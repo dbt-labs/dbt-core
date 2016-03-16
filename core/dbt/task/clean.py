@@ -18,10 +18,8 @@ class CleanTask(BaseTask):
     ConfigType = UnsetProfileConfig
 
     def __is_project_path(self, path):
-        proj_path = os.path.abspath('.')
-        return not os.path.commonprefix(
-            [proj_path, os.path.abspath(path)]
-        ) == proj_path
+        proj_path = os.path.abspath(".")
+        return not os.path.commonprefix([proj_path, os.path.abspath(path)]) == proj_path
 
     def __is_protected_path(self, path):
         """
