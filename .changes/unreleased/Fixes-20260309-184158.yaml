@@ -1,0 +1,6 @@
+kind: Fixes
+body: Allow `catalogs` definitions in any schema YAML file, not only `catalogs.yml`
+time: 2026-03-09T18:41:58+01:00
+custom:
+  Author: ankit-khare-2015
+  Issue: "11707"
