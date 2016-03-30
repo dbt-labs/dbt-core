@@ -1,0 +1,16 @@
+#
+# output environments
+user:
+  outputs:
+    my-redshift: # uniquely named
+      type: redshift # only type supported
+      host: localhost # any IP or fqdn
+      port: 5439
+      user: my_user
+      # best practice: specify outputs in your user profile
+      # located in ~/.dbt/profiles.yml to ensure credentials
+      # don't get checked in alongside your model code
+      pass: password
+      dbname: dev
+      schema: my_model_schema
+  run-target: my-redshift
