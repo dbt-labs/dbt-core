@@ -1,6 +1,6 @@
 import pprint
 import psycopg2
-import os
+import os, sys
 import fnmatch
 import re
 
@@ -121,7 +121,6 @@ class Linker(object):
             else:
                 print("Ignoring {}".format(sql[0:100].replace('\n', ' ')))
 
-
 class RunTask:
     def __init__(self, args, project):
         self.args = args
@@ -184,8 +183,13 @@ class RunTask:
             with handle.cursor() as cursor:
 
                 existing =  self.__query_for_existing(cursor, target.schema);
+                dependency_list = list(self.linker.as_dependency_list())
 
-                for (relation, sql) in self.linker.as_dependency_list():
+                if len(dependency_list) == 0:
+                    print("WARNING: Target directory is empty: '{}'. Try running `dbt compile`.".format(self.project['target-path']))
+                    return
+
+                for (relation, sql) in dependency_list:
 
                     if relation in existing:
                         self.__drop(cursor, relation, existing[relation])
@@ -198,6 +202,11 @@ class RunTask:
                     handle.commit()
 
     def run(self):
-        self.__create_schema()
-        self.__load_models()
-        self.__execute_models()
+        try:
+            self.__create_schema()
+            self.__load_models()
+            self.__execute_models()
+        except psycopg2.OperationalError as e:
+            print("ERROR: Could not connect to the target database. Try `dbt debug` for more information")
+            print(e.message)
+            sys.exit(1)
