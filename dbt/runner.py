@@ -106,9 +106,8 @@ class Runner:
 
         return dict(existing)
 
-    def __drop(self, target, model, relation_type):
+    def __drop(self, target, model, relation, relation_type):
         schema = target.schema
-        relation = model.name
 
         sql = 'drop {relation_type} if exists "{schema}"."{relation}" cascade'.format(schema=schema, relation_type=relation_type, relation=relation)
         self.__do_execute(target, sql, model)
@@ -129,7 +128,7 @@ class Runner:
         existing = self.query_for_existing(target, target.schema);
         for model in models:
             model_name = model.fqn[-1]
-            self.__drop(target, model, existing[model_name])
+            self.__drop(target, model, model.name, existing[model_name])
 
     def get_model_by_fqn(self, models, fqn):
         for model in models:
@@ -140,26 +139,29 @@ class Runner:
     def execute_wrapped_model(self, data):
         target = data['target']
         model = data['model']
-        drop_type = data['drop_type']
+        tmp_drop_type = data['tmp_drop_type']
+        final_drop_type = data['final_drop_type']
 
         error = None
         try:
-            self.execute_model(target, model, drop_type)
+            self.execute_model(target, model, tmp_drop_type, final_drop_type)
         except (RuntimeError, psycopg2.ProgrammingError) as e:
             error = "Error executing {filepath}\n{error}".format(filepath=model.filepath, error=str(e).strip())
 
         return RunModelResult(model, error=error)
 
-    def execute_model(self, target, model, drop_type):
-        if drop_type is not None:
+    def execute_model(self, target, model, tmp_drop_type, final_drop_type):
+        # drop tmp if it exists
+        if tmp_drop_type is not None:
             try:
-                self.__drop(target, model, drop_type)
+                self.__drop(target, model, model.tmp_name(), tmp_drop_type)
             except psycopg2.ProgrammingError as e:
                 if "must be owner of relation" in e.diag.message_primary:
-                    raise RuntimeError(RELATION_NOT_OWNER_MESSAGE.format(model=model.name, schema=target.schema, user=target.user))
+                    raise RuntimeError(RELATION_NOT_OWNER_MESSAGE.format(model=model.tmp_name(), schema=target.schema, user=target.user))
                 else:
                     raise e
 
+        # create model (w/ temp name)
         try:
             self.__do_execute(target, model.contents, model)
         except psycopg2.ProgrammingError as e:
@@ -167,6 +169,20 @@ class Runner:
                 raise RuntimeError(RELATION_PERMISSION_DENIED_MESSAGE.format(model=model.name, schema=target.schema, user=target.user))
             else:
                 raise e
+
+        # drop final model if it exists
+        if final_drop_type is not None:
+            try:
+                self.__drop(target, model, model.name, final_drop_type)
+            except psycopg2.ProgrammingError as e:
+                if "must be owner of relation" in e.diag.message_primary:
+                    raise RuntimeError(RELATION_NOT_OWNER_MESSAGE.format(model=model.name, schema=target.schema, user=target.user))
+                else:
+                    raise e
+
+        # rename this to the actual desired model name
+        rename_query = model.rename_query(target.schema)
+        self.__do_execute(target, rename_query, model)
 
     def execute_models(self, linker, models, limit_to=None):
         target = self.get_target()
@@ -182,8 +198,11 @@ class Runner:
 
         def wrap_fqn(target, models, existing, fqn):
             model = self.get_model_by_fqn(models, fqn)
-            drop_type = existing.get(model.name, None) # False, 'view', or 'table'
-            return {"model" : model, "target": target, "drop_type": drop_type}
+
+            # False, 'view', or 'table'
+            tmp_drop_type = existing.get(model.tmp_name(), None) 
+            final_drop_type = existing.get(model.name, None)
+            return {"model" : model, "target": target, "tmp_drop_type": tmp_drop_type, 'final_drop_type': final_drop_type}
 
         # we can only pass one arg to the self.execute_model method below. Pass a dict w/ all the data we need
         model_dependency_list = [[wrap_fqn(target, models, existing, fqn) for fqn in node_list] for node_list in dependency_list]

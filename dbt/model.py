@@ -63,6 +63,19 @@ class DBTSource(object):
     def original_fqn(self):
         return self.fqn
 
+    def tmp_name(self):
+        return "{}__dbt_tmp".format(self.name)
+
+    def rename_query(self, schema):
+        opts = {
+            "schema": schema,
+            "tmp_name": self.tmp_name(),
+            "final_name": self.name
+        }
+
+        return 'alter table "{schema}"."{tmp_name}" rename to "{final_name}"'.format(**opts)
+
+
 class Model(DBTSource):
     def __init__(self, project, model_dir, rel_filepath):
         super(Model, self).__init__(project, model_dir, rel_filepath)
@@ -104,7 +117,7 @@ class Model(DBTSource):
         opts = {
             "table_or_view": table_or_view,
             "schema": schema,
-            "identifier": self.name,
+            "identifier": self.tmp_name(),
             "query": rendered_query,
             "dist_qualifier": dist_qualifier,
             "sort_qualifier": sort_qualifier

@@ -4,8 +4,9 @@ dbt (data build tool) helps analysts write reliable, modular code using a workfl
 
 ---
 
-- View the [documentation][documentation-url].
-- Project [release notes][release-notes-url].
+- [What is dbt]?
+- Read the [dbt viewpoint]
+- [Installation]
 - Join the [chat][gittr-url] on Gittr.
 
 
@@ -14,14 +15,9 @@ dbt (data build tool) helps analysts write reliable, modular code using a workfl
 Everyone interacting in the dbt project's codebases, issue trackers, chat rooms, and mailing lists is expected to follow the [PyPA Code of Conduct].
 
 
-## Project background
-
-For more information on the thinking that led to dbt, see [this article](https://medium.com/analyst-collective/building-a-mature-analytics-workflow-the-analyst-collective-viewpoint-7653473ef05b).
-
-
-
 
 [PyPA Code of Conduct]: https://www.pypa.io/en/latest/code-of-conduct/
 [gittr-url]: https://gitter.im/analyst-collective/dbt
-[documentation-url]: http://dbt.readthedocs.io/en/readthedocs/
-[release-notes-url]: http://dbt.readthedocs.io/en/readthedocs/about/release-notes/
+[Installation]: http://dbt.readthedocs.io/en/master/guide/setup/
+[What is dbt]: http://dbt.readthedocs.io/en/master/about/overview/
+[dbt viewpoint]: http://dbt.readthedocs.io/en/master/about/viewpoint/
