@@ -22,7 +22,7 @@ class DBTSource(object):
             return fh.read().strip()
 
     def get_config_keys(self):
-        return ['enabled', 'materialized', 'dist', 'sort']
+        return ['enabled', 'materialized', 'dist', 'sort', 'sql_field']
 
     def compile(self):
         raise RuntimeError("Not implemented!")
@@ -84,6 +84,8 @@ class Model(DBTSource):
         super(Model, self).__init__(project, model_dir, rel_filepath)
 
     def sort_qualifier(self, model_config):
+        if 'sort' not in model_config:
+            return ''
         sort_keys = model_config['sort']
         if type(sort_keys) == str:
             sort_keys = [sort_keys]
@@ -93,6 +95,9 @@ class Model(DBTSource):
         return "sortkey ({})".format(', '.join(formatted_sort_keys))
 
     def dist_qualifier(self, model_config):
+        if 'dist' not in model_config:
+            return ''
+
         dist_key = model_config['dist']
 
         if type(dist_key) != str:
@@ -108,22 +113,36 @@ class Model(DBTSource):
 
     def compile(self, rendered_query, project, create_template):
         model_config = self.get_config(project)
-        table_or_view = 'table' if model_config['materialized'] else 'view'
+
+        valid_materializations = ['view', 'table', 'incremental']
+        materialization = model_config['materialized']
+        if materialization not in valid_materializations:
+            raise RuntimeError("Invalid materialize option given: '{}'. Must be one of {}".format(materialization, valid_materializations))
 
         ctx = project.context()
         schema = ctx['env'].get('schema', 'public')
 
-        is_table = table_or_view == 'table'
-        dist_qualifier = self.dist_qualifier(model_config) if 'dist' in model_config and is_table else ''
-        sort_qualifier = self.sort_qualifier(model_config) if 'sort' in model_config and is_table else ''
+        # these are empty strings if configs aren't provided
+        dist_qualifier = self.dist_qualifier(model_config)
+        sort_qualifier = self.sort_qualifier(model_config)
+
+        if materialization in ('table', 'view'):
+            identifier = self.tmp_name()
+            sql_field = None
+        else:
+            identifier = self.name
+            if 'sql_field' not in model_config:
+                raise RuntimeError("sql_field not specified in model materialized as incremental: {}".format(self))
+            sql_field = model_config['sql_field']
 
         opts = {
-            "table_or_view": table_or_view,
+            "materialization": materialization,
             "schema": schema,
-            "identifier": self.tmp_name(),
+            "identifier": identifier,
             "query": rendered_query,
             "dist_qualifier": dist_qualifier,
-            "sort_qualifier": sort_qualifier
+            "sort_qualifier": sort_qualifier,
+            "sql_field": sql_field
         }
 
         return create_template.wrap(opts)

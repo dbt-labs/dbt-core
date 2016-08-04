@@ -188,7 +188,9 @@ class Runner:
         if final_drop_type is not None:
             self.drop(target, model, model.name, final_drop_type)
 
-        self.rename(target, model)
+        model_config = model.get_config(model.project)
+        if model_config['materialized'] != 'incremental':
+            self.rename(target, model)
 
     def execute_models(self, linker, models, limit_to=None):
         target = self.get_target()
@@ -205,9 +207,13 @@ class Runner:
         def wrap_fqn(target, models, existing, fqn):
             model = self.get_model_by_fqn(models, fqn)
 
-            # False, 'view', or 'table'
-            tmp_drop_type = existing.get(model.tmp_name(), None) 
-            final_drop_type = existing.get(model.name, None)
+            model_config = model.get_config(model.project)
+            if model_config.get('materialized') == 'incremental':
+                tmp_drop_type = None
+                final_drop_type = None
+            else:
+                tmp_drop_type = existing.get(model.tmp_name(), None) 
+                final_drop_type = existing.get(model.name, None)
             return {"model" : model, "target": target, "tmp_drop_type": tmp_drop_type, 'final_drop_type': final_drop_type}
 
         # we can only pass one arg to the self.execute_model method below. Pass a dict w/ all the data we need
