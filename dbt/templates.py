@@ -37,6 +37,8 @@ class BaseCreateTemplate(object):
             return self.template.format(**opts)
         elif opts['materialization'] == 'incremental':
             return self.incremental_template.format(**opts)
+        elif opts['materialization'] == 'ephemeral':
+            return opts['query']
         else:
             raise RuntimeError("Invalid materialization parameter ({})".format(opts['materialization']))
 

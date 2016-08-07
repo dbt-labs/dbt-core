@@ -6,19 +6,21 @@ from collections import defaultdict
 import dbt.project
 from dbt.source import Source
 from dbt.utils import find_model_by_name
+import sqlparse
 
 import networkx as nx
 
 class Linker(object):
     def __init__(self):
         self.graph = nx.DiGraph()
+        self.cte_map = defaultdict(set)
 
     def nodes(self):
         return self.graph.nodes()
 
     def as_topological_ordering(self, limit_to=None):
         try:
-            return nx.topological_sort(the_graph, nbunch=limit_to)
+            return nx.topological_sort(self.graph, nbunch=limit_to)
         except KeyError as e:
             raise RuntimeError("Couldn't find model '{}' -- does it exist or is it diabled?".format(e))
 
@@ -49,6 +51,9 @@ class Linker(object):
             dependency_list.append(depth_nodes[depth])
 
         return dependency_list
+
+    def inject_cte(self, source, cte_model):
+        self.cte_map[source].add(cte_model)
 
     def is_child_of(self, nodes, target_node):
         "returns True if node is a child of a node in nodes. Otherwise, False"
@@ -131,9 +136,13 @@ class Compiler(object):
     def __ref(self, linker, ctx, model, all_models):
         schema = ctx['env']['schema']
 
-        # if this node doesn't have any deps, still make sure it's a part of the graph
+        source_config = model.get_config(self.project)
         source_model = tuple(model.fqn)
-        linker.add_node(source_model)
+
+        # if this node doesn't have any deps, still make sure it's a part of the graph
+        is_ephemeral = source_config['materialized'] == 'ephemeral'
+        if not is_ephemeral:
+            linker.add_node(source_model)
 
         def do_ref(*args):
             if len(args) == 1:
@@ -151,8 +160,17 @@ class Compiler(object):
                 ref_fqn = ".".join(other_model_fqn)
                 raise RuntimeError("Model '{}' depends on model '{}' which is disabled in the project config".format(src_fqn, ref_fqn))
 
-            linker.dependency(source_model, other_model_fqn)
-            return '"{}"."{}"'.format(schema, other_model_name)
+            other_config = other_model.get_config(self.project)
+            other_is_ephemeral = other_config['materialized'] == 'ephemeral'
+
+            if not is_ephemeral and not other_is_ephemeral:
+                linker.dependency(source_model, other_model_fqn)
+
+            if other_config['materialized'] == 'ephemeral':
+                linker.inject_cte(model, other_model)
+                return other_model.cte_name
+            else:
+                return '"{}"."{}"'.format(schema, other_model_name)
 
         def wrapped_do_ref(*args):
             try:
@@ -180,13 +198,7 @@ class Compiler(object):
         context['ref'] = self.__ref(linker, context, model, models)
 
         rendered = template.render(context)
-
-        stmt = model.compile(rendered, self.project, self.create_template)
-        if stmt:
-            build_path = model.build_path(self.create_template)
-            self.__write(build_path, stmt)
-            return True
-        return False
+        return rendered
 
     def __write_graph_file(self, linker):
         filename = 'graph-{}.yml'.format(self.create_template.label)
@@ -197,6 +209,63 @@ class Compiler(object):
         config = model.get_config(self.project)
         enabled = config['enabled']
         return enabled
+
+    def combine_query_with_ctes(self, model, query, ctes, compiled_models):
+        parsed_stmts = sqlparse.parse(query)
+        if len(parsed_stmts) != 1:
+            raise RuntimeError("unexpectedly parsed {} queries from model {}".format(len(parsed_stmts), model))
+        parsed = parsed_stmts[0]
+
+        # TODO : i think there's a function to get this w/o iterating?
+        with_stmt = None
+        for token in parsed.tokens:
+            if token.is_keyword and token.normalized == 'WITH':
+                with_stmt = token
+                break
+
+        if with_stmt is None:
+            # no with stmt, add one!
+            first_token = parsed.token_first()
+            with_stmt = sqlparse.sql.Token(sqlparse.tokens.Keyword, 'with')
+            parsed.insert_before(first_token, with_stmt)
+        else:
+            # stmt exists, add a comma (which will come after our injected CTE(s) )
+            trailing_comma = sqlparse.sql.Token(sqlparse.tokens.Punctuation, ',')
+            parsed.insert_after(with_stmt, trailing_comma)
+
+        cte_mapping = [(model.cte_name, compiled_models[model]) for model in ctes]
+        cte_stmts = [" {} as ( {} )".format(name, contents) for (name, contents) in cte_mapping]
+        cte_text = ", ".join(cte_stmts)
+        parsed.insert_after(with_stmt, cte_text)
+
+        return sqlparse.format(str(parsed), keyword_case='lower', reindent=True)
+
+    def add_cte_to_rendered_query(self, linker, primary_model, compiled_models):
+        # this could be a set, but we're interested in maintaining the invocation order
+        # psql CTEs need to be declared in-order and have to reference "upwards" in the CTE list
+
+        required_ctes = []
+        def add_ctes_recursive(model):
+            if model not in linker.cte_map:
+                return
+
+            new_ctes = []
+            for other_model in linker.cte_map[model]:
+                if other_model not in required_ctes:
+                    required_ctes.insert(0, other_model)
+                    new_ctes.append(other_model)
+
+            # do this breadth-first!
+            for model in new_ctes: 
+                add_ctes_recursive(model)
+        add_ctes_recursive(primary_model)
+
+        query = compiled_models[primary_model]
+        if len(required_ctes) == 0:
+            return query
+        else:
+            compiled_query = self.combine_query_with_ctes(primary_model, query, required_ctes, compiled_models)
+            return compiled_query
 
     def compile(self):
         all_models = self.model_sources(self.project)
@@ -209,11 +278,22 @@ class Compiler(object):
         self.validate_models_unique(models)
 
         model_linker = Linker()
-        compiled_models = []
+        compiled_models = {}
+        written_models = 0
         for model in models:
-            compiled = self.compile_model(model_linker, model, models)
-            if compiled:
-                compiled_models.append(compiled)
+            query = self.compile_model(model_linker, model, models)
+            compiled_models[model] = query
+
+        for model, query in compiled_models.items():
+            injected_stmt = self.add_cte_to_rendered_query(model_linker, model, compiled_models)
+            wrapped_stmt = model.compile(injected_stmt, self.project, self.create_template)
+
+            build_path = model.build_path(self.create_template)
+
+            config = model.get_config(self.project)
+            if wrapped_stmt and config['materialized'] != 'ephemeral':
+                written_models += 1
+                self.__write(build_path, wrapped_stmt)
 
         self.__write_graph_file(model_linker)
 
@@ -227,4 +307,4 @@ class Compiler(object):
                 if compiled:
                     compiled_analyses.append(compiled)
 
-        return len(compiled_models), len(compiled_analyses)
+        return written_models, len(compiled_analyses)

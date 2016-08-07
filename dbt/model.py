@@ -114,7 +114,7 @@ class Model(DBTSource):
     def compile(self, rendered_query, project, create_template):
         model_config = self.get_config(project)
 
-        valid_materializations = ['view', 'table', 'incremental']
+        valid_materializations = ['view', 'table', 'incremental', 'ephemeral']
         materialization = model_config['materialized']
         if materialization not in valid_materializations:
             raise RuntimeError("Invalid materialize option given: '{}'. Must be one of {}".format(materialization, valid_materializations))
@@ -126,14 +126,14 @@ class Model(DBTSource):
         dist_qualifier = self.dist_qualifier(model_config)
         sort_qualifier = self.sort_qualifier(model_config)
 
-        if materialization in ('table', 'view'):
-            identifier = self.tmp_name()
-            sql_field = None
-        else:
+        if materialization == 'incremental':
             identifier = self.name
             if 'sql_field' not in model_config:
                 raise RuntimeError("sql_field not specified in model materialized as incremental: {}".format(self))
             sql_field = model_config['sql_field']
+        else:
+            identifier = self.tmp_name()
+            sql_field = None
 
         opts = {
             "materialization": materialization,
@@ -146,6 +146,10 @@ class Model(DBTSource):
         }
 
         return create_template.wrap(opts)
+    
+    @property
+    def cte_name(self):
+        return "__dbt__CTE__{}".format(self.name)
 
     def __repr__(self):
         return "<Model {}.{}: {}>".format(self.project['name'], self.name, self.filepath)
