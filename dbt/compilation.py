@@ -140,6 +140,12 @@ class Compiler(object):
             f.write(payload)
 
 
+    def __model_config(self, model):
+        def do_config(**kwargs):
+            model.update_in_model_config(kwargs)
+            model.add_to_prologue("Config specified in model: {}".format(kwargs))
+        return do_config
+
     def __ref(self, linker, ctx, model, all_models):
         schema = ctx['env']['schema']
 
@@ -191,6 +197,7 @@ class Compiler(object):
 
         context = self.project.context()
         context['ref'] = self.__ref(linker, context, model, models)
+        context['config'] = self.__model_config(model)
 
         rendered = template.render(context)
         return rendered

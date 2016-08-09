@@ -16,6 +16,8 @@ class DBTSource(object):
         self.filepath = os.path.join(top_dir, rel_filepath)
         self.filedir = os.path.dirname(self.filepath)
         self.name = self.fqn[-1]
+        self.in_model_config = {}
+
         self.config = self.load_config()
 
     @property
@@ -29,6 +31,10 @@ class DBTSource(object):
     def contents(self):
         with open(self.filepath) as fh:
             return fh.read().strip()
+
+    def update_in_model_config(self, config):
+        self.in_model_config.update(config)
+        self.config = self.load_config()
 
     def load_config(self):
         config_keys = self.ConfigKeys
@@ -50,11 +56,12 @@ class DBTSource(object):
                     break
             return config
 
-        config = load_from_project(self, self.project, skip_default=False)
+        config = load_from_project(self, self.own_project, skip_default=False)
+        config.update(self.in_model_config)
 
         # overwrite dep config w/ primary config if different
         if self.project['name'] != self.own_project['name']:
-            primary_config = load_from_project(self, self.own_project, skip_default=True)
+            primary_config = load_from_project(self, self.project, skip_default=True)
             config.update(primary_config)
         return config
 
@@ -109,7 +116,15 @@ class DBTSource(object):
 
 class Model(DBTSource):
     def __init__(self, project, model_dir, rel_filepath, own_project):
+        self.prologue = []
         super(Model, self).__init__(project, model_dir, rel_filepath, own_project)
+
+    def add_to_prologue(self, s):
+        self.prologue.append(s)
+
+    def get_prologue_string(self):
+        blob = "\n".join("-- {}".format(s) for s in self.prologue)
+        return "-- Compiled by DBT\n{}".format(blob)
 
     def sort_qualifier(self, model_config):
         if 'sort' not in model_config:
@@ -172,7 +187,8 @@ class Model(DBTSource):
             "query": rendered_query,
             "dist_qualifier": dist_qualifier,
             "sort_qualifier": sort_qualifier,
-            "sql_where": sql_where
+            "sql_where": sql_where,
+            "prologue": self.get_prologue_string()
         }
 
         return create_template.wrap(opts)
