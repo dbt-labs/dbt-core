@@ -6,19 +6,24 @@ from collections import defaultdict
 import dbt.project
 from dbt.source import Source
 from dbt.utils import find_model_by_name
+import sqlparse
 
 import networkx as nx
 
 class Linker(object):
     def __init__(self):
         self.graph = nx.DiGraph()
+        self.cte_map = defaultdict(set)
 
     def nodes(self):
         return self.graph.nodes()
 
+    def get_node(self, node):
+        return self.graph.node[node]
+
     def as_topological_ordering(self, limit_to=None):
         try:
-            return nx.topological_sort(the_graph, nbunch=limit_to)
+            return nx.topological_sort(self.graph, nbunch=limit_to)
         except KeyError as e:
             raise RuntimeError("Couldn't find model '{}' -- does it exist or is it diabled?".format(e))
 
@@ -50,6 +55,9 @@ class Linker(object):
 
         return dependency_list
 
+    def inject_cte(self, source, cte_model):
+        self.cte_map[source].add(cte_model)
+
     def is_child_of(self, nodes, target_node):
         "returns True if node is a child of a node in nodes. Otherwise, False"
         node_span = set()
@@ -66,8 +74,8 @@ class Linker(object):
         self.graph.add_node(node2)
         self.graph.add_edge(node2, node1)
 
-    def add_node(self, node):
-        self.graph.add_node(node)
+    def add_node(self, node, data):
+        self.graph.add_node(node, data)
 
     def write_graph(self, outfile):
         nx.write_yaml(self.graph, outfile)
@@ -94,13 +102,17 @@ class Compiler(object):
                 project = dbt.project.read_project(os.path.join(full_obj, 'dbt_project.yml'))
                 yield project
 
-    def model_sources(self, project):
+    def model_sources(self, this_project, own_project=None):
         "source_key is a dbt config key like source-paths or analysis-paths"
-        paths = project.get('source-paths', [])
+
+        if own_project is None:
+            own_project = this_project
+
+        paths = own_project.get('source-paths', [])
         if self.create_template.label == 'build':
-            return Source(project).get_models(paths)
+            return Source(this_project, own_project=own_project).get_models(paths)
         elif self.create_template.label == 'test':
-            return Source(project).get_test_models(paths)
+            return Source(this_project, own_project=own_project).get_test_models(paths)
         else:
             raise RuntimeError("unexpected create template type: '{}'".format(self.create_template.label))
 
@@ -128,12 +140,33 @@ class Compiler(object):
             f.write(payload)
 
 
+    def __model_config(self, model):
+        def do_config(*args, **kwargs):
+            if len(args) == 1 and len(kwargs) == 0:
+                opts = args[0]
+            elif len(args) == 0 and len(kwargs) > 0:
+                opts = kwargs
+            else:
+                raise RuntimeError("Invalid model config given inline in {}".format(model))
+
+            if type(opts) != dict:
+                raise RuntimeError("Invalid model config given inline in {}".format(model))
+
+            already_called = len(model.in_model_config) > 0
+
+            if already_called:
+                raise RuntimeError("config() called more than once in {}".format(model))
+
+            model.update_in_model_config(opts)
+            model.add_to_prologue("Config specified in model: {}".format(opts))
+            return ""
+        return do_config
+
     def __ref(self, linker, ctx, model, all_models):
         schema = ctx['env']['schema']
 
-        # if this node doesn't have any deps, still make sure it's a part of the graph
         source_model = tuple(model.fqn)
-        linker.add_node(source_model)
+        linker.add_node(source_model, {"materialized": model.materialization})
 
         def do_ref(*args):
             if len(args) == 1:
@@ -145,14 +178,18 @@ class Compiler(object):
                 other_model = find_model_by_name(all_models, other_model_name, package_namespace=other_model_package)
 
             other_model_fqn = tuple(other_model.fqn[:-1] + [other_model_name])
-            other_model_config = other_model.get_config(self.project)
-            if not other_model_config['enabled']:
+            if not other_model.is_enabled:
                 src_fqn = ".".join(source_model)
                 ref_fqn = ".".join(other_model_fqn)
                 raise RuntimeError("Model '{}' depends on model '{}' which is disabled in the project config".format(src_fqn, ref_fqn))
 
             linker.dependency(source_model, other_model_fqn)
-            return '"{}"."{}"'.format(schema, other_model_name)
+
+            if other_model.is_ephemeral:
+                linker.inject_cte(model, other_model)
+                return other_model.cte_name
+            else:
+                return '"{}"."{}"'.format(schema, other_model_name)
 
         def wrapped_do_ref(*args):
             try:
@@ -169,51 +206,98 @@ class Compiler(object):
     def compile_model(self, linker, model, models):
         jinja = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath=model.root_dir))
 
-        model_config = model.get_config(self.project)
-
-        if not model_config.get('enabled'):
+        if not model.is_enabled:
             return None
 
         template = jinja.get_template(model.rel_filepath)
 
         context = self.project.context()
         context['ref'] = self.__ref(linker, context, model, models)
+        context['config'] = self.__model_config(model)
 
         rendered = template.render(context)
-
-        stmt = model.compile(rendered, self.project, self.create_template)
-        if stmt:
-            build_path = model.build_path(self.create_template)
-            self.__write(build_path, stmt)
-            return True
-        return False
+        return rendered
 
     def __write_graph_file(self, linker):
         filename = 'graph-{}.yml'.format(self.create_template.label)
         graph_path = os.path.join(self.project['target-path'], filename)
         linker.write_graph(graph_path)
 
-    def is_enabled(self, model):
-        config = model.get_config(self.project)
-        enabled = config['enabled']
-        return enabled
+    def combine_query_with_ctes(self, model, query, ctes, compiled_models):
+        parsed_stmts = sqlparse.parse(query)
+        if len(parsed_stmts) != 1:
+            raise RuntimeError("unexpectedly parsed {} queries from model {}".format(len(parsed_stmts), model))
+        parsed = parsed_stmts[0]
+
+        # TODO : i think there's a function to get this w/o iterating?
+        with_stmt = None
+        for token in parsed.tokens:
+            if token.is_keyword and token.normalized == 'WITH':
+                with_stmt = token
+                break
+
+        if with_stmt is None:
+            # no with stmt, add one!
+            first_token = parsed.token_first()
+            with_stmt = sqlparse.sql.Token(sqlparse.tokens.Keyword, 'with')
+            parsed.insert_before(first_token, with_stmt)
+        else:
+            # stmt exists, add a comma (which will come after our injected CTE(s) )
+            trailing_comma = sqlparse.sql.Token(sqlparse.tokens.Punctuation, ',')
+            parsed.insert_after(with_stmt, trailing_comma)
+
+        cte_mapping = [(model.cte_name, compiled_models[model]) for model in ctes]
+
+        # these newlines are important -- comments could otherwise interfere w/ query
+        cte_stmts = [" {} as (\n{}\n)".format(name, contents) for (name, contents) in cte_mapping]
+
+        cte_text = ", ".join(cte_stmts)
+        parsed.insert_after(with_stmt, cte_text)
+
+        return sqlparse.format(str(parsed), keyword_case='lower', reindent=True)
+
+    def add_cte_to_rendered_query(self, linker, primary_model, compiled_models):
+        fqn_to_model = {tuple(model.fqn): model for model in compiled_models}
+        sorted_nodes = linker.as_topological_ordering()
+        required_ctes = []
+        for node in sorted_nodes:
+            model = fqn_to_model[node]
+            if model.is_ephemeral and model in linker.cte_map[primary_model]:
+                required_ctes.append(model)
+
+        query = compiled_models[primary_model]
+        if len(required_ctes) == 0:
+            return query
+        else:
+            compiled_query = self.combine_query_with_ctes(primary_model, query, required_ctes, compiled_models)
+            return compiled_query
 
     def compile(self):
-        all_models = self.model_sources(self.project)
+        all_models = self.model_sources(this_project=self.project)
 
         for project in self.dependency_projects():
-            all_models.extend(self.model_sources(project))
+            all_models.extend(self.model_sources(this_project=self.project, own_project=project))
 
-        models = [model for model in all_models if self.is_enabled(model)]
+        models = [model for model in all_models if model.is_enabled]
 
         self.validate_models_unique(models)
 
         model_linker = Linker()
-        compiled_models = []
+        compiled_models = {}
+        written_models = 0
         for model in models:
-            compiled = self.compile_model(model_linker, model, models)
-            if compiled:
-                compiled_models.append(compiled)
+            query = self.compile_model(model_linker, model, models)
+            compiled_models[model] = query
+
+        for model, query in compiled_models.items():
+            injected_stmt = self.add_cte_to_rendered_query(model_linker, model, compiled_models)
+            wrapped_stmt = model.compile(injected_stmt, self.project, self.create_template)
+
+            build_path = model.build_path(self.create_template)
+
+            if wrapped_stmt and not model.is_ephemeral:
+                written_models += 1
+                self.__write(build_path, wrapped_stmt)
 
         self.__write_graph_file(model_linker)
 
@@ -227,4 +311,4 @@ class Compiler(object):
                 if compiled:
                     compiled_analyses.append(compiled)
 
-        return len(compiled_models), len(compiled_analyses)
+        return written_models, len(compiled_analyses)

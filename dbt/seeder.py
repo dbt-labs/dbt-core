@@ -39,8 +39,15 @@ class Seeder:
         header_csv = ", ".join(['"{}"'.format(h) for h in headers])
         base_insert = 'INSERT INTO "{schema}"."{table}" ({header_csv}) VALUES '.format(schema=schema, table=table, header_csv=header_csv)
         records = []
+
+        def quote_or_null(s):
+            if s is None:
+                return 'null'
+            else:
+                return "'{}'".format(s)
+
         for row in virtual_table.to_rows():
-          record_csv = ', '.join(["'{}'".format(val) for val in row])
+          record_csv = ', '.join([quote_or_null(val) for val in row])
           record_csv_wrapped = "({})".format(record_csv)
           records.append(record_csv_wrapped)
         insert_sql = "{} {}".format(base_insert, ",\n".join(records))
@@ -77,7 +84,7 @@ class Seeder:
                 self.insert_into_table(cursor, schema, table_name, virtual_table)
             except psycopg2.ProgrammingError as e:
                 print('Encountered an error while inserting into table "{}"."{}"'.format(schema, table_name))
-                print('Check for formatting errors in {}'.format(csv_path))
+                print('Check for formatting errors in {}'.format(csv.filepath))
                 print('Try --drop-existing to delete and recreate the table instead')
                 print(str(e))
 
