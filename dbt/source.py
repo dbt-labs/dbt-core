@@ -4,8 +4,9 @@ import fnmatch
 from dbt.model import Model, Analysis, CompiledModel, TestModel, Schema, Csv
 
 class Source(object):
-    def __init__(self, project):
+    def __init__(self, project, own_project=None):
         self.project = project
+        self.own_project = own_project if own_project is not None else self.project
         self.project_root = project['project-root']
         self.project_name = project['name']
 
@@ -20,7 +21,7 @@ class Source(object):
                     rel_path = os.path.relpath(abs_path, root_path)
 
                     if fnmatch.fnmatch(filename, file_pattern):
-                        found.append((self.project, source_path, rel_path))
+                        found.append((self.project, source_path, rel_path, self.own_project))
         return found
 
     def get_models(self, model_dirs):

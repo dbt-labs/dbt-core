@@ -77,7 +77,7 @@ class Seeder:
                 self.insert_into_table(cursor, schema, table_name, virtual_table)
             except psycopg2.ProgrammingError as e:
                 print('Encountered an error while inserting into table "{}"."{}"'.format(schema, table_name))
-                print('Check for formatting errors in {}'.format(csv_path))
+                print('Check for formatting errors in {}'.format(csv.filepath))
                 print('Try --drop-existing to delete and recreate the table instead')
                 print(str(e))
 
