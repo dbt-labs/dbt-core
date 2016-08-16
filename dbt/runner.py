@@ -6,11 +6,12 @@ import os, sys
 import logging
 import time
 
-from dbt.compilation import Linker, Compiler
+from dbt.compilation import Compiler
+from dbt.linker import Linker
 from dbt.templates import BaseCreateTemplate
 from dbt.targets import RedshiftTarget
 from dbt.source import Source
-from dbt.utils import find_model_by_name
+from dbt.utils import find_model_by_name, dependency_projects
 
 from multiprocessing.dummy import Pool as ThreadPool
 
@@ -22,17 +23,72 @@ Please adjust the permissions of the '{user}' user on the '{schema}' schema.
 With a superuser account, execute the following commands, then re-run dbt.
 
 grant usage, create on schema "{schema}" to "{user}";
-grant select on all tables in schema "{schema}" to "{user}";"""
+grant select, insert, delete on all tables in schema "{schema}" to "{user}";"""
 
 RELATION_NOT_OWNER_MESSAGE = """The user '{user}' does not have sufficient permissions to drop the model '{model}' in the schema '{schema}'.
 This is likely because the relation was created by a different user. Either delete the model "{schema}"."{model}" manually,
 or adjust the permissions of the '{user}' user in the '{schema}' schema."""
 
+
+class CompiledModel(object):
+    def __init__(self, fqn, data):
+        self.fqn = fqn
+        self.data = data
+
+        # these are set just before the models are executed
+        self.tmp_drop_type = None
+        self.final_drop_type = None
+        self.target = None
+
+    def __getitem__(self, key):
+        return self.data[key]
+
+    def should_execute(self):
+        return self.data['enabled'] and self.materialization != 'ephemeral'
+
+    def should_rename(self):
+        return not self.data['materialized'] == 'incremental' 
+
+    @property
+    def contents(self):
+        with open(self.data['build_path']) as fh:
+            return fh.read()
+
+    @property
+    def materialization(self):
+        return self.data['materialized']
+
+    @property
+    def name(self):
+        return self.data['name']
+
+    @property
+    def tmp_name(self):
+        return self.data['tmp_name']
+
+    def project(self):
+        return {'name': self.data['project_name']}
+
+    @property
+    def schema(self):
+        if self.target is None:
+            raise RuntimeError("`target` not set in compiled model {}".format(self))
+        else:
+            return self.target.schema
+
+    def rename_query(self):
+        return 'alter table "{schema}"."{tmp_name}" rename to "{final_name}"'.format(schema=self.schema, tmp_name=self.tmp_name, final_name=self.name)
+
+    def __repr__(self):
+        return "<CompiledModel {}.{}: {}>".format(self.data['project_name'], self.name, self.data['build_path'])
+
+
 class RunModelResult(object):
-    def __init__(self, model, error=None, skip=False):
+    def __init__(self, model, error=None, skip=False, status=None):
         self.model = model
         self.error = error
         self.skip  = skip
+        self.status = status
 
     @property
     def errored(self):
@@ -48,9 +104,6 @@ class Runner:
         self.project = project
         self.target_path = target_path
         self.run_mode = run_mode
-
-    def get_compiled_models(self):
-        return Source(self.project).get_compiled(self.target_path, self.run_mode)
 
     def get_target(self):
         target_cfg = self.project.run_environment()
@@ -126,6 +179,7 @@ class Runner:
                     cursor.execute(sql)
                     post = time.time()
                     self.logger.debug("SQL status: %s in %d seconds", cursor.statusmessage, post-pre)
+                    return cursor.statusmessage
                 except Exception as e:
                     e.model = model
                     self.logger.exception("Error running SQL: %s", sql)
@@ -139,29 +193,23 @@ class Runner:
             model_name = model.fqn[-1]
             self.drop(target, model, model.name, existing[model_name])
 
-    def get_model_by_fqn(self, models, fqn):
-        for model in models:
-            if tuple(model.fqn) == tuple(fqn):
-                return model
-        raise RuntimeError("Couldn't find a compiled model with fqn: '{}'".format(fqn))
-
-    def execute_wrapped_model(self, data):
-        target = data['target']
-        model = data['model']
-        tmp_drop_type = data['tmp_drop_type']
-        final_drop_type = data['final_drop_type']
-
+    def safe_execute_model(self, model):
         error = None
         try:
-            self.execute_model(target, model, tmp_drop_type, final_drop_type)
+            status = self.execute_model(model)
         except (RuntimeError, psycopg2.ProgrammingError) as e:
-            error = "Error executing {filepath}\n{error}".format(filepath=model.filepath, error=str(e).strip())
+            error = "Error executing {filepath}\n{error}".format(filepath=model['build_path'], error=str(e).strip())
+            status = "ERROR"
+        except Exception as e:
+            error = "Unhandled error while executing {filepath}\n{error}".format(filepath=model['build_path'], error=str(e).strip())
+            self.logger.exception(error)
+            raise e
 
-        return RunModelResult(model, error=error)
+        return RunModelResult(model, error=error, status=status)
 
     def execute_and_handle_permissions(self, target, query, model, model_name):
         try:
-            self.__do_execute(target, query, model)
+            return self.__do_execute(target, query, model)
         except psycopg2.ProgrammingError as e:
             error_data = {"model": model_name, "schema": target.schema, "user": target.user}
             if 'must be owner of relation' in e.diag.message_primary:
@@ -171,47 +219,70 @@ class Runner:
             else:
                 raise e
 
-    def rename(self, target, model):
-        rename_query = model.rename_query(target.schema)
-        self.logger.info("renaming model %s.%s --> %s.%s", target.schema, model.tmp_name(), target.schema, model.name)
-        self.execute_and_handle_permissions(target, rename_query, model, model.name)
-        self.logger.info("renamed model %s.%s --> %s.%s", target.schema, model.tmp_name(), target.schema, model.name)
+    def rename(self, model):
+        rename_query = model.rename_query()
+        self.logger.info("renaming model %s.%s --> %s.%s", model.target.schema, model.tmp_name, model.target.schema, model.name)
+        self.execute_and_handle_permissions(model.target, rename_query, model, model.name)
+        self.logger.info("renamed model %s.%s --> %s.%s", model.target.schema, model.tmp_name, model.target.schema, model.name)
 
-    def execute_model(self, target, model, tmp_drop_type, final_drop_type):
+    def execute_model(self, model):
         self.logger.info("executing model %s", model)
 
-        if tmp_drop_type is not None:
-            self.drop(target, model, model.tmp_name(), tmp_drop_type)
+        if model.tmp_drop_type is not None:
+            self.drop(model.target, model, model.tmp_name, model.tmp_drop_type)
 
-        self.execute_and_handle_permissions(target, model.contents, model, model.tmp_name())
+        status = self.execute_and_handle_permissions(model.target, model.contents, model, model.name)
 
-        if final_drop_type is not None:
-            self.drop(target, model, model.name, final_drop_type)
+        if model.final_drop_type is not None:
+            self.drop(model.target, model, model.name, model.final_drop_type)
 
-        self.rename(target, model)
+        if model.should_rename():
+            self.rename(model)
+
+        return status
+
+    def prepare_model_for_execution(self, model, existing, target):
+        if model.materialization == 'incremental':
+            tmp_drop_type = None
+            final_drop_type = None
+        else:
+            tmp_drop_type = existing.get(model.tmp_name, None) 
+            final_drop_type = existing.get(model.name, None)
+
+        model.tmp_drop_type = tmp_drop_type
+        model.final_drop_type = final_drop_type
+        model.target = target
+
+    def as_concurrent_dep_list(self, linker, models, limit_to, existing, target):
+        model_dependency_list = []
+        dependency_list = linker.as_dependency_list(limit_to)
+        for node_list in dependency_list:
+            level = []
+            for fqn in node_list:
+                model = self.get_model_by_fqn(models, fqn)
+                if model.should_execute():
+                    self.prepare_model_for_execution(model, existing, target)
+                    level.append(model)
+            model_dependency_list.append(level)
+        return model_dependency_list
+
+    def get_model_by_fqn(self, models, fqn):
+        for model in models:
+            if tuple(model.fqn) == tuple(fqn):
+                return model
+        raise RuntimeError("Couldn't find a compiled model with fqn: '{}'".format(fqn))
+
 
     def execute_models(self, linker, models, limit_to=None):
         target = self.get_target()
 
-        dependency_list = linker.as_dependency_list(limit_to)
-        num_models = sum([len(node_list) for node_list in dependency_list])
+        existing = self.query_for_existing(target, target.schema);
+        model_dependency_list = self.as_concurrent_dep_list(linker, models, limit_to, existing, target)
+        num_models = sum([len(node_list) for node_list in model_dependency_list])
 
         if num_models == 0:
             print("WARNING: No models to run in '{}'. Try checking your model configs and running `dbt compile`".format(self.target_path))
             return []
-
-        existing = self.query_for_existing(target, target.schema);
-
-        def wrap_fqn(target, models, existing, fqn):
-            model = self.get_model_by_fqn(models, fqn)
-
-            # False, 'view', or 'table'
-            tmp_drop_type = existing.get(model.tmp_name(), None) 
-            final_drop_type = existing.get(model.name, None)
-            return {"model" : model, "target": target, "tmp_drop_type": tmp_drop_type, 'final_drop_type': final_drop_type}
-
-        # we can only pass one arg to the self.execute_model method below. Pass a dict w/ all the data we need
-        model_dependency_list = [[wrap_fqn(target, models, existing, fqn) for fqn in node_list] for node_list in dependency_list]
 
         num_threads = target.threads
         print("Concurrency: {} threads (target='{}')".format(num_threads, self.project['run-target']))
@@ -225,47 +296,76 @@ class Runner:
         for model_list in model_dependency_list:
             failed_nodes = [tuple(model.fqn) for model in failed_models]
 
-            models_to_execute = [data for data in model_list if not linker.is_child_of(failed_nodes, tuple(data['model'].fqn))]
-            models_to_skip = [data for data in model_list if linker.is_child_of(failed_nodes, tuple(data['model'].fqn))]
+            models_to_execute = [model for model in model_list if not linker.is_child_of(failed_nodes, model.fqn)]
+            models_to_skip = [model for model in model_list if linker.is_child_of(failed_nodes, model.fqn)]
 
-            for i, data in enumerate(models_to_skip):
-                model = data['model']
+            for i, model in enumerate(models_to_skip):
                 model_result = RunModelResult(model, skip=True)
                 model_results.append(model_result)
                 print("{} of {} -- SKIP relation {}.{} because parent failed".format(len(model_results), num_models, target.schema, model_result.model.name))
 
-            run_model_results = pool.map(self.execute_wrapped_model, models_to_execute)
+            for i, model in enumerate(models_to_execute):
+                print_vars = {
+                    "progress": 1 + i + len(model_results),
+                    "total" : num_models,
+                    "schema": target.schema,
+                    "model_name": model.name,
+                    "model_type": model.materialization,
+                    "info": "START"
+                }
+
+                output = "{progress} of {total} -- {info} {model_type} model {schema}.{model_name} ".format(**print_vars)
+                print("{} [Running]".format(output.ljust(80, ".")))
+
+            run_model_results = pool.map(self.safe_execute_model, models_to_execute)
 
             for run_model_result in run_model_results:
                 model_results.append(run_model_result)
 
+                print_vars = {
+                    "progress": len(model_results),
+                    "total" : num_models,
+                    "schema": target.schema,
+                    "model_name": run_model_result.model.name,
+                    "model_type": run_model_result.model.materialization,
+                    "info": "ERROR creating" if run_model_result.errored else "OK created"
+                }
+
+                output = "{progress} of {total} -- {info} {model_type} model {schema}.{model_name} ".format(**print_vars)
+                print("{} [{}]".format(output.ljust(80, "."), run_model_result.status))
+
                 if run_model_result.errored:
                     failed_models.add(run_model_result.model)
-                    print("{} of {} -- ERROR creating relation {}.{}".format(len(model_results), num_models, target.schema, run_model_result.model.name))
                     print(run_model_result.error)
-                else:
-                    print("{} of {} -- OK Created relation {}.{}".format(len(model_results), num_models, target.schema, run_model_result.model.name))
 
         pool.close()
         pool.join()
 
         return model_results
 
+    def get_limited_models(self, specified_models, compiled_models):
+        if specified_models is None:
+            return None
+
+        limit_to = []
+        for model_name in specified_models:
+            try:
+                model = find_model_by_name(compiled_models, model_name)
+                limit_to.append(tuple(model.fqn))
+            except RuntimeError as e:
+                raise e
+
+        return limit_to
+
+    def make_model(self, linker, fqn):
+        data = linker.get_node(fqn)
+        return CompiledModel(fqn, data)
+
     def run(self, specified_models=None):
         linker = self.deserialize_graph()
-        compiled_models = self.get_compiled_models()
 
-        limit_to = None
-        if specified_models is not None:
-            limit_to = []
-            for model_name in specified_models:
-                try:
-                    model = find_model_by_name(compiled_models, model_name)
-                    limit_to.append(tuple(model.fqn))
-                except RuntimeError as e:
-                    print("ERROR: {}".format(str(e)))
-                    print("Exiting")
-                    return[]
+        compiled_models = [self.make_model(linker, fqn) for fqn in linker.nodes()]
+        limited_models = self.get_limited_models(specified_models, compiled_models)
 
         target_cfg = self.project.run_environment()
         schema_name = target_cfg['schema']
@@ -276,7 +376,7 @@ class Runner:
             if schema_name not in schemas:
                 self.create_schema_or_exit(schema_name)
 
-            return self.execute_models(linker, compiled_models, limit_to)
+            return self.execute_models(linker, compiled_models, limited_models)
         except psycopg2.OperationalError as e:
             print("ERROR: Could not connect to the target database. Try `dbt debug` for more information")
             print(str(e))

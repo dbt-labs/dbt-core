@@ -1,4 +1,7 @@
 
+import os
+import dbt.project
+
 def find_model_by_name(models, name, package_namespace=None):
     found = []
     for model in models:
@@ -15,3 +18,9 @@ def find_model_by_name(models, name, package_namespace=None):
         return found[0]
     else:
         raise RuntimeError("Model specification is ambiguous: model='{}' package='{}' -- {} models match criteria: {}".format(name, nice_package_name, len(found), found))
+
+def dependency_projects(project):
+    for obj in os.listdir(project['modules-path']):
+        full_obj = os.path.join(project['modules-path'], obj)
+        if os.path.isdir(full_obj):
+            yield dbt.project.read_project(os.path.join(full_obj, 'dbt_project.yml'))
