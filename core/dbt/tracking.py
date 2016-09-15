@@ -108,7 +108,6 @@ tracker = Tracker(
 
 
 class User:
-
     def __init__(self, cookie_dir):
         self.do_not_track = True
         self.cookie_dir = cookie_dir
@@ -196,7 +195,6 @@ def get_invocation_context(user, config, args):
         "project_id": None if config is None else config.hashed_name(),
         "user_id": user.id,
         "invocation_id": get_invocation_id(),
-
         "command": args.which,
         "options": None,
         "version": str(dbt_version.installed),
