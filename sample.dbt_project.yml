@@ -15,13 +15,12 @@ test-paths: ["test"]         # where to store test results
 data-paths: ["data"]         # load csvs from this directory with `dbt seed`
 log-path: "logs"             # where to save log files (rotated daily)
 
+
+profile: "evil-corp" # this must map to the profile you create in profiles.yml;
+                     # this is how dbt gets the connection information for this project.
+
 # configuration of default database information, as defined within ~/.dbt/profiles.yml.
 # all execution of dbt from the root directory of this project will default to this profile.
-
-profile: evil-corp           # use evil-corp profile within this project.
-
-# Custom configurations for each model.
-# The structure of this config object should mirror the project files in the "source-paths" directories.
 
 models:
   your-package-name:         # the following configs pertain to _this_ dbt project
@@ -51,7 +50,9 @@ models:
             materialized: incremental # incremental models are append-only
                                       # new records are identified by the sql_where statement below
                                       # use {{this}} to reference the schema and table names for this model
+
             sql_where: "created_at > (select max(created_at) from {{this}})"
+
             unique_key: user_id || session_index  #this defines a unique key for this incremental model.
                                                   #records matching this UK will be updated (deleted / inserted) rather than duplicated.
 
