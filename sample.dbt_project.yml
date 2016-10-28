@@ -1,10 +1,11 @@
-# configure dbt file paths (relative to dbt_project.yml)
+# this dbt project configuration is _required_ for all dbt projects.
+# it specifies information about the project that dbt needs to run.
 
-# the package config is _required_. If other packages import this package,
-# the name given below is used to reference this package
+name: 'your-package-name'    # Required. This is the name used to reference the package in all dependencies.
+version: '0.0.1'
 
-name: 'Your_Package_Name_Here'
-version: '1.0'
+
+# configuration of dbt file paths (relative to dbt_project.yml)
 
 source-paths: ["models"]     # paths with source code to compile
 analysis-paths: ["analysis"] # path with code to compile, but not execute
@@ -14,52 +15,47 @@ test-paths: ["test"]         # where to store test results
 data-paths: ["data"]         # load csvs from this directory with `dbt seed`
 log-path: "logs"             # where to save log files (rotated daily)
 
-# profile: my-org            # use my-org profile within this project. uncomment to enable
+# configuration of default database information, as defined within ~/.dbt/profiles.yml.
+# all execution of dbt from the root directory of this project will default to this profile.
 
-# default paramaters that apply to _all_ models (unless overridden below)
 
-model-defaults:
-  enabled: true           # enable all models by default
-  materialized: view      # options: table | view | ephemeral | incremental
+profile: "evil-corp" # this must map to the profile you create in profiles.yml;
+                     # this is how dbt gets the connection information for this project.
 
-# Custom configurations for each model. Unspecified models will use the model-defaults information above.
-# The structure of this config object should mirror the project files in the "source-paths" directories.
-# Here, we specify "Your_Package_Name_Here" to denote that we're referencing models in _this_ project.
-# Below it, we specify configs for the "Analyst_Collective" project, imported from the "analytics" dependency
 
 models:
-  'Your_Package_Name_Here':  # the following configs pertain to _this_ dbt project
+  your-package-name:         # the following configs pertain to _this_ dbt project
     pardot:                  # assuming pardot is listed in the models/ directory
       enabled: true          # enable all pardot models except where overriden (same as default)
-      pardot_emails:         # override the configs for the pardot_emails model
+      mailchimp_emails:      # override the configs for the pardot_emails model
         enabled: true        # enable this specific model (false to disable)
-        materialized: table  # create a table instead of a view
+        materialized: table  # create a table instead of a view. acceptable values: view, table, ephemeral, incremental.
 
         # You can choose sort keys, a dist key, or both to improve query efficiency. By default, materialized
         # tables are created with no sort or dist keys.
-        #
-        sort: ['timestamp', 'userid']  # optionally set one or more sort keys on the materialized table
-        dist: 'userid'                 # optionally set a distribution key on the materialized table
 
+        sort: ['timestamp', 'userid']  # optionally set one or more sort keys on the materialized table.
+        sort_type: interleaved         # sets sort key to interleaved; default is compound.
+        dist: 'userid'                 # optionally set a distribution style and key on the materialized table
+                                       # other options include: all, even. anything but all or even will set the dist style to "key".
       pardot_visitoractivity:
         materialized: view
-        sort: ['timestamp']  # this has no effect, as sort and dist keys only apply to materialized tables
+        sort: ['timestamp']  # this has no effect, as sort and dist keys only apply to table and incremental materialization strategies.
 
-  'Analytics':              # This is a different DBT repo included in the "repositories" dict below
+  analytics:              # This is a different dbt project included in the "repositories" dict below
     snowplow:
-        events:
+        sessions_landing_page:
             materialized: ephemeral   # ephemeral models are injected as CTEs into models which reference them.
                                       # ephemeral models are not created in the database!
         sessions:
             materialized: incremental # incremental models are append-only
                                       # new records are identified by the sql_where statement below
                                       # use {{this}} to reference the schema and table names for this model
+
             sql_where: "created_at > (select max(created_at) from {{this}})"
 
-profile: "evil-corp" # this must map to the profile you create in profiles.yml;
-                     # this is how dbt gets the connection information for this project.
-
-
+            unique_key: user_id || session_index  #this defines a unique key for this incremental model.
+                                                  #records matching this UK will be updated (deleted / inserted) rather than duplicated.
 
 
 # add dependencies. these will get pulled during the `dbt deps` process.

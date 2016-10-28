@@ -3,7 +3,7 @@ import os, sys
 import psycopg2
 import yaml
 
-from dbt.compilation import Compiler
+from dbt.compilation import Compiler, CompilableEntities
 from dbt.templates import DryCreateTemplate, BaseCreateTemplate
 from dbt.runner import RunManager
 from dbt.schema_tester import SchemaTester
@@ -25,15 +25,16 @@ class TestTask:
     def compile(self):
         compiler = Compiler(self.project, BaseCreateTemplate)
         compiler.initialize()
+        results = compiler.compile()
 
-        created_models, created_tests, created_analyses = compiler.compile()
-        print("Compiled {} models, {} tests, and {} analyses".format(created_models, created_tests, created_analyses))
+        stat_line = ", ".join(["{} {}".format(results[k], k) for k in CompilableEntities])
+        print("Compiled {}".format(stat_line))
 
         return compiler
 
     def run(self):
         self.compile()
-        runner = RunManager(self.project, self.project['target-path'], 'build')
+        runner = RunManager(self.project, self.project['target-path'], 'build', self.args.threads)
         runner.run_tests()
 
         print("Done!")

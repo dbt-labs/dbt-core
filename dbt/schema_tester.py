@@ -1,6 +1,6 @@
 import os
 
-from dbt.targets import RedshiftTarget
+import dbt.targets
 
 import psycopg2
 import logging
@@ -58,7 +58,7 @@ class SchemaTester(object):
 
     def get_target(self):
         target_cfg = self.project.run_environment()
-        return RedshiftTarget(target_cfg)
+        return dbt.targets.get_target(target_cfg)
 
     def execute_query(self, model, sql):
         target = self.get_target()

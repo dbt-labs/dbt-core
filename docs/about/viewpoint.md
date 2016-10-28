@@ -23,8 +23,6 @@ Analytics doesn’t have to be this way. In fact, the playbook for solving these
 The same techniques that software engineering teams use to collaborate on the rapid creation of quality applications can apply to analytics. We believe it’s time to build an open set of tools and processes to make that happen.
 
 ## Analytics is collaborative
-Most of the problems with the current analytics workflow aren’t so bad if you’re working alone. You know about all of the data available to you, you know what it means, and you know how it was created. But you don’t scale. As soon as your analytics needs grow beyond a single analyst, these problems begin to manifest.
-
 We believe a mature analytics team’s techniques and workflow should have the following collaboration features:
 
 ### Version Control
@@ -35,15 +33,12 @@ Bad data can lead to bad analyses, and bad analyses can lead to bad decisions. A
 
 ### Documentation
 Your analysis is a software application, and, like every other software application, people are going to have questions about how to use it. Even though it might seem simple, in reality the “Revenue” line you’re showing could mean dozens of things. Your code should come packaged with a basic description of how it should be interpreted, and your team should be able to add to that documentation as additional questions arise.
-Further, your analysis may need to be extended or modified by another member of your team, so document any portions of the code that may benefit from clarification.
 
 ### Modularity
 If you build a series of analyses about your company’s revenue, and your colleague does as well, you should use the same input data. Copy-paste is not a good approach here — if the definition of the underlying set changes, it will need to be updated everywhere it was used. Instead, think of the schema of a data set as its public interface. Create tables, views, or other data sets that expose a consistent schema and can be modified if business logic changes.
 
 ## Analytic code is an asset
-Data collection, processing, and analysis have all grown exponentially in capability in the past decades. As a result, analytics as a practice provides more value than ever to organizations. Today, the success of an organization can be directly linked to its ability to make effective, fast decisions based on data.
-
-If analytics is core to the success of an organization, the code, processes, and tooling required to produce that analysis are core organizational investments. We believe a mature analytics organization’s workflow should have the following characteristics so as to protect and grow that investment:
+The code, processes, and tooling required to produce that analysis are core organizational investments. We believe a mature analytics organization’s workflow should have the following characteristics so as to protect and grow that investment:
 
 ### Environments
 Analytics requires multiple environments. Analysts need the freedom to work without impacting users, while users need service level guarantees so that they can trust the data they rely on to do their jobs.

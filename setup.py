@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 import os.path
 
 package_name = "dbt"
-package_version = "0.4.4"
+package_version = "0.5.2"
 
 setup(
   name=package_name,
@@ -29,6 +29,8 @@ setup(
     'sqlparse==0.1.19',
     'networkx==1.11',
     'csvkit==0.9.1',
+    'snowplow-tracker==0.7.2',
+    'celery==3.1.23',
     #'paramiko==2.0.1',
     #'sshtunnel==0.0.8.2'
   ],

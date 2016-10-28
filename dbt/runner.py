@@ -6,14 +6,18 @@ import os, sys
 import logging
 import time
 import itertools
+import re
+import yaml
+from datetime import datetime
 
 from dbt.compilation import Compiler
 from dbt.linker import Linker
 from dbt.templates import BaseCreateTemplate
-from dbt.targets import RedshiftTarget
+import dbt.targets
 from dbt.source import Source
 from dbt.utils import find_model_by_fqn, find_model_by_name, dependency_projects
 from dbt.compiled_model import make_compiled_model
+import dbt.tracking
 import dbt.schema
 
 from multiprocessing.dummy import Pool as ThreadPool
@@ -61,6 +65,30 @@ class BaseRunner(object):
     def status(self, result):
         raise NotImplementedError("not implemented")
 
+    def execute_contents(self, schema, target, model):
+        parts = re.split(r'-- (DBT_OPERATION .*)', model.compiled_contents)
+        handle = None
+
+        status = 'None'
+        for i, part in enumerate(parts):
+            matches = re.match(r'^DBT_OPERATION ({.*})$', part)
+            if matches is not None:
+                instruction_string = matches.groups()[0]
+                instruction = yaml.safe_load(instruction_string)
+                function = instruction['function']
+                kwargs = instruction['args']
+
+                func_map = {
+                    'expand_column_types_if_needed': lambda kwargs: schema.expand_column_types_if_needed(**kwargs),
+                }
+
+                func_map[function](kwargs)
+            else:
+                handle, status = schema.execute_without_auto_commit(part, handle)
+
+        handle.commit()
+        return status
+
 class ModelRunner(BaseRunner):
     run_type = 'run'
     def pre_run_msg(self, model):
@@ -99,7 +127,7 @@ class ModelRunner(BaseRunner):
         if model.tmp_drop_type is not None:
             schema.drop(target.schema, model.tmp_drop_type, model.tmp_name)
 
-        status = schema.execute_and_handle_permissions(model.contents, model.name)
+        status = self.execute_contents(schema, target, model)
 
         if model.final_drop_type is not None:
             schema.drop(target.schema, model.final_drop_type, model.name)
@@ -186,7 +214,7 @@ class TestRunner(ModelRunner):
         return info
 
     def execute(self, schema, target, model):
-        rows = schema.execute_and_fetch(model.contents)
+        rows = schema.execute_and_fetch(model.compiled_contents)
         if len(rows) > 1:
             raise RuntimeError("Bad test {name}: Returned {num_rows} rows instead of 1".format(name=model.name, num_rows=len(rows)))
 
@@ -196,14 +224,50 @@ class TestRunner(ModelRunner):
 
         return row[0]
 
+class ArchiveRunner(BaseRunner):
+    run_type = 'archive'
+
+    def pre_run_msg(self, model):
+        print_vars = {
+            "schema": model.target.schema,
+            "model_name": model.name,
+        }
+
+        output = "START archive table {schema}.{model_name} ".format(**print_vars)
+        return output
+
+    def post_run_msg(self, result):
+        model = result.model
+        print_vars = {
+            "schema": model.target.schema,
+            "model_name": model.name,
+            "info": "ERROR archiving" if result.errored else "OK created"
+        }
+
+        output = "{info} table {schema}.{model_name} ".format(**print_vars)
+        return output
+
+    def pre_run_all_msg(self, models):
+        return "Archiving {} tables".format(len(models))
+
+    def post_run_all_msg(self, results):
+        return "Finished archiving {} tables".format(len(results))
+
+    def status(self, result):
+        return result.status
+
+    def execute(self, schema, target, model):
+        status = self.execute_contents(schema, target, model)
+        return status
+
 class RunManager(object):
-    def __init__(self, project, target_path, graph_type):
+    def __init__(self, project, target_path, graph_type, threads):
         self.logger = logging.getLogger(__name__)
         self.project = project
         self.target_path = target_path
         self.graph_type = graph_type
 
-        self.target = RedshiftTarget(self.project.run_environment())
+        self.target = dbt.targets.get_target(self.project.run_environment(), threads)
 
         if self.target.should_open_tunnel():
             print("Opening ssh tunnel to host {}... ".format(self.target.ssh_host), end="")
@@ -213,6 +277,15 @@ class RunManager(object):
 
 
         self.schema = dbt.schema.Schema(self.project, self.target)
+
+        self.context = {
+            "run_started_at": datetime.now(),
+            "invocation_id" : dbt.tracking.invocation_id,
+            "get_columns_in_table"   : self.schema.get_columns_in_table,
+            "get_missing_columns"   : self.schema.get_missing_columns,
+            "already_exists"   : self.schema.table_exists,
+        }
+
 
     def deserialize_graph(self):
         linker = Linker()
@@ -293,7 +366,7 @@ class RunManager(object):
 
         num_models = len(flat_models)
         if num_models == 0:
-            print("WARNING: No models to run in '{}'. Try checking your model configs and running `dbt compile`".format(self.target_path))
+            print("WARNING: Nothing to do. Try checking your model configs and running `dbt compile`".format(self.target_path))
             return []
 
         num_threads = self.target.threads
@@ -321,23 +394,50 @@ class RunManager(object):
 
             models_to_execute = [model for model in model_list if not model.should_skip()]
 
-            for i, model in enumerate(models_to_execute):
-                msg = runner.pre_run_msg(model)
-                self.print_fancy_output_line(msg, 'RUN', get_idx(model), num_models)
+            threads = self.target.threads
+            num_models_this_batch = len(models_to_execute)
+            model_index = 0
 
-            wrapped_models_to_execute = [{"runner": runner, "model": model} for model in models_to_execute]
-            run_model_results = pool.map(self.safe_execute_model, wrapped_models_to_execute)
+            def on_complete(run_model_results):
+                for run_model_result in run_model_results:
+                    model_results.append(run_model_result)
 
-            for i, run_model_result in enumerate(run_model_results):
-                model_results.append(run_model_result)
+                    msg = runner.post_run_msg(run_model_result)
+                    status = runner.status(run_model_result)
+                    index = get_idx(run_model_result.model)
+                    self.print_fancy_output_line(msg, status, index, num_models, run_model_result.execution_time)
 
-                msg = runner.post_run_msg(run_model_result)
-                status = runner.status(run_model_result)
-                self.print_fancy_output_line(msg, status, get_idx(run_model_result.model), num_models, run_model_result.execution_time)
+                    dbt.tracking.track_model_run({
+                        "invocation_id": dbt.tracking.invocation_id,
+                        "index": index,
+                        "total": num_models,
+                        "execution_time": run_model_result.execution_time,
+                        "run_status": run_model_result.status,
+                        "run_skipped": run_model_result.skip,
+                        "run_error": run_model_result.error,
+                        "model_materialization": run_model_result.model['materialized'],
+                        "model_id": run_model_result.model.hashed_name(),
+                        "hashed_contents": run_model_result.model.hashed_contents(),
+                    })
 
-                if run_model_result.errored:
-                    on_failure(run_model_result.model)
-                    print(run_model_result.error)
+                    if run_model_result.errored:
+                        on_failure(run_model_result.model)
+                        print(run_model_result.error)
+
+            while model_index < num_models_this_batch:
+                local_models = []
+                for i in range(model_index, min(model_index + threads, num_models_this_batch)):
+                    model = models_to_execute[i]
+                    local_models.append(model)
+                    msg = runner.pre_run_msg(model)
+                    self.print_fancy_output_line(msg, 'RUN', get_idx(model), num_models)
+
+                wrapped_models_to_execute = [{"runner": runner, "model": model} for model in local_models]
+                map_result = pool.map_async(self.safe_execute_model, wrapped_models_to_execute, callback=on_complete)
+                map_result.wait()
+                run_model_results = map_result.get()
+
+                model_index += threads
 
         pool.close()
         pool.join()
@@ -353,6 +453,12 @@ class RunManager(object):
         linker = self.deserialize_graph()
         compiled_models = [make_compiled_model(fqn, linker.get_node(fqn)) for fqn in linker.nodes()]
         relevant_compiled_models = [m for m in compiled_models if m.is_type(runner.run_type)]
+
+        for m in relevant_compiled_models:
+            if m.should_execute():
+                context = self.context.copy()
+                context.update(m.context())
+                m.compile(context)
 
         schema_name = self.target.schema
 
@@ -403,4 +509,9 @@ class RunManager(object):
     def dry_run(self, limit_to=None):
         runner = DryRunner()
         return self.safe_run_from_graph(runner, limit_to)
+
+    def run_archive(self):
+        runner = ArchiveRunner()
+        return self.safe_run_from_graph(runner, None)
+
 

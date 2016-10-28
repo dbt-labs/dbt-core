@@ -6,13 +6,13 @@ from sqlalchemy.dialects import postgresql as postgresql_dialect
 import psycopg2
 
 from dbt.source import Source
-from dbt.targets import RedshiftTarget
+import dbt.targets
 
 class Seeder:
     def __init__(self, project):
         self.project = project
         run_environment = self.project.run_environment()
-        self.target = RedshiftTarget(run_environment)
+        self.target = dbt.targets.get_target(run_environment)
 
     def find_csvs(self):
         return Source(self.project).get_csvs(self.project['data-paths'])

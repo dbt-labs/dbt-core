@@ -1,7 +1,7 @@
 
 import os.path
 import fnmatch
-from dbt.model import Model, Analysis, TestModel, SchemaFile, Csv
+from dbt.model import Model, Analysis, TestModel, SchemaFile, Csv, Macro, ArchiveModel
 
 class Source(object):
     def __init__(self, project, own_project=None):
@@ -53,4 +53,32 @@ class Source(object):
         pattern = "[!.#~]*.csv"
         csvs = [Csv(*csv) for csv in self.find(csv_dirs, pattern)]
         return csvs
+
+    def get_macros(self, macro_dirs):
+        "Get Macro files"
+        pattern = "[!.#~]*.sql"
+        macros = [Macro(*macro) for macro in self.find(macro_dirs, pattern)]
+        return macros
+
+    def get_archives(self, create_template):
+        "Get Archive models defined in project config"
+
+        if 'archive' not in self.project:
+            return []
+
+        raw_source_schemas = self.project['archive']
+
+        archives = []
+        for schema in raw_source_schemas:
+            schema = schema.copy()
+            if 'tables' not in schema:
+                continue
+
+            tables = schema.pop('tables')
+            for table in tables:
+                fields = table.copy()
+                fields.update(schema)
+                archives.append(ArchiveModel(self.project, create_template, fields))
+        return archives
+
 

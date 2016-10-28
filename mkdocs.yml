@@ -3,21 +3,23 @@ docs_dir: docs
 
 pages:
 - Home: index.md
+- Guide:
+  - Setup: guide/setup.md
+  - Usage: guide/usage.md
+  - Building Models: guide/building-models.md
+  - Configuring Models: guide/configuring-models.md
+  - Database Optimizations: guide/database-optimizations.md
+  - Testing: guide/testing.md
+  - Context Variables: guide/context-variables.md
+  - Using Hooks: guide/using-hooks.md
+  - Package Management: guide/package-management.md
+  - Best Practices: guide/best-practices.md  
+  - Upgrading: guide/upgrading.md
 - About:
   - Overview: about/overview.md
   - Viewpoint: about/viewpoint.md
   - License: about/license.md
   - Release Notes: about/release-notes.md
   - Contributing: about/contributing.md
-- Guide:
-  - Setup: guide/setup.md
-  - Usage: guide/usage.md
-  - Building Models: guide/building-models.md
-  - Configuring Models: guide/configuring-models.md
-  - Model Validation: guide/model-validation.md
-  - Best Practices: guide/best-practices.md
-  - Managing Multiple Projects: guide/managing-multiple-projects.md
-
-
 
 theme: readthedocs

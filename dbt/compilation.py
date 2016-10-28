@@ -5,14 +5,21 @@ import jinja2
 from collections import defaultdict
 import dbt.project
 from dbt.source import Source
-from dbt.utils import find_model_by_fqn, find_model_by_name, dependency_projects
+from dbt.utils import find_model_by_fqn, find_model_by_name, dependency_projects, split_path, This, Var, compiler_error
 from dbt.linker import Linker
+import dbt.targets
+import dbt.templates
+import time
 import sqlparse
+
+CompilableEntities = ["models", "tests", "archives", "analyses"]
 
 class Compiler(object):
     def __init__(self, project, create_template_class):
         self.project = project
         self.create_template = create_template_class()
+        self.macro_generator = None
+        self.target = self.get_target()
 
     def initialize(self):
         if not os.path.exists(self.project['target-path']):
@@ -23,7 +30,7 @@ class Compiler(object):
 
     def get_target(self):
         target_cfg = self.project.run_environment()
-        return RedshiftTarget(target_cfg)
+        return dbt.targets.get_target(target_cfg)
 
     def model_sources(self, this_project, own_project=None):
         if own_project is None:
@@ -34,8 +41,20 @@ class Compiler(object):
             return Source(this_project, own_project=own_project).get_models(paths, self.create_template)
         elif self.create_template.label == 'test':
             return Source(this_project, own_project=own_project).get_test_models(paths, self.create_template)
+        elif self.create_template.label == 'archive':
+            return []
         else:
             raise RuntimeError("unexpected create template type: '{}'".format(self.create_template.label))
+
+    def get_macros(self, this_project, own_project=None):
+        if own_project is None:
+            own_project = this_project
+        paths = own_project.get('macro-paths', [])
+        return Source(this_project, own_project=own_project).get_macros(paths)
+
+    def get_archives(self, project):
+        archive_template = dbt.templates.ArchiveInsertTemplate()
+        return Source(project, own_project=project).get_archives(archive_template)
 
     def project_schemas(self):
         source_paths = self.project.get('source-paths', [])
@@ -81,6 +100,15 @@ class Compiler(object):
             return ""
         return do_config
 
+    def model_can_reference(self, src_model, other_model):
+        """returns True if the src_model can reference the other_model. Models can access
+        other models in their package and dependency models, but a dependency model cannot
+        access models "up" the dependency chain"""
+
+        # hack for now b/c we don't support recursive dependencies
+        return other_model.own_project['name'] == src_model.own_project['name'] \
+                or src_model.own_project['name'] == src_model.project['name']
+
     def __ref(self, linker, ctx, model, all_models):
         schema = ctx['env']['schema']
 
@@ -95,14 +123,25 @@ class Compiler(object):
                 other_model_package, other_model_name = args
                 other_model_name = self.create_template.model_name(other_model_name)
                 other_model = find_model_by_name(all_models, other_model_name, package_namespace=other_model_package)
+            else:
+                compiler_error(model, "ref() takes at most two arguments ({} given)".format(len(args)))
 
             other_model_fqn = tuple(other_model.fqn[:-1] + [other_model_name])
+            src_fqn = ".".join(source_model)
+            ref_fqn = ".".join(other_model_fqn)
+
+            #if not self.model_can_reference(model, other_model):
+            #    compiler_error(model, "Model '{}' exists but cannot be referenced from dependency model '{}'".format(ref_fqn, src_fqn))
+
             if not other_model.is_enabled:
-                src_fqn = ".".join(source_model)
-                ref_fqn = ".".join(other_model_fqn)
                 raise RuntimeError("Model '{}' depends on model '{}' which is disabled in the project config".format(src_fqn, ref_fqn))
 
-            linker.dependency(source_model, other_model_fqn)
+            # this creates a trivial cycle -- should this be a compiler error?
+            # we can still interpolate the name w/o making a self-cycle
+            if source_model == other_model_fqn:
+                pass
+            else:
+                linker.dependency(source_model, other_model_fqn)
 
             if other_model.is_ephemeral:
                 linker.inject_cte(model, other_model)
@@ -114,7 +153,9 @@ class Compiler(object):
             try:
                 return do_ref(*args)
             except RuntimeError as e:
-                print("Compiler error in {}".format(model.filepath))
+                root = os.path.relpath(model.root_dir, model.project['project-root'])
+                filepath = os.path.join(root, model.rel_filepath)
+                print("Compiler error in {}".format(filepath))
                 print("Enabled models:")
                 for m in all_models:
                     print(" - {}".format(".".join(m.fqn)))
@@ -122,19 +163,46 @@ class Compiler(object):
 
         return wrapped_do_ref
 
-    def compile_model(self, linker, model, models):
-        jinja = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath=model.root_dir))
-        template = jinja.get_template(model.rel_filepath)
-
+    def get_context(self, linker, model,  models):
         context = self.project.context()
+
+        # built-ins
         context['ref'] = self.__ref(linker, context, model, models)
         context['config'] = self.__model_config(model, linker)
+        context['this'] = This(context['env']['schema'], model.immediate_name, model.name)
+        context['var'] = Var(model, context=context)
 
-        rendered = template.render(context)
+        # these get re-interpolated at runtime!
+        context['run_started_at'] = '{{ run_started_at }}'
+        context['invocation_id']  = '{{ invocation_id }}'
+
+        # add in context from run target
+        context.update(self.target.context)
+
+        # add in macros (can we cache these somehow?)
+        for macro_name, macro in self.macro_generator(context):
+            context[macro_name] = macro
+
+        return context
+
+    def compile_model(self, linker, model, models):
+        try:
+            fs_loader = jinja2.FileSystemLoader(searchpath=model.root_dir)
+            jinja = jinja2.Environment(loader=fs_loader)
+
+            # this is a dumb jinja2 bug -- on windows, forward slashes are EXPECTED
+            posix_filepath = '/'.join(split_path(model.rel_filepath))
+            template = jinja.get_template(posix_filepath)
+            context = self.get_context(linker, model, models)
+
+            rendered = template.render(context)
+        except jinja2.exceptions.TemplateSyntaxError as e:
+            compiler_error(model, str(e))
+
         return rendered
 
-    def write_graph_file(self, linker):
-        filename = 'graph-{}.yml'.format(self.create_template.label)
+    def write_graph_file(self, linker, label):
+        filename = 'graph-{}.yml'.format(label)
         graph_path = os.path.join(self.project['target-path'], filename)
         linker.write_graph(graph_path)
 
@@ -165,10 +233,10 @@ class Compiler(object):
         # these newlines are important -- comments could otherwise interfere w/ query
         cte_stmts = [" {} as (\n{}\n)".format(name, contents) for (name, contents) in cte_mapping]
 
-        cte_text = ", ".join(cte_stmts)
+        cte_text = sqlparse.sql.Token(sqlparse.tokens.Keyword, ", ".join(cte_stmts))
         parsed.insert_after(with_stmt, cte_text)
 
-        return sqlparse.format(str(parsed), keyword_case='lower', reindent=True)
+        return str(parsed)
 
     def __recursive_add_ctes(self, linker, model):
         if model not in linker.cte_map:
@@ -211,7 +279,8 @@ class Compiler(object):
         written_models = []
         for model in sorted_models:
             injected_stmt = self.add_cte_to_rendered_query(linker, model, compiled_models)
-            wrapped_stmt = model.compile(injected_stmt, self.project, self.create_template)
+            context = self.get_context(linker, model, models)
+            wrapped_stmt = model.compile(injected_stmt, self.project, self.create_template, context)
 
             serialized = model.serialize()
             linker.update_node_data(tuple(model.fqn), serialized)
@@ -260,13 +329,39 @@ class Compiler(object):
 
         return written_tests
 
+    def generate_macros(self, all_macros):
+        def do_gen(ctx):
+            macros = []
+            for macro in all_macros:
+                new_macros = macro.get_macros(ctx)
+                macros.extend(new_macros)
+            return macros
+        return do_gen
+
+    def compile_archives(self):
+        linker = Linker()
+        all_archives = self.get_archives(self.project)
+
+        for archive in all_archives:
+            sql = archive.compile()
+            fqn = tuple(archive.fqn)
+            linker.update_node_data(fqn, archive.serialize())
+            self.__write(archive.build_path(), sql)
+
+        self.write_graph_file(linker, 'archive')
+        return all_archives
+
     def compile(self, dry=False):
         linker = Linker()
 
         all_models = self.model_sources(this_project=self.project)
+        all_macros = self.get_macros(this_project=self.project)
 
         for project in dependency_projects(self.project):
             all_models.extend(self.model_sources(this_project=self.project, own_project=project))
+            all_macros.extend(self.get_macros(this_project=self.project, own_project=project))
+
+        self.macro_generator = self.generate_macros(all_macros)
 
         enabled_models = [model for model in all_models if model.is_enabled]
 
@@ -277,11 +372,19 @@ class Compiler(object):
 
         self.validate_models_unique(compiled_models)
         self.validate_models_unique(written_schema_tests)
-        self.write_graph_file(linker)
+        self.write_graph_file(linker, self.create_template.label)
 
-        if self.create_template.label != 'test':
+        if self.create_template.label not in ['test', 'archive']:
             written_analyses = self.compile_analyses(linker, compiled_models)
         else:
             written_analyses = []
 
-        return len(written_models), len(written_schema_tests), len(written_analyses)
+
+        compiled_archives = self.compile_archives()
+
+        return {
+            "models": len(written_models),
+            "tests" : len(written_schema_tests),
+            "archives": len(compiled_archives),
+            "analyses" : len(written_analyses)
+        }

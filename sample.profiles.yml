@@ -3,28 +3,28 @@
 # This is an annotated sample project configuration for reference.
 # It attempts to show all possible configuration options.
 #
-user:                         # you can have multiple profiles for different projects
+my-profile:                   # each project has a single default profile. create additional profiles for new projects as needed.
   outputs:
-    my-redshift:              # uniquely named, you can have different targets in a profile
-      type: redshift          # only type supported
-      threads: 4              # max number of models to run concurrently. Between 1 and 8
-      host: localhost         # any IP or fqdn
+    my-target:                # uniquely named, you can have different targets in a profile
+      type: redshift          # only type supported currently
+      threads: 4              # max number of models to run concurrently. acceptable values between 1 and 8.
+      host: localhost         # any IP or fully-qualified domain name
       port: 5439              # database port
       user: my_user           # database user
       pass: password          # database password
       dbname: dev             # database name
-      schema: my_model_schema # the schema to create models in (eg. analyst_collective)
-  run-target: my-redshift     # which target to run sql against
+      schema: my_model_schema # the schema to create models in. commonly "dbt_" + a suffix for development, and "analytics" for production
+  run-target: my-target       # default target; can be overridden at run time.
 
-# create a second profile. You can switch to this profile in the CLI with --profile my-org
+# create a second profile. You can switch to this profile in the CLI with --profile my-profile
 # Valid dbt options include:
-# dbt debug --profile my-org # use my-org profile with default "dev" run target
-# dbt debug --profile my-org --target dev # explicitly use "dev" run target
-# dbt debug --profile my-org --target prod # switch to the "prod" run target
+# dbt debug --profile my-profile # use my-profile profile with default "dev" run target
+# dbt debug --profile my-profile --target dev # explicitly use "dev" run target
+# dbt debug --profile my-profile --target prod # switch to the "prod" run target
 # these flags work with `dbt (debug|compile|run|test)` as you would expect!
-my-org:
+evil-corp:
   outputs:
-    dev: # specify the dev connection
+    dev:                        # specify the dev connection
       type: redshift
       threads: 8
       host: localhost
@@ -32,8 +32,8 @@ my-org:
       user: my_user
       pass: password
       dbname: warehouse
-      schema: ac_drew_dev # use the dev schema
-    prod: # specify the prod connection
+      schema: dbt_dbanin        # use the dev schema
+    prod:                       # specify the prod connection
       type: redshift
       threads: 1
       host: localhost
@@ -41,5 +41,5 @@ my-org:
       user: my_user
       pass: password
       dbname: warehouse
-      schema: ac_drew_prod # use the prod schema instead
-  run-target: dev # default env is dev unless specified otherwise
+      schema: analytics         # use the prod schema instead
+  run-target: dev               # default target is dev unless specified otherwise at run time.

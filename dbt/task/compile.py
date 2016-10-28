@@ -1,5 +1,5 @@
 
-from dbt.compilation import Compiler
+from dbt.compilation import Compiler, CompilableEntities
 from dbt.templates import BaseCreateTemplate, DryCreateTemplate
 
 
@@ -16,6 +16,7 @@ class CompileTask:
 
         compiler = Compiler(self.project, create_template)
         compiler.initialize()
-        created_models, created_tests, created_analyses = compiler.compile(dry=self.args.dry)
+        results = compiler.compile(dry=self.args.dry)
 
-        print("Compiled {} models, {} tests and {} analyses".format(created_models, created_tests, created_analyses))
+        stat_line = ", ".join(["{} {}".format(results[k], k) for k in CompilableEntities])
+        print("Compiled {}".format(stat_line))

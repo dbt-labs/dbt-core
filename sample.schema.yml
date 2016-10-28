@@ -1,7 +1,7 @@
 # This is a sample schema definition which can go in a model directory
 # There are three types of validations
 #  - Not null
-#  - Unique 
+#  - Unique
 #  - Referential integrity
 #  - Field in list of accepted values
 #
@@ -30,7 +30,7 @@ people:
 accounts:
   constraints:
     # count number of rows where a value is not in the given accepted values
-    accepted-values:
+    accepted_values:
       - {field: tier, values: ['paid', 'free']}
 
     not_null:
@@ -39,5 +39,3 @@ accounts:
 
     unique:
       - id
-
-
