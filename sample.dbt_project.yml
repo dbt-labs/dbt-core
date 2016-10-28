@@ -34,13 +34,13 @@ models:
       pardot_emails:         # override the configs for the pardot_emails model
         enabled: true        # enable this specific model (false to disable)
         materialized: table  # create a table instead of a view
-  
+
         # You can choose sort keys, a dist key, or both to improve query efficiency. By default, materialized
         # tables are created with no sort or dist keys.
         #
         sort: ['timestamp', 'userid']  # optionally set one or more sort keys on the materialized table
         dist: 'userid'                 # optionally set a distribution key on the materialized table
-  
+
       pardot_visitoractivity:
         materialized: view
         sort: ['timestamp']  # this has no effect, as sort and dist keys only apply to materialized tables
@@ -55,7 +55,12 @@ models:
                                       # new records are identified by the sql_where statement below
                                       # use {{this}} to reference the schema and table names for this model
             sql_where: "created_at > (select max(created_at) from {{this}})"
-        
+
+profile: "evil-corp" # this must map to the profile you create in profiles.yml;
+                     # this is how dbt gets the connection information for this project.
+
+
+
 
 # add dependencies. these will get pulled during the `dbt deps` process.
 repositories:
