@@ -15,13 +15,12 @@ test-paths: ["test"]         # where to store test results
 data-paths: ["data"]         # load csvs from this directory with `dbt seed`
 log-path: "logs"             # where to save log files (rotated daily)
 
-# configuration of default database information, as defined within ~/.dbt/profiles.yml.
-# all execution of dbt from the root directory of this project will default to this profile.
-
 
 profile: "evil-corp" # this must map to the profile you create in profiles.yml;
                      # this is how dbt gets the connection information for this project.
 
+# configuration of default database information, as defined within ~/.dbt/profiles.yml.
+# all execution of dbt from the root directory of this project will default to this profile.
 
 models:
   your-package-name:         # the following configs pertain to _this_ dbt project
