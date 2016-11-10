@@ -10,5 +10,4 @@ dependencies:
 
 test:
   override:
-    - make test_unit
-    - make test_integration
+    - make test
