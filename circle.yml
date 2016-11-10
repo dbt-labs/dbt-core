@@ -10,4 +10,4 @@ dependencies:
 
 test:
   override:
-    - make test
+    - test/runner.sh
