@@ -1,7 +1,7 @@
 import unittest
 
 from dbt.compilation import Compiler
-from tests import fake_data
+from test.unit import fake_data
 
 class CompilationTest(unittest.TestCase):
 

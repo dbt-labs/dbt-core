@@ -1,0 +1,22 @@
+version: '2'
+services:
+
+  database:
+    image: postgres
+    environment:
+      POSTGRES_USER: "root"
+      POSTGRES_PASSWORD: "password"
+      POSTGRES_DB: "dbt"
+    ports:
+      - "5432:5432"
+
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: "/root/.virtualenvs/dbt/bin/nosetests"
+    volumes:
+      - .:/usr/src/app
+    working_dir: /usr/src/app
+    depends_on:
+      - database

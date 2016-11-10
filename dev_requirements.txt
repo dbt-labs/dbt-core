@@ -3,3 +3,4 @@ nosy>=1.1.2
 mock>=1.3.0
 pep8>=1.6.2
 bumpversion==0.5.3
+coverage==4.2

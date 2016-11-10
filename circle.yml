@@ -1,5 +1,14 @@
+machine:
+  python:
+    version: 2.7.11
+  hosts:
+    database: 127.0.0.1
+
 dependencies:
   pre:
-    - sudo add-apt-repository -y ppa:fkrull/deadsnakes
-    - sudo apt-get update
-    - sudo apt-get install python3.5 python3.5-dev
+    - pip install -r requirements.txt -r dev_requirements.txt
+
+test:
+  override:
+    - make test_unit
+    - make test_integration
