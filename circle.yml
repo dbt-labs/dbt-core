@@ -19,4 +19,4 @@ dependencies:
 
 test:
   override:
-    - sudo test/runner.sh
+    - sudo test/circle.sh
