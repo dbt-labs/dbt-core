@@ -15,7 +15,7 @@ database:
 
 dependencies:
   pre:
-    - sudo pip install --upgrade pip
+    - sudo pip install --upgrade pip setuptools
     - sudo pip install -r requirements.txt -r dev_requirements.txt
 
 test:
