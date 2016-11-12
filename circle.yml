@@ -15,8 +15,9 @@ database:
 
 dependencies:
   pre:
+    - sudo pip install --upgrade pip
     - sudo pip install -r requirements.txt -r dev_requirements.txt
 
 test:
   override:
-    - sudo test/circle.sh
+    - sudo -i /bin/bash -c 'cd /home/ubuntu/dbt && ./test/circle.sh'
