@@ -15,7 +15,7 @@ database:
 
 dependencies:
   pre:
-    - pip install -r requirements.txt -r dev_requirements.txt
+    - sudo pip install -r requirements.txt -r dev_requirements.txt
 
 test:
   override:
