@@ -15,10 +15,8 @@ test-paths: ["test"]         # where to store test results
 data-paths: ["data"]         # load csvs from this directory with `dbt seed`
 log-path: "logs"             # where to save log files (rotated daily)
 
-# configuration of default database information, as defined within ~/.dbt/profiles.yml.
-# all execution of dbt from the root directory of this project will default to this profile.
-
-profile: evil-corp           # use evil-corp profile within this project.
+profile: "evil-corp"  # this must map to the profile you create in profiles.yml;
+                      # this is how dbt gets the connection information for this project.
 
 # Custom configurations for each model.
 # The structure of this config object should mirror the project files in the "source-paths" directories.
@@ -27,7 +25,7 @@ models:
   your-package-name:         # the following configs pertain to _this_ dbt project
     pardot:                  # assuming pardot is listed in the models/ directory
       enabled: true          # enable all pardot models except where overriden (same as default)
-      mailchimp_emails:      # override the configs for the pardot_emails model
+      pardot_emails:         # override the configs for the pardot_emails model
         enabled: true        # enable this specific model (false to disable)
         materialized: table  # create a table instead of a view. acceptable values: view, table, ephemeral, incremental.
 
@@ -36,6 +34,7 @@ models:
 
         sort: ['timestamp', 'userid']  # optionally set one or more sort keys on the materialized table.
         sort_type: interleaved         # sets sort key to interleaved; default is compound.
+
         dist: 'userid'                 # optionally set a distribution style and key on the materialized table
                                        # other options include: all, even. anything but all or even will set the dist style to "key".
       pardot_visitoractivity:
@@ -51,7 +50,9 @@ models:
             materialized: incremental # incremental models are append-only
                                       # new records are identified by the sql_where statement below
                                       # use {{this}} to reference the schema and table names for this model
+
             sql_where: "created_at > (select max(created_at) from {{this}})"
+
             unique_key: user_id || session_index  #this defines a unique key for this incremental model.
                                                   #records matching this UK will be updated (deleted / inserted) rather than duplicated.
 
