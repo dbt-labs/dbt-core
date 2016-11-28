@@ -118,7 +118,7 @@ def handle(args):
 
             expected_profiles_dir_1 = os.listdir("C:\\Users\\appveyor")
             expected_profiles_dir_2 = os.listdir("C:\\Users\\appveyor\\.dbt")
-            profiles_dir = os.path.join(os.path.expanduser('~'), '.dbt\\profiles.yml')
+            profiles_dir = os.path.join(os.path.expanduser('~'), '.dbt')
             print("* Should be: {}".format(expected_profiles_dir_1))
             print("* Should be: {}".format(expected_profiles_dir_2))
             print("* Looked for profiles.yml in: {}".format(profiles_dir))
