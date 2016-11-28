@@ -28,8 +28,8 @@ environment:
 services:
   - postgresql94
 
-#hosts:
-#  database: 127.0.0.1
+hosts:
+  database: 127.0.0.1
 
 init:
   - PATH=C:\Program Files\PostgreSQL\9.4\bin\;%PATH%
@@ -64,7 +64,7 @@ test_script:
   - createdb dbt
   - psql -c "CREATE ROLE root WITH UNENCRYPTED PASSWORD 'password';" -U postgres
   - psql -c "ALTER ROLE root WITH LOGIN;" -U postgres
-  - psql -c "GRANT SELECT, UPDATE, INSERT ON ALL TABLES IN SCHEMA dbt.* TO root;" -U postgres
+  #- psql -c "GRANT SELECT, UPDATE, INSERT ON ALL TABLES IN SCHEMA dbt.* TO root;" -U postgres
   - psql -c "GRANT CREATE, CONNECT ON DATABASE dbt TO root;" -U postgres
 
   - "%CMD_IN_ENV% tox -e %TOX_ENV%"
