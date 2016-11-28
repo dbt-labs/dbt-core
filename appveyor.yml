@@ -17,7 +17,7 @@ environment:
       PYTHON_ARCH: "64"
 
 
-  HOME: '/root/'
+  DBT_CONFIG_DIR: "C:\projects\dbt"
 
   PGUSER: postgres
   PGPASSWORD: Password12!
@@ -57,6 +57,7 @@ before_test:
   - "%CMD_IN_ENV% pip install tox"
 
 test_script:
+  - echo 'home is: %USERPROFILE%'
   # set up psql db
   - createdb dbt
   - psql -c "CREATE ROLE root WITH UNENCRYPTED PASSWORD 'password';" -U postgres
