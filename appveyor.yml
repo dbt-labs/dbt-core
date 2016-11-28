@@ -1,3 +1,9 @@
+services:
+  - postgresql
+
+hosts:
+  database: 127.0.0.1
+
 environment:
   # SDK v7.0 MSVC Express 2008's SetEnv.cmd script will fail if the
   # /E:ON and /V:ON options are not enabled in the batch script intepreter
@@ -31,6 +37,16 @@ install:
   # Check that we have the expected version and architecture for Python
   - "python --version"
   - "python -c \"import struct; print(struct.calcsize('P') * 8)\""
+
+  # set up psql db
+  - SET PGUSER=postgres
+  - SET PGPASSWORD=Password12!
+  - createdb dbt
+  - PATH=C:\Program Files\PostgreSQL\9.4\bin\;%PATH%
+  - psql -c "CREATE ROLE root WITH UNENCRYPTED PASSWORD 'password';" -U postgres
+  - psql -c "ALTER ROLE root WITH LOGIN;" -U postgres
+  - psql -c "GRANT SELECT, UPDATE, INSERT ON ALL TABLES IN SCHEMA dbt.* TO root;" -U postgres
+  - psql -c "GRANT CREATE, CONNECT ON DATABASE dbt TO root;" -U postgres
 
 build: false  # Not a C# project, build stuff at the test step instead.
 
