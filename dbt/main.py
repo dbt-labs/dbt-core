@@ -114,6 +114,11 @@ def handle(args):
             all_profiles = project.read_profiles().keys()
             profiles_string = "\n".join([" - " + key for key in all_profiles])
             print("Valid profiles:\n{}".format(profiles_string))
+
+            profiles_dir = os.path.join(os.path.expanduser('~'), '.dbt/profiles.yml')
+            print("* Looked for profiles.yml in: {}".format(profiles_dir))
+            print("* Profiles: {}".format(project.read_profiles()))
+
             dbt.tracking.track_invalid_invocation(project=proj, args=parsed, result_type="invalid_profile", result=str(e))
             return None
 
