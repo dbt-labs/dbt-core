@@ -17,7 +17,7 @@ environment:
       PYTHON_ARCH: "64"
 
 
-  DBT_CONFIG_DIR: "C:\\projects\\dbt"
+  DBT_CONFIG_DIR: "C:\\Users\\appveyor"
 
   PGUSER: postgres
   PGPASSWORD: Password12!
