@@ -55,8 +55,9 @@ before_test:
   - "%CMD_IN_ENV% pip install tox"
 
 test_script:
-  - ps: '$env:DBT_CONFIG_DIR="C:\Users\appveyor\.dbt"'
+  - ps: '[Environment]::SetEnvironmentVariable("DBT_CONFIG_DIR", "C:\\Users\\appveyor\\.dbt", "Machine")'
   - ps: 'echo "DBT CONFIG DIR is: $DBT_CONFIG_DIR"'
+  - ps: 'echo "DBT CONFIG DIR is: %DBT_CONFIG_DIR%"'
   #- ps: 'Get-ChildItem -Force $DBT_CONFIG_DIR -Recurse'
   # set up psql db
   - createdb dbt
