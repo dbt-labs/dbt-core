@@ -17,8 +17,6 @@ environment:
       PYTHON_ARCH: "64"
 
 
-  DBT_CONFIG_DIR: "C:\\Users\\appveyor\\.dbt"
-
   PGUSER: postgres
   PGPASSWORD: Password12!
 
@@ -46,6 +44,8 @@ install:
   # done from inside the powershell script as it would require to restart
   # the parent CMD process).
   - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
+  - "SET DBT_CONFIG_DIR=C:\\Users\\appveyor\\.dbt"
+
 
   # Check that we have the expected version and architecture for Python
   - "python --version"
@@ -58,7 +58,7 @@ before_test:
 
 test_script:
   - ps: 'echo "DBT CONFIG DIR is: $DBT_CONFIG_DIR"'
-  - ps: 'Get-ChildItem -Force $DBT_CONFIG_DIR -Recurse'
+  #- ps: 'Get-ChildItem -Force $DBT_CONFIG_DIR -Recurse'
   # set up psql db
   - createdb dbt
   - psql -c "CREATE ROLE root WITH UNENCRYPTED PASSWORD 'password';" -U postgres
