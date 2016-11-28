@@ -130,6 +130,8 @@ def handle(args):
             print("PROFILE: {}".format(DBT_PROFILES))
             print("-" * 40)
             print("EXPANDED: {}".format(os.path.expanduser("~")))
+            print("CLONED: {}".format(os.environ('APPVEYOR_BUILD_FOLDER')))
+            print("CWD: {}".format(os.getcwd()))
 
             dbt.tracking.track_invalid_invocation(project=proj, args=parsed, result_type="invalid_profile", result=str(e))
             return None
