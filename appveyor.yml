@@ -54,6 +54,12 @@ install:
   - "python --version"
   - "python -c \"import struct; print(struct.calcsize('P') * 8)\""
 
+build: false  # Not a C# project, build stuff at the test step instead.
+
+before_test:
+  - "%CMD_IN_ENV% pip install tox"
+
+test_script:
   # set up psql db
   - createdb dbt
   - psql -c "CREATE ROLE root WITH UNENCRYPTED PASSWORD 'password';" -U postgres
@@ -61,10 +67,4 @@ install:
   - psql -c "GRANT SELECT, UPDATE, INSERT ON ALL TABLES IN SCHEMA dbt.* TO root;" -U postgres
   - psql -c "GRANT CREATE, CONNECT ON DATABASE dbt TO root;" -U postgres
 
-build: false  # Not a C# project, build stuff at the test step instead.
-
-before_test:
-  - "%CMD_IN_ENV% pip install tox"
-
-test_script:
   - "%CMD_IN_ENV% tox -e %TOX_ENV%"
