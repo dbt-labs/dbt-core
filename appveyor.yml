@@ -57,8 +57,8 @@ before_test:
   - "%CMD_IN_ENV% pip install tox"
 
 test_script:
-  - ps: 'echo "home is: $HOME"'
-  - ps: 'Get-ChildItem -Force $HOME -Recurse'
+  - ps: 'echo "DBT CONFIG DIR is: $DBT_CONFIG_DIR"'
+  - ps: 'Get-ChildItem -Force $DBT_CONFIG_DIR -Recurse'
   # set up psql db
   - createdb dbt
   - psql -c "CREATE ROLE root WITH UNENCRYPTED PASSWORD 'password';" -U postgres
