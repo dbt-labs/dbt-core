@@ -8,6 +8,8 @@ from test.integration.connection import handle
 DBT_CONFIG_DIR = os.environ.get('DBT_CONFIG_DIR', '/root/.dbt')
 DBT_PROFILES = os.path.join(DBT_CONFIG_DIR, "profiles.yml")
 
+print("DEBUG: PROFILE DIR: {}".format(DBT_PROFILES))
+
 
 class DBTIntegrationTest(unittest.TestCase):
 
