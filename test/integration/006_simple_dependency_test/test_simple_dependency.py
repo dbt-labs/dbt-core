@@ -98,6 +98,6 @@ class TestSimpleDependencyBranch(DBTIntegrationTest):
 
         self.assertTablesEqual("seed_summary","view_summary")
 
-        self.run_sql_file("test/integration/006_simple_dependency/update.sql")
+        self.run_sql_file("test/integration/006_simple_dependency_test/update.sql")
 
         self.deps_run_assert_equality()
