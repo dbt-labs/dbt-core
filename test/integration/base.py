@@ -7,6 +7,15 @@ from test.integration.connection import handle
 
 DBT_CONFIG_DIR = os.environ.get('DBT_CONFIG_DIR', '/root/.dbt')
 DBT_PROFILES = os.path.join(DBT_CONFIG_DIR, "profiles.yml")
+
+
+expected_profiles_dir = os.listdir("C:\\Users\\appveyor\\.dbt")
+profiles_dir = os.path.join(os.path.expanduser('~'), '.dbt')
+print("# Looked for profiles.yml in: {}".format(profiles_dir))
+print("# Should be: {}".format(expected_profiles_dir))
+print("# Found: {}".format(os.listdir(profiles_dir)))
+print("# Profiles: {}".format(project.read_profiles()))
+
 class DBTIntegrationTest(unittest.TestCase):
 
     def setUp(self):
