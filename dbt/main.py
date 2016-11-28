@@ -2,7 +2,6 @@
 from dbt.logger import getLogger
 
 import argparse
-import os
 import os.path
 import sys
 import re
@@ -115,25 +114,6 @@ def handle(args):
             all_profiles = project.read_profiles().keys()
             profiles_string = "\n".join([" - " + key for key in all_profiles])
             print("Valid profiles:\n{}".format(profiles_string))
-
-            expected_profiles_dir = os.listdir("C:/Users/appveyor/.dbt")
-            profiles_dir = os.path.join(os.path.expanduser('~'), '.dbt')
-            print("* Looked for profiles.yml in: {}".format(profiles_dir))
-            print("* Should be: {}".format(expected_profiles_dir))
-            print("* Found: {}".format(os.listdir(profiles_dir)))
-            print("* Profiles: {}".format(project.read_profiles()))
-
-            DBT_CONFIG_DIR = os.environ.get('DBT_CONFIG_DIR', '/root/.dbt')
-            DBT_PROFILES = os.path.join(DBT_CONFIG_DIR, "profiles.yml")
-            print("-" * 40)
-            print("CONFIG: {}".format(DBT_CONFIG_DIR))
-            print("PROFILE: {}".format(DBT_PROFILES))
-            print("-" * 40)
-            print("EXPANDED: {}".format(os.path.expanduser("~")))
-            print("CLONED: {}".format(os.environ.get('APPVEYOR_BUILD_FOLDER')))
-            print("CWD: {}".format(os.getcwd()))
-            print("ENV: {}".format(os.environ))
-
             dbt.tracking.track_invalid_invocation(project=proj, args=parsed, result_type="invalid_profile", result=str(e))
             return None
 

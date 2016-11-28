@@ -5,8 +5,8 @@ import yaml
 
 from test.integration.connection import handle
 
-DBT_CONFIG_DIR = os.environ.get('DBT_CONFIG_DIR', '/root/.dbt')
-DBT_PROFILES = os.path.join(DBT_CONFIG_DIR, "profiles.yml")
+DBT_CONFIG_DIR = os.path.expanduser(os.environ.get("DBT_CONFIG_DIR", '/root/.dbt'))
+DBT_PROFILES = os.path.join(DBT_CONFIG_DIR, 'profiles.yml')
 
 class DBTIntegrationTest(unittest.TestCase):
 
@@ -56,14 +56,6 @@ class DBTIntegrationTest(unittest.TestCase):
 
         with open(DBT_PROFILES, 'w') as f:
             yaml.safe_dump(profile_config, f, default_flow_style=True)
-
-
-        expected_profiles_dir = os.listdir("C:/Users/appveyor/.dbt")
-        profiles_dir = os.path.join(os.path.expanduser('~'), '.dbt')
-        print("# Home dir:  {}".format(profiles_dir))
-        print("# Should be: {}".format(expected_profiles_dir))
-        print("# Found:     {}".format(os.listdir(profiles_dir)))
-        print("# Profiles:  {}".format(project.read_profiles()))
 
         self.run_sql("DROP SCHEMA IF EXISTS {} CASCADE;".format(self.schema))
         self.run_sql("CREATE SCHEMA {};".format(self.schema))
