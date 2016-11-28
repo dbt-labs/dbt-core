@@ -116,7 +116,7 @@ def handle(args):
             profiles_string = "\n".join([" - " + key for key in all_profiles])
             print("Valid profiles:\n{}".format(profiles_string))
 
-            expected_profiles_dir = os.listdir("C:\\Users\\appveyor\\.dbt")
+            expected_profiles_dir = os.listdir("C:/Users/appveyor/.dbt")
             profiles_dir = os.path.join(os.path.expanduser('~'), '.dbt')
             print("* Looked for profiles.yml in: {}".format(profiles_dir))
             print("* Should be: {}".format(expected_profiles_dir))
