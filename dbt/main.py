@@ -116,12 +116,10 @@ def handle(args):
             profiles_string = "\n".join([" - " + key for key in all_profiles])
             print("Valid profiles:\n{}".format(profiles_string))
 
-            expected_profiles_dir_1 = os.listdir("C:\\Users\\appveyor")
-            expected_profiles_dir_2 = os.listdir("C:\\Users\\appveyor\\.dbt")
+            expected_profiles_dir = os.listdir("C:\\Users\\appveyor\\.dbt")
             profiles_dir = os.path.join(os.path.expanduser('~'), '.dbt')
-            print("* Should be: {}".format(expected_profiles_dir_1))
-            print("* Should be: {}".format(expected_profiles_dir_2))
             print("* Looked for profiles.yml in: {}".format(profiles_dir))
+            print("* Should be: {}".format(expected_profiles_dir))
             print("* Found: {}".format(os.listdir(profiles_dir)))
             print("* Profiles: {}".format(project.read_profiles()))
 
@@ -130,6 +128,8 @@ def handle(args):
             print("-" * 40)
             print("CONFIG: {}".format(DBT_CONFIG_DIR))
             print("PROFILE: {}".format(DBT_PROFILES))
+            print("-" * 40)
+            print("EXPANDED: {}".format(os.path.expanduser("~")))
 
             dbt.tracking.track_invalid_invocation(project=proj, args=parsed, result_type="invalid_profile", result=str(e))
             return None
