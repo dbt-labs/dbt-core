@@ -57,7 +57,7 @@ before_test:
   - "%CMD_IN_ENV% pip install tox"
 
 test_script:
-  - echo 'home is: %USERPROFILE%'
+  - ps: echo 'home is: $HOME'
   # set up psql db
   - createdb dbt
   - psql -c "CREATE ROLE root WITH UNENCRYPTED PASSWORD 'password';" -U postgres
