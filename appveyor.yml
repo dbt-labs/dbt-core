@@ -44,8 +44,6 @@ install:
   # done from inside the powershell script as it would require to restart
   # the parent CMD process).
   - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
-  - "SET DBT_CONFIG_DIR=C:\\Users\\appveyor\\.dbt"
-
 
   # Check that we have the expected version and architecture for Python
   - "python --version"
@@ -57,6 +55,7 @@ before_test:
   - "%CMD_IN_ENV% pip install tox"
 
 test_script:
+  - ps: '$env:DBT_CONFIG_DIR="C:\Users\appveyor\.dbt"'
   - ps: 'echo "DBT CONFIG DIR is: $DBT_CONFIG_DIR"'
   #- ps: 'Get-ChildItem -Force $DBT_CONFIG_DIR -Recurse'
   # set up psql db
