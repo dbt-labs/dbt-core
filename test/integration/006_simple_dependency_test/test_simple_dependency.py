@@ -4,7 +4,7 @@ class TestSimpleDependency(DBTIntegrationTest):
 
     def setUp(self):
         DBTIntegrationTest.setUp(self)
-        self.run_sql_file("test/integration/006_simple_dependency/seed.sql")
+        self.run_sql_file("test/integration/006_simple_dependency_test/seed.sql")
 
     @property
     def schema(self):
@@ -12,7 +12,7 @@ class TestSimpleDependency(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/006_simple_dependency/models"
+        return "test/integration/006_simple_dependency_test/models"
 
     @property
     def project_config(self):
@@ -32,7 +32,7 @@ class TestSimpleDependency(DBTIntegrationTest):
 
         self.assertTablesEqual("seed_summary","view_summary")
 
-        self.run_sql_file("test/integration/006_simple_dependency/update.sql")
+        self.run_sql_file("test/integration/006_simple_dependency_test/update.sql")
 
         self.run_dbt(["deps"])
         self.run_dbt(["run"])
@@ -60,7 +60,7 @@ class TestSimpleDependencyBranch(DBTIntegrationTest):
 
     def setUp(self):
         DBTIntegrationTest.setUp(self)
-        self.run_sql_file("test/integration/006_simple_dependency/seed.sql")
+        self.run_sql_file("test/integration/006_simple_dependency_test/seed.sql")
 
     @property
     def schema(self):
@@ -68,7 +68,7 @@ class TestSimpleDependencyBranch(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/006_simple_dependency/models"
+        return "test/integration/006_simple_dependency_test/models"
 
     @property
     def project_config(self):

@@ -4,7 +4,7 @@ class TestDryRun(DBTIntegrationTest):
 
     def setUp(self):
         DBTIntegrationTest.setUp(self)
-        self.run_sql_file("test/integration/007_dry_run/seed.sql")
+        self.run_sql_file("test/integration/007_dry_run_test/seed.sql")
 
     @property
     def schema(self):
@@ -12,7 +12,7 @@ class TestDryRun(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/007_dry_run/models"
+        return "test/integration/007_dry_run_test/models"
 
     def test_dry_run(self):
         self.run_dbt(["run", '--dry'])

@@ -5,7 +5,7 @@ class TestSimpleSeed(DBTIntegrationTest):
     def setUp(self):
         DBTIntegrationTest.setUp(self)
 
-        self.run_sql_file("test/integration/005_simple_seed/seed.sql")
+        self.run_sql_file("test/integration/005_simple_seed_test/seed.sql")
 
     @property
     def schema(self):
@@ -13,12 +13,12 @@ class TestSimpleSeed(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/005_simple_seed/models"
+        return "test/integration/005_simple_seed_test/models"
 
     @property
     def project_config(self):
         return {
-            "data-paths": ['test/integration/005_simple_seed/data']
+            "data-paths": ['test/integration/005_simple_seed_test/data']
         }
 
     def test_simple_seed(self):

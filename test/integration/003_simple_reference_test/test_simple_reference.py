@@ -5,7 +5,7 @@ class TestSimpleReference(DBTIntegrationTest):
     def setUp(self):
         DBTIntegrationTest.setUp(self)
 
-        self.run_sql_file("test/integration/003_simple_reference/seed.sql")
+        self.run_sql_file("test/integration/003_simple_reference_test/seed.sql")
 
     @property
     def schema(self):
@@ -13,7 +13,7 @@ class TestSimpleReference(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/003_simple_reference/models"
+        return "test/integration/003_simple_reference_test/models"
 
     def test_simple_reference(self):
         self.run_dbt()
@@ -29,7 +29,7 @@ class TestSimpleReference(DBTIntegrationTest):
         self.assertTablesEqual("summary_expected","view_summary")
         self.assertTablesEqual("summary_expected","ephemeral_summary")
 
-        self.run_sql_file("test/integration/003_simple_reference/update.sql")
+        self.run_sql_file("test/integration/003_simple_reference_test/update.sql")
 
         self.run_dbt()
 

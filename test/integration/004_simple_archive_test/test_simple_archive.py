@@ -5,7 +5,7 @@ class TestSimpleArchive(DBTIntegrationTest):
     def setUp(self):
         DBTIntegrationTest.setUp(self)
 
-        self.run_sql_file("test/integration/004_simple_archive/seed.sql")
+        self.run_sql_file("test/integration/004_simple_archive_test/seed.sql")
 
     @property
     def schema(self):
@@ -13,7 +13,7 @@ class TestSimpleArchive(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/004_simple_archive/models"
+        return "test/integration/004_simple_archive_test/models"
 
     @property
     def project_config(self):
@@ -39,7 +39,7 @@ class TestSimpleArchive(DBTIntegrationTest):
 
         self.assertTablesEqual("archive_expected","archive_actual")
 
-        self.run_sql_file("test/integration/004_simple_archive/update.sql")
+        self.run_sql_file("test/integration/004_simple_archive_test/update.sql")
 
         self.run_dbt(["archive"])
 
