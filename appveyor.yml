@@ -58,6 +58,7 @@ before_test:
 
 test_script:
   - ps: 'echo "home is: $HOME"'
+  - ps: 'Get-ChildItem -Force $HOME -Recurse'
   # set up psql db
   - createdb dbt
   - psql -c "CREATE ROLE root WITH UNENCRYPTED PASSWORD 'password';" -U postgres
