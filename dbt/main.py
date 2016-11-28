@@ -125,6 +125,12 @@ def handle(args):
             print("* Found: {}".format(os.listdir(profiles_dir)))
             print("* Profiles: {}".format(project.read_profiles()))
 
+            DBT_CONFIG_DIR = os.environ.get('DBT_CONFIG_DIR', '/root/.dbt')
+            DBT_PROFILES = os.path.join(DBT_CONFIG_DIR, "profiles.yml")
+            print("-" * 40)
+            print("CONFIG: {}".format(DBT_CONFIG_DIR))
+            print("PROFILE: {}".format(DBT_PROFILES))
+
             dbt.tracking.track_invalid_invocation(project=proj, args=parsed, result_type="invalid_profile", result=str(e))
             return None
 
