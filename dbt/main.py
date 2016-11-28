@@ -2,6 +2,7 @@
 from dbt.logger import getLogger
 
 import argparse
+import os
 import os.path
 import sys
 import re
@@ -115,8 +116,13 @@ def handle(args):
             profiles_string = "\n".join([" - " + key for key in all_profiles])
             print("Valid profiles:\n{}".format(profiles_string))
 
-            profiles_dir = os.path.join(os.path.expanduser('~'), '.dbt/profiles.yml')
+            expected_profiles_dir_1 = os.listdir("C:\\Users\\appveyor")
+            expected_profiles_dir_2 = os.listdir("C:\\Users\\appveyor\\.dbt")
+            profiles_dir = os.path.join(os.path.expanduser('~'), '.dbt\\profiles.yml')
+            print("* Should be: {}".format(expected_profiles_dir_1))
+            print("* Should be: {}".format(expected_profiles_dir_2))
             print("* Looked for profiles.yml in: {}".format(profiles_dir))
+            print("* Found: {}".format(os.listdir(profiles_dir)))
             print("* Profiles: {}".format(project.read_profiles()))
 
             dbt.tracking.track_invalid_invocation(project=proj, args=parsed, result_type="invalid_profile", result=str(e))
