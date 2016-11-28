@@ -38,6 +38,9 @@ install:
   - "python --version"
   - "python -c \"import struct; print(struct.calcsize('P') * 8)\""
 
+  # enable psql?
+  -  Start-Service postgresql-x64-9.4
+
   # set up psql db
   - SET PGUSER=postgres
   - SET PGPASSWORD=Password12!
