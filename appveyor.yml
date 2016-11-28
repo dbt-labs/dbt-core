@@ -60,7 +60,7 @@ before_test:
 test_script:
   # set dbt config dir + debug
   - ps: 'echo "ps: DBT CONFIG DIR is: $DBT_CONFIG_DIR"'
-  - echo "cmd: DBT CONFIG DIR is: %DBT_CONFIG_DIR%"
+  - 'echo "cmd: DBT CONFIG DIR is: %DBT_CONFIG_DIR%"'
 
   # set up psql db
   - createdb dbt
