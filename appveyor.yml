@@ -1,8 +1,4 @@
-services:
-  - postgresql94
-
-hosts:
-  database: 127.0.0.1
+version: 1.0.{build}-{branch}
 
 environment:
   # SDK v7.0 MSVC Express 2008's SetEnv.cmd script will fail if the
@@ -19,6 +15,24 @@ environment:
     - PYTHON: "C:\\Python27-x64"
       PYTHON_VERSION: "2.7.8"
       PYTHON_ARCH: "64"
+
+  # do we need these?
+  POSTGRES_PORT: tcp://localhost:5432
+  POSTGRES_ENV_POSTGRES_USER: postgres
+  POSTGRES_ENV_POSTGRES_PASSWORD: Password12!
+  POSTGRES_ENV_POSTGRES_DB: dbt
+
+  PGUSER: postgres
+  PGPASSWORD: Password12!
+
+services:
+  - postgresql94
+
+hosts:
+  database: 127.0.0.1
+
+init:
+  - PATH=C:\Program Files\PostgreSQL\9.4\bin\;%PATH%
 
 install:
   # Download setup scripts and unzip
@@ -38,14 +52,9 @@ install:
   - "python --version"
   - "python -c \"import struct; print(struct.calcsize('P') * 8)\""
 
-  # enable psql?
-  -  Start-Service postgresql-x64-9.4
-
   # set up psql db
-  - SET PGUSER=postgres
-  - SET PGPASSWORD=Password12!
-  - PATH=C:\Program Files\PostgreSQL\9.4\bin\;%PATH%
-    psql -c "CREATE DATABASE dbt;" -U postgres
+  - createdb dbt
+  #- psql -c "CREATE DATABASE dbt;" -U postgres
   - psql -c "CREATE ROLE root WITH UNENCRYPTED PASSWORD 'password';" -U postgres
   - psql -c "ALTER ROLE root WITH LOGIN;" -U postgres
   - psql -c "GRANT SELECT, UPDATE, INSERT ON ALL TABLES IN SCHEMA dbt.* TO root;" -U postgres
