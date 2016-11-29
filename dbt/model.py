@@ -153,6 +153,10 @@ class DBTSource(object):
     def root_dir(self):
         return os.path.join(self.own_project['project-root'], self.top_dir)
 
+    @property
+    def is_empty(self):
+        return len(self.contents.strip()) == 0
+
     def compile(self):
         raise RuntimeError("Not implemented!")
     
@@ -171,7 +175,8 @@ class DBTSource(object):
 
     @property
     def contents(self):
-        with open(self.filepath) as fh:
+        filepath = os.path.join(self.root_dir, self.rel_filepath)
+        with open(filepath) as fh:
             return fh.read().strip()
 
     @property
@@ -297,6 +302,16 @@ class Model(DBTSource):
         return os.path.join(*path_parts)
 
     def compile_string(self, ctx, string):
+        # python 2+3 check for stringiness
+        try:
+            basestring
+        except NameError:
+            basestring = str
+
+        # if bool/int/float/etc are passed in, don't compile anything
+        if not isinstance(string, basestring):
+            return string
+
         try:
             fs_loader = jinja2.FileSystemLoader(searchpath=self.project['macro-paths'])
             env = jinja2.Environment(loader=fs_loader)

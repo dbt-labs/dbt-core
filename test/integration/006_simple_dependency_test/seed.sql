@@ -513,19 +513,19 @@ VALUES
 
 create table simple_dependency_006.seed_config_expected_1 as (
 
-    select *, 'default'::text as c1, 'default'::text as c2 from simple_dependency_006.seed
+    select *, 'default'::text as c1, 'default'::text as c2, 'was true'::text as some_bool from simple_dependency_006.seed
 
 );
 
 create table simple_dependency_006.seed_config_expected_2 as (
 
-    select *, 'abc'::text as c1, 'def'::text as c2 from simple_dependency_006.seed
+    select *, 'abc'::text as c1, 'def'::text as c2, 'was true'::text as some_bool from simple_dependency_006.seed
 
 );
 
 create table simple_dependency_006.seed_config_expected_3 as (
 
-    select *, 'ghi'::text as c1, 'jkl'::text as c2 from simple_dependency_006.seed
+    select *, 'ghi'::text as c1, 'jkl'::text as c2, 'was true'::text as some_bool from simple_dependency_006.seed
 
 );
 

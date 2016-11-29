@@ -21,7 +21,9 @@ class TestSimpleDependencyWithConfigs(BaseTestSimpleDependencyWithConfigs):
         return {
             "models": {
                 "DBT Integration Project": {
-                    # no configs
+                    'vars': {
+                        'bool_config': True
+                    }
                 }
 
             },
@@ -51,7 +53,8 @@ class TestSimpleDependencyWithOverriddenConfigs(BaseTestSimpleDependencyWithConf
                 "DBT Integration Project": {
                     "vars": {
                         "config_1": "abc",
-                        "config_2": "def"
+                        "config_2": "def",
+                        "bool_config": True
 
                     }
                 }
@@ -85,7 +88,8 @@ class TestSimpleDependencyWithModelSpecificOverriddenConfigs(BaseTestSimpleDepen
                         # model-level configs
                         "vars": {
                             "config_1": "ghi",
-                            "config_2": "jkl"
+                            "config_2": "jkl",
+                            "bool_config": True
 
                         }
                     }
@@ -120,7 +124,8 @@ class TestSimpleDependencyWithModelSpecificOverriddenConfigs(BaseTestSimpleDepen
                         "enabled": False,
                         "vars": {
                             "config_1": "ghi",
-                            "config_2": "jkl"
+                            "config_2": "jkl",
+                            #"bool_config": True
 
                         }
                     },
