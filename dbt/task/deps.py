@@ -21,6 +21,7 @@ class DepsTask:
         print("  checking out branch {}".format(branch))
         print("DEBUG: cwd = {}, run from = {}".format(os.getcwd(), full_path))
         cwd = os.getcwd()
+        print("DEBUG: dir = {}".format(os.listdir(cwd)))
         os.chdir(full_path)
         proc = subprocess.Popen(
             ['git', 'checkout', branch],
