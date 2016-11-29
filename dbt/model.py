@@ -302,6 +302,16 @@ class Model(DBTSource):
         return os.path.join(*path_parts)
 
     def compile_string(self, ctx, string):
+        # python 2+3 check for stringiness
+        try:
+            basestring
+        except NameError:
+            basestring = str
+
+        # if bool/int/float/etc are passed in, don't compile anything
+        if not isinstance(string, basestring):
+            return string
+
         try:
             fs_loader = jinja2.FileSystemLoader(searchpath=self.project['macro-paths'])
             env = jinja2.Environment(loader=fs_loader)

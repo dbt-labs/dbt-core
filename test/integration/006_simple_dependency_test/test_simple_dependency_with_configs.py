@@ -21,7 +21,9 @@ class TestSimpleDependencyWithConfigs(BaseTestSimpleDependencyWithConfigs):
         return {
             "models": {
                 "DBT Integration Project": {
-                    'bool_config': True
+                    'vars': {
+                        'bool_config': True
+                    }
                 }
 
             },
