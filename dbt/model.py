@@ -153,6 +153,10 @@ class DBTSource(object):
     def root_dir(self):
         return os.path.join(self.own_project['project-root'], self.top_dir)
 
+    @property
+    def is_empty(self):
+        return len(self.contents.strip()) == 0
+
     def compile(self):
         raise RuntimeError("Not implemented!")
     
@@ -171,7 +175,8 @@ class DBTSource(object):
 
     @property
     def contents(self):
-        with open(self.filepath) as fh:
+        filepath = os.path.join(self.root_dir, self.rel_filepath)
+        with open(filepath) as fh:
             return fh.read().strip()
 
     @property

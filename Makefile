@@ -1,6 +1,6 @@
 .PHONY: test
 
-changed_tests := `git status --porcelain | grep '^\( M\|A\)' | awk '{ print $$2 }' | grep '\/test_[a-zA-Z_\-\.]\+.py'`
+changed_tests := `git status --porcelain | grep '^\(M\| M\|A\| A\)' | awk '{ print $$2 }' | grep '\/test_[a-zA-Z_\-\.]\+.py'`
 
 test:
 	@echo "Test run starting..."
