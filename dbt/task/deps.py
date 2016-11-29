@@ -32,6 +32,7 @@ class DepsTask:
         print("DEBUG: 1:{}, 2:{}".format(out, err))
 
     def __pull_repo(self, repo, branch=None):
+        print("DEBUG: CLONING")
         proc = subprocess.Popen(
             ['git', 'clone', repo],
             cwd=os.path.abspath(self.project['modules-path']),
@@ -39,6 +40,7 @@ class DepsTask:
             stderr=subprocess.PIPE)
 
         out, err = proc.communicate()
+        print("CLONED: {}, {}".format(out, err))
 
         exists = re.match("fatal: destination path '(.+)' already exists", err.decode('utf-8'))
         folder = None
@@ -66,6 +68,7 @@ class DepsTask:
             folder = matches.group(1)
             full_path = os.path.abspath(os.path.join(self.project['modules-path'], folder))
             print("pulled new dependency {}".format(folder))
+            print("DEBUG: checking out branch: {}".format(branch))
             if branch is not None:
                 self.__checkout_branch(branch, full_path)
 
@@ -105,7 +108,9 @@ class DepsTask:
                 if repo_folder in processed_repos:
                     print("skipping already processed dependency {}".format(repo_folder))
                 else:
+                    print("DEBUG: pulling repo = {} @ {}".format(repo, branch))
                     dep_folder = self.__pull_repo(repo, branch)
+                    print("DEBUG: dep folder = {}".format(dep_folder))
                     dep_project = project.read_project(
                         os.path.join(self.project['modules-path'],
                                      dep_folder,
