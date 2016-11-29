@@ -22,6 +22,7 @@ class DepsTask:
         print("DEBUG: cwd = {}, run from = {}".format(os.getcwd(), full_path))
         cwd = os.getcwd()
         print("DEBUG: dir = {}".format(os.listdir(cwd)))
+        print("DEBUG: dir2 = {}".format(os.listdir(os.path.join(cwd, 'dbt_modules'))))
         os.chdir(full_path)
         proc = subprocess.Popen(
             ['git', 'checkout', branch],
