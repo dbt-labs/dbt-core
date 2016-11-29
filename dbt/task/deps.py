@@ -23,13 +23,12 @@ class DepsTask:
         cwd = os.getcwd()
         print("DEBUG: dir = {}".format(os.listdir(cwd)))
         print("DEBUG: dir2 = {}".format(os.listdir(os.path.join(cwd, 'dbt_modules'))))
-        os.chdir(full_path)
         proc = subprocess.Popen(
             ['git', 'checkout', branch],
+            cwd=full_path,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
         out, err = proc.communicate()
-        os.chdir(cwd)
         print("DEBUG: 1:{}, 2:{}".format(out, err))
 
     def __pull_repo(self, repo, branch=None):
@@ -115,6 +114,7 @@ class DepsTask:
                     processed_repos.add(dep_folder)
                     self.__pull_deps_recursive(dep_project['repositories'], processed_repos, i+1)
             except IOError as e:
+                print("DEBUG: ERROR: {}".format(str(e)))
                 if e.errno == errno.ENOENT:
                     print("'{}' is not a valid dbt project - dbt_project.yml not found".format(repo))
                     exit(1)
