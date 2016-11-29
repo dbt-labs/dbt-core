@@ -2,6 +2,7 @@ import unittest
 import dbt.main as dbt
 import os, shutil
 import yaml
+import time
 
 from test.integration.connection import handle
 
@@ -64,8 +65,12 @@ class DBTIntegrationTest(unittest.TestCase):
         os.remove(DBT_PROFILES)
         os.remove("dbt_project.yml")
 
-        if os.path.exists('dbt_modules'):
-            shutil.rmtree('dbt_modules')
+        # quick fix for windows bug that prevents us from deleting dbt_modules
+        try:
+            if os.path.exists('dbt_modules'):
+                shutil.rmtree('dbt_modules')
+        except:
+            os.rename("dbt_modules", "dbt_modules-{}".format(time.time()))
 
     @property
     def project_config(self):
