@@ -519,7 +519,7 @@ create table simple_dependency_006.seed_config_expected_1 as (
 
 create table simple_dependency_006.seed_config_expected_2 as (
 
-    select *, 'abc'::text as c1, 'def'::text as c2 from simple_dependency_006.seed
+    select *, 'abc'::text as c1, 'def'::text as c2, 'was true' as some_bool from simple_dependency_006.seed
 
 );
 
