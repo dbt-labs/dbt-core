@@ -20,7 +20,7 @@ class DepsTask:
         print("  checking out branch {}".format(branch))
         proc = subprocess.Popen(
             ['git', 'checkout', branch],
-            cwd=full_path,
+            cwd=os.path.abspath(full_path),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
         out, err = proc.communicate()
@@ -28,7 +28,7 @@ class DepsTask:
     def __pull_repo(self, repo, branch=None):
         proc = subprocess.Popen(
             ['git', 'clone', repo],
-            cwd=self.project['modules-path'],
+            cwd=os.path.abspath(self.project['modules-path']),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
 
@@ -39,7 +39,7 @@ class DepsTask:
         if exists:
             folder = exists.group(1)
             print("updating existing dependency {}".format(folder))
-            full_path = os.path.join(self.project['modules-path'], folder)
+            full_path = os.path.abspath(os.path.join(self.project['modules-path'], folder))
             proc = subprocess.Popen(
                 ['git', 'fetch', '--all'],
                 cwd=full_path,
