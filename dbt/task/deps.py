@@ -20,7 +20,7 @@ class DepsTask:
         print("  checking out branch {}".format(branch))
         proc = subprocess.Popen(
             ['git', 'checkout', branch],
-            cwd=os.path.abspath(full_path),
+            cwd=full_path,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
         out, err = proc.communicate()
@@ -58,7 +58,7 @@ class DepsTask:
         else:
             matches = re.match("Cloning into '(.+)'", err.decode('utf-8'))
             folder = matches.group(1)
-            full_path = os.path.join(self.project['modules-path'], folder)
+            full_path = os.path.abspath(os.path.join(self.project['modules-path'], folder))
             print("pulled new dependency {}".format(folder))
             if branch is not None:
                 self.__checkout_branch(branch, full_path)
