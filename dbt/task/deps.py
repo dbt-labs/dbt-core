@@ -17,37 +17,29 @@ class DepsTask:
         self.project = project
 
     def __checkout_branch(self, branch, full_path):
-        full_path = os.path.normpath(full_path)
         print("  checking out branch {}".format(branch))
-        print("DEBUG: cwd = {}, run from = {}".format(os.getcwd(), full_path))
-        cwd = os.getcwd()
-        print("DEBUG: dir = {}".format(os.listdir(cwd)))
-        print("DEBUG: dir2 = {}".format(os.listdir(os.path.join(cwd, 'dbt_modules'))))
         proc = subprocess.Popen(
             ['git', 'checkout', branch],
             cwd=full_path,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
         out, err = proc.communicate()
-        print("DEBUG: 1:{}, 2:{}".format(out, err))
 
     def __pull_repo(self, repo, branch=None):
-        print("DEBUG: CLONING")
         proc = subprocess.Popen(
             ['git', 'clone', repo],
-            cwd=os.path.abspath(self.project['modules-path']),
+            cwd=self.project['modules-path'],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
 
         out, err = proc.communicate()
-        print("CLONED: {}, {}".format(out, err))
 
         exists = re.match("fatal: destination path '(.+)' already exists", err.decode('utf-8'))
         folder = None
         if exists:
             folder = exists.group(1)
             print("updating existing dependency {}".format(folder))
-            full_path = os.path.abspath(os.path.join(self.project['modules-path'], folder))
+            full_path = os.path.join(self.project['modules-path'], folder)
             proc = subprocess.Popen(
                 ['git', 'fetch', '--all'],
                 cwd=full_path,
@@ -66,9 +58,8 @@ class DepsTask:
         else:
             matches = re.match("Cloning into '(.+)'", err.decode('utf-8'))
             folder = matches.group(1)
-            full_path = os.path.abspath(os.path.join(self.project['modules-path'], folder))
+            full_path = os.path.join(self.project['modules-path'], folder)
             print("pulled new dependency {}".format(folder))
-            print("DEBUG: checking out branch: {}".format(branch))
             if branch is not None:
                 self.__checkout_branch(branch, full_path)
 
@@ -108,9 +99,7 @@ class DepsTask:
                 if repo_folder in processed_repos:
                     print("skipping already processed dependency {}".format(repo_folder))
                 else:
-                    print("DEBUG: pulling repo = {} @ {}".format(repo, branch))
                     dep_folder = self.__pull_repo(repo, branch)
-                    print("DEBUG: dep folder = {}".format(dep_folder))
                     dep_project = project.read_project(
                         os.path.join(self.project['modules-path'],
                                      dep_folder,
@@ -119,7 +108,6 @@ class DepsTask:
                     processed_repos.add(dep_folder)
                     self.__pull_deps_recursive(dep_project['repositories'], processed_repos, i+1)
             except IOError as e:
-                print("DEBUG: ERROR: {}".format(str(e)))
                 if e.errno == errno.ENOENT:
                     print("'{}' is not a valid dbt project - dbt_project.yml not found".format(repo))
                     exit(1)
