@@ -17,6 +17,7 @@ class DepsTask:
         self.project = project
 
     def __checkout_branch(self, branch, full_path):
+        full_path = os.path.normpath(full_path)
         print("  checking out branch {}".format(branch))
         print("DEBUG: cwd = {}, run from = {}".format(os.getcwd(), full_path))
         cwd = os.getcwd()
