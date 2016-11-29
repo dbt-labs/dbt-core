@@ -18,14 +18,15 @@ class DepsTask:
 
     def __checkout_branch(self, branch, full_path):
         print("  checking out branch {}".format(branch))
-        full_path = full_path.replace("\\", "\\\\")
         print("DEBUG: cwd = {}, run from = {}".format(os.getcwd(), full_path))
+        cwd = os.getcwd()
+        os.chdir(full_path)
         proc = subprocess.Popen(
             ['git', 'checkout', branch],
-            cwd=full_path,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
         out, err = proc.communicate()
+        os.chdir(cwd)
         print("DEBUG: 1:{}, 2:{}".format(out, err))
 
     def __pull_repo(self, repo, branch=None):
