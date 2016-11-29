@@ -60,4 +60,7 @@ test_script:
   - psql -c "ALTER ROLE root WITH LOGIN;" -U postgres
   - psql -c "GRANT CREATE, CONNECT ON DATABASE dbt TO root;" -U postgres
 
+  # this is generally a bad idea TODO
+  - git config --system http.sslverify false
+
   - "%CMD_IN_ENV% tox -e %TOX_ENV%"
