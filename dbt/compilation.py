@@ -5,7 +5,7 @@ import jinja2
 from collections import defaultdict
 import dbt.project
 from dbt.source import Source
-from dbt.utils import find_model_by_fqn, find_model_by_name, dependency_projects, split_path, This, Var, compiler_error
+from dbt.utils import find_model_by_fqn, find_model_by_name, dependency_projects, split_path, This, Var, compiler_error, to_string
 from dbt.linker import Linker
 import dbt.targets
 import dbt.templates
@@ -84,7 +84,7 @@ class Compiler(object):
             os.makedirs(os.path.dirname(target_path))
 
         with open(target_path, 'w') as f:
-            f.write(payload)
+            f.write(to_string(payload))
 
 
     def __model_config(self, model, linker):
@@ -391,7 +391,7 @@ class Compiler(object):
 
         self.macro_generator = self.generate_macros(all_macros)
 
-        enabled_models = [model for model in all_models if model.is_enabled]
+        enabled_models = [model for model in all_models if model.is_enabled and not model.is_empty]
 
         compiled_models, written_models = self.compile_models(linker, enabled_models)
 

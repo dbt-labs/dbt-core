@@ -1,11 +1,11 @@
 
 class BaseCreateTemplate(object):
-    template = """
+    template = u"""
 create {materialization} "{schema}"."{identifier}" {dist_qualifier} {sort_qualifier} as (
     {query}
 );"""
 
-    incremental_template = """
+    incremental_template = u"""
 {{% if not already_exists("{schema}", "{identifier}") %}}
 
 create table "{schema}"."{identifier}" {dist_qualifier} {sort_qualifier} as (
@@ -40,13 +40,13 @@ insert into "{schema}"."{identifier}" ({{{{ dest_cols_csv }}}})
 
 """
 
-    incremental_delete_template = """
+    incremental_delete_template = u"""
 delete from "{schema}"."{identifier}" where  ({unique_key}) in (
     select ({unique_key}) from "{identifier}__dbt_incremental_tmp"
 );
 """
 
-    extras_template = """
+    extras_template = u"""
 {prologue}
 
 -- Pre-model hooks
@@ -107,7 +107,7 @@ delete from "{schema}"."{identifier}" where  ({unique_key}) in (
 
 
 class DryCreateTemplate(object):
-    base_template = """
+    base_template = u"""
 create view "{schema}"."{identifier}" as (
     SELECT * FROM (
         {query}
@@ -115,7 +115,7 @@ create view "{schema}"."{identifier}" as (
 );"""
 
 
-    incremental_template = """
+    incremental_template = u"""
 create table "{schema}"."{identifier}" {dist_qualifier} {sort_qualifier} as (
     select * from (
         {query}
@@ -123,7 +123,7 @@ create table "{schema}"."{identifier}" {dist_qualifier} {sort_qualifier} as (
 );
     """
 
-    incremental_delete_template = """
+    incremental_delete_template = u"""
 delete from "{schema}"."{identifier}" where  ({unique_key}) in (
     select ({unique_key}) from "{identifier}__dbt_incremental_tmp"
 );
@@ -156,7 +156,7 @@ delete from "{schema}"."{identifier}" where  ({unique_key}) in (
         return "{}\n\n{}".format(opts['prologue'], sql)
 
 
-SCDArchiveTemplate = """
+SCDArchiveTemplate = u"""
 
     with current_data as (
 
@@ -237,24 +237,24 @@ class ArchiveInsertTemplate(object):
 
     # missing_columns : columns in source_table that are missing from target_table (used for the ALTER)
     # dest_columns    : columns in the dest table (post-alter!)
-    definitions = """
+    definitions = u"""
 {% set missing_columns = get_missing_columns(source_schema, source_table, target_schema, target_table) %}
 {% set dest_columns = get_columns_in_table(target_schema, target_table) + missing_columns %}
 """
 
-    alter_template = """
+    alter_template = u"""
 {% for col in missing_columns %}
     alter table "{{ target_schema }}"."{{ target_table }}" add column "{{ col.name }}" {{ col.data_type }};
 {% endfor %}
 """
 
-    dest_cols = """
+    dest_cols = u"""
 {% for col in dest_columns %}
     "{{ col.name }}" {% if not loop.last %},{% endif %}
 {% endfor %}
 """
 
-    archival_template = """
+    archival_template = u"""
 
 {definitions}
 
