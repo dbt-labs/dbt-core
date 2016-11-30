@@ -107,3 +107,10 @@ def deep_merge(destination, source):
             else:
                 destination[key] = value
         return destination
+
+def to_unicode(s):
+    try:
+        unicode
+    except NameError:
+        unicode = str
+    return unicode(s)

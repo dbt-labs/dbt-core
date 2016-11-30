@@ -84,7 +84,7 @@ class Compiler(object):
             os.makedirs(os.path.dirname(target_path))
 
         with open(target_path, 'w') as f:
-            f.write(payload)
+            f.write(payload.encode('utf-8'))
 
 
     def __model_config(self, model, linker):
