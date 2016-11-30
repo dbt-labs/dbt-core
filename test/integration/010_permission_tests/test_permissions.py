@@ -20,7 +20,7 @@ class TestPermissions(DBTIntegrationTest):
     def models(self):
         return "test/integration/010_permission_tests/models"
 
-    def test_simple_copy(self):
+    def test_read_permissions(self):
 
         failed = False
 
