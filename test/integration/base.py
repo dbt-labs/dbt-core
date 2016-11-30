@@ -31,13 +31,14 @@ class DBTIntegrationTest(unittest.TestCase):
 
         # create profiles
 
-        profile_config = {
+        profile_config = {}
+        default_profile_config = {
             'config': {
                 'send_anonymous_usage_stats': False
             },
             'test': {
                 'outputs': {
-                    'default': {
+                    'default2': {
                         'type': 'postgres',
                         'threads': 1,
                         'host': 'database',
@@ -58,9 +59,11 @@ class DBTIntegrationTest(unittest.TestCase):
                         'schema': self.schema
                     }
                 },
-                'run-target': 'default'
+                'run-target': 'default2'
             }
         }
+        profile_config.update(default_profile_config)
+        profile_config.update(self.profile_config)
 
         if not os.path.exists(DBT_CONFIG_DIR):
             os.makedirs(DBT_CONFIG_DIR)
@@ -84,6 +87,10 @@ class DBTIntegrationTest(unittest.TestCase):
 
     @property
     def project_config(self):
+        return {}
+
+    @property
+    def profile_config(self):
         return {}
 
     def run_dbt(self, args=None):

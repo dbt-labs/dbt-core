@@ -17,7 +17,7 @@ class RunTask:
         create_template = DryCreateTemplate if self.args.dry else BaseCreateTemplate
         compiler = Compiler(self.project, create_template)
         compiler.initialize()
-        results = compiler.compile(self.args.dry)
+        results = compiler.compile(self.args.dry, limit_to=['models'])
 
         stat_line = ", ".join(["{} {}".format(results[k], k) for k in CompilableEntities])
         print("Compiled {}".format(stat_line))

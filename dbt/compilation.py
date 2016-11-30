@@ -175,7 +175,7 @@ class Compiler(object):
         context['config'] = self.__model_config(model, linker)
         context['this'] = This(context['env']['schema'], model.immediate_name, model.name)
         context['var'] = Var(model, context=context)
-        context['target'] = self.project.get('run-target')
+        context['target'] = self.project.get_target()
 
         # these get re-interpolated at runtime!
         context['run_started_at'] = '{{ run_started_at }}'
@@ -398,7 +398,7 @@ class Compiler(object):
 
         return all_models
 
-    def compile(self, dry=False):
+    def compile(self, dry=False, limit_to=None):
         linker = Linker()
 
         all_models = self.get_models()
@@ -409,25 +409,35 @@ class Compiler(object):
 
         self.macro_generator = self.generate_macros(all_macros)
 
-        enabled_models = [model for model in all_models if model.is_enabled and not model.is_empty]
+        if limit_to is not None and 'models' in limit_to:
+            enabled_models = [model for model in all_models if model.is_enabled and not model.is_empty]
+        else:
+            enabled_models = []
 
         compiled_models, written_models = self.compile_models(linker, enabled_models)
 
         # TODO : only compile schema tests for enabled models
-        written_schema_tests = self.compile_schema_tests(linker)
-        written_data_tests = self.compile_data_tests(linker)
+        if limit_to is not None and 'tests' in limit_to:
+            written_schema_tests = self.compile_schema_tests(linker)
+            written_data_tests = self.compile_data_tests(linker)
+        else:
+            written_schema_tests = []
+            written_data_tests = []
 
         self.validate_models_unique(compiled_models)
         self.validate_models_unique(written_schema_tests)
         self.write_graph_file(linker, self.create_template.label)
 
-        if self.create_template.label not in ['test', 'archive']:
+        if limit_to is not None and 'analyses' in limit_to and self.create_template.label not in ['test', 'archive']:
             written_analyses = self.compile_analyses(linker, compiled_models)
         else:
             written_analyses = []
 
 
-        compiled_archives = self.compile_archives()
+        if limit_to is not None and 'archives' in limit_to:
+            compiled_archives = self.compile_archives()
+        else:
+            compiled_archives = []
 
         return {
             "models": len(written_models),

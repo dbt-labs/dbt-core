@@ -1,0 +1,11 @@
+
+table_copy:
+    constraints:
+        not_null:
+            - id
+        unique:
+            - id
+
+        accepted_values:
+            # this is missing a "-" and is malformed
+            { field: favorite_color, values: ['blue', 'green'] }
