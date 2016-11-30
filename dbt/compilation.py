@@ -391,7 +391,7 @@ class Compiler(object):
 
         self.macro_generator = self.generate_macros(all_macros)
 
-        enabled_models = [model for model in all_models if model.is_enabled]
+        enabled_models = [model for model in all_models if model.is_enabled and not model.is_empty]
 
         compiled_models, written_models = self.compile_models(linker, enabled_models)
 
