@@ -11,8 +11,8 @@ create table schema_tests_008.seed (
 INSERT INTO schema_tests_008.seed
     ("favorite_color", "id","first_name","email","ip_address","updated_at")
 VALUES
-    ('blue', 1,'Larry','lking0@miitbeian.gov.cn','69.135.206.194','2008-09-12 19:08:31'),
-    ('blue', 2,'Larry','lperkins1@toplist.cz','64.210.133.162','1978-05-09 04:15:14'),
+    ('blue', 1,'Larry',null,'69.135.206.194','2008-09-12 19:08:31'),
+    ('blue', 2,'Larry',null,'64.210.133.162','1978-05-09 04:15:14'),
     ('blue', 3,'Anna','amontgomery2@miitbeian.gov.cn','168.104.64.114','2011-10-16 04:07:57'),
     ('blue', 4,'Sandra','sgeorge3@livejournal.com','229.235.252.98','1973-07-19 10:52:43'),
     ('blue', 5,'Fred','fwoods4@google.cn','78.229.170.124','2012-09-30 16:38:29'),
