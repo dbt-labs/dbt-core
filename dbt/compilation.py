@@ -288,7 +288,7 @@ class Compiler(object):
             if other_model.is_enabled:
                 this_fqn = ".".join(model.fqn)
                 that_fqn = ".".join(other_model.fqn)
-                compiler_error("Model '{}' depends on model '{}' which is disabled".format(that_fqn, this_fqn))
+                compiler_error(model, "Model '{}' depends on model '{}' which is disabled".format(that_fqn, this_fqn))
 
     def compile_models(self, linker, models):
         compiled_models = {model: self.compile_model(linker, model, models) for model in models}
