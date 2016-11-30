@@ -283,6 +283,10 @@ class Compiler(object):
 
         written_models = []
         for model in sorted_models:
+            # in-model configs were just evaluated. Ignore anything that is newly-disabled
+            if not model.is_enabled:
+                continue
+
             injected_stmt = self.add_cte_to_rendered_query(linker, model, compiled_models)
             context = self.get_context(linker, model, models)
             wrapped_stmt = model.compile(injected_stmt, self.project, self.create_template, context)
