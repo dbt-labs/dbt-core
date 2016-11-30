@@ -84,7 +84,16 @@ class BaseRunner(object):
 
                 func_map[function](kwargs)
             else:
-                handle, status = schema.execute_without_auto_commit(part, handle)
+                try:
+                    handle, status = schema.execute_without_auto_commit(part, handle)
+                except psycopg2.ProgrammingError as e:
+                    if "permission denied for" in e.diag.message_primary:
+                        raise RuntimeError(dbt.schema.READ_PERMISSION_DENIED_ERROR.format(
+                            model=model.name,
+                            error=str(e).strip(),
+                            user=target.user,
+                        ))
+
 
         handle.commit()
         return status

@@ -18,6 +18,10 @@ RELATION_NOT_OWNER_MESSAGE = """The user '{user}' does not have sufficient permi
 This is likely because the relation was created by a different user. Either delete the model "{schema}"."{model}" manually,
 or adjust the permissions of the '{user}' user in the '{schema}' schema."""
 
+READ_PERMISSION_DENIED_ERROR = """Encountered an error while executing model '{model}'.
+> {error}
+Check that the user '{user}' has sufficient permissions to read from all necessary source tables"""
+
 class Column(object):
     def __init__(self, column, dtype, char_size):
         self.column = column

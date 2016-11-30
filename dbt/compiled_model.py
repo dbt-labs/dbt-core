@@ -1,6 +1,6 @@
 import hashlib
 import jinja2
-from dbt.utils import compiler_error
+from dbt.utils import compiler_error, to_unicode
 
 class CompiledModel(object):
     def __init__(self, fqn, data):
@@ -46,7 +46,7 @@ class CompiledModel(object):
     def contents(self):
         if self._contents is None:
             with open(self.data['build_path']) as fh:
-                self._contents = fh.read()
+                self._contents = to_unicode(fh.read(), 'utf-8')
         return self._contents
 
     def compile(self, context):
