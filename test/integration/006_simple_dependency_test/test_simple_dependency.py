@@ -101,3 +101,10 @@ class TestSimpleDependencyBranch(DBTIntegrationTest):
         self.run_sql_file("test/integration/006_simple_dependency_test/update.sql")
 
         self.deps_run_assert_equality()
+
+    def test_empty_models_not_compiled_in_dependencies(self):
+        self.deps_run_assert_equality()
+
+        models = self.get_models_in_schema()
+
+        self.assertFalse('empty' in models.keys())

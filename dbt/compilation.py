@@ -392,7 +392,7 @@ class Compiler(object):
         self.macro_generator = self.generate_macros(all_macros)
 
         if limit_to is not None and 'models' in limit_to:
-            enabled_models = [model for model in all_models if model.is_enabled]
+            enabled_models = [model for model in all_models if model.is_enabled and not model.is_empty]
         else:
             enabled_models = []
 

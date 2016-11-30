@@ -29,3 +29,10 @@ class TestSimpleCopy(DBTIntegrationTest):
         self.assertTablesEqual("seed","view")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
+
+    def test_dbt_doesnt_run_empty_models(self):
+        self.run_dbt()
+
+        models = self.get_models_in_schema()
+
+        self.assertFalse('empty' in models.keys())
