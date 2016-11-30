@@ -70,6 +70,11 @@ class Linker(object):
     def add_node(self, node):
         self.graph.add_node(node)
 
+    def remove_node(self, node):
+        children = nx.descendants(self.graph, node)
+        self.graph.remove_node(node)
+        return children
+
     def update_node_data(self, node, data):
         self.graph.add_node(node, data)
 

@@ -277,12 +277,30 @@ class Compiler(object):
             compiled_query = self.combine_query_with_ctes(primary_model, query, required_ctes, compiled_models)
             return compiled_query
 
+    def remove_node_from_graph(self, linker, model, models):
+        # remove the node
+        children = linker.remove_node(tuple(model.fqn))
+
+        # check if we bricked the graph. if so: throw compilation error
+        for child in children:
+            other_model = find_model_by_fqn(models, child)
+
+            if other_model.is_enabled:
+                this_fqn = ".".join(model.fqn)
+                that_fqn = ".".join(other_model.fqn)
+                compiler_error("Model '{}' depends on model '{}' which is disabled".format(that_fqn, this_fqn))
+
     def compile_models(self, linker, models):
         compiled_models = {model: self.compile_model(linker, model, models) for model in models}
         sorted_models = [find_model_by_fqn(models, fqn) for fqn in linker.as_topological_ordering()]
 
         written_models = []
         for model in sorted_models:
+            # in-model configs were just evaluated. Evict anything that is newly-disabled
+            if not model.is_enabled:
+                self.remove_node_from_graph(linker, model, models)
+                continue
+
             injected_stmt = self.add_cte_to_rendered_query(linker, model, compiled_models)
             context = self.get_context(linker, model, models)
             wrapped_stmt = model.compile(injected_stmt, self.project, self.create_template, context)

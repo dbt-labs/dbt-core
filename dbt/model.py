@@ -208,8 +208,10 @@ class DBTSource(object):
 
     @property
     def is_enabled(self):
-        return self.config['enabled']
-
+        enabled = self.config['enabled']
+        if enabled not in (True, False):
+            compiler_error(self, "'enabled' config must be either True or False. '{}' given.".format(enabled))
+        return enabled
 
     @property
     def fqn(self):
