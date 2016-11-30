@@ -10,7 +10,7 @@ import logging
 THREAD_MIN = 1
 THREAD_MAX = 8
 
-BAD_THREADS_ERROR = """Invalid value given for "threads" in active run-target.
+BAD_THREADS_ERROR = """Invalid value given for "threads" in active target.
 Value given was {supplied} but it should be an int between {min_val} and {max_val}"""
 
 class BaseSQLTarget(object):

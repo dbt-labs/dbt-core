@@ -4,6 +4,7 @@ import pprint
 import copy
 import sys
 import hashlib
+import dbt.deprecations
 
 default_project_cfg = {
     'source-paths': ['models'],
@@ -13,7 +14,7 @@ default_project_cfg = {
     'target-path': 'target',
     'clean-targets': ['target'],
     'outputs': {'default': {}},
-    'run-target': 'default',
+    'target': 'default',
     'models': {},
     'profile': None,
     'repositories': [],
@@ -66,9 +67,17 @@ class Project(object):
     def get(self, key, default=None):
         return self.cfg.get(key, default)
 
+    def handle_deprecations(self):
+        if 'run-target' in self.cfg:
+            dbt.deprecations.warn('run-target')
+            self.cfg['target'] = self.cfg['run-target']
+
     def run_environment(self):
-        target_name = self.cfg['run-target']
+        target_name = self.cfg['target']
         return self.cfg['outputs'][target_name]
+
+    def get_target(self):
+        return self.cfg['target'] # TODO
 
     def context(self):
         target_cfg = self.run_environment()
@@ -83,8 +92,10 @@ class Project(object):
             profile)
 
     def validate(self):
+        self.handle_deprecations()
+
         target_cfg = self.run_environment()
-        target_name = self.cfg['run-target']
+        target_name = self.cfg['target']
 
         package_name = self.cfg.get('name', None)
         package_version = self.cfg.get('version', None)

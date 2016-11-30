@@ -175,7 +175,7 @@ class Compiler(object):
         context['config'] = self.__model_config(model, linker)
         context['this'] = This(context['env']['schema'], model.immediate_name, model.name)
         context['var'] = Var(model, context=context)
-        context['target'] = self.project.get('run-target')
+        context['target'] = self.project.get_target()
 
         # these get re-interpolated at runtime!
         context['run_started_at'] = '{{ run_started_at }}'

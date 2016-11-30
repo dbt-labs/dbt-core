@@ -53,7 +53,7 @@ def handle(args):
 
     base_subparser = argparse.ArgumentParser(add_help=False)
     base_subparser.add_argument('--profile', required=False, type=str, help='Which profile to load (overrides profile setting in dbt_project.yml file)')
-    base_subparser.add_argument('--target', default=None, type=str, help='Which run-target to load for the given profile')
+    base_subparser.add_argument('--target', default=None, type=str, help='Which target to load for the given profile')
 
     sub = subs.add_parser('init', parents=[base_subparser])
     sub.add_argument('project_name', type=str, help='Name of the new project')
@@ -120,7 +120,7 @@ def handle(args):
         if parsed.target is not None:
             targets = proj.cfg.get('outputs', {}).keys()
             if parsed.target in targets:
-                proj.cfg['run-target'] = parsed.target
+                proj.cfg['target'] = parsed.target
             else:
                 print("Encountered an error while reading the project:")
                 print("  ERROR Specified target {} is not a valid option for profile {}".format(parsed.target, proj.profile_to_load))
