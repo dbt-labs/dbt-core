@@ -20,6 +20,7 @@ QUERY_VALIDATE_UNIQUE = """
 with validation as (
   select {field} as f
   from "{schema}"."{table}"
+  where {field} is not null
 ),
 validation_errors as (
     select f from validation group by f having count(*) > 1

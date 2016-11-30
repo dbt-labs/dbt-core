@@ -5,7 +5,7 @@ import jinja2
 from collections import defaultdict
 import dbt.project
 from dbt.source import Source
-from dbt.utils import find_model_by_fqn, find_model_by_name, dependency_projects, split_path, This, Var, compiler_error
+from dbt.utils import find_model_by_fqn, find_model_by_name, dependency_projects, split_path, This, Var, compiler_error, to_string
 from dbt.linker import Linker
 import dbt.targets
 import dbt.templates
@@ -84,7 +84,7 @@ class Compiler(object):
             os.makedirs(os.path.dirname(target_path))
 
         with open(target_path, 'w') as f:
-            f.write(payload)
+            f.write(to_string(payload))
 
 
     def __model_config(self, model, linker):
