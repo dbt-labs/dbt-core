@@ -548,7 +548,7 @@ class SchemaFile(DBTSource):
             possible_types = ", ".join(SchemaFile.SchemaTestMap.keys())
             raise RuntimeError("Invalid validation type given in {}: '{}'. Possible: {}".format(self.filepath, test_type, possible_types))
 
-    def compile(self):
+    def do_compile(self):
         schema_tests = []
         for model_name, constraint_blob in self.schema.items():
             constraints = constraint_blob.get('constraints', {})
@@ -558,6 +558,14 @@ class SchemaFile(DBTSource):
                     schema_test = schema_test_klass(self.project, self.og_target_dir, self.rel_filepath, model_name, params)
                     schema_tests.append(schema_test)
         return schema_tests
+
+    def compile(self):
+        try:
+            return self.do_compile()
+        except TypeError as e:
+            raise compiler_error(self, str(e))
+        except AttributeError as e:
+            raise compiler_error(self, str(e))
 
     def __repr__(self):
         return "<SchemaFile {}.{}: {}>".format(self.project['name'], self.model_name, self.filepath)

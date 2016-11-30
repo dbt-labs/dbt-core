@@ -26,7 +26,7 @@ class TestTask:
     def compile(self):
         compiler = Compiler(self.project, BaseCreateTemplate)
         compiler.initialize()
-        results = compiler.compile()
+        results = compiler.compile(limit_to=['tests'])
 
         stat_line = ", ".join(["{} {}".format(results[k], k) for k in CompilableEntities])
         print("Compiled {}".format(stat_line))
