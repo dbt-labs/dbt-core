@@ -8,7 +8,7 @@ from dbt.utils import split_path
 import dbt.schema_tester
 import dbt.project
 import dbt.archival
-from dbt.utils import This, deep_merge, DBTConfigKeys, compiler_error
+from dbt.utils import This, deep_merge, DBTConfigKeys, compiler_error, compiler_warning
 
 class SourceConfig(object):
     Materializations = ['view', 'table', 'incremental', 'ephemeral']
@@ -79,7 +79,7 @@ class SourceConfig(object):
         for hook in new_hooks:
             if type(hook) != str:
                 name = ".".join(self.fqn)
-                raise RuntimeError("{} for model {} is not a string!".format(key, name))
+                compiler_error("{} for model {} is not a string!".format(key, name))
 
             hooks.append(hook)
         return hooks
@@ -255,20 +255,24 @@ class Model(DBTSource):
         return "-- Compiled by DBT\n{}".format(blob)
 
     def sort_qualifier(self, model_config):
-        if 'sort' not in model_config or self.is_view or self.is_ephemeral:
+        if 'sort' not in model_config:
             return ''
+
+        if (self.is_view or self.is_ephemeral) and 'sort' in model_config:
+           compiler_warning(self, "'sort' configuration supplied to model materialized as '{}'".format(self.materialization))
+           return ''
 
         sort_keys = model_config['sort']
         sort_type = model_config.get('sort_type', 'compound')
 
         if type(sort_type) != str:
-            raise RuntimeError("The provided sort_type '{}' is not valid!".format(sort_type))
+            compiler_error(self, "The provided sort_type '{}' is not valid!".format(sort_type))
 
         sort_type = sort_type.strip().lower()
 
         valid_sort_types = ['compound', 'interleaved']
         if sort_type not in valid_sort_types:
-            raise RuntimeError("Invalid sort_type given: {} -- must be one of {}".format(sort_type, valid_sort_types))
+            compiler_error(self, "Invalid sort_type given: {} -- must be one of {}".format(sort_type, valid_sort_types))
 
         if type(sort_keys) == str:
             sort_keys = [sort_keys]
@@ -280,13 +284,17 @@ class Model(DBTSource):
         return "{sort_type} sortkey ({keys_csv})".format(sort_type=sort_type, keys_csv=keys_csv)
 
     def dist_qualifier(self, model_config):
-        if 'dist' not in model_config or self.is_view or self.is_ephemeral:
+        if 'dist' not in model_config:
             return ''
+
+        if (self.is_view or self.is_ephemeral) and 'dist' in model_config:
+           compiler_warning(self, "'dist' configuration supplied to model materialized as '{}'".format(self.materialization))
+           return ''
 
         dist_key = model_config['dist']
 
         if type(dist_key) != str:
-            raise RuntimeError("The provided distkey '{}' is not valid!".format(dist_key))
+            compiler_error("The provided distkey '{}' is not valid!".format(dist_key))
 
         dist_key = dist_key.strip().lower()
 
@@ -331,7 +339,7 @@ class Model(DBTSource):
         model_config = self.config
 
         if self.materialization not in SourceConfig.Materializations:
-            raise RuntimeError("Invalid materialize option given: '{}'. Must be one of {}".format(self.materialization, SourceConfig.Materializations))
+            compiler_error("Invalid materialize option given: '{}'. Must be one of {}".format(self.materialization, SourceConfig.Materializations))
 
         schema = ctx['env'].get('schema', 'public')
 
@@ -342,12 +350,14 @@ class Model(DBTSource):
         if self.materialization == 'incremental':
             identifier = self.name
             if 'sql_where' not in model_config:
-                raise RuntimeError("sql_where not specified in model materialized as incremental: {}".format(self))
+                compiler_error("sql_where not specified in model materialized as incremental")
             raw_sql_where = model_config['sql_where']
             sql_where = self.compile_string(ctx, raw_sql_where)
 
             unique_key = model_config.get('unique_key', None)
         else:
+            if 'sql_where' in model_config:
+                compiler_warning(self, "'sql_where' configuration supplied to non-incremental model")
             identifier = self.tmp_name()
             sql_where = None
             unique_key = None
@@ -561,7 +571,7 @@ class SchemaFile(DBTSource):
             return SchemaFile.SchemaTestMap[test_type]
         else:
             possible_types = ", ".join(SchemaFile.SchemaTestMap.keys())
-            raise RuntimeError("Invalid validation type given in {}: '{}'. Possible: {}".format(self.filepath, test_type, possible_types))
+            compiler_error("Invalid validation type given in {}: '{}'. Possible: {}".format(self.filepath, test_type, possible_types))
 
     def compile(self):
         schema_tests = []
@@ -634,7 +644,7 @@ class ArchiveModel(DBTSource):
 
         for key in required:
             if data.get(key, None) is None:
-                raise RuntimeError("Invalid archive config: missing required field '{}'".format(key))
+                compiler_error("Invalid archive config: missing required field '{}'".format(key))
 
     def serialize(self):
         data = DBTSource.serialize(self).copy()

@@ -31,7 +31,10 @@ class This(object):
         return self.schema_table(self.schema, self.table)
 
 def compiler_error(model, msg):
-    raise RuntimeError("Compilation error while compiling model {}\n{}".format(model.nice_name, msg))
+    raise RuntimeError("! Compilation error while compiling model {}:\n! {}".format(model.nice_name, msg))
+
+def compiler_warning(model, msg):
+    print("* Compilation warning while compiling model {}:\n* {}".format(model.nice_name, msg))
 
 class Var(object):
     UndefinedVarError = "Required var '{}' not found in config:\nVars supplied to {} = {}"
