@@ -6,12 +6,7 @@ machine:
 
 database:
   override:
-    - createdb dbt
-    - echo "CREATE ROLE root WITH UNENCRYPTED PASSWORD 'password';" | psql -U postgres
-    - echo "ALTER ROLE root WITH LOGIN;" | psql -U postgres
-    - echo "GRANT SELECT, UPDATE, INSERT ON ALL TABLES IN SCHEMA dbt.* TO root;" | psql -U postgres
-    - echo "GRANT CREATE, CONNECT ON DATABASE dbt TO root;" | psql -U postgres
-
+    - bash test/setup_db.sh
 
 dependencies:
   pre:

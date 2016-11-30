@@ -4,7 +4,6 @@ table_copy:
         not_null:
             - id
             - first_name
-            - email
             - ip_address
             - updated_at
 

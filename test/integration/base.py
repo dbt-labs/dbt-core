@@ -46,6 +46,16 @@ class DBTIntegrationTest(unittest.TestCase):
                         'pass': 'password',
                         'dbname': 'dbt',
                         'schema': self.schema
+                    },
+                    'noaccess': {
+                        'type': 'postgres',
+                        'threads': 1,
+                        'host': 'database',
+                        'port': 5432,
+                        'user': 'noaccess',
+                        'pass': 'password',
+                        'dbname': 'dbt',
+                        'schema': self.schema
                     }
                 },
                 'run-target': 'default'
