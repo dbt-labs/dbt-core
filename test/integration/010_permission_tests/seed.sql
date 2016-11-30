@@ -10,10 +10,6 @@ create table private.seed (
 );
 
 
-CREATE USER noaccess WITH UNENCRYPTED PASSWORD 'password' NOSUPERUSER;
-GRANT CREATE, CONNECT ON DATABASE dbt TO noaccess;
-GRANT CREATE ON SCHEMA permission_tests_010 TO noaccess;
-
 insert into private.seed (first_name, last_name, email, gender, ip_address) values ('Kathryn', 'Walker', 'kwalker1@ezinearticles.com', 'Female', '194.121.179.35');
 insert into private.seed (first_name, last_name, email, gender, ip_address) values ('Gerald', 'Ryan', 'gryan2@com.com', 'Male', '11.3.212.243');
 insert into private.seed (first_name, last_name, email, gender, ip_address) values ('Bonnie', 'Spencer', 'bspencer3@ameblo.jp', 'Female', '216.32.196.175');
