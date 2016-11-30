@@ -6,6 +6,7 @@ class TestRunTargetDeprecation(DBTIntegrationTest):
     def setUp(self):
         DBTIntegrationTest.setUp(self)
 
+        dbt.deprecations.reset_deprecations()
         self.run_sql_file("test/integration/012_profile_config_tests/seed.sql")
 
     @property
@@ -50,6 +51,7 @@ class TestNoRunTargetDeprecation(DBTIntegrationTest):
         DBTIntegrationTest.setUp(self)
 
         self.run_sql_file("test/integration/012_profile_config_tests/seed.sql")
+        dbt.deprecations.reset_deprecations()
 
     @property
     def schema(self):
@@ -84,4 +86,4 @@ class TestNoRunTargetDeprecation(DBTIntegrationTest):
 
         self.assertTablesEqual("seed","view")
 
-        self.assertTrue('run-target' not in dbt.deprecations.active_deprecations)
+        self.assertFalse('run-target' in dbt.deprecations.active_deprecations)

@@ -34,3 +34,6 @@ deprecations_list = [
 ]
 
 deprecations = {d.name : d for d in deprecations_list}
+
+def reset_deprecations():
+    active_deprecations.clear()
