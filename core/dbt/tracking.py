@@ -242,10 +242,10 @@ def get_platform_context():
 
 
 def get_dbt_env_context():
-    default = 'manual'
+    default = "manual"
 
     dbt_invocation_env = os.getenv(DBT_INVOCATION_ENV, default)
-    if dbt_invocation_env == '':
+    if dbt_invocation_env == "":
         dbt_invocation_env = default
 
     data = {
