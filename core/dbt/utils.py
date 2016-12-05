@@ -71,7 +71,7 @@ def get_profile_from_project(project):
 
 def get_model_name_or_none(model):
     if model is None:
-        name = '<None>'
+        name = "<None>"
 
     elif isinstance(model, str):
         name = model
