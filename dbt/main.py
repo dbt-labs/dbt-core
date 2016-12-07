@@ -46,6 +46,55 @@ def main(args=None):
         print(str(e))
         sys.exit(1)
 
+def get_nearest_project_dir():
+    root_path = os.path.abspath(os.sep)
+    cwd = os.getcwd()
+
+    while cwd != root_path:
+        project_file = os.path.join(cwd, "dbt_project.yml")
+        if os.path.exists(project_file):
+            return cwd
+        cwd = os.path.dirname(cwd)
+
+    return None
+
+def invoke_dbt(parsed):
+    task = None
+    proj = None
+
+    try:
+        proj = project.read_project('dbt_project.yml', validate=False, profile_to_load=parsed.profile)
+        proj.validate()
+    except project.DbtProjectError as e:
+        print("Encountered an error while reading the project:")
+        print("  ERROR {}".format(str(e)))
+        print("Did you set the correct --profile? Using: {}".format(parsed.profile))
+        all_profiles = project.read_profiles().keys()
+        profiles_string = "\n".join([" - " + key for key in all_profiles])
+        print("Valid profiles:\n{}".format(profiles_string))
+        dbt.tracking.track_invalid_invocation(project=proj, args=parsed, result_type="invalid_profile", result=str(e))
+        return None
+
+    if parsed.target is not None:
+        targets = proj.cfg.get('outputs', {}).keys()
+        if parsed.target in targets:
+            proj.cfg['target'] = parsed.target
+        else:
+            print("Encountered an error while reading the project:")
+            print("  ERROR Specified target {} is not a valid option for profile {}".format(parsed.target, proj.profile_to_load))
+            print("Valid targets are: {}".format(targets))
+            dbt.tracking.track_invalid_invocation(project=proj, args=parsed, result_type="invalid_target", result="target not found")
+            return None
+
+    log_dir = proj.get('log-path', 'logs')
+    logger = getLogger(log_dir, __name__)
+
+    logger.info("running dbt with arguments %s", parsed)
+
+    task = parsed.cls(args=parsed, project=proj)
+
+    return task, proj
+
 def handle(args):
     p = argparse.ArgumentParser(prog='dbt: data build tool', formatter_class=argparse.RawTextHelpFormatter)
     p.add_argument('--version', action='version', version=dbt.version.get_version_information(), help="Show version information")
@@ -96,47 +145,18 @@ def handle(args):
 
     parsed = p.parse_args(args)
 
-    task = None
-    proj = None
+    nearest_project_dir = get_nearest_project_dir()
+
+    if nearest_project_dir is None:
+        raise RuntimeError("dbt must be run from a project root directory with a dbt_project.yml file")
+
+    os.chdir(nearest_project_dir)
 
     if parsed.which == 'init':
         # bypass looking for a project file if we're running `dbt init`
         task = parsed.cls(args=parsed)
-
-    elif os.path.isfile('dbt_project.yml'):
-        try:
-            proj = project.read_project('dbt_project.yml', validate=False, profile_to_load=parsed.profile)
-            proj.validate()
-        except project.DbtProjectError as e:
-            print("Encountered an error while reading the project:")
-            print("  ERROR {}".format(str(e)))
-            print("Did you set the correct --profile? Using: {}".format(parsed.profile))
-            all_profiles = project.read_profiles().keys()
-            profiles_string = "\n".join([" - " + key for key in all_profiles])
-            print("Valid profiles:\n{}".format(profiles_string))
-            dbt.tracking.track_invalid_invocation(project=proj, args=parsed, result_type="invalid_profile", result=str(e))
-            return None
-
-        if parsed.target is not None:
-            targets = proj.cfg.get('outputs', {}).keys()
-            if parsed.target in targets:
-                proj.cfg['target'] = parsed.target
-            else:
-                print("Encountered an error while reading the project:")
-                print("  ERROR Specified target {} is not a valid option for profile {}".format(parsed.target, proj.profile_to_load))
-                print("Valid targets are: {}".format(targets))
-                dbt.tracking.track_invalid_invocation(project=proj, args=parsed, result_type="invalid_target", result="target not found")
-                return None
-
-        log_dir = proj.get('log-path', 'logs')
-        logger = getLogger(log_dir, __name__)
-
-        logger.info("running dbt with arguments %s", parsed)
-
-        task = parsed.cls(args=parsed, project=proj)
-
     else:
-        raise RuntimeError("dbt must be run from a project root directory with a dbt_project.yml file")
+        task, proj = invoke_dbt(parsed)
 
     dbt.tracking.track_invocation_start(project=proj, args=parsed)
     try:
