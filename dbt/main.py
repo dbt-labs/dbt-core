@@ -36,7 +36,7 @@ def handle(args):
     parsed = parse_args(args)
 
     # this needs to happen after args are parsed so we can determine the correct profiles.yml file
-    if config.is_opted_out(parsed.profiles_dir):
+    if not config.send_anonymous_usage_stats(parsed.profiles_dir):
         dbt.tracking.do_not_track()
 
     res = run_from_args(parsed)

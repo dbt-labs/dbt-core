@@ -19,10 +19,10 @@ def read_config(profiles_dir=None):
     return {}
 
 
-def is_opted_out(profiles_dir):
+def send_anonymous_usage_stats(profiles_dir):
     config = read_config(profiles_dir)
 
     if config is not None and config.get("send_anonymous_usage_stats") == False:
-        return True
+        return False
 
-    return False
+    return True
