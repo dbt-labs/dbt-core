@@ -100,14 +100,9 @@ on-run-end:
   - insert into public.cool_table (id) values (4), (5), (6)
 ```
 
-### Bug fixes https://github.com/analyst-collective/dbt/milestone/11?closed=1
+### Bug fixes
 
 We fixed 10 bugs in this release! See the full list [here](https://github.com/analyst-collective/dbt/milestone/11?closed=1)
-
-
-### One more thing...
-
-As always, feel free to reach out to us on [Slack](http://ac-slackin.herokuapp.com/) with any questions or comments!
 
 ---
 
