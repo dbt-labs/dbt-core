@@ -18,17 +18,7 @@ import dbt.task.seed as seed_task
 import dbt.task.test as test_task
 import dbt.task.archive as archive_task
 import dbt.tracking
-
-
-def is_opted_out(profiles_dir):
-    profiles = project.read_profiles(profiles_dir)
-
-    if profiles is None or profiles.get("config") is None:
-        return False
-    elif profiles['config'].get("send_anonymous_usage_stats") == False:
-        return True
-    else:
-        return False
+import dbt.config as config
 
 def main(args=None):
     if args is None:
@@ -46,7 +36,7 @@ def handle(args):
     parsed = parse_args(args)
 
     # this needs to happen after args are parsed so we can determine the correct profiles.yml file
-    if is_opted_out(parsed.profiles_dir):
+    if config.is_opted_out(parsed.profiles_dir):
         dbt.tracking.do_not_track()
 
     res = run_from_args(parsed)
