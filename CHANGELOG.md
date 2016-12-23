@@ -1,8 +1,8 @@
 ## dbt 0.6.1 (unreleased)
 
-### Bugfixes
+#### Bugfixes
 
-- config options in profiles.yml are ignored ([#254](https://github.com/analyst-collective/dbt/issues/254))
+- config options in profiles.yml are ignored ([#255](https://github.com/analyst-collective/dbt/pull/255))
 
 ## dbt release 0.6.0
 
