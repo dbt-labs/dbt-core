@@ -1,3 +1,9 @@
+## dbt 0.6.1 (unreleased)
+
+#### Changes
+
+- add `--debug` flag, replace calls to `print()` with a global logger ([#256](https://github.com/analyst-collective/dbt/pull/256))
+
 ## dbt release 0.6.0
 
 ### tl;dr
