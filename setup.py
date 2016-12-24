@@ -13,7 +13,7 @@ setup(
   author_email="admin@analystcollective.org",
   url="https://github.com/analyst-collective/dbt",
   packages=find_packages(),
-  test_suite = 'test',
+  test_suite='test',
   entry_points={
     'console_scripts': [
       'dbt = dbt.main:main',
@@ -31,7 +31,5 @@ setup(
     'csvkit==0.9.1',
     'snowplow-tracker==0.7.2',
     'celery==3.1.23',
-    #'paramiko==2.0.1',
-    #'sshtunnel==0.0.8.2'
   ],
 )

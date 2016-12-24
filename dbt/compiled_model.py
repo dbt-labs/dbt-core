@@ -2,6 +2,7 @@ import hashlib
 import jinja2
 from dbt.utils import compiler_error, to_unicode
 
+
 class CompiledModel(object):
     def __init__(self, fqn, data):
         self.fqn = fqn
@@ -76,12 +77,17 @@ class CompiledModel(object):
     @property
     def schema(self):
         if self.target is None:
-            raise RuntimeError("`target` not set in compiled model {}".format(self))
+            raise RuntimeError(
+                "`target` not set in compiled model {}".format(self)
+            )
         else:
             return self.target.schema
 
     def should_execute(self, args, existing):
-        if args.non_destructive and self.materialization == 'view' and self.name in existing:
+        if args.non_destructive and \
+           self.materialization == 'view' and \
+           self.name in existing:
+
             return False
         else:
             return self.data['enabled'] and self.materialization != 'ephemeral'
@@ -90,14 +96,14 @@ class CompiledModel(object):
         if args.non_destructive and self.materialization == 'table':
             return False
         else:
-            return self.materialization in ['table' , 'view']
+            return self.materialization in ['table', 'view']
 
     def prepare(self, existing, target):
         if self.materialization == 'incremental':
             tmp_drop_type = None
             final_drop_type = None
         else:
-            tmp_drop_type = existing.get(self.tmp_name, None) 
+            tmp_drop_type = existing.get(self.tmp_name, None)
             final_drop_type = existing.get(self.name, None)
 
         self.tmp_drop_type = tmp_drop_type
@@ -105,7 +111,10 @@ class CompiledModel(object):
         self.target = target
 
     def __repr__(self):
-        return "<CompiledModel {}.{}: {}>".format(self.data['project_name'], self.name, self.data['build_path'])
+        return "<CompiledModel {}.{}: {}>".format(
+            self.data['project_name'], self.name, self.data['build_path']
+        )
+
 
 class CompiledTest(CompiledModel):
     def __init__(self, fqn, data):
@@ -121,7 +130,10 @@ class CompiledTest(CompiledModel):
         self.target = target
 
     def __repr__(self):
-        return "<CompiledModel {}.{}: {}>".format(self.data['project_name'], self.name, self.data['build_path'])
+        return "<CompiledModel {}.{}: {}>".format(
+            self.data['project_name'], self.name, self.data['build_path']
+        )
+
 
 class CompiledArchive(CompiledModel):
     def __init__(self, fqn, data):
@@ -137,7 +149,10 @@ class CompiledArchive(CompiledModel):
         self.target = target
 
     def __repr__(self):
-        return "<CompiledArchive {}.{}: {}>".format(self.data['project_name'], self.name, self.data['build_path'])
+        return "<CompiledArchive {}.{}: {}>".format(
+            self.data['project_name'], self.name, self.data['build_path']
+        )
+
 
 def make_compiled_model(fqn, data):
     run_type = data['dbt_run_type']
@@ -150,5 +165,3 @@ def make_compiled_model(fqn, data):
         return CompiledArchive(fqn, data)
     else:
         raise RuntimeError("invalid run_type given: {}".format(run_type))
-
-

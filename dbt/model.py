@@ -8,37 +8,54 @@ from dbt.utils import split_path
 import dbt.schema_tester
 import dbt.project
 import dbt.archival
-from dbt.utils import deep_merge, DBTConfigKeys, compiler_error, compiler_warning
+from dbt.utils import deep_merge, DBTConfigKeys, compiler_error, \
+    compiler_warning
+
 
 class SourceConfig(object):
     Materializations = ['view', 'table', 'incremental', 'ephemeral']
     ConfigKeys = DBTConfigKeys
 
-    AppendListFields  = ['pre-hook', 'post-hook']
+    AppendListFields = ['pre-hook', 'post-hook']
     ExtendDictFields = ['vars']
-    ClobberFields = ['enabled', 'materialized', 'dist', 'sort', 'sql_where', 'unique_key', 'sort_type']
+    ClobberFields = [
+        'enabled',
+        'materialized',
+        'dist',
+        'sort',
+        'sql_where',
+        'unique_key',
+        'sort_type'
+    ]
 
     def __init__(self, active_project, own_project, fqn):
         self.active_project = active_project
         self.own_project = own_project
         self.fqn = fqn
 
-        self.in_model_config   = {} # the config options defined within the model
+        # the config options defined within the model
+        self.in_model_config = {}
 
         # make sure we categorize all configs
-        all_configs = self.AppendListFields + self.ExtendDictFields + self.ClobberFields
+        all_configs = self.AppendListFields + self.ExtendDictFields + \
+            self.ClobberFields
+
         for config in self.ConfigKeys:
             assert config in all_configs, config
 
     def _merge(self, *configs):
         merged_config = {}
         for config in configs:
-            intermediary_merged = deep_merge(merged_config.copy(), config.copy())
+            intermediary_merged = deep_merge(
+                merged_config.copy(), config.copy()
+            )
+
             merged_config.update(intermediary_merged)
         return merged_config
 
     # this is re-evaluated every time `config` is called.
-    # we can cache it, but that complicates things. TODO : see how this fares performance-wise
+    # we can cache it, but that complicates things.
+    # TODO : see how this fares performance-wise
     @property
     def config(self):
         """
@@ -59,10 +76,14 @@ class SourceConfig(object):
             cfg = self._merge(defaults, active_config, self.in_model_config)
         else:
             own_config = self.load_config_from_own_project()
-            cfg =  self._merge(defaults, own_config, self.in_model_config, active_config)
+            cfg = self._merge(
+                defaults, own_config, self.in_model_config, active_config
+            )
 
-        # mask this as a table if it's an incremental model with --full-refresh provided
-        if cfg.get('materialized') == 'incremental' and self.active_project.args.full_refresh:
+        # mask this as a table if it's an incremental model with
+        # --full-refresh provided
+        if cfg.get('materialized') == 'incremental' and \
+           self.active_project.args.full_refresh:
             cfg['materialized'] = 'table'
 
         return cfg
@@ -70,7 +91,8 @@ class SourceConfig(object):
     def update_in_model_config(self, config):
         config = config.copy()
 
-        # make sure we're not clobbering an array of hooks with a single hook string
+        # make sure we're not clobbering an array of hooks with a single hook
+        # string
         hook_fields = ['pre-hook', 'post-hook']
         for hook_field in hook_fields:
             if hook_field in config:
@@ -91,16 +113,24 @@ class SourceConfig(object):
         for hook in new_hooks:
             if type(hook) != str:
                 name = ".".join(self.fqn)
-                compiler_error(None, "{} for model {} is not a string!".format(key, name))
+                compiler_error(None, "{} for model {} is not a string!".format(
+                    key, name
+                ))
 
             hooks.append(hook)
         return hooks
 
     def smart_update(self, mutable_config, new_configs):
-        relevant_configs = {key: new_configs[key] for key in new_configs if key in self.ConfigKeys}
+        relevant_configs = {
+            key: new_configs[key] for key
+            in new_configs if key in self.ConfigKeys
+        }
+
         for key in SourceConfig.AppendListFields:
             new_hooks = self.__get_hooks(relevant_configs, key)
-            mutable_config[key].extend([h for h in new_hooks if h not in mutable_config[key]])
+            mutable_config[key].extend([
+                h for h in new_hooks if h not in mutable_config[key]
+            ])
 
         for key in SourceConfig.ExtendDictFields:
             dict_val = relevant_configs.get(key, {})
@@ -113,7 +143,8 @@ class SourceConfig(object):
         return relevant_configs
 
     def get_project_config(self, project):
-        # most configs are overwritten by a more specific config, but pre/post hooks are appended!
+        # most configs are overwritten by a more specific config, but pre/post
+        # hooks are appended!
         config = {}
         for k in SourceConfig.AppendListFields:
             config[k] = []
@@ -137,7 +168,12 @@ class SourceConfig(object):
             # mutates config
             relevant_configs = self.smart_update(config, level_config)
 
-            clobber_configs = {k:v for (k,v) in relevant_configs.items() if k not in SourceConfig.AppendListFields and k not in SourceConfig.ExtendDictFields}
+            clobber_configs = {
+                k: v for (k, v) in relevant_configs.items()
+                if k not in SourceConfig.AppendListFields and
+                k not in SourceConfig.ExtendDictFields
+            }
+
             config.update(clobber_configs)
             model_configs = model_configs[level]
 
@@ -148,6 +184,7 @@ class SourceConfig(object):
 
     def load_config_from_active_project(self):
         return self.get_project_config(self.active_project)
+
 
 class DBTSource(object):
     dbt_run_type = 'base'
@@ -175,10 +212,12 @@ class DBTSource(object):
 
     def compile(self):
         raise RuntimeError("Not implemented!")
-    
+
     def serialize(self):
         serialized = {
-            "build_path": os.path.join(self.project['target-path'], self.build_path()),
+            "build_path": os.path.join(
+                self.project['target-path'], self.build_path()
+            ),
             "source_path": self.filepath,
             "name": self.name,
             "tmp_name": self.tmp_name(),
@@ -226,12 +265,19 @@ class DBTSource(object):
     def is_enabled(self):
         enabled = self.config['enabled']
         if enabled not in (True, False):
-            compiler_error(self, "'enabled' config must be either True or False. '{}' given.".format(enabled))
+            compiler_error(
+                self,
+                "'enabled' config must be either True or False. '{}' given."
+                .format(enabled)
+            )
         return enabled
 
     @property
     def fqn(self):
-        "fully-qualified name for model. Includes all subdirs below 'models' path and the filename"
+        """
+        fully-qualified name for model. Includes all subdirs below 'models'
+        path and the filename
+        """
         parts = split_path(self.filepath)
         name, _ = os.path.splitext(parts[-1])
         return [self.own_project['name']] + parts[1:-1] + [name]
@@ -259,19 +305,25 @@ class DBTSource(object):
             "final_name": self.name
         }
 
-        return 'alter table "{schema}"."{tmp_name}" rename to "{final_name}"'.format(**opts)
+        return 'alter table "{schema}"."{tmp_name}" rename to "{final_name}"' \
+            .format(**opts)
 
     @property
     def nice_name(self):
         return "{}.{}".format(self.fqn[0], self.fqn[-1])
 
+
 class Model(DBTSource):
     dbt_run_type = 'run'
 
-    def __init__(self, project, model_dir, rel_filepath, own_project, create_template):
+    def __init__(
+        self, project, model_dir, rel_filepath, own_project, create_template
+    ):
         self.prologue = []
         self.create_template = create_template
-        super(Model, self).__init__(project, model_dir, rel_filepath, own_project)
+        super(Model, self).__init__(
+            project, model_dir, rel_filepath, own_project
+        )
 
     def add_to_prologue(self, s):
         safe_string = s.replace('{{', 'DBT_EXPR(').replace('}}', ')')
@@ -286,40 +338,55 @@ class Model(DBTSource):
             return ''
 
         if (self.is_view or self.is_ephemeral) and 'sort' in model_config:
-           return ''
+            return ''
 
         sort_keys = model_config['sort']
         sort_type = model_config.get('sort_type', 'compound')
 
         if type(sort_type) != str:
-            compiler_error(self, "The provided sort_type '{}' is not valid!".format(sort_type))
+            compiler_error(
+                self,
+                "The provided sort_type '{}' is not valid!".format(sort_type)
+            )
 
         sort_type = sort_type.strip().lower()
 
         valid_sort_types = ['compound', 'interleaved']
         if sort_type not in valid_sort_types:
-            compiler_error(self, "Invalid sort_type given: {} -- must be one of {}".format(sort_type, valid_sort_types))
+            compiler_error(
+                self,
+                "Invalid sort_type given: {} -- must be one of {}".format(
+                    sort_type, valid_sort_types
+                )
+            )
 
         if type(sort_keys) == str:
             sort_keys = [sort_keys]
 
         # remove existing quotes in field name, then wrap in quotes
-        formatted_sort_keys = ['"{}"'.format(sort_key.replace('"', '')) for sort_key in sort_keys]
+        formatted_sort_keys = [
+            '"{}"'.format(sort_key.replace('"', '')) for sort_key in sort_keys
+        ]
         keys_csv = ', '.join(formatted_sort_keys)
 
-        return "{sort_type} sortkey ({keys_csv})".format(sort_type=sort_type, keys_csv=keys_csv)
+        return "{sort_type} sortkey ({keys_csv})".format(
+            sort_type=sort_type, keys_csv=keys_csv
+        )
 
     def dist_qualifier(self, model_config):
         if 'dist' not in model_config:
             return ''
 
         if (self.is_view or self.is_ephemeral) and 'dist' in model_config:
-           return ''
+            return ''
 
         dist_key = model_config['dist']
 
         if type(dist_key) != str:
-            compiler_error(self, "The provided distkey '{}' is not valid!".format(dist_key))
+            compiler_error(
+                self,
+                "The provided distkey '{}' is not valid!".format(dist_key)
+            )
 
         dist_key = dist_key.strip().lower()
 
@@ -346,7 +413,9 @@ class Model(DBTSource):
             return string
 
         try:
-            fs_loader = jinja2.FileSystemLoader(searchpath=self.project['macro-paths'])
+            fs_loader = jinja2.FileSystemLoader(
+                searchpath=self.project['macro-paths']
+            )
             env = jinja2.Environment(loader=fs_loader)
             template = env.from_string(string, globals=ctx)
             return template.render(ctx)
@@ -366,7 +435,11 @@ class Model(DBTSource):
         model_config = self.config
 
         if self.materialization not in SourceConfig.Materializations:
-            compiler_error(self, "Invalid materialize option given: '{}'. Must be one of {}".format(self.materialization, SourceConfig.Materializations))
+            compiler_error(
+                self,
+                "Invalid materialize option given: '{}'. Must be one of {}"
+                .format(self.materialization, SourceConfig.Materializations)
+            )
 
         schema = ctx['env'].get('schema', 'public')
 
@@ -377,7 +450,11 @@ class Model(DBTSource):
         if self.materialization == 'incremental':
             identifier = self.name
             if 'sql_where' not in model_config:
-                compiler_error(self, "sql_where not specified in model materialized as incremental")
+                compiler_error(
+                    self,
+                    """sql_where not specified in model materialized as
+                    incremental"""
+                )
             raw_sql_where = model_config['sql_where']
             sql_where = self.compile_string(ctx, raw_sql_where)
 
@@ -387,7 +464,7 @@ class Model(DBTSource):
             sql_where = None
             unique_key = None
 
-        pre_hooks  = self.get_hooks(ctx, 'pre-hook')
+        pre_hooks = self.get_hooks(ctx, 'pre-hook')
         post_hooks = self.get_hooks(ctx, 'post-hook')
 
         opts = {
@@ -399,9 +476,9 @@ class Model(DBTSource):
             "sort_qualifier": sort_qualifier,
             "sql_where": sql_where,
             "prologue": self.get_prologue_string(),
-            "unique_key" : unique_key,
-            "pre-hooks" : pre_hooks,
-            "post-hooks" : post_hooks,
+            "unique_key": unique_key,
+            "pre-hooks": pre_hooks,
+            "post-hooks": post_hooks,
             "non_destructive": self.is_non_destructive()
         }
 
@@ -419,11 +496,20 @@ class Model(DBTSource):
         return "__dbt__CTE__{}".format(self.name)
 
     def __repr__(self):
-        return "<Model {}.{}: {}>".format(self.project['name'], self.name, self.filepath)
+        return "<Model {}.{}: {}>".format(
+            self.project['name'], self.name, self.filepath
+        )
+
 
 class Analysis(Model):
     def __init__(self, project, target_dir, rel_filepath, own_project):
-        return super(Analysis, self).__init__(project, target_dir, rel_filepath, own_project, BaseCreateTemplate())
+        return super(Analysis, self).__init__(
+            project,
+            target_dir,
+            rel_filepath,
+            own_project,
+            BaseCreateTemplate()
+        )
 
     def build_path(self):
         build_dir = 'build-analysis'
@@ -434,11 +520,21 @@ class Analysis(Model):
     def __repr__(self):
         return "<Analysis {}: {}>".format(self.name, self.filepath)
 
+
 class TestModel(Model):
     dbt_run_type = 'dry-run'
 
-    def __init__(self, project, target_dir, rel_filepath, own_project, create_template):
-        return super(TestModel, self).__init__(project, target_dir, rel_filepath, own_project, create_template)
+    def __init__(
+            self,
+            project,
+            target_dir,
+            rel_filepath,
+            own_project,
+            create_template
+    ):
+        return super(TestModel, self).__init__(
+            project, target_dir, rel_filepath, own_project, create_template
+        )
 
     def build_path(self):
         build_dir = self.create_template.label
@@ -448,7 +544,8 @@ class TestModel(Model):
 
     @property
     def fqn(self):
-        "fully-qualified name for model. Includes all subdirs below 'models' path and the filename"
+        """fully-qualified name for model. Includes all subdirs below 'models'
+        path and the filename"""
         parts = split_path(self.filepath)
         name, _ = os.path.splitext(parts[-1])
         test_name = DryCreateTemplate.model_name(name)
@@ -461,7 +558,10 @@ class TestModel(Model):
         return [self.project['name']] + parts[1:-1] + [name]
 
     def __repr__(self):
-        return "<TestModel {}.{}: {}>".format(self.project['name'], self.name, self.filepath)
+        return "<TestModel {}.{}: {}>".format(
+            self.project['name'], self.name, self.filepath
+        )
+
 
 class SchemaTest(DBTSource):
     test_type = "base"
@@ -474,13 +574,16 @@ class SchemaTest(DBTSource):
         self.options = options
         self.params = self.get_params(options)
 
-        super(SchemaTest, self).__init__(project, target_dir, rel_filepath, project)
+        super(SchemaTest, self).__init__(
+            project, target_dir, rel_filepath, project
+        )
 
     @property
     def fqn(self):
         parts = split_path(self.filepath)
         name, _ = os.path.splitext(parts[-1])
-        return [self.project['name']] + parts[1:-1] + ['schema',  self.get_filename()]
+        return [self.project['name']] + parts[1:-1] + \
+            ['schema', self.get_filename()]
 
     def serialize(self):
         serialized = DBTSource.serialize(self).copy()
@@ -500,7 +603,9 @@ class SchemaTest(DBTSource):
 
     def get_filename(self):
         key = re.sub('[^0-9a-zA-Z]+', '_', self.unique_option_key())
-        filename = "{test_type}_{model_name}_{key}".format(test_type=self.test_type, model_name=self.model_name, key=key)
+        filename = "{test_type}_{model_name}_{key}".format(
+            test_type=self.test_type, model_name=self.model_name, key=key
+        )
         return filename
 
     def build_path(self):
@@ -518,7 +623,10 @@ class SchemaTest(DBTSource):
 
     def __repr__(self):
         class_name = self.__class__.__name__
-        return "<{} {}.{}: {}>".format(class_name, self.project['name'], self.name, self.filepath)
+        return "<{} {}.{}: {}>".format(
+            class_name, self.project['name'], self.name, self.filepath
+        )
+
 
 class NotNullSchemaTest(SchemaTest):
     template = dbt.schema_tester.QUERY_VALIDATE_NOT_NULL
@@ -528,7 +636,9 @@ class NotNullSchemaTest(SchemaTest):
         return self.params['field']
 
     def describe(self):
-        return 'VALIDATE NOT NULL {schema}.{table}.{field}'.format(**self.params)
+        return 'VALIDATE NOT NULL {schema}.{table}.{field}' \
+            .format(**self.params)
+
 
 class UniqueSchemaTest(SchemaTest):
     template = dbt.schema_tester.QUERY_VALIDATE_UNIQUE
@@ -539,6 +649,7 @@ class UniqueSchemaTest(SchemaTest):
 
     def describe(self):
         return 'VALIDATE UNIQUE {schema}.{table}.{field}'.format(**self.params)
+
 
 class ReferentialIntegritySchemaTest(SchemaTest):
     template = dbt.schema_tester.QUERY_VALIDATE_REFERENTIAL_INTEGRITY
@@ -554,10 +665,14 @@ class ReferentialIntegritySchemaTest(SchemaTest):
         }
 
     def unique_option_key(self):
-        return "{child_field}_to_{parent_table}_{parent_field}".format(**self.params)
+        return "{child_field}_to_{parent_table}_{parent_field}" \
+            .format(**self.params)
 
     def describe(self):
-        return 'VALIDATE REFERENTIAL INTEGRITY {schema}.{child_table}.{child_field} to {schema}.{parent_table}.{parent_field}'.format(**self.params)
+        return """VALIDATE REFERENTIAL INTEGRITY
+        {schema}.{child_table}.{child_field} to
+        {schema}.{parent_table}.{parent_field}""".format(**self.params)
+
 
 class AcceptedValuesSchemaTest(SchemaTest):
     template = dbt.schema_tester.QUERY_VALIDATE_ACCEPTED_VALUES
@@ -568,8 +683,8 @@ class AcceptedValuesSchemaTest(SchemaTest):
         quoted_values_csv = ",".join(quoted_values)
         return {
             "schema": self.schema,
-            "table" : self.model_name,
-            "field" : options['field'],
+            "table": self.model_name,
+            "field": options['field'],
             "values_csv": quoted_values_csv
         }
 
@@ -577,7 +692,10 @@ class AcceptedValuesSchemaTest(SchemaTest):
         return "{field}".format(**self.params)
 
     def describe(self):
-        return 'VALIDATE ACCEPTED VALUES {schema}.{table}.{field} VALUES ({values_csv})'.format(**self.params)
+        return """VALIDATE ACCEPTED VALUES
+        {schema}.{table}.{field} VALUES
+        ({values_csv})""".format(**self.params)
+
 
 class SchemaFile(DBTSource):
     SchemaTestMap = {
@@ -588,7 +706,9 @@ class SchemaFile(DBTSource):
     }
 
     def __init__(self, project, target_dir, rel_filepath, own_project):
-        super(SchemaFile, self).__init__(project, target_dir, rel_filepath, own_project)
+        super(SchemaFile, self).__init__(
+            project, target_dir, rel_filepath, own_project
+        )
         self.og_target_dir = target_dir
         self.schema = yaml.safe_load(self.contents)
 
@@ -597,7 +717,11 @@ class SchemaFile(DBTSource):
             return SchemaFile.SchemaTestMap[test_type]
         else:
             possible_types = ", ".join(SchemaFile.SchemaTestMap.keys())
-            compiler_error(self, "Invalid validation type given in {}: '{}'. Possible: {}".format(self.filepath, test_type, possible_types))
+            compiler_error(
+                self,
+                "Invalid validation type given in {}: '{}'. Possible: {}"
+                .format(self.filepath, test_type, possible_types)
+            )
 
     def do_compile(self):
         schema_tests = []
@@ -605,10 +729,20 @@ class SchemaFile(DBTSource):
             constraints = constraint_blob.get('constraints', {})
             for constraint_type, constraint_data in constraints.items():
                 if constraint_data is None:
-                    compiler_error(self, "no constraints given to test: '{}.{}'".format(model_name, constraint_type))
+                    compiler_error(
+                        self,
+                        "no constraints given to test: '{}.{}'"
+                        .format(model_name, constraint_type)
+                    )
                 for params in constraint_data:
                     schema_test_klass = self.get_test(constraint_type)
-                    schema_test = schema_test_klass(self.project, self.og_target_dir, self.rel_filepath, model_name, params)
+                    schema_test = schema_test_klass(
+                        self.project,
+                        self.og_target_dir,
+                        self.rel_filepath,
+                        model_name,
+                        params
+                    )
                     schema_tests.append(schema_test)
         return schema_tests
 
@@ -621,18 +755,28 @@ class SchemaFile(DBTSource):
             compiler_error(self, str(e))
 
     def __repr__(self):
-        return "<SchemaFile {}.{}: {}>".format(self.project['name'], self.model_name, self.filepath)
+        return "<SchemaFile {}.{}: {}>".format(
+            self.project['name'], self.model_name, self.filepath
+        )
+
 
 class Csv(DBTSource):
     def __init__(self, project, target_dir, rel_filepath, own_project):
-        super(Csv, self).__init__(project, target_dir, rel_filepath, own_project)
+        super(Csv, self).__init__(
+            project, target_dir, rel_filepath, own_project
+        )
 
     def __repr__(self):
-        return "<Csv {}.{}: {}>".format(self.project['name'], self.model_name, self.filepath)
+        return "<Csv {}.{}: {}>".format(
+            self.project['name'], self.model_name, self.filepath
+        )
+
 
 class Macro(DBTSource):
     def __init__(self, project, target_dir, rel_filepath, own_project):
-        super(Macro, self).__init__(project, target_dir, rel_filepath, own_project)
+        super(Macro, self).__init__(
+            project, target_dir, rel_filepath, own_project
+        )
         self.filepath = os.path.join(self.root_dir, self.rel_filepath)
 
     def get_macros(self, ctx):
@@ -647,7 +791,9 @@ class Macro(DBTSource):
                 yield {"project": self.own_project, "name": key, "macro": item}
 
     def __repr__(self):
-        return "<Macro {}.{}: {}>".format(self.project['name'], self.name, self.filepath)
+        return "<Macro {}.{}: {}>".format(
+            self.project['name'], self.name, self.filepath
+        )
 
 
 class ArchiveModel(DBTSource):
@@ -661,15 +807,17 @@ class ArchiveModel(DBTSource):
 
         self.source_schema = archive_data['source_schema']
         self.target_schema = archive_data['target_schema']
-        self.source_table  = archive_data['source_table']
-        self.target_table  = archive_data['target_table']
-        self.unique_key    = archive_data['unique_key']
-        self.updated_at    = archive_data['updated_at']
+        self.source_table = archive_data['source_table']
+        self.target_table = archive_data['target_table']
+        self.unique_key = archive_data['unique_key']
+        self.updated_at = archive_data['updated_at']
 
         target_dir = self.create_template.label
         rel_filepath = os.path.join(self.target_schema, self.target_table)
 
-        super(ArchiveModel, self).__init__(project, target_dir, rel_filepath, project)
+        super(ArchiveModel, self).__init__(
+            project, target_dir, rel_filepath, project
+        )
 
     def validate(self, data):
         required = [
@@ -683,18 +831,21 @@ class ArchiveModel(DBTSource):
 
         for key in required:
             if data.get(key, None) is None:
-                compiler_error("Invalid archive config: missing required field '{}'".format(key))
+                compiler_error(
+                    "Invalid archive config: missing required field '{}'"
+                    .format(key)
+                )
 
     def serialize(self):
         data = DBTSource.serialize(self).copy()
 
         serialized = {
-            "source_schema" : self.source_schema,
-            "target_schema" : self.target_schema,
-            "source_table"  : self.source_table,
-            "target_table"    : self.target_table,
-            "unique_key"    : self.unique_key,
-            "updated_at"    : self.updated_at
+            "source_schema": self.source_schema,
+            "target_schema": self.target_schema,
+            "source_table": self.source_table,
+            "target_table": self.target_table,
+            "unique_key": self.unique_key,
+            "updated_at": self.updated_at
         }
 
         data.update(serialized)
@@ -704,7 +855,10 @@ class ArchiveModel(DBTSource):
         archival = dbt.archival.Archival(self.project, self)
         query = archival.compile()
 
-        sql = self.create_template.wrap(self.target_schema, self.target_table, query, self.unique_key)
+        sql = self.create_template.wrap(
+            self.target_schema, self.target_table, query, self.unique_key
+        )
+
         return sql
 
     def build_path(self):
@@ -714,14 +868,25 @@ class ArchiveModel(DBTSource):
         return os.path.join(*path_parts)
 
     def __repr__(self):
-        return "<ArchiveModel {} --> {} unique:{} updated_at:{}>".format(self.source_table, self.target_table, self.unique_key, self.updated_at)
+        return "<ArchiveModel {} --> {} unique:{} updated_at:{}>".format(
+            self.source_table,
+            self.target_table,
+            self.unique_key,
+            self.updated_at
+        )
+
 
 class DataTest(DBTSource):
     dbt_run_type = 'test'
     dbt_test_type = 'data'
 
     def __init__(self, project, target_dir, rel_filepath, own_project):
-        super(DataTest, self).__init__(project, target_dir, rel_filepath, own_project)
+        super(DataTest, self).__init__(
+            project,
+            target_dir,
+            rel_filepath,
+            own_project
+        )
 
     def build_path(self):
         build_dir = "test"
@@ -744,4 +909,6 @@ class DataTest(DBTSource):
         return self.name
 
     def __repr__(self):
-        return "<DataTest {}.{}: {}>".format(self.project['name'], self.name, self.filepath)
+        return "<DataTest {}.{}: {}>".format(
+            self.project['name'], self.name, self.filepath
+        )
