@@ -1,4 +1,5 @@
 import pprint
+from dbt.logger import GLOBAL_LOGGER as logger
 
 
 class DebugTask:
@@ -7,6 +8,8 @@ class DebugTask:
         self.project = project
 
     def run(self):
-        print("args: {}".format(self.args))
-        print("project: ")
+        logger.info("args: {}".format(self.args))
+        logger.info("project: ")
+
+        # TODO: switch this out for a log statement
         pprint.pprint(self.project)

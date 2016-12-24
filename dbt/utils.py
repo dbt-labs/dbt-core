@@ -4,6 +4,7 @@ import dbt.project
 import pprint
 import json
 import dbt.project
+from dbt.logger import GLOBAL_LOGGER as logger
 
 DBTConfigKeys = [
     'enabled',
@@ -39,7 +40,7 @@ def compiler_error(model, msg):
     raise RuntimeError("! Compilation error while compiling model {}:\n! {}".format(name, msg))
 
 def compiler_warning(model, msg):
-    print("* Compilation warning while compiling model {}:\n* {}".format(model.nice_name, msg))
+    logger.info("* Compilation warning while compiling model {}:\n* {}".format(model.nice_name, msg))
 
 class Var(object):
     UndefinedVarError = "Required var '{}' not found in config:\nVars supplied to {} = {}"
@@ -96,8 +97,8 @@ def dependency_projects(project):
             try:
                 yield dbt.project.read_project(os.path.join(full_obj, 'dbt_project.yml'), project.profiles_dir, profile_to_load=project.profile_to_load)
             except dbt.project.DbtProjectError as e:
-                print("Error reading dependency project at {}".format(full_obj))
-                print(str(e))
+                logger.info("Error reading dependency project at {}".format(full_obj))
+                logger.info(str(e))
 
 def split_path(path):
     norm = os.path.normpath(path)

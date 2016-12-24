@@ -1,17 +1,19 @@
-
 import os
 import fnmatch
 import jinja2
 from collections import defaultdict
-import dbt.project
-from dbt.source import Source
-from dbt.utils import find_model_by_fqn, find_model_by_name, dependency_projects, split_path, This, Var, compiler_error, to_string
-from dbt.linker import Linker
-from dbt.runtime import RuntimeContext
-import dbt.targets
-import dbt.templates
 import time
 import sqlparse
+
+import dbt.project
+import dbt.targets
+import dbt.templates
+
+from dbt.linker import Linker
+from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.runtime import RuntimeContext
+from dbt.source import Source
+from dbt.utils import find_model_by_fqn, find_model_by_name, dependency_projects, split_path, This, Var, compiler_error, to_string
 
 CompilableEntities = ["models", "data tests", "schema tests", "archives", "analyses"]
 
@@ -174,10 +176,10 @@ class Compiler(object):
             except RuntimeError as e:
                 root = os.path.relpath(model.root_dir, model.project['project-root'])
                 filepath = os.path.join(root, model.rel_filepath)
-                print("Compiler error in {}".format(filepath))
-                print("Enabled models:")
+                logger.info("Compiler error in {}".format(filepath))
+                logger.info("Enabled models:")
                 for m in all_models:
-                    print(" - {}".format(".".join(m.fqn)))
+                    logger.info(" - {}".format(".".join(m.fqn)))
                 raise e
 
         return wrapped_do_ref

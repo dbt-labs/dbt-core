@@ -1,7 +1,8 @@
-
+from dbt.logger import GLOBAL_LOGGER as logger
 from dbt import version as dbt_version
 from snowplow_tracker import Subject, Tracker, Emitter, logger as sp_logger
 from snowplow_tracker import SelfDescribingJson, disable_contracts
+
 disable_contracts()
 
 import platform
@@ -10,8 +11,6 @@ import yaml
 import os
 import json
 import logging
-
-logger = logging.getLogger(__name__)
 
 sp_logger.setLevel(100)
 
@@ -155,7 +154,7 @@ def track(*args, **kwargs):
     if __is_do_not_track:
         return
     else:
-        #logger.debug("Sending event: {}".format(kwargs))
+        logger.debug("Sending event: {}".format(kwargs))
         try:
             tracker.track_struct_event(*args, **kwargs)
         except Exception as e:
@@ -182,9 +181,10 @@ def track_invalid_invocation(project=None, args=None, result_type=None, result=N
     track(category="dbt", action='invocation', label='invalid', context=context)
 
 def flush():
+    logger.debug("Flushing usage events")
     tracker.flush()
 
 def do_not_track():
     global __is_do_not_track
-    logger.info("Not sending anonymous usage events")
+    logger.debug("Not sending anonymous usage events")
     __is_do_not_track = True
