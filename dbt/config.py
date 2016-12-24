@@ -13,8 +13,8 @@ def read_config(profiles_dir=None):
 
     if os.path.isfile(path):
         with open(path, 'r') as f:
-            m = yaml.safe_load(f)
-            return m['config']
+            profile = yaml.safe_load(f)
+            return profile.get('config', {})
 
     return {}
 
