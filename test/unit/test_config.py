@@ -11,6 +11,12 @@ else:
 
 class ConfigTest(unittest.TestCase):
 
+    def set_up_empty_config(self):
+        profiles_path = '{}/profiles.yml'.format(TMPDIR)
+
+        with open(profiles_path, 'w') as f:
+            f.write(yaml.dump({}))
+
     def set_up_config_options(self, send_anonymous_usage_stats=False):
         profiles_path = '{}/profiles.yml'.format(TMPDIR)
 
@@ -29,7 +35,8 @@ class ConfigTest(unittest.TestCase):
         except:
             pass
 
-    def test__implicit_not_opted_out(self):
+    def test__implicit_opt_in(self):
+        self.set_up_empty_config()
         self.assertTrue(dbt.config.send_anonymous_usage_stats(TMPDIR))
 
     def test__explicit_opt_out(self):
