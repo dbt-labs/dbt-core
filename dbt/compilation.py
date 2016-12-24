@@ -174,10 +174,10 @@ class Compiler(object):
             except RuntimeError as e:
                 root = os.path.relpath(model.root_dir, model.project['project-root'])
                 filepath = os.path.join(root, model.rel_filepath)
-                print("Compiler error in {}".format(filepath))
-                print("Enabled models:")
+                logger.info("Compiler error in {}".format(filepath))
+                logger.info("Enabled models:")
                 for m in all_models:
-                    print(" - {}".format(".".join(m.fqn)))
+                    logger.info(" - {}".format(".".join(m.fqn)))
                 raise e
 
         return wrapped_do_ref

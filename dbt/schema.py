@@ -1,4 +1,6 @@
 
+from dbt.logger import GLOBAL_LOGGER as logger
+
 import psycopg2
 import logging
 import time
@@ -74,7 +76,6 @@ class Schema(object):
     def __init__(self, project, target):
         self.project = project
         self.target = target
-        self.logger = logging.getLogger(__name__)
 
         self.schema_cache = {}
         self.runtime_existing = self.query_for_existing(self.target.schema)
@@ -124,34 +125,34 @@ class Schema(object):
         with self.target.get_handle() as handle:
             with handle.cursor() as cursor:
                 try:
-                    self.logger.debug("SQL: %s", sql)
+                    logger.debug("SQL: %s", sql)
                     pre = time.time()
                     cursor.execute(sql)
                     post = time.time()
-                    self.logger.debug("SQL status: %s in %0.2f seconds", cursor.statusmessage, post-pre)
+                    logger.debug("SQL status: %s in %0.2f seconds", cursor.statusmessage, post-pre)
                     return cursor.statusmessage
                 except Exception as e:
                     self.target.rollback()
-                    self.logger.exception("Error running SQL: %s", sql)
-                    self.logger.debug("rolling back connection")
+                    logger.exception("Error running SQL: %s", sql)
+                    logger.debug("rolling back connection")
                     raise e
 
     def execute_and_fetch(self, sql):
         with self.target.get_handle() as handle:
             with handle.cursor() as cursor:
                 try:
-                    self.logger.debug("SQL: %s", sql)
+                    logger.debug("SQL: %s", sql)
                     pre = time.time()
                     cursor.execute(sql)
                     post = time.time()
-                    self.logger.debug("SQL status: %s in %0.2f seconds", cursor.statusmessage, post-pre)
+                    logger.debug("SQL status: %s in %0.2f seconds", cursor.statusmessage, post-pre)
                     data = cursor.fetchall()
-                    self.logger.debug("SQL response: %s", data)
+                    logger.debug("SQL response: %s", data)
                     return data
                 except Exception as e:
                     self.target.rollback()
-                    self.logger.exception("Error running SQL: %s", sql)
-                    self.logger.debug("rolling back connection")
+                    logger.exception("Error running SQL: %s", sql)
+                    logger.debug("rolling back connection")
                     raise e
 
     def execute_and_handle_permissions(self, query, model_name):
@@ -173,31 +174,31 @@ class Schema(object):
         cursor = handle.cursor()
 
         try:
-            self.logger.debug("SQL: %s", sql)
+            logger.debug("SQL: %s", sql)
             pre = time.time()
             cursor.execute(sql)
             post = time.time()
-            self.logger.debug("SQL status: %s in %0.2f seconds", cursor.statusmessage, post-pre)
+            logger.debug("SQL status: %s in %0.2f seconds", cursor.statusmessage, post-pre)
             return handle, cursor.statusmessage
         except Exception as e:
             self.target.rollback()
-            self.logger.exception("Error running SQL: %s", sql)
-            self.logger.debug("rolling back connection")
+            logger.exception("Error running SQL: %s", sql)
+            logger.debug("rolling back connection")
             raise e
         finally:
             cursor.close()
 
     def truncate(self, schema, relation):
         sql = 'truncate table "{schema}"."{relation}"'.format(schema=schema, relation=relation)
-        self.logger.info("dropping table %s.%s", schema, relation)
+        logger.debug("dropping table %s.%s", schema, relation)
         self.execute_and_handle_permissions(sql, relation)
-        self.logger.info("dropped %s.%s", schema, relation)
+        logger.debug("dropped %s.%s", schema, relation)
 
     def drop(self, schema, relation_type, relation):
         sql = 'drop {relation_type} if exists "{schema}"."{relation}" cascade'.format(schema=schema, relation_type=relation_type, relation=relation)
-        self.logger.info("dropping %s %s.%s", relation_type, schema, relation)
+        logger.debug("dropping %s %s.%s", relation_type, schema, relation)
         self.execute_and_handle_permissions(sql, relation)
-        self.logger.info("dropped %s %s.%s", relation_type, schema, relation)
+        logger.debug("dropped %s %s.%s", relation_type, schema, relation)
 
     def sql_columns_in_table(self, schema_name, table_name):
         sql = """
@@ -211,11 +212,11 @@ class Schema(object):
         return sql
 
     def get_columns_in_table(self, schema_name, table_name, use_cached=True):
-        self.logger.debug("getting columns in table %s.%s", schema_name, table_name)
+        logger.debug("getting columns in table %s.%s", schema_name, table_name)
 
         columns = self.get_table_columns_if_cached(schema_name, table_name)
         if columns is not None and use_cached:
-            self.logger.debug("Found columns (in cache): %s", columns)
+            logger.debug("Found columns (in cache): %s", columns)
             return columns
 
         sql = self.sql_columns_in_table(schema_name, table_name)
@@ -229,14 +230,14 @@ class Schema(object):
 
         self.cache_table_columns(schema_name, table_name, columns)
 
-        self.logger.debug("Found columns: %s", columns)
+        logger.debug("Found columns: %s", columns)
         return columns
 
     def rename(self, schema, from_name, to_name):
         rename_query =  'alter table "{schema}"."{from_name}" rename to "{to_name}"'.format(schema=schema, from_name=from_name, to_name=to_name)
-        self.logger.info("renaming model %s.%s --> %s.%s", schema, from_name, schema, to_name)
+        logger.debug("renaming model %s.%s --> %s.%s", schema, from_name, schema, to_name)
         self.execute_and_handle_permissions(rename_query, from_name)
-        self.logger.info("renamed model %s.%s --> %s.%s", schema, from_name, schema, to_name)
+        logger.debug("renamed model %s.%s --> %s.%s", schema, from_name, schema, to_name)
 
     def get_missing_columns(self, from_schema, from_table, to_schema, to_table):
         "Returns dict of {column:type} for columns in from_table that are missing from to_table"
@@ -253,7 +254,7 @@ class Schema(object):
         dist = self.target.dist_qualifier(dist)
         sort = self.target.sort_qualifier('compound', sort)
         sql = 'create table if not exists "{schema}"."{table}" (\n  {fields}\n) {dist} {sort};'.format(schema=schema, table=table, fields=fields_csv, sort=sort, dist=dist)
-        self.logger.info('creating table "%s"."%s"'.format(schema, table))
+        logger.debug('creating table "%s"."%s"'.format(schema, table))
         self.execute_and_handle_permissions(sql, table)
 
     def create_schema_if_not_exists(self, schema_name):
@@ -297,7 +298,7 @@ class Schema(object):
 
             if dest_column is not None and dest_column.can_expand_to(source_column):
                 new_type = Column.string_type(source_column.string_size())
-                self.logger.debug("Changing col type from %s to %s in table %s.%s", dest_column.data_type, new_type, to_schema, to_table)
+                logger.debug("Changing col type from %s to %s in table %s.%s", dest_column.data_type, new_type, to_schema, to_table)
                 self.alter_column_type(to_schema, to_table, column_name, new_type)
 
         # update these cols in the cache! This is a hack to fix broken incremental models for type expansion. TODO
@@ -311,4 +312,3 @@ class Schema(object):
             tables = self.query_for_existing(schema)
             exists = tables.get(table) is not None
             return exists
-

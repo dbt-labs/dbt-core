@@ -1,5 +1,6 @@
 import os
 
+from dbt.logger import GLOBAL_LOGGER as logger
 import dbt.targets
 
 import psycopg2
@@ -65,7 +66,6 @@ create table if not exists {schema}.dbt_test_results (
 
 class SchemaTester(object):
     def __init__(self, project):
-        self.logger = logging.getLogger(__name__)
         self.project = project
 
         self.test_started_at = datetime.datetime.now()
@@ -80,23 +80,23 @@ class SchemaTester(object):
         with target.get_handle() as handle:
             with handle.cursor() as cursor:
                 try:
-                    self.logger.debug("SQL: %s", sql)
+                    logger.debug("SQL: %s", sql)
                     pre = time.time()
                     cursor.execute(sql)
                     post = time.time()
-                    self.logger.debug("SQL status: %s in %d seconds", cursor.statusmessage, post-pre)
+                    logger.debug("SQL status: %s in %d seconds", cursor.statusmessage, post-pre)
                 except psycopg2.ProgrammingError as e:
-                    self.logger.exception('programming error: %s', sql)
+                    logger.exception('programming error: %s', sql)
                     return e.diag.message_primary
                 except Exception as e:
-                    self.logger.exception('encountered exception while running: %s', sql)
+                    logger.exception('encountered exception while running: %s', sql)
                     e.model = model
                     raise e
 
                 result = cursor.fetchone()
                 if len(result) != 1:
-                    self.logger.error("SQL: %s", sql)
-                    self.logger.error("RESULT: %s", result)
+                    logger.error("SQL: %s", sql)
+                    logger.error("RESULT: %s", result)
                     raise RuntimeError("Unexpected validation result. Expected 1 record, got {}".format(len(result)))
                 else:
                     return result[0]
@@ -105,10 +105,8 @@ class SchemaTester(object):
             sql = schema_test.render()
             num_rows = self.execute_query(model, sql)
             if num_rows == 0:
-                print("  OK")
+                logger.info("  OK")
                 yield True
             else:
-                print("  FAILED ({})".format(num_rows))
+                logger.info("  FAILED ({})".format(num_rows))
                 yield False
-
-

@@ -19,4 +19,4 @@ class CompileTask:
         results = compiler.compile(limit_to=CompilableEntities)
 
         stat_line = ", ".join(["{} {}".format(results[k], k) for k in CompilableEntities])
-        print("Compiled {}".format(stat_line))
+        logger.info("Compiled {}".format(stat_line))

@@ -20,7 +20,7 @@ class RunTask:
         results = compiler.compile(limit_to=['models'] )
 
         stat_line = ", ".join(["{} {}".format(results[k], k) for k in CompilableEntities])
-        print("Compiled {}".format(stat_line))
+        logger.info("Compiled {}".format(stat_line))
 
         return create_template.label
 
@@ -39,6 +39,4 @@ class RunTask:
         errored = len([r for r in results if r.errored])
         skipped = len([r for r in results if r.skipped])
 
-
-        print()
-        print("Done. PASS={passed} ERROR={errored} SKIP={skipped} TOTAL={total}".format(total=total, passed=passed, errored=errored, skipped=skipped))
+        logger.info("Done. PASS={passed} ERROR={errored} SKIP={skipped} TOTAL={total}".format(total=total, passed=passed, errored=errored, skipped=skipped))

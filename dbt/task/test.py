@@ -29,7 +29,7 @@ class TestTask:
         results = compiler.compile(limit_to=['tests'])
 
         stat_line = ", ".join(["{} {}".format(results[k], k) for k in CompilableEntities])
-        print("Compiled {}".format(stat_line))
+        logger.info("Compiled {}".format(stat_line))
 
         return compiler
 
@@ -46,5 +46,5 @@ class TestTask:
         else:
             raise RuntimeError("unexpected")
 
-        print("Done!")
+        logger.info("Done!")
         return res
