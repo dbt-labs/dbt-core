@@ -1,6 +1,6 @@
-
-import os, re
 import argparse
+import os
+import re
 
 try:
     # For Python 3.0 and later
@@ -9,7 +9,10 @@ except ImportError:
     # Fall back to Python 2's urllib2
     from urllib2 import urlopen
 
-REMOTE_VERISON_FILE = 'https://raw.githubusercontent.com/analyst-collective/dbt/master/.bumpversion.cfg'
+REMOTE_VERSION_FILE = \
+    'https://raw.githubusercontent.com/analyst-collective/dbt/' \
+    'master/.bumpversion.cfg'
+
 
 def __parse_version(contents):
     matches = re.search(r"current_version = ([\.0-9]+)", contents)
@@ -19,12 +22,14 @@ def __parse_version(contents):
         version = matches.groups()[0]
         return version
 
+
 def get_version():
     return __version__
 
+
 def get_latest_version():
     try:
-        f = urlopen(REMOTE_VERISON_FILE)
+        f = urlopen(REMOTE_VERSION_FILE)
         contents = f.read()
     except:
         contents = ''
@@ -32,29 +37,36 @@ def get_latest_version():
         contents = contents.decode('utf-8')
     return __parse_version(contents)
 
+
 def not_latest():
-    return """Your version of dbt is out of date! You can find instructions for upgrading here:
-http://dbt.readthedocs.io/en/master/guide/upgrading/
-"""
+    return """Your version of dbt is out of date! You can find instructions
+    for upgrading here:
+
+    http://dbt.readthedocs.io/en/master/guide/upgrading/
+    """
+
 
 def get_version_string():
-    return "installed version: {}\n   latest version: {}".format(installed, latest)
+    return "installed version: {}\n   latest version: {}".format(
+        installed, latest
+    )
+
 
 def get_version_information():
     basic = get_version_string()
 
     if is_latest():
-        basic +='\nUp to date!'
+        basic += '\nUp to date!'
     else:
         basic += '\n{}'.format(not_latest())
 
     return basic
 
+
 def is_latest():
     return installed == latest
+
 
 __version__ = '0.6.0'
 installed = get_version()
 latest = get_latest_version()
-
-

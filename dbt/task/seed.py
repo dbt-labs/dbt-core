@@ -1,6 +1,6 @@
-
 import os
 from dbt.seeder import Seeder
+
 
 class SeedTask:
     def __init__(self, args, project):

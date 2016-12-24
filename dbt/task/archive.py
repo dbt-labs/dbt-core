@@ -1,7 +1,7 @@
-
 from dbt.runner import RunManager
 from dbt.templates import ArchiveInsertTemplate
 from dbt.compilation import Compiler
+
 
 class ArchiveTask:
     def __init__(self, args, project):

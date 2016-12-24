@@ -1,4 +1,3 @@
-
 from dbt.compilation import Compiler, CompilableEntities
 from dbt.templates import BaseCreateTemplate, DryCreateTemplate
 
@@ -18,5 +17,7 @@ class CompileTask:
         compiler.initialize()
         results = compiler.compile(limit_to=CompilableEntities)
 
-        stat_line = ", ".join(["{} {}".format(results[k], k) for k in CompilableEntities])
+        stat_line = ", ".join(
+            ["{} {}".format(results[k], k) for k in CompilableEntities]
+        )
         print("Compiled {}".format(stat_line))
