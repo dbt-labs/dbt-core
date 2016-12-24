@@ -447,7 +447,7 @@ class RunManager(object):
 
         pool = ThreadPool(num_threads)
 
-        logger.info()
+        logger.info("")
         logger.info(runner.pre_run_all_msg(flat_models))
         runner.pre_run_all(flat_models, self.context)
 
@@ -514,7 +514,7 @@ class RunManager(object):
         pool.close()
         pool.join()
 
-        logger.info()
+        logger.info("")
         logger.info(runner.post_run_all_msg(model_results))
         runner.post_run_all(flat_models, model_results, self.context)
 
