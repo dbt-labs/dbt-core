@@ -1,4 +1,4 @@
-
+from dbt.logger import GLOBAL_LOGGER as logger
 
 class DBTDeprecation(object):
     name = None
