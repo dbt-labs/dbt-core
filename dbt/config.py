@@ -5,9 +5,6 @@ import dbt.project as project
 
 
 def read_config(profiles_dir=None):
-    if profiles_dir is None:
-        profiles_dir = default_profiles_dir
-
     path = os.path.join(profiles_dir, 'profiles.yml')
 
     if os.path.isfile(path):
