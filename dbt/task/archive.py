@@ -2,6 +2,7 @@
 from dbt.runner import RunManager
 from dbt.templates import ArchiveInsertTemplate
 from dbt.compilation import Compiler
+from dbt.logger import GLOBAL_LOGGER as logger
 
 class ArchiveTask:
     def __init__(self, args, project):

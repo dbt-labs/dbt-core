@@ -6,6 +6,8 @@ import pprint
 import subprocess
 import dbt.project as project
 
+from dbt.logger import GLOBAL_LOGGER as logger
+
 def folder_from_git_remote(remote_spec):
     start = remote_spec.rfind('/') + 1
     end = len(remote_spec) - (4 if remote_spec.endswith('.git') else 0)

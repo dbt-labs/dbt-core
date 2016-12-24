@@ -4,6 +4,7 @@ import dbt.project
 import pprint
 import json
 import dbt.project
+from dbt.logger import GLOBAL_LOGGER as logger
 
 DBTConfigKeys = [
     'enabled',

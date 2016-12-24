@@ -1,10 +1,11 @@
-
 from __future__ import print_function
 
 import os
-from dbt.templates import DryCreateTemplate, BaseCreateTemplate
-from dbt.runner import RunManager
+
 from dbt.compilation import Compiler, CompilableEntities
+from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.runner import RunManager
+from dbt.templates import DryCreateTemplate, BaseCreateTemplate
 
 THREAD_LIMIT = 9
 

@@ -1,4 +1,3 @@
-
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt import version as dbt_version
 from snowplow_tracker import Subject, Tracker, Emitter, logger as sp_logger

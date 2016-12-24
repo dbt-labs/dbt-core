@@ -1,6 +1,7 @@
 
 from dbt.compilation import Compiler, CompilableEntities
 from dbt.templates import BaseCreateTemplate, DryCreateTemplate
+from dbt.logger import GLOBAL_LOGGER as logger
 
 
 class CompileTask:

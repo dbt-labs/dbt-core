@@ -5,8 +5,9 @@ from csvkit import table as csv_table, sql as csv_sql
 from sqlalchemy.dialects import postgresql as postgresql_dialect
 import psycopg2
 
-from dbt.source import Source
 import dbt.targets
+from dbt.source import Source
+from dbt.logger import GLOBAL_LOGGER as logger
 
 class Seeder:
     def __init__(self, project):
