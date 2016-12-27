@@ -4,7 +4,8 @@ import yaml
 import dbt.project as project
 
 
-def read_config(profiles_dir=None):
+def read_config(profiles_dir):
+    # TODO: validate profiles_dir
     path = os.path.join(profiles_dir, 'profiles.yml')
 
     if os.path.isfile(path):
