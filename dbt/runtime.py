@@ -1,5 +1,6 @@
 from dbt.utils import compiler_error
 
+
 class RuntimeContext(dict):
     def __init__(self, model=None, *args, **kwargs):
         super(RuntimeContext, self).__init__(*args, **kwargs)

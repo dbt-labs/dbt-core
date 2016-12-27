@@ -124,7 +124,9 @@ def invoke_dbt(parsed):
     except project.DbtProjectError as e:
         logger.info("Encountered an error while reading the project:")
         logger.info("  ERROR {}".format(str(e)))
-        logger.info("Did you set the correct --profile? Using: {}".format(parsed.profile))
+        logger.info(
+            "Did you set the correct --profile? Using: {}"
+            .format(parsed.profile))
 
         logger.info("Valid profiles:")
 
@@ -132,7 +134,11 @@ def invoke_dbt(parsed):
         for profile in all_profiles:
             logger.info(" - {}".format(profile))
 
-        dbt.tracking.track_invalid_invocation(project=proj, args=parsed, result_type="invalid_profile", result=str(e))
+        dbt.tracking.track_invalid_invocation(
+            project=proj,
+            args=parsed,
+            result_type="invalid_profile",
+            result=str(e))
 
         return None
 
@@ -142,9 +148,15 @@ def invoke_dbt(parsed):
             proj.cfg['target'] = parsed.target
         else:
             logger.info("Encountered an error while reading the project:")
-            logger.info("  ERROR Specified target {} is not a valid option for profile {}".format(parsed.target, proj.profile_to_load))
+            logger.info("  ERROR Specified target {} is not a valid option "
+                        "for profile {}"
+                        .format(parsed.target, proj.profile_to_load))
             logger.info("Valid targets are: {}".format(targets))
-            dbt.tracking.track_invalid_invocation(project=proj, args=parsed, result_type="invalid_target", result="target not found")
+            dbt.tracking.track_invalid_invocation(
+                project=proj,
+                args=parsed,
+                result_type="invalid_target",
+                result="target not found")
 
             return None
 

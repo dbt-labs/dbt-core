@@ -3,8 +3,6 @@ from dbt import version as dbt_version
 from snowplow_tracker import Subject, Tracker, Emitter, logger as sp_logger
 from snowplow_tracker import SelfDescribingJson, disable_contracts
 
-disable_contracts()
-
 import platform
 import uuid
 import yaml
@@ -12,6 +10,7 @@ import os
 import json
 import logging
 
+disable_contracts()
 sp_logger.setLevel(100)
 
 COLLECTOR_URL = "events.fivetran.com/snowplow/forgiving_ain"

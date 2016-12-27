@@ -9,6 +9,7 @@ import dbt.targets
 from dbt.source import Source
 from dbt.logger import GLOBAL_LOGGER as logger
 
+
 class Seeder:
     def __init__(self, project):
         self.project = project
@@ -19,18 +20,24 @@ class Seeder:
         return Source(self.project).get_csvs(self.project['data-paths'])
 
     def drop_table(self, cursor, schema, table):
-        sql = 'drop table if exists "{schema}"."{table}" cascade'.format(schema=schema, table=table)
+        sql = 'drop table if exists "{schema}"."{table}" cascade'.format(
+            schema=schema, table=table
+        )
         logger.info("Dropping table {}.{}".format(schema, table))
         cursor.execute(sql)
 
     def truncate_table(self, cursor, schema, table):
-        sql = 'truncate table "{schema}"."{table}"'.format(schema=schema, table=table)
+        sql = 'truncate table "{schema}"."{table}"'.format(
+            schema=schema, table=table
+        )
         logger.info("Truncating table {}.{}".format(schema, table))
         cursor.execute(sql)
 
     def create_table(self, cursor, schema, table, virtual_table):
         sql_table = csv_sql.make_table(virtual_table, db_schema=schema)
-        create_table_sql = csv_sql.make_create_table_statement(sql_table, dialect='postgresql')
+        create_table_sql = csv_sql.make_create_table_statement(
+            sql_table, dialect='postgresql'
+        )
         logger.info("Creating table {}.{}".format(schema, table))
         cursor.execute(create_table_sql)
 
@@ -38,7 +45,12 @@ class Seeder:
         headers = virtual_table.headers()
 
         header_csv = ", ".join(['"{}"'.format(h) for h in headers])
-        base_insert = 'INSERT INTO "{schema}"."{table}" ({header_csv}) VALUES '.format(schema=schema, table=table, header_csv=header_csv)
+        base_insert = ('INSERT INTO "{schema}"."{table}" ({header_csv}) '
+                       'VALUES '.format(
+                           schema=schema,
+                           table=table,
+                           header_csv=header_csv
+                       ))
         records = []
 
         def quote_or_null(s):
@@ -48,15 +60,17 @@ class Seeder:
                 return "'{}'".format(s)
 
         for row in virtual_table.to_rows():
-          record_csv = ', '.join([quote_or_null(val) for val in row])
-          record_csv_wrapped = "({})".format(record_csv)
-          records.append(record_csv_wrapped)
+            record_csv = ', '.join([quote_or_null(val) for val in row])
+            record_csv_wrapped = "({})".format(record_csv)
+            records.append(record_csv_wrapped)
         insert_sql = "{} {}".format(base_insert, ",\n".join(records))
-        logger.info("Inserting {} records into table {}.{}".format(len(virtual_table.to_rows()), schema, table))
+        logger.info("Inserting {} records into table {}.{}"
+                    .format(len(virtual_table.to_rows()), schema, table))
         cursor.execute(insert_sql)
 
     def existing_tables(self, cursor, schema):
-        sql = "select tablename as name from pg_tables where schemaname = '{schema}'".format(schema=schema)
+        sql = ("select tablename as name from pg_tables where "
+               "schemaname = '{schema}'".format(schema=schema))
 
         cursor.execute(sql)
         existing = set([row[0] for row in cursor.fetchall()])
@@ -75,20 +89,34 @@ class Seeder:
             if table_name in existing_tables:
                 if drop_existing:
                     self.drop_table(cursor, schema, table_name)
-                    self.create_table(cursor, schema, table_name, virtual_table)
+                    self.create_table(
+                        cursor,
+                        schema,
+                        table_name,
+                        virtual_table
+                    )
                 else:
                     self.truncate_table(cursor, schema, table_name)
             else:
                 self.create_table(cursor, schema, table_name, virtual_table)
 
             try:
-                self.insert_into_table(cursor, schema, table_name, virtual_table)
+                self.insert_into_table(
+                    cursor, schema, table_name, virtual_table
+                )
             except psycopg2.ProgrammingError as e:
-                logger.info('Encountered an error while inserting into table "{}"."{}"'.format(schema, table_name))
-                logger.info('Check for formatting errors in {}'.format(csv.filepath))
-                logger.info('Try --drop-existing to delete and recreate the table instead')
+                logger.info(
+                    'Encountered an error while inserting into table "{}"."{}"'
+                    .format(schema, table_name)
+                )
+                logger.info(
+                    'Check for formatting errors in {}'.format(csv.filepath)
+                )
+                logger.info(
+                    'Try --drop-existing to delete and recreate the table '
+                    'instead'
+                )
                 logger.info(str(e))
-
 
     def seed(self, drop_existing=False):
         schema = self.target.schema
