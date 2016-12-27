@@ -7,6 +7,7 @@ from dbt.compilation import Compiler, CompilableEntities
 from dbt.templates import DryCreateTemplate, BaseCreateTemplate
 from dbt.runner import RunManager
 from dbt.schema_tester import SchemaTester
+from dbt.logger import GLOBAL_LOGGER as logger
 
 
 class TestTask:
@@ -32,7 +33,7 @@ class TestTask:
         stat_line = ", ".join(
             ["{} {}".format(results[k], k) for k in CompilableEntities]
         )
-        print("Compiled {}".format(stat_line))
+        logger.info("Compiled {}".format(stat_line))
 
         return compiler
 
@@ -52,5 +53,5 @@ class TestTask:
         else:
             raise RuntimeError("unexpected")
 
-        print("Done!")
+        logger.info("Done!")
         return res

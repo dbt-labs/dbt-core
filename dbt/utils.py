@@ -2,6 +2,7 @@ import os
 import json
 
 import dbt.project
+from dbt.logger import GLOBAL_LOGGER as logger
 
 DBTConfigKeys = [
     'enabled',
@@ -43,7 +44,7 @@ def compiler_error(model, msg):
 
 
 def compiler_warning(model, msg):
-    print(
+    logger.info(
         "* Compilation warning while compiling model {}:\n* {}"
         .format(model.nice_name, msg)
     )
@@ -135,11 +136,10 @@ def dependency_projects(project):
                     profile_to_load=project.profile_to_load
                 )
             except dbt.project.DbtProjectError as e:
-                print("Error reading dependency project at {}".format(
-                    full_obj
-                ))
-
-                print(str(e))
+                logger.info(
+                    "Error reading dependency project at {}".format(full_obj)
+                )
+                logger.info(str(e))
 
 
 def split_path(path):

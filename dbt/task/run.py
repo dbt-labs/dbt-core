@@ -1,9 +1,11 @@
 from __future__ import print_function
 
 import os
-from dbt.templates import DryCreateTemplate, BaseCreateTemplate
-from dbt.runner import RunManager
+
 from dbt.compilation import Compiler, CompilableEntities
+from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.runner import RunManager
+from dbt.templates import DryCreateTemplate, BaseCreateTemplate
 
 THREAD_LIMIT = 9
 
@@ -23,7 +25,7 @@ class RunTask:
         stat_line = ", ".join([
             "{} {}".format(results[k], k) for k in CompilableEntities
         ])
-        print("Compiled {}".format(stat_line))
+        logger.info("Compiled {}".format(stat_line))
 
         return create_template.label
 
@@ -44,8 +46,12 @@ class RunTask:
         errored = len([r for r in results if r.errored])
         skipped = len([r for r in results if r.skipped])
 
-        print()
-        print("""Done. PASS={passed} ERROR={errored}
-        SKIP={skipped} TOTAL={total}""".format(
-            total=total, passed=passed, errored=errored, skipped=skipped
-        ))
+        logger.info(
+            "Done. PASS={passed} ERROR={errored} SKIP={skipped} TOTAL={total}"
+            .format(
+                total=total,
+                passed=passed,
+                errored=errored,
+                skipped=skipped
+            )
+        )

@@ -1,5 +1,5 @@
 
-from dbt.logger import getLogger
+from dbt.logger import initialize_logger, GLOBAL_LOGGER as logger
 
 import argparse
 import os.path
@@ -39,13 +39,15 @@ def main(args=None):
         return handle(args)
 
     except RuntimeError as e:
-        print("Encountered an error:")
-        print(str(e))
+        logger.info("Encountered an error:")
+        logger.info(str(e))
         sys.exit(1)
 
 
 def handle(args):
     parsed = parse_args(args)
+
+    initialize_logger(parsed.debug)
 
     # this needs to happen after args are parsed so we can determine the
     # correct profiles.yml file
@@ -80,7 +82,6 @@ def run_from_args(parsed):
         task = parsed.cls(args=parsed)
     else:
         nearest_project_dir = get_nearest_project_dir()
-
         if nearest_project_dir is None:
             raise RuntimeError(
                 "fatal: Not a dbt project (or any of the parent directories). "
@@ -121,21 +122,17 @@ def invoke_dbt(parsed):
         )
         proj.validate()
     except project.DbtProjectError as e:
-        print("Encountered an error while reading the project:")
-        print("  ERROR {}".format(str(e)))
-        print("Did you set the correct --profile? Using: {}".format(
-            parsed.profile
-        ))
-        all_profiles = project.read_profiles(parsed.profiles_dir).keys()
-        profiles_string = "\n".join([" - " + key for key in all_profiles])
-        print("Valid profiles:\n{}".format(profiles_string))
+        logger.info("Encountered an error while reading the project:")
+        logger.info("  ERROR {}".format(str(e)))
+        logger.info("Did you set the correct --profile? Using: {}".format(parsed.profile))
 
-        dbt.tracking.track_invalid_invocation(
-            project=proj,
-            args=parsed,
-            result_type="invalid_profile",
-            result=str(e)
-        )
+        logger.info("Valid profiles:")
+
+        all_profiles = project.read_profiles(parsed.profiles_dir).keys()
+        for profile in all_profiles:
+            logger.info(" - {}".format(profile))
+
+        dbt.tracking.track_invalid_invocation(project=proj, args=parsed, result_type="invalid_profile", result=str(e))
 
         return None
 
@@ -144,24 +141,16 @@ def invoke_dbt(parsed):
         if parsed.target in targets:
             proj.cfg['target'] = parsed.target
         else:
-            print("Encountered an error while reading the project:")
-            print(
-                "  ERROR Specified target {} is not a valid option for "
-                "profile {}".format(parsed.target, proj.profile_to_load)
-            )
-            print("Valid targets are: {}".format(targets))
-            dbt.tracking.track_invalid_invocation(
-                project=proj,
-                args=parsed,
-                result_type="invalid_target",
-                result="target not found"
-            )
+            logger.info("Encountered an error while reading the project:")
+            logger.info("  ERROR Specified target {} is not a valid option for profile {}".format(parsed.target, proj.profile_to_load))
+            logger.info("Valid targets are: {}".format(targets))
+            dbt.tracking.track_invalid_invocation(project=proj, args=parsed, result_type="invalid_target", result="target not found")
+
             return None
 
     log_dir = proj.get('log-path', 'logs')
-    logger = getLogger(log_dir, __name__)
 
-    logger.info("running dbt with arguments %s", parsed)
+    logger.debug("running dbt with arguments %s", parsed)
 
     task = parsed.cls(args=parsed, project=proj)
 
@@ -180,6 +169,12 @@ def parse_args(args):
         version=dbt.version.get_version_information(),
         help="Show version information"
     )
+    p.add_argument(
+        '-d',
+        '--debug',
+        action='store_true',
+        help='''Display debug logging during dbt execution. Useful for
+        debugging and making bug reports.''')
 
     subs = p.add_subparsers()
 
@@ -327,7 +322,10 @@ def parse_args(args):
 
     sub.set_defaults(cls=test_task.TestTask, which='test')
 
-    if len(args) == 0: return p.print_help()
+    if len(args) == 0:
+        p.print_help()
+        sys.exit(1)
 
     parsed = p.parse_args(args)
+
     return parsed

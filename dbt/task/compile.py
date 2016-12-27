@@ -1,5 +1,6 @@
 from dbt.compilation import Compiler, CompilableEntities
 from dbt.templates import BaseCreateTemplate, DryCreateTemplate
+from dbt.logger import GLOBAL_LOGGER as logger
 
 
 class CompileTask:
@@ -20,4 +21,4 @@ class CompileTask:
         stat_line = ", ".join(
             ["{} {}".format(results[k], k) for k in CompilableEntities]
         )
-        print("Compiled {}".format(stat_line))
+        logger.info("Compiled {}".format(stat_line))

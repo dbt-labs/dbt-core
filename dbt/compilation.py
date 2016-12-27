@@ -2,6 +2,9 @@ import os
 import fnmatch
 import jinja2
 from collections import defaultdict
+import time
+import sqlparse
+
 import dbt.project
 from dbt.source import Source
 from dbt.utils import find_model_by_fqn, find_model_by_name, \
@@ -12,8 +15,8 @@ from dbt.linker import Linker
 from dbt.runtime import RuntimeContext
 import dbt.targets
 import dbt.templates
-import time
-import sqlparse
+
+from dbt.logger import GLOBAL_LOGGER as logger
 
 CompilableEntities = [
     "models", "data tests", "schema tests", "archives", "analyses"
@@ -223,12 +226,10 @@ class Compiler(object):
                 )
 
                 filepath = os.path.join(root, model.rel_filepath)
-                print("Compiler error in {}".format(filepath))
-                print("Enabled models:")
-
+                logger.info("Compiler error in {}".format(filepath))
+                logger.info("Enabled models:")
                 for m in all_models:
-                    print(" - {}".format(".".join(m.fqn)))
-
+                    logger.info(" - {}".format(".".join(m.fqn)))
                 raise e
 
         return wrapped_do_ref

@@ -10,6 +10,7 @@ import re
 import yaml
 from datetime import datetime
 
+from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.compilation import compile_string
 from dbt.linker import Linker
 from dbt.templates import BaseCreateTemplate
@@ -231,7 +232,7 @@ class DryRunner(ModelRunner):
             relation_type = 'table' if model.materialization == 'incremental' else 'view'
             self.schema_helper.drop(schema_name, relation_type, model.name)
             count_dropped += 1
-        print("Dropped {} dry-run models".format(count_dropped))
+        logger.info("Dropped {} dry-run models".format(count_dropped))
 
 class TestRunner(ModelRunner):
     run_type = 'test'
@@ -333,7 +334,6 @@ class ArchiveRunner(BaseRunner):
 
 class RunManager(object):
     def __init__(self, project, target_path, graph_type, args):
-        self.logger = logging.getLogger(__name__)
         self.project = project
         self.target_path = target_path
         self.graph_type = graph_type
@@ -342,10 +342,10 @@ class RunManager(object):
         self.target = dbt.targets.get_target(self.project.run_environment(), self.args.threads)
 
         if self.target.should_open_tunnel():
-            print("Opening ssh tunnel to host {}... ".format(self.target.ssh_host), end="")
+            logger.info("Opening ssh tunnel to host {}... ".format(self.target.ssh_host), end="")
             sys.stdout.flush()
             self.target.open_tunnel_if_needed()
-            print("Connected")
+            logger.info("Connected")
 
 
         self.schema = dbt.schema.Schema(self.project, self.target)
@@ -369,7 +369,7 @@ class RunManager(object):
         return linker
 
     def execute_model(self, runner, model):
-        self.logger.info("executing model %s", model)
+        logger.debug("executing model %s", model)
 
         result = runner.execute(self.target, model)
         return result
@@ -385,12 +385,12 @@ class RunManager(object):
         except (RuntimeError, psycopg2.ProgrammingError, psycopg2.InternalError) as e:
             error = "Error executing {filepath}\n{error}".format(filepath=model['build_path'], error=str(e).strip())
             status = "ERROR"
-            self.logger.exception(error)
+            logger.exception(error)
             if type(e) == psycopg2.InternalError and ABORTED_TRANSACTION_STRING == e.diag.message_primary:
                 return RunModelResult(model, error=ABORTED_TRANSACTION_STRING, status="SKIP")
         except Exception as e:
             error = "Unhandled error while executing {filepath}\n{error}".format(filepath=model['build_path'], error=str(e).strip())
-            self.logger.exception(error)
+            logger.exception(error)
             raise e
 
         execution_time = time.time() - start_time
@@ -428,27 +428,27 @@ class RunManager(object):
         if execution_time is None:
             status_time = ""
         else:
-            status_time = " in {execution_time:0.2f}s".format(execution_time=execution_time) 
+            status_time = " in {execution_time:0.2f}s".format(execution_time=execution_time)
 
         output = "{justified} [{status}{status_time}]".format(justified=justified, status=status, status_time=status_time)
-        print(output)
+        logger.info(output)
 
     def execute_models(self, runner, model_dependency_list, on_failure):
         flat_models = list(itertools.chain.from_iterable(model_dependency_list))
 
         num_models = len(flat_models)
         if num_models == 0:
-            print("WARNING: Nothing to do. Try checking your model configs and running `dbt compile`".format(self.target_path))
+            logger.info("WARNING: Nothing to do. Try checking your model configs and running `dbt compile`".format(self.target_path))
             return []
 
         num_threads = self.target.threads
-        print("Concurrency: {} threads (target='{}')".format(num_threads, self.project.get_target().get('name')))
-        print("Running!")
+        logger.info("Concurrency: {} threads (target='{}')".format(num_threads, self.project.get_target().get('name')))
+        logger.info("Running!")
 
         pool = ThreadPool(num_threads)
 
-        print()
-        print(runner.pre_run_all_msg(flat_models))
+        logger.info("")
+        logger.info(runner.pre_run_all_msg(flat_models))
         runner.pre_run_all(flat_models, self.context)
 
         fqn_to_id_map = {model.fqn: i + 1 for (i, model) in enumerate(flat_models)}
@@ -494,7 +494,7 @@ class RunManager(object):
 
                     if run_model_result.errored:
                         on_failure(run_model_result.model)
-                        print(run_model_result.error)
+                        logger.info(run_model_result.error)
 
             while model_index < num_models_this_batch:
                 local_models = []
@@ -514,14 +514,14 @@ class RunManager(object):
         pool.close()
         pool.join()
 
-        print()
-        print(runner.post_run_all_msg(model_results))
+        logger.info("")
+        logger.info(runner.post_run_all_msg(model_results))
         runner.post_run_all(flat_models, model_results, self.context)
 
         return model_results
 
     def run_from_graph(self, runner, limit_to):
-        print("Loading dependency graph file")
+        logger.info("Loading dependency graph file")
         linker = self.deserialize_graph()
         compiled_models = [make_compiled_model(fqn, linker.get_node(fqn)) for fqn in linker.nodes()]
         relevant_compiled_models = [m for m in compiled_models if m.is_type(runner.run_type)]
@@ -535,12 +535,12 @@ class RunManager(object):
         schema_name = self.target.schema
 
 
-        print("Connecting to redshift")
+        logger.info("Connecting to redshift")
         try:
             self.schema.create_schema_if_not_exists(schema_name)
         except psycopg2.OperationalError as e:
-            print("ERROR: Could not connect to the target database. Try `dbt debug` for more information")
-            print(str(e))
+            logger.info("ERROR: Could not connect to the target database. Try `dbt debug` for more information")
+            logger.info(str(e))
             sys.exit(1)
 
         existing = self.schema.query_for_existing(schema_name);
@@ -563,10 +563,10 @@ class RunManager(object):
             raise
         finally:
             if self.target.should_open_tunnel():
-                print("Closing SSH tunnel... ", end="")
+                logger.info("Closing SSH tunnel... ", end="")
                 sys.stdout.flush()
                 self.target.cleanup()
-                print("Done")
+                logger.info("Done")
 
 
     def run_tests_from_graph(self, test_schemas, test_data):
@@ -575,12 +575,12 @@ class RunManager(object):
 
         schema_name = self.target.schema
 
-        print("Connecting to redshift")
+        logger.info("Connecting to redshift")
         try:
             self.schema.create_schema_if_not_exists(schema_name)
         except psycopg2.OperationalError as e:
-            print("ERROR: Could not connect to the target database. Try `dbt debug` for more information")
-            print(str(e))
+            logger.info("ERROR: Could not connect to the target database. Try `dbt debug` for more information")
+            logger.info(str(e))
             sys.exit(1)
 
         test_runner = TestRunner(self.project, self.schema)
@@ -626,5 +626,3 @@ class RunManager(object):
     def run_archive(self):
         runner = ArchiveRunner(self.project, self.schema)
         return self.safe_run_from_graph(runner, None)
-
-

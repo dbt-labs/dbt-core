@@ -6,6 +6,8 @@ import pprint
 import subprocess
 import dbt.project as project
 
+from dbt.logger import GLOBAL_LOGGER as logger
+
 
 def folder_from_git_remote(remote_spec):
     start = remote_spec.rfind('/') + 1
@@ -19,7 +21,7 @@ class DepsTask:
         self.project = project
 
     def __checkout_branch(self, branch, full_path):
-        print("  checking out branch {}".format(branch))
+        logger.info("  checking out branch {}".format(branch))
         proc = subprocess.Popen(
             ['git', 'checkout', branch],
             cwd=full_path,
@@ -44,7 +46,7 @@ class DepsTask:
         folder = None
         if exists:
             folder = exists.group(1)
-            print("updating existing dependency {}".format(folder))
+            logger.info("updating existing dependency {}".format(folder))
             full_path = os.path.join(self.project['modules-path'], folder)
             proc = subprocess.Popen(
                 ['git', 'fetch', '--all'],
@@ -66,7 +68,7 @@ class DepsTask:
             matches = re.match("Cloning into '(.+)'", err.decode('utf-8'))
             folder = matches.group(1)
             full_path = os.path.join(self.project['modules-path'], folder)
-            print("pulled new dependency {}".format(folder))
+            logger.info("pulled new dependency {}".format(folder))
             if branch is not None:
                 self.__checkout_branch(branch, full_path)
 
@@ -108,9 +110,10 @@ class DepsTask:
 
             try:
                 if repo_folder in processed_repos:
-                    print("skipping already processed dependency {}".format(
-                        repo_folder
-                    ))
+                    logger.info(
+                        "skipping already processed dependency {}"
+                        .format(repo_folder)
+                    )
                 else:
                     dep_folder = self.__pull_repo(repo, branch)
                     dep_project = project.read_project(
@@ -126,8 +129,8 @@ class DepsTask:
                     )
             except IOError as e:
                 if e.errno == errno.ENOENT:
-                    print("""'{}' is not a valid dbt project - dbt_project.yml
-                    not found""".format(repo))
+                    logger.info("'{}' is not a valid dbt project - "
+                                "dbt_project.yml not found".format(repo))
                     exit(1)
                 else:
                     raise e

@@ -1,43 +1,24 @@
 import logging
-import logging.config
-import os
+import sys
 
-def make_log_dir_if_missing(log_dir):
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+# disable logs from other modules, excepting ERROR logs
+logging.getLogger('contracts').setLevel(logging.ERROR)
+logging.getLogger('requests').setLevel(logging.ERROR)
+logging.getLogger('urllib3').setLevel(logging.ERROR)
 
-def getLogger(log_dir, name):
-    make_log_dir_if_missing(log_dir)
-    filename = "dbt.log"
-    base_log_path = os.path.join(log_dir, filename)
 
-    dictLogConfig = {
-        "version":1,
-        "handlers": {
-            "fileHandler":{
-                "class":"logging.handlers.TimedRotatingFileHandler",
-                "formatter":"fileFormatter",
-                "when": "d",  # rotate daily
-                "interval": 1,
-                "backupCount": 7,
-                "filename": base_log_path
-            },
-        },
-        "loggers":{
-            "dbt":{
-                "handlers":["fileHandler"],
-                "level":"DEBUG",
-                "propagate": False
-            }
-        },
+# create a global console logger for dbt
+handler = logging.StreamHandler(sys.stdout)
+handler.setFormatter(logging.Formatter('%(message)s'))
 
-        "formatters":{
-            "fileFormatter":{
-                "format":"%(asctime)s - %(name)s - %(levelname)s - %(threadName)s - %(message)s"
-            }
-        }
-    }
-    logging.config.dictConfig(dictLogConfig)
-    logger = logging.getLogger(name)
-    return logger
+logger = logging.getLogger()
+logger.addHandler(handler)
+logger.setLevel(logging.INFO)
 
+
+def initialize_logger(debug_mode=False,):
+    if debug_mode:
+        handler.setFormatter(logging.Formatter('%(asctime)-18s: %(message)s'))
+        logger.setLevel(logging.DEBUG)
+
+GLOBAL_LOGGER = logger
