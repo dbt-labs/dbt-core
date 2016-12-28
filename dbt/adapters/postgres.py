@@ -50,8 +50,8 @@ class PostgresAdapter:
             result['handle'] = handle
             result['state'] = 'open'
         except psycopg2.Error as e:
-            logger.debug('Got an error when attempting to open a postgres '
-                         'connection: \'{}\''
+            logger.debug("Got an error when attempting to open a postgres "
+                         "connection: '{}'"
                          .format(e))
             result['handle'] = None
             result['state'] = 'fail'
@@ -68,5 +68,3 @@ class PostgresAdapter:
                     profile.get('password'),
                     profile.get('port'),
                 ))
-
-        return ""
