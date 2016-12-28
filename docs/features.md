@@ -8,6 +8,8 @@
 | Incremental | Y | Y |
 | Ephemeral | Y | Y |
 | __SCHEMA__ | | |
+| Table Creation | Y | Y |
+| View Creation | Y | Y |
 | Renaming fields | Y | Y |
 | Alter column type | Y | Y |
 | Truncate | Y | Y |
