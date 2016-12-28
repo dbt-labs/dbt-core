@@ -6,7 +6,7 @@ test: test-unit test-integration
 
 test-unit:
 	@echo "Unit test run starting..."
-	tox -e unit-py27,unit-py35
+	@docker-compose run test /usr/src/app/test/unit.sh
 
 test-integration:
 	@echo "Integration test run starting..."
