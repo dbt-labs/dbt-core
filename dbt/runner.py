@@ -10,6 +10,7 @@ import re
 import yaml
 from datetime import datetime
 
+from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.compilation import compile_string
 from dbt.linker import Linker
@@ -94,38 +95,8 @@ class BaseRunner(object):
         return status
 
     def execute_contents(self, target, model):
-        parts = re.split(r'-- (DBT_OPERATION .*)', model.compiled_contents)
-        handle = None
-
-        status = 'None'
-        for i, part in enumerate(parts):
-            matches = re.match(r'^DBT_OPERATION ({.*})$', part)
-            if matches is not None:
-                instruction_string = matches.groups()[0]
-                instruction = yaml.safe_load(instruction_string)
-                function = instruction['function']
-                kwargs = instruction['args']
-
-                func_map = {
-                    'expand_column_types_if_needed': lambda kwargs: self.schema_helper.expand_column_types_if_needed(**kwargs),
-                }
-
-                func_map[function](kwargs)
-            else:
-                try:
-                    handle, status = self.schema_helper.execute_without_auto_commit(part, handle)
-                except psycopg2.ProgrammingError as e:
-                    if "permission denied for" in e.diag.message_primary:
-                        raise RuntimeError(dbt.schema.READ_PERMISSION_DENIED_ERROR.format(
-                            model=model.name,
-                            error=str(e).strip(),
-                            user=target.user,
-                        ))
-                    else:
-                        raise
-
-        handle.commit()
-        return status
+        return get_adapter(target).execute_model(
+            {}, self.project, target, model)
 
 class ModelRunner(BaseRunner):
     run_type = 'run'
