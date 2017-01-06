@@ -20,7 +20,7 @@ def send_anonymous_usage_stats(profiles_dir):
     config = read_config(profiles_dir)
 
     if config is not None \
-       and not config.get("send_anonymous_usage_stats", False):
+       and not config.get("send_anonymous_usage_stats", True):
         return False
 
     return True
