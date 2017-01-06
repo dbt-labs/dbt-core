@@ -1,6 +1,10 @@
+import copy
 import psycopg2
 import re
+import time
 import yaml
+
+import dbt.flags as flags
 
 from dbt.contracts.connection import validate_connection
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -8,25 +12,34 @@ from dbt.schema import Schema, READ_PERMISSION_DENIED_ERROR
 
 class PostgresAdapter:
 
-    @staticmethod
-    def acquire_connection(cfg, profile):
+    @classmethod
+    def acquire_connection(cls, profile):
+
+        # profile requires some marshalling right now because it includes a
+        # wee bit of global config.
+        # TODO remove this
+        credentials = copy.deepcopy(profile)
+
+        credentials.pop('type', None)
+        credentials.pop('threads', None)
+
         result = {
             'type': 'postgres',
             'state': 'init',
-            'handle': None
+            'handle': None,
+            'credentials': credentials
         }
 
         logger.debug('Acquiring postgres connection')
 
-        if cfg.get('STRICT_MODE', False):
-            logger.debug('Strict mode on, validating connection')
+        if flags.STRICT_MODE:
             validate_connection(result)
 
-        return PostgresAdapter.open_connection(cfg, profile, result)
+        return cls.open_connection(result)
 
-    @staticmethod
-    def get_connection():
-        pass
+    @classmethod
+    def get_connection(cls, profile):
+        return cls.acquire_connection(profile)
 
     @staticmethod
     def create_table():
@@ -36,11 +49,17 @@ class PostgresAdapter:
     def drop_table():
         pass
 
-    @staticmethod
-    def execute_model(cfg, project, target, model):
+    @classmethod
+    def execute_model(cls, project, target, model):
         schema_helper = Schema(project, target)
         parts = re.split(r'-- (DBT_OPERATION .*)', model.compiled_contents)
-        handle = None
+        profile = project.run_environment()
+        connection = cls.get_connection(profile)
+
+        if flags.STRICT_MODE:
+            validate_connection(connection)
+
+        handle = connection['handle']
 
         status = 'None'
         for i, part in enumerate(parts):
@@ -60,7 +79,7 @@ class PostgresAdapter:
                 func_map[function](kwargs)
             else:
                 try:
-                    handle, status = schema_helper.execute_without_auto_commit(
+                    handle, status = cls.add_query_to_transaction(
                         part, handle)
                 except psycopg2.ProgrammingError as e:
                     if "permission denied for" in e.diag.message_primary:
@@ -75,8 +94,8 @@ class PostgresAdapter:
         handle.commit()
         return status
 
-    @staticmethod
-    def open_connection(cfg, profile, connection):
+    @classmethod
+    def open_connection(cls, connection):
         if connection.get('state') == 'open':
             logger.debug('Connection is already open, skipping open.')
             return connection
@@ -84,7 +103,7 @@ class PostgresAdapter:
         result = connection.copy()
 
         try:
-            handle = psycopg2.connect(PostgresAdapter.profile_to_spec(profile))
+            handle = psycopg2.connect(cls.get_connection_spec(connection))
 
             result['handle'] = handle
             result['state'] = 'open'
@@ -99,12 +118,33 @@ class PostgresAdapter:
         return result
 
     @staticmethod
-    def profile_to_spec(profile):
+    def get_connection_spec(connection):
+        credentials = connection.get('credentials')
+
         return ("dbname='{}' user='{}' host='{}' password='{}' port='{}' "
                 "connect_timeout=10".format(
-                    profile.get('dbname'),
-                    profile.get('user'),
-                    profile.get('host'),
-                    profile.get('password'),
-                    profile.get('port'),
+                    credentials.get('dbname'),
+                    credentials.get('user'),
+                    credentials.get('host'),
+                    credentials.get('pass'),
+                    credentials.get('port'),
                 ))
+
+    @staticmethod
+    def add_query_to_transaction(sql, handle):
+        cursor = handle.cursor()
+
+        try:
+            logger.debug("SQL: %s", sql)
+            pre = time.time()
+            cursor.execute(sql)
+            post = time.time()
+            logger.debug("SQL status: %s in %0.2f seconds", cursor.statusmessage, post-pre)
+            return handle, cursor.statusmessage
+        except Exception as e:
+            handle.rollback()
+            logger.exception("Error running SQL: %s", sql)
+            logger.debug("rolling back connection")
+            raise e
+        finally:
+            cursor.close()

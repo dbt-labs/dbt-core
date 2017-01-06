@@ -7,6 +7,7 @@ import sys
 import re
 
 import dbt.version
+import dbt.flags as flags
 import dbt.project as project
 import dbt.task.run as run_task
 import dbt.task.compile as compile_task
@@ -36,6 +37,8 @@ def handle(args):
     parsed = parse_args(args)
 
     initialize_logger(parsed.debug)
+
+    flags.STRICT_MODE = parsed.strict
 
     # this needs to happen after args are parsed so we can determine the correct profiles.yml file
     if not config.send_anonymous_usage_stats(parsed.profiles_dir):
@@ -131,6 +134,7 @@ def parse_args(args):
     p = argparse.ArgumentParser(prog='dbt: data build tool', formatter_class=argparse.RawTextHelpFormatter)
     p.add_argument('--version', action='version', version=dbt.version.get_version_information(), help="Show version information")
     p.add_argument('-d', '--debug', action='store_true', help='Display debug logging during dbt execution. Useful for debugging and making bug reports.')
+    p.add_argument('-S', '--strict', action='store_true', help='Run schema validations at runtime. This will surface bugs in dbt, but may incur a speed penalty.')
 
     subs = p.add_subparsers()
 

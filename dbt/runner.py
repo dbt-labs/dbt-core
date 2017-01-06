@@ -96,7 +96,7 @@ class BaseRunner(object):
 
     def execute_contents(self, target, model):
         return get_adapter(target).execute_model(
-            {}, self.project, target, model)
+            self.project, target, model)
 
 class ModelRunner(BaseRunner):
     run_type = 'run'
