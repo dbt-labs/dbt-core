@@ -7,6 +7,7 @@
 #### Changes
 
 - add `--debug` flag, replace calls to `print()` with a global logger ([#256](https://github.com/analyst-collective/dbt/pull/256))
+- add pep8 check to continuous integration tests and bring codebase into compliance ([#257](https://github.com/analyst-collective/dbt/pull/257))
 
 ## dbt release 0.6.0
 
