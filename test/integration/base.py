@@ -95,7 +95,9 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def run_dbt(self, args=None):
         if args is None:
-            args = ["--strict", "run"]
+            args = ["run"]
+
+        args = ["--strict"] + args
 
         return dbt.handle(args)
 
