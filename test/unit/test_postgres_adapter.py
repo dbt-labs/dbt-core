@@ -18,6 +18,7 @@ class TestPostgresAdapter(unittest.TestCase):
             'host': 'database',
             'pass': 'password',
             'port': 5432,
+            'schema': 'public'
         }
 
     def test_acquire_connection_validations(self):
