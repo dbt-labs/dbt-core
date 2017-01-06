@@ -1,7 +1,8 @@
-
 import os.path
 import fnmatch
-from dbt.model import Model, Analysis, TestModel, SchemaFile, Csv, Macro, ArchiveModel, DataTest
+from dbt.model import Model, Analysis, TestModel, SchemaFile, Csv, Macro, \
+    ArchiveModel, DataTest
+
 
 class Source(object):
     def __init__(self, project, own_project=None):
@@ -9,12 +10,14 @@ class Source(object):
         self.project_root = project['project-root']
         self.project_name = project['name']
 
-        self.own_project = own_project if own_project is not None else self.project
+        self.own_project = (own_project if own_project is not None
+                            else self.project)
         self.own_project_root = self.own_project['project-root']
         self.own_project_name = self.own_project['name']
 
     def find(self, source_paths, file_pattern):
-        """returns abspath, relpath, filename of files matching file_regex in source_paths"""
+        """returns abspath, relpath, filename of files matching file_regex in
+        source_paths"""
         found = []
 
         if type(source_paths) not in (list, tuple):
@@ -28,28 +31,37 @@ class Source(object):
                     rel_path = os.path.relpath(abs_path, root_path)
 
                     if fnmatch.fnmatch(filename, file_pattern):
-                        found.append((self.project, source_path, rel_path, self.own_project))
+                        found.append(
+                            (self.project,
+                             source_path,
+                             rel_path,
+                             self.own_project)
+                        )
         return found
 
     def get_models(self, model_dirs, create_template):
         pattern = "[!.#~]*.sql"
-        models = [Model(*model + (create_template,)) for model in self.find(model_dirs, pattern)]
+        models = [Model(*model + (create_template,))
+                  for model in self.find(model_dirs, pattern)]
         return models
 
     def get_test_models(self, model_dirs, create_template):
         pattern = "[!.#~]*.sql"
-        models = [TestModel(*model + (create_template,)) for model in self.find(model_dirs, pattern)]
+        models = [TestModel(*model + (create_template,))
+                  for model in self.find(model_dirs, pattern)]
         return models
 
     def get_analyses(self, analysis_dirs):
         pattern = "[!.#~]*.sql"
-        models = [Analysis(*analysis) for analysis in self.find(analysis_dirs, pattern)]
+        models = [Analysis(*analysis)
+                  for analysis in self.find(analysis_dirs, pattern)]
         return models
 
     def get_schemas(self, model_dirs):
         "Get schema.yml files"
         pattern = "[!.#~]*.yml"
-        schemas = [SchemaFile(*schema) for schema in self.find(model_dirs, pattern)]
+        schemas = [SchemaFile(*schema)
+                   for schema in self.find(model_dirs, pattern)]
         return schemas
 
     def get_tests(self, test_dirs):
@@ -88,7 +100,7 @@ class Source(object):
             for table in tables:
                 fields = table.copy()
                 fields.update(schema)
-                archives.append(ArchiveModel(self.project, create_template, fields))
+                archives.append(ArchiveModel(
+                    self.project, create_template, fields
+                ))
         return archives
-
-

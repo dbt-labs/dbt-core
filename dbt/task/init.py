@@ -6,7 +6,8 @@ name: 'package_name'
 version: '1.0'
 
 source-paths: ["models"]   # paths with source code to compile
-analysis-paths: ["analysis"] # path with analysis files which are compiled, but not run
+analysis-paths: ["analysis"] # path with analysis files which are compiled, but
+                             # not run
 target-path: "target"      # path for compiled code
 clean-targets: ["target"]  # directories removed by the clean task
 test-paths: ["test"]       # where to store test results
@@ -14,8 +15,9 @@ data-paths: ["data"]       # load CSVs from this directory with `dbt seed`
 
 # specify per-model configs
 #models:
-#  package_name:             # define configs for this package (called "package_name" above)
-#    pardot:                 # assuming pardot is listed in the models/ directory
+#  package_name:             # define configs for this package (called
+#                            # "package_name" above)
+#    pardot:                 # assuming pardot is listed in models/
 #      enabled: false        # disable all pardot models except where overriden
 #      pardot_emails:        # override the configs for the pardot_emails model
 #        enabled: true       # enable this specific model
@@ -32,6 +34,7 @@ target/
 dbt_modules/
 """
 
+
 class InitTask:
     def __init__(self, args, project=None):
         self.args = args
@@ -47,7 +50,9 @@ class InitTask:
         project_dir = self.args.project_name
 
         if os.path.exists(project_dir):
-            raise RuntimeError("directory {} already exists!".format(project_dir))
+            raise RuntimeError("directory {} already exists!".format(
+                project_dir
+            ))
 
         os.mkdir(project_dir)
 

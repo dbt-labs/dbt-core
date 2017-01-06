@@ -8,10 +8,12 @@ import dbt.project as project
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
+
 def folder_from_git_remote(remote_spec):
     start = remote_spec.rfind('/') + 1
     end = len(remote_spec) - (4 if remote_spec.endswith('.git') else 0)
     return remote_spec[start:end]
+
 
 class DepsTask:
     def __init__(self, args, project):
@@ -36,7 +38,11 @@ class DepsTask:
 
         out, err = proc.communicate()
 
-        exists = re.match("fatal: destination path '(.+)' already exists", err.decode('utf-8'))
+        exists = re.match(
+            "fatal: destination path '(.+)' already exists",
+            err.decode('utf-8')
+        )
+
         folder = None
         if exists:
             folder = exists.group(1)
@@ -48,7 +54,8 @@ class DepsTask:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE)
             out, err = proc.communicate()
-            remote_branch = 'origin/master' if branch is None else 'origin/{}'.format(branch)
+            remote_branch = 'origin/master' if branch is None \
+                            else 'origin/{}'.format(branch)
             proc = subprocess.Popen(
                 ['git', 'reset', '--hard', remote_branch],
                 cwd=full_path,
@@ -69,7 +76,11 @@ class DepsTask:
 
     def __split_at_branch(self, repo_spec):
         parts = repo_spec.split("@")
-        error = RuntimeError("Invalid dep specified: '{}' -- not a repo we can clone".format(repo_spec))
+        error = RuntimeError(
+            "Invalid dep specified: '{}' -- not a repo we can clone".format(
+                repo_spec
+            )
+        )
 
         repo = None
         if repo_spec.startswith("git@"):
@@ -90,7 +101,7 @@ class DepsTask:
 
         return repo, branch
 
-    def __pull_deps_recursive(self, repos, processed_repos = None, i=0):
+    def __pull_deps_recursive(self, repos, processed_repos=None, i=0):
         if processed_repos is None:
             processed_repos = set()
         for repo_string in repos:
@@ -99,19 +110,27 @@ class DepsTask:
 
             try:
                 if repo_folder in processed_repos:
-                    logger.info("skipping already processed dependency {}".format(repo_folder))
+                    logger.info(
+                        "skipping already processed dependency {}"
+                        .format(repo_folder)
+                    )
                 else:
                     dep_folder = self.__pull_repo(repo, branch)
                     dep_project = project.read_project(
                         os.path.join(self.project['modules-path'],
                                      dep_folder,
-                                     'dbt_project.yml'), self.project.profiles_dir, profile_to_load=self.project.profile_to_load
+                                     'dbt_project.yml'),
+                        self.project.profiles_dir,
+                        profile_to_load=self.project.profile_to_load
                     )
                     processed_repos.add(dep_folder)
-                    self.__pull_deps_recursive(dep_project['repositories'], processed_repos, i+1)
+                    self.__pull_deps_recursive(
+                        dep_project['repositories'], processed_repos, i+1
+                    )
             except IOError as e:
                 if e.errno == errno.ENOENT:
-                    logger.info("'{}' is not a valid dbt project - dbt_project.yml not found".format(repo))
+                    logger.info("'{}' is not a valid dbt project - "
+                                "dbt_project.yml not found".format(repo))
                     exit(1)
                 else:
                     raise e

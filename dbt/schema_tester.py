@@ -64,6 +64,7 @@ create table if not exists {schema}.dbt_test_results (
 );
 """
 
+
 class SchemaTester(object):
     def __init__(self, project):
         self.project = project
@@ -84,12 +85,15 @@ class SchemaTester(object):
                     pre = time.time()
                     cursor.execute(sql)
                     post = time.time()
-                    logger.debug("SQL status: %s in %d seconds", cursor.statusmessage, post-pre)
+                    logger.debug(
+                        "SQL status: %s in %d seconds",
+                        cursor.statusmessage, post-pre)
                 except psycopg2.ProgrammingError as e:
                     logger.exception('programming error: %s', sql)
                     return e.diag.message_primary
                 except Exception as e:
-                    logger.exception('encountered exception while running: %s', sql)
+                    logger.exception(
+                        'encountered exception while running: %s', sql)
                     e.model = model
                     raise e
 
@@ -97,7 +101,9 @@ class SchemaTester(object):
                 if len(result) != 1:
                     logger.error("SQL: %s", sql)
                     logger.error("RESULT: %s", result)
-                    raise RuntimeError("Unexpected validation result. Expected 1 record, got {}".format(len(result)))
+                    raise RuntimeError(
+                        "Unexpected validation result. Expected 1 record, "
+                        "got {}".format(len(result)))
                 else:
                     return result[0]
 

@@ -6,23 +6,33 @@ import logging
 import time
 import re
 
-SCHEMA_PERMISSION_DENIED_MESSAGE = """The user '{user}' does not have sufficient permissions to create the schema '{schema}'.
-Either create the schema  manually, or adjust the permissions of the '{user}' user."""
+SCHEMA_PERMISSION_DENIED_MESSAGE = """
+The user '{user}' does not have sufficient permissions to create the schema
+'{schema}'. Either create the schema manually, or adjust the permissions of
+the '{user}' user."""
 
-RELATION_PERMISSION_DENIED_MESSAGE = """The user '{user}' does not have sufficient permissions to create the model '{model}'  in the schema '{schema}'.
-Please adjust the permissions of the '{user}' user on the '{schema}' schema.
-With a superuser account, execute the following commands, then re-run dbt.
+RELATION_PERMISSION_DENIED_MESSAGE = """
+The user '{user}' does not have sufficient permissions to create the model
+'{model}' in the schema '{schema}'. Please adjust the permissions of the
+'{user}' user on the '{schema}' schema. With a superuser account, execute the
+following commands, then re-run dbt.
 
 grant usage, create on schema "{schema}" to "{user}";
 grant select, insert, delete on all tables in schema "{schema}" to "{user}";"""
 
-RELATION_NOT_OWNER_MESSAGE = """The user '{user}' does not have sufficient permissions to drop the model '{model}' in the schema '{schema}'.
-This is likely because the relation was created by a different user. Either delete the model "{schema}"."{model}" manually,
-or adjust the permissions of the '{user}' user in the '{schema}' schema."""
+RELATION_NOT_OWNER_MESSAGE = """
+The user '{user}' does not have sufficient permissions to drop the model
+'{model}' in the schema '{schema}'. This is likely because the relation was
+created by a different user. Either delete the model "{schema}"."{model}"
+manually, or adjust the permissions of the '{user}' user in the '{schema}'
+schema."""
 
-READ_PERMISSION_DENIED_ERROR = """Encountered an error while executing model '{model}'.
+READ_PERMISSION_DENIED_ERROR = """
+Encountered an error while executing model '{model}'.
 > {error}
-Check that the user '{user}' has sufficient permissions to read from all necessary source tables"""
+Check that the user '{user}' has sufficient permissions to read from all
+necessary source tables"""
+
 
 class Column(object):
     def __init__(self, column, dtype, char_size):
@@ -59,7 +69,8 @@ class Column(object):
             return int(self.char_size)
 
     def can_expand_to(self, other_column):
-        "returns True if this column can be expanded to the size of the other column"
+        """returns True if this column can be expanded to the size of the
+        other column"""
         if not self.is_string() or not other_column.is_string():
             return False
 
@@ -71,6 +82,7 @@ class Column(object):
 
     def __repr__(self):
         return "<Column {} ({})>".format(self.name, self.data_type)
+
 
 class Schema(object):
     def __init__(self, project, target):
@@ -94,7 +106,8 @@ class Schema(object):
 
     def get_schemas(self):
         existing = []
-        results = self.execute_and_fetch('select nspname from pg_catalog.pg_namespace')
+        results = self.execute_and_fetch(
+            'select nspname from pg_catalog.pg_namespace')
         return [name for (name,) in results]
 
     def create_schema(self, schema_name):
@@ -102,10 +115,13 @@ class Schema(object):
         user = target_cfg['user']
 
         try:
-            self.execute('create schema if not exists "{}"'.format(schema_name))
+            self.execute(
+                'create schema if not exists "{}"'.format(schema_name))
         except psycopg2.ProgrammingError as e:
             if "permission denied for" in e.diag.message_primary:
-                raise RuntimeError(SCHEMA_PERMISSION_DENIED_MESSAGE.format(schema=schema_name, user=user))
+                raise RuntimeError(
+                    SCHEMA_PERMISSION_DENIED_MESSAGE.format(
+                        schema=schema_name, user=user))
             else:
                 raise e
 
@@ -113,8 +129,7 @@ class Schema(object):
         sql = """
             select tablename as name, 'table' as type from pg_tables where schemaname = '{schema}'
                 union all
-            select viewname as name, 'view' as type from pg_views where schemaname = '{schema}' """.format(schema=schema)
-
+            select viewname as name, 'view' as type from pg_views where schemaname = '{schema}' """.format(schema=schema)  # noqa
 
         results = self.execute_and_fetch(sql)
         existing = [(name, relation_type) for (name, relation_type) in results]
@@ -129,7 +144,9 @@ class Schema(object):
                     pre = time.time()
                     cursor.execute(sql)
                     post = time.time()
-                    logger.debug("SQL status: %s in %0.2f seconds", cursor.statusmessage, post-pre)
+                    logger.debug(
+                        "SQL status: %s in %0.2f seconds",
+                        cursor.statusmessage, post-pre)
                     return cursor.statusmessage
                 except Exception as e:
                     self.target.rollback()
@@ -145,7 +162,9 @@ class Schema(object):
                     pre = time.time()
                     cursor.execute(sql)
                     post = time.time()
-                    logger.debug("SQL status: %s in %0.2f seconds", cursor.statusmessage, post-pre)
+                    logger.debug(
+                        "SQL status: %s in %0.2f seconds",
+                        cursor.statusmessage, post-pre)
                     data = cursor.fetchall()
                     logger.debug("SQL response: %s", data)
                     return data
@@ -159,11 +178,15 @@ class Schema(object):
         try:
             return self.execute(query)
         except psycopg2.ProgrammingError as e:
-            error_data = {"model": model_name, "schema": self.target.schema, "user": self.target.user}
+            error_data = {"model": model_name,
+                          "schema": self.target.schema,
+                          "user": self.target.user}
             if 'must be owner of relation' in e.diag.message_primary:
-                raise RuntimeError(RELATION_NOT_OWNER_MESSAGE.format(**error_data))
+                raise RuntimeError(
+                    RELATION_NOT_OWNER_MESSAGE.format(**error_data))
             elif "permission denied for" in e.diag.message_primary:
-                raise RuntimeError(RELATION_PERMISSION_DENIED_MESSAGE.format(**error_data))
+                raise RuntimeError(
+                    RELATION_PERMISSION_DENIED_MESSAGE.format(**error_data))
             else:
                 raise e
 
@@ -178,7 +201,9 @@ class Schema(object):
             pre = time.time()
             cursor.execute(sql)
             post = time.time()
-            logger.debug("SQL status: %s in %0.2f seconds", cursor.statusmessage, post-pre)
+            logger.debug(
+                "SQL status: %s in %0.2f seconds",
+                cursor.statusmessage, post-pre)
             return handle, cursor.statusmessage
         except Exception as e:
             self.target.rollback()
@@ -189,25 +214,32 @@ class Schema(object):
             cursor.close()
 
     def truncate(self, schema, relation):
-        sql = 'truncate table "{schema}"."{relation}"'.format(schema=schema, relation=relation)
+        sql = ('truncate table "{schema}"."{relation}"'
+               .format(schema=schema, relation=relation))
         logger.debug("dropping table %s.%s", schema, relation)
         self.execute_and_handle_permissions(sql, relation)
         logger.debug("dropped %s.%s", schema, relation)
 
     def drop(self, schema, relation_type, relation):
-        sql = 'drop {relation_type} if exists "{schema}"."{relation}" cascade'.format(schema=schema, relation_type=relation_type, relation=relation)
+        sql = ('drop {relation_type} if exists "{schema}"."{relation}" cascade'
+               .format(
+                   schema=schema,
+                   relation_type=relation_type,
+                   relation=relation))
         logger.debug("dropping %s %s.%s", relation_type, schema, relation)
         self.execute_and_handle_permissions(sql, relation)
         logger.debug("dropped %s %s.%s", relation_type, schema, relation)
 
     def sql_columns_in_table(self, schema_name, table_name):
-        sql = """
+        sql = ("""
                 select column_name, data_type, character_maximum_length
                 from information_schema.columns
-                where table_name = '{table_name}'""".format(table_name=table_name).strip()
+                where table_name = '{table_name}'"""
+               .format(table_name=table_name).strip())
 
         if schema_name is not None:
-            sql += " AND table_schema = '{schema_name}'".format(schema_name=schema_name)
+            sql += (" AND table_schema = '{schema_name}'"
+                    .format(schema_name=schema_name))
 
         return sql
 
@@ -234,26 +266,37 @@ class Schema(object):
         return columns
 
     def rename(self, schema, from_name, to_name):
-        rename_query =  'alter table "{schema}"."{from_name}" rename to "{to_name}"'.format(schema=schema, from_name=from_name, to_name=to_name)
-        logger.debug("renaming model %s.%s --> %s.%s", schema, from_name, schema, to_name)
+        rename_query = 'alter table "{schema}"."{from_name}" rename to "{to_name}"'.format(schema=schema, from_name=from_name, to_name=to_name)  # noqa
+        logger.debug(
+            "renaming model %s.%s --> %s.%s",
+            schema, from_name, schema, to_name)
         self.execute_and_handle_permissions(rename_query, from_name)
-        logger.debug("renamed model %s.%s --> %s.%s", schema, from_name, schema, to_name)
+        logger.debug(
+            "renamed model %s.%s --> %s.%s",
+            schema, from_name, schema, to_name)
 
-    def get_missing_columns(self, from_schema, from_table, to_schema, to_table):
-        "Returns dict of {column:type} for columns in from_table that are missing from to_table"
-        from_columns = {col.name:col for col in self.get_columns_in_table(from_schema, from_table)}
-        to_columns   = {col.name:col for col in self.get_columns_in_table(to_schema, to_table)}
+    def get_missing_columns(self, from_schema, from_table, to_schema,
+                            to_table):
+        """Returns dict of {column:type} for columns in from_table that are
+        missing from to_table"""
+        from_columns = {col.name: col for col in
+                        self.get_columns_in_table(from_schema, from_table)}
+        to_columns = {col.name: col for col in
+                      self.get_columns_in_table(to_schema, to_table)}
 
         missing_columns = set(from_columns.keys()) - set(to_columns.keys())
 
-        return [col for (col_name, col) in from_columns.items() if col_name in missing_columns]
+        return [col for (col_name, col) in from_columns.items()
+                if col_name in missing_columns]
 
     def create_table(self, schema, table, columns, sort, dist):
-        fields = ['"{field}" {data_type}'.format(field=column.name, data_type=column.data_type) for column in columns]
+        fields = ['"{field}" {data_type}'.format(
+            field=column.name, data_type=column.data_type
+        ) for column in columns]
         fields_csv = ",\n  ".join(fields)
         dist = self.target.dist_qualifier(dist)
         sort = self.target.sort_qualifier('compound', sort)
-        sql = 'create table if not exists "{schema}"."{table}" (\n  {fields}\n) {dist} {sort};'.format(schema=schema, table=table, fields=fields_csv, sort=sort, dist=dist)
+        sql = 'create table if not exists "{schema}"."{table}" (\n  {fields}\n) {dist} {sort};'.format(schema=schema, table=table, fields=fields_csv, sort=sort, dist=dist)  # noqa
         logger.debug('creating table "%s"."%s"'.format(schema, table))
         self.execute_and_handle_permissions(sql, table)
 
@@ -284,24 +327,33 @@ class Schema(object):
         update "{schema}"."{table}" set "{tmp_column}" = "{old_column}";
         alter table "{schema}"."{table}" drop column "{old_column}" cascade;
         alter table "{schema}"."{table}" rename column "{tmp_column}" to "{old_column}";
-        """.format(**opts)
+        """.format(**opts)  # noqa
 
         status = self.execute(sql)
         return status
 
     def expand_column_types_if_needed(self, temp_table, to_schema, to_table):
-        source_columns = {col.name: col for col in self.get_columns_in_table(None, temp_table)}
-        dest_columns   = {col.name: col for col in self.get_columns_in_table(to_schema, to_table)}
+        source_columns = {col.name: col for col in
+                          self.get_columns_in_table(None, temp_table)}
+        dest_columns = {col.name: col for col in
+                        self.get_columns_in_table(to_schema, to_table)}
 
         for column_name, source_column in source_columns.items():
             dest_column = dest_columns.get(column_name)
 
-            if dest_column is not None and dest_column.can_expand_to(source_column):
+            if dest_column is not None and \
+               dest_column.can_expand_to(source_column):
                 new_type = Column.string_type(source_column.string_size())
-                logger.debug("Changing col type from %s to %s in table %s.%s", dest_column.data_type, new_type, to_schema, to_table)
-                self.alter_column_type(to_schema, to_table, column_name, new_type)
+                logger.debug("Changing col type from %s to %s in table %s.%s",
+                             dest_column.data_type,
+                             new_type,
+                             to_schema,
+                             to_table)
+                self.alter_column_type(
+                    to_schema, to_table, column_name, new_type)
 
-        # update these cols in the cache! This is a hack to fix broken incremental models for type expansion. TODO
+        # update these cols in the cache! This is a hack to fix broken
+        # incremental models for type expansion. TODO
         self.cache_table_columns(to_schema, to_table, source_columns)
 
     def table_exists(self, schema, table):

@@ -90,7 +90,8 @@ delete from "{schema}"."{identifier}" where  ({unique_key}) in (
         if opts['materialization'] == 'view':
             sql = self.template.format(**opts)
 
-        elif opts['materialization'] == 'table' and not opts['non_destructive']:
+        elif (opts['materialization'] == 'table' and
+              not opts['non_destructive']):
             sql = self.template.format(**opts)
 
         elif opts['materialization'] == 'table' and opts['non_destructive']:
@@ -295,4 +296,3 @@ where change_type = 'insert';
     def wrap(self, schema, table, query, unique_key):
         sql = self.archival_template.format(schema=schema, identifier=table, query=query, unique_key=unique_key, alter_template=self.alter_template, dest_cols=self.dest_cols, definitions=self.definitions)
         return sql
-

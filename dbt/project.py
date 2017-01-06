@@ -26,10 +26,12 @@ default_profiles = {}
 
 default_profiles_dir = os.path.join(os.path.expanduser('~'), '.dbt')
 
+
 class DbtProjectError(Exception):
     def __init__(self, message, project):
         self.project = project
         super(DbtProjectError, self).__init__(message)
+
 
 class Project(object):
 
@@ -46,12 +48,16 @@ class Project(object):
             self.profile_to_load = self.cfg['profile']
 
         if self.profile_to_load is None:
-            raise DbtProjectError("No profile was supplied in the dbt_project.yml file, or the command line", self)
+            raise DbtProjectError(
+                "No profile was supplied in the dbt_project.yml file, or the "
+                "command line", self)
 
         if self.profile_to_load in self.profiles:
             self.cfg.update(self.profiles[self.profile_to_load])
         else:
-            raise DbtProjectError("Could not find profile named '{}'".format(self.profile_to_load), self)
+            raise DbtProjectError(
+                "Could not find profile named '{}'"
+                .format(self.profile_to_load), self)
 
     def __str__(self):
         return pprint.pformat({'project': self.cfg, 'profiles': self.profiles})
@@ -77,7 +83,8 @@ class Project(object):
             self.cfg['target'] = self.cfg['run-target']
 
         if not self.is_valid_package_name():
-            dbt.deprecations.warn('invalid-package-name', package_name = self['name'])
+            dbt.deprecations.warn(
+                'invalid-package-name', package_name=self['name'])
 
     def is_valid_package_name(self):
         if re.match(r"^[^\d\W]\w*\Z", self['name']):
@@ -110,13 +117,16 @@ class Project(object):
         package_version = self.cfg.get('version', None)
 
         if package_name is None or package_version is None:
-            raise DbtProjectError("Project name and version is not provided", self)
+            raise DbtProjectError(
+                "Project name and version is not provided", self)
 
-        required_keys = ['host', 'user', 'pass', 'schema', 'type', 'dbname', 'port']
+        required_keys = ['host', 'user', 'pass', 'schema', 'type',
+                         'dbname', 'port']
         for key in required_keys:
             if key not in target_cfg or len(str(target_cfg[key])) == 0:
-                raise DbtProjectError("Expected project configuration '{}' was not supplied".format(key), self)
-
+                raise DbtProjectError(
+                    "Expected project configuration '{}' was not supplied"
+                    .format(key), self)
 
     def hashed_name(self):
         if self.cfg.get("name", None) is None:
@@ -138,18 +148,22 @@ def read_profiles(profiles_dir=None):
         if os.path.isfile(path):
             with open(path, 'r') as f:
                 m = yaml.safe_load(f)
-                valid_profiles = {k:v for (k,v) in m.items() if k != 'config'}
+                valid_profiles = {k: v for (k, v) in m.items()
+                                  if k != 'config'}
                 profiles.update(valid_profiles)
 
     return profiles
 
-def read_project(filename, profiles_dir=None, validate=True, profile_to_load=None):
+
+def read_project(filename, profiles_dir=None, validate=True,
+                 profile_to_load=None):
     if profiles_dir is None:
         profiles_dir = default_profiles_dir
 
     with open(filename, 'r') as f:
         project_cfg = yaml.safe_load(f)
-        project_cfg['project-root'] = os.path.dirname(os.path.abspath(filename))
+        project_cfg['project-root'] = os.path.dirname(
+            os.path.abspath(filename))
         profiles = read_profiles(profiles_dir)
         proj = Project(project_cfg, profiles, profiles_dir, profile_to_load)
 

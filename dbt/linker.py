@@ -1,6 +1,6 @@
-
 import networkx as nx
 from collections import defaultdict
+
 
 class Linker(object):
     def __init__(self, data=None):
@@ -22,15 +22,27 @@ class Linker(object):
         try:
             return nx.topological_sort(self.graph, nbunch=limit_to)
         except KeyError as e:
-            raise RuntimeError("Couldn't find model '{}' -- does it exist or is it diabled?".format(e))
+            raise RuntimeError(
+                "Couldn't find model '{}' -- does it exist or is it "
+                "disabled?".format(e)
+            )
+
         except nx.exception.NetworkXUnfeasible as e:
-            cycle = " --> ".join([".".join(node) for node in  nx.algorithms.find_cycle(self.graph)[0]])
-            raise RuntimeError("Can't compile -- cycle exists in model graph\n{}".format(cycle))
+            cycle = " --> ".join(
+                [".".join(node) for node in
+                 nx.algorithms.find_cycle(self.graph)[0]]
+            )
+            raise RuntimeError(
+                "Can't compile -- cycle exists in model graph\n"
+                "{}".format(cycle)
+            )
 
     def as_dependency_list(self, limit_to=None):
-        """returns a list of list of nodes, eg. [[0,1], [2], [4,5,6]]. Each element contains nodes whose
-        dependenices are subsumed by the union of all lists before it. In this way, all nodes in list `i`
-        can be run simultaneously assuming that all lists before list `i` have been completed"""
+        """returns a list of list of nodes, eg. [[0,1], [2], [4,5,6]]. Each
+        element contains nodes whose dependenices are subsumed by the union of
+        all lists before it. In this way, all nodes in list `i` can be run
+        simultaneously assuming that all lists before list `i` have been
+        completed"""
 
         if limit_to is None:
             graph_nodes = set(self.graph.nodes())
@@ -41,7 +53,10 @@ class Linker(object):
                 if node in self.graph:
                     graph_nodes.update(nx.descendants(self.graph, node))
                 else:
-                    raise RuntimeError("Couldn't find model '{}' -- does it exist or is it diabled?".format(node))
+                    raise RuntimeError(
+                        "Couldn't find model '{}' -- does it exist or is "
+                        "it disabled?".format(node)
+                    )
 
         depth_nodes = defaultdict(list)
 
@@ -83,4 +98,3 @@ class Linker(object):
 
     def read_graph(self, infile):
         self.graph = nx.read_yaml(infile)
-
