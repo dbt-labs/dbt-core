@@ -199,7 +199,7 @@ def track_run(task):
     dbt.tracking.track_invocation_start(config=task.config, args=task.args)
     try:
         yield
-        dbt.tracking.track_invocation_end(
+        dbt.tracking.track_invocation_end(config=task.config, args=task.args, result_type="ok")
             config=task.config, args=task.args, result_type="ok"
         )
     except (NotImplementedException,
@@ -260,7 +260,7 @@ def _build_base_subparser():
     )
 
     base_subparser.add_argument(
-        '--profiles-dir',
+        "--profiles-dir",
         default=None,
         dest="sub_profiles_dir",  # Main cli arg precedes subcommand
         type=str,
@@ -272,7 +272,7 @@ def _build_base_subparser():
     )
 
     base_subparser.add_argument(
-        '--profile',
+        "--profile",
         required=False,
         type=str,
         help='''
@@ -282,7 +282,7 @@ def _build_base_subparser():
 
     base_subparser.add_argument(
         '-t',
-        '--target',
+        "--target",
         default=None,
         type=str,
         help='''
@@ -478,7 +478,7 @@ def _build_snapshot_subparser(subparsers, base_subparser):
         ''',
     )
     sub.add_argument(
-        '--threads',
+        "--threads",
         type=int,
         required=False,
         help='''

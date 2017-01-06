@@ -90,9 +90,7 @@ def renamed_method(old_name: str, new_name: str):
 def warn(name, *args, **kwargs):
     if name not in deprecations:
         # this should (hopefully) never happen
-        raise RuntimeError(
-            "Error showing deprecation warning: {}".format(name)
-        )
+        raise RuntimeError("Error showing deprecation warning: {}".format(name))
 
     deprecations[name].show(*args, **kwargs)
 

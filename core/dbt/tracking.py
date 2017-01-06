@@ -402,7 +402,7 @@ def track_invocation_end(
     )
 
 
-def track_invalid_invocation(
+def track_invalid_invocation(config=None, args=None, result_type=None):
         config=None, args=None, result_type=None
 ):
     assert active_user is not None, \

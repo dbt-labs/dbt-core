@@ -28,8 +28,7 @@ class CleanTask(BaseTask):
         protected_paths = self.config.model_paths + \
             self.config.test_paths + ['.']
         protected_abs_paths = [os.path.abspath(p) for p in protected_paths]
-        return abs_path in set(protected_abs_paths) or \
-            self.__is_project_path(abs_path)
+        return abs_path in set(protected_abs_paths) or self.__is_project_path(abs_path)
 
     def run(self):
         """
