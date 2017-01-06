@@ -1,5 +1,9 @@
 ## dbt 0.6.1 (unreleased)
 
+#### Bugfixes
+
+- respect `config` options in profiles.yml ([#255](https://github.com/analyst-collective/dbt/pull/255))
+
 #### Changes
 
 - add `--debug` flag, replace calls to `print()` with a global logger ([#256](https://github.com/analyst-collective/dbt/pull/256))
@@ -62,7 +66,7 @@ Use `{{ target }}` to interpolate profile variables into your model definitions.
 
 ```sql
 -- only use the last week of data in development
-select * from events 
+select * from events
 
 {% if target.name == 'dev' %}
 where created_at > getdate() - interval '1 week'
@@ -227,7 +231,7 @@ As `dbt` has grown, we found this implementation to be a little unwieldy and har
 
 The additions of automated testing and a more comprehensive manual testing process will go a long way to ensuring the future stability of dbt. We're going to get started on these tasks soon, and you can follow our progress here: https://github.com/analyst-collective/dbt/milestone/16 .
 
-As always, feel free to [reach out to us on Slack](http://ac-slackin.herokuapp.com/) with any questions or concerns: 
+As always, feel free to [reach out to us on Slack](http://ac-slackin.herokuapp.com/) with any questions or concerns:
 
 
 
@@ -244,7 +248,7 @@ See https://github.com/analyst-collective/dbt/releases/tag/v0.5.1
 
 ## dbt release 0.5.1
 
-### 0. tl;dr 
+### 0. tl;dr
 
 1. Raiders of the Lost Archive -- version your raw data to make historical queries more accurate
 2. Column type resolution for incremental models (no more `Value too long for character type` errors)
@@ -281,7 +285,7 @@ The archived tables will mirror the schema of the source tables they're generate
 
 1. `valid_from`: The timestamp when this archived row was inserted (and first considered valid)
 1. `valid_to`: The timestamp when this archived row became invalidated. The first archived record for a given `unique_key` has `valid_to = NULL`. When newer data is archived for that `unique_key`, the `valid_to` field of the old record is set to the `valid_from` field of the new record!
-1. `scd_id`: A unique key generated for each archive record. Scd = [Slowly Changing Dimension](https://en.wikipedia.org/wiki/Slowly_changing_dimension#Type_2:_add_new_row). 
+1. `scd_id`: A unique key generated for each archive record. Scd = [Slowly Changing Dimension](https://en.wikipedia.org/wiki/Slowly_changing_dimension#Type_2:_add_new_row).
 
 dbt models can be built on top of these archived tables. The most recent record for a given `unique_key` is the one where `valid_to` is `null`.
 
@@ -289,7 +293,7 @@ To run this archive process, use the command `dbt archive`. After testing and co
 
 ### 2. Incremental column expansion https://github.com/analyst-collective/dbt/issues/175
 
-Incremental tables are a powerful dbt feature, but there was at least one edge case which makes working with them difficult. During the first run of an incremental model, Redshift will infer a type for every column in the table. Subsequent runs can insert new data which does not conform to the expected type. One example is a `varchar(16)` field which is inserted into a `varchar(8)` field. 
+Incremental tables are a powerful dbt feature, but there was at least one edge case which makes working with them difficult. During the first run of an incremental model, Redshift will infer a type for every column in the table. Subsequent runs can insert new data which does not conform to the expected type. One example is a `varchar(16)` field which is inserted into a `varchar(8)` field.
 In practice, this error looks like:
 
 ```
@@ -485,7 +489,7 @@ models:
       post-hook: "insert into my_audit_table (model_name, run_at) values ({{this.name}}, getdate())"
 ```
 
-Hooks are recursively appended, so the `my_model` model will only receive the `grant select...` hook, whereas the `some_model` model will receive _both_ the `grant select...` and `insert into...` hooks. 
+Hooks are recursively appended, so the `my_model` model will only receive the `grant select...` hook, whereas the `some_model` model will receive _both_ the `grant select...` and `insert into...` hooks.
 
 Finally, note that the `grant` statement uses the (hopefully familiar) `{{this}}` syntax whereas the `insert` statement uses the `{{this.name}}` syntax. When DBT creates a model:
  - A temp table is created
@@ -516,7 +520,7 @@ config:
 
 ![windows](https://pbs.twimg.com/profile_images/571398080688181248/57UKydQS.png)
 
---- 
+---
 
 dbt v0.4.1 provides improvements to incremental models, performance improvements, and ssh support for db connections.
 
@@ -540,7 +544,7 @@ pip install -U dbt
 # To run models
 dbt run # same as before
 
-# to dry-run models 
+# to dry-run models
 dbt run --dry # previously dbt test
 
 # to run schema tests
@@ -553,10 +557,10 @@ Previously, dbt calculated "new" incremental records to insert by querying for r
 
 User 1 Session 1 Event 1 @ 12:00
 User 1 Session 1 Event 2 @ 12:01
--- dbt run -- 
+-- dbt run --
 User 1 Session 1 Event 3 @ 12:02
 
-In this scenario, there are two possible outcomes depending on the `sql_where` chosen: 1) Event 3 does not get included in the Session 1 record for User 1 (bad), or 2) Session 1 is duplicated in the sessions table (bad). Both of these outcomes are inadequate! 
+In this scenario, there are two possible outcomes depending on the `sql_where` chosen: 1) Event 3 does not get included in the Session 1 record for User 1 (bad), or 2) Session 1 is duplicated in the sessions table (bad). Both of these outcomes are inadequate!
 
 With this release, you can now add a `unique_key` expression to an incremental model config. Records matching the `unique_key` will be `delete`d from the incremental table, then `insert`ed as usual. This makes it possible to maintain data accuracy without recalculating the entire table on every run.
 
@@ -570,7 +574,7 @@ sessions:
 
 ### 3. Run schema validations concurrently https://github.com/analyst-collective/dbt/issues/100
 
-The `threads` run-target config now applies to schema validations too. Try it with `dbt test` 
+The `threads` run-target config now applies to schema validations too. Try it with `dbt test`
 
 ### 4. Connect to database over ssh https://github.com/analyst-collective/dbt/issues/93
 
@@ -588,10 +592,10 @@ warehouse:
       dbname: my-db
       schema: dbt_dbanin
       threads: 8
-      ssh-host: ssh-host-name  # <------ Add this line 
+      ssh-host: ssh-host-name  # <------ Add this line
   run-target: dev
 ```
- 
+
 ### Remove the model-defaults config https://github.com/analyst-collective/dbt/issues/111
 
 The `model-defaults` config doesn't make sense in a dbt world with dependencies. To apply default configs to your package, add the configs immediately under the package definition:
@@ -688,12 +692,12 @@ from users
 where email not in (select email from __dbt__CTE__employees)
 ```
 
-Ephemeral models play nice with other ephemeral models, incremental models, and regular table/view models. Feel free to mix and match different materialization options to optimize for performance and simplicity. 
+Ephemeral models play nice with other ephemeral models, incremental models, and regular table/view models. Feel free to mix and match different materialization options to optimize for performance and simplicity.
 
 
 ### 4. Feature: In-model configs https://github.com/analyst-collective/dbt/issues/88
 
-Configurations can now be specified directly inside of models. These in-model configs work exactly the same as configs inside of the dbt_project.yml file. 
+Configurations can now be specified directly inside of models. These in-model configs work exactly the same as configs inside of the dbt_project.yml file.
 
 An in-model-config looks like this:
 
@@ -703,7 +707,7 @@ An in-model-config looks like this:
 -- python function syntax
 {{ config(materialized="incremental", sql_where="id > (select max(id) from {{this}})") }}
 -- OR json syntax
-{{ 
+{{
     config({"materialized:" "incremental", "sql_where" : "id > (select max(id) from {{this}})"})
 }}
 
