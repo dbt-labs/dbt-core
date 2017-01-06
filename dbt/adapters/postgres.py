@@ -10,6 +10,8 @@ from dbt.contracts.connection import validate_connection
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.schema import Schema, READ_PERMISSION_DENIED_ERROR
 
+connection_cache = {}
+
 
 class PostgresAdapter:
 
@@ -38,9 +40,27 @@ class PostgresAdapter:
 
         return cls.open_connection(result)
 
+    @staticmethod
+    def hash_profile(profile):
+        return ("{}--{}--{}--{}".format(
+            profile.get('host'),
+            profile.get('dbname'),
+            profile.get('schema'),
+            profile.get('user'),
+        ))
+
     @classmethod
     def get_connection(cls, profile):
-        return cls.acquire_connection(profile)
+        profile_hash = cls.hash_profile(profile)
+
+        if connection_cache.get(profile_hash):
+            connection = connection_cache.get(profile_hash)
+            return connection
+
+        connection = cls.acquire_connection(profile)
+        connection_cache[profile_hash] = connection
+
+        return connection
 
     @staticmethod
     def create_table():
@@ -130,6 +150,11 @@ class PostgresAdapter:
                     credentials.get('pass'),
                     credentials.get('port'),
                 ))
+
+    @staticmethod
+    def get_connection_hash(connection):
+        credentials = connection.get('credentials')
+
 
     @staticmethod
     def add_query_to_transaction(sql, handle):

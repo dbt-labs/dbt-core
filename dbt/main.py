@@ -20,7 +20,7 @@ import dbt.task.test as test_task
 import dbt.task.archive as archive_task
 import dbt.tracking
 import dbt.config as config
-
+import dbt.adapters.cache as adapter_cache
 
 def main(args=None):
     if args is None:
@@ -105,6 +105,8 @@ def run_from_args(parsed):
 def invoke_dbt(parsed):
     task = None
     proj = None
+
+    adapter_cache.reset()
 
     try:
         proj = project.read_project(
