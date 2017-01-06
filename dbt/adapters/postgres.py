@@ -10,6 +10,7 @@ from dbt.contracts.connection import validate_connection
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.schema import Schema, READ_PERMISSION_DENIED_ERROR
 
+
 class PostgresAdapter:
 
     @classmethod
@@ -71,7 +72,7 @@ class PostgresAdapter:
                 kwargs = instruction['args']
 
                 func_map = {
-                    'expand_column_types_if_needed': \
+                    'expand_column_types_if_needed':
                     lambda kwargs: schema_helper.expand_column_types_if_needed(
                         **kwargs)
                 }
@@ -139,7 +140,9 @@ class PostgresAdapter:
             pre = time.time()
             cursor.execute(sql)
             post = time.time()
-            logger.debug("SQL status: %s in %0.2f seconds", cursor.statusmessage, post-pre)
+            logger.debug(
+                "SQL status: %s in %0.2f seconds",
+                cursor.statusmessage, post-pre)
             return handle, cursor.statusmessage
         except Exception as e:
             handle.rollback()

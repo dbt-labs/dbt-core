@@ -1,5 +1,6 @@
 from dbt.adapters.postgres import PostgresAdapter
 
+
 def get_adapter(target):
     adapters = {
         'postgres': PostgresAdapter,

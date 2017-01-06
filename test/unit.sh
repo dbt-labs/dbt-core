@@ -3,4 +3,4 @@
 pip install tox
 
 cd /usr/src/app
-tox -e unit-py27,unit-py35
+time tox -e unit-py27,unit-py35,pep8

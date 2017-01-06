@@ -26,6 +26,7 @@ credentials_mapping = {
     'redshift': postgres_credentials_contract,
 }
 
+
 def validate_connection(connection):
     try:
         connection_contract(connection)
