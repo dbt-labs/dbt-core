@@ -4,13 +4,17 @@ changed_tests := `git status --porcelain | grep '^\(M\| M\|A\| A\)' | awk '{ pri
 
 test: test-unit test-integration
 
+test-unit-quick:
+	@echo "Quick unit test run starting..."
+	@time docker-compose run test tox -e unit-py35
+
 test-unit:
 	@echo "Unit test run starting..."
-	@docker-compose run test /usr/src/app/test/unit.sh
+	@time docker-compose run test tox -e unit-py27,unit-py35,pep8
 
 test-integration:
 	@echo "Integration test run starting..."
-	@docker-compose run test /usr/src/app/test/integration.sh
+	@time docker-compose run test tox -e integration-py27,integration-py35
 
 test-new:
 	@echo "Test run starting..."
