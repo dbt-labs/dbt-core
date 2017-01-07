@@ -63,57 +63,17 @@ class PostgresAdapter:
         return connection
 
     @staticmethod
-    def create_table():
-        pass
+    def get_connection_spec(connection):
+        credentials = connection.get('credentials')
 
-    @staticmethod
-    def drop_table():
-        pass
-
-    @classmethod
-    def execute_model(cls, project, target, model):
-        schema_helper = Schema(project, target)
-        parts = re.split(r'-- (DBT_OPERATION .*)', model.compiled_contents)
-        profile = project.run_environment()
-        connection = cls.get_connection(profile)
-
-        if flags.STRICT_MODE:
-            validate_connection(connection)
-
-        handle = connection['handle']
-
-        status = 'None'
-        for i, part in enumerate(parts):
-            matches = re.match(r'^DBT_OPERATION ({.*})$', part)
-            if matches is not None:
-                instruction_string = matches.groups()[0]
-                instruction = yaml.safe_load(instruction_string)
-                function = instruction['function']
-                kwargs = instruction['args']
-
-                func_map = {
-                    'expand_column_types_if_needed':
-                    lambda kwargs: schema_helper.expand_column_types_if_needed(
-                        **kwargs)
-                }
-
-                func_map[function](kwargs)
-            else:
-                try:
-                    handle, status = cls.add_query_to_transaction(
-                        part, handle)
-                except psycopg2.ProgrammingError as e:
-                    if "permission denied for" in e.diag.message_primary:
-                        raise RuntimeError(READ_PERMISSION_DENIED_ERROR.format(
-                            model=model.name,
-                            error=str(e).strip(),
-                            user=target.user,
-                        ))
-                    else:
-                        raise
-
-        handle.commit()
-        return status
+        return ("dbname='{}' user='{}' host='{}' password='{}' port='{}' "
+                "connect_timeout=10".format(
+                    credentials.get('dbname'),
+                    credentials.get('user'),
+                    credentials.get('host'),
+                    credentials.get('pass'),
+                    credentials.get('port'),
+                ))
 
     @classmethod
     def open_connection(cls, connection):
@@ -139,25 +99,98 @@ class PostgresAdapter:
         return result
 
     @staticmethod
-    def get_connection_spec(connection):
-        credentials = connection.get('credentials')
+    def create_table():
+        pass
 
-        return ("dbname='{}' user='{}' host='{}' password='{}' port='{}' "
-                "connect_timeout=10".format(
-                    credentials.get('dbname'),
-                    credentials.get('user'),
-                    credentials.get('host'),
-                    credentials.get('pass'),
-                    credentials.get('port'),
-                ))
+    @classmethod
+    def drop(cls, profile, relation, relation_type):
+        if relation_type == 'view':
+            return cls.drop_view(profile, relation)
+        elif relation_type == 'table':
+            return cls.drop_table(profile, relation)
+        else:
+            raise RuntimeError(
+                "Invalid relation_type '{}'"
+                .format(relation_type))
+
+    @classmethod
+    def drop_view(cls, profile, view):
+        connection = cls.get_connection(profile)
+
+        if flags.STRICT_MODE:
+            validate_connection(connection)
+
+        schema = connection.get('credentials', {}).get('schema')
+
+        sql = ('drop view if exists "{schema}"."{view}" cascade'
+               .format(
+                   schema=schema,
+                   view=view))
+
+        handle, status = cls.add_query_to_transaction(sql, connection)
+
+    @classmethod
+    def drop_table(cls, profile, table):
+        connection = cls.get_connection(profile)
+
+        if flags.STRICT_MODE:
+            validate_connection(connection)
+
+        schema = connection.get('credentials', {}).get('schema')
+
+        sql = ('drop table if exists "{schema}"."{table}" cascade'
+               .format(
+                   schema=schema,
+                   table=table))
+
+        handle, status = cls.add_query_to_transaction(sql, connection)
+
+    @classmethod
+    def execute_model(cls, project, target, model):
+        schema_helper = Schema(project, target)
+        parts = re.split(r'-- (DBT_OPERATION .*)', model.compiled_contents)
+        profile = project.run_environment()
+        connection = cls.get_connection(profile)
+
+        if flags.STRICT_MODE:
+            validate_connection(connection)
+
+        status = 'None'
+        for i, part in enumerate(parts):
+            matches = re.match(r'^DBT_OPERATION ({.*})$', part)
+            if matches is not None:
+                instruction_string = matches.groups()[0]
+                instruction = yaml.safe_load(instruction_string)
+                function = instruction['function']
+                kwargs = instruction['args']
+
+                func_map = {
+                    'expand_column_types_if_needed':
+                    lambda kwargs: schema_helper.expand_column_types_if_needed(
+                        **kwargs)
+                }
+
+                func_map[function](kwargs)
+            else:
+                try:
+                    handle, status = cls.add_query_to_transaction(
+                        part, connection)
+                except psycopg2.ProgrammingError as e:
+                    if "permission denied for" in e.diag.message_primary:
+                        raise RuntimeError(READ_PERMISSION_DENIED_ERROR.format(
+                            model=model.name,
+                            error=str(e).strip(),
+                            user=target.user,
+                        ))
+                    else:
+                        raise
+
+        handle.commit()
+        return status
 
     @staticmethod
-    def get_connection_hash(connection):
-        credentials = connection.get('credentials')
-
-
-    @staticmethod
-    def add_query_to_transaction(sql, handle):
+    def add_query_to_transaction(sql, connection):
+        handle = connection.get('handle')
         cursor = handle.cursor()
 
         try:

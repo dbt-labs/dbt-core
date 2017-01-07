@@ -147,13 +147,17 @@ class ModelRunner(BaseRunner):
         return result.status
 
     def execute(self, target, model):
+        adapter = get_adapter(target)
+
         if model.tmp_drop_type is not None:
             if model.materialization == 'table' and \
                self.project.args.non_destructive:
                 self.schema_helper.truncate(target.schema, model.tmp_name)
             else:
-                self.schema_helper.drop(
-                    target.schema, model.tmp_drop_type, model.tmp_name)
+                adapter.drop(
+                    profile=self.project.run_environment(),
+                    relation=model.tmp_name,
+                    relation_type=model.tmp_drop_type)
 
         status = self.execute_contents(target, model)
 
