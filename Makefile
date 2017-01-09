@@ -2,11 +2,9 @@
 
 changed_tests := `git status --porcelain | grep '^\(M\| M\|A\| A\)' | awk '{ print $$2 }' | grep '\/test_[a-zA-Z_\-\.]\+.py'`
 
-test: test-unit test-integration
-
-test-unit-quick:
-	@echo "Quick unit test run starting..."
-	@time docker-compose run test tox -e unit-py35
+test:
+	@echo "Full test run starting..."
+	@time docker-compose run test tox
 
 test-unit:
 	@echo "Unit test run starting..."
