@@ -22,6 +22,7 @@ import dbt.tracking
 import dbt.config as config
 import dbt.adapters.cache as adapter_cache
 
+
 def main(args=None):
     if args is None:
         args = sys.argv[1:]

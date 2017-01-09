@@ -34,13 +34,14 @@ schema."""
 @contextmanager
 def exception_handler(connection, cursor, model_name):
     handle = connection.get('handle')
+    schema = connection.get('credentials', {}).get('schema')
 
     try:
         yield
     except psycopg2.ProgrammingError as e:
         handle.rollback()
         error_data = {"model": model_name,
-                      "schema": connection.get('credentials', {}).get('schema'),
+                      "schema": schema,
                       "user": connection.get('credentials', {}).get('user')}
         if 'must be owner of relation' in e.diag.message_primary:
             raise RuntimeError(
@@ -173,7 +174,8 @@ class PostgresAdapter:
                    schema=schema,
                    view=view))
 
-        handle, status = cls.add_query_to_transaction(sql, connection, model_name)
+        handle, status = cls.add_query_to_transaction(
+            sql, connection, model_name)
 
     @classmethod
     def drop_table(cls, profile, table, model_name):
@@ -189,7 +191,8 @@ class PostgresAdapter:
                    schema=schema,
                    table=table))
 
-        handle, status = cls.add_query_to_transaction(sql, connection, model_name)
+        handle, status = cls.add_query_to_transaction(
+            sql, connection, model_name)
 
     @classmethod
     def truncate(cls, profile, table, model_name=None):
@@ -205,7 +208,8 @@ class PostgresAdapter:
                    schema=schema,
                    table=table))
 
-        handle, status = cls.add_query_to_transaction(sql, connection, model_name)
+        handle, status = cls.add_query_to_transaction(
+            sql, connection, model_name)
 
     @classmethod
     def rename(cls, profile, from_name, to_name, model_name=None):
@@ -222,7 +226,8 @@ class PostgresAdapter:
                    from_name=from_name,
                    to_name=to_name))
 
-        handle, status = cls.add_query_to_transaction(sql, connection, model_name)
+        handle, status = cls.add_query_to_transaction(
+            sql, connection, model_name)
 
     @classmethod
     def execute_model(cls, project, target, model):
