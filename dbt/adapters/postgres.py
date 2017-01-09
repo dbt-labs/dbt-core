@@ -4,6 +4,8 @@ import re
 import time
 import yaml
 
+from contextlib import contextmanager
+
 import dbt.flags as flags
 
 from dbt.contracts.connection import validate_connection
@@ -11,6 +13,50 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.schema import Schema, READ_PERMISSION_DENIED_ERROR
 
 connection_cache = {}
+
+RELATION_PERMISSION_DENIED_MESSAGE = """
+The user '{user}' does not have sufficient permissions to create the model
+'{model}' in the schema '{schema}'. Please adjust the permissions of the
+'{user}' user on the '{schema}' schema. With a superuser account, execute the
+following commands, then re-run dbt.
+
+grant usage, create on schema "{schema}" to "{user}";
+grant select, insert, delete on all tables in schema "{schema}" to "{user}";"""
+
+RELATION_NOT_OWNER_MESSAGE = """
+The user '{user}' does not have sufficient permissions to drop the model
+'{model}' in the schema '{schema}'. This is likely because the relation was
+created by a different user. Either delete the model "{schema}"."{model}"
+manually, or adjust the permissions of the '{user}' user in the '{schema}'
+schema."""
+
+
+@contextmanager
+def exception_handler(connection, cursor, model_name):
+    handle = connection.get('handle')
+
+    try:
+        yield
+    except psycopg2.ProgrammingError as e:
+        handle.rollback()
+        error_data = {"model": model_name,
+                      "schema": connection.get('credentials', {}).get('schema'),
+                      "user": connection.get('credentials', {}).get('user')}
+        if 'must be owner of relation' in e.diag.message_primary:
+            raise RuntimeError(
+                RELATION_NOT_OWNER_MESSAGE.format(**error_data))
+        elif "permission denied for" in e.diag.message_primary:
+            raise RuntimeError(
+                RELATION_PERMISSION_DENIED_MESSAGE.format(**error_data))
+        else:
+            raise e
+    except Exception as e:
+        handle.rollback()
+        logger.exception("Error running SQL: %s", sql)
+        logger.debug("rolling back connection")
+        raise e
+    finally:
+        cursor.close()
 
 
 class PostgresAdapter:
@@ -103,18 +149,18 @@ class PostgresAdapter:
         pass
 
     @classmethod
-    def drop(cls, profile, relation, relation_type):
+    def drop(cls, profile, relation, relation_type, model_name=None):
         if relation_type == 'view':
-            return cls.drop_view(profile, relation)
+            return cls.drop_view(profile, relation, model_name)
         elif relation_type == 'table':
-            return cls.drop_table(profile, relation)
+            return cls.drop_table(profile, relation, model_name)
         else:
             raise RuntimeError(
                 "Invalid relation_type '{}'"
                 .format(relation_type))
 
     @classmethod
-    def drop_view(cls, profile, view):
+    def drop_view(cls, profile, view, model_name):
         connection = cls.get_connection(profile)
 
         if flags.STRICT_MODE:
@@ -127,10 +173,10 @@ class PostgresAdapter:
                    schema=schema,
                    view=view))
 
-        handle, status = cls.add_query_to_transaction(sql, connection)
+        handle, status = cls.add_query_to_transaction(sql, connection, model_name)
 
     @classmethod
-    def drop_table(cls, profile, table):
+    def drop_table(cls, profile, table, model_name):
         connection = cls.get_connection(profile)
 
         if flags.STRICT_MODE:
@@ -143,7 +189,40 @@ class PostgresAdapter:
                    schema=schema,
                    table=table))
 
-        handle, status = cls.add_query_to_transaction(sql, connection)
+        handle, status = cls.add_query_to_transaction(sql, connection, model_name)
+
+    @classmethod
+    def truncate(cls, profile, table, model_name=None):
+        connection = cls.get_connection(profile)
+
+        if flags.STRICT_MODE:
+            validate_connection(connection)
+
+        schema = connection.get('credentials', {}).get('schema')
+
+        sql = ('truncate table "{schema}"."{table}"'
+               .format(
+                   schema=schema,
+                   table=table))
+
+        handle, status = cls.add_query_to_transaction(sql, connection, model_name)
+
+    @classmethod
+    def rename(cls, profile, from_name, to_name, model_name=None):
+        connection = cls.get_connection(profile)
+
+        if flags.STRICT_MODE:
+            validate_connection(connection)
+
+        schema = connection.get('credentials', {}).get('schema')
+
+        sql = ('alter table "{schema}"."{from_name}" rename to "{to_name}"'
+               .format(
+                   schema=schema,
+                   from_name=from_name,
+                   to_name=to_name))
+
+        handle, status = cls.add_query_to_transaction(sql, connection, model_name)
 
     @classmethod
     def execute_model(cls, project, target, model):
@@ -172,28 +251,28 @@ class PostgresAdapter:
 
                 func_map[function](kwargs)
             else:
-                try:
-                    handle, status = cls.add_query_to_transaction(
-                        part, connection)
-                except psycopg2.ProgrammingError as e:
-                    if "permission denied for" in e.diag.message_primary:
-                        raise RuntimeError(READ_PERMISSION_DENIED_ERROR.format(
-                            model=model.name,
-                            error=str(e).strip(),
-                            user=target.user,
-                        ))
-                    else:
-                        raise
+                handle, status = cls.add_query_to_transaction(
+                    part, connection, model.name)
 
         handle.commit()
         return status
 
+    @classmethod
+    def commit(cls, profile):
+        connection = cls.get_connection(profile)
+
+        if flags.STRICT_MODE:
+            validate_connection(connection)
+
+        handle = connection.get('handle')
+        handle.commit()
+
     @staticmethod
-    def add_query_to_transaction(sql, connection):
+    def add_query_to_transaction(sql, connection, model_name=None):
         handle = connection.get('handle')
         cursor = handle.cursor()
 
-        try:
+        with exception_handler(connection, cursor, model_name):
             logger.debug("SQL: %s", sql)
             pre = time.time()
             cursor.execute(sql)
@@ -202,10 +281,3 @@ class PostgresAdapter:
                 "SQL status: %s in %0.2f seconds",
                 cursor.statusmessage, post-pre)
             return handle, cursor.statusmessage
-        except Exception as e:
-            handle.rollback()
-            logger.exception("Error running SQL: %s", sql)
-            logger.debug("rolling back connection")
-            raise e
-        finally:
-            cursor.close()

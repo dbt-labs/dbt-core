@@ -152,12 +152,16 @@ class ModelRunner(BaseRunner):
         if model.tmp_drop_type is not None:
             if model.materialization == 'table' and \
                self.project.args.non_destructive:
-                self.schema_helper.truncate(target.schema, model.tmp_name)
+                adapter.truncate(
+                    profile=self.project.run_environment(),
+                    table=model.tmp_name,
+                    model_name=model.name)
             else:
                 adapter.drop(
                     profile=self.project.run_environment(),
                     relation=model.tmp_name,
-                    relation_type=model.tmp_drop_type)
+                    relation_type=model.tmp_drop_type,
+                    model_name=model.name)
 
         status = self.execute_contents(target, model)
 
@@ -168,14 +172,21 @@ class ModelRunner(BaseRunner):
                 # do nothing here
                 pass
             else:
-                self.schema_helper.drop(
-                    target.schema, model.final_drop_type, model.name)
+                adapter.drop(
+                    profile=self.project.run_environment(),
+                    relation=model.name,
+                    relation_type=model.final_drop_type,
+                    model_name=model.name)
 
         if model.should_rename(self.project.args):
-            self.schema_helper.rename(
-                target.schema,
-                model.tmp_name,
-                model.name)
+            adapter.rename(
+                profile=self.project.run_environment(),
+                from_name=model.tmp_name,
+                to_name=model.name,
+                model_name=model.name)
+
+        adapter.commit(
+            profile=self.project.run_environment())
 
         return status
 
