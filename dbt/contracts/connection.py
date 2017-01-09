@@ -21,9 +21,19 @@ postgres_credentials_contract = Schema({
     Required('schema'): str,
 })
 
+snowflake_credentials_contract = Schema({
+    Required('account'): str,
+    Required('user'): str,
+    Required('password'): str,
+    Required('database'): str,
+    Required('schema'): str,
+    Required('warehouse'): str,
+})
+
 credentials_mapping = {
     'postgres': postgres_credentials_contract,
     'redshift': postgres_credentials_contract,
+    'snowflake': snowflake_credentials_contract,
 }
 
 

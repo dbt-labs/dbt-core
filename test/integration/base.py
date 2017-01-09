@@ -11,28 +11,8 @@ DBT_PROFILES = os.path.join(DBT_CONFIG_DIR, 'profiles.yml')
 
 class DBTIntegrationTest(unittest.TestCase):
 
-    def setUp(self):
-        # create a dbt_project.yml
-
-        base_project_config = {
-            'name': 'test',
-            'version': '1.0',
-            'test-paths': [],
-            'source-paths': [self.models],
-            'profile': 'test'
-        }
-
-        project_config = {}
-        project_config.update(base_project_config)
-        project_config.update(self.project_config)
-
-        with open("dbt_project.yml", 'w') as f:
-            yaml.safe_dump(project_config, f, default_flow_style=True)
-
-        # create profiles
-
-        profile_config = {}
-        default_profile_config = {
+    def postgres_profile(self):
+        return {
             'config': {
                 'send_anonymous_usage_stats': False
             },
@@ -62,6 +42,100 @@ class DBTIntegrationTest(unittest.TestCase):
                 'run-target': 'default2'
             }
         }
+
+    def snowflake_profile(self):
+        return {
+            'config': {
+                'send_anonymous_usage_stats': False
+            },
+            'test': {
+                'outputs': {
+                    'default2': {
+                        'type': 'snowflake',
+                        'threads': 1,
+                        'account': '',
+                        'user': '',
+                        'password': '',
+                        'database': 'FISHTOWN_ANALYTICS',
+                        'schema': self.schema,
+                        'warehouse': 'FISHTOWN_ANALYTICS'
+                    },
+                    'noaccess': {
+                        'type': 'postgres',
+                        'threads': 1,
+                        'account': '',
+                        'user': '',
+                        'password': '',
+                        'database': 'FISHTOWN_ANALYTICS',
+                        'schema': self.schema,
+                        'warehouse': 'FISHTOWN_ANALYTICS'
+                    }
+                },
+                'run-target': 'default2'
+            }
+        }
+
+    def get_profile(self, adapter_type):
+        if adapter_type == 'postgres':
+            return self.postgres_profile()
+        elif adapter_type == 'snowflake':
+            return self.snowflake_profile()
+
+    def setUp(self):
+        # create a dbt_project.yml
+
+        base_project_config = {
+            'name': 'test',
+            'version': '1.0',
+            'test-paths': [],
+            'source-paths': [self.models],
+            'profile': 'test'
+        }
+
+        project_config = {}
+        project_config.update(base_project_config)
+        project_config.update(self.project_config)
+
+        with open("dbt_project.yml", 'w') as f:
+            yaml.safe_dump(project_config, f, default_flow_style=True)
+
+        # create profiles
+
+        profile_config = {}
+        default_profile_config = self.postgres_profile()
+        profile_config.update(default_profile_config)
+        profile_config.update(self.profile_config)
+
+        if not os.path.exists(DBT_CONFIG_DIR):
+            os.makedirs(DBT_CONFIG_DIR)
+
+        with open(DBT_PROFILES, 'w') as f:
+            yaml.safe_dump(profile_config, f, default_flow_style=True)
+
+        self.run_sql("DROP SCHEMA IF EXISTS {} CASCADE;".format(self.schema))
+        self.run_sql("CREATE SCHEMA {};".format(self.schema))
+
+    def use_default_project(self):
+        # create a dbt_project.yml
+        base_project_config = {
+            'name': 'test',
+            'version': '1.0',
+            'test-paths': [],
+            'source-paths': [self.models],
+            'profile': 'test'
+        }
+
+        project_config = {}
+        project_config.update(base_project_config)
+        project_config.update(self.project_config)
+
+        with open("dbt_project.yml", 'w') as f:
+            yaml.safe_dump(project_config, f, default_flow_style=True)
+
+    def use_profile(self, adapter_type):
+        profile_config = {}
+        default_profile_config = self.get_profile(adapter_type)
+
         profile_config.update(default_profile_config)
         profile_config.update(self.profile_config)
 
