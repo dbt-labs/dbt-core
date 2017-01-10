@@ -158,9 +158,43 @@ class PostgresAdapter:
         handle, cursor = cls.add_query_to_transaction(
             query, connection, model_name)
 
-    @staticmethod
-    def create_table():
-        pass
+    @classmethod
+    def dist_qualifier(cls, dist):
+        return ''
+
+    @classmethod
+    def sort_qualifier(cls, sort_type, sort):
+        return ''
+
+    @classmethod
+    def create_table(cls, profile, schema, table, columns, sort, dist):
+        connection = cls.get_connection(profile)
+
+        if flags.STRICT_MODE:
+            validate_connection(connection)
+
+        fields = ['"{field}" {data_type}'.format(
+            field=column.name, data_type=column.data_type
+        ) for column in columns]
+        fields_csv = ",\n  ".join(fields)
+        dist = cls.dist_qualifier(dist)
+        sort = cls.sort_qualifier('compound', sort)
+        sql = """
+        create table if not exists "{schema}"."{table}" (
+        {fields}
+        )
+        {dist} {sort}
+        """.format(
+            schema=schema,
+            table=table,
+            fields=fields_csv,
+            sort=sort,
+            dist=dist)
+
+        logger.debug('creating table "%s"."%s"'.format(schema, table))
+
+        cls.add_query_to_transaction(
+            sql, connection, table)
 
     @classmethod
     def drop(cls, profile, relation, relation_type, model_name=None):
@@ -426,14 +460,24 @@ class PostgresAdapter:
             validate_connection(connection)
 
         handle = connection.get('handle')
-        status = 'None'
 
         for i, query in enumerate(queries):
             handle, cursor = cls.add_query_to_transaction(
                 query, connection, model_name)
 
-        handle.commit()
         return cursor.statusmessage
+
+    @classmethod
+    def execute_one(cls, profile, query, model_name=None):
+        connection = cls.get_connection(profile)
+
+        if flags.STRICT_MODE:
+            validate_connection(connection)
+
+        handle = connection.get('handle')
+
+        return cls.add_query_to_transaction(
+            query, connection, model_name)
 
     @classmethod
     def commit(cls, profile):

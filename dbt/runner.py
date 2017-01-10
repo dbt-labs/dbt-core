@@ -53,9 +53,8 @@ class RunModelResult(object):
 
 
 class BaseRunner(object):
-    def __init__(self, project, schema_helper):
+    def __init__(self, project):
         self.project = project
-        self.schema_helper = schema_helper
 
     def pre_run_msg(self, model):
         raise NotImplementedError("not implemented")
@@ -189,6 +188,8 @@ class ModelRunner(BaseRunner):
             queries=compiled_hooks,
             model_name=source)
 
+        adapter.commit(profile)
+
     def pre_run_all(self, models, context):
         hooks = self.project.cfg.get('on-run-start', [])
         self.__run_hooks(hooks, context, 'on-run-start hooks')
@@ -301,7 +302,15 @@ class TestRunner(ModelRunner):
         return info
 
     def execute(self, target, model):
-        rows = self.schema_helper.execute_and_fetch(model.compiled_contents)
+        adapter = get_adapter(target.target_type)
+        profile = self.project.run_environment()
+
+        _, cursor = adapter.execute_one(
+            profile, model.compiled_contents, model.name)
+        rows = cursor.fetchall()
+
+        cursor.close()
+
         if len(rows) > 1:
             raise RuntimeError(
                 "Bad test {name}: Returned {num_rows} rows instead of 1"
@@ -371,8 +380,6 @@ class RunManager(object):
         self.target = dbt.targets.get_target(
             self.project.run_environment(),
             self.args.threads)
-
-        self.schema = dbt.schema.Schema(self.project, self.target)
 
         adapter = get_adapter(self.target.target_type)
         profile = self.project.run_environment()
@@ -679,7 +686,7 @@ class RunManager(object):
             logger.info(str(e))
             sys.exit(1)
 
-        test_runner = TestRunner(self.project, self.schema)
+        test_runner = TestRunner(self.project)
 
         if test_schemas:
             schema_tests = [m for m in compiled_models
@@ -714,13 +721,13 @@ class RunManager(object):
         return self.run_tests_from_graph(test_schemas, test_data)
 
     def run(self, limit_to=None):
-        runner = ModelRunner(self.project, self.schema)
+        runner = ModelRunner(self.project)
         return self.run_from_graph(runner, limit_to)
 
     def dry_run(self, limit_to=None):
-        runner = DryRunner(self.project, self.schema)
+        runner = DryRunner(self.project)
         return self.run_from_graph(runner, limit_to)
 
     def run_archive(self):
-        runner = ArchiveRunner(self.project, self.schema)
+        runner = ArchiveRunner(self.project)
         return self.run_from_graph(runner, None)
