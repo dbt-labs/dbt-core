@@ -12,7 +12,7 @@ class CompiledModel(object):
         # these are set just before the models are executed
         self.tmp_drop_type = None
         self.final_drop_type = None
-        self.target = None
+        self.profile = None
 
         self.skip = False
         self._contents = None
@@ -76,12 +76,12 @@ class CompiledModel(object):
 
     @property
     def schema(self):
-        if self.target is None:
+        if self.profile is None:
             raise RuntimeError(
-                "`target` not set in compiled model {}".format(self)
+                "`profile` not set in compiled model {}".format(self)
             )
         else:
-            return self.target.schema
+            return get_adapter(self.profile).get_default_schema(self.profile)
 
     def should_execute(self, args, existing):
         if args.non_destructive and \
@@ -98,7 +98,7 @@ class CompiledModel(object):
         else:
             return self.materialization in ['table', 'view']
 
-    def prepare(self, existing, target):
+    def prepare(self, existing, profile):
         if self.materialization == 'incremental':
             tmp_drop_type = None
             final_drop_type = None
@@ -108,7 +108,7 @@ class CompiledModel(object):
 
         self.tmp_drop_type = tmp_drop_type
         self.final_drop_type = final_drop_type
-        self.target = target
+        self.profile = profile
 
     def __repr__(self):
         return "<CompiledModel {}.{}: {}>".format(
@@ -126,8 +126,8 @@ class CompiledTest(CompiledModel):
     def should_execute(self, args, existing):
         return True
 
-    def prepare(self, existing, target):
-        self.target = target
+    def prepare(self, existing, profile):
+        self.profile = profile
 
     def __repr__(self):
         return "<CompiledModel {}.{}: {}>".format(
@@ -145,8 +145,8 @@ class CompiledArchive(CompiledModel):
     def should_execute(self, args, existing):
         return True
 
-    def prepare(self, existing, target):
-        self.target = target
+    def prepare(self, existing, profile):
+        self.profile = profile
 
     def __repr__(self):
         return "<CompiledArchive {}.{}: {}>".format(

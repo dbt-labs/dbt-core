@@ -56,11 +56,15 @@ class BaseRunner(object):
     def __init__(self, project):
         self.project = project
 
+        self.profile = project.run_environment()
+        self.adapter = get_adapter(self.profile)
+
     def pre_run_msg(self, model):
         raise NotImplementedError("not implemented")
 
     def skip_msg(self, model):
-        return "SKIP relation {}.{}".format(model.target.schema, model.name)
+        return "SKIP relation {}.{}".format(
+            self.adapter.get_default_schema(self.profile), model.name)
 
     def post_run_msg(self, result):
         raise NotImplementedError("not implemented")
@@ -85,7 +89,7 @@ class ModelRunner(BaseRunner):
 
     def pre_run_msg(self, model):
         print_vars = {
-            "schema": model.target.schema,
+            "schema": self.adapter.get_default_schema(self.profile),
             "model_name": model.name,
             "model_type": model.materialization,
             "info": "START"
@@ -98,7 +102,7 @@ class ModelRunner(BaseRunner):
     def post_run_msg(self, result):
         model = result.model
         print_vars = {
-            "schema": model.target.schema,
+            "schema": self.adapter.get_default_schema(self.profile),
             "model_name": model.name,
             "model_type": model.materialization,
             "info": "ERROR creating" if result.errored else "OK created"
@@ -118,9 +122,9 @@ class ModelRunner(BaseRunner):
     def status(self, result):
         return result.status
 
-    def execute(self, target, model):
-        adapter = get_adapter(target.target_type)
+    def execute(self, model):
         profile = self.project.run_environment()
+        adapter = get_adapter(profile)
 
         if model.tmp_drop_type is not None:
             if model.materialization == 'table' and \
@@ -180,8 +184,8 @@ class ModelRunner(BaseRunner):
 
         compiled_hooks = [compile_string(hook, ctx) for hook in hooks]
 
-        adapter = get_adapter(target.get('type'))
         profile = self.project.run_environment()
+        adapter = get_adapter(profile)
 
         adapter.execute_all(
             profile=profile,
@@ -204,13 +208,13 @@ class DryRunner(ModelRunner):
 
     def pre_run_msg(self, model):
         output = ("DRY-RUN model {schema}.{model_name} "
-                  .format(schema=model.target.schema, model_name=model.name))
+                  .format(schema=self.adapter.get_default_schema(self.profile), model_name=model.name))
         return output
 
     def post_run_msg(self, result):
         model = result.model
         output = ("DONE model {schema}.{model_name} "
-                  .format(schema=model.target.schema, model_name=model.name))
+                  .format(schema=self.adapter.get_default_schema(self.profile), model_name=model.name))
         return output
 
     def pre_run_all_msg(self, models):
@@ -221,16 +225,15 @@ class DryRunner(ModelRunner):
                 .format(get_timestamp(), len(results)))
 
     def post_run_all(self, models, results, context):
-        target = self.project.get_target()
-        adapter = get_adapter(target.get('type'))
         profile = self.project.run_environment()
+        adapter = get_adapter(profile)
 
         count_dropped = 0
         for result in results:
             if result.errored or result.skipped:
                 continue
             model = result.model
-            schema_name = model.target.schema
+            schema_name = self.adapter.get_default_schema(self.profile)
 
             relation_type = ('table' if model.materialization == 'incremental'
                              else 'view')
@@ -301,9 +304,9 @@ class TestRunner(ModelRunner):
 
         return info
 
-    def execute(self, target, model):
-        adapter = get_adapter(target.target_type)
+    def execute(self, model):
         profile = self.project.run_environment()
+        adapter = get_adapter(profile)
 
         _, cursor = adapter.execute_one(
             profile, model.compiled_contents, model.name)
@@ -330,7 +333,7 @@ class ArchiveRunner(BaseRunner):
 
     def pre_run_msg(self, model):
         print_vars = {
-            "schema": model.target.schema,
+            "schema": self.adapter.get_default_schema(self.profile),
             "model_name": model.name,
         }
 
@@ -341,7 +344,7 @@ class ArchiveRunner(BaseRunner):
     def post_run_msg(self, result):
         model = result.model
         print_vars = {
-            "schema": model.target.schema,
+            "schema": self.adapter.get_default_schema(self.profile),
             "model_name": model.name,
             "info": "ERROR archiving" if result.errored else "OK created"
         }
@@ -359,9 +362,9 @@ class ArchiveRunner(BaseRunner):
     def status(self, result):
         return result.status
 
-    def execute(self, target, model):
-        adapter = get_adapter(target.target_type)
+    def execute(self, model):
         profile = self.project.run_environment()
+        adapter = get_adapter(profile)
 
         status = adapter.execute_model(
             profile=profile,
@@ -377,12 +380,19 @@ class RunManager(object):
         self.graph_type = graph_type
         self.args = args
 
+        profile = self.project.run_environment()
+
+        # TODO validate the number of threads
+        if self.args.threads is None:
+            self.threads = profile.get('threads', 1)
+        else:
+            self.threads = self.args.threads
+
         self.target = dbt.targets.get_target(
             self.project.run_environment(),
             self.args.threads)
 
-        adapter = get_adapter(self.target.target_type)
-        profile = self.project.run_environment()
+        adapter = get_adapter(profile)
 
         def call_get_columns_in_table(schema_name, table_name):
             return adapter.get_columns_in_table(
@@ -418,7 +428,7 @@ class RunManager(object):
     def execute_model(self, runner, model):
         logger.debug("executing model %s", model)
 
-        result = runner.execute(self.target, model)
+        result = runner.execute(model)
         return result
 
     def safe_execute_model(self, data):
@@ -456,6 +466,9 @@ class RunManager(object):
 
     def as_concurrent_dep_list(self, linker, models, existing, target,
                                limit_to):
+        profile = self.project.run_environment()
+        adapter = get_adapter(profile)
+
         model_dependency_list = []
         dependency_list = linker.as_dependency_list(limit_to)
         for node_list in dependency_list:
@@ -466,7 +479,7 @@ class RunManager(object):
                 except RuntimeError as e:
                     continue
                 if model.should_execute(self.args, existing):
-                    model.prepare(existing, target)
+                    model.prepare(existing, adapter)
                     level.append(model)
             model_dependency_list.append(level)
         return model_dependency_list
@@ -509,7 +522,7 @@ class RunManager(object):
                             self.target_path))
             return []
 
-        num_threads = self.target.threads
+        num_threads = self.threads
         logger.info("Concurrency: {} threads (target='{}')".format(
             num_threads, self.project.get_target().get('name'))
         )
@@ -540,7 +553,7 @@ class RunManager(object):
             models_to_execute = [model for model in model_list
                                  if not model.should_skip()]
 
-            threads = self.target.threads
+            threads = self.threads
             num_models_this_batch = len(models_to_execute)
             model_index = 0
 
@@ -625,13 +638,10 @@ class RunManager(object):
                 context.update(m.context())
                 m.compile(context)
 
-        schema_name = self.target.schema
-
-        # TODO change this
-        logger.info("Connecting to redshift")
-
-        adapter = get_adapter(self.target.target_type)
         profile = self.project.run_environment()
+        adapter = get_adapter(profile)
+
+        schema_name = adapter.get_default_schema(profile)
 
         try:
             adapter.create_schema(profile, schema_name)
@@ -670,13 +680,10 @@ class RunManager(object):
         compiled_models = [make_compiled_model(fqn, linker.get_node(fqn))
                            for fqn in linker.nodes()]
 
-        schema_name = self.target.schema
-
-        # TODO change this
-        logger.info("Connecting to redshift")
-
-        adapter = get_adapter(self.target.target_type)
         profile = self.project.run_environment()
+        adapter = get_adapter(profile)
+
+        schema_name = adapter.get_default_schema(profile)
 
         try:
             adapter.create_schema(profile, schema_name)

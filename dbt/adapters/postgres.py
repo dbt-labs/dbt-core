@@ -197,6 +197,15 @@ class PostgresAdapter:
             sql, connection, table)
 
     @classmethod
+    def get_default_schema(cls, profile):
+        connection = cls.get_connection(profile)
+
+        if flags.STRICT_MODE:
+            validate_connection(connection)
+
+        return connection.get('credentials', {}).get('schema')
+
+    @classmethod
     def drop(cls, profile, relation, relation_type, model_name=None):
         if relation_type == 'view':
             return cls.drop_view(profile, relation, model_name)

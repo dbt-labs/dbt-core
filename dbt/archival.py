@@ -1,5 +1,4 @@
 from __future__ import print_function
-import dbt.targets
 import dbt.schema
 import dbt.templates
 import jinja2
@@ -12,8 +11,6 @@ class Archival(object):
         self.archive_model = archive_model
         self.project = project
 
-        self.target = dbt.targets.get_target(self.project.run_environment())
-
     def compile(self):
         source_schema = self.archive_model.source_schema
         target_schema = self.archive_model.target_schema
@@ -22,8 +19,8 @@ class Archival(object):
         unique_key = self.archive_model.unique_key
         updated_at = self.archive_model.updated_at
 
-        adapter = get_adapter(self.target.target_type)
         profile = self.project.run_environment()
+        adapter = get_adapter(profile)
 
         adapter.create_schema(profile, target_schema)
 
