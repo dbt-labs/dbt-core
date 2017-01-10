@@ -4,7 +4,7 @@ import os, shutil
 import yaml
 import time
 
-from test.integration.connection import handle
+from dbt.adapters.factory import get_adapter
 
 DBT_CONFIG_DIR = os.path.expanduser(os.environ.get("DBT_CONFIG_DIR", '/root/.dbt'))
 DBT_PROFILES = os.path.join(DBT_CONFIG_DIR, 'profiles.yml')
@@ -39,7 +39,7 @@ class DBTIntegrationTest(unittest.TestCase):
                         'schema': self.schema
                     }
                 },
-                'run-target': 'default2'
+                'target': 'default2'
             }
         }
 
@@ -71,7 +71,7 @@ class DBTIntegrationTest(unittest.TestCase):
                         'warehouse': 'FISHTOWN_ANALYTICS'
                     }
                 },
-                'run-target': 'default2'
+                'target': 'default2'
             }
         }
 
@@ -112,8 +112,23 @@ class DBTIntegrationTest(unittest.TestCase):
         with open(DBT_PROFILES, 'w') as f:
             yaml.safe_dump(profile_config, f, default_flow_style=True)
 
-        self.run_sql("DROP SCHEMA IF EXISTS {} CASCADE;".format(self.schema))
-        self.run_sql("CREATE SCHEMA {};".format(self.schema))
+        target = profile_config.get('test').get('target')
+
+        if target is None:
+            target = profile_config.get('test').get('run-target')
+
+        profile = profile_config.get('test').get('outputs').get(target)
+
+        adapter = get_adapter(profile)
+
+        # it's important to use a different connection handle here so
+        # we don't look into an incomplete transaction
+        connection = adapter.acquire_connection(profile)
+        self.handle = connection.get('handle')
+        self.adapter_type = profile.get('type')
+
+        self.run_sql('DROP SCHEMA IF EXISTS "{}" CASCADE'.format(self.schema))
+        self.run_sql('CREATE SCHEMA "{}"'.format(self.schema))
 
     def use_default_project(self):
         # create a dbt_project.yml
@@ -145,8 +160,17 @@ class DBTIntegrationTest(unittest.TestCase):
         with open(DBT_PROFILES, 'w') as f:
             yaml.safe_dump(profile_config, f, default_flow_style=True)
 
-        self.run_sql("DROP SCHEMA IF EXISTS {} CASCADE;".format(self.schema))
-        self.run_sql("CREATE SCHEMA {};".format(self.schema))
+        profile = profile_config.get('test').get('outputs').get('default2')
+        adapter = get_adapter(profile)
+
+        # it's important to use a different connection handle here so
+        # we don't look into an incomplete transaction
+        connection = adapter.acquire_connection(profile)
+        self.handle = connection.get('handle')
+        self.adapter_type = profile.get('type')
+
+        self.run_sql('DROP SCHEMA IF EXISTS "{}" CASCADE'.format(self.schema))
+        self.run_sql('CREATE SCHEMA "{}"'.format(self.schema))
 
     def tearDown(self):
         os.remove(DBT_PROFILES)
@@ -177,21 +201,38 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def run_sql_file(self, path):
         with open(path, 'r') as f:
-            return self.run_sql(f.read())
+            statements = f.read().split(";")
+            for statement in statements:
+                self.run_sql(statement)
 
-    def run_sql(self, query, fetch='all'):
-        with handle.cursor() as cursor:
+    # horrible hack to support snowflake for right now
+    def transform_sql(self, query):
+        to_return = query
+
+        if self.adapter_type == 'snowflake':
+            to_return = to_return.replace("BIGSERIAL", "BIGINT AUTOINCREMENT")
+
+        return to_return
+
+    def run_sql(self, query, fetch='None'):
+        if query.strip() == "":
+            return
+
+        with self.handle.cursor() as cursor:
             try:
-                cursor.execute(query)
-                handle.commit()
+                cursor.execute(self.transform_sql(query))
+                self.handle.commit()
                 if fetch == 'one':
-                    output = cursor.fetchone()
+                    return cursor.fetchone()
+                elif fetch == 'all':
+                    return cursor.fetchall()
                 else:
-                    output = cursor.fetchall()
-                return output
+                    return
             except BaseException as e:
-                handle.rollback()
+                self.handle.rollback()
+                print(query)
                 print(e)
+                raise e
 
     def get_table_columns(self, table):
         sql = """
@@ -201,7 +242,7 @@ class DBTIntegrationTest(unittest.TestCase):
                 and table_schema = '{}'
                 order by column_name asc"""
 
-        result = self.run_sql(sql.format(table, self.schema))
+        result = self.run_sql(sql.format(table, self.schema), fetch='all')
 
         return result
 
@@ -217,7 +258,7 @@ class DBTIntegrationTest(unittest.TestCase):
                 order by table_name
                 """
 
-        result = self.run_sql(sql.format(self.schema))
+        result = self.run_sql(sql.format(self.schema), fetch='all')
 
         return {model_name: materialization for (model_name, materialization) in result}
 
@@ -232,10 +273,10 @@ class DBTIntegrationTest(unittest.TestCase):
 
         sql = """
             SELECT COUNT(*) FROM (
-                (SELECT {columns} FROM {schema}.{table_a} EXCEPT SELECT {columns} FROM {schema}.{table_b})
+                (SELECT {columns} FROM "{schema}"."{table_a}" EXCEPT SELECT {columns} FROM "{schema}"."{table_b}")
                  UNION ALL
-                (SELECT {columns} FROM {schema}.{table_b} EXCEPT SELECT {columns} FROM {schema}.{table_a})
-            ) AS _""".format(
+                (SELECT {columns} FROM "{schema}"."{table_b}" EXCEPT SELECT {columns} FROM "{schema}"."{table_a}")
+            ) AS a""".format(
                 columns=columns_csv,
                 schema=self.schema,
                 table_a=table_a,
@@ -247,12 +288,12 @@ class DBTIntegrationTest(unittest.TestCase):
         self.assertEquals(
             result[0],
             0,
-            "{} rows had mismatches."
+            sql
         )
 
     def assertTableRowCountsEqual(self, table_a, table_b):
-        table_a_result = self.run_sql("SELECT COUNT(*) FROM {}.{}".format(self.schema, table_a), fetch='one')
-        table_b_result = self.run_sql("SELECT COUNT(*) FROM {}.{}".format(self.schema, table_b), fetch='one')
+        table_a_result = self.run_sql('SELECT COUNT(*) FROM "{}"."{}"'.format(self.schema, table_a), fetch='one')
+        table_b_result = self.run_sql('SELECT COUNT(*) FROM "{}"."{}"'.format(self.schema, table_b), fetch='one')
 
         self.assertEquals(
             table_a_result[0],

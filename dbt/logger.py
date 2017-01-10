@@ -2,10 +2,11 @@ import logging
 import sys
 
 # disable logs from other modules, excepting ERROR logs
+logging.getLogger('botocore').setLevel(logging.ERROR)
 logging.getLogger('contracts').setLevel(logging.ERROR)
 logging.getLogger('requests').setLevel(logging.ERROR)
 logging.getLogger('urllib3').setLevel(logging.ERROR)
-
+logging.getLogger('snowflake.connector').setLevel(logging.ERROR)
 
 # create a global console logger for dbt
 handler = logging.StreamHandler(sys.stdout)

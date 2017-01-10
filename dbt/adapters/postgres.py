@@ -34,7 +34,7 @@ schema."""
 
 
 @contextmanager
-def exception_handler(connection, cursor, model_name):
+def exception_handler(connection, cursor, model_name, query):
     handle = connection.get('handle')
     schema = connection.get('credentials', {}).get('schema')
 
@@ -61,6 +61,10 @@ def exception_handler(connection, cursor, model_name):
 
 
 class PostgresAdapter:
+
+    # TODO: wrap sql-related things into the adapter rather than having
+    #       the compiler call this to get the context
+    date_function = 'datenow()'
 
     @classmethod
     def acquire_connection(cls, profile):
@@ -317,7 +321,7 @@ class PostgresAdapter:
                     part, connection, model.name)
 
         handle.commit()
-        return cursor.statusmessage
+        return cls.get_status(cursor)
 
     @classmethod
     def get_missing_columns(cls, profile,
@@ -396,10 +400,11 @@ class PostgresAdapter:
                              to_table)
 
                 cls.alter_column_type(
-                    to_schema, to_table, column_name, new_type)
+                    connection, to_schema, to_table, column_name, new_type)
 
     @classmethod
-    def alter_column_type(cls, schema, table, column_name, new_column_type):
+    def alter_column_type(cls, connection,
+                          schema, table, column_name, new_column_type):
         """
         1. Create a new column (w/ temp name and correct type)
         2. Copy data over to it
@@ -425,9 +430,9 @@ class PostgresAdapter:
         # TODO this is clearly broken, connection isn't available here.
         #      for some reason it doesn't break the integration test though
         handle, cursor = cls.add_query_to_transaction(
-            query, connection, model_name)
+            query, connection, table)
 
-        return cursor.statusmessage
+        return cls.get_status(cursor)
 
     @classmethod
     def table_exists(cls, profile, schema, table):
@@ -474,7 +479,7 @@ class PostgresAdapter:
             handle, cursor = cls.add_query_to_transaction(
                 query, connection, model_name)
 
-        return cursor.statusmessage
+        return cls.get_status(cursor)
 
     @classmethod
     def execute_one(cls, profile, query, model_name=None):
@@ -498,17 +503,21 @@ class PostgresAdapter:
         handle = connection.get('handle')
         handle.commit()
 
-    @staticmethod
-    def add_query_to_transaction(query, connection, model_name=None):
+    @classmethod
+    def get_status(cls, cursor):
+        return cursor.statusmessage
+
+    @classmethod
+    def add_query_to_transaction(cls, query, connection, model_name=None):
         handle = connection.get('handle')
         cursor = handle.cursor()
 
-        with exception_handler(connection, cursor, model_name):
+        with exception_handler(connection, cursor, model_name, query):
             logger.debug("SQL: %s", query)
             pre = time.time()
             cursor.execute(query)
             post = time.time()
             logger.debug(
                 "SQL status: %s in %0.2f seconds",
-                cursor.statusmessage, post-pre)
+                cls.get_status(cursor), post-pre)
             return handle, cursor

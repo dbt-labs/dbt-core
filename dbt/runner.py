@@ -388,10 +388,6 @@ class RunManager(object):
         else:
             self.threads = self.args.threads
 
-        self.target = dbt.targets.get_target(
-            self.project.run_environment(),
-            self.args.threads)
-
         adapter = get_adapter(profile)
 
         def call_get_columns_in_table(schema_name, table_name):
@@ -464,7 +460,7 @@ class RunManager(object):
                               status=status,
                               execution_time=execution_time)
 
-    def as_concurrent_dep_list(self, linker, models, existing, target,
+    def as_concurrent_dep_list(self, linker, models, existing,
                                limit_to):
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
@@ -664,7 +660,6 @@ class RunManager(object):
             linker,
             relevant_compiled_models,
             existing,
-            self.target,
             specified_models
         )
 

@@ -13,9 +13,9 @@ from dbt.utils import find_model_by_fqn, find_model_by_name, \
 
 from dbt.linker import Linker
 from dbt.runtime import RuntimeContext
-import dbt.targets
 import dbt.templates
 
+from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
 
 CompilableEntities = [
@@ -43,7 +43,6 @@ class Compiler(object):
         self.project.args = args
 
         self.macro_generator = None
-        self.target = self.get_target()
 
     def initialize(self):
         if not os.path.exists(self.project['target-path']):
@@ -51,10 +50,6 @@ class Compiler(object):
 
         if not os.path.exists(self.project['modules-path']):
             os.makedirs(self.project['modules-path'])
-
-    def get_target(self):
-        target_cfg = self.project.run_environment()
-        return dbt.targets.get_target(target_cfg)
 
     def model_sources(self, this_project, own_project=None):
         if own_project is None:
@@ -254,8 +249,8 @@ class Compiler(object):
         context['run_started_at'] = '{{ run_started_at }}'
         context['invocation_id'] = '{{ invocation_id }}'
 
-        # add in context from run target
-        context.update(self.target.context)
+        adapter = get_adapter(self.project.run_environment())
+        context['sql_now'] = adapter.date_function
 
         runtime.update_global(context)
 

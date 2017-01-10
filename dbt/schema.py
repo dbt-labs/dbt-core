@@ -56,7 +56,7 @@ class Column(object):
             return self.dtype
 
     def is_string(self):
-        return self.dtype in ['text', 'character varying']
+        return self.dtype.lower() in ['text', 'character varying']
 
     def string_size(self):
         if not self.is_string():

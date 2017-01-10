@@ -1,4 +1,7 @@
 import copy
+import re
+import time
+import yaml
 
 import snowflake.connector
 import snowflake.connector.errors
@@ -15,19 +18,23 @@ connection_cache = {}
 
 
 @contextmanager
-def exception_handler(connection, cursor, model_name):
+def exception_handler(connection, cursor, model_name, query):
     handle = connection.get('handle')
     schema = connection.get('credentials', {}).get('schema')
 
     try:
         yield
+    except snowflake.connector.errors.ProgrammingError as e:
+        if 'Empty SQL statement' in e.msg:
+            logger.debug("got empty sql statement, moving on")
+        else:
+            handle.rollback()
+            raise e
     except Exception as e:
         handle.rollback()
-        logger.exception("Error running SQL: %s", sql)
+        logger.exception("Error running SQL: %s", query)
         logger.debug("rolling back connection")
         raise e
-    finally:
-        cursor.close()
 
 
 class SnowflakeAdapter(PostgresAdapter):
@@ -98,3 +105,123 @@ class SnowflakeAdapter(PostgresAdapter):
             result['state'] = 'fail'
 
         return result
+
+    @classmethod
+    def query_for_existing(cls, profile, schema):
+        query = """
+        select TABLE_NAME as name, TABLE_TYPE as type
+        from INFORMATION_SCHEMA.TABLES
+        where TABLE_SCHEMA = '{schema}'
+        """.format(schema=schema).strip()  # noqa
+
+        connection = cls.get_connection(profile)
+
+        if flags.STRICT_MODE:
+            validate_connection(connection)
+
+        _, cursor = cls.add_query_to_transaction(
+            query, connection, schema)
+        results = cursor.fetchall()
+
+        relation_type_lookup = {
+            'BASE TABLE': 'table',
+            'VIEW': 'view'
+        }
+
+        existing = [(name, relation_type_lookup.get(relation_type))
+                    for (name, relation_type) in results]
+
+        return dict(existing)
+
+    @classmethod
+    def get_status(cls, cursor):
+        return cursor.sqlstate
+
+    @classmethod
+    def rename(cls, profile, from_name, to_name, model_name=None):
+        connection = cls.get_connection(profile)
+
+        if flags.STRICT_MODE:
+            validate_connection(connection)
+
+        schema = connection.get('credentials', {}).get('schema')
+
+        # in snowflake, if you fail to include the quoted schema in the
+        # identifier, the new table will have `schema.upper()` as its new
+        # schema
+        query = ('''
+        alter table "{schema}"."{from_name}"
+        rename to "{schema}"."{to_name}"
+        '''.format(
+            schema=schema,
+            from_name=from_name,
+            to_name=to_name)).strip()
+
+        handle, cursor = cls.add_query_to_transaction(
+            query, connection, model_name)
+
+    @classmethod
+    def execute_model(cls, profile, model):
+        parts = re.split(r'-- (DBT_OPERATION .*)', model.compiled_contents)
+        connection = cls.get_connection(profile)
+
+        if flags.STRICT_MODE:
+            validate_connection(connection)
+
+        # snowflake requires a schema to be specified for temporary tables
+        # TODO setup templates to be adapter-specific. then we can just use
+        #      the existing schema for temp tables.
+        cls.add_query_to_transaction(
+            'USE SCHEMA "{}"'.format(connection.get('credentials', {}).get('schema')),
+            connection)
+
+        status = 'None'
+        for i, part in enumerate(parts):
+            matches = re.match(r'^DBT_OPERATION ({.*})$', part)
+            if matches is not None:
+                instruction_string = matches.groups()[0]
+                instruction = yaml.safe_load(instruction_string)
+                function = instruction['function']
+                kwargs = instruction['args']
+
+                def call_expand_target_column_types(kwargs):
+                    kwargs.update({'profile': profile})
+                    return cls.expand_target_column_types(**kwargs)
+
+                func_map = {
+                    'expand_column_types_if_needed':
+                    call_expand_target_column_types
+                }
+
+                func_map[function](kwargs)
+            else:
+                handle, cursor = cls.add_query_to_transaction(
+                    part, connection, model.name)
+
+        handle.commit()
+        return cls.get_status(cursor)
+
+    @classmethod
+    def add_query_to_transaction(cls, query, connection, model_name=None):
+        handle = connection.get('handle')
+        cursor = handle.cursor()
+
+        # snowflake only allows one query per api call.
+        queries = query.strip().split(";")
+
+        for individual_query in queries:
+            logger.info("QUERY: '{}'".format(individual_query))
+            if individual_query.strip() == "":
+                continue
+
+            with exception_handler(connection, cursor,
+                                   model_name, individual_query):
+                logger.debug("SQL: %s", individual_query)
+                pre = time.time()
+                cursor.execute(individual_query)
+                post = time.time()
+                logger.debug(
+                    "SQL status: %s in %0.2f seconds",
+                    cls.get_status(cursor), post-pre)
+
+        return handle, cursor

@@ -75,7 +75,7 @@ class TestPrePostRunHooks(DBTIntegrationTest):
         field_list = ", ".join(['"{}"'.format(f) for f in self.fields])
         query = "select {field_list} from {schema}.on_run_hook where state = '{state}'".format(field_list=field_list, schema=self.schema, state=state)
 
-        vals = self.run_sql(query)
+        vals = self.run_sql(query, fetch='all')
         self.assertFalse(len(vals) == 0, 'nothing inserted into on_run_hook table')
         ctx = dict([(k,v) for (k,v) in zip(self.fields, vals[0])])
 
@@ -99,4 +99,3 @@ class TestPrePostRunHooks(DBTIntegrationTest):
 
         self.assertTrue(ctx['run_started_at'] is not None and len(ctx['run_started_at']) > 0, 'run_started_at was not set')
         self.assertTrue(ctx['invocation_id'] is not None and len(ctx['invocation_id']) > 0, 'invocation_id was not set')
-
