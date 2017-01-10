@@ -19,9 +19,11 @@ logger.setLevel(logging.DEBUG)
 
 initialized = False
 
+
 def make_log_dir_if_missing(log_dir):
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
+
 
 def initialize_logger(debug_mode=False, path=None):
     global initialized, logger, stdout_handler
