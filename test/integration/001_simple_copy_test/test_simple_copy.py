@@ -44,21 +44,21 @@ class TestSimpleCopy(DBTIntegrationTest):
         self.assertFalse('empty' in models.keys())
         self.assertFalse('disabled' in models.keys())
 
-    def test__snowflake__simple_copy(self):
-        self.use_default_project()
-        self.use_profile('snowflake')
-        self.run_sql_file("test/integration/001_simple_copy_test/seed.sql")
+    # def test__snowflake__simple_copy(self):
+    #     self.use_default_project()
+    #     self.use_profile('snowflake')
+    #     self.run_sql_file("test/integration/001_simple_copy_test/seed.sql")
 
-        self.run_dbt()
+    #     self.run_dbt()
 
-        self.assertTablesEqual("seed","view")
-        self.assertTablesEqual("seed","incremental")
-        self.assertTablesEqual("seed","materialized")
+    #     self.assertTablesEqual("seed","view")
+    #     self.assertTablesEqual("seed","incremental")
+    #     self.assertTablesEqual("seed","materialized")
 
-        self.run_sql_file("test/integration/001_simple_copy_test/update.sql")
+    #     self.run_sql_file("test/integration/001_simple_copy_test/update.sql")
 
-        self.run_dbt()
+    #     self.run_dbt()
 
-        self.assertTablesEqual("seed","view")
-        self.assertTablesEqual("seed","incremental")
-        self.assertTablesEqual("seed","materialized")
+    #     self.assertTablesEqual("seed","view")
+    #     self.assertTablesEqual("seed","incremental")
+    #     self.assertTablesEqual("seed","materialized")

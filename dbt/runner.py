@@ -81,33 +81,6 @@ class BaseRunner(object):
     def status(self, result):
         raise NotImplementedError("not implemented")
 
-    def execute_list(self, queries, source):
-        if len(queries) == 0:
-            return
-
-        handle = None
-
-        status = 'None'
-        for i, query in enumerate(queries):
-            try:
-                handle, status = self.schema_helper.execute_without_auto_commit(query, handle)  # noqa
-            except psycopg2.ProgrammingError as e:
-                error_msg = e.diag.message_primary
-                if error_msg is not None and \
-                   "permission denied for" in error_msg:
-                    raise RuntimeError(
-                        "Permission denied while running {}".format(source))
-                else:
-                    raise
-
-        handle.commit()
-        return status
-
-    def execute_contents(self, target, model):
-        return get_adapter(target).execute_model(
-            self.project, target, model)
-
-
 class ModelRunner(BaseRunner):
     run_type = 'run'
 
@@ -147,23 +120,26 @@ class ModelRunner(BaseRunner):
         return result.status
 
     def execute(self, target, model):
-        adapter = get_adapter(target)
+        adapter = get_adapter(target.target_type)
+        profile = self.project.run_environment()
 
         if model.tmp_drop_type is not None:
             if model.materialization == 'table' and \
                self.project.args.non_destructive:
                 adapter.truncate(
-                    profile=self.project.run_environment(),
+                    profile=profile,
                     table=model.tmp_name,
                     model_name=model.name)
             else:
                 adapter.drop(
-                    profile=self.project.run_environment(),
+                    profile=profile,
                     relation=model.tmp_name,
                     relation_type=model.tmp_drop_type,
                     model_name=model.name)
 
-        status = self.execute_contents(target, model)
+        status = adapter.execute_model(
+            profile=profile,
+            model=model)
 
         if model.final_drop_type is not None:
             if model.materialization == 'table' and \
@@ -173,20 +149,20 @@ class ModelRunner(BaseRunner):
                 pass
             else:
                 adapter.drop(
-                    profile=self.project.run_environment(),
+                    profile=profile,
                     relation=model.name,
                     relation_type=model.final_drop_type,
                     model_name=model.name)
 
         if model.should_rename(self.project.args):
             adapter.rename(
-                profile=self.project.run_environment(),
+                profile=profile,
                 from_name=model.tmp_name,
                 to_name=model.name,
                 model_name=model.name)
 
         adapter.commit(
-            profile=self.project.run_environment())
+            profile=profile)
 
         return status
 
@@ -194,15 +170,24 @@ class ModelRunner(BaseRunner):
         if type(hooks) not in (list, tuple):
             hooks = [hooks]
 
+        target = self.project.get_target()
+
         ctx = {
-            "target": self.project.get_target(),
+            "target": target,
             "state": "start",
             "invocation_id": context['invocation_id'],
             "run_started_at": context['run_started_at']
         }
 
         compiled_hooks = [compile_string(hook, ctx) for hook in hooks]
-        self.execute_list(compiled_hooks, source)
+
+        adapter = get_adapter(target.get('type'))
+        profile = self.project.run_environment()
+
+        adapter.execute_all(
+            profile=profile,
+            queries=compiled_hooks,
+            model_name=source)
 
     def pre_run_all(self, models, context):
         hooks = self.project.cfg.get('on-run-start', [])
@@ -235,6 +220,10 @@ class DryRunner(ModelRunner):
                 .format(get_timestamp(), len(results)))
 
     def post_run_all(self, models, results, context):
+        target = self.project.get_target()
+        adapter = get_adapter(target.get('type'))
+        profile = self.project.run_environment()
+
         count_dropped = 0
         for result in results:
             if result.errored or result.skipped:
@@ -244,8 +233,10 @@ class DryRunner(ModelRunner):
 
             relation_type = ('table' if model.materialization == 'incremental'
                              else 'view')
-            self.schema_helper.drop(schema_name, relation_type, model.name)
+            adapter.drop(profile, model.name, relation_type, model.name)
             count_dropped += 1
+
+        adapter.commit(profile)
         logger.info("Dropped {} dry-run models".format(count_dropped))
 
 
@@ -360,7 +351,13 @@ class ArchiveRunner(BaseRunner):
         return result.status
 
     def execute(self, target, model):
-        status = self.execute_contents(target, model)
+        adapter = get_adapter(target.target_type)
+        profile = self.project.run_environment()
+
+        status = adapter.execute_model(
+            profile=profile,
+            model=model)
+
         return status
 
 
@@ -375,21 +372,31 @@ class RunManager(object):
             self.project.run_environment(),
             self.args.threads)
 
-        if self.target.should_open_tunnel():
-            logger.info("Opening ssh tunnel to host {}... "
-                        .format(self.target.ssh_host), end="")
-            sys.stdout.flush()
-            self.target.open_tunnel_if_needed()
-            logger.info("Connected")
-
         self.schema = dbt.schema.Schema(self.project, self.target)
+
+        adapter = get_adapter(self.target.target_type)
+        profile = self.project.run_environment()
+
+        def call_get_columns_in_table(schema_name, table_name):
+            return adapter.get_columns_in_table(
+                profile, schema_name, table_name)
+
+        def call_get_missing_columns(from_schema, from_table,
+                                     to_schema, to_table):
+            return adapter.get_missing_columns(
+                profile, from_schema, from_table,
+                to_schema, to_table)
+
+        def call_table_exists(schema, table):
+            return adapter.table_exists(
+                profile, schema, table)
 
         self.context = {
             "run_started_at": datetime.now(),
             "invocation_id": dbt.tracking.invocation_id,
-            "get_columns_in_table": self.schema.get_columns_in_table,
-            "get_missing_columns": self.schema.get_missing_columns,
-            "already_exists": self.schema.table_exists,
+            "get_columns_in_table": call_get_columns_in_table,
+            "get_missing_columns": call_get_missing_columns,
+            "already_exists": call_table_exists,
         }
 
     def deserialize_graph(self):
@@ -613,16 +620,21 @@ class RunManager(object):
 
         schema_name = self.target.schema
 
+        # TODO change this
         logger.info("Connecting to redshift")
+
+        adapter = get_adapter(self.target.target_type)
+        profile = self.project.run_environment()
+
         try:
-            self.schema.create_schema_if_not_exists(schema_name)
+            adapter.create_schema(profile, schema_name)
         except psycopg2.OperationalError as e:
             logger.info("ERROR: Could not connect to the target database. Try"
                         "`dbt debug` for more information")
             logger.info(str(e))
             sys.exit(1)
 
-        existing = self.schema.query_for_existing(schema_name)
+        existing = adapter.query_for_existing(profile, schema_name)
 
         if limit_to is None:
             specified_models = None
@@ -646,18 +658,6 @@ class RunManager(object):
 
         return results
 
-    def safe_run_from_graph(self, *args, **kwargs):
-        try:
-            return self.run_from_graph(*args, **kwargs)
-        except:
-            raise
-        finally:
-            if self.target.should_open_tunnel():
-                logger.info("Closing SSH tunnel... ", end="")
-                sys.stdout.flush()
-                self.target.cleanup()
-                logger.info("Done")
-
     def run_tests_from_graph(self, test_schemas, test_data):
         linker = self.deserialize_graph()
         compiled_models = [make_compiled_model(fqn, linker.get_node(fqn))
@@ -665,9 +665,14 @@ class RunManager(object):
 
         schema_name = self.target.schema
 
+        # TODO change this
         logger.info("Connecting to redshift")
+
+        adapter = get_adapter(self.target.target_type)
+        profile = self.project.run_environment()
+
         try:
-            self.schema.create_schema_if_not_exists(schema_name)
+            adapter.create_schema(profile, schema_name)
         except psycopg2.OperationalError as e:
             logger.info("ERROR: Could not connect to the target database. Try "
                         "`dbt debug` for more information")
@@ -710,12 +715,12 @@ class RunManager(object):
 
     def run(self, limit_to=None):
         runner = ModelRunner(self.project, self.schema)
-        return self.safe_run_from_graph(runner, limit_to)
+        return self.run_from_graph(runner, limit_to)
 
     def dry_run(self, limit_to=None):
         runner = DryRunner(self.project, self.schema)
-        return self.safe_run_from_graph(runner, limit_to)
+        return self.run_from_graph(runner, limit_to)
 
     def run_archive(self):
         runner = ArchiveRunner(self.project, self.schema)
-        return self.safe_run_from_graph(runner, None)
+        return self.run_from_graph(runner, None)

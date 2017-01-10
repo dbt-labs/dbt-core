@@ -10,7 +10,9 @@ import dbt.flags as flags
 
 from dbt.contracts.connection import validate_connection
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.schema import Schema, READ_PERMISSION_DENIED_ERROR
+from dbt.schema import Column, READ_PERMISSION_DENIED_ERROR
+
+# TODO close cursors somewhere
 
 connection_cache = {}
 
@@ -53,11 +55,9 @@ def exception_handler(connection, cursor, model_name):
             raise e
     except Exception as e:
         handle.rollback()
-        logger.exception("Error running SQL: %s", sql)
+        logger.exception("Error running SQL: %s", query)
         logger.debug("rolling back connection")
         raise e
-    finally:
-        cursor.close()
 
 
 class PostgresAdapter:
@@ -146,17 +146,17 @@ class PostgresAdapter:
         return result
 
     @classmethod
-    def create_schema(cls, profile, schema):
+    def create_schema(cls, profile, schema, model_name=None):
         connection = cls.get_connection(profile)
 
         if flags.STRICT_MODE:
             validate_connection(connection)
 
-        sql = ('create_schema_if_not_exists "{schema}"'
+        query = ('create schema if not exists "{schema}"'
                .format(schema=schema))
 
-        handle, status = cls.add_query_to_transaction(
-            sql, connection, model_name)
+        handle, cursor = cls.add_query_to_transaction(
+            query, connection, model_name)
 
     @staticmethod
     def create_table():
@@ -182,13 +182,13 @@ class PostgresAdapter:
 
         schema = connection.get('credentials', {}).get('schema')
 
-        sql = ('drop view if exists "{schema}"."{view}" cascade'
+        query = ('drop view if exists "{schema}"."{view}" cascade'
                .format(
                    schema=schema,
                    view=view))
 
-        handle, status = cls.add_query_to_transaction(
-            sql, connection, model_name)
+        handle, cursor = cls.add_query_to_transaction(
+            query, connection, model_name)
 
     @classmethod
     def drop_table(cls, profile, table, model_name):
@@ -199,13 +199,13 @@ class PostgresAdapter:
 
         schema = connection.get('credentials', {}).get('schema')
 
-        sql = ('drop table if exists "{schema}"."{table}" cascade'
+        query = ('drop table if exists "{schema}"."{table}" cascade'
                .format(
                    schema=schema,
                    table=table))
 
-        handle, status = cls.add_query_to_transaction(
-            sql, connection, model_name)
+        handle, cursor = cls.add_query_to_transaction(
+            query, connection, model_name)
 
     @classmethod
     def truncate(cls, profile, table, model_name=None):
@@ -216,13 +216,13 @@ class PostgresAdapter:
 
         schema = connection.get('credentials', {}).get('schema')
 
-        sql = ('truncate table "{schema}"."{table}"'
+        query = ('truncate table "{schema}"."{table}"'
                .format(
                    schema=schema,
                    table=table))
 
-        handle, status = cls.add_query_to_transaction(
-            sql, connection, model_name)
+        handle, cursor = cls.add_query_to_transaction(
+            query, connection, model_name)
 
     @classmethod
     def rename(cls, profile, from_name, to_name, model_name=None):
@@ -233,20 +233,18 @@ class PostgresAdapter:
 
         schema = connection.get('credentials', {}).get('schema')
 
-        sql = ('alter table "{schema}"."{from_name}" rename to "{to_name}"'
+        query = ('alter table "{schema}"."{from_name}" rename to "{to_name}"'
                .format(
                    schema=schema,
                    from_name=from_name,
                    to_name=to_name))
 
-        handle, status = cls.add_query_to_transaction(
-            sql, connection, model_name)
+        handle, cursor = cls.add_query_to_transaction(
+            query, connection, model_name)
 
     @classmethod
-    def execute_model(cls, project, target, model):
-        schema_helper = Schema(project, target)
+    def execute_model(cls, profile, model):
         parts = re.split(r'-- (DBT_OPERATION .*)', model.compiled_contents)
-        profile = project.run_environment()
         connection = cls.get_connection(profile)
 
         if flags.STRICT_MODE:
@@ -261,19 +259,181 @@ class PostgresAdapter:
                 function = instruction['function']
                 kwargs = instruction['args']
 
+                def call_expand_target_column_types(kwargs):
+                    kwargs.update({'profile': profile})
+                    return cls.expand_target_column_types(**kwargs)
+
                 func_map = {
                     'expand_column_types_if_needed':
-                    lambda kwargs: schema_helper.expand_column_types_if_needed(
-                        **kwargs)
+                    call_expand_target_column_types
                 }
 
                 func_map[function](kwargs)
             else:
-                handle, status = cls.add_query_to_transaction(
+                handle, cursor = cls.add_query_to_transaction(
                     part, connection, model.name)
 
         handle.commit()
-        return status
+        return cursor.statusmessage
+
+    @classmethod
+    def get_missing_columns(cls, profile,
+                            from_schema, from_table,
+                            to_schema, to_table):
+        """Returns dict of {column:type} for columns in from_table that are
+        missing from to_table"""
+        from_columns = {col.name: col for col in
+                        cls.get_columns_in_table(
+                            profile, from_schema, from_table)}
+        to_columns = {col.name: col for col in
+                      cls.get_columns_in_table(
+                          profile, to_schema, to_table)}
+
+        missing_columns = set(from_columns.keys()) - set(to_columns.keys())
+
+        return [col for (col_name, col) in from_columns.items()
+                if col_name in missing_columns]
+
+    @classmethod
+    def get_columns_in_table(cls, profile, schema_name, table_name):
+        connection = cls.get_connection(profile)
+
+        if flags.STRICT_MODE:
+            validate_connection(connection)
+
+        query = """
+        select column_name, data_type, character_maximum_length
+        from information_schema.columns
+        where table_name = '{table_name}'
+        """.format(table_name=table_name).strip()
+
+        if schema_name is not None:
+            query += (" AND table_schema = '{schema_name}'"
+                    .format(schema_name=schema_name))
+
+        handle, cursor = cls.add_query_to_transaction(
+            query, connection, table_name)
+
+        data = cursor.fetchall()
+        columns = []
+
+        for row in data:
+            name, data_type, char_size = row
+            column = Column(name, data_type, char_size)
+            columns.append(column)
+
+        return columns
+
+    @classmethod
+    def expand_target_column_types(cls, profile,
+                                   temp_table,
+                                   to_schema, to_table):
+        connection = cls.get_connection(profile)
+
+        if flags.STRICT_MODE:
+            validate_connection(connection)
+
+        reference_columns = {col.name: col for col in
+                             cls.get_columns_in_table(
+                                 profile, None, temp_table)}
+        target_columns = {col.name: col for col in
+                          cls.get_columns_in_table(
+                              profile, to_schema, to_table)}
+
+        for column_name, reference_column in reference_columns.items():
+            target_column = target_columns.get(column_name)
+
+            if target_column is not None and \
+               target_column.can_expand_to(reference_column):
+                new_type = Column.string_type(reference_column.string_size())
+                logger.debug("Changing col type from %s to %s in table %s.%s",
+                             target_column.data_type,
+                             new_type,
+                             to_schema,
+                             to_table)
+
+                cls.alter_column_type(
+                    to_schema, to_table, column_name, new_type)
+
+    @classmethod
+    def alter_column_type(cls, schema, table, column_name, new_column_type):
+        """
+        1. Create a new column (w/ temp name and correct type)
+        2. Copy data over to it
+        3. Drop the existing column (cascade!)
+        4. Rename the new column to existing column
+        """
+
+        opts = {
+            "schema": schema,
+            "table": table,
+            "old_column": column_name,
+            "tmp_column": "{}__dbt_alter".format(column_name),
+            "dtype": new_column_type
+        }
+
+        query = """
+        alter table "{schema}"."{table}" add column "{tmp_column}" {dtype};
+        update "{schema}"."{table}" set "{tmp_column}" = "{old_column}";
+        alter table "{schema}"."{table}" drop column "{old_column}" cascade;
+        alter table "{schema}"."{table}" rename column "{tmp_column}" to "{old_column}";
+        """.format(**opts).strip()  # noqa
+
+        # TODO this is clearly broken, connection isn't available here.
+        #      for some reason it doesn't break the integration test though
+        handle, cursor = cls.add_query_to_transaction(
+            query, connection, model_name)
+
+        return cursor.statusmessage
+
+    @classmethod
+    def table_exists(cls, profile, schema, table):
+        tables = cls.query_for_existing(profile, schema)
+        exists = tables.get(table) is not None
+        return exists
+
+    @classmethod
+    def query_for_existing(cls, profile, schema):
+        query = """
+        select tablename as name, 'table' as type from pg_tables
+        where schemaname = '{schema}'
+        union all
+        select viewname as name, 'view' as type from pg_views
+        where schemaname = '{schema}'
+        """.format(schema=schema).strip()  # noqa
+
+        connection = cls.get_connection(profile)
+
+        if flags.STRICT_MODE:
+            validate_connection(connection)
+
+        _, cursor = cls.add_query_to_transaction(
+            query, connection, schema)
+        results = cursor.fetchall()
+
+        existing = [(name, relation_type) for (name, relation_type) in results]
+
+        return dict(existing)
+
+    @classmethod
+    def execute_all(cls, profile, queries, model_name=None):
+        if len(queries) == 0:
+            return
+
+        connection = cls.get_connection(profile)
+
+        if flags.STRICT_MODE:
+            validate_connection(connection)
+
+        handle = connection.get('handle')
+        status = 'None'
+
+        for i, query in enumerate(queries):
+            handle, cursor = cls.add_query_to_transaction(
+                query, connection, model_name)
+
+        handle.commit()
+        return cursor.statusmessage
 
     @classmethod
     def commit(cls, profile):
@@ -286,16 +446,16 @@ class PostgresAdapter:
         handle.commit()
 
     @staticmethod
-    def add_query_to_transaction(sql, connection, model_name=None):
+    def add_query_to_transaction(query, connection, model_name=None):
         handle = connection.get('handle')
         cursor = handle.cursor()
 
         with exception_handler(connection, cursor, model_name):
-            logger.debug("SQL: %s", sql)
+            logger.debug("SQL: %s", query)
             pre = time.time()
-            cursor.execute(sql)
+            cursor.execute(query)
             post = time.time()
             logger.debug(
                 "SQL status: %s in %0.2f seconds",
                 cursor.statusmessage, post-pre)
-            return handle, cursor.statusmessage
+            return handle, cursor

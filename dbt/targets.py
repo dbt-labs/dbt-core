@@ -143,7 +143,7 @@ class PostgresTarget(BaseSQLTarget):
 
 target_map = {
     'postgres': PostgresTarget,
-    'redshift': RedshiftTarget
+    'redshift': RedshiftTarget,
 }
 
 
