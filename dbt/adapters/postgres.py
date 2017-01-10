@@ -145,6 +145,19 @@ class PostgresAdapter:
 
         return result
 
+    @classmethod
+    def create_schema(cls, profile, schema):
+        connection = cls.get_connection(profile)
+
+        if flags.STRICT_MODE:
+            validate_connection(connection)
+
+        sql = ('create_schema_if_not_exists "{schema}"'
+               .format(schema=schema))
+
+        handle, status = cls.add_query_to_transaction(
+            sql, connection, model_name)
+
     @staticmethod
     def create_table():
         pass

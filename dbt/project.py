@@ -5,7 +5,11 @@ import copy
 import sys
 import hashlib
 import re
+from voluptuous import Schema, Required, Invalid
+
 import dbt.deprecations
+import dbt.contracts.connection
+from dbt.logger import GLOBAL_LOGGER as logger
 
 default_project_cfg = {
     'source-paths': ['models'],
@@ -120,13 +124,31 @@ class Project(object):
             raise DbtProjectError(
                 "Project name and version is not provided", self)
 
-        required_keys = ['host', 'user', 'pass', 'schema', 'type',
-                         'dbname', 'port']
-        for key in required_keys:
-            if key not in target_cfg or len(str(target_cfg[key])) == 0:
+        validator = dbt.contracts.connection.credentials_mapping.get(
+            target_cfg.get('type'), None)
+
+        if validator is None:
+            valid_types = ', '.join(validator.keys())
+            raise DbtProjectError(
+                "Expected project configuration '{}' should be one of {}"
+                .format(key, valid_types), self)
+
+        validator = validator.extend({
+            Required('type'): str,
+            Required('threads'): int,
+        })
+
+        try:
+            validator(target_cfg)
+        except voluptuous.Invalid as e:
+            if 'extra keys not allowed' in str(e):
+                raise DbtProjectError(
+                    "Extra project configuration '{}' is not recognized"
+                    .format('.'.join(e.path)), self)
+            else:
                 raise DbtProjectError(
                     "Expected project configuration '{}' was not supplied"
-                    .format(key), self)
+                    .format('.'.join(e.path)), self)
 
     def hashed_name(self):
         if self.cfg.get("name", None) is None:

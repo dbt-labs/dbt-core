@@ -6,7 +6,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 
 
 connection_contract = Schema({
-    Required('type'): Any('postgres', 'redshift'),
+    Required('type'): Any('postgres', 'redshift', 'snowflake'),
     Required('state'): Any('init', 'open', 'closed', 'fail'),
     Required('handle'): Any(None, object),
     Required('credentials'): object,

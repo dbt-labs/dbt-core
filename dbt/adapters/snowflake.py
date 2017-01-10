@@ -4,7 +4,7 @@ import time
 import yaml
 
 import snowflake.connector
-import snowflake.errors
+import snowflake.connector.errors
 
 from contextlib import contextmanager
 
@@ -121,7 +121,7 @@ class SnowflakeAdapter:
 
             result['handle'] = handle
             result['state'] = 'open'
-        except snowflake.errors.Error as e:
+        except snowflake.connector.errors.Error as e:
             logger.debug("Got an error when attempting to open a snowflake "
                          "connection: '{}'"
                          .format(e))
