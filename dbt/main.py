@@ -87,7 +87,6 @@ def run_from_args(parsed):
     log_path = None
 
     if proj is not None:
-        logger.info("Found a project!")
         log_path = proj.get('log-path', 'logs')
 
     initialize_logger(parsed.debug, log_path)
