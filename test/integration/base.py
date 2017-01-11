@@ -53,22 +53,22 @@ class DBTIntegrationTest(unittest.TestCase):
                     'default2': {
                         'type': 'snowflake',
                         'threads': 1,
-                        'account': '',
-                        'user': '',
-                        'password': '',
-                        'database': 'FISHTOWN_ANALYTICS',
+                        'account': os.getenv('SNOWFLAKE_TEST_ACCOUNT'),
+                        'user': os.getenv('SNOWFLAKE_TEST_USER'),
+                        'password': os.getenv('SNOWFLAKE_TEST_PASSWORD'),
+                        'database': os.getenv('SNOWFLAKE_TEST_DATABASE'),
                         'schema': self.schema,
-                        'warehouse': 'FISHTOWN_ANALYTICS'
+                        'warehouse': os.getenv('SNOWFLAKE_TEST_WAREHOUSE'),
                     },
                     'noaccess': {
-                        'type': 'postgres',
+                        'type': 'snowflake',
                         'threads': 1,
-                        'account': '',
-                        'user': '',
-                        'password': '',
-                        'database': 'FISHTOWN_ANALYTICS',
+                        'account': os.getenv('SNOWFLAKE_TEST_ACCOUNT'),
+                        'user': 'noaccess',
+                        'password': 'password',
+                        'database': os.getenv('SNOWFLAKE_TEST_DATABASE'),
                         'schema': self.schema,
-                        'warehouse': 'FISHTOWN_ANALYTICS'
+                        'warehouse': os.getenv('SNOWFLAKE_TEST_WAREHOUSE'),
                     }
                 },
                 'target': 'default2'
