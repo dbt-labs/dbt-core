@@ -435,7 +435,7 @@ class RunManager(object):
             error = "Error executing {filepath}\n{error}".format(
                 filepath=model['build_path'], error=str(e).strip())
             status = "ERROR"
-            logger.exception(error)
+            logger.debug(error)
             if type(e) == psycopg2.InternalError and \
                ABORTED_TRANSACTION_STRING == e.diag.message_primary:
                 return RunModelResult(
@@ -444,7 +444,7 @@ class RunManager(object):
             error = ("Unhandled error while executing {filepath}\n{error}"
                      .format(
                          filepath=model['build_path'], error=str(e).strip()))
-            logger.exception(error)
+            logger.debug(error)
             raise e
 
         execution_time = time.time() - start_time

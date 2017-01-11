@@ -150,7 +150,7 @@ class Schema(object):
                     return cursor.statusmessage
                 except Exception as e:
                     self.target.rollback()
-                    logger.exception("Error running SQL: %s", sql)
+                    logger.debug("Error running SQL: %s", sql)
                     logger.debug("rolling back connection")
                     raise e
 
@@ -170,7 +170,7 @@ class Schema(object):
                     return data
                 except Exception as e:
                     self.target.rollback()
-                    logger.exception("Error running SQL: %s", sql)
+                    logger.debug("Error running SQL: %s", sql)
                     logger.debug("rolling back connection")
                     raise e
 
@@ -207,7 +207,7 @@ class Schema(object):
             return handle, cursor.statusmessage
         except Exception as e:
             self.target.rollback()
-            logger.exception("Error running SQL: %s", sql)
+            logger.debug("Error running SQL: %s", sql)
             logger.debug("rolling back connection")
             raise e
         finally:
