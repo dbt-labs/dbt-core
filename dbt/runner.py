@@ -199,7 +199,7 @@ class ModelRunner(BaseRunner):
         self.__run_hooks(hooks, context, 'on-run-start hooks')
 
     def post_run_all(self, models, results, context):
-        hooks = self.project.cfg.get('on-run-start', [])
+        hooks = self.project.cfg.get('on-run-end', [])
         self.__run_hooks(hooks, context, 'on-run-end hooks')
 
 

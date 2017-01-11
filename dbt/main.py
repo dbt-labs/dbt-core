@@ -39,10 +39,6 @@ def main(args=None):
 def handle(args):
     parsed = parse_args(args)
 
-    initialize_logger(parsed.debug)
-
-    flags.STRICT_MODE = parsed.strict
-
     # this needs to happen after args are parsed so we can determine the
     # correct profiles.yml file
     if not config.send_anonymous_usage_stats(parsed.profiles_dir):
@@ -89,6 +85,13 @@ def run_from_args(parsed):
             raise RuntimeError("Could not run dbt")
         else:
             task, proj = res
+
+    log_path = None
+
+    if proj is not None:
+        log_path = proj.get('log-path', 'logs')
+
+    initialize_logger(parsed.debug, log_path)
 
     dbt.tracking.track_invocation_start(project=proj, args=parsed)
     try:

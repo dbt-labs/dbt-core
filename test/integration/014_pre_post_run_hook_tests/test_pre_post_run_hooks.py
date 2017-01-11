@@ -1,7 +1,7 @@
 from test.integration.base import DBTIntegrationTest
 
 
-RUN_HOOK_TEMPLATE = """
+RUN_START_HOOK = """
    insert into pre_post_run_hooks_014.on_run_hook (
         "state",
         "target.dbname",
@@ -16,7 +16,7 @@ RUN_HOOK_TEMPLATE = """
         "run_started_at",
         "invocation_id"
    ) VALUES (
-    '{{ state }}',
+    'start',
     '{{ target.dbname }}',
     '{{ target.host }}',
     '{{ target.name }}',
@@ -31,8 +31,35 @@ RUN_HOOK_TEMPLATE = """
    )
 """
 
-RUN_START_HOOK = RUN_HOOK_TEMPLATE
-RUN_END_HOOK = RUN_HOOK_TEMPLATE
+RUN_END_HOOK = """
+   insert into pre_post_run_hooks_014.on_run_hook (
+        "state",
+        "target.dbname",
+        "target.host",
+        "target.name",
+        "target.schema",
+        "target.type",
+        "target.user",
+        "target.pass",
+        "target.port",
+        "target.threads",
+        "run_started_at",
+        "invocation_id"
+   ) VALUES (
+    'end',
+    '{{ target.dbname }}',
+    '{{ target.host }}',
+    '{{ target.name }}',
+    '{{ target.schema }}',
+    '{{ target.type }}',
+    '{{ target.user }}',
+    '{{ target.pass }}',
+    {{ target.port }},
+    {{ target.threads }},
+    '{{ run_started_at }}',
+    '{{ invocation_id }}'
+   )
+"""
 
 class TestPrePostRunHooks(DBTIntegrationTest):
 
@@ -81,12 +108,10 @@ class TestPrePostRunHooks(DBTIntegrationTest):
 
         return ctx
 
-    def test_pre_post_run_hooks(self):
-        self.run_dbt(['run'])
+    def check_hooks(self, state):
+        ctx = self.get_ctx_vars(state)
 
-        ctx = self.get_ctx_vars('start')
-
-        self.assertEqual(ctx['state'], 'start')
+        self.assertEqual(ctx['state'], state)
         self.assertEqual(ctx['target.dbname'], 'dbt')
         self.assertEqual(ctx['target.host'], 'database')
         self.assertEqual(ctx['target.name'], 'default2')
@@ -99,3 +124,9 @@ class TestPrePostRunHooks(DBTIntegrationTest):
 
         self.assertTrue(ctx['run_started_at'] is not None and len(ctx['run_started_at']) > 0, 'run_started_at was not set')
         self.assertTrue(ctx['invocation_id'] is not None and len(ctx['invocation_id']) > 0, 'invocation_id was not set')
+
+    def test_pre_and_post_run_hooks(self):
+        self.run_dbt(['run'])
+
+        self.check_hooks('start')
+        self.check_hooks('end')

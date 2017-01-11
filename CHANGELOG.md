@@ -1,8 +1,9 @@
-## dbt 0.6.1 (unreleased)
+## dbt 0.6.1
 
 #### Bugfixes
 
 - respect `config` options in profiles.yml ([#255](https://github.com/analyst-collective/dbt/pull/255))
+- use correct `on-run-end` option for post-run hooks ([#261](https://github.com/analyst-collective/dbt/pull/261))
 
 #### Changes
 
