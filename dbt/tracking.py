@@ -175,7 +175,7 @@ def track(*args, **kwargs):
         try:
             tracker.track_struct_event(*args, **kwargs)
         except Exception as e:
-            logger.exception(
+            logger.debug(
                 "An error was encountered while trying to send an event"
             )
 

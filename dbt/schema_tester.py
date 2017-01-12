@@ -89,18 +89,18 @@ class SchemaTester(object):
                         "SQL status: %s in %d seconds",
                         cursor.statusmessage, post-pre)
                 except psycopg2.ProgrammingError as e:
-                    logger.exception('programming error: %s', sql)
+                    logger.debug('programming error: %s', sql)
                     return e.diag.message_primary
                 except Exception as e:
-                    logger.exception(
+                    logger.debug(
                         'encountered exception while running: %s', sql)
                     e.model = model
                     raise e
 
                 result = cursor.fetchone()
                 if len(result) != 1:
-                    logger.error("SQL: %s", sql)
-                    logger.error("RESULT: %s", result)
+                    logger.debug("SQL: %s", sql)
+                    logger.debug("RESULT: %s", result)
                     raise RuntimeError(
                         "Unexpected validation result. Expected 1 record, "
                         "got {}".format(len(result)))

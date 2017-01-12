@@ -55,7 +55,7 @@ def exception_handler(connection, cursor, model_name, query):
             raise e
     except Exception as e:
         handle.rollback()
-        logger.exception("Error running SQL: %s", query)
+        logger.debug("Error running SQL: %s", query)
         logger.debug("rolling back connection")
         raise e
 
