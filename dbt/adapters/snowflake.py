@@ -135,7 +135,12 @@ class SnowflakeAdapter(PostgresAdapter):
 
     @classmethod
     def get_status(cls, cursor):
-        return cursor.sqlstate
+        state = cursor.sqlstate
+
+        if state is None:
+            state = 'SUCCESS'
+
+        return "{} {}".format(state, cursor.rowcount)
 
     @classmethod
     def rename(cls, profile, from_name, to_name, model_name=None):
@@ -211,8 +216,14 @@ class SnowflakeAdapter(PostgresAdapter):
         queries = query.strip().split(";")
 
         for individual_query in queries:
-            logger.info("QUERY: '{}'".format(individual_query))
-            if individual_query.strip() == "":
+            # hack -- after the last ';', remove comments and don't run
+            # empty queries. this avoids using exceptions as flow control,
+            # and also allows us to return the status of the last cursor
+            without_comments = re.sub(
+                re.compile('^.*(--.*)$', re.MULTILINE),
+                '', individual_query).strip()
+
+            if without_comments == "":
                 continue
 
             with exception_handler(connection, cursor,

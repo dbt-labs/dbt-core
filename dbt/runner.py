@@ -26,6 +26,8 @@ import dbt.schema
 
 from multiprocessing.dummy import Pool as ThreadPool
 
+import snowflake.connector.errors
+
 ABORTED_TRANSACTION_STRING = ("current transaction is aborted, commands "
                               "ignored until end of transaction block")
 
@@ -441,6 +443,7 @@ class RunManager(object):
         try:
             status = self.execute_model(runner, model)
         except (RuntimeError,
+                snowflake.connector.errors.ProgrammingError,
                 psycopg2.ProgrammingError,
                 psycopg2.InternalError) as e:
             error = "Error executing {filepath}\n{error}".format(

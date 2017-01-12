@@ -140,7 +140,7 @@ class Project(object):
 
         try:
             validator(target_cfg)
-        except voluptuous.Invalid as e:
+        except Invalid as e:
             if 'extra keys not allowed' in str(e):
                 raise DbtProjectError(
                     "Extra project configuration '{}' is not recognized"

@@ -111,7 +111,7 @@ class PostgresAdapter:
         connection = cls.acquire_connection(profile)
         connection_cache[profile_hash] = connection
 
-        return connection
+        return cls.get_connection(profile)
 
     @staticmethod
     def get_connection_spec(connection):
