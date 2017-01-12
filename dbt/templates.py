@@ -170,7 +170,7 @@ delete from "{schema}"."{identifier}" where  ({unique_key}) in (
 
 SCDArchiveTemplate = u"""
 
-    with current_data as (
+    with "current_data" as (
 
         select
             {% raw %}
@@ -178,15 +178,15 @@ SCDArchiveTemplate = u"""
                     "{{ col.name }}" {% if not loop.last %},{% endif %}
                 {% endfor %},
             {% endraw %}
-            {{ updated_at }} as dbt_updated_at,
-            {{ unique_key }} as dbt_pk,
-            {{ updated_at }} as valid_from,
-            null::timestamp as tmp_valid_to
+            "{{ updated_at }}" as "dbt_updated_at",
+            "{{ unique_key }}" as "dbt_pk",
+            "{{ updated_at }}" as "valid_from",
+            null::timestamp as "tmp_valid_to"
         from "{{ source_schema }}"."{{ source_table }}"
 
     ),
 
-    archived_data as (
+    "archived_data" as (
 
         select
             {% raw %}
@@ -194,51 +194,53 @@ SCDArchiveTemplate = u"""
                     "{{ col.name }}" {% if not loop.last %},{% endif %}
                 {% endfor %},
             {% endraw %}
-            {{ updated_at }} as dbt_updated_at,
-            {{ unique_key }} as dbt_pk,
-            valid_from,
-            valid_to as tmp_valid_to
+            "{{ updated_at }}" as "dbt_updated_at",
+            "{{ unique_key }}" as "dbt_pk",
+            "valid_from",
+            "valid_to" as "tmp_valid_to"
         from "{{ target_schema }}"."{{ target_table }}"
 
     ),
 
-    insertions as (
+    "insertions" as (
 
         select
-            current_data.*,
-            null::timestamp as valid_to
-        from current_data
-        left outer join archived_data on archived_data.dbt_pk = current_data.dbt_pk
-        where archived_data.dbt_pk is null or (
-          archived_data.dbt_pk is not null and
-          current_data.dbt_updated_at > archived_data.dbt_updated_at and
-          archived_data.tmp_valid_to is null
+            "current_data".*,
+            null::timestamp as "valid_to"
+        from "current_data"
+        left outer join "archived_data"
+          on "archived_data"."dbt_pk" = "current_data"."dbt_pk"
+        where "archived_data"."dbt_pk" is null or (
+          "archived_data"."dbt_pk" is not null and
+          "current_data"."dbt_updated_at" > "archived_data"."dbt_updated_at" and
+          "archived_data"."tmp_valid_to" is null
         )
     ),
 
-    updates as (
+    "updates" as (
 
         select
-            archived_data.*,
-            current_data.dbt_updated_at as valid_to
-        from current_data
-        left outer join archived_data on archived_data.dbt_pk = current_data.dbt_pk
-        where archived_data.dbt_pk is not null
-          and archived_data.dbt_updated_at < current_data.dbt_updated_at
-          and archived_data.tmp_valid_to is null
+            "archived_data".*,
+            "current_data"."dbt_updated_at" as "valid_to"
+        from "current_data"
+        left outer join "archived_data"
+          on "archived_data"."dbt_pk" = "current_data"."dbt_pk"
+        where "archived_data"."dbt_pk" is not null
+          and "archived_data"."dbt_updated_at" < "current_data"."dbt_updated_at"
+          and "archived_data"."tmp_valid_to" is null
     ),
 
-    merged as (
+    "merged" as (
 
-      select *, 'update' as change_type from updates
+      select *, 'update' as "change_type" from "updates"
       union all
-      select *, 'insert' as change_type from insertions
+      select *, 'insert' as "change_type" from "insertions"
 
     )
 
     select *,
-        md5(dbt_pk || '|' || dbt_updated_at) as scd_id
-    from merged
+        md5("dbt_pk" || '|' || "dbt_updated_at") as "scd_id"
+    from "merged"
 """
 
 
@@ -281,16 +283,16 @@ create temporary table "{identifier}__dbt_archival_tmp" as (
 
 -- DBT_OPERATION {{ function: expand_column_types_if_needed, args: {{ temp_table: "{identifier}__dbt_archival_tmp", to_schema: "{schema}", to_table: "{identifier}"}} }}
 
-update "{schema}"."{identifier}" set valid_to = tmp.valid_to
-from "{identifier}__dbt_archival_tmp" as tmp
-where tmp.scd_id = "{schema}"."{identifier}".scd_id
-  and change_type = 'update';
+update "{schema}"."{identifier}" set "valid_to" = "tmp"."valid_to"
+from "{identifier}__dbt_archival_tmp" as "tmp"
+where "tmp"."scd_id" = "{schema}"."{identifier}"."scd_id"
+  and "change_type" = 'update';
 
 insert into "{schema}"."{identifier}" (
     {dest_cols}
 )
 select {dest_cols} from "{identifier}__dbt_archival_tmp"
-where change_type = 'insert';
+where "change_type" = 'insert';
 """
 
     def wrap(self, schema, table, query, unique_key):

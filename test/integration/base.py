@@ -267,15 +267,18 @@ class DBTIntegrationTest(unittest.TestCase):
         self.assertTableRowCountsEqual(table_a, table_b)
 
         columns = self.get_table_columns(table_a)
-        columns_csv = ", ".join([record[0] for record in columns])
+        columns_csv = ", ".join(['"{}"'.format(record[0])
+                                 for record in columns])
 
         table_sql = "SELECT {} FROM {}"
 
         sql = """
             SELECT COUNT(*) FROM (
-                (SELECT {columns} FROM "{schema}"."{table_a}" EXCEPT SELECT {columns} FROM "{schema}"."{table_b}")
+                (SELECT {columns} FROM "{schema}"."{table_a}" EXCEPT
+                 SELECT {columns} FROM "{schema}"."{table_b}")
                  UNION ALL
-                (SELECT {columns} FROM "{schema}"."{table_b}" EXCEPT SELECT {columns} FROM "{schema}"."{table_a}")
+                (SELECT {columns} FROM "{schema}"."{table_b}" EXCEPT
+                 SELECT {columns} FROM "{schema}"."{table_a}")
             ) AS a""".format(
                 columns=columns_csv,
                 schema=self.schema,
