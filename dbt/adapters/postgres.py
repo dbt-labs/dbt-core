@@ -12,8 +12,6 @@ from dbt.contracts.connection import validate_connection
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.schema import Column, READ_PERMISSION_DENIED_ERROR
 
-# TODO close cursors somewhere
-
 connection_cache = {}
 
 RELATION_PERMISSION_DENIED_MESSAGE = """
@@ -68,7 +66,6 @@ class PostgresAdapter:
 
     @classmethod
     def acquire_connection(cls, profile):
-
         # profile requires some marshalling right now because it includes a
         # wee bit of global config.
         # TODO remove this
@@ -297,7 +294,6 @@ class PostgresAdapter:
         if flags.STRICT_MODE:
             validate_connection(connection)
 
-        status = 'None'
         for i, part in enumerate(parts):
             matches = re.match(r'^DBT_OPERATION ({.*})$', part)
             if matches is not None:
@@ -321,7 +317,11 @@ class PostgresAdapter:
                     part, connection, model.name)
 
         handle.commit()
-        return cls.get_status(cursor)
+
+        status = cls.get_status(cursor)
+        cursor.close()
+
+        return status
 
     @classmethod
     def get_missing_columns(cls, profile,
@@ -427,8 +427,6 @@ class PostgresAdapter:
         alter table "{schema}"."{table}" rename column "{tmp_column}" to "{old_column}";
         """.format(**opts).strip()  # noqa
 
-        # TODO this is clearly broken, connection isn't available here.
-        #      for some reason it doesn't break the integration test though
         handle, cursor = cls.add_query_to_transaction(
             query, connection, table)
 

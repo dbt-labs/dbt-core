@@ -39,6 +39,8 @@ def exception_handler(connection, cursor, model_name, query):
 
 class SnowflakeAdapter(PostgresAdapter):
 
+    date_function = 'CURRENT_TIMESTAMP()'
+
     @classmethod
     def acquire_connection(cls, profile):
 
@@ -181,7 +183,6 @@ class SnowflakeAdapter(PostgresAdapter):
                 connection.get('credentials', {}).get('schema')),
             connection)
 
-        status = 'None'
         for i, part in enumerate(parts):
             matches = re.match(r'^DBT_OPERATION ({.*})$', part)
             if matches is not None:
@@ -205,7 +206,11 @@ class SnowflakeAdapter(PostgresAdapter):
                     part, connection, model.name)
 
         handle.commit()
-        return cls.get_status(cursor)
+
+        status = cls.get_status(cursor)
+        cursor.close()
+
+        return status
 
     @classmethod
     def add_query_to_transaction(cls, query, connection, model_name=None):

@@ -3,6 +3,8 @@ from dbt.adapters.postgres import PostgresAdapter
 
 class RedshiftAdapter(PostgresAdapter):
 
+    date_function = 'getdate()'
+
     @classmethod
     def dist_qualifier(cls, dist):
         dist_key = dist_key.strip().lower()
