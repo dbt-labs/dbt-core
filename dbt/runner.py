@@ -84,6 +84,7 @@ class BaseRunner(object):
     def status(self, result):
         raise NotImplementedError("not implemented")
 
+
 class ModelRunner(BaseRunner):
     run_type = 'run'
 
@@ -208,13 +209,17 @@ class DryRunner(ModelRunner):
 
     def pre_run_msg(self, model):
         output = ("DRY-RUN model {schema}.{model_name} "
-                  .format(schema=self.adapter.get_default_schema(self.profile), model_name=model.name))
+                  .format(
+                      schema=self.adapter.get_default_schema(self.profile),
+                      model_name=model.name))
         return output
 
     def post_run_msg(self, result):
         model = result.model
         output = ("DONE model {schema}.{model_name} "
-                  .format(schema=self.adapter.get_default_schema(self.profile), model_name=model.name))
+                  .format(
+                      schema=self.adapter.get_default_schema(self.profile),
+                      model_name=model.name))
         return output
 
     def pre_run_all_msg(self, models):

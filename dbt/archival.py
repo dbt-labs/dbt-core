@@ -5,6 +5,7 @@ import jinja2
 
 from dbt.adapters.factory import get_adapter
 
+
 class Archival(object):
 
     def __init__(self, project, archive_model):

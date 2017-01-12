@@ -172,7 +172,8 @@ class SnowflakeAdapter(PostgresAdapter):
         # TODO setup templates to be adapter-specific. then we can just use
         #      the existing schema for temp tables.
         cls.add_query_to_transaction(
-            'USE SCHEMA "{}"'.format(connection.get('credentials', {}).get('schema')),
+            'USE SCHEMA "{}"'.format(
+                connection.get('credentials', {}).get('schema')),
             connection)
 
         status = 'None'

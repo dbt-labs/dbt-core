@@ -157,7 +157,7 @@ class PostgresAdapter:
             validate_connection(connection)
 
         query = ('create schema if not exists "{schema}"'
-               .format(schema=schema))
+                 .format(schema=schema))
 
         handle, cursor = cls.add_query_to_transaction(
             query, connection, model_name)
@@ -230,9 +230,9 @@ class PostgresAdapter:
         schema = connection.get('credentials', {}).get('schema')
 
         query = ('drop view if exists "{schema}"."{view}" cascade'
-               .format(
-                   schema=schema,
-                   view=view))
+                 .format(
+                     schema=schema,
+                     view=view))
 
         handle, cursor = cls.add_query_to_transaction(
             query, connection, model_name)
@@ -247,9 +247,9 @@ class PostgresAdapter:
         schema = connection.get('credentials', {}).get('schema')
 
         query = ('drop table if exists "{schema}"."{table}" cascade'
-               .format(
-                   schema=schema,
-                   table=table))
+                 .format(
+                     schema=schema,
+                     table=table))
 
         handle, cursor = cls.add_query_to_transaction(
             query, connection, model_name)
@@ -264,9 +264,9 @@ class PostgresAdapter:
         schema = connection.get('credentials', {}).get('schema')
 
         query = ('truncate table "{schema}"."{table}"'
-               .format(
-                   schema=schema,
-                   table=table))
+                 .format(
+                     schema=schema,
+                     table=table))
 
         handle, cursor = cls.add_query_to_transaction(
             query, connection, model_name)
@@ -281,10 +281,10 @@ class PostgresAdapter:
         schema = connection.get('credentials', {}).get('schema')
 
         query = ('alter table "{schema}"."{from_name}" rename to "{to_name}"'
-               .format(
-                   schema=schema,
-                   from_name=from_name,
-                   to_name=to_name))
+                 .format(
+                     schema=schema,
+                     from_name=from_name,
+                     to_name=to_name))
 
         handle, cursor = cls.add_query_to_transaction(
             query, connection, model_name)
@@ -356,7 +356,7 @@ class PostgresAdapter:
 
         if schema_name is not None:
             query += (" AND table_schema = '{schema_name}'"
-                    .format(schema_name=schema_name))
+                      .format(schema_name=schema_name))
 
         handle, cursor = cls.add_query_to_transaction(
             query, connection, table_name)
