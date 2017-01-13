@@ -1,3 +1,4 @@
+from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 
 class TestInvalidViewModels(DBTIntegrationTest):
@@ -15,6 +16,7 @@ class TestInvalidViewModels(DBTIntegrationTest):
     def models(self):
         return "test/integration/011_invalid_model_tests/models"
 
+    @attr(type='postgres')
     def test_view_with_incremental_attributes(self):
         self.run_dbt()
 
@@ -33,6 +35,7 @@ class TestInvalidDisabledModels(DBTIntegrationTest):
     def models(self):
         return "test/integration/011_invalid_model_tests/models-2"
 
+    @attr(type='postgres')
     def test_view_with_incremental_attributes(self):
 
         try:
@@ -57,6 +60,7 @@ class TestInvalidModelReference(DBTIntegrationTest):
     def models(self):
         return "test/integration/011_invalid_model_tests/models-3"
 
+    @attr(type='postgres')
     def test_view_with_incremental_attributes(self):
 
         try:

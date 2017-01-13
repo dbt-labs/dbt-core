@@ -1,3 +1,4 @@
+from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 
 from dbt.task.test import TestTask
@@ -15,7 +16,7 @@ class TestDataTests(DBTIntegrationTest):
     def setUp(self):
         DBTIntegrationTest.setUp(self)
         self.run_sql_file("test/integration/009_data_tests_test/seed.sql")
-    
+
     @property
     def project_config(self):
         return {
@@ -37,6 +38,7 @@ class TestDataTests(DBTIntegrationTest):
         test_task = TestTask(args, project)
         return test_task.run()
 
+    @attr(type='postgres')
     def test_data_tests(self):
         self.run_dbt()
         test_results = self.run_data_validations()

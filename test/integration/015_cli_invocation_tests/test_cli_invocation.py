@@ -1,3 +1,4 @@
+from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest, DBT_PROFILES
 import os, shutil, yaml
 
@@ -16,10 +17,12 @@ class TestCLIInvocation(DBTIntegrationTest):
     def models(self):
         return "test/integration/015_cli_invocation_tests/models"
 
+    @attr(type='postgres')
     def test_toplevel_dbt_run(self):
         self.run_dbt(['run'])
         self.assertTablesEqual("seed", "model")
 
+    @attr(type='postgres')
     def test_subdir_dbt_run(self):
         os.chdir(os.path.join(self.models, "subdir1"))
 
@@ -81,6 +84,7 @@ class TestCLIInvocationWithProfilesDir(DBTIntegrationTest):
     def models(self):
         return "test/integration/015_cli_invocation_tests/models"
 
+    @attr(type='postgres')
     def test_toplevel_dbt_run_with_profile_dir_arg(self):
         self.run_dbt(['run', '--profiles-dir', 'dbt-profile'])
 
@@ -94,4 +98,3 @@ class TestCLIInvocationWithProfilesDir(DBTIntegrationTest):
         # make sure the test runs against `custom_schema`
         for test_result in res:
             self.assertTrue(self.custom_schema, test_result.model.compiled_contents)
-

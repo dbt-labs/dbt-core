@@ -1,3 +1,4 @@
+from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 
 from dbt.task.test import TestTask
@@ -16,7 +17,7 @@ class TestSchemaTests(DBTIntegrationTest):
         DBTIntegrationTest.setUp(self)
         self.run_sql_file("test/integration/008_schema_tests_test/seed.sql")
         self.run_sql_file("test/integration/008_schema_tests_test/seed_failure.sql")
-    
+
     @property
     def schema(self):
         return "schema_tests_008"
@@ -32,6 +33,7 @@ class TestSchemaTests(DBTIntegrationTest):
         test_task = TestTask(args, project)
         return test_task.run()
 
+    @attr(type='postgres')
     def test_schema_tests(self):
         self.run_dbt()
         test_results = self.run_schema_validations()
@@ -71,6 +73,7 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
         test_task = TestTask(args, project)
         return test_task.run()
 
+    @attr(type='postgres')
     def test_malformed_schema_test_wont_brick_run(self):
         # dbt run should work (Despite broken schema test)
         self.run_dbt()

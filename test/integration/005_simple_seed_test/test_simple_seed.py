@@ -1,3 +1,4 @@
+from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 
 class TestSimpleSeed(DBTIntegrationTest):
@@ -21,6 +22,7 @@ class TestSimpleSeed(DBTIntegrationTest):
             "data-paths": ['test/integration/005_simple_seed_test/data']
         }
 
+    @attr(type='postgres')
     def test_simple_seed(self):
         self.run_dbt(["seed"])
         self.assertTablesEqual("seed_actual","seed_expected")
@@ -30,6 +32,7 @@ class TestSimpleSeed(DBTIntegrationTest):
         self.assertTablesEqual("seed_actual","seed_expected")
 
 
+    @attr(type='postgres')
     def test_simple_seed_with_drop(self):
         self.run_dbt(["seed"])
         self.assertTablesEqual("seed_actual","seed_expected")

@@ -1,3 +1,4 @@
+from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 
 class TestContextVars(DBTIntegrationTest):
@@ -70,6 +71,7 @@ class TestContextVars(DBTIntegrationTest):
 
         return ctx
 
+    @attr(type='postgres')
     def test_env_vars_dev(self):
         self.run_dbt(['run'])
         ctx = self.get_ctx_vars()
@@ -89,6 +91,7 @@ class TestContextVars(DBTIntegrationTest):
         self.assertEqual(ctx['target.user'], 'root')
         self.assertEqual(ctx['target.pass'], '')
 
+    @attr(type='postgres')
     def test_env_vars_prod(self):
         self.run_dbt(['run', '--target', 'prod'])
         ctx = self.get_ctx_vars()

@@ -1,3 +1,4 @@
+from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 
 class BaseTestSimpleDependencyWithConfigs(DBTIntegrationTest):
@@ -32,7 +33,7 @@ class TestSimpleDependencyWithConfigs(BaseTestSimpleDependencyWithConfigs):
             ]
         }
 
-
+    @attr(type='postgres')
     def test_simple_dependency(self):
         self.run_dbt(["deps"])
         self.run_dbt(["run"])
@@ -66,6 +67,7 @@ class TestSimpleDependencyWithOverriddenConfigs(BaseTestSimpleDependencyWithConf
         }
 
 
+    @attr(type='postgres')
     def test_simple_dependency(self):
         self.run_dbt(["deps"])
         self.run_dbt(["run"])
@@ -102,6 +104,7 @@ class TestSimpleDependencyWithModelSpecificOverriddenConfigs(BaseTestSimpleDepen
         }
 
 
+    @attr(type='postgres')
     def test_simple_dependency(self):
         self.run_dbt(["deps"])
         self.run_dbt(["run"])
@@ -146,6 +149,7 @@ class TestSimpleDependencyWithModelSpecificOverriddenConfigs(BaseTestSimpleDepen
         }
 
 
+    @attr(type='postgres')
     def test_simple_dependency(self):
         self.run_dbt(["deps"])
         self.run_dbt(["run"])

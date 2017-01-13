@@ -1,3 +1,4 @@
+from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 
 class TestDryRun(DBTIntegrationTest):
@@ -14,6 +15,7 @@ class TestDryRun(DBTIntegrationTest):
     def models(self):
         return "test/integration/007_dry_run_test/models"
 
+    @attr(type='postgres')
     def test_dry_run(self):
         self.run_dbt(["run", '--dry'])
 

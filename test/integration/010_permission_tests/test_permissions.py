@@ -1,3 +1,4 @@
+from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 
 class TestPermissions(DBTIntegrationTest):
@@ -20,6 +21,7 @@ class TestPermissions(DBTIntegrationTest):
     def models(self):
         return "test/integration/010_permission_tests/models"
 
+    @attr(type='postgres')
     def test_read_permissions(self):
 
         failed = False

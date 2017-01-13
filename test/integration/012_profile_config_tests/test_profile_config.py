@@ -1,3 +1,4 @@
+from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 import dbt.deprecations
 
@@ -37,6 +38,7 @@ class TestRunTargetDeprecation(DBTIntegrationTest):
             }
         }
 
+    @attr(type='postgres')
     def test_deprecated_run_target_config(self):
         self.run_dbt()
 
@@ -81,6 +83,7 @@ class TestNoRunTargetDeprecation(DBTIntegrationTest):
             }
         }
 
+    @attr(type='postgres')
     def test_deprecated_run_target_config(self):
         self.run_dbt()
 

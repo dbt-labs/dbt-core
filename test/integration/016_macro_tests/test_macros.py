@@ -1,3 +1,4 @@
+from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 
 class TestMacros(DBTIntegrationTest):
@@ -23,6 +24,7 @@ class TestMacros(DBTIntegrationTest):
             ]
         }
 
+    @attr(type='postgres')
     def test_working_macros(self):
         self.run_dbt(["deps"])
         self.run_dbt(["run"])
@@ -50,6 +52,7 @@ class TestInvalidMacros(DBTIntegrationTest):
             "macro-paths": ["test/integration/016_macro_tests/bad-macros"]
         }
 
+    @attr(type='postgres')
     def test_invalid_macro(self):
 
         try:
@@ -80,6 +83,7 @@ class TestMisusedMacros(DBTIntegrationTest):
             ]
         }
 
+    @attr(type='postgres')
     def test_working_macros(self):
         self.run_dbt(["deps"])
 
