@@ -5,16 +5,15 @@ from csvkit import table as csv_table, sql as csv_sql
 from sqlalchemy.dialects import postgresql as postgresql_dialect
 import psycopg2
 
-import dbt.targets
 from dbt.source import Source
 from dbt.logger import GLOBAL_LOGGER as logger
-
+from dbt.adapters.factory import get_adapter
+import dbt.exceptions
 
 class Seeder:
     def __init__(self, project):
         self.project = project
         run_environment = self.project.run_environment()
-        self.target = dbt.targets.get_target(run_environment)
 
     def find_csvs(self):
         return Source(self.project).get_csvs(self.project['data-paths'])
@@ -119,8 +118,17 @@ class Seeder:
                 logger.info(str(e))
 
     def seed(self, drop_existing=False):
-        schema = self.target.schema
+        profile = self.project.run_environment()
 
-        with self.target.get_handle() as handle:
+        if profile.get('type') == 'snowflake':
+            raise dbt.exceptions.NotImplementedException(
+                "`seed` operation is not supported for snowflake.")
+
+        adapter = get_adapter(profile)
+        connection = adapter.get_connection(profile)
+
+        schema = connection.get('credentials', {}).get('schema')
+
+        with connection.get('handle') as handle:
             with handle.cursor() as cursor:
                 self.do_seed(schema, cursor, drop_existing)

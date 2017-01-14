@@ -99,6 +99,11 @@ def run_from_args(parsed):
         dbt.tracking.track_invocation_end(
             project=proj, args=parsed, result_type="ok", result=None
         )
+    except dbt.exceptions.NotImplementedException as e:
+        logger.info('ERROR: {}'.format(e))
+        dbt.tracking.track_invocation_end(
+            project=proj, args=parsed, result_type="error", result=str(e)
+        )
     except Exception as e:
         dbt.tracking.track_invocation_end(
             project=proj, args=parsed, result_type="error", result=str(e)

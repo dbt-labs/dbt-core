@@ -16,7 +16,6 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.compilation import compile_string
 from dbt.linker import Linker
 from dbt.templates import BaseCreateTemplate
-import dbt.targets
 from dbt.source import Source
 from dbt.utils import find_model_by_fqn, find_model_by_name, \
     dependency_projects
