@@ -2,26 +2,60 @@
 
 ## Installation
 
+### macOS
+
+The preferred way to install dbt on macOS is via [Homebrew](http://brew.sh/). Install homebrew, then run:
+
+```bash
+brew update
+brew install dbt
+
+# to upgrade dbt, use
+brew update
+brew upgrade dbt
+```
+
+If you'd prefer to use the development version of dbt, you can install it as follows. Please note that the development version is considered unstable, and may contain bugs.
+
+```bash
+brew update
+brew install --HEAD dbt
+
+brew update
+brew reinstall --HEAD dbt
+```
+
+To install from source (not recommended), first install `postgresql` with Homebrew:
+
+```bash
+brew install postgresql
+```
+
+Then, install using pip:
+
+```bash
+pip install dbt
+```
+
+If you encounter SSL cryptography errors during install, make sure your copy of pip is up-to-date (via [cryptography.io](https://cryptography.io/en/latest/faq/#compiling-cryptography-on-os-x-produces-a-fatal-error-openssl-aes-h-file-not-found-error))
+
+```bash
+pip install -U pip
+pip install -U dbt
+```
+
+### Ubuntu / Debian
+
 First, make sure you have postgres installed:
 
 ```bash
-# linux
 sudo apt-get install libpq-dev python-dev
-
-# osx
-brew install postgresql
 ```
 
 Then, install using `pip`:
 
 ```bash
-› pip install dbt
-```
-
-If you encounter SSL cryptography errors during install on OSX, make sure your copy of pip is up-to-date (via [cryptography.io](https://cryptography.io/en/latest/faq/#compiling-cryptography-on-os-x-produces-a-fatal-error-openssl-aes-h-file-not-found-error))
-```bash
-› pip install -U pip
-› pip install -U dbt
+pip install dbt
 ```
 
 ## Configuration
