@@ -1,4 +1,3 @@
-
 import os
 import fnmatch
 from csvkit import table as csv_table, sql as csv_sql
@@ -9,6 +8,7 @@ from dbt.source import Source
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.adapters.factory import get_adapter
 import dbt.exceptions
+
 
 class Seeder:
     def __init__(self, project):
