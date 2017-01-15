@@ -8,3 +8,7 @@ class ValidationException(Exception):
 
 class NotImplementedException(Exception):
     pass
+
+
+class ProgrammingException(Exception):
+    pass

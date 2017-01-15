@@ -10,6 +10,7 @@ import snowflake.connector.errors
 
 from contextlib import contextmanager
 
+import dbt.exceptions
 import dbt.flags as flags
 
 from dbt.adapters.postgres import PostgresAdapter
@@ -31,7 +32,7 @@ def exception_handler(connection, cursor, model_name, query):
             logger.debug("got empty sql statement, moving on")
         else:
             handle.rollback()
-            raise e
+            raise dbt.exceptions.ProgrammingException(str(e))
     except Exception as e:
         handle.rollback()
         logger.debug("Error running SQL: %s", query)
