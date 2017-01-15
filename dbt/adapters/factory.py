@@ -7,6 +7,8 @@ from dbt.adapters.redshift import RedshiftAdapter
 
 if platform.system() != 'Windows':
     from dbt.adapters.snowflake import SnowflakeAdapter
+else:
+    SnowflakeAdapter = None
 
 
 def get_adapter(profile):
