@@ -147,7 +147,6 @@ class PostgresAdapter:
 
             raise dbt.exceptions.FailedToConnectException(str(e))
 
-
         return result
 
     @classmethod
