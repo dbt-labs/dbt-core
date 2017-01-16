@@ -644,13 +644,14 @@ class RunManager(object):
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
 
-        schema_name = adapter.get_default_schema(profile)
-
         try:
+            schema_name = adapter.get_default_schema(profile)
+
             adapter.create_schema(profile, schema_name)
-        except psycopg2.OperationalError as e:
-            logger.info("ERROR: Could not connect to the target database. Try"
-                        "`dbt debug` for more information")
+        except (dbt.exceptions.FailedToConnectException,
+                psycopg2.OperationalError) as e:
+            logger.info("ERROR: Could not connect to the target database. Try "
+                        "`dbt debug` for more information.")
             logger.info(str(e))
             sys.exit(1)
 
@@ -689,7 +690,8 @@ class RunManager(object):
 
         try:
             adapter.create_schema(profile, schema_name)
-        except psycopg2.OperationalError as e:
+        except (dbt.exceptions.FailedToConnectException,
+                psycopg2.OperationalError) as e:
             logger.info("ERROR: Could not connect to the target database. Try "
                         "`dbt debug` for more information")
             logger.info(str(e))

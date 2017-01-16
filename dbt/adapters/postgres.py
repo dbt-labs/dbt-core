@@ -6,6 +6,7 @@ import yaml
 
 from contextlib import contextmanager
 
+import dbt.exceptions
 import dbt.flags as flags
 
 from dbt.contracts.connection import validate_connection
@@ -81,7 +82,7 @@ class PostgresAdapter:
             'credentials': credentials
         }
 
-        logger.debug('Acquiring postgres connection')
+        logger.info('Connecting to postgres.')
 
         if flags.STRICT_MODE:
             validate_connection(result)
@@ -143,6 +144,9 @@ class PostgresAdapter:
 
             result['handle'] = None
             result['state'] = 'fail'
+
+            raise dbt.exceptions.FailedToConnectException(str(e))
+
 
         return result
 

@@ -12,3 +12,7 @@ class NotImplementedException(Exception):
 
 class ProgrammingException(Exception):
     pass
+
+
+class FailedToConnectException(Exception):
+    pass

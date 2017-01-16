@@ -1,9 +1,39 @@
+import copy
+
+import dbt.flags as flags
+
 from dbt.adapters.postgres import PostgresAdapter
+from dbt.contracts.connection import validate_connection
+from dbt.logger import GLOBAL_LOGGER as logger
 
 
 class RedshiftAdapter(PostgresAdapter):
 
     date_function = 'getdate()'
+
+    @classmethod
+    def acquire_connection(cls, profile):
+        # profile requires some marshalling right now because it includes a
+        # wee bit of global config.
+        # TODO remove this
+        credentials = copy.deepcopy(profile)
+
+        credentials.pop('type', None)
+        credentials.pop('threads', None)
+
+        result = {
+            'type': 'redshift',
+            'state': 'init',
+            'handle': None,
+            'credentials': credentials
+        }
+
+        logger.info('Connecting to redshift.')
+
+        if flags.STRICT_MODE:
+            validate_connection(result)
+
+        return cls.open_connection(result)
 
     @classmethod
     def dist_qualifier(cls, dist):

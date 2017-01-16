@@ -62,7 +62,7 @@ class SnowflakeAdapter(PostgresAdapter):
             'credentials': credentials
         }
 
-        logger.debug('Acquiring snowflake connection')
+        logger.info('Connecting to snowflake.')
 
         if flags.STRICT_MODE:
             validate_connection(result)
@@ -108,6 +108,8 @@ class SnowflakeAdapter(PostgresAdapter):
 
             result['handle'] = None
             result['state'] = 'fail'
+
+            raise dbt.exceptions.FailedToConnectException(str(e))
 
         return result
 
