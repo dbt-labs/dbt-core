@@ -1,4 +1,10 @@
-## dbt 0.6.1
+## dbt 0.6.2 (January 16, 2017)
+
+#### Changes
+
+- condense error output when `--debug` is not set ([#265](https://github.com/analyst-collective/dbt/pull/265))
+
+## dbt 0.6.1 (January 11, 2017)
 
 #### Bugfixes
 

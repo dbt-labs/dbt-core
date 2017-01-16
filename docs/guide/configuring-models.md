@@ -73,7 +73,7 @@ Each of the four values passed to `materialized` significantly changes how dbt b
 
 Incremental models are a powerful feature in production dbt deployments. Frequently, certain raw data tables can have billions of rows, which makes performing frequent rebuilds of models dependent on these tables impractical. Incremental tables provide another option. The first time a model is deployed, the table is created and data is inserted. In subsequent runs this model will have new rows inserted and changed rows updated. (Technically, updates happen via deletes and then inserts.)
 
-It's highly recommended to use incremental models rather than basic tables in production whenever the schema allows for it. This will minimize your model build times and minimize the use of database resources.
+It's highly recommended to use incremental models rather than table models in production whenever the schema allows for it. This will minimize your model build times and minimize the use of database resources.
 
 #### sql_where
 
@@ -93,7 +93,7 @@ dbt applies this `WHERE` condition automatically, so it shouldn't be present in 
 WHERE session_end_timestamp >= (select max(session_end_timestamp) from {{this}})
 ```
 
-See [environment variables](environment-variables/) for more information on `this`.
+See [context variables](context-variables/) for more information on `this`.
 
 #### unique_key
 

@@ -1,62 +1,195 @@
-# this dbt project configuration is _required_ for all dbt projects.
-# it specifies information about the project that dbt needs to run.
 
-name: 'your-package-name'    # Required. This is the name used to reference the package in all dependencies.
+# This configuration file specifies information about your package
+# that dbt needs in order to build your models. This file is _required_
+# 
+# For more information, consult:
+# http://dbt.readthedocs.io/en/master/guide/configuring-models/
+
+
+#
+# Package Configuration
+#
+
+# name: Required. This is the name used to reference your package in the configs
+# below. Package names must only contain letters and underscores
+name: 'your_package_name'
+
+# version: Required. This indicates the current version of your package and
+# should conform to semantic versioning. The field is currently unused
 version: '0.0.1'
 
 
-# configuration of dbt file paths (relative to dbt_project.yml)
 
-source-paths: ["models"]     # paths with source code to compile
-analysis-paths: ["analysis"] # path with code to compile, but not execute
-target-path: "target"        # path for compiled code
-test-paths: ["test"]         # where to store test results
-data-paths: ["data"]         # load csvs from this directory with `dbt seed`
-log-path: "logs"             # where to save log files (rotated daily)
-clean-targets: ["target", "dbt_modules"]    # directories removed by the clean task
+#
+# File Path Configurations
+#
 
-profile: "evil-corp"  # this must map to the profile you create in profiles.yml;
-                      # this is how dbt gets the connection information for this project.
+# The following configs specify directories that dbt uses to operate. All
+# paths are specified relative to the path of dbt_project.yml
 
-# Custom configurations for each model.
-# The structure of this config object should mirror the project files in the "source-paths" directories.
+# source-paths: Required. Specify which path(s) dbt should look in to find
+# models. Models are text files with a .sql file extension.
+source-paths: ["models"]
+
+# analysis-paths: Optional. Specify which path(s) dbt should look in to find
+# analytical queries. These queries are compiled, but not executed, by dbt.
+analysis-paths: ["analysis"]
+
+# target-path: Required. Specify which path dbt should write compiled SQL to.
+target-path: "target"
+
+# test-paths: Optional. Specify which path(s) dbt should look in to find data
+# test definitions.
+test-paths: ["test"]
+
+# data-paths: Optional. Specify which path(s) dbt should look in to find CSV
+# files. Running `dbt seed` will load these CSVs as tables in your warehouse
+data-paths: ["data"]
+
+# macro-paths: Optional. Specify which path(s) dbt should look in to find
+# macros. These macros will be globally available to all models in your project
+macro-paths: ['macros']
+
+# log-path: Optional. Specify which path dbt should write debug logs to.
+log-path: "logs"
+
+# clean-targets: Optional. Specify which path(s) should be removed by the
+# clean task. Run `dbt clean` to delete these directories
+clean-targets: ["target", "dbt_modules"]
+
+
+
+#
+# Connection Configurations
+#
+
+# profile: Required. This config specifies which profile dbt should use to
+# connect to your data warehouse. The provided value must exist in the
+# profiles.yml file.
+profile: "evil-corp"
+
+
+
+#
+# Model Configurations
+#
+
+# The following section contains configurations that define how your models are
+# instantiated by dbt. The `models` config below can specify options for both
+# your package, and any packages included as dependencies.
+#
+# Options are specified on a per-package, per-directory, and per-model basis.
+# The configs are inherited, so configs applied to a package can be overridden
+# for directories and models contained within that package.
+#
+# The configuration structure within a package should mirror the directory
+# structure within that package. The example configs provided below are based
+# on the following directory structure.
+#
+# dbt_project.yml
+# models/
+# ├── adwords
+# │   └── adwords_ads.sql
+# └── snowplow
+#     ├── base
+#     │   └── snowplow_events.sql
+#     └── snowplow_sessions.sql
 
 models:
-  your-package-name:         # the following configs pertain to _this_ dbt project
-    pardot:                  # assuming pardot is listed in the models/ directory
-      enabled: true          # enable all pardot models except where overriden (same as default)
-      pardot_emails:         # override the configs for the pardot_emails model
-        enabled: true        # enable this specific model (false to disable)
-        materialized: table  # create a table instead of a view. acceptable values: view, table, ephemeral, incremental.
+    enabled: true        # configs defined here are applied to _all_ packages
+    materialized: view   # but can be overridden in more specific configs below
 
-        # You can choose sort keys, a dist key, or both to improve query efficiency. By default, materialized
-        # tables are created with no sort or dist keys.
+    # pre- and post- hooks can be defined anywhere within the model hierarchy.
+    # when defined at the root level (as they are here), they apply to all models
+    # in all packages. These hooks are compiled into the model SQL and run either
+    # before or after the model is materializated.
+    pre-hook:
+        - "insert into audit (model, state, time) values ('{{this.name}}', 'start', getdate())"
 
-        sort: ['timestamp', 'userid']  # optionally set one or more sort keys on the materialized table.
-        sort_type: interleaved         # sets sort key to interleaved; default is compound.
+    post-hook:
+        - "grant select on {{this}} to user_1"
+        - "insert into audit (model, state, time) values ('{{this.name}}', 'end', getdate())"
 
-        dist: 'userid'                 # optionally set a distribution style and key on the materialized table
-                                       # other options include: all, even. anything but all or even will set the dist style to "key".
-      pardot_visitoractivity:
-        materialized: view
-        sort: ['timestamp']  # this has no effect, as sort and dist keys only apply to table and incremental materialization strategies.
+    # This is the configuration for the models in your local package. The name
+    # `your_package_name` is defined above.
+    your_package_name:
+        # Applies to all SQL files found under ./models/adwords/
+        adwords:
+            enabled: false
+            # Applies to the specific model ./models/adwords/adwords_ads.sql
+            adwords_ads:
+                enabled: true
+                materialized: table
 
-  analytics:              # This is a different dbt project included in the "repositories" dict below
-    snowplow:
-        sessions_landing_page:
-            materialized: ephemeral   # ephemeral models are injected as CTEs into models which reference them.
-                                      # ephemeral models are not created in the database!
-        sessions:
-            materialized: incremental # incremental models are append-only
-                                      # new records are identified by the sql_where statement below
-                                      # use {{this}} to reference the schema and table names for this model
+        # Applies to all SQL files found under ./models/snowplow/
+        snowplow:
+            # Applies to all SQL files found under ./models/snowplow/base
+            base:
+                # Applies to model ./models/snowplow/base/snowplow_events.sql
+                snowplow_events:
+                    materialized: table
+                    sort: ['timestamp', 'userid']
+                    sort_type: interleaved
+                    dist: 'userid'
 
-            sql_where: "created_at > (select max(created_at) from {{this}})"
+            # Applies to model ./models/snowplow/snowplow_sessions.sql
+            snowplow_sessions:
+                materialized: incremental
+                sql_where: "created_at > (select max(created_at) from {{ this }})"
+                unique_key: "id"
+                sort: "timestamp"
+                dist: "user_id"
 
-            unique_key: user_id || session_index  #this defines a unique key for this incremental model.
-                                                  #records matching this UK will be updated (deleted / inserted) rather than duplicated.
+    # This is the configuration for the "quickbooks" open source package
+    # which is included in the `repositories` section below.
+    # These configs override those defined within the quickbooks package
+    quickbooks:
+        base:
+            materialized: ephemeral
+        transform:
+            materialized: view
 
 
-# add dependencies. these will get pulled during the `dbt deps` process.
+
+#
+# Run Start & Complete Hooks
+#
+
+# Like the pre- and post- hooks above, the on-run-start and on-run-end configs
+# make it possible to run SQL at the very beginning, and very end of a dbt run.
+on-run-start:
+    - "create table if not exists audit (model text, state text, time timestamp)"
+
+on-run-end:
+    - 'grant usage on schema "{{ target.schema }}" to db_reader'
+    - 'grant select on all tables in schema "{{ target.schema }}" to db_reader'
+
+
+
+#
+# Package configurations
+#
+
+# repositories: Optional. Contains a list of packages (git repositories) that
+# should be downloaded and included in this project. When a package is
+# included, its models are added to the dbt model graph and executed with
+# `dbt run`. These configs can be specified above (as with quickbooks).
+#
+# Each repository should be a git-cloneable url. Branches and Tags can be
+# specified by adding @branch-or-version to the end of the url, ex:
+#
+# - https://github.com/fishtown-analytics/quickbooks
+# - https://github.com/fishtown-analytics/quickbooks@v0.1.0
+# - https://github.com/fishtown-analytics/quickbooks@master
+
 repositories:
-  - "git@github.com:analyst-collective/analytics"
+  - https://github.com/fishtown-analytics/quickbooks
+
+
+
+#
+# Archival
+#
+
+# Data archival is a powerful feature intended for advanced dbt users. For more
+# information, consult: http://dbt.readthedocs.io/en/master/guide/archival/

@@ -4,13 +4,16 @@
 
 ### macOS
 
-The preferred way to install dbt on macOS is via [Homebrew](http://brew.sh/). Install homebrew, then run:
+The preferred way to install dbt on macOS is via [Homebrew](http://brew.sh/). Install Homebrew, then run:
 
 ```bash
 brew update
 brew install dbt
+```
 
-# to upgrade dbt, use
+To upgrade dbt, use
+
+```bash
 brew update
 brew upgrade dbt
 ```
@@ -58,7 +61,7 @@ Then, install using `pip`:
 pip install dbt
 ```
 
-## Configuration
+## Create a new dbt project
 
 To create your first dbt project, run:
 
@@ -66,13 +69,26 @@ To create your first dbt project, run:
 › dbt init [project]
 ```
 
-This will do two things:
-- create a directory at `./[project]` with everything you need to get started.
-- create a directory at `~/.dbt/` for environment configuration. [TODO]
+This will create a directory at `./[project]` with almost everything you need to get started.
 
 Finally, configure your environment:
+
 - supply project configuration within `[project]/dbt_project.yml`
 - supply environment configuration within `~/.dbt/profiles.yml`
 
 **Please note: `dbt_project.yml` should be checked in to your models repository, so be sure that it does not contain any database
 credentials!** All private credentials belong in `~/.dbt/profiles.yml`.
+
+
+## Configuring a project
+
+The `dbt_project.yml` file is responsible for configuring how dbt operates on your project.
+You can find a sample `dbt_project.yml` file [here](https://github.com/analyst-collective/dbt/blob/master/sample.dbt_project.yml).
+
+
+## Configuring profiles
+
+`profiles.yml` defines how dbt connects to your data warehouse(s). You can find a sample
+`profiles.yml` file [here](https://github.com/analyst-collective/dbt/blob/master/sample.profiles.yml).
+By default, dbt expects this file to be located at `~/.dbt/profiles.yml`, but this location can be changed
+on the command line with the `--profiles-dir` option.

@@ -6,10 +6,10 @@ Every dbt project is a package that can be imported as a dependency within other
 # add dependencies. these will get pulled during the `dbt deps` process.
 
 repositories:
-  - "git@github.com:analyst-collective/analytics"
+  - "https://github.com/fishtown-analytics/snowplow.git"
 ```
 
-Once a package is added as a dependency, updated source code for that dependency can be downloaded from its git repository by using the command `dbt deps`. Package code will be available in the same dependency graph as the models within the current project. This allows your models to use `ref()` on top of models that are built and maintained by others in your organization.
+Once a package is added as a dependency, updated source code for that dependency can be downloaded from its git repository with `dbt deps`. Package code will be available in the same dependency graph as the models within the current project. This allows your models to use `ref()` on top of models that are built and maintained by others in your organization.
 
 ## Open source dbt packages
 

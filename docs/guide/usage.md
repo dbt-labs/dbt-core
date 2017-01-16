@@ -6,12 +6,12 @@ The following commands are available from the command line to interact with dbt.
 
 `dbt init [project_name]` performs several actions necessary to create a new dbt project:
 
-- creates a new folder at `./[project_name]` that includes necessary dbt scaffolding, including directories and template configuration files, and
-- creates necessary user-specific configuration files at `~/.dbt/` if these files do not already exist. [NOT YET IMPLEMENTED]
+- creates a new folder at `./[project_name]`
+- generates directories and sample files necessary to get started with dbt
 
 ## Run
 
-`dbt run` first compiles, and then runs, model files against the current `run-target` database. dbt connects to the run target and runs the relevant DDL and SQL required to materialize all data models using the configured materialization strategy. Models are run in the order defined by the dependency graph generated during compilation. Intelligent multi-threading is used to minimize execution time without violating dependencies.
+`dbt run` first compiles, and then runs, model files against the current `target` database. dbt connects to the target database and runs the relevant SQL required to materialize all data models using the specified materialization strategies. Models are run in the order defined by the dependency graph generated during compilation. Intelligent multi-threading is used to minimize execution time without violating dependencies.
 
 Deploying new models frequently involves destroying prior versions of these models. In these cases, `dbt run` minimizes the amount of time in which a model is unavailable by first building each model with a temporary name, then dropping the existing model, then renaming the model to its correct name. The drop and rename happen within a single database transaction for database adapters that support transactions.
 
@@ -19,23 +19,46 @@ Deploying new models frequently involves destroying prior versions of these mode
 
 Using `dbt run --models [model names]` will cause dbt to only deploy the models you list, along with their dependents. This can significantly decrease deployment time for large projects when only deploying a subset of models.
 
-### Dry run
 
-`dbt run --dry` checks the validity of data models by running them against the target database as views within a temporary namespace and subsequently dropping them. The user will be notified as to the success and failure of each model run.
+### Run dbt non-destructively
 
-`dbt run` is frequently destructive (it drops previous models at the same namespace). `dbt run --dry` is a useful way to verify that a run will complete in its entirety prior to a `dbt run`. Clean deployment signals that a subsequent `dbt run` in the same environment is likely to be successful.
+If you provide the `--non-destructive` argument to `dbt run`, dbt will minimize the amount of destructive changes it runs against your database. Specifically, dbt
+will:
 
-Note that in its current version, `dbt run --dry` does not build any tables and therefore never executes `SELECT` statements on the underlying data. As such, there are modes in which `dbt run --dry` can succeed but `dbt run` can fail. Future versions will address this issue.
+ 1. Ignore models materialized as `views`
+ 2. Truncate tables and re-insert data instead of dropping and re-creating these tables
+
+This flag is useful for recurring jobs which only need to update table models and incremental models. DBT will _not_ create, drop, or modify views if the `--non-destructive` flag is provided.
+
+```bash
+dbt run --non-destructive
+```
+
+### Refresh incremental models
+
+If you provide the `--full-refresh` argument to `dbt run`, dbt will treat incremental models as table models. This is useful when
+
+1. The schema of an incremental model changes and you need to recreate it
+2. You want to reprocess the entirety of the incremental model because of new logic in the model code
+
+```bash
+dbt run --full-refresh
+```
 
 ## Test
 
 `dbt test` runs tests on data in deployed models. There are two types of tests:
+
 - schema validations, declared in a `schema.yml` file.
-- custom validations, written as SQL `SELECT` statements. [NOT YET IMPLEMENTED]
+- custom data tests, written as SQL `SELECT` statements.
 
 `dbt test` runs both types of test and reports the results to the console.
 
-Model validation is discussed in more detail [here](model-validation/).
+Model validation is discussed in more detail [here](testing/).
+
+## Archive
+
+`dbt archive` records snapshots of specified tables so that you can analyze how tables change over time. See [here](archival/) for more information.
 
 ## Dependencies
 

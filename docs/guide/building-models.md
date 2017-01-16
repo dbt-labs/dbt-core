@@ -4,7 +4,7 @@ Building data models is the core of using dbt. This section provides guidance on
 
 ## Everything is a select
 
-The core concept of dbt data models is that everything is a `SELECT` statement. Using this approach, the SQL code within a given model defines the dataset, while dbt configuration defines what to do with it. This allows users to focus on writing analysis, not writing plumbing code. dbt is responsible for all of your DDL: creating tables, inserting records, dropping tables, etc.
+The core concept of dbt data models is that everything is a `SELECT` statement. Using this approach, the SQL code within a given model defines the dataset, while dbt configuration defines what to do with it. This allows users to focus on writing analysis, not writing plumbing code. dbt is responsible for the plumbing: creating tables, inserting records, dropping tables, etc.
 
 Here are some things that can be done when separating the analytic logic from the model configuration:
 
@@ -54,5 +54,5 @@ Here are some reference examples of dbt projects. Take a look at their code to g
 
 - [Quickbooks](https://github.com/fishtown-analytics/quickbooks)
 - [Snowplow](https://github.com/fishtown-analytics/snowplow)
-- [Stripe](https://github.com/analyst-collective/stripe)
-- [Mailchimp](https://github.com/analyst-collective/mailchimp)
+- [Stripe](https://github.com/fishtown-analytics/stripe)
+- [Zendesk](https://github.com/fishtown-analytics/zendesk)

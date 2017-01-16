@@ -13,7 +13,7 @@ Your project will depend on raw data stored in your database. We recommend makin
 
 In this convention, all subsequent data models are built on top of base models rather than on top of raw data—only base models are allowed to select from raw data tables. This ensures both that all of the transformations within the base model will be applied to all uses of this data and that if the source data table moves (or is located in a different schema or table in a different environment) it can be renamed in a single place.
 
-For a simple example of a base model, check out this [Quickbooks base model](https://github.com/fishtown-analytics/quickbooks/blob/master/base-models/quickbooks_bills.sql).
+For a simple example of a base model, check out this [Quickbooks base model](https://github.com/fishtown-analytics/quickbooks/blob/master/models/base/quickbooks_bills.sql).
 
 ## Managing multiple environments
 

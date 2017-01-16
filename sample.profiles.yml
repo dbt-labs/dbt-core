@@ -1,45 +1,90 @@
-# Put this file in ~/.dbt/profiles.yml
-#
-# This is an annotated sample project configuration for reference.
-# It attempts to show all possible configuration options.
-#
-my-profile:                   # each project has a single default profile. create additional profiles for new projects as needed.
-  outputs:
-    my-target:                # uniquely named, you can have different targets in a profile
-      type: redshift          # only type supported currently
-      threads: 4              # max number of models to run concurrently. acceptable values between 1 and 8.
-      host: localhost         # any IP or fully-qualified domain name
-      port: 5439              # database port
-      user: my_user           # database user
-      pass: password          # database password
-      dbname: dev             # database name
-      schema: my_model_schema # the schema to create models in. commonly "dbt_" + a suffix for development, and "analytics" for production
-  run-target: my-target       # default target; can be overridden at run time.
 
-# create a second profile. You can switch to this profile in the CLI with --profile my-profile
-# Valid dbt options include:
-# dbt debug --profile my-profile # use my-profile profile with default "dev" run target
-# dbt debug --profile my-profile --target dev # explicitly use "dev" run target
-# dbt debug --profile my-profile --target prod # switch to the "prod" run target
-# these flags work with `dbt (debug|compile|run|test)` as you would expect!
+# This configuration file specifies information about connections to
+# your data warehouse(s). The file contains a series of "profiles."
+# Profiles specify database credentials and connection information
+#
+# By default, dbt looks for this file in ~/.dbt/profiles.yml. That option
+# can be configured when dbt is invoked with the --profiles-dir option:
+#
+#  $ dbt run --profiles-dir /opt/dbt/
+#
+
+# Profiles should adhere to the structure defined below:
+#
+# [profile-name]:
+#   outputs:
+#     [target-name]:
+#       type: {redshift, postgres}
+#       threads: [1 - 8]
+#       host: [host ip or fully qualified domain name]
+#       port: [port]
+#       user: [user]
+#       pass: [password]
+#       dbname: [dbname]
+#       schema: [schema name]
+#   target: [target-name]
+#
+# Commonly, it's helpful to define multiple targets for a profile. For example,
+# these targets might be `dev` and `prod`. Whereas the `dev` target points to
+# a development schema (eg. dbt_dev), the `prod` schema should point to the
+# prod schema (eg. analytics). Analytical/BI tools should point to the
+# prod schema so that local development does not interfere with analysis.
+#
+# In practice, a profile might look like this:
+
 evil-corp:
-  outputs:
-    dev:                        # specify the dev connection
-      type: redshift
-      threads: 8
-      host: localhost
-      port: 5439
-      user: my_user
-      pass: password
-      dbname: warehouse
-      schema: dbt_dbanin        # use the dev schema
-    prod:                       # specify the prod connection
-      type: redshift
-      threads: 1
-      host: localhost
-      port: 5439
-      user: my_user
-      pass: password
-      dbname: warehouse
-      schema: analytics         # use the prod schema instead
-  run-target: dev               # default target is dev unless specified otherwise at run time.
+    outputs:
+        dev:                      # specify the dev connection
+            type: redshift
+            threads: 8
+            host: 12.34.56.78
+            port: 5439
+            user: elliot
+            pass: pa55word
+            dbname: warehouse
+            schema: dbt_elliot    # use the dev schema
+        prod:                     # specify the prod connection
+            type: redshift
+            threads: 1
+            host: 12.34.56.78
+            port: 5439
+            user: elliot
+            pass: pa55word
+            dbname: warehouse
+            schema: analytics     # use the prod schema instead
+    target: dev                   # default target is dev unless changed at run time
+
+mr-robot:
+    outputs:
+        dev:                      # specify the dev connection
+            type: postgres
+            threads: 6
+            host: 87.65.43.21
+            port: 5439
+            user: mr_robot
+            pass: password1
+            dbname: warehouse
+            schema: dbt_mr_robot  # use the dev schema
+        prod:                     # specify the prod connection
+            type: postgres
+            threads: 1
+            host: 87.65.43.21
+            port: 5439
+            user: mr_robot
+            pass: password1
+            dbname: warehouse
+            schema: analytics     # use the prod schema instead
+    target: dev                   # default target is dev unless changed at run time
+
+# You can switch between profiles and targets on the command line. All of the
+# following are valid ways to invoke dbt run/test/compile/etc
+#
+# $ dbt run --profile evil-corp
+# $ dbt run --profile evil-corp --target dev
+# $ dbt run --profile evil-corp --target prod
+#
+# $ dbt run --profile mr-robot
+# $ dbt run --profile mr-robot --target dev
+# $ dbt run --profile mr-robot --target prod
+
+

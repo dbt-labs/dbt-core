@@ -1,4 +1,4 @@
-# Using hooks
+# Using model hooks
 
 dbt provides the ability to run arbitrary commands against the database before and after a model is run. These are known as pre- and post-model hooks and configured as such:
 
@@ -56,3 +56,23 @@ models:
   project-name:
     post-hook: "grant select on {{this}} to looker_user"
 ```
+
+# Using run hooks
+
+dbt also provides a way to define hooks that should be executed at the very beginning and the very end of runs. Like the pre- and post- hook runs above, these `on-run-start` and `on-run-end` hooks should be added to the `dbt_project.yml` file. Check out the context variables available for use [here](context-variables/)
+
+
+```YAML
+# these hooks go at the root-level of the config file
+on-run-start:
+    - "create table if not exists audit (model text, state text, time timestamp)"
+
+on-run-end:
+    - 'grant usage on schema "{{ target.schema }}" to db_reader'
+    - 'grant select on all tables in schema "{{ target.schema }}" to db_reader'
+
+models:
+    my_package:
+        ...
+```
+
