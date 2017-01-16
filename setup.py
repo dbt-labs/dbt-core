@@ -32,6 +32,6 @@ setup(
         'snowplow-tracker==0.7.2',
         'celery==3.1.23',
         'voluptuous==0.9.3',
-        'snowflake-connector-python==1.3.7',
+        'snowflake-connector-python==1.3.8',
     ],
 )
