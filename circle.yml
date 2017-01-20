@@ -1,6 +1,6 @@
 machine:
   post:
-    - pyenv global 2.7.9 3.5.0
+    - pyenv global 2.7.9 3.6.0
   hosts:
     database: 127.0.0.1
 
