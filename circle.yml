@@ -1,4 +1,6 @@
 machine:
+  python:
+    version: 3.6.0
   post:
     - pyenv global 2.7.9 3.6.0
   hosts:
