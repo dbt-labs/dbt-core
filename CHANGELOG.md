@@ -1,3 +1,9 @@
+## dbt 0.7.0 (unreleased)
+
+#### New Features
+
+- dbt now supports [Snowflake](https://www.snowflake.net/) as a warehouse ([#259](https://github.com/analyst-collective/dbt/pull/259))
+
 ## dbt 0.6.2 (January 16, 2017)
 
 #### Changes

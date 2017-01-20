@@ -14,7 +14,7 @@ stdout_handler = logging.StreamHandler(sys.stdout)
 stdout_handler.setFormatter(logging.Formatter('%(message)s'))
 stdout_handler.setLevel(logging.INFO)
 
-logger = logging.getLogger()
+logger = logging.getLogger('dbt')
 logger.addHandler(stdout_handler)
 logger.setLevel(logging.DEBUG)
 
