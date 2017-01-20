@@ -13,7 +13,7 @@ dependencies:
     - pip install --upgrade pip setuptools || true
     - pip install --upgrade tox tox-pyenv
   override:
-    - pyenv local 2.7.9 3.5.0
+    - pyenv local 2.7.9 3.6.0
 
 test:
   override:
