@@ -2,7 +2,7 @@ machine:
   python:
     version: 3.6.0
   post:
-    - pyenv global 2.7.9 3.6.0
+    - pyenv global 2.7.12 3.6.0
   hosts:
     database: 127.0.0.1
 
@@ -15,7 +15,7 @@ dependencies:
     - pip install --upgrade pip setuptools || true
     - pip install --upgrade tox tox-pyenv
   override:
-    - pyenv local 2.7.9 3.6.0
+    - pyenv local 2.7.12 3.6.0
 
 test:
   override:
