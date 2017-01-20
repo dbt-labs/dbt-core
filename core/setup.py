@@ -41,14 +41,14 @@ setup(
     url="https://github.com/dbt-labs/dbt-core",
     packages=find_namespace_packages(include=["dbt", "dbt.*"]),
     include_package_data=True,
-    test_suite='test',
+    test_suite="test",
     entry_points={
-        'console_scripts': [
-            'dbt = dbt.main:main',
+        "console_scripts": [
+            "dbt = dbt.main:main",
         ],
     },
     scripts=[
-        'scripts/dbt',
+        "scripts/dbt",
     ],
     install_requires=[
         'Jinja2==2.11.3',
