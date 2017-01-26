@@ -57,8 +57,7 @@ def find_matching(
     reobj = re.compile(regex, re.IGNORECASE)
 
     for relative_path_to_search in relative_paths_to_search:
-        absolute_path_to_search = os.path.join(
-            root_path, relative_path_to_search)
+        absolute_path_to_search = os.path.join(root_path, relative_path_to_search)
         walk_results = os.walk(absolute_path_to_search)
 
         for current_path, subdirectories, local_files in walk_results:
@@ -73,12 +72,14 @@ def find_matching(
                 except OSError:
                     fire_event(SystemErrorRetrievingModTime(path=absolute_path))
                 if reobj.match(local_file):
-                    matching.append({
+                    matching.append(
                         'searched_path': relative_path_to_search,
                         'absolute_path': absolute_path,
                         'relative_path': relative_path,
                         'modification_time': modification_time,
-                    })
+                            "modification_time": modification_time,
+                        }
+                    )
 
     return matching
 
