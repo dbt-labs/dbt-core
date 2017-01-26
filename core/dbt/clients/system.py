@@ -84,8 +84,8 @@ def find_matching(
 
 def load_file_contents(path: str, strip: bool = True) -> str:
     path = convert_path(path)
-    with open(path, 'rb') as handle:
-        to_return = handle.read().decode('utf-8')
+    with open(path, "rb") as handle:
+        to_return = handle.read().decode("utf-8")
 
     if strip:
         to_return = to_return.strip()
