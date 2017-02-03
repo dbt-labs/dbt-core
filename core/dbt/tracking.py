@@ -379,11 +379,7 @@ def track_invalid_invocation(config=None, args=None, result_type=None):
     user = active_user
     invocation_context = get_invocation_invalid_context(user, config, args, result_type)
 
-    context = [
-        invocation_context,
-        get_platform_context(),
-        get_dbt_env_context()
-    ]
+    context = [invocation_context, get_platform_context(), get_dbt_env_context()]
 
     track(active_user, category="dbt", action="invocation", label="invalid", context=context)
 
