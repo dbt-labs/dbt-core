@@ -273,13 +273,7 @@ def track_invocation_start(config=None, args=None):
         get_dbt_env_context(),
     ]
 
-    track(
-        active_user,
-        category="dbt",
-        action='invocation',
-        label='start',
-        context=context
-    )
+    track(active_user, category="dbt", action="invocation", label="start", context=context)
 
 
 def track_project_load(options):
@@ -382,13 +376,7 @@ def track_invocation_end(
 
     assert active_user is not None, "Cannot track invocation end when active user is None"
 
-    track(
-        active_user,
-        category="dbt",
-        action='invocation',
-        label='end',
-        context=context
-    )
+    track(active_user, category="dbt", action="invocation", label="end", context=context)
 
 
 def track_invalid_invocation(config=None, args=None, result_type=None):
@@ -411,13 +399,7 @@ def track_invalid_invocation(config=None, args=None, result_type=None):
         get_dbt_env_context()
     ]
 
-    track(
-        active_user,
-        category="dbt",
-        action='invocation',
-        label='invalid',
-        context=context
-    )
+    track(active_user, category="dbt", action="invocation", label="invalid", context=context)
 
 
 def track_experimental_parser_sample(options):
