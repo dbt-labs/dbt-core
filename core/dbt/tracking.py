@@ -127,7 +127,7 @@ class User:
         self.do_not_track = False
 
         cookie = self.get_cookie()
-        self.id = cookie.get('id')
+        self.id = cookie.get("id")
 
         subject = Subject()
         subject.set_user_id(self.id)
@@ -389,7 +389,7 @@ def track_invocation_end(
     context = [
         get_invocation_end_context(user, config, args, result_type),
         get_platform_context(),
-        get_dbt_env_context()
+        get_dbt_env_context(),
     ]
 
     assert active_user is not None, "Cannot track invocation end when active user is None"
