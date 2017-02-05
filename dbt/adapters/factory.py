@@ -4,11 +4,7 @@ import dbt.exceptions
 
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.adapters.redshift import RedshiftAdapter
-
-if platform.system() != 'Windows':
-    from dbt.adapters.snowflake import SnowflakeAdapter
-else:
-    SnowflakeAdapter = None
+from dbt.adapters.snowflake import SnowflakeAdapter
 
 
 def get_adapter(profile):
