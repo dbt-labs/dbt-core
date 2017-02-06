@@ -25,7 +25,7 @@ setup(
     install_requires=[
         'Jinja2>=2.8',
         'PyYAML>=3.11',
-        'psycopg2==2.6.1',
+        'psycopg2==2.6.2',
         'sqlparse==0.1.19',
         'networkx==1.11',
         'csvkit==0.9.1',
