@@ -10,11 +10,6 @@ from dbt.adapters.snowflake import SnowflakeAdapter
 def get_adapter(profile):
     adapter_type = profile.get('type', None)
 
-    if platform.system() == 'Windows' and \
-       adapter_type == 'snowflake':
-        raise dbt.exceptions.NotImplementedException(
-            "ERROR: 'snowflake' is not supported on Windows.")
-
     adapters = {
         'postgres': PostgresAdapter,
         'redshift': RedshiftAdapter,
