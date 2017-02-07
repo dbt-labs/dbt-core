@@ -57,7 +57,7 @@ class DBTIntegrationTest(unittest.TestCase):
                         'user': os.getenv('SNOWFLAKE_TEST_USER'),
                         'password': os.getenv('SNOWFLAKE_TEST_PASSWORD'),
                         'database': os.getenv('SNOWFLAKE_TEST_DATABASE'),
-                        'schema': self.schema,
+                        'schema': self.schema + os.getenv('BUILD_ID', ''),
                         'warehouse': os.getenv('SNOWFLAKE_TEST_WAREHOUSE'),
                     },
                     'noaccess': {
@@ -67,7 +67,7 @@ class DBTIntegrationTest(unittest.TestCase):
                         'user': 'noaccess',
                         'password': 'password',
                         'database': os.getenv('SNOWFLAKE_TEST_DATABASE'),
-                        'schema': self.schema,
+                        'schema': self.schema + os.getenv('BUILD_ID', ''),
                         'warehouse': os.getenv('SNOWFLAKE_TEST_WAREHOUSE'),
                     }
                 },
