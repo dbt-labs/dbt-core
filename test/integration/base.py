@@ -11,6 +11,10 @@ DBT_PROFILES = os.path.join(DBT_CONFIG_DIR, 'profiles.yml')
 
 class DBTIntegrationTest(unittest.TestCase):
 
+    @property
+    def build_specific_schema(self):
+        return self.schema + os.getenv('BUILD_ID', '')
+
     def postgres_profile(self):
         return {
             'config': {
@@ -26,7 +30,7 @@ class DBTIntegrationTest(unittest.TestCase):
                         'user': 'root',
                         'pass': 'password',
                         'dbname': 'dbt',
-                        'schema': self.schema
+                        'schema': self.build_specific_schema
                     },
                     'noaccess': {
                         'type': 'postgres',
@@ -36,7 +40,7 @@ class DBTIntegrationTest(unittest.TestCase):
                         'user': 'noaccess',
                         'pass': 'password',
                         'dbname': 'dbt',
-                        'schema': self.schema
+                        'schema': self.build_specific_schema
                     }
                 },
                 'target': 'default2'
@@ -57,7 +61,7 @@ class DBTIntegrationTest(unittest.TestCase):
                         'user': os.getenv('SNOWFLAKE_TEST_USER'),
                         'password': os.getenv('SNOWFLAKE_TEST_PASSWORD'),
                         'database': os.getenv('SNOWFLAKE_TEST_DATABASE'),
-                        'schema': self.schema + os.getenv('BUILD_ID', ''),
+                        'schema': self.build_specific_schema,
                         'warehouse': os.getenv('SNOWFLAKE_TEST_WAREHOUSE'),
                     },
                     'noaccess': {
@@ -67,7 +71,7 @@ class DBTIntegrationTest(unittest.TestCase):
                         'user': 'noaccess',
                         'password': 'password',
                         'database': os.getenv('SNOWFLAKE_TEST_DATABASE'),
-                        'schema': self.schema + os.getenv('BUILD_ID', ''),
+                        'schema': self.build_specific_schema,
                         'warehouse': os.getenv('SNOWFLAKE_TEST_WAREHOUSE'),
                     }
                 },
@@ -127,8 +131,8 @@ class DBTIntegrationTest(unittest.TestCase):
         self.handle = connection.get('handle')
         self.adapter_type = profile.get('type')
 
-        self.run_sql('DROP SCHEMA IF EXISTS "{}" CASCADE'.format(self.schema))
-        self.run_sql('CREATE SCHEMA "{}"'.format(self.schema))
+        self.run_sql('DROP SCHEMA IF EXISTS "{}" CASCADE'.format(self.build_specific_schema))
+        self.run_sql('CREATE SCHEMA "{}"'.format(self.build_specific_schema))
 
     def use_default_project(self):
         # create a dbt_project.yml
@@ -169,8 +173,8 @@ class DBTIntegrationTest(unittest.TestCase):
         self.handle = connection.get('handle')
         self.adapter_type = profile.get('type')
 
-        self.run_sql('DROP SCHEMA IF EXISTS "{}" CASCADE'.format(self.schema))
-        self.run_sql('CREATE SCHEMA "{}"'.format(self.schema))
+        self.run_sql('DROP SCHEMA IF EXISTS "{}" CASCADE'.format(self.build_specific_schema))
+        self.run_sql('CREATE SCHEMA "{}"'.format(self.build_specific_schema))
 
     def tearDown(self):
         os.remove(DBT_PROFILES)
@@ -242,7 +246,7 @@ class DBTIntegrationTest(unittest.TestCase):
                 and table_schema = '{}'
                 order by column_name asc"""
 
-        result = self.run_sql(sql.format(table, self.schema), fetch='all')
+        result = self.run_sql(sql.format(table, self.build_specific_schema), fetch='all')
 
         return result
 
@@ -258,7 +262,7 @@ class DBTIntegrationTest(unittest.TestCase):
                 order by table_name
                 """
 
-        result = self.run_sql(sql.format(self.schema), fetch='all')
+        result = self.run_sql(sql.format(self.build_specific_schema), fetch='all')
 
         return {model_name: materialization for (model_name, materialization) in result}
 
@@ -281,7 +285,7 @@ class DBTIntegrationTest(unittest.TestCase):
                  SELECT {columns} FROM "{schema}"."{table_a}")
             ) AS a""".format(
                 columns=columns_csv,
-                schema=self.schema,
+                schema=self.build_specific_schema,
                 table_a=table_a,
                 table_b=table_b
             )
@@ -295,8 +299,8 @@ class DBTIntegrationTest(unittest.TestCase):
         )
 
     def assertTableRowCountsEqual(self, table_a, table_b):
-        table_a_result = self.run_sql('SELECT COUNT(*) FROM "{}"."{}"'.format(self.schema, table_a), fetch='one')
-        table_b_result = self.run_sql('SELECT COUNT(*) FROM "{}"."{}"'.format(self.schema, table_b), fetch='one')
+        table_a_result = self.run_sql('SELECT COUNT(*) FROM "{}"."{}"'.format(self.build_specific_schema, table_a), fetch='one')
+        table_b_result = self.run_sql('SELECT COUNT(*) FROM "{}"."{}"'.format(self.build_specific_schema, table_b), fetch='one')
 
         self.assertEquals(
             table_a_result[0],
