@@ -177,7 +177,7 @@ active_user: Optional[User] = None
 
 
 def get_run_type(args):
-    return 'regular'
+    return "regular"
 
 
 def get_invocation_context(user, config, args):
