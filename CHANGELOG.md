@@ -1,8 +1,42 @@
-## dbt 0.7.0 (unreleased)
+## dbt 0.7.0 (February 9, 2017)
+
+### Overview
+
+- Snowflake Support
+- Deprecations
+
+### Snowflake Support
+
+dbt now supports [Snowflake](https://www.snowflake.net/) as a target in addition to Postgres and Redshift! All dbt functionality is supported in this new warehouse. There is a sample snowflake profile in [sample.profiles.yml](https://github.com/analyst-collective/dbt/blob/development/sample.profiles.yml) -- you can start using it right away.
+
+### Deprecations
+
+There are a few deprecations in 0.7:
+
+ - `run-target` in profiles.yml is no longer supported. Use `target` instead.
+ - Project names (`name` in dbt_project.yml) can now only contain letters, numbers, and underscores, and must start with a letter. Previously they could contain any character.
+ - `--dry-run` is no longer supported.
+
+### Notes
 
 #### New Features
 
 - dbt now supports [Snowflake](https://www.snowflake.net/) as a warehouse ([#259](https://github.com/analyst-collective/dbt/pull/259))
+
+#### Bugfixes
+
+- use adapter for sort/dist ([#274](https://github.com/analyst-collective/dbt/pull/274))
+
+#### Deprecations
+
+- run-target and name validations ([#280](https://github.com/analyst-collective/dbt/pull/280))
+- dry-run removed ([#281](https://github.com/analyst-collective/dbt/pull/281))
+
+#### Changes
+
+- fixed a typo in the docs related to post-run hooks ([#271](https://github.com/analyst-collective/dbt/pull/271))
+- refactored tracking code to refresh invocation id in a multi-run context ([#273](https://github.com/analyst-collective/dbt/pull/273))
+- added unit tests for the graph ([#270](https://github.com/analyst-collective/dbt/pull/270)
 
 ## dbt 0.6.2 (January 16, 2017)
 
