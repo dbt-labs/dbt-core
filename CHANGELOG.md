@@ -36,7 +36,7 @@ There are a few deprecations in 0.7:
 
 - fixed a typo in the docs related to post-run hooks ([#271](https://github.com/analyst-collective/dbt/pull/271))
 - refactored tracking code to refresh invocation id in a multi-run context ([#273](https://github.com/analyst-collective/dbt/pull/273))
-- added unit tests for the graph ([#270](https://github.com/analyst-collective/dbt/pull/270)
+- added unit tests for the graph ([#270](https://github.com/analyst-collective/dbt/pull/270))
 
 ## dbt 0.6.2 (January 16, 2017)
 
