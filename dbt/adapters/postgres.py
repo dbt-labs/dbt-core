@@ -52,6 +52,9 @@ def exception_handler(connection, cursor, model_name, query):
                 RELATION_PERMISSION_DENIED_MESSAGE.format(**error_data))
         else:
             raise e
+    except psycopg2.DataError as e:
+        raise RuntimeError("Data Error: {} while building {}.{}".format(
+            str(e), schema, model_name))
     except Exception as e:
         handle.rollback()
         logger.debug("Error running SQL: %s", query)

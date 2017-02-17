@@ -7,6 +7,8 @@ import sqlparse
 
 import dbt.project
 import dbt.utils
+import dbt.loader
+import dbt.model
 
 from dbt.source import Source
 from dbt.utils import find_model_by_fqn, find_model_by_name, \
@@ -219,10 +221,14 @@ class Compiler(object):
 
         # built-ins
         context['ref'] = self.__ref(linker, context, model, models)
-        context['config'] = self.__model_config(model, linker)
-        context['this'] = This(
-            context['env']['schema'], model.immediate_name, model.name
-        )
+
+        # these only apply to models
+        if model.dbt_run_type == dbt.model.NodeType.Model:
+            context['config'] = self.__model_config(model, linker)
+            context['this'] = This(
+                context['env']['schema'], model.immediate_name, model.name
+            )
+
         context['var'] = Var(model, context=context)
         context['target'] = self.project.get_target()
 
@@ -459,32 +465,35 @@ class Compiler(object):
         for schema in all_schema_specs:
             # compiling a SchemaFile returns >= 0 SchemaTest models
             try:
-                schema_tests.extend(schema.compile())
+                def context_partial(schema_test):
+                    return self.get_context(linker, schema_test, models)
+
+                schema_tests.extend(schema.compile(context_partial))
             except RuntimeError as e:
                 logger.info("\n" + str(e))
                 schema_test_path = schema.filepath
                 logger.info("Skipping compilation for {}...\n"
                             .format(schema_test_path))
 
+        models_and_schemas = models.copy()
+        schemas_map = {schema: schema.render() for schema in schema_tests}
+        models_and_schemas.update(schemas_map)
+
         written_tests = []
-        for schema_test in schema_tests:
-            # show a warning if the model being tested doesn't exist
-            try:
-                source_model = find_model_by_name(models,
-                                                  schema_test.model_name)
-            except RuntimeError as e:
-                dbt.utils.compiler_warning(schema_test, str(e))
+        for schema_test, raw_query in schemas_map.items():
+
+            if raw_query is None:
                 continue
+
+            query = self.add_cte_to_rendered_query(
+                linker, schema_test, models_and_schemas
+            )
 
             serialized = schema_test.serialize()
 
-            model_node = tuple(source_model.fqn)
             test_node = tuple(schema_test.fqn)
-
-            linker.dependency(test_node, model_node)
             linker.update_node_data(test_node, serialized)
 
-            query = schema_test.render()
             self.__write(schema_test.build_path(), query)
             written_tests.append(schema_test)
 

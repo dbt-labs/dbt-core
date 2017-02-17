@@ -69,8 +69,6 @@ class SchemaTester(object):
     def __init__(self, project):
         self.project = project
 
-        self.test_started_at = datetime.datetime.now()
-
     def get_target(self):
         target_cfg = self.project.run_environment()
         return dbt.targets.get_target(target_cfg)
@@ -106,13 +104,3 @@ class SchemaTester(object):
                         "got {}".format(len(result)))
                 else:
                     return result[0]
-
-    def validate_schema(self, schema_test):
-            sql = schema_test.render()
-            num_rows = self.execute_query(model, sql)
-            if num_rows == 0:
-                logger.info("  OK")
-                yield True
-            else:
-                logger.info("  FAILED ({})".format(num_rows))
-                yield False

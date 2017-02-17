@@ -600,10 +600,11 @@ class RunManager(object):
         if exclude_spec is None:
             exclude_spec = []
 
-        model_nodes = [
-            n for n in graph.nodes()
-            if graph.node[n]['dbt_run_type'] == model_type
-        ]
+        model_nodes = []
+        for node in graph.nodes():
+            data = graph.node[node]
+            if data.get('dbt_run_type') == model_type:
+                model_nodes.append(node)
 
         model_only_graph = graph.subgraph(model_nodes)
         selected_nodes = dbt.graph.selector.select_nodes(self.project,
