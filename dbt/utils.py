@@ -34,6 +34,8 @@ class This(object):
 def compiler_error(model, msg):
     if model is None:
         name = '<None>'
+    elif model is str:
+        name = model
     else:
         name = model.nice_name
 

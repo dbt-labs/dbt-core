@@ -169,7 +169,7 @@ class SourceConfig(object):
         for k in SourceConfig.ExtendDictFields:
             config[k] = {}
 
-        model_configs = project['models']
+        model_configs = project.get('models')
 
         if model_configs is None:
             return config

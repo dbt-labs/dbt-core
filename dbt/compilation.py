@@ -41,6 +41,7 @@ class Compiler(object):
     def __init__(self, project, args):
         self.project = project
         self.args = args
+        self.parsed_models = None
 
         self.macro_generator = None
 
@@ -538,8 +539,25 @@ class Compiler(object):
 
         return all_models
 
+    def get_parsed_models(self):
+        root_project = self.project
+        all_projects = [root_project]
+        all_projects.extend(dbt.utils.dependency_projects(self.project))
+
+        all_models = []
+        for project in all_projects:
+            all_models.extend(
+                dbt.parser.load_and_parse_models(
+                    package_name=project.get('name'),
+                    root_dir=root_project.get('project-root'),
+                    relative_dirs=project.get('source_paths', [])))
+
+        return all_models
+
     def compile(self):
         linker = Linker()
+
+        parsed_models = self.get_parsed_models()
 
         all_models = self.get_models()
         all_macros = self.get_macros(this_project=self.project)
@@ -552,8 +570,8 @@ class Compiler(object):
         self.macro_generator = self.generate_macros(all_macros)
 
         enabled_models = [
-            model for model in all_models
-            if model.is_enabled and not model.is_empty
+            model for model in parsed_models
+            if model.get('enabled') == True and model.get('empty') == True
         ]
 
         compiled_models, written_models = self.compile_models(
