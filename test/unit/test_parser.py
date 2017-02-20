@@ -52,6 +52,7 @@ class ParserTest(unittest.TestCase):
             {
                 'models.root.model_one': {
                     'name': 'model_one',
+                    'fqn': ['root_project', 'model_one'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': [],
@@ -76,6 +77,7 @@ class ParserTest(unittest.TestCase):
             {
                 'models.root.model_one': {
                     'name': 'model_one',
+                    'fqn': ['root_project', 'model_one'],
                     'empty': True,
                     'package_name': 'root',
                     'depends_on': [],
@@ -105,6 +107,7 @@ class ParserTest(unittest.TestCase):
             {
                 'models.root.base': {
                     'name': 'base',
+                    'fqn': ['root_project', 'base'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': [],
@@ -114,6 +117,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'models.root.events_tx': {
                     'name': 'events_tx',
+                    'fqn': ['root_project', 'events_tx'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': ['models.root.base'],
@@ -159,6 +163,7 @@ class ParserTest(unittest.TestCase):
             {
                 'models.root.events': {
                     'name': 'events',
+                    'fqn': ['root_project', 'events'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': [],
@@ -168,6 +173,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'models.root.sessions': {
                     'name': 'sessions',
+                    'fqn': ['root_project', 'sessions'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': [],
@@ -177,6 +183,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'models.root.events_tx': {
                     'name': 'events_tx',
+                    'fqn': ['root_project', 'events_tx'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': ['models.root.events'],
@@ -186,6 +193,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'models.root.sessions_tx': {
                     'name': 'sessions_tx',
+                    'fqn': ['root_project', 'sessions_tx'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': ['models.root.sessions'],
@@ -195,6 +203,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'models.root.multi': {
                     'name': 'multi',
+                    'fqn': ['root_project', 'multi'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': ['models.root.sessions_tx',
@@ -241,6 +250,7 @@ class ParserTest(unittest.TestCase):
             {
                 'models.snowplow.events': {
                     'name': 'events',
+                    'fqn': ['snowplow', 'events'],
                     'empty': False,
                     'package_name': 'snowplow',
                     'depends_on': [],
@@ -250,6 +260,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'models.snowplow.sessions': {
                     'name': 'sessions',
+                    'fqn': ['snowplow', 'sessions'],
                     'empty': False,
                     'package_name': 'snowplow',
                     'depends_on': [],
@@ -259,6 +270,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'models.snowplow.events_tx': {
                     'name': 'events_tx',
+                    'fqn': ['snowplow', 'events_tx'],
                     'empty': False,
                     'package_name': 'snowplow',
                     'depends_on': ['models.snowplow.events'],
@@ -268,6 +280,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'models.snowplow.sessions_tx': {
                     'name': 'sessions_tx',
+                    'fqn': ['snowplow', 'sessions_tx'],
                     'empty': False,
                     'package_name': 'snowplow',
                     'depends_on': ['models.snowplow.sessions'],
@@ -277,6 +290,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'models.root.multi': {
                     'name': 'multi',
+                    'fqn': ['root_project', 'multi'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': ['models.snowplow.sessions_tx',
@@ -308,6 +322,7 @@ class ParserTest(unittest.TestCase):
             {
                 'models.root.model_one': {
                     'name': 'model_one',
+                    'fqn': ['root_project', 'model_one'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': [],
@@ -374,6 +389,7 @@ class ParserTest(unittest.TestCase):
             {
                 'models.root.table': {
                     'name': 'table',
+                    'fqn': ['root_project', 'table'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': [],
@@ -384,6 +400,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'models.root.ephemeral': {
                     'name': 'ephemeral',
+                    'fqn': ['root_project', 'ephemeral'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': [],
@@ -394,6 +411,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'models.root.view': {
                     'name': 'view',
+                    'fqn': ['root_project', 'view'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': [],
@@ -503,6 +521,7 @@ class ParserTest(unittest.TestCase):
             {
                 'models.root.table': {
                     'name': 'table',
+                    'fqn': ['root_project', 'table'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': [],
@@ -513,6 +532,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'models.root.ephemeral': {
                     'name': 'ephemeral',
+                    'fqn': ['root_project', 'ephemeral'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': [],
@@ -523,6 +543,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'models.root.view': {
                     'name': 'view',
+                    'fqn': ['root_project', 'view'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': [],
@@ -533,6 +554,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'models.snowplow.disabled': {
                     'name': 'disabled',
+                    'fqn': ['snowplow', 'disabled'],
                     'empty': False,
                     'package_name': 'snowplow',
                     'depends_on': [],
@@ -543,6 +565,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'models.snowplow.package': {
                     'name': 'package',
+                    'fqn': ['snowplow', 'views', 'package'],
                     'empty': False,
                     'package_name': 'snowplow',
                     'depends_on': [],

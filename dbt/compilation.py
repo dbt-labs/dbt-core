@@ -149,21 +149,17 @@ class Compiler(object):
     def __ref(self, linker, ctx, model, all_models):
         schema = ctx['env']['schema']
 
-        source_model = tuple(model.fqn)
-        linker.add_node(source_model)
+        model_id = model.get('unique_id')
+        linker.add_node(model_id)
 
         def do_ref(*args):
-            if len(args) == 1:
-                other_model_name = args[0]
-                other_model = find_model_by_name(all_models, other_model_name)
-            elif len(args) == 2:
-                other_model_package, other_model_name = args
+            target_model_name = None
+            target_model_package = None
 
-                other_model = find_model_by_name(
-                    all_models,
-                    other_model_name,
-                    package_namespace=other_model_package
-                )
+            if len(args) == 1:
+                target_model_name = args[0]
+            elif len(args) == 2:
+                target_model_package, target_model_name = args
             else:
                 compiler_error(
                     model,
@@ -172,43 +168,38 @@ class Compiler(object):
                     )
                 )
 
-            other_model_fqn = tuple(other_model.fqn[:-1] + [other_model_name])
-            src_fqn = ".".join(source_model)
-            ref_fqn = ".".join(other_model_fqn)
+            target_model = find_model_by_unique_id(all_models,
+                                                   target_model_name,
+                                                   target_model_package)
+            target_model_id = target_model.get('unique_id')
 
-            if not other_model.is_enabled:
-                raise RuntimeError(
+            if target_model.get('enabled') == False:
+                compiler_error(
                     "Model '{}' depends on model '{}' which is disabled in "
-                    "the project config".format(src_fqn, ref_fqn)
-                )
+                    "the project config".format(model.get('unique_id'),
+                                                target_model.get('unique_id')))
 
             # this creates a trivial cycle -- should this be a compiler error?
             # we can still interpolate the name w/o making a self-cycle
-            if source_model == other_model_fqn:
+            if model_id == target_model_id:
                 pass
             else:
-                linker.dependency(source_model, other_model_fqn)
+                linker.dependency(model_id, target_model_id)
 
-            if other_model.is_ephemeral:
-                linker.inject_cte(model, other_model)
-                return other_model.cte_name
+            if other_model.get('ephemeral') == True:
+                model['extra_ctes'].append(target_model_id)
+                return '__dbt__CTE__{}'.format(target_model.get('name'))
             else:
-                return '"{}"."{}"'.format(schema, other_model_name)
+                return '"{}"."{}"'.format(schema, target_model.get('name'))
 
         def wrapped_do_ref(*args):
             try:
                 return do_ref(*args)
             except RuntimeError as e:
-                root = os.path.relpath(
-                    model.root_dir,
-                    model.project['project-root']
-                )
-
-                filepath = os.path.join(root, model.rel_filepath)
-                logger.info("Compiler error in {}".format(filepath))
+                logger.info("Compiler error in {}".format(model.get('path')))
                 logger.info("Enabled models:")
                 for m in all_models:
-                    logger.info(" - {}".format(".".join(m.fqn)))
+                    logger.info(" - {}".format(".".join(m.get('fqn'))))
                 raise e
 
         return wrapped_do_ref
@@ -251,22 +242,26 @@ class Compiler(object):
 
     def compile_model(self, linker, model, models):
         try:
-            fs_loader = jinja2.FileSystemLoader(searchpath=model.root_dir)
-            jinja = jinja2.Environment(loader=fs_loader)
+            compiled_model = model.copy()
+            compiled_model.update({
+                'compiled': False,
+                'extra_ctes': [],
+                'compiled_sql': None
+            })
 
-            template_contents = dbt.clients.system.load_file_contents(
-                model.absolute_path)
-
-            template = jinja.from_string(template_contents)
             context = self.get_context(linker, model, models)
 
-            rendered = template.render(context)
+            env = jinja2.sandbox.SandboxedEnvironment()
+
+            compiled_model['compiled_sql'] = env.from_string(
+                model.get('raw_sql')).render(context)
+            compiled_model['compiled'] = True
         except jinja2.exceptions.TemplateSyntaxError as e:
             compiler_error(model, str(e))
         except jinja2.exceptions.UndefinedError as e:
             compiler_error(model, str(e))
 
-        return rendered
+        return compiled_model
 
     def write_graph_file(self, linker):
         filename = graph_file_name
@@ -380,16 +375,16 @@ class Compiler(object):
                 )
 
     def compile_models(self, linker, models):
-        compiled_models = {model: self.compile_model(linker, model, models)
+        compiled_models = {self.compile_model(linker, model, models)
                            for model in models}
-        sorted_models = [find_model_by_fqn(models, fqn)
-                         for fqn in linker.as_topological_ordering()]
+        sorted_models = [models[path]
+                         for path in linker.as_topological_ordering()]
 
         written_models = []
         for model in sorted_models:
             # in-model configs were just evaluated. Evict anything that is
             # newly-disabled
-            if not model.is_enabled:
+            if model.get('enabled') == False:
                 self.remove_node_from_graph(linker, model, models)
                 continue
 
@@ -400,13 +395,11 @@ class Compiler(object):
             context = self.get_context(linker, model, models)
             wrapped_stmt = model.compile(injected_stmt, self.project, context)
 
-            serialized = model.serialize()
-            linker.update_node_data(tuple(model.fqn), serialized)
-
-            if model.is_ephemeral:
+            if model.get('ephemeral') == True:
                 continue
 
-            self.__write(model.build_path(), wrapped_stmt)
+            build_path = os.path.join('build', model.get('path'))
+            self.__write(build_path, wrapped_stmt)
             written_models.append(model)
 
         return compiled_models, written_models

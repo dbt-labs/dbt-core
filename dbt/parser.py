@@ -70,7 +70,8 @@ def __config(model, cfg):
     return config
 
 
-def parse_model(model, root_project_config, package_project_config):
+def parse_model(model, model_path, root_project_config,
+                package_project_config):
     parsed_model = copy.deepcopy(model)
 
     parsed_model.update({
@@ -96,8 +97,10 @@ def parse_model(model, root_project_config, package_project_config):
 
     env.from_string(model.get('raw_sql')).render(context)
 
+    parsed_model['unique_id'] = model_path
     parsed_model['config'] = config.config
     parsed_model['empty'] = (len(model.get('raw_sql').strip()) == 0)
+    parsed_model['fqn'] = fqn
 
     return parsed_model
 
@@ -110,7 +113,9 @@ def parse_models(models, projects):
 
         model_path = get_model_path(package_name, model.get('name'))
 
+        # TODO if this is set, raise a compiler error
         to_return[model_path] = parse_model(model,
+                                            model_path,
                                             projects.get('root'),
                                             projects.get(package_name))
 
@@ -133,6 +138,7 @@ def load_and_parse_files(package_name, root_dir, relative_dirs, extension,
         # TODO: support more than just models
         models.append({
             'name': os.path.basename(file_match.get('absolute_path')),
+            'root_path': root_dir,
             'path': file_match.get('relative_path'),
             'package_name': package_name,
             'raw_sql': file_contents

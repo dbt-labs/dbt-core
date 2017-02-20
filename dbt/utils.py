@@ -90,6 +90,23 @@ class Var(object):
             return default
 
 
+def model_cte_name(model):
+    return '__dbt__CTE__{}'.format(model.get('name'))
+
+
+def find_model_by_unique_id(all_models, target_model_name,
+                            target_model_package):
+
+    for name, model in all_models.items():
+        resource_type, package_name, model_name = name.split('.')
+
+        if ((target_model_name == model_name) and \
+            (target_model_package is None or
+             target_model_package == package_name)):
+            return model
+
+    return None
+
 def find_model_by_name(models, name, package_namespace=None):
     found = []
     for model in models:
