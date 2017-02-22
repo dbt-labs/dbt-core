@@ -59,6 +59,8 @@ evil-corp:
                                   # i.e. evilcorp.snowflakecomputing.com
             user: elliot
             password: pa55word
+            role: SYSADMIN        # optional, the snowflake role you want to use
+                                  # when connecting
             database: db
             warehouse: warehouse
             schema: analytics     # use the prod schema instead

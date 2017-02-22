@@ -1,3 +1,9 @@
+## dbt 0.7.1 (unreleased)
+
+#### New Features
+
+- profiles.yml now supports Snowflake `role` as an option ([#291](https://github.com/analyst-collective/dbt/pull/291))
+
 ## dbt 0.7.0 (February 9, 2017)
 
 ### Overview

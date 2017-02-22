@@ -3,7 +3,7 @@
 changed_tests := `git status --porcelain | grep '^\(M\| M\|A\| A\)' | awk '{ print $$2 }' | grep '\/test_[a-zA-Z_\-\.]\+.py'`
 
 install:
-	pip install .
+	pip install --upgrade .
 
 test:
 	@echo "Full test run starting..."

@@ -104,7 +104,8 @@ def run_from_args(parsed):
         dbt.tracking.track_invocation_end(
             project=proj, args=parsed, result_type="ok", result=None
         )
-    except dbt.exceptions.NotImplementedException as e:
+    except (dbt.exceptions.NotImplementedException,
+            dbt.exceptions.FailedToConnectException) as e:
         logger.info('ERROR: {}'.format(e))
         dbt.tracking.track_invocation_end(
             project=proj, args=parsed, result_type="error", result=str(e)
