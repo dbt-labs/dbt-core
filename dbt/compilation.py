@@ -8,12 +8,19 @@ import sqlparse
 import dbt.project
 import dbt.utils
 
+from dbt.model import Model
 from dbt.source import Source
 from dbt.utils import find_model_by_fqn, find_model_by_name, \
      split_path, This, Var, compiler_error, to_string
 
 from dbt.linker import Linker
 from dbt.runtime import RuntimeContext
+
+import dbt.contracts.graph.compiled
+import dbt.contracts.graph.parsed
+import dbt.contracts.project
+import dbt.flags
+import dbt.parser
 import dbt.templates
 
 from dbt.adapters.factory import get_adapter
@@ -35,6 +42,95 @@ def compile_string(string, ctx):
         compiler_error(None, str(e))
     except jinja2.exceptions.UndefinedError as e:
         compiler_error(None, str(e))
+
+
+def prepend_ctes(model, all_models):
+    model, _, all_models = recursively_prepend_ctes(model, all_models)
+
+    return (model, all_models)
+
+
+def recursively_prepend_ctes(model, all_models):
+    if dbt.flags.STRICT_MODE:
+        dbt.contracts.graph.compiled.validate_one(model)
+        dbt.contracts.graph.compiled.validate(all_models)
+
+    model = model.copy()
+    prepend_ctes = []
+
+    if model.get('all_ctes_injected') == True:
+        return (model, model.get('extra_cte_ids'), all_models)
+
+    for cte_id in model.get('extra_cte_ids'):
+        cte_to_add = all_models.get(cte_id)
+        cte_to_add, new_prepend_ctes, all_models = recursively_prepend_ctes(
+            cte_to_add, all_models)
+
+        prepend_ctes = new_prepend_ctes + prepend_ctes
+        new_cte_name = '__dbt__CTE__{}'.format(cte_to_add.get('name'))
+        prepend_ctes.append(' {} as (\n{}\n)'.format(
+            new_cte_name,
+            cte_to_add.get('compiled_sql')))
+
+    model['extra_ctes_injected'] = True
+    model['extra_cte_sql'] = prepend_ctes
+    model['injected_sql'] = inject_ctes_into_sql(
+        model.get('compiled_sql'),
+        model.get('extra_cte_sql'))
+
+    all_models[model.get('unique_id')] = model
+
+    return (model, prepend_ctes, all_models)
+
+
+def inject_ctes_into_sql(sql, ctes):
+    """
+    `ctes` is a list of CTEs in the form:
+
+      [ "__dbt__CTE__ephemeral as (select * from table)",
+        "__dbt__CTE__events as (select id, type from events)" ]
+
+    Given `sql` like:
+
+      "with internal_cte as (select * from sessions)
+       select * from internal_cte"
+
+    This will spit out:
+
+      "with __dbt__CTE__ephemeral as (select * from table),
+            __dbt__CTE__events as (select id, type from events),
+            with internal_cte as (select * from sessions)
+       select * from internal_cte"
+
+    (Whitespace enhanced for readability.)
+    """
+    if len(ctes) == 0:
+        return sql
+
+    parsed_stmts = sqlparse.parse(sql)
+    parsed = parsed_stmts[0]
+
+    with_stmt = None
+    for token in parsed.tokens:
+        if token.is_keyword and token.normalized == 'WITH':
+            with_stmt = token
+            break
+
+    if with_stmt is None:
+        # no with stmt, add one, and inject CTEs right at the beginning
+        first_token = parsed.token_first()
+        with_stmt = sqlparse.sql.Token(sqlparse.tokens.Keyword, 'with')
+        parsed.insert_before(first_token, with_stmt)
+    else:
+        # stmt exists, add a comma (which will come after injected CTEs)
+        trailing_comma = sqlparse.sql.Token(sqlparse.tokens.Punctuation, ',')
+        parsed.insert_after(with_stmt, trailing_comma)
+
+    parsed.insert_after(
+        with_stmt,
+        sqlparse.sql.Token(sqlparse.tokens.Keyword, ", ".join(ctes)))
+
+    return str(parsed)
 
 
 class Compiler(object):
@@ -114,23 +210,8 @@ class Compiler(object):
 
     def __model_config(self, model, linker):
         def do_config(*args, **kwargs):
-            if len(args) == 1 and len(kwargs) == 0:
-                opts = args[0]
-            elif len(args) == 0 and len(kwargs) > 0:
-                opts = kwargs
-            else:
-                raise RuntimeError(
-                    "Invalid model config given inline in {}".format(model)
-                )
+            return ''
 
-            if type(opts) != dict:
-                raise RuntimeError(
-                    "Invalid model config given inline in {}".format(model)
-                )
-
-            model.update_in_model_config(opts)
-            model.add_to_prologue("Config specified in model: {}".format(opts))
-            return ""
         return do_config
 
     def model_can_reference(self, src_model, other_model):
@@ -146,11 +227,8 @@ class Compiler(object):
             src_model.own_project['name'] == src_model.project['name']
         )
 
-    def __ref(self, linker, ctx, model, all_models):
-        schema = ctx['env']['schema']
-
-        model_id = model.get('unique_id')
-        linker.add_node(model_id)
+    def __ref(self, ctx, model, all_models):
+        schema = ctx.get('env', {}).get('schema')
 
         def do_ref(*args):
             target_model_name = None
@@ -168,26 +246,35 @@ class Compiler(object):
                     )
                 )
 
-            target_model = find_model_by_unique_id(all_models,
-                                                   target_model_name,
-                                                   target_model_package)
+            target_model = dbt.utils.find_model_by_name(
+                all_models,
+                target_model_name,
+                target_model_package)
+
+            if target_model is None:
+                compiler_error(
+                    model,
+                    "Model '{}' depends on model '{}' which was not found."
+                    .format(model.get('unique_id'), target_model_name))
+
             target_model_id = target_model.get('unique_id')
 
-            if target_model.get('enabled') == False:
+            if target_model.get('config', {}) \
+                           .get('enabled') == False:
                 compiler_error(
+                    model,
                     "Model '{}' depends on model '{}' which is disabled in "
                     "the project config".format(model.get('unique_id'),
                                                 target_model.get('unique_id')))
 
-            # this creates a trivial cycle -- should this be a compiler error?
-            # we can still interpolate the name w/o making a self-cycle
-            if model_id == target_model_id:
-                pass
-            else:
-                linker.dependency(model_id, target_model_id)
+            print('dependency {} to {}'.format(model.get('unique_id'),
+                                               target_model.get('unique_id')))
 
-            if other_model.get('ephemeral') == True:
-                model['extra_ctes'].append(target_model_id)
+            model['depends_on'].append(target_model_id)
+            if target_model.get('config', {}) \
+                           .get('materialized') == 'ephemeral':
+
+                model['extra_cte_ids'].append(target_model_id)
                 return '__dbt__CTE__{}'.format(target_model.get('name'))
             else:
                 return '"{}"."{}"'.format(schema, target_model.get('name'))
@@ -198,11 +285,47 @@ class Compiler(object):
             except RuntimeError as e:
                 logger.info("Compiler error in {}".format(model.get('path')))
                 logger.info("Enabled models:")
-                for m in all_models:
+                for n,m in all_models.items():
                     logger.info(" - {}".format(".".join(m.get('fqn'))))
                 raise e
 
         return wrapped_do_ref
+
+    def get_compiler_context(self, linker, model, models):
+        runtime = RuntimeContext(model=model)
+
+        context = self.project.context()
+
+        # built-ins
+        context['ref'] = self.__ref(context, model, models)
+        context['config'] = self.__model_config(model, linker)
+        #context['this'] = This(
+        #    context['env']['schema'], model.immediate_name, model.name
+        #)
+        context['var'] = Var(model, context=context)
+        context['target'] = self.project.get_target()
+
+        # these get re-interpolated at runtime!
+        context['run_started_at'] = '{{ run_started_at }}'
+        context['invocation_id'] = '{{ invocation_id }}'
+
+        adapter = get_adapter(self.project.run_environment())
+        context['sql_now'] = adapter.date_function
+
+        runtime.update_global(context)
+
+        # add in macros (can we cache these somehow?)
+        for macro_data in self.macro_generator(context):
+            macro = macro_data["macro"]
+            macro_name = macro_data["name"]
+            project = macro_data["project"]
+
+            runtime.update_package(project['name'], {macro_name: macro})
+
+            if project['name'] == self.project['name']:
+                runtime.update_global({macro_name: macro})
+
+        return runtime
 
     def get_context(self, linker, model, models):
         runtime = RuntimeContext(model=model)
@@ -210,7 +333,7 @@ class Compiler(object):
         context = self.project.context()
 
         # built-ins
-        context['ref'] = self.__ref(linker, context, model, models)
+        context['ref'] = self.__ref(context, model, models)
         context['config'] = self.__model_config(model, linker)
         context['this'] = This(
             context['env']['schema'], model.immediate_name, model.name
@@ -245,16 +368,20 @@ class Compiler(object):
             compiled_model = model.copy()
             compiled_model.update({
                 'compiled': False,
-                'extra_ctes': [],
-                'compiled_sql': None
+                'compiled_sql': None,
+                'extra_ctes_injected': False,
+                'extra_cte_ids': [],
+                'extra_cte_sql': [],
+                'injected_sql': None,
             })
 
-            context = self.get_context(linker, model, models)
+            context = self.get_compiler_context(linker, compiled_model, models)
 
             env = jinja2.sandbox.SandboxedEnvironment()
 
             compiled_model['compiled_sql'] = env.from_string(
                 model.get('raw_sql')).render(context)
+
             compiled_model['compiled'] = True
         except jinja2.exceptions.TemplateSyntaxError as e:
             compiler_error(model, str(e))
@@ -329,6 +456,35 @@ class Compiler(object):
 
         return models_to_add
 
+    def new_add_cte_to_rendered_query(self, linker, primary_model,
+                                      compiled_models):
+
+        fqn_to_model = {tuple(model.fqn): model for model in compiled_models}
+        sorted_nodes = linker.as_topological_ordering()
+
+        models_to_add = self.__recursive_add_ctes(linker, primary_model)
+
+        required_ctes = []
+        for node in sorted_nodes:
+
+            if node not in fqn_to_model:
+                continue
+
+            model = fqn_to_model[node]
+            # add these in topological sort order -- significant for CTEs
+            if model.is_ephemeral and model in models_to_add:
+                required_ctes.append(model)
+
+        query = compiled_models[primary_model]
+        if len(required_ctes) == 0:
+            return query
+        else:
+            compiled_query = self.combine_query_with_ctes(
+                primary_model, query, required_ctes, compiled_models
+            )
+            return compiled_query
+
+
     def add_cte_to_rendered_query(
             self, linker, primary_model, compiled_models
     ):
@@ -375,32 +531,80 @@ class Compiler(object):
                 )
 
     def compile_models(self, linker, models):
-        compiled_models = {self.compile_model(linker, model, models)
-                           for model in models}
-        sorted_models = [models[path]
-                         for path in linker.as_topological_ordering()]
+        all_projects = {'root': self.project}
+        dependency_projects = dbt.utils.dependency_projects(self.project)
 
+        for project in dependency_projects:
+            name = project.cfg.get('name', 'unknown')
+            all_projects[name] = project
+
+        compiled_models = {}
+        injected_models = {}
+        wrapped_models = {}
         written_models = []
-        for model in sorted_models:
-            # in-model configs were just evaluated. Evict anything that is
-            # newly-disabled
-            if model.get('enabled') == False:
-                self.remove_node_from_graph(linker, model, models)
-                continue
 
-            injected_stmt = self.add_cte_to_rendered_query(
-                linker, model, compiled_models
-            )
+        for name, model in models.items():
+            compiled_models[name] = self.compile_model(linker, model, models)
 
-            context = self.get_context(linker, model, models)
-            wrapped_stmt = model.compile(injected_stmt, self.project, context)
+        if dbt.flags.STRICT_MODE:
+            dbt.contracts.graph.compiled.validate(compiled_models)
 
-            if model.get('ephemeral') == True:
-                continue
+        for name, model in compiled_models.items():
+            model, compiled_models = prepend_ctes(model, compiled_models)
+            injected_models[name] = model
 
-            build_path = os.path.join('build', model.get('path'))
-            self.__write(build_path, wrapped_stmt)
-            written_models.append(model)
+        if dbt.flags.STRICT_MODE:
+            dbt.contracts.graph.compiled.validate(injected_models)
+
+        for name, injected_model in injected_models.items():
+            # now turn a model back into the old-style model object
+            model = Model(
+                self.project,
+                injected_model.get('root_path'),
+                injected_model.get('path'),
+                all_projects[injected_model.get('package_name')])
+            model._config = injected_model.get('config', {})
+
+            context = self.get_context(linker, model, injected_models)
+
+            wrapped_stmt = model.compile(
+                injected_model.get('injected_sql'), self.project, context)
+
+            injected_model['wrapped_sql'] = wrapped_stmt
+            wrapped_model = injected_model
+            wrapped_models[name] = wrapped_model
+
+            build_path = os.path.join('build', injected_model.get('path'))
+            if injected_model.get('config', {}) \
+                             .get('materialized') != 'ephemeral':
+                self.__write(build_path, wrapped_stmt)
+                written_models.append(model)
+
+            linker.add_node(tuple(wrapped_model.get('fqn')))
+            project = all_projects[wrapped_model.get('package_name')]
+
+            linker.update_node_data(
+                tuple(wrapped_model.get('fqn')),
+                {
+                    'materialized': (wrapped_model.get('config', {})
+                                                  .get('materialized')),
+                    'dbt_run_type': dbt.model.NodeType.Model,
+                    'enabled': (wrapped_model.get('config', {})
+                                             .get('enabled')),
+                    'build_path': os.path.join(project['target-path'],
+                                               build_path),
+                    'name': wrapped_model.get('name'),
+
+                    # I think we always use tmp_name. - Connor
+                    'tmp_name': model.tmp_name(),
+                    'project_name': project.cfg.get('name')
+                })
+
+            for dependency in wrapped_model.get('depends_on'):
+                if wrapped_models.get(dependency):
+                    linker.dependency(
+                        tuple(wrapped_model.get('fqn')),
+                        tuple(wrapped_models.get(dependency).get('fqn')))
 
         return compiled_models, written_models
 
@@ -465,14 +669,15 @@ class Compiler(object):
             # show a warning if the model being tested doesn't exist
             try:
                 source_model = find_model_by_name(models,
-                                                  schema_test.model_name)
+                                                  schema_test.model_name,
+                                                  None)
             except RuntimeError as e:
                 dbt.utils.compiler_warning(schema_test, str(e))
                 continue
 
             serialized = schema_test.serialize()
 
-            model_node = tuple(source_model.fqn)
+            model_node = tuple(source_model.get('fqn'))
             test_node = tuple(schema_test.fqn)
 
             linker.dependency(test_node, model_node)
@@ -532,27 +737,42 @@ class Compiler(object):
 
         return all_models
 
-    def get_parsed_models(self):
-        root_project = self.project
-        all_projects = [root_project]
-        all_projects.extend(dbt.utils.dependency_projects(self.project))
+    def get_all_projects(self):
+        root_project = self.project.cfg
+        all_projects = {'root': root_project}
+        dependency_projects = dbt.utils.dependency_projects(self.project)
 
-        all_models = []
-        for project in all_projects:
-            all_models.extend(
+        for project in dependency_projects:
+            name = project.cfg.get('name', 'unknown')
+            all_projects[name] = project.cfg
+
+        if dbt.flags.STRICT_MODE:
+            dbt.contracts.project.validate_list(all_projects)
+
+        return all_projects
+
+
+    def get_parsed_models(self, root_project, all_projects):
+        parsed_models = {}
+
+        for name, project in all_projects.items():
+            parsed_models.update(
                 dbt.parser.load_and_parse_models(
-                    package_name=project.get('name'),
-                    root_dir=root_project.get('project-root'),
-                    relative_dirs=project.get('source_paths', [])))
+                    package_name=name,
+                    all_projects=all_projects,
+                    root_dir=project.get('project-root'),
+                    relative_dirs=project.get('source-paths', [])))
 
-        return all_models
+        return parsed_models
 
     def compile(self):
         linker = Linker()
 
-        parsed_models = self.get_parsed_models()
+        root_project = self.project.cfg
+        all_projects = self.get_all_projects()
 
-        all_models = self.get_models()
+        parsed_models = self.get_parsed_models(root_project, all_projects)
+
         all_macros = self.get_macros(this_project=self.project)
 
         for project in dbt.utils.dependency_projects(self.project):
@@ -562,10 +782,14 @@ class Compiler(object):
 
         self.macro_generator = self.generate_macros(all_macros)
 
-        enabled_models = [
-            model for model in parsed_models
-            if model.get('enabled') == True and model.get('empty') == True
-        ]
+        enabled_models = {}
+
+        # TODO: don't worry about testing enabled here. do it after
+        #       linking
+        for name, model in parsed_models.items():
+            if model.get('config', {}).get('enabled') == True and \
+               model.get('empty') == False:
+                enabled_models[model.get('unique_id')] = model
 
         compiled_models, written_models = self.compile_models(
             linker, enabled_models

@@ -4,11 +4,13 @@ import six
 import unittest
 
 import dbt.compilation
+import dbt.exceptions
+import dbt.flags
+import dbt.linker
 import dbt.model
 import dbt.project
 import dbt.templates
 import dbt.utils
-import dbt.linker
 
 import networkx as nx
 from test.integration.base import FakeArgs
@@ -25,6 +27,8 @@ class GraphTest(unittest.TestCase):
         dbt.clients.system.load_file_contents = self.real_load_file_contents
 
     def setUp(self):
+        dbt.flags.STRICT_MODE = True
+
         def mock_write_yaml(graph, outfile):
             self.graph_result = graph
 

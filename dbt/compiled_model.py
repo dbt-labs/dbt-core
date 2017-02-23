@@ -53,6 +53,7 @@ class CompiledModel(object):
         if self._contents is None:
             with open(self.data['build_path']) as fh:
                 self._contents = to_unicode(fh.read(), 'utf-8')
+
         return self._contents
 
     def compile(self, context, profile, existing):

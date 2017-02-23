@@ -42,6 +42,7 @@ class SourceConfig(object):
     ]
 
     def __init__(self, active_project, own_project, fqn):
+        self._config = None
         self.active_project = active_project
         self.own_project = own_project
         self.fqn = fqn
@@ -101,7 +102,8 @@ class SourceConfig(object):
         return cfg
 
     def is_full_refresh(self):
-        if hasattr(self.active_project.args, 'full_refresh'):
+        if hasattr(self.active_project, 'args') and \
+           hasattr(self.active_project.args, 'full_refresh'):
             return self.active_project.args.full_refresh
         else:
             return False
@@ -208,6 +210,7 @@ class DBTSource(object):
     dbt_run_type = NodeType.Base
 
     def __init__(self, project, top_dir, rel_filepath, own_project):
+        self._config = None
         self.project = project
         self.own_project = own_project
 
@@ -256,6 +259,9 @@ class DBTSource(object):
 
     @property
     def config(self):
+        if self._config is not None:
+            return self._config
+
         return self.source_config.config
 
     def update_in_model_config(self, config):

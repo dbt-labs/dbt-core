@@ -3,15 +3,19 @@ import jinja2
 import jinja2.sandbox
 import os
 
+import dbt.flags
 import dbt.model
 import dbt.utils
 
+import dbt.contracts.graph.parsed
+import dbt.contracts.graph.unparsed
+import dbt.contracts.project
 
 class SilentUndefined(jinja2.Undefined):
     """
-    Don't fail to parse because of undefined things. This allows us to parse
-    models before macros, since we aren't guaranteed to know about macros
-    before models.
+    This class sets up the parser to just ignore undefined jinja2 calls. So,
+    for example, `env` is not defined here, but will not make the parser fail
+    with a fatal error.
     """
     def _fail_with_undefined_error(self, *args, **kwargs):
         return None
@@ -36,19 +40,7 @@ def get_macro_path(package_name, resource_name):
 def __ref(model):
 
     def ref(*args):
-        model_path = None
-
-        if len(args) == 1:
-            model_path = get_model_path(model.get('package_name'), args[0])
-        elif len(args) == 2:
-            model_path = get_model_path(args[0], args[1])
-        else:
-            dbt.utils.compiler_error(
-                model.get('name'),
-                "ref() takes at most two arguments ({} given)".format(
-                    len(args)))
-
-        model['depends_on'].append(model_path)
+        pass
 
     return ref
 
@@ -108,6 +100,9 @@ def parse_model(model, model_path, root_project_config,
 def parse_models(models, projects):
     to_return = {}
 
+    if dbt.flags.STRICT_MODE:
+        dbt.contracts.graph.unparsed.validate(models)
+
     for model in models:
         package_name = model.get('package_name', 'root')
 
@@ -119,11 +114,14 @@ def parse_models(models, projects):
                                             projects.get('root'),
                                             projects.get(package_name))
 
+    if dbt.flags.STRICT_MODE:
+        dbt.contracts.graph.parsed.validate(to_return)
+
     return to_return
 
 
-def load_and_parse_files(package_name, root_dir, relative_dirs, extension,
-                         resource_type):
+def load_and_parse_files(package_name, all_projects, root_dir, relative_dirs,
+                         extension, resource_type):
     file_matches = dbt.clients.system.find_matching(
         root_dir,
         relative_dirs,
@@ -135,19 +133,28 @@ def load_and_parse_files(package_name, root_dir, relative_dirs, extension,
         file_contents = dbt.clients.system.load_file_contents(
             file_match.get('absolute_path'))
 
+        parts = dbt.utils.split_path(file_match.get('relative_path', ''))
+        name, _ = os.path.splitext(parts[-1])
+
         # TODO: support more than just models
         models.append({
-            'name': os.path.basename(file_match.get('absolute_path')),
+            'name': name,
             'root_path': root_dir,
             'path': file_match.get('relative_path'),
             'package_name': package_name,
             'raw_sql': file_contents
         })
 
-    return parse_models(models)
+    return parse_models(models, all_projects)
 
 
-def load_and_parse_models(package_name, root_dir, relative_dirs):
-    return load_and_parse_files(package_name, root_dir, relative_dirs,
+def load_and_parse_models(package_name, all_projects, root_dir, relative_dirs):
+    if dbt.flags.STRICT_MODE:
+        dbt.contracts.project.validate_list(all_projects)
+
+    return load_and_parse_files(package_name,
+                                all_projects,
+                                root_dir,
+                                relative_dirs,
                                 extension="[!.#~]*.sql",
                                 resource_type='models')

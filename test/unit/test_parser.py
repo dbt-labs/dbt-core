@@ -3,6 +3,7 @@ import unittest
 
 import os
 
+import dbt.flags
 import dbt.parser
 
 
@@ -14,6 +15,8 @@ class ParserTest(unittest.TestCase):
             {})
 
     def setUp(self):
+        dbt.flags.STRICT_MODE = True
+
         self.maxDiff = None
 
         self.root_project_config = {
@@ -41,6 +44,8 @@ class ParserTest(unittest.TestCase):
         models = [{
             'name': 'model_one',
             'package_name': 'root',
+            'root_path': '/usr/src/app',
+            'path': 'model_one.sql',
             'raw_sql': ("select * from events"),
         }]
 
@@ -52,11 +57,14 @@ class ParserTest(unittest.TestCase):
             {
                 'models.root.model_one': {
                     'name': 'model_one',
+                    'unique_id': 'models.root.model_one',
                     'fqn': ['root_project', 'model_one'],
                     'empty': False,
                     'package_name': 'root',
+                    'root_path': '/usr/src/app',
                     'depends_on': [],
                     'config': self.model_config,
+                    'path': 'model_one.sql',
                     'raw_sql': self.find_input_by_name(
                         models, 'model_one').get('raw_sql')
                 }
@@ -67,6 +75,8 @@ class ParserTest(unittest.TestCase):
         models = [{
             'name': 'model_one',
             'package_name': 'root',
+            'path': 'model_one.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': (" "),
         }]
 
@@ -77,11 +87,14 @@ class ParserTest(unittest.TestCase):
             {
                 'models.root.model_one': {
                     'name': 'model_one',
+                    'unique_id': 'models.root.model_one',
                     'fqn': ['root_project', 'model_one'],
                     'empty': True,
                     'package_name': 'root',
                     'depends_on': [],
                     'config': self.model_config,
+                    'path': 'model_one.sql',
+                    'root_path': '/usr/src/app',
                     'raw_sql': self.find_input_by_name(
                         models, 'model_one').get('raw_sql')
                 }
@@ -92,10 +105,14 @@ class ParserTest(unittest.TestCase):
         models = [{
             'name': 'base',
             'package_name': 'root',
+            'path': 'base.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': 'select * from events'
         }, {
             'name': 'events_tx',
             'package_name': 'root',
+            'path': 'events_tx.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': "select * from {{ref('base')}}"
         }]
 
@@ -107,21 +124,27 @@ class ParserTest(unittest.TestCase):
             {
                 'models.root.base': {
                     'name': 'base',
+                    'unique_id': 'models.root.base',
                     'fqn': ['root_project', 'base'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': [],
                     'config': self.model_config,
+                    'path': 'base.sql',
+                    'root_path': '/usr/src/app',
                     'raw_sql': self.find_input_by_name(
                         models, 'base').get('raw_sql')
                 },
                 'models.root.events_tx': {
                     'name': 'events_tx',
+                    'unique_id': 'models.root.events_tx',
                     'fqn': ['root_project', 'events_tx'],
                     'empty': False,
                     'package_name': 'root',
-                    'depends_on': ['models.root.base'],
+                    'depends_on': [],
                     'config': self.model_config,
+                    'path': 'events_tx.sql',
+                    'root_path': '/usr/src/app',
                     'raw_sql': self.find_input_by_name(
                         models, 'events_tx').get('raw_sql')
                 }
@@ -132,24 +155,34 @@ class ParserTest(unittest.TestCase):
         models = [{
             'name': 'events',
             'package_name': 'root',
+            'path': 'events.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': 'select * from base.events',
         }, {
             'name': 'sessions',
             'package_name': 'root',
+            'path': 'sessions.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': 'select * from base.sessions',
         }, {
             'name': 'events_tx',
             'package_name': 'root',
+            'path': 'events_tx.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': ("with events as (select * from {{ref('events')}}) "
                         "select * from events"),
         }, {
             'name': 'sessions_tx',
             'package_name': 'root',
+            'path': 'sessions_tx.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': ("with sessions as (select * from {{ref('sessions')}}) "
                         "select * from sessions"),
         }, {
             'name': 'multi',
             'package_name': 'root',
+            'path': 'multi.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': ("with s as (select * from {{ref('sessions_tx')}}), "
                         "e as (select * from {{ref('events_tx')}}) "
                         "select * from e left join s on s.id = e.sid"),
@@ -163,52 +196,66 @@ class ParserTest(unittest.TestCase):
             {
                 'models.root.events': {
                     'name': 'events',
+                    'unique_id': 'models.root.events',
                     'fqn': ['root_project', 'events'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': [],
                     'config': self.model_config,
+                    'path': 'events.sql',
+                    'root_path': '/usr/src/app',
                     'raw_sql': self.find_input_by_name(
                         models, 'events').get('raw_sql')
                 },
                 'models.root.sessions': {
                     'name': 'sessions',
+                    'unique_id': 'models.root.sessions',
                     'fqn': ['root_project', 'sessions'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': [],
                     'config': self.model_config,
+                    'path': 'sessions.sql',
+                    'root_path': '/usr/src/app',
                     'raw_sql': self.find_input_by_name(
                         models, 'sessions').get('raw_sql')
                 },
                 'models.root.events_tx': {
                     'name': 'events_tx',
+                    'unique_id': 'models.root.events_tx',
                     'fqn': ['root_project', 'events_tx'],
                     'empty': False,
                     'package_name': 'root',
-                    'depends_on': ['models.root.events'],
+                    'depends_on': [],
                     'config': self.model_config,
+                    'path': 'events_tx.sql',
+                    'root_path': '/usr/src/app',
                     'raw_sql': self.find_input_by_name(
                         models, 'events_tx').get('raw_sql')
                 },
                 'models.root.sessions_tx': {
                     'name': 'sessions_tx',
+                    'unique_id': 'models.root.sessions_tx',
                     'fqn': ['root_project', 'sessions_tx'],
                     'empty': False,
                     'package_name': 'root',
-                    'depends_on': ['models.root.sessions'],
+                    'depends_on': [],
                     'config': self.model_config,
+                    'path': 'sessions_tx.sql',
+                    'root_path': '/usr/src/app',
                     'raw_sql': self.find_input_by_name(
                         models, 'sessions_tx').get('raw_sql')
                 },
                 'models.root.multi': {
                     'name': 'multi',
+                    'unique_id': 'models.root.multi',
                     'fqn': ['root_project', 'multi'],
                     'empty': False,
                     'package_name': 'root',
-                    'depends_on': ['models.root.sessions_tx',
-                                   'models.root.events_tx'],
+                    'depends_on': [],
                     'config': self.model_config,
+                    'path': 'multi.sql',
+                    'root_path': '/usr/src/app',
                     'raw_sql': self.find_input_by_name(
                         models, 'multi').get('raw_sql')
                 }
@@ -219,24 +266,34 @@ class ParserTest(unittest.TestCase):
         models = [{
             'name': 'events',
             'package_name': 'snowplow',
+            'path': 'events.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': 'select * from base.events',
         }, {
             'name': 'sessions',
             'package_name': 'snowplow',
+            'path': 'sessions.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': 'select * from base.sessions',
         }, {
             'name': 'events_tx',
             'package_name': 'snowplow',
+            'path': 'events_tx.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': ("with events as (select * from {{ref('events')}}) "
                         "select * from events"),
         }, {
             'name': 'sessions_tx',
             'package_name': 'snowplow',
+            'path': 'sessions_tx.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': ("with sessions as (select * from {{ref('sessions')}}) "
                         "select * from sessions"),
         }, {
             'name': 'multi',
             'package_name': 'root',
+            'path': 'multi.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': ("with s as (select * from {{ref('snowplow', 'sessions_tx')}}), "
                         "e as (select * from {{ref('snowplow', 'events_tx')}}) "
                         "select * from e left join s on s.id = e.sid"),
@@ -250,52 +307,66 @@ class ParserTest(unittest.TestCase):
             {
                 'models.snowplow.events': {
                     'name': 'events',
+                    'unique_id': 'models.snowplow.events',
                     'fqn': ['snowplow', 'events'],
                     'empty': False,
                     'package_name': 'snowplow',
                     'depends_on': [],
                     'config': self.model_config,
+                    'path': 'events.sql',
+                    'root_path': '/usr/src/app',
                     'raw_sql': self.find_input_by_name(
                         models, 'events').get('raw_sql')
                 },
                 'models.snowplow.sessions': {
                     'name': 'sessions',
+                    'unique_id': 'models.snowplow.sessions',
                     'fqn': ['snowplow', 'sessions'],
                     'empty': False,
                     'package_name': 'snowplow',
                     'depends_on': [],
                     'config': self.model_config,
+                    'path': 'sessions.sql',
+                    'root_path': '/usr/src/app',
                     'raw_sql': self.find_input_by_name(
                         models, 'sessions').get('raw_sql')
                 },
                 'models.snowplow.events_tx': {
                     'name': 'events_tx',
+                    'unique_id': 'models.snowplow.events_tx',
                     'fqn': ['snowplow', 'events_tx'],
                     'empty': False,
                     'package_name': 'snowplow',
-                    'depends_on': ['models.snowplow.events'],
+                    'depends_on': [],
                     'config': self.model_config,
+                    'path': 'events_tx.sql',
+                    'root_path': '/usr/src/app',
                     'raw_sql': self.find_input_by_name(
                         models, 'events_tx').get('raw_sql')
                 },
                 'models.snowplow.sessions_tx': {
                     'name': 'sessions_tx',
+                    'unique_id': 'models.snowplow.sessions_tx',
                     'fqn': ['snowplow', 'sessions_tx'],
                     'empty': False,
                     'package_name': 'snowplow',
-                    'depends_on': ['models.snowplow.sessions'],
+                    'depends_on': [],
                     'config': self.model_config,
+                    'path': 'sessions_tx.sql',
+                    'root_path': '/usr/src/app',
                     'raw_sql': self.find_input_by_name(
                         models, 'sessions_tx').get('raw_sql')
                 },
                 'models.root.multi': {
                     'name': 'multi',
+                    'unique_id': 'models.root.multi',
                     'fqn': ['root_project', 'multi'],
                     'empty': False,
                     'package_name': 'root',
-                    'depends_on': ['models.snowplow.sessions_tx',
-                                   'models.snowplow.events_tx'],
+                    'depends_on': [],
                     'config': self.model_config,
+                    'path': 'multi.sql',
+                    'root_path': '/usr/src/app',
                     'raw_sql': self.find_input_by_name(
                         models, 'multi').get('raw_sql')
                 }
@@ -306,6 +377,8 @@ class ParserTest(unittest.TestCase):
         models = [{
             'name': 'model_one',
             'package_name': 'root',
+            'path': 'model_one.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': ("{{config({'materialized':'table'})}}"
                         "select * from events"),
         }]
@@ -322,11 +395,14 @@ class ParserTest(unittest.TestCase):
             {
                 'models.root.model_one': {
                     'name': 'model_one',
+                    'unique_id': 'models.root.model_one',
                     'fqn': ['root_project', 'model_one'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': [],
                     'config': self.model_config,
+                    'root_path': '/usr/src/app',
+                    'path': 'model_one.sql',
                     'raw_sql': self.find_input_by_name(
                         models, 'model_one').get('raw_sql')
                 }
@@ -353,17 +429,20 @@ class ParserTest(unittest.TestCase):
             'name': 'table',
             'package_name': 'root',
             'path': 'table.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': ("{{config({'materialized':'table'})}}"
                         "select * from events"),
         }, {
             'name': 'ephemeral',
             'package_name': 'root',
             'path': 'ephemeral.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': ("select * from events"),
         }, {
             'name': 'view',
             'package_name': 'root',
             'path': 'view.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': ("select * from events"),
         }]
 
@@ -389,33 +468,39 @@ class ParserTest(unittest.TestCase):
             {
                 'models.root.table': {
                     'name': 'table',
+                    'unique_id': 'models.root.table',
                     'fqn': ['root_project', 'table'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': [],
                     'path': 'table.sql',
                     'config': self.model_config,
+                    'root_path': '/usr/src/app',
                     'raw_sql': self.find_input_by_name(
                         models, 'table').get('raw_sql')
                 },
                 'models.root.ephemeral': {
                     'name': 'ephemeral',
+                    'unique_id': 'models.root.ephemeral',
                     'fqn': ['root_project', 'ephemeral'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': [],
                     'path': 'ephemeral.sql',
                     'config': ephemeral_config,
+                    'root_path': '/usr/src/app',
                     'raw_sql': self.find_input_by_name(
                         models, 'ephemeral').get('raw_sql')
                 },
                 'models.root.view': {
                     'name': 'view',
+                    'unique_id': 'models.root.view',
                     'fqn': ['root_project', 'view'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': [],
                     'path': 'view.sql',
+                    'root_path': '/usr/src/app',
                     'config': view_config,
                     'raw_sql': self.find_input_by_name(
                         models, 'ephemeral').get('raw_sql')
@@ -463,27 +548,32 @@ class ParserTest(unittest.TestCase):
             'name': 'table',
             'package_name': 'root',
             'path': 'table.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': ("{{config({'materialized':'table'})}}"
                         "select * from events"),
         }, {
             'name': 'ephemeral',
             'package_name': 'root',
             'path': 'ephemeral.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': ("select * from events"),
         }, {
             'name': 'view',
             'package_name': 'root',
             'path': 'view.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': ("select * from events"),
         }, {
             'name': 'disabled',
             'package_name': 'snowplow',
             'path': 'disabled.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': ("select * from events"),
         }, {
             'name': 'package',
             'package_name': 'snowplow',
             'path': 'models/views/package.sql',
+            'root_path': '/usr/src/app',
             'raw_sql': ("select * from events"),
         }]
 
@@ -521,55 +611,65 @@ class ParserTest(unittest.TestCase):
             {
                 'models.root.table': {
                     'name': 'table',
+                    'unique_id': 'models.root.table',
                     'fqn': ['root_project', 'table'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': [],
                     'path': 'table.sql',
+                    'root_path': '/usr/src/app',
                     'config': self.model_config,
                     'raw_sql': self.find_input_by_name(
                         models, 'table').get('raw_sql')
                 },
                 'models.root.ephemeral': {
                     'name': 'ephemeral',
+                    'unique_id': 'models.root.ephemeral',
                     'fqn': ['root_project', 'ephemeral'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': [],
                     'path': 'ephemeral.sql',
+                    'root_path': '/usr/src/app',
                     'config': ephemeral_config,
                     'raw_sql': self.find_input_by_name(
                         models, 'ephemeral').get('raw_sql')
                 },
                 'models.root.view': {
                     'name': 'view',
+                    'unique_id': 'models.root.view',
                     'fqn': ['root_project', 'view'],
                     'empty': False,
                     'package_name': 'root',
                     'depends_on': [],
                     'path': 'view.sql',
+                    'root_path': '/usr/src/app',
                     'config': view_config,
                     'raw_sql': self.find_input_by_name(
                         models, 'view').get('raw_sql')
                 },
                 'models.snowplow.disabled': {
                     'name': 'disabled',
+                    'unique_id': 'models.snowplow.disabled',
                     'fqn': ['snowplow', 'disabled'],
                     'empty': False,
                     'package_name': 'snowplow',
                     'depends_on': [],
                     'path': 'disabled.sql',
+                    'root_path': '/usr/src/app',
                     'config': disabled_config,
                     'raw_sql': self.find_input_by_name(
                         models, 'disabled').get('raw_sql')
                 },
                 'models.snowplow.package': {
                     'name': 'package',
+                    'unique_id': 'models.snowplow.package',
                     'fqn': ['snowplow', 'views', 'package'],
                     'empty': False,
                     'package_name': 'snowplow',
                     'depends_on': [],
                     'path': 'models/views/package.sql',
+                    'root_path': '/usr/src/app',
                     'config': sort_config,
                     'raw_sql': self.find_input_by_name(
                         models, 'package').get('raw_sql')

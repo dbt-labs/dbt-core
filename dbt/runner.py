@@ -614,6 +614,7 @@ class RunManager(object):
 
     def get_compiled_models(self, linker, nodes, node_type):
         compiled_models = []
+
         for fqn in nodes:
             compiled_model = make_compiled_model(fqn, linker.get_node(fqn))
 
