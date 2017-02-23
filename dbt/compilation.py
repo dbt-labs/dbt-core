@@ -267,9 +267,6 @@ class Compiler(object):
                     "the project config".format(model.get('unique_id'),
                                                 target_model.get('unique_id')))
 
-            print('dependency {} to {}'.format(model.get('unique_id'),
-                                               target_model.get('unique_id')))
-
             model['depends_on'].append(target_model_id)
             if target_model.get('config', {}) \
                            .get('materialized') == 'ephemeral':
@@ -563,6 +560,7 @@ class Compiler(object):
                 injected_model.get('root_path'),
                 injected_model.get('path'),
                 all_projects[injected_model.get('package_name')])
+
             model._config = injected_model.get('config', {})
 
             context = self.get_context(linker, model, injected_models)
@@ -594,17 +592,20 @@ class Compiler(object):
                     'build_path': os.path.join(project['target-path'],
                                                build_path),
                     'name': wrapped_model.get('name'),
-
-                    # I think we always use tmp_name. - Connor
                     'tmp_name': model.tmp_name(),
                     'project_name': project.cfg.get('name')
                 })
 
             for dependency in wrapped_model.get('depends_on'):
-                if wrapped_models.get(dependency):
+                if compiled_models.get(dependency):
                     linker.dependency(
                         tuple(wrapped_model.get('fqn')),
-                        tuple(wrapped_models.get(dependency).get('fqn')))
+                        tuple(compiled_models.get(dependency).get('fqn')))
+                else:
+                    compiler_error(
+                        model,
+                        "dependency {} not found in graph!".format(
+                            dependency))
 
         return compiled_models, written_models
 
@@ -782,17 +783,8 @@ class Compiler(object):
 
         self.macro_generator = self.generate_macros(all_macros)
 
-        enabled_models = {}
-
-        # TODO: don't worry about testing enabled here. do it after
-        #       linking
-        for name, model in parsed_models.items():
-            if model.get('config', {}).get('enabled') == True and \
-               model.get('empty') == False:
-                enabled_models[model.get('unique_id')] = model
-
         compiled_models, written_models = self.compile_models(
-            linker, enabled_models
+            linker, parsed_models
         )
 
         compilers = {

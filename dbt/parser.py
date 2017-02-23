@@ -100,8 +100,7 @@ def parse_model(model, model_path, root_project_config,
 def parse_models(models, projects):
     to_return = {}
 
-    if dbt.flags.STRICT_MODE:
-        dbt.contracts.graph.unparsed.validate(models)
+    dbt.contracts.graph.unparsed.validate(models)
 
     for model in models:
         package_name = model.get('package_name', 'root')
@@ -114,8 +113,7 @@ def parse_models(models, projects):
                                             projects.get('root'),
                                             projects.get(package_name))
 
-    if dbt.flags.STRICT_MODE:
-        dbt.contracts.graph.parsed.validate(to_return)
+    dbt.contracts.graph.parsed.validate(to_return)
 
     return to_return
 

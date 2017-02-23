@@ -1,7 +1,6 @@
 from voluptuous import Schema, Required, All, Any, Extra, Range, Optional
-from voluptuous.error import MultipleInvalid
 
-from dbt.exceptions import ValidationException
+from dbt.contracts.common import validate_with
 from dbt.logger import GLOBAL_LOGGER as logger
 
 
@@ -39,11 +38,7 @@ credentials_mapping = {
 
 
 def validate_connection(connection):
-    try:
-        connection_contract(connection)
+    validate_with(connection_contract, connection)
 
-        credentials_contract = credentials_mapping.get(connection.get('type'))
-        credentials_contract(connection.get('credentials'))
-    except MultipleInvalid as e:
-        logger.info(e)
-        raise ValidationException(str(e))
+    credentials_contract = credentials_mapping.get(connection.get('type'))
+    validate_with(credentials_contract, connection.get('credentials'))

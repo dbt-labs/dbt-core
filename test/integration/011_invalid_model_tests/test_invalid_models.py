@@ -1,6 +1,8 @@
 from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 
+from dbt.exceptions import ValidationException
+
 class TestInvalidViewModels(DBTIntegrationTest):
 
     def setUp(self):
@@ -18,7 +20,12 @@ class TestInvalidViewModels(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test_view_with_incremental_attributes(self):
-        self.run_dbt()
+        try:
+            self.run_dbt()
+            # should throw
+            self.assertTrue(False)
+        except RuntimeError as e:
+            pass
 
 class TestInvalidDisabledModels(DBTIntegrationTest):
 
@@ -43,7 +50,7 @@ class TestInvalidDisabledModels(DBTIntegrationTest):
             # should throw
             self.assertTrue(False)
         except RuntimeError as e:
-            self.assertTrue("config must be either True or False" in str(e))
+            self.assertTrue("enabled" in str(e))
 
 class TestInvalidModelReference(DBTIntegrationTest):
 

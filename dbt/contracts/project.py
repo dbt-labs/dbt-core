@@ -1,8 +1,7 @@
 from voluptuous import Schema, Required, All, Any, Extra, Range, Optional, \
     Length, ALLOW_EXTRA
-from voluptuous.error import Invalid, MultipleInvalid
 
-from dbt.exceptions import ValidationException
+from dbt.contracts.common import validate_with
 from dbt.logger import GLOBAL_LOGGER as logger
 
 project_contract = Schema({
@@ -12,17 +11,7 @@ project_contract = Schema({
 projects_list_contract = Schema({str: project_contract})
 
 def validate(project):
-    try:
-        project_contract(project)
-
-    except Invalid as e:
-        logger.info(e)
-        raise ValidationException(str(e))
+    validate_with(project_contract, project)
 
 def validate_list(projects):
-    try:
-        projects_list_contract(projects)
-
-    except Invalid as e:
-        logger.info(e)
-        raise ValidationException(str(e))
+    validate_with(projects_list_contract, project)

@@ -1,10 +1,10 @@
 from voluptuous import Schema, Required, All, Any, Extra, Range, Optional, \
     Length
-from voluptuous.error import Invalid, MultipleInvalid
 
 from dbt.exceptions import ValidationException
 from dbt.logger import GLOBAL_LOGGER as logger
 
+from dbt.contracts.common import validate_with
 from dbt.contracts.graph.unparsed import unparsed_graph_item_contract
 
 config_contract = {
@@ -29,12 +29,7 @@ parsed_graph_item_contract = unparsed_graph_item_contract.extend({
 })
 
 def validate_one(parsed_graph_item):
-    try:
-        parsed_graph_item_contract(parsed_graph_item)
-
-    except Invalid as e:
-        logger.info(e)
-        raise ValidationException(str(e))
+    validate_with(parsed_graph_item_contract, parsed_graph_item)
 
     materialization = parsed_graph_item.get('config', {}) \
                                        .get('materialized')
@@ -50,17 +45,12 @@ def validate_one(parsed_graph_item):
 
 
 def validate(parsed_graph):
-    try:
-        for k, v in parsed_graph.items():
-            parsed_graph_item_contract(v)
+    for k, v in parsed_graph.items():
+        validate_one(v)
 
-            if v.get('unique_id') != k:
-                error_msg = ('unique_id must match key name in parsed graph!'
-                             'key: {}, model: {}'
-                             .format(k, v))
-                logger.info(error_msg)
-                raise ValidationException(error_msg)
-
-    except Invalid as e:
-        logger.info(e)
-        raise ValidationException(str(e))
+        if v.get('unique_id') != k:
+            error_msg = ('unique_id must match key name in parsed graph!'
+                         'key: {}, model: {}'
+                         .format(k, v))
+            logger.info(error_msg)
+            raise ValidationException(error_msg)
