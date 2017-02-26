@@ -1,6 +1,7 @@
 
 from __future__ import print_function
 
+import jinja2
 import hashlib
 import psycopg2
 import os
@@ -98,7 +99,14 @@ def print_start_line(node, schema_name, index, total):
     if node.get('resource_type') == NodeType.Model:
         print_model_start_line(node, schema_name, index, total)
     if node.get('resource_type') == NodeType.Test:
-        print_model_start_line(node, schema_name, index, total)
+        print_test_start_line(node, schema_name, index, total)
+
+
+def print_test_start_line(model, schema_name, index, total):
+    msg = "START test {name}".format(
+        name=model.get('name'))
+
+    print_fancy_output_line(msg, 'RUN', index, total)
 
 
 def print_model_start_line(model, schema_name, index, total):
@@ -186,7 +194,6 @@ def print_model_result_line(result, schema_name, index, total):
         result.execution_time)
 
 
-
 def execute_model(profile, model):
     adapter = get_adapter(profile)
     schema = adapter.get_default_schema(profile)
@@ -255,6 +262,66 @@ def execute_model(profile, model):
                        from_name=tmp_name,
                        to_name=model.get('name'),
                        model_name=model.get('name'))
+
+    return result
+
+
+def execute_archive(profile, node, context):
+    adapter = get_adapter(profile)
+
+    node_cfg = node.get('config', {})
+
+    source_columns = adapter.get_columns_in_table(
+        profile, node_cfg.get('source_schema'), node_cfg.get('source_table'))
+
+    if len(source_columns) == 0:
+        raise RuntimeError(
+            'Source table "{}"."{}" does not '
+            'exist'.format(source_schema, source_table))
+
+    dest_columns = source_columns + [
+        dbt.schema.Column("valid_from", "timestamp", None),
+        dbt.schema.Column("valid_to", "timestamp", None),
+        dbt.schema.Column("scd_id", "text", None),
+        dbt.schema.Column("dbt_updated_at", "timestamp", None)
+    ]
+
+    adapter.create_table(
+        profile,
+        schema=node_cfg.get('target_schema'),
+        table=node_cfg.get('target_table'),
+        columns=dest_columns,
+        sort=node_cfg.get('updated_at'),
+        dist=node_cfg.get('unique_key'))
+
+    # TODO move this to inject_runtime_config, generate archive SQL
+    # in wrap step. can't do this right now because we actually need
+    # to inspect status of the schema at runtime and archive requires
+    # a lot of information about the schema to generate queries.
+    template_ctx = context.copy()
+    template_ctx.update(node_cfg)
+
+    env = jinja2.Environment()
+    select = env.from_string(
+        dbt.templates.SCDArchiveTemplate,
+        template_ctx
+    ).render(node_cfg)
+
+    insert_stmt = dbt.templates.ArchiveInsertTemplate().wrap(
+        schema=node_cfg.get('target_schema'),
+        table=node_cfg.get('target_table'),
+        query=select,
+        unique_key=node_cfg.get('unique_key'))
+
+    env = jinja2.Environment()
+    node['wrapped_sql'] = env.from_string(
+        insert_stmt,
+        template_ctx
+    ).render(node_cfg)
+
+    result = adapter.execute_model(
+        profile=profile,
+        model=node)
 
     return result
 
@@ -640,6 +707,8 @@ class RunManager(object):
             result = execute_model(profile, node)
         elif node.get('resource_type') == NodeType.Test:
             result = execute_test(profile, node)
+        elif node.get('resource_type') == NodeType.Archive:
+            result = execute_archive(profile, node, self.context)
 
         return result
 
@@ -693,7 +762,6 @@ class RunManager(object):
 
     def on_model_failure(self, linker, selected_nodes):
         def skip_dependent(node):
-            print(node)
             dependent_nodes = linker.get_dependent_nodes(node.get('unique_id'))
             for node in dependent_nodes:
                 if node in selected_nodes:
@@ -750,7 +818,7 @@ class RunManager(object):
                 node_results.append(node_result)
 
             nodes_to_execute = [node for node in node_list
-                                 if not node.get('skip')]
+                                if not node.get('skip')]
 
             threads = self.threads
             num_nodes_this_batch = len(nodes_to_execute)
@@ -818,29 +886,37 @@ class RunManager(object):
 
         return node_results
 
-    def get_nodes_to_run(self, graph, include_spec, exclude_spec, resource_type):
+    def get_nodes_to_run(self, graph, include_spec, exclude_spec,
+                         resource_types, tags):
         if include_spec is None:
             include_spec = ['*']
 
         if exclude_spec is None:
             exclude_spec = []
 
-        print('graphnodes')
-        print(graph.nodes())
-
         to_run = [
             n for n in graph.nodes()
-            if ((graph.node.get(n, {}).get('resource_type') == resource_type)
-                and graph.node.get(n, {}).get('empty') == False
-                and is_enabled(graph.node.get(n, {})))
+            if ((graph.node.get(n).get('resource_type') in resource_types)
+                and is_enabled(graph.node.get(n))
+                and (len(tags) == 0 or
+                     # does the node share any tags with the run?
+                     bool(set(graph.node.get(n).get('tags')) &
+                          set(tags))))
         ]
 
-        type_filtered_graph = graph.subgraph(to_run)
+        filtered_graph = graph.subgraph(to_run)
         selected_nodes = dbt.graph.selector.select_nodes(self.project,
-                                                         type_filtered_graph,
+                                                         filtered_graph,
                                                          include_spec,
                                                          exclude_spec)
-        return selected_nodes
+
+        post_filter = [
+            n for n in selected_nodes
+            if (get_materialization(graph.node.get(n)) != 'ephemeral' and
+                graph.node.get(n).get('empty') == False)
+        ]
+
+        return post_filter
 
     def get_compiled_models(self, linker, nodes, node_type):
         compiled_models = []
@@ -879,38 +955,16 @@ class RunManager(object):
             logger.info(str(e))
             raise
 
-    def run_models_from_graph(self, include_spec, exclude_spec):
+    def run_types_from_graph(self, include_spec, exclude_spec,
+                             resource_types, tags):
         linker = self.deserialize_graph()
 
         selected_nodes = self.get_nodes_to_run(
             linker.graph,
             include_spec,
             exclude_spec,
-            dbt.model.NodeType.Model)
-
-        self.try_create_schema()
-
-        dependency_list = self.as_concurrent_dep_list(
-            linker,
-            selected_nodes)
-
-        on_failure = self.on_model_failure(linker, selected_nodes)
-
-        results = self.execute_nodes(dependency_list, on_failure)
-
-        return results
-
-    def run_tests_from_graph(self, include_spec, exclude_spec,
-                             test_schemas, test_data):
-
-        runner = TestRunner(self.project)
-        linker = self.deserialize_graph()
-
-        selected_nodes = self.get_nodes_to_run(
-            linker.graph,
-            include_spec,
-            exclude_spec,
-            dbt.model.NodeType.Test)
+            resource_types,
+            tags)
 
         dependency_list = self.as_concurrent_dep_list(
             linker,
@@ -921,48 +975,25 @@ class RunManager(object):
         on_failure = self.on_model_failure(linker, selected_nodes)
 
         results = self.execute_nodes(dependency_list, on_failure)
-
-        return results
-
-    def run_archives_from_graph(self):
-        runner = ArchiveRunner(self.project)
-        linker = self.deserialize_graph()
-
-        selected_nodes = self.get_nodes_to_run(
-            linker.graph,
-            None,
-            None,
-            dbt.model.NodeType.Archive)
-
-        compiled_models = self.get_compiled_models(
-            linker,
-            selected_nodes,
-            runner.run_type)
-
-        self.try_create_schema()
-
-        model_dependency_list = self.as_concurrent_dep_list(
-            linker,
-            compiled_models
-        )
-
-        on_failure = self.on_model_failure(linker, compiled_models,
-                                           selected_nodes)
-        results = self.execute_models(
-            runner, model_dependency_list, on_failure
-        )
 
         return results
 
     # ------------------------------------
 
-    def run_tests(self, include_spec, exclude_spec,
-                  test_schemas=False, test_data=False):
-        return self.run_tests_from_graph(include_spec, exclude_spec,
-                                         test_schemas, test_data)
-
     def run_models(self, include_spec, exclude_spec):
-        return self.run_models_from_graph(include_spec, exclude_spec)
+        return self.run_types_from_graph(include_spec,
+                                         exclude_spec,
+                                         [NodeType.Model],
+                                         [])
 
-    def run_archives(self):
-        return self.run_archives_from_graph()
+    def run_tests(self, include_spec, exclude_spec, tags):
+        return self.run_types_from_graph(include_spec,
+                                         exclude_spec,
+                                         [NodeType.Test],
+                                         tags)
+
+    def run_archives(self, include_spec, exclude_spec):
+        return self.run_types_from_graph(include_spec,
+                                         exclude_spec,
+                                         [NodeType.Archive],
+                                         [])

@@ -91,6 +91,7 @@ class SourceConfig(object):
             cfg = self._merge(defaults, active_config, self.in_model_config)
         else:
             own_config = self.load_config_from_own_project()
+
             cfg = self._merge(
                 defaults, own_config, self.in_model_config, active_config
             )

@@ -117,11 +117,9 @@ SCDArchiveTemplate = u"""
     with "current_data" as (
 
         select
-            {% raw %}
-                {% for col in get_columns_in_table(source_schema, source_table) %}
-                    "{{ col.name }}" {% if not loop.last %},{% endif %}
-                {% endfor %},
-            {% endraw %}
+            {% for col in get_columns_in_table(source_schema, source_table) %}
+                "{{ col.name }}" {% if not loop.last %},{% endif %}
+            {% endfor %},
             "{{ updated_at }}" as "dbt_updated_at",
             "{{ unique_key }}" as "dbt_pk",
             "{{ updated_at }}" as "valid_from",
@@ -133,11 +131,9 @@ SCDArchiveTemplate = u"""
     "archived_data" as (
 
         select
-            {% raw %}
-                {% for col in get_columns_in_table(source_schema, source_table) %}
-                    "{{ col.name }}" {% if not loop.last %},{% endif %}
-                {% endfor %},
-            {% endraw %}
+            {% for col in get_columns_in_table(source_schema, source_table) %}
+                "{{ col.name }}" {% if not loop.last %},{% endif %}
+            {% endfor %},
             "{{ updated_at }}" as "dbt_updated_at",
             "{{ unique_key }}" as "dbt_pk",
             "valid_from",

@@ -404,10 +404,16 @@ class Compiler(object):
         for name, injected_node in injected_nodes.items():
             # now turn model nodes back into the old-style model object for
             # wrapping
-            if injected_node.get('resource_type') != NodeType.Model:
-                # don't wrap thing that aren't models, i.e. tests.
+            if injected_node.get('resource_type') == NodeType.Test:
+                # don't wrap tests.
                 injected_node['wrapped_sql'] = injected_node['injected_sql']
                 wrapped_nodes[name] = injected_node
+
+            elif injected_node.get('resource_type') == NodeType.Archive:
+                # unfortunately we do everything automagically for
+                # archives. in the future it'd be nice to generate
+                # the SQL at the parser level.
+                pass
             else:
                 model = Model(
                     self.project,
@@ -427,7 +433,8 @@ class Compiler(object):
 
             build_path = os.path.join('build', injected_node.get('path'))
 
-            if injected_node.get('config', {}) \
+            if injected_node.get('resource_type') == NodeType.Model and \
+               injected_node.get('config', {}) \
                             .get('materialized') != 'ephemeral':
                 self.__write(build_path, wrapped_stmt)
                 written_nodes.append(injected_node)
@@ -547,7 +554,8 @@ class Compiler(object):
                     all_projects=all_projects,
                     root_dir=project.get('project-root'),
                     relative_dirs=project.get('test-paths', []),
-                    resource_type=NodeType.Test))
+                    resource_type=NodeType.Test,
+                    tags=['data']))
 
         return parsed_tests
 
@@ -556,9 +564,6 @@ class Compiler(object):
         parsed_tests = {}
 
         for name, project in all_projects.items():
-            print('project')
-            print(project)
-
             parsed_tests.update(
                 dbt.parser.load_and_parse_yml(
                     package_name=name,
@@ -578,6 +583,9 @@ class Compiler(object):
             self.get_parsed_data_tests(root_project, all_projects))
         all_nodes.update(
             self.get_parsed_schema_tests(root_project, all_projects))
+        all_nodes.update(
+            dbt.parser.parse_archives_from_projects(root_project,
+                                                    all_projects))
 
         return all_nodes
 
@@ -589,10 +597,6 @@ class Compiler(object):
         all_projects = self.get_all_projects()
 
         all_nodes = self.load_all_nodes(root_project, all_projects)
-
-        print('all_nodes')
-        print(all_nodes.keys())
-
         all_macros = self.get_macros(this_project=self.project)
 
         for project in dbt.utils.dependency_projects(self.project):

@@ -1,4 +1,5 @@
 import os
+import jinja2
 import json
 
 import dbt.project
@@ -66,7 +67,10 @@ class Var(object):
 
         if isinstance(model, dict) and model.get('unique_id'):
             self.local_vars = model.get('config', {}).get('vars')
+            self.model_name = model.get('name')
         else:
+            # still used for wrapping
+            self.model_name = model.nice_name
             self.local_vars = model.config.get('vars', {})
 
     def pretty_dict(self, data):
@@ -78,7 +82,7 @@ class Var(object):
             compiler_error(
                 self.model,
                 self.UndefinedVarError.format(
-                    var_name, self.model.nice_name, pretty_vars
+                    var_name, self.model_name, pretty_vars
                 )
             )
         elif var_name in self.local_vars:
@@ -90,7 +94,20 @@ class Var(object):
                         var_name, self.model.nice_name, pretty_vars
                     )
                 )
-            compiled = self.model.compile_string(self.context, raw)
+
+            # python 2+3 check for stringiness
+            try:
+                basestring
+            except NameError:
+                basestring = str
+
+            # if bool/int/float/etc are passed in, don't compile anything
+            if not isinstance(raw, basestring):
+                return raw
+
+            env = jinja2.Environment()
+            compiled = env.from_string(raw, self.context).render(self.context)
+
             return compiled
         else:
             return default

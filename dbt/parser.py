@@ -125,7 +125,7 @@ def get_fqn(path, package_project_config, extra=[]):
     return fqn
 
 def parse_node(node, node_path, root_project_config, package_project_config,
-               fqn_extra=[]):
+               tags=[], fqn_extra=[]):
     parsed_node = copy.deepcopy(node)
 
     parsed_node.update({
@@ -147,19 +147,19 @@ def parse_node(node, node_path, root_project_config, package_project_config,
 
     env.from_string(node.get('raw_sql')).render(context)
 
+    config_dict = node.get('config', {})
+    config_dict.update(config.config)
+
     parsed_node['unique_id'] = node_path
-    parsed_node['config'] = config.config
+    parsed_node['config'] = config_dict
     parsed_node['empty'] = (len(node.get('raw_sql').strip()) == 0)
     parsed_node['fqn'] = fqn
+    parsed_node['tags'] = tags
 
     return parsed_node
 
 
-def parse_models(nodes, projects):
-    return parse_sql_nodes(nodes, projects)
-
-
-def parse_sql_nodes(nodes, root_project, projects):
+def parse_sql_nodes(nodes, root_project, projects, tags=[]):
     to_return = {}
 
     dbt.contracts.graph.unparsed.validate(nodes)
@@ -175,7 +175,8 @@ def parse_sql_nodes(nodes, root_project, projects):
         to_return[node_path] = parse_node(node,
                                           node_path,
                                           root_project,
-                                          projects.get(package_name))
+                                          projects.get(package_name),
+                                          tags=tags)
 
     dbt.contracts.graph.parsed.validate(to_return)
 
@@ -183,7 +184,7 @@ def parse_sql_nodes(nodes, root_project, projects):
 
 
 def load_and_parse_sql(package_name, root_project, all_projects, root_dir,
-                       relative_dirs, resource_type):
+                       relative_dirs, resource_type, tags=[]):
     extension = "[!.#~]*.sql"
 
     if dbt.flags.STRICT_MODE:
@@ -212,7 +213,7 @@ def load_and_parse_sql(package_name, root_project, all_projects, root_dir,
             'raw_sql': file_contents
         })
 
-    return parse_sql_nodes(result, root_project, all_projects)
+    return parse_sql_nodes(result, root_project, all_projects, tags)
 
 
 def parse_schema_tests(tests, root_project, projects):
@@ -290,6 +291,7 @@ def parse_schema_test(test_base, model_name, test_config, test_type,
                                     name),
                       root_project_config,
                       package_project_config,
+                      tags=['schema'],
                       fqn_extra=['schema'])
 
 
@@ -324,3 +326,52 @@ def load_and_parse_yml(package_name, root_project, all_projects, root_dir,
         })
 
     return parse_schema_tests(result, root_project, all_projects)
+
+
+def parse_archives_from_projects(root_project, all_projects):
+    archives = []
+    to_return = {}
+
+    for name, project in all_projects.items():
+        archives = archives + parse_archives_from_project(project)
+
+    for archive in archives:
+        node_path = get_path(archive.get('resource_type'),
+                             archive.get('package_name'),
+                             archive.get('name'))
+
+        to_return[node_path] = parse_node(
+            archive,
+            node_path,
+            root_project,
+            all_projects.get(archive.get('package_name')))
+
+    return to_return
+
+
+def parse_archives_from_project(project):
+    archives = []
+    archive_configs = project.get('archive', [])
+
+    for archive_config in archive_configs:
+        tables = archive_config.get('tables')
+
+        if tables is None:
+            continue
+
+        for table in tables:
+            config = table.copy()
+            config['source_schema'] = archive_config.get('source_schema')
+            config['target_schema'] = archive_config.get('target_schema')
+
+            archives.append({
+                'name': table.get('target_table'),
+                'root_path': project.get('project-root'),
+                'resource_type': NodeType.Archive,
+                'path': project.get('project-root'),
+                'package_name': project.get('name'),
+                'config': config,
+                'raw_sql': '-- noop'
+            })
+
+    return archives

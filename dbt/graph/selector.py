@@ -43,8 +43,6 @@ def parse_spec(node_spec):
 
 
 def get_package_names(graph):
-    print('get_package_names')
-    print([node.split(".")[1] for node in graph.nodes()])
     return set([node.split(".")[1] for node in graph.nodes()])
 
 
@@ -136,11 +134,6 @@ def warn_if_useless_spec(spec, nodes):
 
 def select_nodes(project, graph, raw_include_specs, raw_exclude_specs):
     selected_nodes = set()
-
-    print('select_nodes')
-    print(graph)
-    print(raw_include_specs)
-    print(raw_exclude_specs)
 
     split_include_specs = split_specs(raw_include_specs)
     split_exclude_specs = split_specs(raw_exclude_specs)

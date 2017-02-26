@@ -11,10 +11,12 @@ class ArchiveTask:
     def compile(self):
         compiler = Compiler(self.project, self.args)
         compiler.initialize()
-        compiled = compiler.compile()
+        results = compiler.compile()
 
-        count_compiled_archives = compiled['archives']
-        logger.info("Compiled {} archives".format(count_compiled_archives))
+        stat_line = ", ".join(
+            ["{} {}s".format(ct, t) for t, ct in results.items()])
+
+        logger.info("Compiled {}".format(stat_line))
 
     def run(self):
         self.compile()
@@ -25,4 +27,4 @@ class ArchiveTask:
             self.args
         )
 
-        runner.run_archives()
+        runner.run_archives(['*'], [])

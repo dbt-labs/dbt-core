@@ -13,6 +13,8 @@ config_contract = {
     Required('post-hook'): list,
     Required('pre-hook'): list,
     Required('vars'): dict,
+
+    # incremental optional fields
     Optional('sql_where'): str,
     Optional('unique_key'): str,
 }
@@ -26,6 +28,7 @@ parsed_graph_item_contract = unparsed_graph_item_contract.extend({
     Required('depends_on'): All(list, [All(str, Length(min=1, max=255))]),
     Required('empty'): bool,
     Required('config'): config_contract,
+    Required('tags'): All(list, [str]),
 })
 
 def validate_one(parsed_graph_item):

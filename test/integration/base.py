@@ -194,6 +194,8 @@ class DBTIntegrationTest(unittest.TestCase):
         except:
             os.rename("dbt_modules", "dbt_modules-{}".format(time.time()))
 
+        self.handle.close()
+
     @property
     def project_config(self):
         return {}
