@@ -139,8 +139,6 @@ class Compiler(object):
         self.args = args
         self.parsed_models = None
 
-        self.macro_generator = None
-
     def initialize(self):
         if not os.path.exists(self.project['target-path']):
             os.makedirs(self.project['target-path'])
@@ -246,41 +244,45 @@ class Compiler(object):
 
         return wrapped_do_ref
 
-    def get_compiler_context(self, linker, model, models):
-        runtime = RuntimeContext(model=model)
-
+    def get_compiler_context(self, linker, model, models,
+                            macro_generator=None):
         context = self.project.context()
+
+        if macro_generator is not None:
+            for macro_data in macro_generator(context):
+                macro = macro_data["macro"]
+                macro_name = macro_data["name"]
+                project = macro_data["project"]
+
+                if context.get(project.get('name')) is None:
+                    context[project.get('name')] = {}
+
+                context.get(project.get('name'), {}) \
+                       .update({macro_name: macro})
+
+                if model.get('package_name') == project.get('name'):
+                    context.update({macro_name: macro})
+
+        adapter = get_adapter(self.project.run_environment())
 
         # built-ins
         context['ref'] = self.__ref(context, model, models)
         context['config'] = self.__model_config(model, linker)
-        #context['this'] = This(
-        #    context['env']['schema'], model.immediate_name, model.name
-        #)
+        context['this'] = This(
+            context['env']['schema'],
+            (model.get('name') if dbt.flags.NON_DESTRUCTIVE
+             else '{}__dbt_tmp'.format(model.get('name'))),
+            model.get('name')
+        )
         context['var'] = Var(model, context=context)
         context['target'] = self.project.get_target()
 
         # these get re-interpolated at runtime!
         context['run_started_at'] = '{{ run_started_at }}'
         context['invocation_id'] = '{{ invocation_id }}'
-
-        adapter = get_adapter(self.project.run_environment())
         context['sql_now'] = adapter.date_function
 
-        runtime.update_global(context)
-
-        # add in macros (can we cache these somehow?)
-        for macro_data in self.macro_generator(context):
-            macro = macro_data["macro"]
-            macro_name = macro_data["name"]
-            project = macro_data["project"]
-
-            runtime.update_package(project['name'], {macro_name: macro})
-
-            if project['name'] == self.project['name']:
-                runtime.update_global({macro_name: macro})
-
-        return runtime
+        return context
 
     def get_context(self, linker, model, models):
         runtime = RuntimeContext(model=model)
@@ -305,20 +307,9 @@ class Compiler(object):
 
         runtime.update_global(context)
 
-        # add in macros (can we cache these somehow?)
-        for macro_data in self.macro_generator(context):
-            macro = macro_data["macro"]
-            macro_name = macro_data["name"]
-            project = macro_data["project"]
-
-            runtime.update_package(project['name'], {macro_name: macro})
-
-            if project['name'] == self.project['name']:
-                runtime.update_global({macro_name: macro})
-
         return runtime
 
-    def compile_node(self, linker, node, nodes):
+    def compile_node(self, linker, node, nodes, macro_generator):
         try:
             compiled_node = node.copy()
             compiled_node.update({
@@ -330,7 +321,8 @@ class Compiler(object):
                 'injected_sql': None,
             })
 
-            context = self.get_compiler_context(linker, compiled_node, nodes)
+            context = self.get_compiler_context(linker, compiled_node, nodes,
+                                                macro_generator)
 
             env = jinja2.sandbox.SandboxedEnvironment()
 
@@ -380,7 +372,7 @@ class Compiler(object):
             return compiled_query
 
 
-    def compile_nodes(self, linker, nodes):
+    def compile_nodes(self, linker, nodes, macro_generator):
         all_projects = self.get_all_projects()
 
         compiled_nodes = {}
@@ -389,7 +381,8 @@ class Compiler(object):
         written_nodes = []
 
         for name, node in nodes.items():
-            compiled_nodes[name] = self.compile_node(linker, node, nodes)
+            compiled_nodes[name] = self.compile_node(linker, node, nodes,
+                                                     macro_generator)
 
         if dbt.flags.STRICT_MODE:
             dbt.contracts.graph.compiled.validate(compiled_nodes)
@@ -527,7 +520,7 @@ class Compiler(object):
         return all_projects
 
 
-    def get_parsed_models(self, root_project, all_projects):
+    def get_parsed_models(self, root_project, all_projects, macro_generator):
         parsed_models = {}
 
         for name, project in all_projects.items():
@@ -538,12 +531,14 @@ class Compiler(object):
                     all_projects=all_projects,
                     root_dir=project.get('project-root'),
                     relative_dirs=project.get('source-paths', []),
-                    resource_type=NodeType.Model))
+                    resource_type=NodeType.Model,
+                    macro_generator=macro_generator))
 
         return parsed_models
 
 
-    def get_parsed_data_tests(self, root_project, all_projects):
+    def get_parsed_data_tests(self, root_project, all_projects,
+                              macro_generator):
         parsed_tests = {}
 
         for name, project in all_projects.items():
@@ -555,6 +550,7 @@ class Compiler(object):
                     root_dir=project.get('project-root'),
                     relative_dirs=project.get('test-paths', []),
                     resource_type=NodeType.Test,
+                    macro_generator=macro_generator,
                     tags=['data']))
 
         return parsed_tests
@@ -575,12 +571,14 @@ class Compiler(object):
         return parsed_tests
 
 
-    def load_all_nodes(self, root_project, all_projects):
+    def load_all_nodes(self, root_project, all_projects, macro_generator):
         all_nodes = {}
 
-        all_nodes.update(self.get_parsed_models(root_project, all_projects))
+        all_nodes.update(self.get_parsed_models(root_project, all_projects,
+                                                macro_generator))
         all_nodes.update(
-            self.get_parsed_data_tests(root_project, all_projects))
+            self.get_parsed_data_tests(root_project, all_projects,
+                                       macro_generator))
         all_nodes.update(
             self.get_parsed_schema_tests(root_project, all_projects))
         all_nodes.update(
@@ -596,7 +594,6 @@ class Compiler(object):
         root_project = self.project.cfg
         all_projects = self.get_all_projects()
 
-        all_nodes = self.load_all_nodes(root_project, all_projects)
         all_macros = self.get_macros(this_project=self.project)
 
         for project in dbt.utils.dependency_projects(self.project):
@@ -604,9 +601,13 @@ class Compiler(object):
                 self.get_macros(this_project=self.project, own_project=project)
             )
 
-        self.macro_generator = self.generate_macros(all_macros)
+        macro_generator = self.generate_macros(all_macros)
 
-        compiled_nodes, written_nodes = self.compile_nodes(linker, all_nodes)
+        all_nodes = self.load_all_nodes(root_project, all_projects,
+                                        macro_generator)
+
+        compiled_nodes, written_nodes = self.compile_nodes(linker, all_nodes,
+                                                           macro_generator)
 
         # TODO re-add archives
 

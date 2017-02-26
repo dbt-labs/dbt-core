@@ -17,6 +17,10 @@ config_contract = {
     # incremental optional fields
     Optional('sql_where'): str,
     Optional('unique_key'): str,
+
+    # adapter optional fields
+    Optional('sort'): str,
+    Optional('dist'): str,
 }
 
 parsed_graph_item_contract = unparsed_graph_item_contract.extend({

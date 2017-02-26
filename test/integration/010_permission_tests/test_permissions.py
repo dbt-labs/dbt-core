@@ -6,12 +6,13 @@ class TestPermissions(DBTIntegrationTest):
     def setUp(self):
         DBTIntegrationTest.setUp(self)
 
+        self.run_sql_file("test/integration/010_permission_tests/tearDown.sql")
         self.run_sql_file("test/integration/010_permission_tests/seed.sql")
 
     def tearDown(self):
-        DBTIntegrationTest.tearDown(self)
-
         self.run_sql_file("test/integration/010_permission_tests/tearDown.sql")
+
+        DBTIntegrationTest.tearDown(self)
 
     @property
     def schema(self):

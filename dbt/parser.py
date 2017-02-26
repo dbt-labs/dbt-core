@@ -125,7 +125,7 @@ def get_fqn(path, package_project_config, extra=[]):
     return fqn
 
 def parse_node(node, node_path, root_project_config, package_project_config,
-               tags=[], fqn_extra=[]):
+               macro_generator=None, tags=[], fqn_extra=[]):
     parsed_node = copy.deepcopy(node)
 
     parsed_node.update({
@@ -137,10 +137,25 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     config = dbt.model.SourceConfig(
         root_project_config, package_project_config, fqn)
 
-    context = {
-        'ref': __ref(parsed_node),
-        'config': __config(parsed_node, config),
-    }
+    context = {}
+
+    if macro_generator is not None:
+        for macro_data in macro_generator(context):
+            macro = macro_data["macro"]
+            macro_name = macro_data["name"]
+            project = macro_data["project"]
+
+            if context.get(project.get('name')) is None:
+                context[project.get('name')] = {}
+
+            context.get(project.get('name'), {}) \
+                   .update({macro_name: macro})
+
+            if node.get('package_name') == project.get('name'):
+                context.update({macro_name: macro})
+
+    context['ref'] = __ref(parsed_node)
+    context['config'] = __config(parsed_node, config)
 
     env = jinja2.sandbox.SandboxedEnvironment(
         undefined=SilentUndefined)
@@ -159,7 +174,7 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     return parsed_node
 
 
-def parse_sql_nodes(nodes, root_project, projects, tags=[]):
+def parse_sql_nodes(nodes, root_project, projects, macro_generator, tags=[]):
     to_return = {}
 
     dbt.contracts.graph.unparsed.validate(nodes)
@@ -176,6 +191,7 @@ def parse_sql_nodes(nodes, root_project, projects, tags=[]):
                                           node_path,
                                           root_project,
                                           projects.get(package_name),
+                                          macro_generator,
                                           tags=tags)
 
     dbt.contracts.graph.parsed.validate(to_return)
@@ -184,7 +200,7 @@ def parse_sql_nodes(nodes, root_project, projects, tags=[]):
 
 
 def load_and_parse_sql(package_name, root_project, all_projects, root_dir,
-                       relative_dirs, resource_type, tags=[]):
+                       relative_dirs, resource_type, macro_generator, tags=[]):
     extension = "[!.#~]*.sql"
 
     if dbt.flags.STRICT_MODE:
@@ -213,7 +229,8 @@ def load_and_parse_sql(package_name, root_project, all_projects, root_dir,
             'raw_sql': file_contents
         })
 
-    return parse_sql_nodes(result, root_project, all_projects, tags)
+    return parse_sql_nodes(result, root_project, all_projects, macro_generator,
+                           tags)
 
 
 def parse_schema_tests(tests, root_project, projects):
@@ -231,7 +248,9 @@ def parse_schema_tests(tests, root_project, projects):
                         test, model_name, config, test_type,
                         root_project,
                         projects.get(test.get('package_name')))
-                    to_return[to_add.get('unique_id')] = to_add
+
+                    if to_add is not None:
+                        to_return[to_add.get('unique_id')] = to_add
 
     return to_return
 
@@ -249,6 +268,9 @@ def parse_schema_test(test_base, model_name, test_config, test_type,
         name_key = test_config
 
     elif test_type == 'relationships':
+        if not isinstance(test_config, dict):
+            return None
+
         child_field = test_config.get('from')
         parent_field = test_config.get('field')
         parent_model = test_config.get('to')
@@ -263,11 +285,14 @@ def parse_schema_test(test_base, model_name, test_config, test_type,
                                         parent_field)
 
     elif test_type == 'accepted_values':
+        if not isinstance(test_config, dict):
+            return None
+
         raw_sql = QUERY_VALIDATE_ACCEPTED_VALUES.format(
             ref="{{ref('"+model_name+"')}}",
             field=test_config.get('field', ''),
             values_csv="'{}'".format(
-                "','".join(test_config.get('values', []))))
+                "','".join([str(v) for v in test_config.get('values', [])])))
 
         name_key = test_config.get('field')
 

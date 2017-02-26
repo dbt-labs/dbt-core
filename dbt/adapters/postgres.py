@@ -505,6 +505,16 @@ class PostgresAdapter:
         handle.commit()
 
     @classmethod
+    def rollback(cls, profile):
+        connection = cls.get_connection(profile)
+
+        if flags.STRICT_MODE:
+            validate_connection(connection)
+
+        handle = connection.get('handle')
+        handle.rollback()
+
+    @classmethod
     def get_status(cls, cursor):
         return cursor.statusmessage
 

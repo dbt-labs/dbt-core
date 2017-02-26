@@ -35,7 +35,7 @@ class TestSchemaTests(DBTIntegrationTest):
 
         for result in test_results:
             # assert that all deliberately failing tests actually fail
-            if 'failure' in result.model.name:
+            if 'failure' in result.node.get('name'):
                 self.assertFalse(result.errored)
                 self.assertFalse(result.skipped)
                 self.assertTrue(result.status > 0)
@@ -75,4 +75,4 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
         self.run_dbt()
 
         ran_tests = self.run_schema_validations()
-        self.assertEqual(ran_tests, [])
+        self.assertEqual(len(ran_tests), 2)

@@ -175,6 +175,12 @@ def invoke_dbt(parsed):
 
     log_dir = proj.get('log-path', 'logs')
 
+    if hasattr(proj.args, 'non_destructive') and \
+       proj.args.non_destructive == True:
+        flags.NON_DESTRUCTIVE = True
+    else:
+        flags.NON_DESTRUCTIVE = False
+
     logger.debug("running dbt with arguments %s", parsed)
 
     task = parsed.cls(args=parsed, project=proj)

@@ -159,6 +159,8 @@ def execute_test(profile, test):
 
     rows = cursor.fetchall()
 
+    adapter.rollback(profile)
+
     cursor.close()
 
     if len(rows) > 1:
@@ -324,6 +326,33 @@ def execute_archive(profile, node, context):
         model=node)
 
     return result
+
+def run_hooks(profile, hooks, context, source):
+    if type(hooks) not in (list, tuple):
+        hooks = [hooks]
+
+    print('hooks')
+    print(hooks)
+
+    ctx = {
+        "target": profile,
+        "state": "start",
+        "invocation_id": context['invocation_id'],
+        "run_started_at": context['run_started_at']
+    }
+
+    compiled_hooks = [
+        dbt.compilation.compile_string(hook, ctx) for hook in hooks
+    ]
+
+    adapter = get_adapter(profile)
+
+    adapter.execute_all(
+        profile=profile,
+        queries=compiled_hooks,
+        model_name=source)
+
+    adapter.commit(profile)
 
 
 class RunModelResult(object):
@@ -771,7 +800,8 @@ class RunManager(object):
         return skip_dependent
 
 
-    def execute_nodes(self, node_dependency_list, on_failure):
+    def execute_nodes(self, node_dependency_list, on_failure,
+                      should_run_hooks=False):
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
         schema_name = adapter.get_default_schema(profile)
@@ -798,8 +828,11 @@ class RunManager(object):
         logger.info("")
         print_counts(flat_nodes)
 
-        # TODO: re-add hooks
-        # runner.pre_run_all(flat_models, self.context)
+        if should_run_hooks:
+            run_hooks(self.project.get_target(),
+                      self.project.cfg.get('on-run-start', []),
+                      self.context,
+                      'on-run-start hooks')
 
         node_id_to_index_map = {node.get('unique_id'): i + 1 for (i, node)
                                  in enumerate(flat_nodes)}
@@ -879,15 +912,21 @@ class RunManager(object):
         pool.close()
         pool.join()
 
+        if should_run_hooks:
+            run_hooks(self.project.get_target(),
+                      self.project.cfg.get('on-run-end', []),
+                      self.context,
+                      'on-run-end hooks')
+
         logger.info("")
         logger.info("FIXME")
         # logger.info(runner.post_run_all_msg(model_results))
-        # runner.post_run_all(flat_models, model_results, self.context)
 
         return node_results
 
     def get_nodes_to_run(self, graph, include_spec, exclude_spec,
                          resource_types, tags):
+
         if include_spec is None:
             include_spec = ['*']
 
@@ -896,12 +935,8 @@ class RunManager(object):
 
         to_run = [
             n for n in graph.nodes()
-            if ((graph.node.get(n).get('resource_type') in resource_types)
-                and is_enabled(graph.node.get(n))
-                and (len(tags) == 0 or
-                     # does the node share any tags with the run?
-                     bool(set(graph.node.get(n).get('tags')) &
-                          set(tags))))
+            if (graph.node.get(n).get('empty') == False
+                and is_enabled(graph.node.get(n)))
         ]
 
         filtered_graph = graph.subgraph(to_run)
@@ -912,11 +947,15 @@ class RunManager(object):
 
         post_filter = [
             n for n in selected_nodes
-            if (get_materialization(graph.node.get(n)) != 'ephemeral' and
-                graph.node.get(n).get('empty') == False)
+            if ((graph.node.get(n).get('resource_type') in resource_types)
+                and get_materialization(graph.node.get(n)) != 'ephemeral'
+                and (len(tags) == 0 or
+                     # does the node share any tags with the run?
+                     bool(set(graph.node.get(n).get('tags')) &
+                          set(tags))))
         ]
 
-        return post_filter
+        return set(post_filter)
 
     def get_compiled_models(self, linker, nodes, node_type):
         compiled_models = []
@@ -956,7 +995,7 @@ class RunManager(object):
             raise
 
     def run_types_from_graph(self, include_spec, exclude_spec,
-                             resource_types, tags):
+                             resource_types, tags, should_run_hooks=False):
         linker = self.deserialize_graph()
 
         selected_nodes = self.get_nodes_to_run(
@@ -974,7 +1013,8 @@ class RunManager(object):
 
         on_failure = self.on_model_failure(linker, selected_nodes)
 
-        results = self.execute_nodes(dependency_list, on_failure)
+        results = self.execute_nodes(dependency_list, on_failure,
+                                     should_run_hooks)
 
         return results
 
@@ -983,8 +1023,9 @@ class RunManager(object):
     def run_models(self, include_spec, exclude_spec):
         return self.run_types_from_graph(include_spec,
                                          exclude_spec,
-                                         [NodeType.Model],
-                                         [])
+                                         resource_types=[NodeType.Model],
+                                         tags=[],
+                                         should_run_hooks=True)
 
     def run_tests(self, include_spec, exclude_spec, tags):
         return self.run_types_from_graph(include_spec,
