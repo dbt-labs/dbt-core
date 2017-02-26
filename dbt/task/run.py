@@ -17,9 +17,9 @@ class RunTask:
         compiler.initialize()
         results = compiler.compile()
 
-        stat_line = ", ".join([
-            "{} {}".format(results[k], k) for k in CompilableEntities
-        ])
+        stat_line = ", ".join(
+            ["{} {}s".format(ct, t) for t, ct in results.items()])
+
         logger.info("Compiled {}".format(stat_line))
 
     def run(self):

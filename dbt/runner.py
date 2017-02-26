@@ -1,6 +1,7 @@
 
 from __future__ import print_function
 
+import hashlib
 import psycopg2
 import os
 import sys
@@ -13,14 +14,16 @@ from datetime import datetime
 
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
-import dbt.compilation
-from dbt.linker import Linker
+
 from dbt.source import Source
 from dbt.utils import find_model_by_fqn, find_model_by_name, \
     dependency_projects
 from dbt.compiled_model import make_compiled_model
+from dbt.model import NodeType
 
+import dbt.compilation
 import dbt.exceptions
+import dbt.linker
 import dbt.tracking
 import dbt.schema
 import dbt.graph.selector
@@ -33,13 +36,233 @@ ABORTED_TRANSACTION_STRING = ("current transaction is aborted, commands "
 
 
 def get_timestamp():
-    return "{} |".format(time.strftime("%H:%M:%S"))
+    return time.strftime("%H:%M:%S")
+
+
+def get_materialization(model):
+    return model.get('config', {}).get('materialized')
+
+
+def get_hash(model):
+    return hashlib.md5(model.get('unique_id').encode('utf-8')).hexdigest()
+
+
+def get_hashed_contents(model):
+    return hashlib.md5(model.get('raw_sql').encode('utf-8')).hexdigest()
+
+
+def is_enabled(model):
+    return model.get('config', {}).get('enabled') == True
+
+
+def print_timestamped_line(msg):
+    logger.info("{} | {}".format(get_timestamp(), msg))
+
+
+def print_fancy_output_line(msg, status, index, total, execution_time=None):
+    prefix = "{timestamp} {index} of {total} {message}".format(
+        timestamp=get_timestamp(),
+        index=index,
+        total=total,
+        message=msg)
+    justified = prefix.ljust(80, ".")
+
+    if execution_time is None:
+        status_time = ""
+    else:
+        status_time = " in {execution_time:0.2f}s".format(
+            execution_time=execution_time)
+
+    output = "{justified} [{status}{status_time}]".format(
+        justified=justified, status=status, status_time=status_time)
+
+    logger.info(output)
+
+
+def print_skip_line(model, schema, relation, index, num_models):
+    msg = 'SKIP relation {}.{}'.format(schema, relation)
+    print_fancy_output_line(msg, 'SKIP', index, num_models)
+
+
+def print_counts(flat_nodes):
+    counts = {}
+    for node in flat_nodes:
+        t = node.get('resource_type')
+        counts[t] = counts.get(t, 0) + 1
+
+    for k, v in counts.items():
+        print_timestamped_line("Running {} {}s".format(v,k))
+
+
+def print_start_line(node, schema_name, index, total):
+    if node.get('resource_type') == NodeType.Model:
+        print_model_start_line(node, schema_name, index, total)
+    if node.get('resource_type') == NodeType.Test:
+        print_model_start_line(node, schema_name, index, total)
+
+
+def print_model_start_line(model, schema_name, index, total):
+    msg = "START {model_type} model {schema}.{relation}".format(
+        model_type=get_materialization(model),
+        schema=schema_name,
+        relation=model.get('name'))
+
+    print_fancy_output_line(msg, 'RUN', index, total)
+
+
+def print_result_line(result, schema_name, index, total):
+    node = result.node
+
+    if node.get('resource_type') == NodeType.Model:
+        print_model_result_line(result, schema_name, index, total)
+    elif node.get('resource_type') == NodeType.Test:
+        print_test_result_line(result, schema_name, index, total)
+
+
+def print_test_result_line(result, schema_name, index, total):
+    model = result.node
+    info = 'PASS'
+
+    if result.errored:
+        info = "ERROR"
+    elif result.status > 0:
+        info = 'FAIL {}'.format(result.status)
+    elif result.status == 0:
+        info = 'PASS'
+    else:
+        raise RuntimeError("unexpected status: {}".format(result.status))
+
+    print_fancy_output_line(
+        "{info} {name}".format(
+            info=info,
+            name=model.get('name')),
+        result.status,
+        index,
+        total,
+        result.execution_time)
+
+
+def execute_test(profile, test):
+    adapter = get_adapter(profile)
+    _, cursor = adapter.execute_one(
+        profile,
+        test.get('wrapped_sql'),
+        test.get('name'))
+
+    rows = cursor.fetchall()
+
+    cursor.close()
+
+    if len(rows) > 1:
+        raise RuntimeError(
+            "Bad test {name}: Returned {num_rows} rows instead of 1"
+            .format(name=model.name, num_rows=len(rows)))
+
+    row = rows[0]
+    if len(row) > 1:
+        raise RuntimeError(
+            "Bad test {name}: Returned {num_cols} cols instead of 1"
+            .format(name=model.name, num_cols=len(row)))
+
+    return row[0]
+
+
+def print_model_result_line(result, schema_name, index, total):
+    model = result.node
+    info = 'OK created'
+
+    if result.errored:
+        info = 'ERROR creating'
+
+    print_fancy_output_line(
+        "{info} {model_type} model {schema}.{relation}".format(
+            info=info,
+            model_type=get_materialization(model),
+            schema=schema_name,
+            relation=model.get('name')),
+        result.status,
+        index,
+        total,
+        result.execution_time)
+
+
+
+def execute_model(profile, model):
+    adapter = get_adapter(profile)
+    schema = adapter.get_default_schema(profile)
+    existing = adapter.query_for_existing(profile, schema)
+
+    tmp_name = '{}__dbt_tmp'.format(model.get('name'))
+
+    if dbt.flags.NON_DESTRUCTIVE:
+        # for non destructive mode, we only look at the already existing table.
+        tmp_name = model.get('name')
+
+    result = None
+
+    # TRUNCATE / DROP
+    if get_materialization(model) == 'table' and \
+       dbt.flags.NON_DESTRUCTIVE and \
+       existing.get(tmp_name) == 'table':
+        # tables get truncated instead of dropped in non-destructive mode.
+        adapter.truncate(
+            profile=profile,
+            table=tmp_name,
+            model_name=model.get('name'))
+
+    elif dbt.flags.NON_DESTRUCTIVE:
+        # never drop existing relations in non destructive mode.
+        pass
+
+    elif get_materialization(model) != 'incremental' and \
+         existing.get(tmp_name) is not None:
+        # otherwise, for non-incremental things, drop them with IF EXISTS
+        adapter.drop(
+            profile=profile,
+            relation=tmp_name,
+            relation_type=existing.get(tmp_name),
+            model_name=model.get('name'))
+
+        # and update the list of what exists
+        existing = adapter.query_for_existing(profile, schema)
+
+    # EXECUTE
+    if get_materialization(model) == 'view' and dbt.flags.NON_DESTRUCTIVE and \
+       model.get('name') in existing:
+        # views don't need to be recreated in non destructive mode since they
+        # will repopulate automatically. note that we won't run DDL for these
+        # views either.
+        pass
+    elif is_enabled(model) and get_materialization(model) != 'ephemeral':
+        result = adapter.execute_model(profile, model)
+
+    # DROP OLD RELATION AND RENAME
+    if dbt.flags.NON_DESTRUCTIVE:
+        # in non-destructive mode, we truncate and repopulate tables, and
+        # don't modify views.
+        pass
+    elif get_materialization(model) in ['table', 'view']:
+        # otherwise, drop tables and views, and rename tmp tables/views to
+        # their new names
+        if existing.get(model.get('name')) is not None:
+            adapter.drop(
+                profile=profile,
+                relation=model.get('name'),
+                relation_type=existing.get(model.get('name')),
+                model_name=model.get('name'))
+
+        adapter.rename(profile=profile,
+                       from_name=tmp_name,
+                       to_name=model.get('name'),
+                       model_name=model.get('name'))
+
+    return result
 
 
 class RunModelResult(object):
-    def __init__(self, model, error=None, skip=False, status=None,
+    def __init__(self, node, error=None, skip=False, status=None,
                  execution_time=0):
-        self.model = model
+        self.node = node
         self.error = error
         self.skip = skip
         self.status = status
@@ -103,7 +326,7 @@ class ModelRunner(BaseRunner):
         return output
 
     def post_run_msg(self, result):
-        model = result.model
+        model = result.node
         print_vars = {
             "schema": self.adapter.get_default_schema(self.profile),
             "model_name": model.name,
@@ -385,106 +608,112 @@ class RunManager(object):
             "already_exists": call_table_exists,
         }
 
+
+    def inject_runtime_config(self, node):
+        sql = dbt.compilation.compile_string(node.get('wrapped_sql'),
+                                             self.context)
+
+        node['wrapped_sql'] = sql
+
+        return node
+
     def deserialize_graph(self):
         logger.info("Loading dependency graph file")
 
-        linker = Linker()
         base_target_path = self.project['target-path']
         graph_file = os.path.join(
             base_target_path,
             dbt.compilation.graph_file_name
         )
-        linker.read_graph(graph_file)
 
-        return linker
+        return dbt.linker.from_file(graph_file)
 
-    def execute_model(self, runner, model):
-        logger.debug("executing model %s", model)
 
-        result = runner.execute(model)
+    def execute_node(self, node):
+        profile = self.project.run_environment()
+
+        logger.debug("executing node %s", node.get('unique_id'))
+
+        node = self.inject_runtime_config(node)
+
+        if node.get('resource_type') == NodeType.Model:
+            result = execute_model(profile, node)
+        elif node.get('resource_type') == NodeType.Test:
+            result = execute_test(profile, node)
+
         return result
 
-    def safe_execute_model(self, data):
-        runner, model = data['runner'], data['model']
+
+    def safe_execute_node(self, data):
+        node = data
 
         start_time = time.time()
 
         error = None
+
         try:
-            status = self.execute_model(runner, model)
+            status = self.execute_node(node)
         except (RuntimeError,
                 dbt.exceptions.ProgrammingException,
                 psycopg2.ProgrammingError,
                 psycopg2.InternalError) as e:
             error = "Error executing {filepath}\n{error}".format(
-                filepath=model['build_path'], error=str(e).strip())
+                filepath=node.get('build_path'), error=str(e).strip())
             status = "ERROR"
             logger.debug(error)
             if type(e) == psycopg2.InternalError and \
                ABORTED_TRANSACTION_STRING == e.diag.message_primary:
                 return RunModelResult(
-                    model, error=ABORTED_TRANSACTION_STRING, status="SKIP")
+                    node, error=ABORTED_TRANSACTION_STRING, status="SKIP")
         except Exception as e:
             error = ("Unhandled error while executing {filepath}\n{error}"
                      .format(
-                         filepath=model['build_path'], error=str(e).strip()))
+                         filepath=node.get('build_path'), error=str(e).strip()))
             logger.debug(error)
             raise e
 
         execution_time = time.time() - start_time
 
-        return RunModelResult(model,
+        return RunModelResult(node,
                               error=error,
                               status=status,
                               execution_time=execution_time)
 
-    def as_concurrent_dep_list(self, linker, models_to_run):
-        # linker.as_dependency_list operates on nodes, but this method operates
-        # on compiled models. Use a dict to translate between the two
-        node_model_map = {m.fqn: m for m in models_to_run}
-        dependency_list = linker.as_dependency_list(node_model_map.keys())
 
-        model_dependency_list = []
-        for node_level in dependency_list:
-            model_level = [node_model_map[n] for n in node_level]
-            model_dependency_list.append(model_level)
+    def as_concurrent_dep_list(self, linker, nodes_to_run):
+        dependency_list = linker.as_dependency_list(nodes_to_run)
 
-        return model_dependency_list
+        concurrent_dependency_list = []
+        for level in dependency_list:
+            node_level = [linker.get_node(node) for node in level]
+            concurrent_dependency_list.append(node_level)
 
-    def on_model_failure(self, linker, models, selected_nodes):
-        def skip_dependent(model):
-            dependent_nodes = linker.get_dependent_nodes(model.fqn)
+        return concurrent_dependency_list
+
+
+    def on_model_failure(self, linker, selected_nodes):
+        def skip_dependent(node):
+            print(node)
+            dependent_nodes = linker.get_dependent_nodes(node.get('unique_id'))
             for node in dependent_nodes:
                 if node in selected_nodes:
-                    model_to_skip = find_model_by_fqn(models, node)
-                    model_to_skip.do_skip()
+                    # TODO fix skipping
+                    pass
+
         return skip_dependent
 
-    def print_fancy_output_line(self, message, status, index, total,
-                                execution_time=None):
-        prefix = "{timestamp} {index} of {total} {message}".format(
-            timestamp=get_timestamp(),
-            index=index,
-            total=total,
-            message=message)
-        justified = prefix.ljust(80, ".")
 
-        if execution_time is None:
-            status_time = ""
-        else:
-            status_time = " in {execution_time:0.2f}s".format(
-                execution_time=execution_time)
+    def execute_nodes(self, node_dependency_list, on_failure):
+        profile = self.project.run_environment()
+        adapter = get_adapter(profile)
+        schema_name = adapter.get_default_schema(profile)
 
-        output = "{justified} [{status}{status_time}]".format(
-            justified=justified, status=status, status_time=status_time)
-        logger.info(output)
+        flat_nodes = list(itertools.chain.from_iterable(
+            node_dependency_list))
 
-    def execute_models(self, runner, model_dependency_list, on_failure):
-        flat_models = list(itertools.chain.from_iterable(
-            model_dependency_list))
+        num_nodes = len(flat_nodes)
 
-        num_models = len(flat_models)
-        if num_models == 0:
+        if num_nodes == 0:
             logger.info("WARNING: Nothing to do. Try checking your model "
                         "configs and running `dbt compile`".format(
                             self.target_path))
@@ -499,115 +728,116 @@ class RunManager(object):
         pool = ThreadPool(num_threads)
 
         logger.info("")
-        logger.info(runner.pre_run_all_msg(flat_models))
-        runner.pre_run_all(flat_models, self.context)
+        print_counts(flat_nodes)
 
-        fqn_to_id_map = {model.fqn: i + 1 for (i, model)
-                         in enumerate(flat_models)}
+        # TODO: re-add hooks
+        # runner.pre_run_all(flat_models, self.context)
 
-        def get_idx(model):
-            return fqn_to_id_map[model.fqn]
+        node_id_to_index_map = {node.get('unique_id'): i + 1 for (i, node)
+                                 in enumerate(flat_nodes)}
 
-        model_results = []
-        for model_list in model_dependency_list:
-            for i, model in enumerate([model for model in model_list
-                                       if model.should_skip()]):
-                msg = runner.skip_msg(model)
-                self.print_fancy_output_line(
-                    msg, 'SKIP', get_idx(model), num_models)
-                model_result = RunModelResult(model, skip=True)
-                model_results.append(model_result)
+        def get_idx(node):
+            return node_id_to_index_map[node.get('unique_id')]
 
-            models_to_execute = [model for model in model_list
-                                 if not model.should_skip()]
+        node_results = []
+        for node_list in node_dependency_list:
+            for i, node in enumerate([node for node in node_list
+                                       if node.get('skip')]):
+                print_skip_line(
+                    schema_name, node.get('name'), get_idx(node), num_nodes)
+
+                node_result = RunModelResult(node, skip=True)
+                node_results.append(node_result)
+
+            nodes_to_execute = [node for node in node_list
+                                 if not node.get('skip')]
 
             threads = self.threads
-            num_models_this_batch = len(models_to_execute)
-            model_index = 0
+            num_nodes_this_batch = len(nodes_to_execute)
+            node_index = 0
 
             def on_complete(run_model_results):
                 for run_model_result in run_model_results:
-                    model_results.append(run_model_result)
+                    node_results.append(run_model_result)
 
-                    msg = runner.post_run_msg(run_model_result)
-                    status = runner.status(run_model_result)
-                    index = get_idx(run_model_result.model)
-                    self.print_fancy_output_line(
-                        msg,
-                        status,
-                        index,
-                        num_models,
-                        run_model_result.execution_time
-                    )
+                    index = get_idx(run_model_result.node)
+
+                    print_result_line(run_model_result,
+                                      schema_name,
+                                      index,
+                                      num_nodes)
 
                     invocation_id = dbt.tracking.active_user.invocation_id
                     dbt.tracking.track_model_run({
                         "invocation_id": invocation_id,
                         "index": index,
-                        "total": num_models,
+                        "total": num_nodes,
                         "execution_time": run_model_result.execution_time,
                         "run_status": run_model_result.status,
                         "run_skipped": run_model_result.skip,
                         "run_error": run_model_result.error,
-                        "model_materialization": run_model_result.model['materialized'],  # noqa
-                        "model_id": run_model_result.model.hashed_name(),
-                        "hashed_contents": run_model_result.model.hashed_contents(),  # noqa
+                        "model_materialization": get_materialization(run_model_result.node),  # noqa
+                        "model_id": get_hash(run_model_result.node),
+                        "hashed_contents": get_hashed_contents(run_model_result.node),  # noqa
                     })
 
                     if run_model_result.errored:
-                        on_failure(run_model_result.model)
+                        on_failure(run_model_result.node)
                         logger.info(run_model_result.error)
 
-            while model_index < num_models_this_batch:
-                local_models = []
+            while node_index < num_nodes_this_batch:
+                local_nodes = []
                 for i in range(
-                        model_index,
-                        min(model_index + threads, num_models_this_batch)):
-                    model = models_to_execute[i]
-                    local_models.append(model)
-                    msg = runner.pre_run_msg(model)
-                    self.print_fancy_output_line(
-                        msg, 'RUN', get_idx(model), num_models
-                    )
+                        node_index,
+                        min(node_index + threads, num_nodes_this_batch)):
+                    node = nodes_to_execute[i]
+                    local_nodes.append(node)
 
-                wrapped_models_to_execute = [
-                    {"runner": runner, "model": model}
-                    for model in local_models
-                ]
+                    print_start_line(node,
+                                     schema_name,
+                                     get_idx(node),
+                                     num_nodes)
+
                 map_result = pool.map_async(
-                    self.safe_execute_model,
-                    wrapped_models_to_execute,
+                    self.safe_execute_node,
+                    local_nodes,
                     callback=on_complete
                 )
                 map_result.wait()
                 run_model_results = map_result.get()
 
-                model_index += threads
+                node_index += threads
 
         pool.close()
         pool.join()
 
         logger.info("")
-        logger.info(runner.post_run_all_msg(model_results))
-        runner.post_run_all(flat_models, model_results, self.context)
+        logger.info("FIXME")
+        # logger.info(runner.post_run_all_msg(model_results))
+        # runner.post_run_all(flat_models, model_results, self.context)
 
-        return model_results
+        return node_results
 
-    def get_nodes_to_run(self, graph, include_spec, exclude_spec, model_type):
+    def get_nodes_to_run(self, graph, include_spec, exclude_spec, resource_type):
         if include_spec is None:
             include_spec = ['*']
 
         if exclude_spec is None:
             exclude_spec = []
 
-        model_nodes = [
+        print('graphnodes')
+        print(graph.nodes())
+
+        to_run = [
             n for n in graph.nodes()
-            if graph.node[n]['dbt_run_type'] == model_type
+            if ((graph.node.get(n, {}).get('resource_type') == resource_type)
+                and graph.node.get(n, {}).get('empty') == False
+                and is_enabled(graph.node.get(n, {})))
         ]
 
-        model_only_graph = graph.subgraph(model_nodes)
+        type_filtered_graph = graph.subgraph(to_run)
         selected_nodes = dbt.graph.selector.select_nodes(self.project,
-                                                         model_only_graph,
+                                                         type_filtered_graph,
                                                          include_spec,
                                                          exclude_spec)
         return selected_nodes
@@ -650,7 +880,6 @@ class RunManager(object):
             raise
 
     def run_models_from_graph(self, include_spec, exclude_spec):
-        runner = ModelRunner(self.project)
         linker = self.deserialize_graph()
 
         selected_nodes = self.get_nodes_to_run(
@@ -659,23 +888,15 @@ class RunManager(object):
             exclude_spec,
             dbt.model.NodeType.Model)
 
-        compiled_models = self.get_compiled_models(
-            linker,
-            selected_nodes,
-            runner.run_type)
-
         self.try_create_schema()
 
-        model_dependency_list = self.as_concurrent_dep_list(
+        dependency_list = self.as_concurrent_dep_list(
             linker,
-            compiled_models
-        )
+            selected_nodes)
 
-        on_failure = self.on_model_failure(linker, compiled_models,
-                                           selected_nodes)
-        results = self.execute_models(
-            runner, model_dependency_list, on_failure
-        )
+        on_failure = self.on_model_failure(linker, selected_nodes)
+
+        results = self.execute_nodes(dependency_list, on_failure)
 
         return results
 
@@ -685,42 +906,21 @@ class RunManager(object):
         runner = TestRunner(self.project)
         linker = self.deserialize_graph()
 
-        selected_model_nodes = self.get_nodes_to_run(
+        selected_nodes = self.get_nodes_to_run(
             linker.graph,
             include_spec,
             exclude_spec,
-            dbt.model.NodeType.Model)
+            dbt.model.NodeType.Test)
 
-        # just throw everything in this set, then pick out tests later
-        nodes_and_neighbors = set()
-        for model_node in selected_model_nodes:
-            nodes_and_neighbors.add(model_node)
-            neighbors = linker.graph.neighbors(model_node)
-            for neighbor in neighbors:
-                nodes_and_neighbors.add(neighbor)
-
-        compiled_models = self.get_compiled_models(
+        dependency_list = self.as_concurrent_dep_list(
             linker,
-            nodes_and_neighbors,
-            runner.run_type)
-
-        selected_nodes = set(cm.fqn for cm in compiled_models)
+            selected_nodes)
 
         self.try_create_schema()
 
-        all_tests = []
-        if test_schemas:
-            all_tests.extend([cm for cm in compiled_models
-                             if cm.is_test_type(runner.test_schema_type)])
+        on_failure = self.on_model_failure(linker, selected_nodes)
 
-        if test_data:
-            all_tests.extend([cm for cm in compiled_models
-                              if cm.is_test_type(runner.test_data_type)])
-
-        dep_list = [all_tests]
-
-        on_failure = self.on_model_failure(linker, all_tests, selected_nodes)
-        results = self.execute_models(runner, dep_list, on_failure)
+        results = self.execute_nodes(dependency_list, on_failure)
 
         return results
 

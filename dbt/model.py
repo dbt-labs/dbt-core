@@ -10,6 +10,7 @@ import dbt.archival
 from dbt.adapters.factory import get_adapter
 from dbt.utils import deep_merge, DBTConfigKeys, compiler_error, \
     compiler_warning
+import dbt.flags
 
 
 class NodeType(object):
@@ -319,10 +320,7 @@ class DBTSource(object):
             return "{}__dbt_tmp".format(self.name)
 
     def is_non_destructive(self):
-        if hasattr(self.project.args, 'non_destructive'):
-            return self.project.args.non_destructive
-        else:
-            return False
+        return dbt.flags.NON_DESTRUCTIVE
 
     def rename_query(self, schema):
         opts = {

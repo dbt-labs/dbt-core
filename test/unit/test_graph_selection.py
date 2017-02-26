@@ -12,17 +12,11 @@ class GraphSelectionTest(unittest.TestCase):
 
     def setUp(self):
         integer_graph = nx.balanced_tree(2, 2, nx.DiGraph())
-        simple_mapping = {
-            i: letter for (i, letter) in enumerate(string.ascii_lowercase)
-        }
 
         package_mapping = {
-            i: ('X' if i % 2 == 0 else 'Y', letter)
+            i: 'm.' + ('X' if i % 2 == 0 else 'Y') + '.' + letter
             for (i, letter) in enumerate(string.ascii_lowercase)
         }
-
-        # Edges: [(a, b), (a, c), (b, d), (b, e), (c, f), (c, g)]
-        self.simple_graph = nx.relabel_nodes(integer_graph, simple_mapping)
 
         # Edges: [(X.a, Y.b), (X.a, X.c), (Y.b, Y.d), (Y.b, X.e), (X.c, Y.f), (X.c, X.g)]
         self.package_graph = nx.relabel_nodes(integer_graph, package_mapping)
@@ -78,37 +72,13 @@ class GraphSelectionTest(unittest.TestCase):
 
         self.assertEquals(selected, expected)
 
-    # Test the select_nodes() interface
-    def test__single_node_selection(self):
-        self.run_specs_and_assert(self.simple_graph, ['a'], [], set('a'))
-
-    def test__node_and_children(self):
-        self.run_specs_and_assert(self.simple_graph, ['a+'], [], set('abcdefg'))
-
-    def test__node_and_parents(self):
-        self.run_specs_and_assert(self.simple_graph, ['+g'], [], set('acg'))
-
-    def test__node_and_children_and_parents(self):
-        self.run_specs_and_assert(self.simple_graph, ['+c+'], [], set('acfg'))
-
-    def test__node_and_children_and_parents_except_one(self):
-        self.run_specs_and_assert(self.simple_graph, ['+c+'], ['c'], set('afg'))
-
-    def test__node_and_children_and_parents_except_many(self):
-        self.run_specs_and_assert(self.simple_graph, ['+c+'], ['+f'], set('g'))
-
-    def test__multiple_node_selection(self):
-        self.run_specs_and_assert(self.simple_graph, ['a', 'b'], [], set('ab'))
-
-    def test__multiple_node_selection_mixed(self):
-        self.run_specs_and_assert(self.simple_graph, ['a+', 'b+'], ['b', '+c'], set('defg'))
 
     def test__single_node_selection_in_package(self):
         self.run_specs_and_assert(
             self.package_graph,
             ['X.a'],
             [],
-            set([('X', 'a')])
+            set(['m.X.a'])
         )
 
     def test__multiple_node_selection_in_package(self):
@@ -116,7 +86,7 @@ class GraphSelectionTest(unittest.TestCase):
             self.package_graph,
             ['X.a', 'b'],
             [],
-            set([('X', 'a'), ('Y', 'b')])
+            set(['m.X.a', 'm.Y.b'])
         )
 
     def test__select_children_except_in_package(self):
@@ -124,16 +94,7 @@ class GraphSelectionTest(unittest.TestCase):
             self.package_graph,
             ['X.a+'],
             ['b'],
-            set([
-                ('X', 'a'),
-                # ('Y', 'b'),
-                ('X', 'c'),
-                ('Y', 'd'),
-                ('X', 'e'),
-                ('Y', 'f'),
-                ('X', 'g')
-            ])
-        )
+            set(['m.X.a','m.X.c', 'm.Y.d','m.X.e','m.Y.f','m.X.g']))
 
     def parse_spec_and_assert(self, spec, parents, children, qualified_node_name):
         parsed = graph_selector.parse_spec(spec)

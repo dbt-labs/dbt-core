@@ -4,10 +4,13 @@ from voluptuous import Schema, Required, All, Any, Extra, Range, Optional, \
 from dbt.contracts.common import validate_with
 from dbt.logger import GLOBAL_LOGGER as logger
 
+from dbt.model import NodeType
+
 unparsed_graph_item_contract = Schema({
     # identifiers
     Required('name'): All(str, Length(min=1, max=63)),
     Required('package_name'): str,
+    Required('resource_type'): Any(NodeType.Model, NodeType.Test),
 
     # filesystem
     Required('root_path'): str,

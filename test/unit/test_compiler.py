@@ -45,15 +45,16 @@ class CompilerTest(unittest.TestCase):
         ephemeral_config['materialized'] = 'ephemeral'
 
         compiled_models = {
-            'models.root.view': {
+            'model.root.view': {
                 'name': 'view',
-                'unique_id': 'models.root.view',
+                'resource_type': 'model',
+                'unique_id': 'model.root.view',
                 'fqn': ['root_project', 'view'],
                 'empty': False,
                 'package_name': 'root',
                 'root_path': '/usr/src/app',
                 'depends_on': [
-                    'models.root.ephemeral'
+                    'model.root.ephemeral'
                 ],
                 'config': self.model_config,
                 'path': 'view.sql',
@@ -61,16 +62,17 @@ class CompilerTest(unittest.TestCase):
                 'compiled': True,
                 'extra_ctes_injected': False,
                 'extra_cte_ids': [
-                    'models.root.ephemeral'
+                    'model.root.ephemeral'
                 ],
                 'extra_cte_sql': [],
                 'injected_sql': '',
                 'compiled_sql': ('with cte as (select * from something_else) '
                                  'select * from __dbt__CTE__ephemeral')
             },
-            'models.root.ephemeral': {
+            'model.root.ephemeral': {
                 'name': 'ephemeral',
-                'unique_id': 'models.root.ephemeral',
+                'resource_type': 'model',
+                'unique_id': 'model.root.ephemeral',
                 'fqn': ['root_project', 'ephemeral'],
                 'empty': False,
                 'package_name': 'root',
@@ -89,10 +91,10 @@ class CompilerTest(unittest.TestCase):
         }
 
         result, all_models = dbt.compilation.prepend_ctes(
-            compiled_models['models.root.view'],
+            compiled_models['model.root.view'],
             compiled_models)
 
-        self.assertEqual(result, all_models.get('models.root.view'))
+        self.assertEqual(result, all_models.get('model.root.view'))
         self.assertEqual(result.get('extra_ctes_injected'), True)
         self.assertEqualIgnoreWhitespace(
             result.get('injected_sql'),
@@ -102,14 +104,15 @@ class CompilerTest(unittest.TestCase):
              'select * from __dbt__CTE__ephemeral'))
 
         self.assertEqual(
-            all_models.get('models.root.ephemeral').get('extra_ctes_injected'),
+            all_models.get('model.root.ephemeral').get('extra_ctes_injected'),
             True)
 
     def test__prepend_ctes__no_ctes(self):
         compiled_models = {
-            'models.root.view': {
+            'model.root.view': {
                 'name': 'view',
-                'unique_id': 'models.root.view',
+                'resource_type': 'model',
+                'unique_id': 'model.root.view',
                 'fqn': ['root_project', 'view'],
                 'empty': False,
                 'package_name': 'root',
@@ -127,9 +130,10 @@ class CompilerTest(unittest.TestCase):
                 'compiled_sql': ('with cte as (select * from something_else) '
                                  'select * from source_table')
             },
-            'models.root.view_no_cte': {
+            'model.root.view_no_cte': {
                 'name': 'view_no_cte',
-                'unique_id': 'models.root.view_no_cte',
+                'resource_type': 'model',
+                'unique_id': 'model.root.view_no_cte',
                 'fqn': ['root_project', 'view_no_cte'],
                 'empty': False,
                 'package_name': 'root',
@@ -148,24 +152,24 @@ class CompilerTest(unittest.TestCase):
         }
 
         result, all_models = dbt.compilation.prepend_ctes(
-            compiled_models.get('models.root.view'),
+            compiled_models.get('model.root.view'),
             compiled_models)
 
-        self.assertEqual(result, all_models.get('models.root.view'))
+        self.assertEqual(result, all_models.get('model.root.view'))
         self.assertEqual(result.get('extra_ctes_injected'), True)
         self.assertEqualIgnoreWhitespace(
             result.get('injected_sql'),
-            compiled_models.get('models.root.view').get('compiled_sql'))
+            compiled_models.get('model.root.view').get('compiled_sql'))
 
         result, all_models = dbt.compilation.prepend_ctes(
-            compiled_models.get('models.root.view_no_cte'),
+            compiled_models.get('model.root.view_no_cte'),
             compiled_models)
 
-        self.assertEqual(result, all_models.get('models.root.view_no_cte'))
+        self.assertEqual(result, all_models.get('model.root.view_no_cte'))
         self.assertEqual(result.get('extra_ctes_injected'), True)
         self.assertEqualIgnoreWhitespace(
             result.get('injected_sql'),
-            compiled_models.get('models.root.view_no_cte').get('compiled_sql'))
+            compiled_models.get('model.root.view_no_cte').get('compiled_sql'))
 
 
     def test__prepend_ctes(self):
@@ -173,15 +177,16 @@ class CompilerTest(unittest.TestCase):
         ephemeral_config['materialized'] = 'ephemeral'
 
         compiled_models = {
-            'models.root.view': {
+            'model.root.view': {
                 'name': 'view',
-                'unique_id': 'models.root.view',
+                'resource_type': 'model',
+                'unique_id': 'model.root.view',
                 'fqn': ['root_project', 'view'],
                 'empty': False,
                 'package_name': 'root',
                 'root_path': '/usr/src/app',
                 'depends_on': [
-                    'models.root.ephemeral'
+                    'model.root.ephemeral'
                 ],
                 'config': self.model_config,
                 'path': 'view.sql',
@@ -189,15 +194,16 @@ class CompilerTest(unittest.TestCase):
                 'compiled': True,
                 'extra_ctes_injected': False,
                 'extra_cte_ids': [
-                    'models.root.ephemeral'
+                    'model.root.ephemeral'
                 ],
                 'extra_cte_sql': [],
                 'injected_sql': '',
                 'compiled_sql': 'select * from __dbt__CTE__ephemeral'
             },
-            'models.root.ephemeral': {
+            'model.root.ephemeral': {
                 'name': 'ephemeral',
-                'unique_id': 'models.root.ephemeral',
+                'resource_type': 'model',
+                'unique_id': 'model.root.ephemeral',
                 'fqn': ['root_project', 'ephemeral'],
                 'empty': False,
                 'package_name': 'root',
@@ -216,10 +222,10 @@ class CompilerTest(unittest.TestCase):
         }
 
         result, all_models = dbt.compilation.prepend_ctes(
-            compiled_models['models.root.view'],
+            compiled_models['model.root.view'],
             compiled_models)
 
-        self.assertEqual(result, all_models.get('models.root.view'))
+        self.assertEqual(result, all_models.get('model.root.view'))
         self.assertEqual(result.get('extra_ctes_injected'), True)
         self.assertEqualIgnoreWhitespace(
             result.get('injected_sql'),
@@ -229,7 +235,7 @@ class CompilerTest(unittest.TestCase):
              'select * from __dbt__CTE__ephemeral'))
 
         self.assertEqual(
-            all_models.get('models.root.ephemeral').get('extra_ctes_injected'),
+            all_models.get('model.root.ephemeral').get('extra_ctes_injected'),
             True)
 
 
@@ -238,15 +244,16 @@ class CompilerTest(unittest.TestCase):
         ephemeral_config['materialized'] = 'ephemeral'
 
         compiled_models = {
-            'models.root.view': {
+            'model.root.view': {
                 'name': 'view',
-                'unique_id': 'models.root.view',
+                'resource_type': 'model',
+                'unique_id': 'model.root.view',
                 'fqn': ['root_project', 'view'],
                 'empty': False,
                 'package_name': 'root',
                 'root_path': '/usr/src/app',
                 'depends_on': [
-                    'models.root.ephemeral'
+                    'model.root.ephemeral'
                 ],
                 'config': self.model_config,
                 'path': 'view.sql',
@@ -254,15 +261,16 @@ class CompilerTest(unittest.TestCase):
                 'compiled': True,
                 'extra_ctes_injected': False,
                 'extra_cte_ids': [
-                    'models.root.ephemeral'
+                    'model.root.ephemeral'
                 ],
                 'extra_cte_sql': [],
                 'injected_sql': '',
                 'compiled_sql': 'select * from __dbt__CTE__ephemeral'
             },
-            'models.root.ephemeral': {
+            'model.root.ephemeral': {
                 'name': 'ephemeral',
-                'unique_id': 'models.root.ephemeral',
+                'resource_type': 'model',
+                'unique_id': 'model.root.ephemeral',
                 'fqn': ['root_project', 'ephemeral'],
                 'empty': False,
                 'package_name': 'root',
@@ -274,15 +282,16 @@ class CompilerTest(unittest.TestCase):
                 'compiled': True,
                 'extra_ctes_injected': False,
                 'extra_cte_ids': [
-                    'models.root.ephemeral_level_two'
+                    'model.root.ephemeral_level_two'
                 ],
                 'extra_cte_sql': [],
                 'injected_sql': '',
                 'compiled_sql': 'select * from __dbt__CTE__ephemeral_level_two'
             },
-            'models.root.ephemeral_level_two': {
+            'model.root.ephemeral_level_two': {
                 'name': 'ephemeral_level_two',
-                'unique_id': 'models.root.ephemeral_level_two',
+                'resource_type': 'model',
+                'unique_id': 'model.root.ephemeral_level_two',
                 'fqn': ['root_project', 'ephemeral_level_two'],
                 'empty': False,
                 'package_name': 'root',
@@ -302,10 +311,10 @@ class CompilerTest(unittest.TestCase):
         }
 
         result, all_models = dbt.compilation.prepend_ctes(
-            compiled_models['models.root.view'],
+            compiled_models['model.root.view'],
             compiled_models)
 
-        self.assertEqual(result, all_models.get('models.root.view'))
+        self.assertEqual(result, all_models.get('model.root.view'))
         self.assertEqual(result.get('extra_ctes_injected'), True)
         self.assertEqualIgnoreWhitespace(
             result.get('injected_sql'),
@@ -317,8 +326,8 @@ class CompilerTest(unittest.TestCase):
              'select * from __dbt__CTE__ephemeral'))
 
         self.assertEqual(
-            all_models.get('models.root.ephemeral').get('extra_ctes_injected'),
+            all_models.get('model.root.ephemeral').get('extra_ctes_injected'),
             True)
         self.assertEqual(
-            all_models.get('models.root.ephemeral_level_two').get('extra_ctes_injected'),
+            all_models.get('model.root.ephemeral_level_two').get('extra_ctes_injected'),
             True)

@@ -14,4 +14,4 @@ def validate(project):
     validate_with(project_contract, project)
 
 def validate_list(projects):
-    validate_with(projects_list_contract, project)
+    validate_with(projects_list_contract, projects)
