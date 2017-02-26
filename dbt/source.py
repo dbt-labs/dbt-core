@@ -1,7 +1,6 @@
 import os.path
 import fnmatch
-from dbt.model import Model, Analysis, SchemaFile, Csv, Macro, \
-    DataTest
+from dbt.model import Model, Csv, Macro
 
 import dbt.clients.system
 
@@ -39,36 +38,6 @@ class Source(object):
 
         return self.build_models_from_file_matches(
             Model,
-            file_matches)
-
-    def get_analyses(self, analysis_dirs):
-        file_matches = dbt.clients.system.find_matching(
-            self.own_project_root,
-            analysis_dirs,
-            "[!.#~]*.sql")
-
-        return self.build_models_from_file_matches(
-            Analysis,
-            file_matches)
-
-    def get_schemas(self, schema_dirs):
-        file_matches = dbt.clients.system.find_matching(
-            self.own_project_root,
-            schema_dirs,
-            "[!.#~]*.yml")
-
-        return self.build_models_from_file_matches(
-            SchemaFile,
-            file_matches)
-
-    def get_tests(self, test_dirs):
-        file_matches = dbt.clients.system.find_matching(
-            self.own_project_root,
-            test_dirs,
-            "[!.#~]*.sql")
-
-        return self.build_models_from_file_matches(
-            DataTest,
             file_matches)
 
     def get_csvs(self, csv_dirs):

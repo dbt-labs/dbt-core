@@ -152,10 +152,6 @@ class Compiler(object):
         paths = own_project.get('macro-paths', [])
         return Source(this_project, own_project=own_project).get_macros(paths)
 
-    def analysis_sources(self, project):
-        paths = project.get('analysis-paths', [])
-        return Source(project).get_analyses(paths)
-
     def __write(self, build_filepath, payload):
         target_path = os.path.join(self.project['target-path'], build_filepath)
 
@@ -440,35 +436,6 @@ class Compiler(object):
                             dependency))
 
         return wrapped_nodes, written_nodes
-
-
-    def compile_analyses(self, linker, compiled_models):
-        analyses = self.analysis_sources(self.project)
-        compiled_analyses = {
-            analysis: self.compile_model(
-                linker, analysis, compiled_models
-            ) for analysis in analyses
-        }
-
-        written_analyses = []
-        referenceable_models = {}
-        referenceable_models.update(compiled_models)
-        referenceable_models.update(compiled_analyses)
-        for analysis in analyses:
-            injected_stmt = self.add_cte_to_rendered_query(
-                linker,
-                analysis,
-                referenceable_models
-            )
-
-            serialized = analysis.serialize()
-            linker.update_node_data(tuple(analysis.fqn), serialized)
-
-            build_path = analysis.build_path()
-            self.__write(build_path, injected_stmt)
-            written_analyses.append(analysis)
-
-        return written_analyses
 
     def generate_macros(self, all_macros):
         def do_gen(ctx):
