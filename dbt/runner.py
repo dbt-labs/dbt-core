@@ -437,7 +437,6 @@ class RunManager(object):
 
         return dbt.linker.from_file(graph_file)
 
-
     def execute_node(self, node):
         profile = self.project.run_environment()
 
@@ -453,7 +452,6 @@ class RunManager(object):
             result = execute_archive(profile, node, self.context)
 
         return result
-
 
     def safe_execute_node(self, data):
         node = data
@@ -490,7 +488,6 @@ class RunManager(object):
                               status=status,
                               execution_time=execution_time)
 
-
     def as_concurrent_dep_list(self, linker, nodes_to_run):
         dependency_list = linker.as_dependency_list(nodes_to_run)
 
@@ -501,7 +498,6 @@ class RunManager(object):
 
         return concurrent_dependency_list
 
-
     def on_model_failure(self, linker, selected_nodes):
         def skip_dependent(node):
             dependent_nodes = linker.get_dependent_nodes(node.get('unique_id'))
@@ -511,7 +507,6 @@ class RunManager(object):
                     pass
 
         return skip_dependent
-
 
     def execute_nodes(self, node_dependency_list, on_failure,
                       should_run_hooks=False):
@@ -669,28 +664,6 @@ class RunManager(object):
         ]
 
         return set(post_filter)
-
-    def get_compiled_models(self, linker, nodes, node_type):
-        compiled_models = []
-
-        for fqn in nodes:
-            compiled_model = make_compiled_model(fqn, linker.get_node(fqn))
-
-            if not compiled_model.is_type(node_type):
-                continue
-
-            if not compiled_model.should_execute(self.args,
-                                                 self.existing_models):
-                continue
-
-            context = self.context.copy()
-            context.update(compiled_model.context())
-
-            profile = self.project.run_environment()
-            compiled_model.compile(context, profile, self.existing_models)
-            compiled_models.append(compiled_model)
-
-        return compiled_models
 
     def try_create_schema(self):
         profile = self.project.run_environment()
