@@ -1,7 +1,7 @@
 import os.path
 import fnmatch
 from dbt.model import Model, Analysis, SchemaFile, Csv, Macro, \
-    ArchiveModel, DataTest
+    DataTest
 
 import dbt.clients.system
 
@@ -90,26 +90,3 @@ class Source(object):
         return self.build_models_from_file_matches(
             Macro,
             file_matches)
-
-    def get_archives(self):
-        "Get Archive models defined in project config"
-
-        if 'archive' not in self.project:
-            return []
-
-        raw_source_schemas = self.project['archive']
-
-        archives = []
-        for schema in raw_source_schemas:
-            schema = schema.copy()
-            if 'tables' not in schema:
-                continue
-
-            tables = schema.pop('tables')
-            for table in tables:
-                fields = table.copy()
-                fields.update(schema)
-                archives.append(ArchiveModel(
-                    self.project, fields
-                ))
-        return archives

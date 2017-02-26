@@ -146,25 +146,15 @@ class Compiler(object):
         if not os.path.exists(self.project['modules-path']):
             os.makedirs(self.project['modules-path'])
 
-
     def get_macros(self, this_project, own_project=None):
         if own_project is None:
             own_project = this_project
         paths = own_project.get('macro-paths', [])
         return Source(this_project, own_project=own_project).get_macros(paths)
 
-
-    def get_archives(self, project):
-        return Source(
-            project,
-            own_project=project
-        ).get_archives()
-
-
     def analysis_sources(self, project):
         paths = project.get('analysis-paths', [])
         return Source(project).get_analyses(paths)
-
 
     def __write(self, build_filepath, payload):
         target_path = os.path.join(self.project['target-path'], build_filepath)
@@ -180,7 +170,6 @@ class Compiler(object):
             return ''
 
         return do_config
-
 
     def __ref(self, ctx, model, all_models):
         schema = ctx.get('env', {}).get('schema')
@@ -342,7 +331,6 @@ class Compiler(object):
         graph_path = os.path.join(self.project['target-path'], filename)
         linker.write_graph(graph_path)
 
-
     def new_add_cte_to_rendered_query(self, linker, primary_model,
                                       compiled_models):
 
@@ -482,7 +470,6 @@ class Compiler(object):
 
         return written_analyses
 
-
     def generate_macros(self, all_macros):
         def do_gen(ctx):
             macros = []
@@ -491,19 +478,6 @@ class Compiler(object):
                 macros.extend(new_macros)
             return macros
         return do_gen
-
-
-    def compile_archives(self, linker, compiled_models):
-        all_archives = self.get_archives(self.project)
-
-        for archive in all_archives:
-            sql = archive.compile()
-            fqn = tuple(archive.fqn)
-            linker.update_node_data(fqn, archive.serialize())
-            self.__write(archive.build_path(), sql)
-
-        return all_archives
-
 
     def get_all_projects(self):
         root_project = self.project.cfg
@@ -518,7 +492,6 @@ class Compiler(object):
             dbt.contracts.project.validate_list(all_projects)
 
         return all_projects
-
 
     def get_parsed_models(self, root_project, all_projects, macro_generator):
         parsed_models = {}
@@ -535,7 +508,6 @@ class Compiler(object):
                     macro_generator=macro_generator))
 
         return parsed_models
-
 
     def get_parsed_data_tests(self, root_project, all_projects,
                               macro_generator):
@@ -555,7 +527,6 @@ class Compiler(object):
 
         return parsed_tests
 
-
     def get_parsed_schema_tests(self, root_project, all_projects):
         parsed_tests = {}
 
@@ -569,7 +540,6 @@ class Compiler(object):
                     relative_dirs=project.get('source-paths', [])))
 
         return parsed_tests
-
 
     def load_all_nodes(self, root_project, all_projects, macro_generator):
         all_nodes = {}
@@ -586,7 +556,6 @@ class Compiler(object):
                                                     all_projects))
 
         return all_nodes
-
 
     def compile(self):
         linker = Linker()

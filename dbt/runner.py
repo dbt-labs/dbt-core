@@ -19,7 +19,6 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.source import Source
 from dbt.utils import find_model_by_fqn, find_model_by_name, \
     dependency_projects
-from dbt.compiled_model import make_compiled_model
 from dbt.model import NodeType
 
 import dbt.compilation
