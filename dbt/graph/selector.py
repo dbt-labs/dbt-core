@@ -131,7 +131,7 @@ def get_nodes_from_spec(project, graph, spec):
         # include tests that depend on this node. if we aren't running tests,
         # they'll be filtered out later.
         child_tests = [n for n in graph.successors(node)
-                       if graph.node.get(n).get('resource_type') == \
+                       if graph.node.get(n).get('resource_type') ==
                        dbt.model.NodeType.Test]
         test_nodes.update(child_tests)
 

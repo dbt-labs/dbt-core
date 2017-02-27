@@ -123,13 +123,14 @@ def find_model_by_name(all_models, target_model_name,
     for name, model in all_models.items():
         resource_type, package_name, model_name = name.split('.')
 
-        if (resource_type == 'model' and \
-            ((target_model_name == model_name) and \
+        if (resource_type == 'model' and
+            ((target_model_name == model_name) and
              (target_model_package is None or
               target_model_package == package_name))):
             return model
 
     return None
+
 
 def find_model_by_fqn(models, fqn):
     for model in models:

@@ -10,8 +10,10 @@ project_contract = Schema({
 
 projects_list_contract = Schema({str: project_contract})
 
+
 def validate(project):
     validate_with(project_contract, project)
+
 
 def validate_list(projects):
     validate_with(projects_list_contract, projects)

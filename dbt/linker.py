@@ -12,7 +12,6 @@ def from_file(graph_file):
     return linker
 
 
-
 class Linker(object):
     def __init__(self, data=None):
         if data is None:

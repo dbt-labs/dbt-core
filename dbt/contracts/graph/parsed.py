@@ -7,6 +7,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.contracts.common import validate_with
 from dbt.contracts.graph.unparsed import unparsed_graph_item_contract
 
+
 config_contract = {
     Required('enabled'): bool,
     Required('materialized'): Any('table', 'view', 'ephemeral', 'incremental'),
@@ -23,6 +24,7 @@ config_contract = {
     Optional('dist'): str,
 }
 
+
 parsed_graph_item_contract = unparsed_graph_item_contract.extend({
     # identifiers
     Required('unique_id'): All(str, Length(min=1, max=255)),
@@ -35,6 +37,7 @@ parsed_graph_item_contract = unparsed_graph_item_contract.extend({
     Required('tags'): All(list, [str]),
 })
 
+
 def validate_one(parsed_graph_item):
     validate_with(parsed_graph_item_contract, parsed_graph_item)
 
@@ -45,8 +48,8 @@ def validate_one(parsed_graph_item):
        parsed_graph_item.get('config', {}).get('sql_where') is None:
         raise ValidationException(
             'missing `sql_where` for an incremental model')
-    elif materialization != 'incremental' and \
-         parsed_graph_item.get('config', {}).get('sql_where') is not None:
+    elif (materialization != 'incremental' and
+          parsed_graph_item.get('config', {}).get('sql_where') is not None):
         raise ValidationException(
             'invalid field `sql_where` for a non-incremental model')
 

@@ -58,7 +58,7 @@ def recursively_prepend_ctes(model, all_models):
     model = model.copy()
     prepend_ctes = []
 
-    if model.get('all_ctes_injected') == True:
+    if model.get('all_ctes_injected') is True:
         return (model, model.get('extra_cte_ids'), all_models)
 
     for cte_id in model.get('extra_cte_ids'):
@@ -200,7 +200,7 @@ class Compiler(object):
             target_model_id = target_model.get('unique_id')
 
             if target_model.get('config', {}) \
-                           .get('enabled') == False:
+                           .get('enabled') is False:
                 compiler_error(
                     model,
                     "Model '{}' depends on model '{}' which is disabled in "
@@ -223,14 +223,14 @@ class Compiler(object):
             except RuntimeError as e:
                 logger.info("Compiler error in {}".format(model.get('path')))
                 logger.info("Enabled models:")
-                for n,m in all_models.items():
+                for n, m in all_models.items():
                     logger.info(" - {}".format(".".join(m.get('fqn'))))
                 raise e
 
         return wrapped_do_ref
 
     def get_compiler_context(self, linker, model, models,
-                            macro_generator=None):
+                             macro_generator=None):
         context = self.project.context()
 
         if macro_generator is not None:
@@ -354,7 +354,6 @@ class Compiler(object):
                 primary_model, query, required_ctes, compiled_models
             )
             return compiled_query
-
 
     def compile_nodes(self, linker, nodes, macro_generator):
         all_projects = self.get_all_projects()

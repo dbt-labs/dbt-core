@@ -81,14 +81,18 @@ class SilentUndefined(jinja2.Undefined):
 def get_path(resource_type, package_name, resource_name):
     return "{}.{}.{}".format(resource_type, package_name, resource_name)
 
+
 def get_model_path(package_name, resource_name):
     return get_path(NodeType.Model, package_name, resource_name)
+
 
 def get_test_path(package_name, resource_name):
     return get_path(NodeType.Test, package_name, resource_name)
 
+
 def get_macro_path(package_name, resource_name):
     return get_path('macros', package_name, resource_name)
+
 
 def __ref(model):
 
@@ -114,15 +118,17 @@ def __config(model, cfg):
 
     return config
 
+
 def get_fqn(path, package_project_config, extra=[]):
     parts = dbt.utils.split_path(path)
     name, _ = os.path.splitext(parts[-1])
     fqn = ([package_project_config.get('name')] +
-            parts[1:-1] +
-            extra +
-            [name])
+           parts[1:-1] +
+           extra +
+           [name])
 
     return fqn
+
 
 def parse_node(node, node_path, root_project_config, package_project_config,
                macro_generator=None, tags=[], fqn_extra=[]):

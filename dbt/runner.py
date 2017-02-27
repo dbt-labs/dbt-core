@@ -52,7 +52,7 @@ def get_hashed_contents(model):
 
 
 def is_enabled(model):
-    return model.get('config', {}).get('enabled') == True
+    return model.get('config', {}).get('enabled') is True
 
 
 def print_timestamped_line(msg):
@@ -91,7 +91,7 @@ def print_counts(flat_nodes):
         counts[t] = counts.get(t, 0) + 1
 
     for k, v in counts.items():
-        print_timestamped_line("Running {} {}s".format(v,k))
+        print_timestamped_line("Running {} {}s".format(v, k))
 
 
 def print_start_line(node, schema_name, index, total):
@@ -222,8 +222,8 @@ def execute_model(profile, model):
         # never drop existing relations in non destructive mode.
         pass
 
-    elif get_materialization(model) != 'incremental' and \
-         existing.get(tmp_name) is not None:
+    elif (get_materialization(model) != 'incremental' and
+          existing.get(tmp_name) is not None):
         # otherwise, for non-incremental things, drop them with IF EXISTS
         adapter.drop(
             profile=profile,
@@ -326,6 +326,7 @@ def execute_archive(profile, node, context):
 
     return result
 
+
 def run_hooks(profile, hooks, context, source):
     if type(hooks) not in (list, tuple):
         hooks = [hooks]
@@ -416,7 +417,6 @@ class RunManager(object):
             "already_exists": call_table_exists,
         }
 
-
     def inject_runtime_config(self, node):
         sql = dbt.compilation.compile_string(node.get('wrapped_sql'),
                                              self.context)
@@ -476,7 +476,8 @@ class RunManager(object):
         except Exception as e:
             error = ("Unhandled error while executing {filepath}\n{error}"
                      .format(
-                         filepath=node.get('build_path'), error=str(e).strip()))
+                         filepath=node.get('build_path'),
+                         error=str(e).strip()))
             logger.debug(error)
             raise e
 
@@ -542,7 +543,7 @@ class RunManager(object):
                       'on-run-start hooks')
 
         node_id_to_index_map = {node.get('unique_id'): i + 1 for (i, node)
-                                 in enumerate(flat_nodes)}
+                                in enumerate(flat_nodes)}
 
         def get_idx(node):
             return node_id_to_index_map[node.get('unique_id')]
@@ -550,7 +551,7 @@ class RunManager(object):
         node_results = []
         for node_list in node_dependency_list:
             for i, node in enumerate([node for node in node_list
-                                       if node.get('skip')]):
+                                      if node.get('skip')]):
                 print_skip_line(
                     schema_name, node.get('name'), get_idx(node), num_nodes)
 
@@ -642,8 +643,8 @@ class RunManager(object):
 
         to_run = [
             n for n in graph.nodes()
-            if (graph.node.get(n).get('empty') == False
-                and is_enabled(graph.node.get(n)))
+            if (graph.node.get(n).get('empty') is False and
+                is_enabled(graph.node.get(n)))
         ]
 
         filtered_graph = graph.subgraph(to_run)
@@ -654,12 +655,11 @@ class RunManager(object):
 
         post_filter = [
             n for n in selected_nodes
-            if ((graph.node.get(n).get('resource_type') in resource_types)
-                and get_materialization(graph.node.get(n)) != 'ephemeral'
-                and (len(tags) == 0 or
-                     # does the node share any tags with the run?
-                     bool(set(graph.node.get(n).get('tags')) &
-                          set(tags))))
+            if ((graph.node.get(n).get('resource_type') in resource_types) and
+                get_materialization(graph.node.get(n)) != 'ephemeral' and
+                (len(tags) == 0 or
+                 # does the node share any tags with the run?
+                 bool(set(graph.node.get(n).get('tags')) & set(tags))))
         ]
 
         return set(post_filter)

@@ -7,6 +7,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.contracts.common import validate_with
 from dbt.contracts.graph.parsed import parsed_graph_item_contract
 
+
 compiled_graph_item_contract = parsed_graph_item_contract.extend({
     # compiled fields
     Required('compiled'): bool,
@@ -22,6 +23,7 @@ compiled_graph_item_contract = parsed_graph_item_contract.extend({
 
 def validate_one(compiled_graph_item):
     validate_with(compiled_graph_item_contract, compiled_graph_item)
+
 
 def validate(compiled_graph):
     for k, v in compiled_graph.items():
