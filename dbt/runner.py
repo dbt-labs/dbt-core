@@ -158,7 +158,7 @@ def execute_test(profile, test):
 
     rows = cursor.fetchall()
 
-    adapter.rollback(profile)
+    adapter.commit(profile)
 
     cursor.close()
 
@@ -195,10 +195,9 @@ def print_model_result_line(result, schema_name, index, total):
         result.execution_time)
 
 
-def execute_model(profile, model):
+def execute_model(profile, model, existing):
     adapter = get_adapter(profile)
     schema = adapter.get_default_schema(profile)
-    existing = adapter.query_for_existing(profile, schema)
 
     tmp_name = '{}__dbt_tmp'.format(model.get('name'))
 
@@ -387,11 +386,6 @@ class RunManager(object):
         adapter = get_adapter(profile)
         schema_name = adapter.get_default_schema(profile)
 
-        self.existing_models = adapter.query_for_existing(
-            profile,
-            schema_name
-        )
-
         def call_get_columns_in_table(schema_name, table_name):
             return adapter.get_columns_in_table(
                 profile, schema_name, table_name)
@@ -423,7 +417,7 @@ class RunManager(object):
         return node
 
     def deserialize_graph(self):
-        logger.info("Loading dependency graph file")
+        logger.info("Loading dependency graph file.")
 
         base_target_path = self.project['target-path']
         graph_file = os.path.join(
@@ -433,7 +427,7 @@ class RunManager(object):
 
         return dbt.linker.from_file(graph_file)
 
-    def execute_node(self, node):
+    def execute_node(self, node, existing):
         profile = self.project.run_environment()
 
         logger.debug("executing node %s", node.get('unique_id'))
@@ -441,7 +435,7 @@ class RunManager(object):
         node = self.inject_runtime_config(node)
 
         if node.get('resource_type') == NodeType.Model:
-            result = execute_model(profile, node)
+            result = execute_model(profile, node, existing)
         elif node.get('resource_type') == NodeType.Test:
             result = execute_test(profile, node)
         elif node.get('resource_type') == NodeType.Archive:
@@ -450,14 +444,14 @@ class RunManager(object):
         return result
 
     def safe_execute_node(self, data):
-        node = data
+        node, existing = data
 
         start_time = time.time()
 
         error = None
 
         try:
-            status = self.execute_node(node)
+            status = self.execute_node(node, existing)
         except (RuntimeError,
                 dbt.exceptions.ProgrammingException,
                 psycopg2.ProgrammingError,
@@ -527,6 +521,8 @@ class RunManager(object):
             num_threads, self.project.get_target().get('name'))
         )
         logger.info("Running!")
+
+        existing = adapter.query_for_existing(profile, schema_name)
 
         pool = ThreadPool(num_threads)
 
@@ -606,7 +602,7 @@ class RunManager(object):
 
                 map_result = pool.map_async(
                     self.safe_execute_node,
-                    local_nodes,
+                    [(node, existing,) for node in local_nodes],
                     callback=on_complete
                 )
                 map_result.wait()
