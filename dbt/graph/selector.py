@@ -121,8 +121,6 @@ def get_nodes_from_spec(project, graph, spec):
     if select_children:
         for node in selected_nodes:
             child_nodes = nx.descendants(graph, node)
-            print('\nchild_nodes')
-            print(child_nodes)
             additional_nodes.update(child_nodes)
 
     model_nodes = selected_nodes | additional_nodes
