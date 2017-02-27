@@ -331,9 +331,6 @@ def run_hooks(profile, hooks, context, source):
     if type(hooks) not in (list, tuple):
         hooks = [hooks]
 
-    print('hooks')
-    print(hooks)
-
     ctx = {
         "target": profile,
         "state": "start",
