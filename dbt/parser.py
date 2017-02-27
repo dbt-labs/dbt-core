@@ -123,7 +123,7 @@ def get_fqn(path, package_project_config, extra=[]):
     parts = dbt.utils.split_path(path)
     name, _ = os.path.splitext(parts[-1])
     fqn = ([package_project_config.get('name')] +
-           parts[1:-1] +
+           parts[:-1] +
            extra +
            [name])
 

@@ -33,6 +33,23 @@ CompilableEntities = [
 graph_file_name = 'graph.yml'
 
 
+def compile_and_print_status(project, args):
+    compiler = Compiler(project, args)
+    compiler.initialize()
+    results = {
+        NodeType.Model: 0,
+        NodeType.Test: 0,
+        NodeType.Archive: 0,
+    }
+
+    results.update(compiler.compile())
+
+    stat_line = ", ".join(
+        ["{} {}s".format(ct, t) for t, ct in results.items()])
+
+    logger.info("Compiled {}".format(stat_line))
+
+
 def compile_string(string, ctx):
     try:
         env = jinja2.Environment()
@@ -224,7 +241,8 @@ class Compiler(object):
                 logger.info("Compiler error in {}".format(model.get('path')))
                 logger.info("Enabled models:")
                 for n, m in all_models.items():
-                    logger.info(" - {}".format(".".join(m.get('fqn'))))
+                    if m.get('resource_type') == NodeType.Model:
+                        logger.info(" - {}".format(m.get('unique_id')))
                 raise e
 
         return wrapped_do_ref

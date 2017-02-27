@@ -75,6 +75,63 @@ class ParserTest(unittest.TestCase):
             }
         )
 
+    def test__single_model__nested_configuration(self):
+        models = [{
+            'name': 'model_one',
+            'resource_type': 'model',
+            'package_name': 'root',
+            'root_path': '/usr/src/app',
+            'path': 'nested/path/model_one.sql',
+            'raw_sql': ("select * from events"),
+        }]
+
+        self.root_project_config = {
+            'name': 'root',
+            'version': '0.1',
+            'profile': 'test',
+            'project-root': os.path.abspath('.'),
+            'models': {
+                'materialized': 'ephemeral',
+                'root': {
+                    'nested': {
+                        'path': {
+                            'materialized': 'ephemeral'
+                        }
+                    }
+                }
+            }
+        }
+
+        ephemeral_config = self.model_config.copy()
+        ephemeral_config.update({
+            'materialized': 'ephemeral'
+        })
+
+        self.assertEquals(
+            dbt.parser.parse_sql_nodes(
+                models,
+                self.root_project_config,
+                {'root': self.root_project_config,
+                 'snowplow': self.snowplow_project_config}),
+            {
+                'model.root.model_one': {
+                    'name': 'model_one',
+                    'resource_type': 'model',
+                    'unique_id': 'model.root.model_one',
+                    'fqn': ['root', 'nested', 'path', 'model_one'],
+                    'empty': False,
+                    'package_name': 'root',
+                    'root_path': '/usr/src/app',
+                    'depends_on': [],
+                    'config': ephemeral_config,
+                    'tags': [],
+                    'path': 'nested/path/model_one.sql',
+                    'raw_sql': self.find_input_by_name(
+                        models, 'model_one').get('raw_sql')
+                }
+            }
+        )
+
     def test__empty_model(self):
         models = [{
             'name': 'model_one',
@@ -597,10 +654,12 @@ class ParserTest(unittest.TestCase):
             'version': '0.1',
             'project-root': os.path.abspath('./dbt_modules/snowplow'),
             'models': {
-                'enabled': False,
-                'views': {
-                    'materialized': 'table',
-                    'sort': 'timestamp'
+                'snowplow': {
+                    'enabled': False,
+                    'views': {
+                        'materialized': 'table',
+                        'sort': 'timestamp'
+                    }
                 }
             }
         }
@@ -638,7 +697,7 @@ class ParserTest(unittest.TestCase):
             'name': 'package',
             'resource_type': 'model',
             'package_name': 'snowplow',
-            'path': 'models/views/package.sql',
+            'path': 'views/package.sql',
             'root_path': '/usr/src/app',
             'raw_sql': ("select * from events"),
         }]
@@ -666,7 +725,8 @@ class ParserTest(unittest.TestCase):
         sort_config = self.model_config.copy()
         sort_config.update({
             'enabled': False,
-            'materialized': 'view'
+            'materialized': 'view',
+            'sort': 'timestamp',
         })
 
         self.assertEquals(
@@ -744,7 +804,7 @@ class ParserTest(unittest.TestCase):
                     'empty': False,
                     'package_name': 'snowplow',
                     'depends_on': [],
-                    'path': 'models/views/package.sql',
+                    'path': 'views/package.sql',
                     'root_path': '/usr/src/app',
                     'config': sort_config,
                     'tags': [],

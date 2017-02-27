@@ -195,6 +195,20 @@ def print_model_result_line(result, schema_name, index, total):
         result.execution_time)
 
 
+
+def print_results_line(results):
+    stats = {}
+
+    for result in results:
+        stats[result.node.get('resource_type')] = stats.get(
+            result.node.get('resource_type'), 0) + 1
+
+    stat_line = ", ".join(
+        ["{} {}s".format(ct, t) for t, ct in stats.items()])
+
+    print_timestamped_line("Finished running {}.".format(stat_line))
+
+
 def execute_model(profile, model, existing):
     adapter = get_adapter(profile)
     schema = adapter.get_default_schema(profile)
@@ -432,6 +446,9 @@ class RunManager(object):
 
         logger.debug("executing node %s", node.get('unique_id'))
 
+        if node.get('skip') is True:
+            return RunModelResult(node, skip=True)
+
         node = self.inject_runtime_config(node)
 
         if node.get('resource_type') == NodeType.Model:
@@ -463,7 +480,9 @@ class RunManager(object):
             if type(e) == psycopg2.InternalError and \
                ABORTED_TRANSACTION_STRING == e.diag.message_primary:
                 return RunModelResult(
-                    node, error=ABORTED_TRANSACTION_STRING, status="SKIP")
+                    node,
+                    error='{}\n'.format(ABORTED_TRANSACTION_STRING),
+                    status="SKIP")
         except Exception as e:
             error = ("Unhandled error while executing {filepath}\n{error}"
                      .format(
@@ -494,8 +513,9 @@ class RunManager(object):
             dependent_nodes = linker.get_dependent_nodes(node.get('unique_id'))
             for node in dependent_nodes:
                 if node in selected_nodes:
-                    # TODO fix skipping
-                    pass
+                    node_data = linker.get_node(node)
+                    node_data['skip'] = True
+                    linker.update_node_data(node, node_data)
 
         return skip_dependent
 
@@ -545,8 +565,8 @@ class RunManager(object):
         for node_list in node_dependency_list:
             for i, node in enumerate([node for node in node_list
                                       if node.get('skip')]):
-                print_skip_line(
-                    schema_name, node.get('name'), get_idx(node), num_nodes)
+                print_skip_line(node, schema_name, node.get('name'),
+                                get_idx(node), num_nodes)
 
                 node_result = RunModelResult(node, skip=True)
                 node_results.append(node_result)
@@ -620,8 +640,7 @@ class RunManager(object):
                       'on-run-end hooks')
 
         logger.info("")
-        logger.info("FIXME")
-        # logger.info(runner.post_run_all_msg(model_results))
+        print_results_line(node_results)
 
         return node_results
 

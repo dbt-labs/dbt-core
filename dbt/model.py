@@ -2,6 +2,7 @@ import os.path
 import yaml
 import jinja2
 import re
+
 from dbt.templates import BaseCreateTemplate, ArchiveInsertTemplate
 from dbt.utils import split_path
 import dbt.project

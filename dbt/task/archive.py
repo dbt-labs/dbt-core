@@ -8,18 +8,9 @@ class ArchiveTask:
         self.args = args
         self.project = project
 
-    def compile(self):
-        compiler = Compiler(self.project, self.args)
-        compiler.initialize()
-        results = compiler.compile()
-
-        stat_line = ", ".join(
-            ["{} {}s".format(ct, t) for t, ct in results.items()])
-
-        logger.info("Compiled {}".format(stat_line))
-
     def run(self):
-        self.compile()
+        dbt.compilation.compile_and_print_status(
+            self.project, self.args)
 
         runner = RunManager(
             self.project,

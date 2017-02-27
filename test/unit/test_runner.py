@@ -101,7 +101,8 @@ class TestRunner(unittest.TestCase):
 
         dbt.runner.execute_model(
             self.profile,
-            model)
+            model,
+            existing=self.existing)
 
         dbt.adapters.postgres.PostgresAdapter.drop.assert_not_called()
 
@@ -117,12 +118,14 @@ class TestRunner(unittest.TestCase):
                                             mock_adapter_truncate,
                                             mock_adapter_rename,
                                             mock_adapter_execute_model):
-        self.existing = {'view': 'view'}
+        self.existing = {'view': 'table'}
+
         model = self.model.copy()
 
         dbt.runner.execute_model(
             self.profile,
-            model)
+            model,
+            existing=self.existing)
 
         dbt.adapters.postgres.PostgresAdapter.drop.assert_not_called()
 
@@ -143,7 +146,8 @@ class TestRunner(unittest.TestCase):
 
         dbt.runner.execute_model(
             self.profile,
-            model)
+            model,
+            existing=self.existing)
 
         dbt.adapters.postgres.PostgresAdapter.drop.assert_not_called()
 
@@ -166,7 +170,8 @@ class TestRunner(unittest.TestCase):
 
         dbt.runner.execute_model(
             self.profile,
-            self.model)
+            self.model,
+            existing=self.existing)
 
         dbt.adapters.postgres.PostgresAdapter.drop.assert_not_called()
 
@@ -189,7 +194,8 @@ class TestRunner(unittest.TestCase):
 
         dbt.runner.execute_model(
             self.profile,
-            model)
+            model,
+            existing=self.existing)
 
         dbt.adapters.postgres.PostgresAdapter.drop.assert_not_called()
 
@@ -212,7 +218,8 @@ class TestRunner(unittest.TestCase):
 
         dbt.runner.execute_model(
             self.profile,
-            model)
+            model,
+            existing=self.existing)
 
         dbt.adapters.postgres.PostgresAdapter.drop.assert_called_once()
 
@@ -235,7 +242,8 @@ class TestRunner(unittest.TestCase):
 
         dbt.runner.execute_model(
             self.profile,
-            model)
+            model,
+            existing=self.existing)
 
         dbt.adapters.postgres.PostgresAdapter.drop.assert_not_called()
 
@@ -260,7 +268,8 @@ class TestRunner(unittest.TestCase):
 
         dbt.runner.execute_model(
             self.profile,
-            self.model)
+            self.model,
+            existing=self.existing)
 
         dbt.adapters.postgres.PostgresAdapter.drop.assert_called_once()
 
