@@ -4,9 +4,7 @@ import jinja2
 import re
 from dbt.templates import BaseCreateTemplate, ArchiveInsertTemplate
 from dbt.utils import split_path
-import dbt.schema_tester
 import dbt.project
-import dbt.archival
 from dbt.adapters.factory import get_adapter
 from dbt.utils import deep_merge, DBTConfigKeys, compiler_error, \
     compiler_warning
