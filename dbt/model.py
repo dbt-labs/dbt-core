@@ -3,6 +3,7 @@ import yaml
 import jinja2
 import re
 
+from dbt.compat import basestring
 from dbt.templates import BaseCreateTemplate, ArchiveInsertTemplate
 from dbt.utils import split_path
 import dbt.project
@@ -397,12 +398,6 @@ class Model(DBTSource):
         return os.path.join(*path_parts)
 
     def compile_string(self, ctx, string):
-        # python 2+3 check for stringiness
-        try:
-            basestring
-        except NameError:
-            basestring = str
-
         # if bool/int/float/etc are passed in, don't compile anything
         if not isinstance(string, basestring):
             return string

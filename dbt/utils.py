@@ -3,6 +3,8 @@ import jinja2
 import json
 
 import dbt.project
+
+from dbt.compat import basestring
 from dbt.logger import GLOBAL_LOGGER as logger
 
 DBTConfigKeys = [
@@ -94,12 +96,6 @@ class Var(object):
                         var_name, self.model.nice_name, pretty_vars
                     )
                 )
-
-            # python 2+3 check for stringiness
-            try:
-                basestring
-            except NameError:
-                basestring = str
 
             # if bool/int/float/etc are passed in, don't compile anything
             if not isinstance(raw, basestring):

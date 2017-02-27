@@ -1,5 +1,6 @@
 from voluptuous import Schema, Required, All, Any, Extra, Range, Optional
 
+from dbt.compat import basestring
 from dbt.contracts.common import validate_with
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -12,22 +13,22 @@ connection_contract = Schema({
 })
 
 postgres_credentials_contract = Schema({
-    Required('dbname'): str,
-    Required('host'): str,
-    Required('user'): str,
-    Required('pass'): str,
+    Required('dbname'): basestring,
+    Required('host'): basestring,
+    Required('user'): basestring,
+    Required('pass'): basestring,
     Required('port'): All(int, Range(min=0, max=65535)),
-    Required('schema'): str,
+    Required('schema'): basestring,
 })
 
 snowflake_credentials_contract = Schema({
-    Required('account'): str,
-    Required('user'): str,
-    Required('password'): str,
-    Required('database'): str,
-    Required('schema'): str,
-    Required('warehouse'): str,
-    Optional('role'): str,
+    Required('account'): basestring,
+    Required('user'): basestring,
+    Required('password'): basestring,
+    Required('database'): basestring,
+    Required('schema'): basestring,
+    Required('warehouse'): basestring,
+    Optional('role'): basestring,
 })
 
 credentials_mapping = {

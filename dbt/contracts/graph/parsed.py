@@ -1,6 +1,7 @@
 from voluptuous import Schema, Required, All, Any, Extra, Range, Optional, \
     Length
 
+from dbt.compat import basestring
 from dbt.exceptions import ValidationException
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -16,25 +17,25 @@ config_contract = {
     Required('vars'): dict,
 
     # incremental optional fields
-    Optional('sql_where'): str,
-    Optional('unique_key'): str,
+    Optional('sql_where'): basestring,
+    Optional('unique_key'): basestring,
 
     # adapter optional fields
-    Optional('sort'): str,
-    Optional('dist'): str,
+    Optional('sort'): basestring,
+    Optional('dist'): basestring,
 }
 
 
 parsed_graph_item_contract = unparsed_graph_item_contract.extend({
     # identifiers
-    Required('unique_id'): All(str, Length(min=1, max=255)),
-    Required('fqn'): All(list, [All(str)]),
+    Required('unique_id'): All(basestring, Length(min=1, max=255)),
+    Required('fqn'): All(list, [All(basestring)]),
 
     # parsed fields
-    Required('depends_on'): All(list, [All(str, Length(min=1, max=255))]),
+    Required('depends_on'): All(list, [All(basestring, Length(min=1, max=255))]),
     Required('empty'): bool,
     Required('config'): config_contract,
-    Required('tags'): All(list, [str]),
+    Required('tags'): All(list, [basestring]),
 })
 
 
