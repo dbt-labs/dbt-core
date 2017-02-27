@@ -13,6 +13,6 @@ class CompileTask:
         results = compiler.compile()
 
         stat_line = ", ".join(
-            ["{} {}".format(results[k], k) for k in CompilableEntities]
-        )
+            ["{} {}s".format(ct, t) for t, ct in results.items()])
+
         logger.info("Compiled {}".format(stat_line))

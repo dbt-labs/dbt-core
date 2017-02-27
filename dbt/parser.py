@@ -180,7 +180,8 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     return parsed_node
 
 
-def parse_sql_nodes(nodes, root_project, projects, macro_generator, tags=[]):
+def parse_sql_nodes(nodes, root_project, projects, macro_generator=None,
+                    tags=[]):
     to_return = {}
 
     dbt.contracts.graph.unparsed.validate(nodes)
