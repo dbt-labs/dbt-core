@@ -28,7 +28,7 @@ def main(args=None):
         args = sys.argv[1:]
 
     try:
-        return handle(args)
+        handle(args)
 
     except RuntimeError as e:
         logger.info("Encountered an error:")

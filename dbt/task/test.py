@@ -39,5 +39,4 @@ class TestTask:
         else:
             raise RuntimeError("unexpected")
 
-        logger.info("Done!")
         return res

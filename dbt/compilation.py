@@ -415,7 +415,8 @@ class Compiler(object):
                     injected_node.get('path'),
                     all_projects.get(injected_node.get('package_name')))
 
-                model._config = injected_node.get('config', {})
+                cfg = injected_node.get('config', {})
+                model._config = cfg
 
                 context = self.get_context(linker, model, injected_nodes)
 

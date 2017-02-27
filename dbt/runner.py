@@ -60,7 +60,7 @@ def print_timestamped_line(msg):
 
 
 def print_fancy_output_line(msg, status, index, total, execution_time=None):
-    prefix = "{timestamp} {index} of {total} {message}".format(
+    prefix = "{timestamp} | {index} of {total} {message}".format(
         timestamp=get_timestamp(),
         index=index,
         total=total,
@@ -91,7 +91,9 @@ def print_counts(flat_nodes):
         counts[t] = counts.get(t, 0) + 1
 
     for k, v in counts.items():
+        logger.info("")
         print_timestamped_line("Running {} {}s".format(v, k))
+        print_timestamped_line("")
 
 
 def print_start_line(node, schema_name, index, total):
@@ -143,7 +145,7 @@ def print_test_result_line(result, schema_name, index, total):
         "{info} {name}".format(
             info=info,
             name=model.get('name')),
-        result.status,
+        info,
         index,
         total,
         result.execution_time)
@@ -196,7 +198,7 @@ def print_model_result_line(result, schema_name, index, total):
 
 
 
-def print_results_line(results):
+def print_results_line(results, execution_time):
     stats = {}
 
     for result in results:
@@ -206,7 +208,10 @@ def print_results_line(results):
     stat_line = ", ".join(
         ["{} {}s".format(ct, t) for t, ct in stats.items()])
 
-    print_timestamped_line("Finished running {}.".format(stat_line))
+    print_timestamped_line("")
+    print_timestamped_line(
+        "Finished running {stat_line} in {execution_time:0.2f}s."
+        .format(stat_line=stat_line, execution_time=execution_time))
 
 
 def execute_model(profile, model, existing):
@@ -540,14 +545,14 @@ class RunManager(object):
         logger.info("Concurrency: {} threads (target='{}')".format(
             num_threads, self.project.get_target().get('name'))
         )
-        logger.info("Running!")
 
         existing = adapter.query_for_existing(profile, schema_name)
 
         pool = ThreadPool(num_threads)
 
-        logger.info("")
         print_counts(flat_nodes)
+
+        start_time = time.time()
 
         if should_run_hooks:
             run_hooks(self.project.get_target(),
@@ -639,8 +644,9 @@ class RunManager(object):
                       self.context,
                       'on-run-end hooks')
 
-        logger.info("")
-        print_results_line(node_results)
+        execution_time = time.time() - start_time
+
+        print_results_line(node_results, execution_time)
 
         return node_results
 
