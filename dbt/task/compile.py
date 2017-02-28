@@ -2,6 +2,7 @@ import dbt.compilation
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
+
 class CompileTask:
     def __init__(self, args, project):
         self.args = args

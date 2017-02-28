@@ -1,3 +1,4 @@
+import codecs
 import os
 import fnmatch
 import jinja2
@@ -11,11 +12,12 @@ import dbt.utils
 from dbt.model import Model, NodeType
 from dbt.source import Source
 from dbt.utils import find_model_by_fqn, find_model_by_name, \
-     split_path, This, Var, compiler_error, to_string
+     split_path, This, Var, compiler_error
 
 from dbt.linker import Linker
 from dbt.runtime import RuntimeContext
 
+import dbt.compat
 import dbt.contracts.graph.compiled
 import dbt.contracts.graph.parsed
 import dbt.contracts.project
@@ -53,7 +55,7 @@ def compile_and_print_status(project, args):
 def compile_string(string, ctx):
     try:
         env = jinja2.Environment()
-        template = env.from_string(str(string), globals=ctx)
+        template = env.from_string(dbt.compat.to_string(string), globals=ctx)
         return template.render(ctx)
     except jinja2.exceptions.TemplateSyntaxError as e:
         compiler_error(None, str(e))
@@ -147,7 +149,7 @@ def inject_ctes_into_sql(sql, ctes):
         with_stmt,
         sqlparse.sql.Token(sqlparse.tokens.Keyword, ", ".join(ctes)))
 
-    return str(parsed)
+    return dbt.compat.to_string(parsed)
 
 
 class Compiler(object):

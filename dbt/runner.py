@@ -1,4 +1,3 @@
-
 from __future__ import print_function
 
 import jinja2
@@ -195,7 +194,6 @@ def print_model_result_line(result, schema_name, index, total):
         index,
         total,
         result.execution_time)
-
 
 
 def print_results_line(results, execution_time):
