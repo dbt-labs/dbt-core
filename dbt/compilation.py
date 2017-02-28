@@ -1,4 +1,3 @@
-import codecs
 import os
 import fnmatch
 import jinja2
@@ -177,8 +176,7 @@ class Compiler(object):
         if not os.path.exists(os.path.dirname(target_path)):
             os.makedirs(os.path.dirname(target_path))
 
-        with open(target_path, 'w') as f:
-            f.write(to_string(payload))
+        dbt.compat.write_file(target_path, payload)
 
     def __model_config(self, model, linker):
         def do_config(*args, **kwargs):
