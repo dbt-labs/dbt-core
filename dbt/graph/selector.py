@@ -3,6 +3,9 @@
 import networkx as nx
 from dbt.logger import GLOBAL_LOGGER as logger
 
+import dbt.model
+
+
 SELECTOR_PARENTS = '+'
 SELECTOR_CHILDREN = '+'
 SELECTOR_GLOB = '*'
@@ -43,7 +46,7 @@ def parse_spec(node_spec):
 
 
 def get_package_names(graph):
-    return set([node[0] for node in graph.nodes()])
+    return set([node.split(".")[1] for node in graph.nodes()])
 
 
 def is_selected_node(real_node, node_selector):
@@ -79,17 +82,21 @@ def get_nodes_by_qualified_name(project, graph, qualified_name):
     package_names = get_package_names(graph)
 
     for node in graph.nodes():
-        if len(qualified_name) == 1 and node[-1] == qualified_name[0]:
+        # node naming has changed to dot notation. split to tuple for
+        # compatibility with this code.
+        fqn_ish = node.split('.')[1:]
+
+        if len(qualified_name) == 1 and fqn_ish == qualified_name[0]:
             yield node
 
         elif qualified_name[0] in package_names:
-            if is_selected_node(node, qualified_name):
+            if is_selected_node(fqn_ish, qualified_name):
                 yield node
 
         else:
             for package_name in package_names:
                 local_qualified_node_name = (package_name,) + qualified_name
-                if is_selected_node(node, local_qualified_node_name):
+                if is_selected_node(fqn_ish, local_qualified_node_name):
                     yield node
                     break
 
@@ -104,6 +111,8 @@ def get_nodes_from_spec(project, graph, spec):
                                                      qualified_node_name))
 
     additional_nodes = set()
+    test_nodes = set()
+
     if select_parents:
         for node in selected_nodes:
             parent_nodes = nx.ancestors(graph, node)
@@ -114,7 +123,17 @@ def get_nodes_from_spec(project, graph, spec):
             child_nodes = nx.descendants(graph, node)
             additional_nodes.update(child_nodes)
 
-    return selected_nodes | additional_nodes
+    model_nodes = selected_nodes | additional_nodes
+
+    for node in model_nodes:
+        # include tests that depend on this node. if we aren't running tests,
+        # they'll be filtered out later.
+        child_tests = [n for n in graph.successors(node)
+                       if graph.node.get(n).get('resource_type') ==
+                       dbt.model.NodeType.Test]
+        test_nodes.update(child_tests)
+
+    return model_nodes | test_nodes
 
 
 def warn_if_useless_spec(spec, nodes):

@@ -2,7 +2,11 @@ class Exception(BaseException):
     pass
 
 
-class ValidationException(Exception):
+class RuntimeException(RuntimeError, Exception):
+    pass
+
+
+class ValidationException(RuntimeException):
     pass
 
 

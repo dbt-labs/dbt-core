@@ -1,5 +1,5 @@
+import dbt.compilation
 
-from dbt.compilation import Compiler, CompilableEntities
 from dbt.runner import RunManager
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -19,38 +19,24 @@ class TestTask:
         self.args = args
         self.project = project
 
-    def compile(self):
-        compiler = Compiler(self.project, self.args)
-        compiler.initialize()
-        results = compiler.compile()
-
-        stat_line = ", ".join(
-            ["{} {}".format(results[k], k) for k in CompilableEntities]
-        )
-        logger.info("Compiled {}".format(stat_line))
-
     def run(self):
-        self.compile()
+        dbt.compilation.compile_and_print_status(
+            self.project, self.args)
 
         runner = RunManager(
-            self.project, self.project['target-path'], self.args
-        )
+            self.project, self.project['target-path'], self.args)
 
         include = self.args.models
         exclude = self.args.exclude
 
         if (self.args.data and self.args.schema) or \
            (not self.args.data and not self.args.schema):
-            res = runner.run_tests(include, exclude,
-                                   test_schemas=True, test_data=True)
+            res = runner.run_tests(include, exclude, [])
         elif self.args.data:
-            res = runner.run_tests(include, exclude,
-                                   test_schemas=False, test_data=True)
+            res = runner.run_tests(include, exclude, ['data'])
         elif self.args.schema:
-            res = runner.run_tests(include, exclude,
-                                   test_schemas=True, test_data=False)
+            res = runner.run_tests(include, exclude, ['schema'])
         else:
             raise RuntimeError("unexpected")
 
-        logger.info("Done!")
         return res

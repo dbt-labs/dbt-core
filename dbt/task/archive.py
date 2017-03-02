@@ -1,5 +1,6 @@
+import dbt.compilation
+
 from dbt.runner import RunManager
-from dbt.compilation import Compiler
 from dbt.logger import GLOBAL_LOGGER as logger
 
 
@@ -8,16 +9,9 @@ class ArchiveTask:
         self.args = args
         self.project = project
 
-    def compile(self):
-        compiler = Compiler(self.project, self.args)
-        compiler.initialize()
-        compiled = compiler.compile()
-
-        count_compiled_archives = compiled['archives']
-        logger.info("Compiled {} archives".format(count_compiled_archives))
-
     def run(self):
-        self.compile()
+        dbt.compilation.compile_and_print_status(
+            self.project, self.args)
 
         runner = RunManager(
             self.project,
@@ -25,4 +19,4 @@ class ArchiveTask:
             self.args
         )
 
-        runner.run_archives()
+        runner.run_archives(['*'], [])

@@ -8,12 +8,20 @@ import sqlparse
 import dbt.project
 import dbt.utils
 
+from dbt.model import Model, NodeType
 from dbt.source import Source
 from dbt.utils import find_model_by_fqn, find_model_by_name, \
-     split_path, This, Var, compiler_error, to_string
+     split_path, This, Var, compiler_error
 
 from dbt.linker import Linker
 from dbt.runtime import RuntimeContext
+
+import dbt.compat
+import dbt.contracts.graph.compiled
+import dbt.contracts.graph.parsed
+import dbt.contracts.project
+import dbt.flags
+import dbt.parser
 import dbt.templates
 
 from dbt.adapters.factory import get_adapter
@@ -26,10 +34,35 @@ CompilableEntities = [
 graph_file_name = 'graph.yml'
 
 
+def compile_and_print_status(project, args):
+    compiler = Compiler(project, args)
+    compiler.initialize()
+    names = {
+        NodeType.Model: 'models',
+        NodeType.Test: 'tests',
+        NodeType.Archive: 'archives',
+        NodeType.Analysis: 'analyses',
+    }
+
+    results = {
+        NodeType.Model: 0,
+        NodeType.Test: 0,
+        NodeType.Archive: 0,
+        NodeType.Analysis: 0,
+    }
+
+    results.update(compiler.compile())
+
+    stat_line = ", ".join(
+        ["{} {}".format(ct, names.get(t)) for t, ct in results.items()])
+
+    logger.info("Compiled {}".format(stat_line))
+
+
 def compile_string(string, ctx):
     try:
         env = jinja2.Environment()
-        template = env.from_string(str(string), globals=ctx)
+        template = env.from_string(dbt.compat.to_string(string), globals=ctx)
         return template.render(ctx)
     except jinja2.exceptions.TemplateSyntaxError as e:
         compiler_error(None, str(e))
@@ -37,12 +70,100 @@ def compile_string(string, ctx):
         compiler_error(None, str(e))
 
 
+def prepend_ctes(model, all_models):
+    model, _, all_models = recursively_prepend_ctes(model, all_models)
+
+    return (model, all_models)
+
+
+def recursively_prepend_ctes(model, all_models):
+    if dbt.flags.STRICT_MODE:
+        dbt.contracts.graph.compiled.validate_one(model)
+        dbt.contracts.graph.compiled.validate(all_models)
+
+    model = model.copy()
+    prepend_ctes = []
+
+    if model.get('all_ctes_injected') is True:
+        return (model, model.get('extra_cte_ids'), all_models)
+
+    for cte_id in model.get('extra_cte_ids'):
+        cte_to_add = all_models.get(cte_id)
+        cte_to_add, new_prepend_ctes, all_models = recursively_prepend_ctes(
+            cte_to_add, all_models)
+
+        prepend_ctes = new_prepend_ctes + prepend_ctes
+        new_cte_name = '__dbt__CTE__{}'.format(cte_to_add.get('name'))
+        prepend_ctes.append(' {} as (\n{}\n)'.format(
+            new_cte_name,
+            cte_to_add.get('compiled_sql')))
+
+    model['extra_ctes_injected'] = True
+    model['extra_cte_sql'] = prepend_ctes
+    model['injected_sql'] = inject_ctes_into_sql(
+        model.get('compiled_sql'),
+        model.get('extra_cte_sql'))
+
+    all_models[model.get('unique_id')] = model
+
+    return (model, prepend_ctes, all_models)
+
+
+def inject_ctes_into_sql(sql, ctes):
+    """
+    `ctes` is a list of CTEs in the form:
+
+      [ "__dbt__CTE__ephemeral as (select * from table)",
+        "__dbt__CTE__events as (select id, type from events)" ]
+
+    Given `sql` like:
+
+      "with internal_cte as (select * from sessions)
+       select * from internal_cte"
+
+    This will spit out:
+
+      "with __dbt__CTE__ephemeral as (select * from table),
+            __dbt__CTE__events as (select id, type from events),
+            with internal_cte as (select * from sessions)
+       select * from internal_cte"
+
+    (Whitespace enhanced for readability.)
+    """
+    if len(ctes) == 0:
+        return sql
+
+    parsed_stmts = sqlparse.parse(sql)
+    parsed = parsed_stmts[0]
+
+    with_stmt = None
+    for token in parsed.tokens:
+        if token.is_keyword and token.normalized == 'WITH':
+            with_stmt = token
+            break
+
+    if with_stmt is None:
+        # no with stmt, add one, and inject CTEs right at the beginning
+        first_token = parsed.token_first()
+        with_stmt = sqlparse.sql.Token(sqlparse.tokens.Keyword, 'with')
+        parsed.insert_before(first_token, with_stmt)
+    else:
+        # stmt exists, add a comma (which will come after injected CTEs)
+        trailing_comma = sqlparse.sql.Token(sqlparse.tokens.Punctuation, ',')
+        parsed.insert_after(with_stmt, trailing_comma)
+
+    parsed.insert_after(
+        with_stmt,
+        sqlparse.sql.Token(sqlparse.tokens.Keyword, ", ".join(ctes)))
+
+    return dbt.compat.to_string(parsed)
+
+
 class Compiler(object):
     def __init__(self, project, args):
         self.project = project
         self.args = args
-
-        self.macro_generator = None
+        self.parsed_models = None
 
     def initialize(self):
         if not os.path.exists(self.project['target-path']):
@@ -51,56 +172,11 @@ class Compiler(object):
         if not os.path.exists(self.project['modules-path']):
             os.makedirs(self.project['modules-path'])
 
-    def model_sources(self, this_project, own_project=None):
-        if own_project is None:
-            own_project = this_project
-
-        paths = own_project.get('source-paths', [])
-        return Source(
-            this_project,
-            own_project=own_project
-        ).get_models(paths)
-
     def get_macros(self, this_project, own_project=None):
         if own_project is None:
             own_project = this_project
         paths = own_project.get('macro-paths', [])
         return Source(this_project, own_project=own_project).get_macros(paths)
-
-    def get_archives(self, project):
-        return Source(
-            project,
-            own_project=project
-        ).get_archives()
-
-    def project_schemas(self, project):
-        source_paths = project.get('source-paths', [])
-        return Source(project).get_schemas(source_paths)
-
-    def project_tests(self, project):
-        source_paths = project.get('test-paths', [])
-        return Source(project).get_tests(source_paths)
-
-    def analysis_sources(self, project):
-        paths = project.get('analysis-paths', [])
-        return Source(project).get_analyses(paths)
-
-    def validate_models_unique(self, models, error_type):
-        found_models = defaultdict(list)
-        for model in models:
-            found_models[model.name].append(model)
-        for model_name, model_list in found_models.items():
-            if len(model_list) > 1:
-                models_str = "\n  - ".join(
-                    [str(model) for model in model_list])
-
-                error_msg = "Found {} models with the same name.\n" \
-                            "  Name='{}'\n" \
-                            "  - {}".format(
-                                    len(model_list), model_name, models_str
-                            )
-
-                error_type(model_list[0], error_msg)
 
     def __write(self, build_filepath, payload):
         target_path = os.path.join(self.project['target-path'], build_filepath)
@@ -108,61 +184,25 @@ class Compiler(object):
         if not os.path.exists(os.path.dirname(target_path)):
             os.makedirs(os.path.dirname(target_path))
 
-        with open(target_path, 'w') as f:
-            f.write(to_string(payload))
+        dbt.compat.write_file(target_path, payload)
 
     def __model_config(self, model, linker):
         def do_config(*args, **kwargs):
-            if len(args) == 1 and len(kwargs) == 0:
-                opts = args[0]
-            elif len(args) == 0 and len(kwargs) > 0:
-                opts = kwargs
-            else:
-                raise RuntimeError(
-                    "Invalid model config given inline in {}".format(model)
-                )
+            return ''
 
-            if type(opts) != dict:
-                raise RuntimeError(
-                    "Invalid model config given inline in {}".format(model)
-                )
-
-            model.update_in_model_config(opts)
-            model.add_to_prologue("Config specified in model: {}".format(opts))
-            return ""
         return do_config
 
-    def model_can_reference(self, src_model, other_model):
-        """
-        returns True if the src_model can reference the other_model. Models
-        can access other models in their package and dependency models, but
-        a dependency model cannot access models "up" the dependency chain.
-        """
-
-        # hack for now b/c we don't support recursive dependencies
-        return (
-            other_model.own_project['name'] == src_model.own_project['name'] or
-            src_model.own_project['name'] == src_model.project['name']
-        )
-
-    def __ref(self, linker, ctx, model, all_models):
-        schema = ctx['env']['schema']
-
-        source_model = tuple(model.fqn)
-        linker.add_node(source_model)
+    def __ref(self, ctx, model, all_models):
+        schema = ctx.get('env', {}).get('schema')
 
         def do_ref(*args):
-            if len(args) == 1:
-                other_model_name = args[0]
-                other_model = find_model_by_name(all_models, other_model_name)
-            elif len(args) == 2:
-                other_model_package, other_model_name = args
+            target_model_name = None
+            target_model_package = None
 
-                other_model = find_model_by_name(
-                    all_models,
-                    other_model_name,
-                    package_namespace=other_model_package
-                )
+            if len(args) == 1:
+                target_model_name = args[0]
+            elif len(args) == 2:
+                target_model_package, target_model_name = args
             else:
                 compiler_error(
                     model,
@@ -171,46 +211,89 @@ class Compiler(object):
                     )
                 )
 
-            other_model_fqn = tuple(other_model.fqn[:-1] + [other_model_name])
-            src_fqn = ".".join(source_model)
-            ref_fqn = ".".join(other_model_fqn)
+            target_model = dbt.utils.find_model_by_name(
+                all_models,
+                target_model_name,
+                target_model_package)
 
-            if not other_model.is_enabled:
-                raise RuntimeError(
+            if target_model is None:
+                compiler_error(
+                    model,
+                    "Model '{}' depends on model '{}' which was not found."
+                    .format(model.get('unique_id'), target_model_name))
+
+            target_model_id = target_model.get('unique_id')
+
+            if target_model.get('config', {}) \
+                           .get('enabled') is False:
+                compiler_error(
+                    model,
                     "Model '{}' depends on model '{}' which is disabled in "
-                    "the project config".format(src_fqn, ref_fqn)
-                )
+                    "the project config".format(model.get('unique_id'),
+                                                target_model.get('unique_id')))
 
-            # this creates a trivial cycle -- should this be a compiler error?
-            # we can still interpolate the name w/o making a self-cycle
-            if source_model == other_model_fqn:
-                pass
-            else:
-                linker.dependency(source_model, other_model_fqn)
+            model['depends_on'].append(target_model_id)
 
-            if other_model.is_ephemeral:
-                linker.inject_cte(model, other_model)
-                return other_model.cte_name
+            if target_model.get('config', {}) \
+                           .get('materialized') == 'ephemeral':
+
+                model['extra_cte_ids'].append(target_model_id)
+                return '__dbt__CTE__{}'.format(target_model.get('name'))
             else:
-                return '"{}"."{}"'.format(schema, other_model_name)
+                return '"{}"."{}"'.format(schema, target_model.get('name'))
 
         def wrapped_do_ref(*args):
             try:
                 return do_ref(*args)
             except RuntimeError as e:
-                root = os.path.relpath(
-                    model.root_dir,
-                    model.project['project-root']
-                )
-
-                filepath = os.path.join(root, model.rel_filepath)
-                logger.info("Compiler error in {}".format(filepath))
+                logger.info("Compiler error in {}".format(model.get('path')))
                 logger.info("Enabled models:")
-                for m in all_models:
-                    logger.info(" - {}".format(".".join(m.fqn)))
+                for n, m in all_models.items():
+                    if m.get('resource_type') == NodeType.Model:
+                        logger.info(" - {}".format(m.get('unique_id')))
                 raise e
 
         return wrapped_do_ref
+
+    def get_compiler_context(self, linker, model, models,
+                             macro_generator=None):
+        context = self.project.context()
+
+        if macro_generator is not None:
+            for macro_data in macro_generator(context):
+                macro = macro_data["macro"]
+                macro_name = macro_data["name"]
+                project = macro_data["project"]
+
+                if context.get(project.get('name')) is None:
+                    context[project.get('name')] = {}
+
+                context.get(project.get('name'), {}) \
+                       .update({macro_name: macro})
+
+                if model.get('package_name') == project.get('name'):
+                    context.update({macro_name: macro})
+
+        adapter = get_adapter(self.project.run_environment())
+
+        # built-ins
+        context['ref'] = self.__ref(context, model, models)
+        context['config'] = self.__model_config(model, linker)
+        context['this'] = This(
+            context['env']['schema'],
+            (model.get('name') if dbt.flags.NON_DESTRUCTIVE
+             else '{}__dbt_tmp'.format(model.get('name'))),
+            model.get('name')
+        )
+        context['var'] = Var(model, context=context)
+        context['target'] = self.project.get_target()
+
+        # these get re-interpolated at runtime!
+        context['run_started_at'] = '{{ run_started_at }}'
+        context['invocation_id'] = '{{ invocation_id }}'
+        context['sql_now'] = adapter.date_function
+
+        return context
 
     def get_context(self, linker, model, models):
         runtime = RuntimeContext(model=model)
@@ -218,7 +301,7 @@ class Compiler(object):
         context = self.project.context()
 
         # built-ins
-        context['ref'] = self.__ref(linker, context, model, models)
+        context['ref'] = self.__ref(context, model, models)
         context['config'] = self.__model_config(model, linker)
         context['this'] = This(
             context['env']['schema'], model.immediate_name, model.name
@@ -235,107 +318,44 @@ class Compiler(object):
 
         runtime.update_global(context)
 
-        # add in macros (can we cache these somehow?)
-        for macro_data in self.macro_generator(context):
-            macro = macro_data["macro"]
-            macro_name = macro_data["name"]
-            project = macro_data["project"]
-
-            runtime.update_package(project['name'], {macro_name: macro})
-
-            if project['name'] == self.project['name']:
-                runtime.update_global({macro_name: macro})
-
         return runtime
 
-    def compile_model(self, linker, model, models):
+    def compile_node(self, linker, node, nodes, macro_generator):
         try:
-            fs_loader = jinja2.FileSystemLoader(searchpath=model.root_dir)
-            jinja = jinja2.Environment(loader=fs_loader)
+            compiled_node = node.copy()
+            compiled_node.update({
+                'compiled': False,
+                'compiled_sql': None,
+                'extra_ctes_injected': False,
+                'extra_cte_ids': [],
+                'extra_cte_sql': [],
+                'injected_sql': None,
+            })
 
-            template_contents = dbt.clients.system.load_file_contents(
-                model.absolute_path)
+            context = self.get_compiler_context(linker, compiled_node, nodes,
+                                                macro_generator)
 
-            template = jinja.from_string(template_contents)
-            context = self.get_context(linker, model, models)
+            env = jinja2.sandbox.SandboxedEnvironment()
 
-            rendered = template.render(context)
+            compiled_node['compiled_sql'] = env.from_string(
+                node.get('raw_sql')).render(context)
+
+            compiled_node['compiled'] = True
         except jinja2.exceptions.TemplateSyntaxError as e:
-            compiler_error(model, str(e))
+            compiler_error(node, str(e))
         except jinja2.exceptions.UndefinedError as e:
-            compiler_error(model, str(e))
+            compiler_error(node, str(e))
 
-        return rendered
+        return compiled_node
 
     def write_graph_file(self, linker):
         filename = graph_file_name
         graph_path = os.path.join(self.project['target-path'], filename)
         linker.write_graph(graph_path)
 
-    def combine_query_with_ctes(self, model, query, ctes, compiled_models):
-        parsed_stmts = sqlparse.parse(query)
-        if len(parsed_stmts) != 1:
-            raise RuntimeError(
-                "unexpectedly parsed {} queries from model "
-                "{}".format(len(parsed_stmts), model)
-            )
+    def new_add_cte_to_rendered_query(self, linker, primary_model,
+                                      compiled_models):
 
-        parsed = parsed_stmts[0]
-
-        with_stmt = None
-        for token in parsed.tokens:
-            if token.is_keyword and token.normalized == 'WITH':
-                with_stmt = token
-                break
-
-        if with_stmt is None:
-            # no with stmt, add one!
-            first_token = parsed.token_first()
-            with_stmt = sqlparse.sql.Token(sqlparse.tokens.Keyword, 'with')
-            parsed.insert_before(first_token, with_stmt)
-        else:
-            # stmt exists, add a comma (which will come after our injected
-            # CTE(s) )
-            trailing_comma = sqlparse.sql.Token(
-                sqlparse.tokens.Punctuation, ','
-            )
-            parsed.insert_after(with_stmt, trailing_comma)
-
-        cte_mapping = [
-            (model.cte_name, compiled_models[model]) for model in ctes
-        ]
-
-        # these newlines are important -- comments could otherwise interfere
-        # w/ query
-        cte_stmts = [
-            " {} as (\n{}\n)".format(name, contents)
-            for (name, contents) in cte_mapping
-        ]
-
-        cte_text = sqlparse.sql.Token(
-            sqlparse.tokens.Keyword, ", ".join(cte_stmts)
-        )
-        parsed.insert_after(with_stmt, cte_text)
-
-        return str(parsed)
-
-    def __recursive_add_ctes(self, linker, model):
-        if model not in linker.cte_map:
-            return set()
-
-        models_to_add = linker.cte_map[model]
-        recursive_models = [
-            self.__recursive_add_ctes(linker, m) for m in models_to_add
-        ]
-
-        for recursive_model_set in recursive_models:
-            models_to_add = models_to_add | recursive_model_set
-
-        return models_to_add
-
-    def add_cte_to_rendered_query(
-            self, linker, primary_model, compiled_models
-    ):
         fqn_to_model = {tuple(model.fqn): model for model in compiled_models}
         sorted_nodes = linker.as_topological_ordering()
 
@@ -361,154 +381,90 @@ class Compiler(object):
             )
             return compiled_query
 
-    def remove_node_from_graph(self, linker, model, models):
-        # remove the node
-        children = linker.remove_node(tuple(model.fqn))
+    def compile_nodes(self, linker, nodes, macro_generator):
+        all_projects = self.get_all_projects()
 
-        # check if we bricked the graph. if so: throw compilation error
-        for child in children:
-            other_model = find_model_by_fqn(models, child)
+        compiled_nodes = {}
+        injected_nodes = {}
+        wrapped_nodes = {}
+        written_nodes = []
 
-            if other_model.is_enabled:
-                this_fqn = ".".join(model.fqn)
-                that_fqn = ".".join(other_model.fqn)
-                compiler_error(
-                    model,
-                    "Model '{}' depends on model '{}' which is "
-                    "disabled".format(that_fqn, this_fqn)
-                )
+        for name, node in nodes.items():
+            compiled_nodes[name] = self.compile_node(linker, node, nodes,
+                                                     macro_generator)
 
-    def compile_models(self, linker, models):
-        compiled_models = {model: self.compile_model(linker, model, models)
-                           for model in models}
-        sorted_models = [find_model_by_fqn(models, fqn)
-                         for fqn in linker.as_topological_ordering()]
+        if dbt.flags.STRICT_MODE:
+            dbt.contracts.graph.compiled.validate(compiled_nodes)
 
-        written_models = []
-        for model in sorted_models:
-            # in-model configs were just evaluated. Evict anything that is
-            # newly-disabled
-            if not model.is_enabled:
-                self.remove_node_from_graph(linker, model, models)
-                continue
+        for name, node in compiled_nodes.items():
+            node, compiled_nodes = prepend_ctes(node, compiled_nodes)
+            injected_nodes[name] = node
 
-            injected_stmt = self.add_cte_to_rendered_query(
-                linker, model, compiled_models
-            )
+        if dbt.flags.STRICT_MODE:
+            dbt.contracts.graph.compiled.validate(injected_nodes)
 
-            context = self.get_context(linker, model, models)
-            wrapped_stmt = model.compile(injected_stmt, self.project, context)
+        for name, injected_node in injected_nodes.items():
+            # now turn model nodes back into the old-style model object for
+            # wrapping
+            if injected_node.get('resource_type') in [NodeType.Test,
+                                                      NodeType.Analysis]:
+                # don't wrap tests or analyses.
+                injected_node['wrapped_sql'] = injected_node['injected_sql']
+                wrapped_nodes[name] = injected_node
 
-            serialized = model.serialize()
-            linker.update_node_data(tuple(model.fqn), serialized)
+            elif injected_node.get('resource_type') == NodeType.Archive:
+                # unfortunately we do everything automagically for
+                # archives. in the future it'd be nice to generate
+                # the SQL at the parser level.
+                pass
 
-            if model.is_ephemeral:
-                continue
+            else:
+                model = Model(
+                    self.project,
+                    injected_node.get('root_path'),
+                    injected_node.get('path'),
+                    all_projects.get(injected_node.get('package_name')))
 
-            self.__write(model.build_path(), wrapped_stmt)
-            written_models.append(model)
+                cfg = injected_node.get('config', {})
+                model._config = cfg
 
-        return compiled_models, written_models
+                context = self.get_context(linker, model, injected_nodes)
 
-    def compile_analyses(self, linker, compiled_models):
-        analyses = self.analysis_sources(self.project)
-        compiled_analyses = {
-            analysis: self.compile_model(
-                linker, analysis, compiled_models
-            ) for analysis in analyses
-        }
+                wrapped_stmt = model.compile(
+                    injected_node.get('injected_sql'), self.project, context)
 
-        written_analyses = []
-        referenceable_models = {}
-        referenceable_models.update(compiled_models)
-        referenceable_models.update(compiled_analyses)
-        for analysis in analyses:
-            injected_stmt = self.add_cte_to_rendered_query(
-                linker,
-                analysis,
-                referenceable_models
-            )
+                injected_node['wrapped_sql'] = wrapped_stmt
+                wrapped_nodes[name] = injected_node
 
-            serialized = analysis.serialize()
-            linker.update_node_data(tuple(analysis.fqn), serialized)
+            build_path = os.path.join('build', injected_node.get('path'))
 
-            build_path = analysis.build_path()
-            self.__write(build_path, injected_stmt)
-            written_analyses.append(analysis)
+            if injected_node.get('resource_type') in (NodeType.Model,
+                                                      NodeType.Analysis) and \
+               injected_node.get('config', {}) \
+                            .get('materialized') != 'ephemeral':
+                self.__write(build_path, injected_node.get('wrapped_sql'))
+                written_nodes.append(injected_node)
+                injected_node['build_path'] = build_path
 
-        return written_analyses
+            linker.add_node(injected_node.get('unique_id'))
+            project = all_projects[injected_node.get('package_name')]
 
-    def get_local_and_package_sources(self, project, source_getter):
-        all_sources = []
+            linker.update_node_data(
+                injected_node.get('unique_id'),
+                injected_node)
 
-        all_sources.extend(source_getter(project))
+            for dependency in injected_node.get('depends_on'):
+                if compiled_nodes.get(dependency):
+                    linker.dependency(
+                        injected_node.get('unique_id'),
+                        compiled_nodes.get(dependency).get('unique_id'))
+                else:
+                    compiler_error(
+                        model,
+                        "dependency {} not found in graph!".format(
+                            dependency))
 
-        for package in dbt.utils.dependency_projects(project):
-            all_sources.extend(source_getter(package))
-
-        return all_sources
-
-    def compile_schema_tests(self, linker, models):
-        all_schema_specs = self.get_local_and_package_sources(
-                self.project,
-                self.project_schemas
-        )
-
-        schema_tests = []
-
-        for schema in all_schema_specs:
-            # compiling a SchemaFile returns >= 0 SchemaTest models
-            try:
-                schema_tests.extend(schema.compile())
-            except RuntimeError as e:
-                logger.info("\n" + str(e))
-                schema_test_path = schema.filepath
-                logger.info("Skipping compilation for {}...\n"
-                            .format(schema_test_path))
-
-        written_tests = []
-        for schema_test in schema_tests:
-            # show a warning if the model being tested doesn't exist
-            try:
-                source_model = find_model_by_name(models,
-                                                  schema_test.model_name)
-            except RuntimeError as e:
-                dbt.utils.compiler_warning(schema_test, str(e))
-                continue
-
-            if not source_model.is_enabled:
-                continue
-
-            serialized = schema_test.serialize()
-
-            model_node = tuple(source_model.fqn)
-            test_node = tuple(schema_test.fqn)
-
-            linker.dependency(test_node, model_node)
-            linker.update_node_data(test_node, serialized)
-
-            query = schema_test.render()
-            self.__write(schema_test.build_path(), query)
-            written_tests.append(schema_test)
-
-        return written_tests
-
-    def compile_data_tests(self, linker, models):
-        tests = self.get_local_and_package_sources(
-                self.project,
-                self.project_tests
-        )
-
-        written_tests = []
-        for data_test in tests:
-            serialized = data_test.serialize()
-            linker.update_node_data(tuple(data_test.fqn), serialized)
-            query = self.compile_model(linker, data_test, models)
-            wrapped = data_test.render(query)
-            self.__write(data_test.build_path(), wrapped)
-            written_tests.append(data_test)
-
-        return written_tests
+        return wrapped_nodes, written_nodes
 
     def generate_macros(self, all_macros):
         def do_gen(ctx):
@@ -519,32 +475,108 @@ class Compiler(object):
             return macros
         return do_gen
 
-    def compile_archives(self, linker, compiled_models):
-        all_archives = self.get_archives(self.project)
+    def get_all_projects(self):
+        root_project = self.project.cfg
+        all_projects = {root_project.get('name'): root_project}
+        dependency_projects = dbt.utils.dependency_projects(self.project)
 
-        for archive in all_archives:
-            sql = archive.compile()
-            fqn = tuple(archive.fqn)
-            linker.update_node_data(fqn, archive.serialize())
-            self.__write(archive.build_path(), sql)
+        for project in dependency_projects:
+            name = project.cfg.get('name', 'unknown')
+            all_projects[name] = project.cfg
 
-        return all_archives
+        if dbt.flags.STRICT_MODE:
+            dbt.contracts.project.validate_list(all_projects)
 
-    def get_models(self):
-        all_models = self.model_sources(this_project=self.project)
-        for project in dbt.utils.dependency_projects(self.project):
-            all_models.extend(
-                self.model_sources(
-                    this_project=self.project, own_project=project
-                )
-            )
+        return all_projects
 
-        return all_models
+    def get_parsed_models(self, root_project, all_projects, macro_generator):
+        parsed_models = {}
+
+        for name, project in all_projects.items():
+            parsed_models.update(
+                dbt.parser.load_and_parse_sql(
+                    package_name=name,
+                    root_project=root_project,
+                    all_projects=all_projects,
+                    root_dir=project.get('project-root'),
+                    relative_dirs=project.get('source-paths', []),
+                    resource_type=NodeType.Model,
+                    macro_generator=macro_generator))
+
+        return parsed_models
+
+    def get_parsed_analyses(self, root_project, all_projects, macro_generator):
+        parsed_models = {}
+
+        for name, project in all_projects.items():
+            parsed_models.update(
+                dbt.parser.load_and_parse_sql(
+                    package_name=name,
+                    root_project=root_project,
+                    all_projects=all_projects,
+                    root_dir=project.get('project-root'),
+                    relative_dirs=project.get('analysis-paths', []),
+                    resource_type=NodeType.Analysis,
+                    macro_generator=macro_generator))
+
+        return parsed_models
+
+    def get_parsed_data_tests(self, root_project, all_projects,
+                              macro_generator):
+        parsed_tests = {}
+
+        for name, project in all_projects.items():
+            parsed_tests.update(
+                dbt.parser.load_and_parse_sql(
+                    package_name=name,
+                    root_project=root_project,
+                    all_projects=all_projects,
+                    root_dir=project.get('project-root'),
+                    relative_dirs=project.get('test-paths', []),
+                    resource_type=NodeType.Test,
+                    macro_generator=macro_generator,
+                    tags=['data']))
+
+        return parsed_tests
+
+    def get_parsed_schema_tests(self, root_project, all_projects):
+        parsed_tests = {}
+
+        for name, project in all_projects.items():
+            parsed_tests.update(
+                dbt.parser.load_and_parse_yml(
+                    package_name=name,
+                    root_project=root_project,
+                    all_projects=all_projects,
+                    root_dir=project.get('project-root'),
+                    relative_dirs=project.get('source-paths', [])))
+
+        return parsed_tests
+
+    def load_all_nodes(self, root_project, all_projects, macro_generator):
+        all_nodes = {}
+
+        all_nodes.update(self.get_parsed_models(root_project, all_projects,
+                                                macro_generator))
+        all_nodes.update(self.get_parsed_analyses(root_project, all_projects,
+                                                  macro_generator))
+        all_nodes.update(
+            self.get_parsed_data_tests(root_project, all_projects,
+                                       macro_generator))
+        all_nodes.update(
+            self.get_parsed_schema_tests(root_project, all_projects))
+        all_nodes.update(
+            dbt.parser.parse_archives_from_projects(root_project,
+                                                    all_projects))
+
+        return all_nodes
 
     def compile(self):
         linker = Linker()
 
-        all_models = self.get_models()
+        root_project = self.project.cfg
+        all_projects = self.get_all_projects()
+
         all_macros = self.get_macros(this_project=self.project)
 
         for project in dbt.utils.dependency_projects(self.project):
@@ -552,48 +584,22 @@ class Compiler(object):
                 self.get_macros(this_project=self.project, own_project=project)
             )
 
-        self.macro_generator = self.generate_macros(all_macros)
+        macro_generator = self.generate_macros(all_macros)
 
-        enabled_models = [
-            model for model in all_models
-            if model.is_enabled and not model.is_empty
-        ]
+        all_nodes = self.load_all_nodes(root_project, all_projects,
+                                        macro_generator)
 
-        compiled_models, written_models = self.compile_models(
-            linker, enabled_models
-        )
+        compiled_nodes, written_nodes = self.compile_nodes(linker, all_nodes,
+                                                           macro_generator)
 
-        compilers = {
-            'schema tests': self.compile_schema_tests,
-            'data tests': self.compile_data_tests,
-            'archives': self.compile_archives,
-            'analyses': self.compile_analyses
-        }
-
-        compiled = {
-            'models': written_models
-        }
-
-        for (compile_type, compiler_f) in compilers.items():
-            newly_compiled = compiler_f(linker, compiled_models)
-            compiled[compile_type] = newly_compiled
-
-        self.validate_models_unique(
-            compiled['models'],
-            dbt.utils.compiler_error
-        )
-
-        self.validate_models_unique(
-            compiled['data tests'],
-            dbt.utils.compiler_warning
-        )
-
-        self.validate_models_unique(
-            compiled['schema tests'],
-            dbt.utils.compiler_warning
-        )
+        # TODO re-add archives
 
         self.write_graph_file(linker)
 
-        stats = {ttype: len(m) for (ttype, m) in compiled.items()}
+        stats = {}
+
+        for node_name, node in compiled_nodes.items():
+            stats[node.get('resource_type')] = stats.get(
+                node.get('resource_type'), 0) + 1
+
         return stats

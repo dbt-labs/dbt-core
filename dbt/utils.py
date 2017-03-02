@@ -1,7 +1,10 @@
 import os
+import jinja2
 import json
 
 import dbt.project
+
+from dbt.compat import basestring
 from dbt.logger import GLOBAL_LOGGER as logger
 
 DBTConfigKeys = [
@@ -34,6 +37,10 @@ class This(object):
 def compiler_error(model, msg):
     if model is None:
         name = '<None>'
+    elif isinstance(model, str):
+        name = model
+    elif isinstance(model, dict):
+        name = model.get('name')
     else:
         name = model.nice_name
 
@@ -59,7 +66,14 @@ class Var(object):
     def __init__(self, model, context):
         self.model = model
         self.context = context
-        self.local_vars = model.config.get('vars', {})
+
+        if isinstance(model, dict) and model.get('unique_id'):
+            self.local_vars = model.get('config', {}).get('vars')
+            self.model_name = model.get('name')
+        else:
+            # still used for wrapping
+            self.model_name = model.nice_name
+            self.local_vars = model.config.get('vars', {})
 
     def pretty_dict(self, data):
         return json.dumps(data, sort_keys=True, indent=4)
@@ -70,7 +84,7 @@ class Var(object):
             compiler_error(
                 self.model,
                 self.UndefinedVarError.format(
-                    var_name, self.model.nice_name, pretty_vars
+                    var_name, self.model_name, pretty_vars
                 )
             )
         elif var_name in self.local_vars:
@@ -82,37 +96,36 @@ class Var(object):
                         var_name, self.model.nice_name, pretty_vars
                     )
                 )
-            compiled = self.model.compile_string(self.context, raw)
+
+            # if bool/int/float/etc are passed in, don't compile anything
+            if not isinstance(raw, basestring):
+                return raw
+
+            env = jinja2.Environment()
+            compiled = env.from_string(raw, self.context).render(self.context)
+
             return compiled
         else:
             return default
 
 
-def find_model_by_name(models, name, package_namespace=None):
-    found = []
-    for model in models:
-        if model.name == name:
-            if package_namespace is None:
-                found.append(model)
-            elif (package_namespace is not None and
-                  package_namespace == model.project['name']):
-                found.append(model)
+def model_cte_name(model):
+    return '__dbt__CTE__{}'.format(model.get('name'))
 
-    nice_package_name = 'ANY' if package_namespace is None \
-                        else package_namespace
-    if len(found) == 0:
-        raise RuntimeError(
-            "Can't find a model named '{}' in package '{}' -- does it exist?"
-            .format(name, nice_package_name)
-        )
-    elif len(found) == 1:
-        return found[0]
-    else:
-        raise RuntimeError(
-            "Model specification is ambiguous: model='{}' package='{}' -- "
-            "{} models match criteria: {}"
-            .format(name, nice_package_name, len(found), found)
-        )
+
+def find_model_by_name(all_models, target_model_name,
+                       target_model_package):
+
+    for name, model in all_models.items():
+        resource_type, package_name, model_name = name.split('.')
+
+        if (resource_type == 'model' and
+            ((target_model_name == model_name) and
+             (target_model_package is None or
+              target_model_package == package_name))):
+            return model
+
+    return None
 
 
 def find_model_by_fqn(models, fqn):

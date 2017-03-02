@@ -1,6 +1,8 @@
 from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 
+import dbt.flags
+
 class TestContextVars(DBTIntegrationTest):
 
     def setUp(self):

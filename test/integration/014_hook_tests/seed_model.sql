@@ -1,5 +1,7 @@
 
-create table pre_post_run_hooks_014.on_run_hook (
+drop table if exists model_hooks_014.on_model_hook;
+
+create table model_hooks_014.on_model_hook (
     "state"            TEXT, -- start|end
 
     "target.dbname"    TEXT,

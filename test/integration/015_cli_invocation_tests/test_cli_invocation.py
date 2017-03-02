@@ -97,4 +97,5 @@ class TestCLIInvocationWithProfilesDir(DBTIntegrationTest):
 
         # make sure the test runs against `custom_schema`
         for test_result in res:
-            self.assertTrue(self.custom_schema, test_result.model.compiled_contents)
+            self.assertTrue(self.custom_schema,
+                            test_result.node.get('wrapped_sql'))

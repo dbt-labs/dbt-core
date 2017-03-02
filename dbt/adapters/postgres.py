@@ -291,7 +291,7 @@ class PostgresAdapter:
 
     @classmethod
     def execute_model(cls, profile, model):
-        parts = re.split(r'-- (DBT_OPERATION .*)', model.compiled_contents)
+        parts = re.split(r'-- (DBT_OPERATION .*)', model.get('wrapped_sql'))
         connection = cls.get_connection(profile)
 
         if flags.STRICT_MODE:
@@ -317,7 +317,7 @@ class PostgresAdapter:
                 func_map[function](kwargs)
             else:
                 handle, cursor = cls.add_query_to_transaction(
-                    part, connection, model.name)
+                    part, connection, model.get('name'))
 
         handle.commit()
 
@@ -503,6 +503,16 @@ class PostgresAdapter:
 
         handle = connection.get('handle')
         handle.commit()
+
+    @classmethod
+    def rollback(cls, profile):
+        connection = cls.get_connection(profile)
+
+        if flags.STRICT_MODE:
+            validate_connection(connection)
+
+        handle = connection.get('handle')
+        handle.rollback()
 
     @classmethod
     def get_status(cls, cursor):

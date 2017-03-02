@@ -105,6 +105,8 @@ class TestSimpleDependencyWithModelSpecificOverriddenConfigs(BaseTestSimpleDepen
 
     @attr(type='postgres')
     def test_simple_dependency(self):
+        self.use_default_project()
+
         self.run_dbt(["deps"])
         self.run_dbt(["run"])
 
@@ -114,7 +116,7 @@ class TestSimpleDependencyWithModelSpecificOverriddenConfigs(BaseTestSimpleDepen
         self.assertTablesEqual("seed","incremental")
 
 
-class TestSimpleDependencyWithModelSpecificOverriddenConfigs(BaseTestSimpleDependencyWithConfigs):
+class TestSimpleDependencyWithModelSpecificOverriddenConfigsAndMaterializations(BaseTestSimpleDependencyWithConfigs):
 
     @property
     def project_config(self):
@@ -127,7 +129,7 @@ class TestSimpleDependencyWithModelSpecificOverriddenConfigs(BaseTestSimpleDepen
                         "vars": {
                             "config_1": "ghi",
                             "config_2": "jkl",
-                            #"bool_config": True
+                            "bool_config": True
 
                         }
                     },

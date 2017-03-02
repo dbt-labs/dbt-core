@@ -1,6 +1,15 @@
 import networkx as nx
 from collections import defaultdict
+
+import dbt.compilation
 import dbt.model
+
+
+def from_file(graph_file):
+    linker = Linker()
+    linker.read_graph(graph_file)
+
+    return linker
 
 
 class Linker(object):
@@ -93,6 +102,11 @@ class Linker(object):
         self.graph.add_node(node1)
         self.graph.add_node(node2)
         self.graph.add_edge(node2, node1)
+
+        if len(list(nx.simple_cycles(self.graph))) > 0:
+            raise ValidationException(
+                "Detected a cycle when adding dependency from {} to {}"
+                .format(node1, node2))
 
     def add_node(self, node):
         self.graph.add_node(node)

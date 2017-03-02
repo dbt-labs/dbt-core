@@ -28,7 +28,7 @@ def main(args=None):
         args = sys.argv[1:]
 
     try:
-        return handle(args)
+        handle(args)
 
     except RuntimeError as e:
         logger.info("Encountered an error:")
@@ -185,6 +185,12 @@ def invoke_dbt(parsed):
             return None
 
     log_dir = proj.get('log-path', 'logs')
+
+    if hasattr(proj.args, 'non_destructive') and \
+       proj.args.non_destructive is True:
+        flags.NON_DESTRUCTIVE = True
+    else:
+        flags.NON_DESTRUCTIVE = False
 
     logger.debug("running dbt with arguments %s", parsed)
 

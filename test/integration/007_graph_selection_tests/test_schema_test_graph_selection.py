@@ -43,7 +43,9 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         test_task = TestTask(args, self.project)
         test_results = test_task.run()
 
-        ran_tests = sorted([test.model.name for test in test_results])
+        print(test_results)
+
+        ran_tests = sorted([test.node.get('name') for test in test_results])
         expected_sorted = sorted(expected_tests)
 
         self.assertEqual(ran_tests, expected_sorted)

@@ -1,6 +1,7 @@
 from __future__ import print_function
 
-from dbt.compilation import Compiler, CompilableEntities
+import dbt.compilation
+
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.runner import RunManager
 
@@ -12,18 +13,9 @@ class RunTask:
         self.args = args
         self.project = project
 
-    def compile(self):
-        compiler = Compiler(self.project, self.args)
-        compiler.initialize()
-        results = compiler.compile()
-
-        stat_line = ", ".join([
-            "{} {}".format(results[k], k) for k in CompilableEntities
-        ])
-        logger.info("Compiled {}".format(stat_line))
-
     def run(self):
-        self.compile()
+        dbt.compilation.compile_and_print_status(
+            self.project, self.args)
 
         runner = RunManager(
             self.project, self.project['target-path'], self.args

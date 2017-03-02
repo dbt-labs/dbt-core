@@ -1,3 +1,9 @@
+## dbt 0.7.2 (unreleased)
+
+### Changes
+
+- Graph refactor: fix common issues with load order ([#292](https://github.com/fishtown-analytics/dbt/pull/292))
+
 ## dbt 0.7.1 (February 28, 2017)
 
 ### Overview

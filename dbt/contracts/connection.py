@@ -1,7 +1,7 @@
 from voluptuous import Schema, Required, All, Any, Extra, Range, Optional
-from voluptuous.error import MultipleInvalid
 
-from dbt.exceptions import ValidationException
+from dbt.compat import basestring
+from dbt.contracts.common import validate_with
 from dbt.logger import GLOBAL_LOGGER as logger
 
 
@@ -13,22 +13,22 @@ connection_contract = Schema({
 })
 
 postgres_credentials_contract = Schema({
-    Required('dbname'): str,
-    Required('host'): str,
-    Required('user'): str,
-    Required('pass'): str,
+    Required('dbname'): basestring,
+    Required('host'): basestring,
+    Required('user'): basestring,
+    Required('pass'): basestring,
     Required('port'): All(int, Range(min=0, max=65535)),
-    Required('schema'): str,
+    Required('schema'): basestring,
 })
 
 snowflake_credentials_contract = Schema({
-    Required('account'): str,
-    Required('user'): str,
-    Required('password'): str,
-    Required('database'): str,
-    Required('schema'): str,
-    Required('warehouse'): str,
-    Optional('role'): str,
+    Required('account'): basestring,
+    Required('user'): basestring,
+    Required('password'): basestring,
+    Required('database'): basestring,
+    Required('schema'): basestring,
+    Required('warehouse'): basestring,
+    Optional('role'): basestring,
 })
 
 credentials_mapping = {
@@ -39,11 +39,7 @@ credentials_mapping = {
 
 
 def validate_connection(connection):
-    try:
-        connection_contract(connection)
+    validate_with(connection_contract, connection)
 
-        credentials_contract = credentials_mapping.get(connection.get('type'))
-        credentials_contract(connection.get('credentials'))
-    except MultipleInvalid as e:
-        logger.info(e)
-        raise ValidationException(str(e))
+    credentials_contract = credentials_mapping.get(connection.get('type'))
+    validate_with(credentials_contract, connection.get('credentials'))
