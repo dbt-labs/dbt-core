@@ -1,5 +1,9 @@
 ## dbt 0.7.2 (unreleased)
 
+### Bugfixes
+
+- Fix ephemeral load order bug ([#292](https://github.com/fishtown-analytics/dbt/pull/292), [#285](https://github.com/fishtown-analytics/dbt/pull/285))
+
 ### Changes
 
 - Graph refactor: fix common issues with load order ([#292](https://github.com/fishtown-analytics/dbt/pull/292))
