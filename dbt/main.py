@@ -154,6 +154,17 @@ def invoke_dbt(parsed):
             result=str(e))
 
         return None
+    except project.DbtProfileError as e:
+        logger.info("Encountered an error while reading profiles:")
+        logger.info("  ERROR {}".format(str(e)))
+
+        dbt.tracking.track_invalid_invocation(
+            project=proj,
+            args=parsed,
+            result_type="invalid_profile",
+            result=str(e))
+
+        return None
 
     if parsed.target is not None:
         targets = proj.cfg.get('outputs', {}).keys()

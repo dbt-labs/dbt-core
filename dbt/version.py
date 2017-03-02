@@ -10,7 +10,7 @@ except ImportError:
     from urllib2 import urlopen
 
 REMOTE_VERSION_FILE = \
-    'https://raw.githubusercontent.com/analyst-collective/dbt/' \
+    'https://raw.githubusercontent.com/fishtown-analytics/dbt/' \
     'master/.bumpversion.cfg'
 
 
@@ -67,6 +67,6 @@ def is_latest():
     return installed == latest
 
 
-__version__ = '0.7.0'
+__version__ = '0.7.1'
 installed = get_version()
 latest = get_latest_version()

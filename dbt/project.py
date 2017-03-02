@@ -37,6 +37,11 @@ class DbtProjectError(Exception):
         super(DbtProjectError, self).__init__(message)
 
 
+class DbtProfileError(Exception):
+    def __init__(self, message, project):
+        super(DbtProfileError, self).__init__(message)
+
+
 class Project(object):
 
     def __init__(self, cfg, profiles, profiles_dir, profile_to_load=None,
@@ -95,7 +100,12 @@ class Project(object):
 
     def run_environment(self):
         target_name = self.cfg['target']
-        return self.cfg['outputs'][target_name]
+        if target_name in self.cfg['outputs']:
+            return self.cfg['outputs'][target_name]
+        else:
+            raise DbtProfileError(
+                    "'target' config was not found in profile entry for "
+                    "'{}'".format(target_name), self)
 
     def get_target(self):
         ctx = self.context().get('env').copy()

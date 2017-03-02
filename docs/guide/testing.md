@@ -10,7 +10,7 @@ Data integrity in analytic databases is empirically often of lower quality than 
 
 Tests are run with `dbt test`. See [usage](usage/) for more information on the dbt command structure. `dbt test` will report back the success or failure of each test, and in case of failure will report the number of failing rows.
 
-Schema tests are declared in a `schema.yml` file that can be placed at any level within your models folders. See the sample provided [here](https://github.com/analyst-collective/dbt/blob/master/sample.schema.yml). There are four primary schema validations provided.
+Schema tests are declared in a `schema.yml` file that can be placed at any level within your models folders. See the sample provided [here](https://github.com/fishtown-analytics/dbt/blob/master/sample.schema.yml). There are four primary schema validations provided.
 
 ### Not null
 

@@ -18,7 +18,7 @@ COLLECTOR_PROTOCOL = "https"
 
 COOKIE_PATH = os.path.join(os.path.expanduser('~'), '.dbt/.user.yml')
 
-BASE_URL = 'https://raw.githubusercontent.com/analyst-collective/'\
+BASE_URL = 'https://raw.githubusercontent.com/fishtown-analytics/'\
            'dbt/master/events/schemas/com.fishtownanalytics/'
 
 INVOCATION_SPEC = BASE_URL + "invocation_event.json"
