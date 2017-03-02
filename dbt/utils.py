@@ -38,14 +38,14 @@ def compiler_error(model, msg):
         name = model.nice_name
 
     raise RuntimeError(
-        "! Compilation error while compiling model {}:\n! {}"
+        "! Compilation error while compiling model {}:\n! {}\n"
         .format(name, msg)
     )
 
 
 def compiler_warning(model, msg):
     logger.info(
-        "* Compilation warning while compiling model {}:\n* {}"
+        "* Compilation warning while compiling model {}:\n* {}\n"
         .format(model.nice_name, msg)
     )
 
@@ -133,8 +133,8 @@ def dependency_projects(project):
                 yield dbt.project.read_project(
                     os.path.join(full_obj, 'dbt_project.yml'),
                     project.profiles_dir,
-                    profile_to_load=project.profile_to_load
-                )
+                    profile_to_load=project.profile_to_load,
+                    args=project.args)
             except dbt.project.DbtProjectError as e:
                 logger.info(
                     "Error reading dependency project at {}".format(full_obj)

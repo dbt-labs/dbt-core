@@ -1,4 +1,4 @@
-from voluptuous import Schema, Required, All, Any, Extra, Range
+from voluptuous import Schema, Required, All, Any, Extra, Range, Optional
 from voluptuous.error import MultipleInvalid
 
 from dbt.exceptions import ValidationException
@@ -28,6 +28,7 @@ snowflake_credentials_contract = Schema({
     Required('database'): str,
     Required('schema'): str,
     Required('warehouse'): str,
+    Optional('role'): str,
 })
 
 credentials_mapping = {

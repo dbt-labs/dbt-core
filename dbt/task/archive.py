@@ -1,5 +1,4 @@
 from dbt.runner import RunManager
-from dbt.templates import ArchiveInsertTemplate
 from dbt.compilation import Compiler
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -8,13 +7,14 @@ class ArchiveTask:
     def __init__(self, args, project):
         self.args = args
         self.project = project
-        self.create_template = ArchiveInsertTemplate
 
     def compile(self):
-        compiler = Compiler(self.project, self.create_template, self.args)
+        compiler = Compiler(self.project, self.args)
         compiler.initialize()
-        compiled = compiler.compile_archives()
-        logger.info("Compiled {} archives".format(len(compiled)))
+        compiled = compiler.compile()
+
+        count_compiled_archives = compiled['archives']
+        logger.info("Compiled {} archives".format(count_compiled_archives))
 
     def run(self):
         self.compile()
@@ -22,8 +22,7 @@ class ArchiveTask:
         runner = RunManager(
             self.project,
             self.project['target-path'],
-            self.create_template.label,
             self.args
         )
 
-        results = runner.run_archive()
+        runner.run_archives()

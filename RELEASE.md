@@ -69,7 +69,7 @@ git clone git@github.com:fishtown-analytics/dbt-feedstock.git
 2. Update the version and sha256 in `recipe/meta.yml`. To calculate the sha256, run:
 
 ```bash
-wget https://github.com/analyst-collective/dbt/archive/v{version}.tar.gz
+wget https://github.com/fishtown-analytics/dbt/archive/v{version}.tar.gz
 openssl sha256 v{version}.tar.gz
 ```
 

@@ -1,5 +1,6 @@
 import networkx as nx
 from collections import defaultdict
+import dbt.model
 
 
 class Linker(object):
@@ -37,6 +38,16 @@ class Linker(object):
                 "{}".format(cycle)
             )
 
+    def is_blocking_dependency(self, node_data):
+        # sorting by # ancestors works, but only if we strictly consider
+        # non-ephemeral models
+
+        if 'dbt_run_type' not in node_data or 'materialized' not in node_data:
+            return False
+
+        return node_data['dbt_run_type'] == dbt.model.NodeType.Model \
+            and node_data['materialized'] != 'ephemeral'
+
     def as_dependency_list(self, limit_to=None):
         """returns a list of list of nodes, eg. [[0,1], [2], [4,5,6]]. Each
         element contains nodes whose dependenices are subsumed by the union of
@@ -44,24 +55,25 @@ class Linker(object):
         simultaneously assuming that all lists before list `i` have been
         completed"""
 
-        if limit_to is None:
-            graph_nodes = set(self.graph.nodes())
-        else:
-            graph_nodes = set()
-            for node in limit_to:
-                graph_nodes.add(node)
-                if node in self.graph:
-                    graph_nodes.update(nx.descendants(self.graph, node))
-                else:
-                    raise RuntimeError(
-                        "Couldn't find model '{}' -- does it exist or is "
-                        "it disabled?".format(node)
-                    )
-
         depth_nodes = defaultdict(list)
 
+        if limit_to is None:
+            graph_nodes = self.graph.nodes()
+        else:
+            graph_nodes = limit_to
+
         for node in graph_nodes:
-            num_ancestors = len(nx.ancestors(self.graph, node))
+            if node not in self.graph:
+                raise RuntimeError(
+                    "Couldn't find model '{}' -- does it exist or is "
+                    "it disabled?".format(node)
+                )
+
+            num_ancestors = len([
+                ancestor for ancestor in
+                nx.ancestors(self.graph, node)
+                # if self.is_blocking_dependency(self.graph[ancestor])
+            ])
             depth_nodes[num_ancestors].append(node)
 
         dependency_list = []

@@ -1,0 +1,11 @@
+
+
+users:
+    constraints:
+        unique:
+            - id
+
+users_rollup:
+    constraints:
+        unique:
+            - gender

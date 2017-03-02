@@ -15,10 +15,47 @@ The following commands are available from the command line to interact with dbt.
 
 Deploying new models frequently involves destroying prior versions of these models. In these cases, `dbt run` minimizes the amount of time in which a model is unavailable by first building each model with a temporary name, then dropping the existing model, then renaming the model to its correct name. The drop and rename happen within a single database transaction for database adapters that support transactions.
 
-### Specify the models to run
+### Specifying models to run
 
-Using `dbt run --models [model names]` will cause dbt to only deploy the models you list, along with their dependents. This can significantly decrease deployment time for large projects when only deploying a subset of models.
+By default, `dbt run` will execute _all_ of the models in the dependency graph. During development (and deployment), it is useful to specify only a subset of models to run. Use the `--models` flag with `dbt run` to select a subset of models to run. Note that the following arguments (`--models` and `--exclude`) also apply to `dbt test`!
 
+The `--models` flag accepts one or more arguments. Each argument can be one of:
+1. a package name
+2. a model name
+3. a path hierarchy to a models directory
+
+Examples:
+```bash
+dbt run --models my_dbt_project_name   # runs all models in your project
+dbt run --models my_dbt_model          # runs a specific model
+dbt run --models path.to.my.models     # runs all models in a specific directory
+dbt run --models my_package.some_model # run a specific model in a specific package
+
+# multiple arguments can be provided to --models
+dbt run --models my_project other_project
+
+# these arguments can be projects, models, or directory paths
+dbt run --models my_project path.to.models a_specific_model
+```
+
+Additionally, arguments to `--models` can be modified with the `+` and `*` operators. If placed at the front of the model specifier, `+` will select all parents of the selected model(s). If placed at the end, `+` will select all children of the selected models. The `*` operator matches all models within a package or directory.
+
+```bash
+dbt run --models my_model+          # select my_model and all children
+dbt run --models +my_model          # select my_model and all parents
+
+dbt run --models my_package.*       # select all models in my_package
+dbt run --models path.to.models.*   # select all models in path/to/models
+
+dbt run --models my_package.*+      # select all models in my_package and their children
+dbt run --models +some_model+       # select some_model and all parents and children
+```
+
+Finally, dbt provides an `--exclude` flag with the same semantics as `--models`. Models specified with the `--exclude` flag will be removed from the set of models selected with `--models`
+
+```bash
+dbt run --models my_package.*+ --exclude my_package.a_big_model+
+```
 
 ### Run dbt non-destructively
 
@@ -53,6 +90,13 @@ dbt run --full-refresh
 - custom data tests, written as SQL `SELECT` statements.
 
 `dbt test` runs both types of test and reports the results to the console.
+
+The tests to run can be selected using the `--models` flag discussed [here](#Specifying models to run)
+
+```bash
+dbt test --models one_specific_model  # run tests for one_specific_model
+dbt test --models some_package.*      # run tests for all models in package
+```
 
 Model validation is discussed in more detail [here](testing/).
 

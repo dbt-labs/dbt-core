@@ -40,7 +40,7 @@ class RedshiftAdapter(PostgresAdapter):
         dist_key = dist.strip().lower()
 
         if dist_key in ['all', 'even']:
-            return 'diststyle({})'.format(dist_key)
+            return 'diststyle {}'.format(dist_key)
         else:
             return 'diststyle key distkey("{}")'.format(dist_key)
 

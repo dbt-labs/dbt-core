@@ -56,8 +56,12 @@ class LinkerTest(unittest.TestCase):
             self.linker.dependency(l, r)
 
         actual_limit = self.linker.as_dependency_list(['B'])
-        expected_limit = [['B'], ['A']]
+        expected_limit = [['B']]
         self.assertEqual(expected_limit, actual_limit)
+
+        actual_limit_2 = self.linker.as_dependency_list(['A', 'B'])
+        expected_limit_2 = [['B'], ['A']]
+        self.assertEqual(expected_limit_2, actual_limit_2)
 
     def test_linker_bad_limit_throws_runtime_error(self):
         actual_deps = [('A', 'B'), ('B', 'C'), ('C', 'D')]

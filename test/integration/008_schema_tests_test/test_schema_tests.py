@@ -1,15 +1,9 @@
 from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, FakeArgs
 
 from dbt.task.test import TestTask
 from dbt.project import read_project
 
-class FakeArgs(object):
-    def __init__(self):
-        self.threads = 1
-        self.data = False
-        self.schema = True
-        self.insert_test_results = False
 
 class TestSchemaTests(DBTIntegrationTest):
 
@@ -52,6 +46,7 @@ class TestSchemaTests(DBTIntegrationTest):
                 # status = # of failing rows
                 self.assertEqual(result.status, 0)
 
+
 class TestMalformedSchemaTests(DBTIntegrationTest):
 
     def setUp(self):
@@ -78,11 +73,5 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
         # dbt run should work (Despite broken schema test)
         self.run_dbt()
 
-        # this should error, as test is invalid
-        failed = False
-        try:
-            self.run_schema_validations()
-        except RuntimeError:
-            failed = True
-
-        self.assertTrue(failed)
+        ran_tests = self.run_schema_validations()
+        self.assertEqual(ran_tests, [])

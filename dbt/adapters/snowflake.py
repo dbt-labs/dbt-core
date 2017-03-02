@@ -30,6 +30,13 @@ def exception_handler(connection, cursor, model_name, query):
     except snowflake.connector.errors.ProgrammingError as e:
         if 'Empty SQL statement' in e.msg:
             logger.debug("got empty sql statement, moving on")
+        elif 'This session does not have a current database' in e.msg:
+            handle.rollback()
+            raise dbt.exceptions.FailedToConnectException(
+                ('{}\n\nThis error sometimes occurs when invalid credentials '
+                 'are provided, or when your default role does not have '
+                 'access to use the specified database. Please double check '
+                 'your profile and try again.').format(str(e)))
         else:
             handle.rollback()
             raise dbt.exceptions.ProgrammingException(str(e))
@@ -96,6 +103,7 @@ class SnowflakeAdapter(PostgresAdapter):
                 database=credentials.get('database'),
                 schema=credentials.get('schema'),
                 warehouse=credentials.get('warehouse'),
+                role=credentials.get('role', None),
                 autocommit=False
             )
 

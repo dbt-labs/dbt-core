@@ -1,15 +1,8 @@
 from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, FakeArgs
 
 from dbt.task.test import TestTask
 from dbt.project import read_project
-
-class FakeArgs(object):
-    def __init__(self):
-        self.threads = 1
-        self.data = True
-        self.schema = False
-        self.insert_test_results = False
 
 class TestDataTests(DBTIntegrationTest):
 

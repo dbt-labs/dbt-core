@@ -2,7 +2,7 @@
 
 > In 2015-2016, a team of folks at RJMetrics had the opportunity to observe, and participate in, a significant evolution of the analytics ecosystem. The seeds of dbt were conceived in this environment, and the viewpoint below was written to reflect what we had learned and how we believed the world should be different. **dbt is our attempt to address the workflow challenges we observed, and as such, this viewpoint is the most foundational statement of the dbt project's goals.**
 
-> The remainder of this document is largely unedited from [the original post](https://medium.com/analyst-collective/building-a-mature-analytics-workflow-the-analyst-collective-viewpoint-7653473ef05b).
+> The remainder of this document is largely unedited from [the original post](https://medium.com/analyst-collective/building-a-mature-analytics-workflow-the-fishtown-analytics-viewpoint-7653473ef05b).
 
 ## Analytics today
 

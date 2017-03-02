@@ -1,26 +1,82 @@
-## dbt 0.7.0 (unreleased)
+## dbt 0.7.1 (February 28, 2017)
+
+### Overview
+
+- [Improved graph selection](http://dbt.readthedocs.io/en/master/guide/usage/#run)
+- A new home for dbt
+- Snowflake improvements
 
 #### New Features
 
-- dbt now supports [Snowflake](https://www.snowflake.net/) as a warehouse ([#259](https://github.com/analyst-collective/dbt/pull/259))
+- improved graph selection for `dbt run` and `dbt test` ([more information](http://dbt.readthedocs.io/en/master/guide/usage/#run)) ([#279](https://github.com/fishtown-analytics/dbt/pull/279))
+- profiles.yml now supports Snowflake `role` as an option ([#291](https://github.com/fishtown-analytics/dbt/pull/291))
+
+#### A new home for dbt
+
+In v0.7.1, dbt was moved from the analyst-collective org to the fishtown-analytics org ([#300](https://github.com/fishtown-analytics/dbt/pull/300))
+
+#### Bugfixes
+
+- nicer error if `run-target` was not changed to `target` during upgrade to dbt>=0.7.0
+
+
+## dbt 0.7.0 (February 9, 2017)
+
+### Overview
+
+- Snowflake Support
+- Deprecations
+
+### Snowflake Support
+
+dbt now supports [Snowflake](https://www.snowflake.net/) as a target in addition to Postgres and Redshift! All dbt functionality is supported in this new warehouse. There is a sample snowflake profile in [sample.profiles.yml](https://github.com/fishtown-analytics/dbt/blob/development/sample.profiles.yml) -- you can start using it right away.
+
+### Deprecations
+
+There are a few deprecations in 0.7:
+
+ - `run-target` in profiles.yml is no longer supported. Use `target` instead.
+ - Project names (`name` in dbt_project.yml) can now only contain letters, numbers, and underscores, and must start with a letter. Previously they could contain any character.
+ - `--dry-run` is no longer supported.
+
+### Notes
+
+#### New Features
+
+- dbt now supports [Snowflake](https://www.snowflake.net/) as a warehouse ([#259](https://github.com/fishtown-analytics/dbt/pull/259))
+
+#### Bugfixes
+
+- use adapter for sort/dist ([#274](https://github.com/fishtown-analytics/dbt/pull/274))
+
+#### Deprecations
+
+- run-target and name validations ([#280](https://github.com/fishtown-analytics/dbt/pull/280))
+- dry-run removed ([#281](https://github.com/fishtown-analytics/dbt/pull/281))
+
+#### Changes
+
+- fixed a typo in the docs related to post-run hooks ([#271](https://github.com/fishtown-analytics/dbt/pull/271))
+- refactored tracking code to refresh invocation id in a multi-run context ([#273](https://github.com/fishtown-analytics/dbt/pull/273))
+- added unit tests for the graph ([#270](https://github.com/fishtown-analytics/dbt/pull/270))
 
 ## dbt 0.6.2 (January 16, 2017)
 
 #### Changes
 
-- condense error output when `--debug` is not set ([#265](https://github.com/analyst-collective/dbt/pull/265))
+- condense error output when `--debug` is not set ([#265](https://github.com/fishtown-analytics/dbt/pull/265))
 
 ## dbt 0.6.1 (January 11, 2017)
 
 #### Bugfixes
 
-- respect `config` options in profiles.yml ([#255](https://github.com/analyst-collective/dbt/pull/255))
-- use correct `on-run-end` option for post-run hooks ([#261](https://github.com/analyst-collective/dbt/pull/261))
+- respect `config` options in profiles.yml ([#255](https://github.com/fishtown-analytics/dbt/pull/255))
+- use correct `on-run-end` option for post-run hooks ([#261](https://github.com/fishtown-analytics/dbt/pull/261))
 
 #### Changes
 
-- add `--debug` flag, replace calls to `print()` with a global logger ([#256](https://github.com/analyst-collective/dbt/pull/256))
-- add pep8 check to continuous integration tests and bring codebase into compliance ([#257](https://github.com/analyst-collective/dbt/pull/257))
+- add `--debug` flag, replace calls to `print()` with a global logger ([#256](https://github.com/fishtown-analytics/dbt/pull/256))
+- add pep8 check to continuous integration tests and bring codebase into compliance ([#257](https://github.com/fishtown-analytics/dbt/pull/257))
 
 ## dbt release 0.6.0
 
@@ -36,13 +92,13 @@
 Macros are snippets of SQL that can be called like functions in models. Macros make it possible to re-use SQL between models
 in keeping with the engineering principle of DRY (Dont Repeat Yourself). Moreover, packages can expose Macros that you can use in your own dbt project.
 
-For detailed information on how to use Macros, check out the pull request [here](https://github.com/analyst-collective/dbt/pull/245)
+For detailed information on how to use Macros, check out the pull request [here](https://github.com/fishtown-analytics/dbt/pull/245)
 
 
 ### Runtime Materialization Configs
 DBT Version 0.6.0 introduces two new ways to control the materialization of models:
 
-#### Non-destructive dbt run [more info](https://github.com/analyst-collective/dbt/issues/137)
+#### Non-destructive dbt run [more info](https://github.com/fishtown-analytics/dbt/issues/137)
 
 If you provide the `--non-destructive` argument to `dbt run`, dbt will minimize the amount of time during which your models are unavailable. Specfically, dbt
 will
@@ -55,7 +111,7 @@ This flag is useful for recurring jobs which only need to update table models an
 dbt run --non-destructive
 ```
 
-#### Incremental Model Full Refresh [more info](https://github.com/analyst-collective/dbt/issues/140)
+#### Incremental Model Full Refresh [more info](https://github.com/fishtown-analytics/dbt/issues/140)
 
 If you provide the `--full-refresh` argument to `dbt run`, dbt will treat incremental models as table models. This is useful when
 
@@ -73,9 +129,9 @@ For more information, run
 dbt run --help
 ```
 
-### Minor improvements [more info](https://github.com/analyst-collective/dbt/milestone/15?closed=1)
+### Minor improvements [more info](https://github.com/fishtown-analytics/dbt/milestone/15?closed=1)
 
-#### Add a `{{ target }}` variable to the dbt runtime [more info](https://github.com/analyst-collective/dbt/issues/149)
+#### Add a `{{ target }}` variable to the dbt runtime [more info](https://github.com/fishtown-analytics/dbt/issues/149)
 Use `{{ target }}` to interpolate profile variables into your model definitions. For example:
 
 ```sql
@@ -87,15 +143,15 @@ where created_at > getdate() - interval '1 week'
 {% endif %}
 ```
 
-#### User-specified `profiles.yml` dir [more info](https://github.com/analyst-collective/dbt/issues/213)
+#### User-specified `profiles.yml` dir [more info](https://github.com/fishtown-analytics/dbt/issues/213)
 DBT looks for a file called `profiles.yml` in the `~/.dbt/` directory. You can now overide this directory with
 ```bash
 $ dbt run --profiles-dir /path/to/my/dir
 ```
-#### Add timestamp to console output [more info](https://github.com/analyst-collective/dbt/issues/125)
+#### Add timestamp to console output [more info](https://github.com/fishtown-analytics/dbt/issues/125)
 Informative _and_ pretty
 
-#### Run dbt from subdirectory of project root [more info](https://github.com/analyst-collective/dbt/issues/129)
+#### Run dbt from subdirectory of project root [more info](https://github.com/fishtown-analytics/dbt/issues/129)
 A story in three parts:
 ```bash
 cd models/snowplow/sessions
@@ -103,7 +159,7 @@ vim sessions.sql
 dbt run # it works!
 ```
 
-#### Pre and post run hooks [more info](https://github.com/analyst-collective/dbt/issues/226)
+#### Pre and post run hooks [more info](https://github.com/fishtown-analytics/dbt/issues/226)
 ```yaml
 # dbt_project.yml
 name: ...
@@ -120,7 +176,7 @@ on-run-end:
 
 ### Bug fixes
 
-We fixed 10 bugs in this release! See the full list [here](https://github.com/analyst-collective/dbt/milestone/11?closed=1)
+We fixed 10 bugs in this release! See the full list [here](https://github.com/fishtown-analytics/dbt/milestone/11?closed=1)
 
 ---
 
@@ -133,8 +189,8 @@ We fixed 10 bugs in this release! See the full list [here](https://github.com/an
 - dbt-core integration tests
   - running in Continuous Integration environments
     - windows ([appveyor](https://ci.appveyor.com/project/DrewBanin/dbt/branch/development))
-    - linux ([circle](https://circleci.com/gh/analyst-collective/dbt/tree/master))
-  - with [code coverage](https://circleci.com/api/v1/project/analyst-collective/dbt/latest/artifacts/0/$CIRCLE_ARTIFACTS/htmlcov/index.html?branch=development)
+    - linux ([circle](https://circleci.com/gh/fishtown-analytics/dbt/tree/master))
+  - with [code coverage](https://circleci.com/api/v1/project/fishtown-analytics/dbt/latest/artifacts/0/$CIRCLE_ARTIFACTS/htmlcov/index.html?branch=development)
 
 
 ### Custom SQL data tests
@@ -186,12 +242,12 @@ dbt test -h
 
 ### DBT-core integration tests
 
-With the dbt 0.5.4 release, dbt now features a robust integration test suite. These integration tests will help mitigate the risk of software regressions, and in so doing, will help us develop dbt more quickly. You can check out the tests [here](https://github.com/analyst-collective/dbt/tree/development/test/integration), and the test results [here (linux/osx)](https://circleci.com/gh/analyst-collective/dbt/tree/master) and [here (windows)](https://ci.appveyor.com/project/DrewBanin/dbt/branch/development).
+With the dbt 0.5.4 release, dbt now features a robust integration test suite. These integration tests will help mitigate the risk of software regressions, and in so doing, will help us develop dbt more quickly. You can check out the tests [here](https://github.com/fishtown-analytics/dbt/tree/development/test/integration), and the test results [here (linux/osx)](https://circleci.com/gh/fishtown-analytics/dbt/tree/master) and [here (windows)](https://ci.appveyor.com/project/DrewBanin/dbt/branch/development).
 
 
 ### The Future
 
-You can check out the DBT roadmap [here](https://github.com/analyst-collective/dbt/milestones). In the next few weeks, we'll be working on [bugfixes](https://github.com/analyst-collective/dbt/milestone/11), [minor features](https://github.com/analyst-collective/dbt/milestone/15), [improved macro support](https://github.com/analyst-collective/dbt/milestone/14), and  [expanded control over runtime materialization configs](https://github.com/analyst-collective/dbt/milestone/9).
+You can check out the DBT roadmap [here](https://github.com/fishtown-analytics/dbt/milestones). In the next few weeks, we'll be working on [bugfixes](https://github.com/fishtown-analytics/dbt/milestone/11), [minor features](https://github.com/fishtown-analytics/dbt/milestone/15), [improved macro support](https://github.com/fishtown-analytics/dbt/milestone/14), and  [expanded control over runtime materialization configs](https://github.com/fishtown-analytics/dbt/milestone/9).
 
 As always, feel free to reach out to us on [Slack](http://ac-slackin.herokuapp.com/) with any questions or comments!
 
@@ -237,13 +293,13 @@ In this way, the source and destination columns are guaranteed to be in the same
 
 ### Fixed 0.5.2 regressions
 
-We attempted to refactor the way profiles work in dbt. Previously, a default `user` profile was loaded, and the profiles specified in `dbt_project.yml` or on the command line (`with --profile`) would be applied on top of the `user` config. This implementation is [some of the earliest code](https://github.com/analyst-collective/dbt/commit/430d12ad781a48af6a754442693834efdf98ffb1) that was committed to dbt.
+We attempted to refactor the way profiles work in dbt. Previously, a default `user` profile was loaded, and the profiles specified in `dbt_project.yml` or on the command line (`with --profile`) would be applied on top of the `user` config. This implementation is [some of the earliest code](https://github.com/fishtown-analytics/dbt/commit/430d12ad781a48af6a754442693834efdf98ffb1) that was committed to dbt.
 
 As `dbt` has grown, we found this implementation to be a little unwieldy and hard to maintain. The 0.5.2 release made it so that only one profile could be loaded at a time. This profile needed to be specified in either `dbt_project.yml` or on the command line with `--profile`. A bug was errantly introduced during this change which broke the handling of dependency projects.
 
 ### The future
 
-The additions of automated testing and a more comprehensive manual testing process will go a long way to ensuring the future stability of dbt. We're going to get started on these tasks soon, and you can follow our progress here: https://github.com/analyst-collective/dbt/milestone/16 .
+The additions of automated testing and a more comprehensive manual testing process will go a long way to ensuring the future stability of dbt. We're going to get started on these tasks soon, and you can follow our progress here: https://github.com/fishtown-analytics/dbt/milestone/16 .
 
 As always, feel free to [reach out to us on Slack](http://ac-slackin.herokuapp.com/) with any questions or concerns:
 
@@ -256,7 +312,7 @@ As always, feel free to [reach out to us on Slack](http://ac-slackin.herokuapp.c
 
 Patch release fixing a bug that arises when profiles are overridden on the command line with the `--profile` flag.
 
-See https://github.com/analyst-collective/dbt/releases/tag/v0.5.1
+See https://github.com/fishtown-analytics/dbt/releases/tag/v0.5.1
 
 ---
 
@@ -270,7 +326,7 @@ See https://github.com/analyst-collective/dbt/releases/tag/v0.5.1
 4. Top-level configs applied to your project + all dependencies
 5. --threads CLI option + better multithreaded output
 
-### 1. Source table archival https://github.com/analyst-collective/dbt/pull/183
+### 1. Source table archival https://github.com/fishtown-analytics/dbt/pull/183
 
 Commonly, analysts need to "look back in time" at some previous state of data in their mutable tables. Imagine a `users` table which is synced to your data warehouse from a production database. This `users` table is a representation of what your users look like _now_. Consider what happens if you need to look at revenue by city for each of your users trended over time. Specifically, what happens if a user moved from, say, Philadelphia to New York? To do this correctly, you need to archive snapshots of the `users` table on a recurring basis. With this release, dbt now provides an easy mechanism to store such snapshots.
 
@@ -305,7 +361,7 @@ dbt models can be built on top of these archived tables. The most recent record 
 
 To run this archive process, use the command `dbt archive`. After testing and confirming that the archival works, you should schedule this process through cron (or similar).
 
-### 2. Incremental column expansion https://github.com/analyst-collective/dbt/issues/175
+### 2. Incremental column expansion https://github.com/fishtown-analytics/dbt/issues/175
 
 Incremental tables are a powerful dbt feature, but there was at least one edge case which makes working with them difficult. During the first run of an incremental model, Redshift will infer a type for every column in the table. Subsequent runs can insert new data which does not conform to the expected type. One example is a `varchar(16)` field which is inserted into a `varchar(8)` field.
 In practice, this error looks like:
@@ -325,7 +381,7 @@ DETAIL:
 
 With this release, dbt will detect when column types are incongruent and will attempt to reconcile these different types if possible. Specifically, dbt will alter the incremental model table schema from `character varying(x)` to `character varying(y)` for some `y > x`. This should drastically reduce the occurrence of this class of error.
 
-### 3. First-class Postgres support https://github.com/analyst-collective/dbt/pull/183
+### 3. First-class Postgres support https://github.com/fishtown-analytics/dbt/pull/183
 
 With this release, Postgres became a first-class dbt target. You can configure a postgres database target in your `~/.dbt/profiles.yml` file:
 
@@ -342,7 +398,7 @@ warehouse:
 
 While Redshift is built on top of Postgres, the two are subtly different. For instance, Redshift supports sort and dist keys, while Postgres does not! dbt will use the database target `type` parameter to generate the appropriate SQL for the target database.
 
-### 4. Root-level configs https://github.com/analyst-collective/dbt/issues/161
+### 4. Root-level configs https://github.com/fishtown-analytics/dbt/issues/161
 
 Configurations in `dbt_project.yml` can now be declared at the `models:` level. These configurations will apply to the primary project, as well as any dependency projects. This feature is particularly useful for setting pre- or post- hooks that run for *every* model. In practice, this looks like:
 
@@ -358,7 +414,7 @@ models:
         enabled: true
 ```
 
-### 5. --threads CLI option https://github.com/analyst-collective/dbt/issues/143
+### 5. --threads CLI option https://github.com/fishtown-analytics/dbt/issues/143
 
 The number of threads that DBT uses can now be overridden with a CLI argument. The number of threads used must be between 1 and 8.
 
@@ -395,11 +451,11 @@ Made with ♥️ by 🐟🏙  📈
 - specify branches for dependencies
 - more & better docs
 
-### 1. new incremental model generation https://github.com/analyst-collective/dbt/issues/138
+### 1. new incremental model generation https://github.com/fishtown-analytics/dbt/issues/138
 
-In previous versions of dbt, an edge case existed which caused the `sql_where` query to select different rows in the `delete` and `insert` steps. As a result, it was possible to construct incremental models which would insert duplicate records into the specified table. With this release, DBT uses a temp table which will 1) circumvent this issue and 2) improve query performance. For more information, check out the GitHub issue: https://github.com/analyst-collective/dbt/issues/138
+In previous versions of dbt, an edge case existed which caused the `sql_where` query to select different rows in the `delete` and `insert` steps. As a result, it was possible to construct incremental models which would insert duplicate records into the specified table. With this release, DBT uses a temp table which will 1) circumvent this issue and 2) improve query performance. For more information, check out the GitHub issue: https://github.com/fishtown-analytics/dbt/issues/138
 
-### 2. Arbitrary configuration https://github.com/analyst-collective/dbt/issues/146
+### 2. Arbitrary configuration https://github.com/fishtown-analytics/dbt/issues/146
 
 Configuration in dbt is incredibly powerful: it is what allows models to change their behavior without changing their code. Previously, all configuration was done using built-in parameters, but that actually limits the user in the power of configuration.
 
@@ -445,13 +501,13 @@ models:
 
 This effectively mirrors the previous behavior, but it much more explicit about what's happening under the hood!
 
-### 3. specify a dependency branch https://github.com/analyst-collective/dbt/pull/165
+### 3. specify a dependency branch https://github.com/fishtown-analytics/dbt/pull/165
 
 With this release, you can point DBT to a specific branch of a dependency repo. The syntax looks like this:
 
 ```
 repositories:
-    - https://github.com/analyst-collective/dbt-audit.git@development # use the "development" branch
+    - https://github.com/fishtown-analytics/dbt-audit.git@development # use the "development" branch
 ```
 
 ### 4. More & Better Docs!
@@ -477,7 +533,7 @@ pip install --upgrade dbt
 - event tracking
 
 
-### 1. --version https://github.com/analyst-collective/dbt/issues/135
+### 1. --version https://github.com/fishtown-analytics/dbt/issues/135
 
 The `--version` command was added to help aid debugging. Further, organizations can use it to ensure that everyone in their org is up-to-date with dbt.
 
@@ -488,7 +544,7 @@ installed version: 0.4.7
 Up to date!
 ```
 
-### 2. pre-and-post-hooks https://github.com/analyst-collective/dbt/pull/147
+### 2. pre-and-post-hooks https://github.com/fishtown-analytics/dbt/pull/147
 
 With this release, you can now specify `pre-` and `post-` hooks that are run before and after a model is run, respectively. Hooks are useful for running `grant` statements, inserting a log of runs into an audit table, and more! Here's an example of a grant statement implemented using a post-hook:
 
@@ -519,9 +575,9 @@ DBT will intelligently uses the right table/view name when you invoke `{{this}}`
 {{this.name}}: "table"
 ```
 
-### 3. Event tracking https://github.com/analyst-collective/dbt/issues/89
+### 3. Event tracking https://github.com/fishtown-analytics/dbt/issues/89
 
-We want to build the best version of DBT possible, and a crucial part of that is understanding how users work with DBT. To this end, we've added some really simple event tracking to DBT (using Snowplow). We do not track credentials, model contents or model names (we consider these private, and frankly none of our business). This release includes basic event tracking that reports 1) when dbt is invoked 2) when models are run, and 3) basic platform information (OS + python version). The schemas for these events can be seen [here](https://github.com/analyst-collective/dbt/tree/development/events/schemas/com.fishtownanalytics)
+We want to build the best version of DBT possible, and a crucial part of that is understanding how users work with DBT. To this end, we've added some really simple event tracking to DBT (using Snowplow). We do not track credentials, model contents or model names (we consider these private, and frankly none of our business). This release includes basic event tracking that reports 1) when dbt is invoked 2) when models are run, and 3) basic platform information (OS + python version). The schemas for these events can be seen [here](https://github.com/fishtown-analytics/dbt/tree/development/events/schemas/com.fishtownanalytics)
 
 You can opt out of event tracking at any time by adding the following to the top of you `~/.dbt/profiles.yml` file:
 
@@ -530,7 +586,7 @@ config:
     send_anonymous_usage_stats: False
 ```
 
-### 4. Windows support https://github.com/analyst-collective/dbt/pull/154
+### 4. Windows support https://github.com/fishtown-analytics/dbt/pull/154
 
 ![windows](https://pbs.twimg.com/profile_images/571398080688181248/57UKydQS.png)
 
@@ -553,7 +609,7 @@ pip install -U pip
 pip install -U dbt
 ```
 
-### 1. new dbt command structure https://github.com/analyst-collective/dbt/issues/109
+### 1. new dbt command structure https://github.com/fishtown-analytics/dbt/issues/109
 ```bash
 # To run models
 dbt run # same as before
@@ -565,7 +621,7 @@ dbt run --dry # previously dbt test
 dbt test # previously dbt test --validate
 ```
 
-### 2. Incremental model improvements https://github.com/analyst-collective/dbt/issues/101
+### 2. Incremental model improvements https://github.com/fishtown-analytics/dbt/issues/101
 
 Previously, dbt calculated "new" incremental records to insert by querying for rows which matched some `sql_where` condition defined in the model configuration. This works really well for atomic datasets like a clickstream event log -- once inserted, these records will never change. Other datasets, like a sessions table comprised of many pageviews for many users, can change over time. Consider the following scenario:
 
@@ -586,11 +642,11 @@ sessions:
   unique_key: user_id || session_index
 ```
 
-### 3. Run schema validations concurrently https://github.com/analyst-collective/dbt/issues/100
+### 3. Run schema validations concurrently https://github.com/fishtown-analytics/dbt/issues/100
 
 The `threads` run-target config now applies to schema validations too. Try it with `dbt test`
 
-### 4. Connect to database over ssh https://github.com/analyst-collective/dbt/issues/93
+### 4. Connect to database over ssh https://github.com/fishtown-analytics/dbt/issues/93
 
 Add an `ssh-host` parameter to a run-target to connect to a database over ssh. The `ssh-host` parameter should be the name of a `Host` in your `~/.ssh/config` file [more info](http://nerderati.com/2011/03/17/simplify-your-life-with-an-ssh-config-file/)
 
@@ -610,7 +666,7 @@ warehouse:
   run-target: dev
 ```
 
-### Remove the model-defaults config https://github.com/analyst-collective/dbt/issues/111
+### Remove the model-defaults config https://github.com/fishtown-analytics/dbt/issues/111
 
 The `model-defaults` config doesn't make sense in a dbt world with dependencies. To apply default configs to your package, add the configs immediately under the package definition:
 
@@ -634,7 +690,7 @@ dbt v0.4.0 provides new ways to materialize models in your database.
  - if upgrading, change `materialized: true|false` to `materialized: table|view|incremental|ephemeral`
  - optionally specify model configs within the SQL file
 
-### 1. Feature: `{{this}}` template variable https://github.com/analyst-collective/dbt/issues/81
+### 1. Feature: `{{this}}` template variable https://github.com/fishtown-analytics/dbt/issues/81
 The `{{this}}` template variable expands to the name of the model being compiled. For example:
 
 ```sql
@@ -644,7 +700,7 @@ select 'the fully qualified name of this model is {{ this }}'
 select 'the fully qualified name of this model is "the_schema"."my_model"'
 ```
 
-### 2. Feature: `materialized: incremental` https://github.com/analyst-collective/dbt/pull/90
+### 2. Feature: `materialized: incremental` https://github.com/fishtown-analytics/dbt/pull/90
 
 After initially creating a table, incremental models will `insert` new records into the table on subsequent runs. This drastically speeds up execution time for large, append-only datasets.
 
@@ -673,7 +729,7 @@ insert into schema.model (
 )
 ```
 
-### 3. Feature: `materialized: ephemeral` https://github.com/analyst-collective/dbt/issues/78
+### 3. Feature: `materialized: ephemeral` https://github.com/fishtown-analytics/dbt/issues/78
 
 Ephemeral models are injected as CTEs (`with` statements) into any model that `ref`erences them. Ephemeral models are part of the dependency graph and generally function like any other model, except ephemeral models are not compiled to their own files or directly created in the database. This is useful for intermediary models which are shared by other downstream models, but shouldn't be queried directly from outside of dbt.
 
@@ -709,7 +765,7 @@ where email not in (select email from __dbt__CTE__employees)
 Ephemeral models play nice with other ephemeral models, incremental models, and regular table/view models. Feel free to mix and match different materialization options to optimize for performance and simplicity.
 
 
-### 4. Feature: In-model configs https://github.com/analyst-collective/dbt/issues/88
+### 4. Feature: In-model configs https://github.com/fishtown-analytics/dbt/issues/88
 
 Configurations can now be specified directly inside of models. These in-model configs work exactly the same as configs inside of the dbt_project.yml file.
 
@@ -733,7 +789,7 @@ The config resolution order is:
   2. in-model config
   3. dbt_project.yml `models` config
 
-### 5. Fix: dbt seed null values https://github.com/analyst-collective/dbt/issues/102
+### 5. Fix: dbt seed null values https://github.com/fishtown-analytics/dbt/issues/102
 
 Previously, `dbt seed` would insert empty CSV cells as `"None"`, whereas they should have been `NULL`. Not anymore!
 
@@ -744,7 +800,7 @@ Previously, `dbt seed` would insert empty CSV cells as `"None"`, whereas they sh
 
 Version 0.3.0 comes with the following updates:
 
-#### 1. Parallel model creation https://github.com/analyst-collective/dbt/pull/83
+#### 1. Parallel model creation https://github.com/fishtown-analytics/dbt/pull/83
 dbt will analyze the model dependency graph and can create models in parallel if possible. In practice, this can significantly speed up the amount of time it takes to complete `dbt run`. The number of threads dbt uses must be between 1 and 8. To configure the number of threads dbt uses, add the `threads` key to your dbt target in `~/.dbt/profiles.yml`, eg:
 
 ```yml
@@ -758,12 +814,12 @@ user:
   run-target: my-redshift
 ```
 
-For a complete example, check out [a sample profiles.yml file](https://github.com/analyst-collective/dbt/blob/master/sample.profiles.yml)
+For a complete example, check out [a sample profiles.yml file](https://github.com/fishtown-analytics/dbt/blob/master/sample.profiles.yml)
 
-#### 2. Fail only within a single dependency chain https://github.com/analyst-collective/dbt/issues/63
+#### 2. Fail only within a single dependency chain https://github.com/fishtown-analytics/dbt/issues/63
 If a model cannot be created, it won't crash the entire `dbt run` process. The errant model will fail and all of its descendants will be "skipped". Other models which do not depend on the failing model (or its descendants) will still be created.
 
-#### 3. Logging https://github.com/analyst-collective/dbt/issues/64, https://github.com/analyst-collective/dbt/issues/65
+#### 3. Logging https://github.com/fishtown-analytics/dbt/issues/64, https://github.com/fishtown-analytics/dbt/issues/65
 dbt will log output from the `dbt run` and `dbt test` commands to a configurable logging directory. By default, this directory is called `logs/`. The log filename is `dbt.log` and it is rotated on a daily basic. Logs are kept for 7 days.
 
 To change the name of the logging directory, add the following line to your `dbt_project.yml` file:
@@ -771,7 +827,7 @@ To change the name of the logging directory, add the following line to your `dbt
 log-path: "my-logging-directory" # will write logs to my-logging-directory/dbt.log
 ```
 
-#### 4. Minimize time models are unavailable in the database https://github.com/analyst-collective/dbt/issues/68
+#### 4. Minimize time models are unavailable in the database https://github.com/fishtown-analytics/dbt/issues/68
 Previously, dbt would create models by:
 1. dropping the existing model
 2. creating the new model
@@ -781,7 +837,7 @@ This resulted in a significant amount of time in which the model was inaccessibl
 2. dropping the existing model
 3. renaming the tmp model name to the actual model name
 
-#### 5. Arbitrarily deep nesting https://github.com/analyst-collective/dbt/issues/50
+#### 5. Arbitrarily deep nesting https://github.com/fishtown-analytics/dbt/issues/50
 Previously, all models had to be located in a directory matching `models/{model group}/{model_name}.sql`. Now, these models can be nested arbitrarily deeply within a given dbt project. For instance, `models/snowplow/sessions/transformed/transformed_sessions.sql` is a totally valid model location with this release.
 
 To configure these deeply-nested models, just nest the config options within the `dbt_project.yml` file. The only caveat is that you need to specify the dbt project name as the first key under the `models` object, ie:
@@ -796,9 +852,9 @@ models:
             enabled: true
 ```
 
-More information is available on the [issue](https://github.com/analyst-collective/dbt/issues/50) and in the [sample dbt_project.yml file](https://github.com/analyst-collective/dbt/blob/master/sample.dbt_project.yml)
+More information is available on the [issue](https://github.com/fishtown-analytics/dbt/issues/50) and in the [sample dbt_project.yml file](https://github.com/fishtown-analytics/dbt/blob/master/sample.dbt_project.yml)
 
-#### 6. don't try to create a schema if it already exists https://github.com/analyst-collective/dbt/issues/66
+#### 6. don't try to create a schema if it already exists https://github.com/fishtown-analytics/dbt/issues/66
 dbt run would execute `create schema if not exists {schema}`. This would fail if the dbt user didn't have sufficient permissions to create the schema, even if the schema already existed! Now, dbt checks for the schema existence and only attempts to create the schema if it doesn't already exist.
 
 #### 7. Semantic Versioning

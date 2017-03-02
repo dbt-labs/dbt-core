@@ -1,4 +1,10 @@
-insert into "simple_copy_001"."seed" (first_name, last_name, email, gender, ip_address) values
+
+truncate table "simple_reference_003"."summary_expected";
+insert into "simple_reference_003"."summary_expected" (gender, ct) values
+('Female', 94),
+('Male', 106);
+
+insert into "simple_reference_003"."seed" (first_name, last_name, email, gender, ip_address) values
 ('Michael', 'Perez', 'mperez0@chronoengine.com', 'Male', '106.239.70.175'),
 ('Shawn', 'Mccoy', 'smccoy1@reddit.com', 'Male', '24.165.76.182'),
 ('Kathleen', 'Payne', 'kpayne2@cargocollective.com', 'Female', '113.207.168.106'),

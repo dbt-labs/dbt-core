@@ -37,15 +37,23 @@ class DbtProjectError(Exception):
         super(DbtProjectError, self).__init__(message)
 
 
+class DbtProfileError(Exception):
+    def __init__(self, message, project):
+        super(DbtProfileError, self).__init__(message)
+
+
 class Project(object):
 
-    def __init__(self, cfg, profiles, profiles_dir, profile_to_load=None):
+    def __init__(self, cfg, profiles, profiles_dir, profile_to_load=None,
+                 args=None):
+
         self.cfg = default_project_cfg.copy()
         self.cfg.update(cfg)
         self.profiles = default_profiles.copy()
         self.profiles.update(profiles)
         self.profiles_dir = profiles_dir
         self.profile_to_load = profile_to_load
+        self.args = args
 
         # load profile from dbt_config.yml if cli arg isn't supplied
         if self.profile_to_load is None and self.cfg['profile'] is not None:
@@ -92,7 +100,12 @@ class Project(object):
 
     def run_environment(self):
         target_name = self.cfg['target']
-        return self.cfg['outputs'][target_name]
+        if target_name in self.cfg['outputs']:
+            return self.cfg['outputs'][target_name]
+        else:
+            raise DbtProfileError(
+                    "'target' config was not found in profile entry for "
+                    "'{}'".format(target_name), self)
 
     def get_target(self):
         ctx = self.context().get('env').copy()
@@ -177,7 +190,7 @@ def read_profiles(profiles_dir=None):
 
 
 def read_project(filename, profiles_dir=None, validate=True,
-                 profile_to_load=None):
+                 profile_to_load=None, args=None):
     if profiles_dir is None:
         profiles_dir = default_profiles_dir
 
@@ -186,7 +199,11 @@ def read_project(filename, profiles_dir=None, validate=True,
         project_cfg['project-root'] = os.path.dirname(
             os.path.abspath(filename))
         profiles = read_profiles(profiles_dir)
-        proj = Project(project_cfg, profiles, profiles_dir, profile_to_load)
+        proj = Project(project_cfg,
+                       profiles,
+                       profiles_dir,
+                       profile_to_load=profile_to_load,
+                       args=args)
 
         if validate:
             proj.validate()

@@ -9,6 +9,17 @@ from dbt.adapters.factory import get_adapter
 DBT_CONFIG_DIR = os.path.expanduser(os.environ.get("DBT_CONFIG_DIR", '/root/.dbt'))
 DBT_PROFILES = os.path.join(DBT_CONFIG_DIR, 'profiles.yml')
 
+
+class FakeArgs(object):
+    def __init__(self):
+        self.threads = 1
+        self.data = False
+        self.schema = True
+        self.full_refresh = False
+        self.models = None
+        self.exclude = None
+
+
 class DBTIntegrationTest(unittest.TestCase):
 
     def postgres_profile(self):

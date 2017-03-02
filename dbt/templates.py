@@ -59,12 +59,6 @@ delete from "{schema}"."{identifier}" where  ({unique_key}) in (
 {post_hooks}
 """
 
-    label = "build"
-
-    @classmethod
-    def model_name(cls, base_name):
-        return base_name
-
     def add_extras(self, opts, sql):
         pre_hooks = ';\n\n'.join(opts['pre-hooks'])
         post_hooks = ';\n\n'.join(opts['post-hooks'])
@@ -195,9 +189,6 @@ SCDArchiveTemplate = u"""
 
 
 class ArchiveInsertTemplate(object):
-
-    label = "archive"
-
 
     # missing_columns : columns in source_table that are missing from target_table (used for the ALTER)
     # dest_columns    : columns in the dest table (post-alter!)

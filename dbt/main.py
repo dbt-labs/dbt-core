@@ -104,7 +104,8 @@ def run_from_args(parsed):
         dbt.tracking.track_invocation_end(
             project=proj, args=parsed, result_type="ok", result=None
         )
-    except dbt.exceptions.NotImplementedException as e:
+    except (dbt.exceptions.NotImplementedException,
+            dbt.exceptions.FailedToConnectException) as e:
         logger.info('ERROR: {}'.format(e))
         dbt.tracking.track_invocation_end(
             project=proj, args=parsed, result_type="error", result=str(e)
@@ -129,7 +130,8 @@ def invoke_dbt(parsed):
             'dbt_project.yml',
             parsed.profiles_dir,
             validate=False,
-            profile_to_load=parsed.profile
+            profile_to_load=parsed.profile,
+            args=parsed
         )
         proj.validate()
     except project.DbtProjectError as e:
@@ -144,6 +146,17 @@ def invoke_dbt(parsed):
         all_profiles = project.read_profiles(parsed.profiles_dir).keys()
         for profile in all_profiles:
             logger.info(" - {}".format(profile))
+
+        dbt.tracking.track_invalid_invocation(
+            project=proj,
+            args=parsed,
+            result_type="invalid_profile",
+            result=str(e))
+
+        return None
+    except project.DbtProfileError as e:
+        logger.info("Encountered an error while reading profiles:")
+        logger.info("  ERROR {}".format(str(e)))
 
         dbt.tracking.track_invalid_invocation(
             project=proj,
@@ -284,8 +297,15 @@ def parse_args(args):
         required=False,
         nargs='+',
         help="""
-        Specify the models to run. All models depending on these models will
-        also be run.
+        Specify the models to include.
+        """
+    )
+    sub.add_argument(
+        '--exclude',
+        required=False,
+        nargs='+',
+        help="""
+        Specify the models to exclude.
         """
     )
     sub.add_argument(
@@ -340,6 +360,22 @@ def parse_args(args):
         help="""
         Specify number of threads to use while executing tests. Overrides
         settings in profiles.yml
+        """
+    )
+    sub.add_argument(
+        '--models',
+        required=False,
+        nargs='+',
+        help="""
+        Specify the models to test.
+        """
+    )
+    sub.add_argument(
+        '--exclude',
+        required=False,
+        nargs='+',
+        help="""
+        Specify the models to exclude from testing.
         """
     )
 

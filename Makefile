@@ -3,11 +3,7 @@
 changed_tests := `git status --porcelain | grep '^\(M\| M\|A\| A\)' | awk '{ print $$2 }' | grep '\/test_[a-zA-Z_\-\.]\+.py'`
 
 install:
-	pip install .
-
-it:
-	@echo "Unit test run starting..."
-	@time docker-compose run test tox -e unit-py27,pep8
+	pip install --upgrade .
 
 test:
 	@echo "Full test run starting..."

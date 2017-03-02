@@ -17,6 +17,7 @@ pages:
   - Archival: guide/archival.md
   - Best Practices: guide/best-practices.md  
   - Upgrading: guide/upgrading.md
+  - Resources: guide/resources.md
 - About:
   - Overview: about/overview.md
   - Viewpoint: about/viewpoint.md

@@ -11,14 +11,9 @@ import dbt.utils
 import dbt.linker
 
 import networkx as nx
+from test.integration.base import FakeArgs
 
 # from dbt.logger import GLOBAL_LOGGER as logger
-
-
-class FakeArgs:
-
-    def __init__(self):
-        self.full_refresh = False
 
 
 class GraphTest(unittest.TestCase):
@@ -108,7 +103,6 @@ class GraphTest(unittest.TestCase):
     def get_compiler(self, project):
         compiler = dbt.compilation.Compiler(
             project,
-            dbt.templates.BaseCreateTemplate,
             FakeArgs())
 
         compiler.get_macros = MagicMock(return_value=[])
@@ -129,7 +123,7 @@ class GraphTest(unittest.TestCase):
         })
 
         compiler = self.get_compiler(self.get_project())
-        compiler.compile(limit_to=['models'])
+        compiler.compile()
 
         self.assertEquals(
             self.graph_result.nodes(),
@@ -146,7 +140,7 @@ class GraphTest(unittest.TestCase):
         })
 
         compiler = self.get_compiler(self.get_project())
-        compiler.compile(limit_to=['models'])
+        compiler.compile()
 
         six.assertCountEqual(self,
                              self.graph_result.nodes(),
@@ -184,7 +178,7 @@ class GraphTest(unittest.TestCase):
         }
 
         compiler = self.get_compiler(self.get_project(cfg))
-        compiler.compile(limit_to=['models'])
+        compiler.compile()
 
         expected_materialization = {
             "model_one": "table",
@@ -216,7 +210,7 @@ class GraphTest(unittest.TestCase):
         }
 
         compiler = self.get_compiler(self.get_project(cfg))
-        compiler.compile(limit_to=['models'])
+        compiler.compile()
 
         six.assertCountEqual(self,
                              self.graph_result.nodes(),
@@ -241,7 +235,7 @@ class GraphTest(unittest.TestCase):
         compiler = self.get_compiler(self.get_project(cfg))
 
         with self.assertRaises(RuntimeError):
-            compiler.compile(limit_to=['models'])
+            compiler.compile()
 
     def test__model_incremental(self):
         self.use_models({
@@ -261,7 +255,7 @@ class GraphTest(unittest.TestCase):
         }
 
         compiler = self.get_compiler(self.get_project(cfg))
-        compiler.compile(limit_to=['models'])
+        compiler.compile()
 
         node = ('test_models_compile', 'model_one')
 
@@ -285,7 +279,7 @@ class GraphTest(unittest.TestCase):
         })
 
         compiler = self.get_compiler(self.get_project({}))
-        compiler.compile(limit_to=['models'])
+        compiler.compile()
 
         six.assertCountEqual(self,
                              self.graph_result.nodes(),
@@ -343,12 +337,13 @@ class GraphTest(unittest.TestCase):
         })
 
         compiler = self.get_compiler(self.get_project({}))
-        compiler.compile(limit_to=['models'])
+        compiler.compile()
 
         linker = dbt.linker.Linker()
         linker.graph = self.graph_result
 
         actual_dep_list = linker.as_dependency_list()
+
         expected_dep_list = [
             [
                 ('test_models_compile', 'model_1')

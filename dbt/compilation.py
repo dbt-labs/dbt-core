@@ -23,6 +23,8 @@ CompilableEntities = [
     "models", "data tests", "schema tests", "archives", "analyses"
 ]
 
+graph_file_name = 'graph.yml'
+
 
 def compile_string(string, ctx):
     try:
@@ -36,12 +38,9 @@ def compile_string(string, ctx):
 
 
 class Compiler(object):
-    def __init__(self, project, create_template_class, args):
+    def __init__(self, project, args):
         self.project = project
-        self.create_template = create_template_class()
         self.args = args
-
-        self.project.args = args
 
         self.macro_generator = None
 
@@ -57,18 +56,10 @@ class Compiler(object):
             own_project = this_project
 
         paths = own_project.get('source-paths', [])
-        if self.create_template.label == 'build':
-            return Source(
-                this_project,
-                own_project=own_project
-            ).get_models(paths, self.create_template)
-
-        elif self.create_template.label == 'archive':
-            return []
-        else:
-            raise RuntimeError(
-                "unexpected create template "
-                "type: '{}'".format(self.create_template.label))
+        return Source(
+            this_project,
+            own_project=own_project
+        ).get_models(paths)
 
     def get_macros(self, this_project, own_project=None):
         if own_project is None:
@@ -77,25 +68,24 @@ class Compiler(object):
         return Source(this_project, own_project=own_project).get_macros(paths)
 
     def get_archives(self, project):
-        archive_template = dbt.templates.ArchiveInsertTemplate()
         return Source(
             project,
             own_project=project
-        ).get_archives(archive_template)
+        ).get_archives()
 
-    def project_schemas(self):
-        source_paths = self.project.get('source-paths', [])
-        return Source(self.project).get_schemas(source_paths)
+    def project_schemas(self, project):
+        source_paths = project.get('source-paths', [])
+        return Source(project).get_schemas(source_paths)
 
-    def project_tests(self):
-        source_paths = self.project.get('test-paths', [])
-        return Source(self.project).get_tests(source_paths)
+    def project_tests(self, project):
+        source_paths = project.get('test-paths', [])
+        return Source(project).get_tests(source_paths)
 
     def analysis_sources(self, project):
         paths = project.get('analysis-paths', [])
         return Source(project).get_analyses(paths)
 
-    def validate_models_unique(self, models):
+    def validate_models_unique(self, models, error_type):
         found_models = defaultdict(list)
         for model in models:
             found_models[model.name].append(model)
@@ -104,12 +94,13 @@ class Compiler(object):
                 models_str = "\n  - ".join(
                     [str(model) for model in model_list])
 
-                raise RuntimeError(
-                    "Found {} models with the same name! Can't "
-                    "create tables. Name='{}'\n  - {}".format(
-                        len(model_list), model_name, models_str
-                    )
-                )
+                error_msg = "Found {} models with the same name.\n" \
+                            "  Name='{}'\n" \
+                            "  - {}".format(
+                                    len(model_list), model_name, models_str
+                            )
+
+                error_type(model_list[0], error_msg)
 
     def __write(self, build_filepath, payload):
         target_path = os.path.join(self.project['target-path'], build_filepath)
@@ -154,7 +145,7 @@ class Compiler(object):
             src_model.own_project['name'] == src_model.project['name']
         )
 
-    def __ref(self, linker, ctx, model, all_models, add_dependency=True):
+    def __ref(self, linker, ctx, model, all_models):
         schema = ctx['env']['schema']
 
         source_model = tuple(model.fqn)
@@ -162,13 +153,10 @@ class Compiler(object):
 
         def do_ref(*args):
             if len(args) == 1:
-                other_model_name = self.create_template.model_name(args[0])
+                other_model_name = args[0]
                 other_model = find_model_by_name(all_models, other_model_name)
             elif len(args) == 2:
                 other_model_package, other_model_name = args
-                other_model_name = self.create_template.model_name(
-                    other_model_name
-                )
 
                 other_model = find_model_by_name(
                     all_models,
@@ -195,7 +183,7 @@ class Compiler(object):
 
             # this creates a trivial cycle -- should this be a compiler error?
             # we can still interpolate the name w/o making a self-cycle
-            if source_model == other_model_fqn or not add_dependency:
+            if source_model == other_model_fqn:
                 pass
             else:
                 linker.dependency(source_model, other_model_fqn)
@@ -224,15 +212,13 @@ class Compiler(object):
 
         return wrapped_do_ref
 
-    def get_context(self, linker, model, models, add_dependency=False):
+    def get_context(self, linker, model, models):
         runtime = RuntimeContext(model=model)
 
         context = self.project.context()
 
         # built-ins
-        context['ref'] = self.__ref(
-            linker, context, model, models, add_dependency
-        )
+        context['ref'] = self.__ref(linker, context, model, models)
         context['config'] = self.__model_config(model, linker)
         context['this'] = This(
             context['env']['schema'], model.immediate_name, model.name
@@ -262,7 +248,7 @@ class Compiler(object):
 
         return runtime
 
-    def compile_model(self, linker, model, models, add_dependency=True):
+    def compile_model(self, linker, model, models):
         try:
             fs_loader = jinja2.FileSystemLoader(searchpath=model.root_dir)
             jinja = jinja2.Environment(loader=fs_loader)
@@ -271,9 +257,7 @@ class Compiler(object):
                 model.absolute_path)
 
             template = jinja.from_string(template_contents)
-            context = self.get_context(
-                linker, model, models, add_dependency=add_dependency
-            )
+            context = self.get_context(linker, model, models)
 
             rendered = template.render(context)
         except jinja2.exceptions.TemplateSyntaxError as e:
@@ -283,8 +267,8 @@ class Compiler(object):
 
         return rendered
 
-    def write_graph_file(self, linker, label):
-        filename = 'graph-{}.yml'.format(label)
+    def write_graph_file(self, linker):
+        filename = graph_file_name
         graph_path = os.path.join(self.project['target-path'], filename)
         linker.write_graph(graph_path)
 
@@ -413,9 +397,7 @@ class Compiler(object):
             )
 
             context = self.get_context(linker, model, models)
-            wrapped_stmt = model.compile(
-                injected_stmt, self.project, self.create_template, context
-            )
+            wrapped_stmt = model.compile(injected_stmt, self.project, context)
 
             serialized = model.serialize()
             linker.update_node_data(tuple(model.fqn), serialized)
@@ -446,26 +428,64 @@ class Compiler(object):
                 analysis,
                 referenceable_models
             )
+
+            serialized = analysis.serialize()
+            linker.update_node_data(tuple(analysis.fqn), serialized)
+
             build_path = analysis.build_path()
             self.__write(build_path, injected_stmt)
             written_analyses.append(analysis)
 
         return written_analyses
 
-    def compile_schema_tests(self, linker):
-        target_cfg = self.project.run_environment()
+    def get_local_and_package_sources(self, project, source_getter):
+        all_sources = []
 
-        schemas = self.project_schemas()
+        all_sources.extend(source_getter(project))
+
+        for package in dbt.utils.dependency_projects(project):
+            all_sources.extend(source_getter(package))
+
+        return all_sources
+
+    def compile_schema_tests(self, linker, models):
+        all_schema_specs = self.get_local_and_package_sources(
+                self.project,
+                self.project_schemas
+        )
 
         schema_tests = []
-        for schema in schemas:
+
+        for schema in all_schema_specs:
             # compiling a SchemaFile returns >= 0 SchemaTest models
-            schema_tests.extend(schema.compile())
+            try:
+                schema_tests.extend(schema.compile())
+            except RuntimeError as e:
+                logger.info("\n" + str(e))
+                schema_test_path = schema.filepath
+                logger.info("Skipping compilation for {}...\n"
+                            .format(schema_test_path))
 
         written_tests = []
         for schema_test in schema_tests:
+            # show a warning if the model being tested doesn't exist
+            try:
+                source_model = find_model_by_name(models,
+                                                  schema_test.model_name)
+            except RuntimeError as e:
+                dbt.utils.compiler_warning(schema_test, str(e))
+                continue
+
+            if not source_model.is_enabled:
+                continue
+
             serialized = schema_test.serialize()
-            linker.update_node_data(tuple(schema_test.fqn), serialized)
+
+            model_node = tuple(source_model.fqn)
+            test_node = tuple(schema_test.fqn)
+
+            linker.dependency(test_node, model_node)
+            linker.update_node_data(test_node, serialized)
 
             query = schema_test.render()
             self.__write(schema_test.build_path(), query)
@@ -473,19 +493,17 @@ class Compiler(object):
 
         return written_tests
 
-    def compile_data_tests(self, linker):
-        tests = self.project_tests()
-
-        all_models = self.get_models()
-        enabled_models = [model for model in all_models if model.is_enabled]
+    def compile_data_tests(self, linker, models):
+        tests = self.get_local_and_package_sources(
+                self.project,
+                self.project_tests
+        )
 
         written_tests = []
         for data_test in tests:
             serialized = data_test.serialize()
             linker.update_node_data(tuple(data_test.fqn), serialized)
-            query = self.compile_model(
-                linker, data_test, enabled_models, add_dependency=False
-            )
+            query = self.compile_model(linker, data_test, models)
             wrapped = data_test.render(query)
             self.__write(data_test.build_path(), wrapped)
             written_tests.append(data_test)
@@ -501,8 +519,7 @@ class Compiler(object):
             return macros
         return do_gen
 
-    def compile_archives(self):
-        linker = Linker()
+    def compile_archives(self, linker, compiled_models):
         all_archives = self.get_archives(self.project)
 
         for archive in all_archives:
@@ -511,7 +528,6 @@ class Compiler(object):
             linker.update_node_data(fqn, archive.serialize())
             self.__write(archive.build_path(), sql)
 
-        self.write_graph_file(linker, 'archive')
         return all_archives
 
     def get_models(self):
@@ -525,7 +541,7 @@ class Compiler(object):
 
         return all_models
 
-    def compile(self, limit_to=None):
+    def compile(self):
         linker = Linker()
 
         all_models = self.get_models()
@@ -538,45 +554,46 @@ class Compiler(object):
 
         self.macro_generator = self.generate_macros(all_macros)
 
-        if limit_to is not None and 'models' in limit_to:
-            enabled_models = [
-                model for model in all_models
-                if model.is_enabled and not model.is_empty
-            ]
-        else:
-            enabled_models = []
+        enabled_models = [
+            model for model in all_models
+            if model.is_enabled and not model.is_empty
+        ]
 
         compiled_models, written_models = self.compile_models(
             linker, enabled_models
         )
 
-        # TODO : only compile schema tests for enabled models
-        if limit_to is not None and 'tests' in limit_to:
-            written_schema_tests = self.compile_schema_tests(linker)
-            written_data_tests = self.compile_data_tests(linker)
-        else:
-            written_schema_tests = []
-            written_data_tests = []
-
-        self.validate_models_unique(compiled_models)
-        self.validate_models_unique(written_schema_tests)
-        self.write_graph_file(linker, self.create_template.label)
-
-        if limit_to is not None and 'analyses' in limit_to and \
-           self.create_template.label not in ['test', 'archive']:
-            written_analyses = self.compile_analyses(linker, compiled_models)
-        else:
-            written_analyses = []
-
-        if limit_to is not None and 'archives' in limit_to:
-            compiled_archives = self.compile_archives()
-        else:
-            compiled_archives = []
-
-        return {
-            "models": len(written_models),
-            "schema tests": len(written_schema_tests),
-            "data tests": len(written_data_tests),
-            "archives": len(compiled_archives),
-            "analyses": len(written_analyses)
+        compilers = {
+            'schema tests': self.compile_schema_tests,
+            'data tests': self.compile_data_tests,
+            'archives': self.compile_archives,
+            'analyses': self.compile_analyses
         }
+
+        compiled = {
+            'models': written_models
+        }
+
+        for (compile_type, compiler_f) in compilers.items():
+            newly_compiled = compiler_f(linker, compiled_models)
+            compiled[compile_type] = newly_compiled
+
+        self.validate_models_unique(
+            compiled['models'],
+            dbt.utils.compiler_error
+        )
+
+        self.validate_models_unique(
+            compiled['data tests'],
+            dbt.utils.compiler_warning
+        )
+
+        self.validate_models_unique(
+            compiled['schema tests'],
+            dbt.utils.compiler_warning
+        )
+
+        self.write_graph_file(linker)
+
+        stats = {ttype: len(m) for (ttype, m) in compiled.items()}
+        return stats

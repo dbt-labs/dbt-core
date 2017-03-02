@@ -46,7 +46,7 @@ class TestSimpleDependency(DBTIntegrationTest):
     @attr(type='postgres')
     def test_simple_dependency_with_models(self):
         self.run_dbt(["deps"])
-        self.run_dbt(["run", '--models', 'view'])
+        self.run_dbt(["run", '--models', 'view+'])
 
         self.assertTablesEqual("seed","view")
         self.assertTablesEqual("seed_summary","view_summary")

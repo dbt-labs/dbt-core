@@ -31,7 +31,7 @@ class Source(object):
 
         return [to_build(*args) for args in build_args]
 
-    def get_models(self, model_dirs, create_template):
+    def get_models(self, model_dirs):
         file_matches = dbt.clients.system.find_matching(
             self.own_project_root,
             model_dirs,
@@ -39,8 +39,7 @@ class Source(object):
 
         return self.build_models_from_file_matches(
             Model,
-            file_matches,
-            [create_template])
+            file_matches)
 
     def get_analyses(self, analysis_dirs):
         file_matches = dbt.clients.system.find_matching(
@@ -92,7 +91,7 @@ class Source(object):
             Macro,
             file_matches)
 
-    def get_archives(self, create_template):
+    def get_archives(self):
         "Get Archive models defined in project config"
 
         if 'archive' not in self.project:
@@ -111,6 +110,6 @@ class Source(object):
                 fields = table.copy()
                 fields.update(schema)
                 archives.append(ArchiveModel(
-                    self.project, create_template, fields
+                    self.project, fields
                 ))
         return archives

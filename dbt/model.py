@@ -2,7 +2,7 @@ import os.path
 import yaml
 import jinja2
 import re
-from dbt.templates import BaseCreateTemplate
+from dbt.templates import BaseCreateTemplate, ArchiveInsertTemplate
 from dbt.utils import split_path
 import dbt.schema_tester
 import dbt.project
@@ -10,6 +10,19 @@ import dbt.archival
 from dbt.adapters.factory import get_adapter
 from dbt.utils import deep_merge, DBTConfigKeys, compiler_error, \
     compiler_warning
+
+
+class NodeType(object):
+    Base = 'base'
+    Model = 'model'
+    Test = 'test'
+    Archive = 'archive'
+    Analysis = 'analysis'
+
+
+class TestNodeType(object):
+    SchemaTest = 'schema'
+    DataTest = 'data'
 
 
 class SourceConfig(object):
@@ -82,11 +95,16 @@ class SourceConfig(object):
 
         # mask this as a table if it's an incremental model with
         # --full-refresh provided
-        if cfg.get('materialized') == 'incremental' and \
-           self.active_project.args.full_refresh:
+        if cfg.get('materialized') == 'incremental' and self.is_full_refresh():
             cfg['materialized'] = 'table'
 
         return cfg
+
+    def is_full_refresh(self):
+        if hasattr(self.active_project.args, 'full_refresh'):
+            return self.active_project.args.full_refresh
+        else:
+            return False
 
     def update_in_model_config(self, config):
         config = config.copy()
@@ -187,7 +205,7 @@ class SourceConfig(object):
 
 
 class DBTSource(object):
-    dbt_run_type = 'base'
+    dbt_run_type = NodeType.Base
 
     def __init__(self, project, top_dir, rel_filepath, own_project):
         self.project = project
@@ -316,13 +334,12 @@ class DBTSource(object):
 
 
 class Model(DBTSource):
-    dbt_run_type = 'run'
+    dbt_run_type = NodeType.Model
+    build_dir = 'build'
+    template = BaseCreateTemplate()
 
-    def __init__(
-        self, project, model_dir, rel_filepath, own_project, create_template
-    ):
+    def __init__(self, project, model_dir, rel_filepath, own_project):
         self.prologue = []
-        self.create_template = create_template
         super(Model, self).__init__(
             project, model_dir, rel_filepath, own_project
         )
@@ -377,9 +394,8 @@ class Model(DBTSource):
         return adapter.dist_qualifier(dist_key)
 
     def build_path(self):
-        build_dir = self.create_template.label
-        filename = "{}.sql".format(self.create_template.model_name(self.name))
-        path_parts = [build_dir] + self.fqn[:-1] + [filename]
+        filename = "{}.sql".format(self.name)
+        path_parts = [self.build_dir] + self.fqn[:-1] + [filename]
         return os.path.join(*path_parts)
 
     def compile_string(self, ctx, string):
@@ -412,7 +428,7 @@ class Model(DBTSource):
 
         return [self.compile_string(ctx, hook) for hook in hooks]
 
-    def compile(self, rendered_query, project, create_template, ctx):
+    def compile(self, rendered_query, project, ctx):
         model_config = self.config
 
         if self.materialization not in SourceConfig.Materializations:
@@ -463,7 +479,7 @@ class Model(DBTSource):
             "non_destructive": self.is_non_destructive()
         }
 
-        return create_template.wrap(opts)
+        return self.template.wrap(opts)
 
     @property
     def immediate_name(self):
@@ -483,13 +499,14 @@ class Model(DBTSource):
 
 
 class Analysis(Model):
+    dbt_run_type = NodeType.Analysis
+
     def __init__(self, project, target_dir, rel_filepath, own_project):
         return super(Analysis, self).__init__(
             project,
             target_dir,
             rel_filepath,
-            own_project,
-            BaseCreateTemplate()
+            own_project
         )
 
     def build_path(self):
@@ -504,8 +521,8 @@ class Analysis(Model):
 
 class SchemaTest(DBTSource):
     test_type = "base"
-    dbt_run_type = 'test'
-    dbt_test_type = 'schema'
+    dbt_run_type = NodeType.Test
+    dbt_test_type = TestNodeType.SchemaTest
 
     def __init__(self, project, target_dir, rel_filepath, model_name, options):
         self.schema = project.context()['env']['schema']
@@ -736,11 +753,11 @@ class Macro(DBTSource):
 
 
 class ArchiveModel(DBTSource):
-    dbt_run_type = 'archive'
+    dbt_run_type = NodeType.Archive
+    build_dir = 'archive'
+    template = ArchiveInsertTemplate()
 
-    def __init__(self, project, create_template, archive_data):
-
-        self.create_template = create_template
+    def __init__(self, project, archive_data):
 
         self.validate(archive_data)
 
@@ -751,11 +768,10 @@ class ArchiveModel(DBTSource):
         self.unique_key = archive_data['unique_key']
         self.updated_at = archive_data['updated_at']
 
-        target_dir = self.create_template.label
         rel_filepath = os.path.join(self.target_schema, self.target_table)
 
         super(ArchiveModel, self).__init__(
-            project, target_dir, rel_filepath, project
+            project, self.build_dir, rel_filepath, project
         )
 
     def validate(self, data):
@@ -794,16 +810,15 @@ class ArchiveModel(DBTSource):
         archival = dbt.archival.Archival(self.project, self)
         query = archival.compile()
 
-        sql = self.create_template.wrap(
+        sql = self.template.wrap(
             self.target_schema, self.target_table, query, self.unique_key
         )
 
         return sql
 
     def build_path(self):
-        build_dir = self.create_template.label
         filename = "{}.sql".format(self.name)
-        path_parts = [build_dir] + self.fqn[:-1] + [filename]
+        path_parts = [self.build_dir] + self.fqn[:-1] + [filename]
         return os.path.join(*path_parts)
 
     def __repr__(self):
@@ -816,8 +831,8 @@ class ArchiveModel(DBTSource):
 
 
 class DataTest(DBTSource):
-    dbt_run_type = 'test'
-    dbt_test_type = 'data'
+    dbt_run_type = NodeType.Test
+    dbt_test_type = TestNodeType.DataTest
 
     def __init__(self, project, target_dir, rel_filepath, own_project):
         super(DataTest, self).__init__(

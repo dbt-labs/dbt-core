@@ -61,6 +61,16 @@ Then, install using `pip`:
 pip install dbt
 ```
 
+### Windows
+
+Before starting, you'll need to install [Git for Windows](https://git-scm.com/downloads) and [Python version 3.5 or higher for Windows](https://www.python.org/downloads/windows/).
+
+Open up Windows powershell as an administrator, and install dbt with `pip`:
+
+```bash
+pip install dbt
+```
+
 ## Create a new dbt project
 
 To create your first dbt project, run:
@@ -83,12 +93,12 @@ credentials!** All private credentials belong in `~/.dbt/profiles.yml`.
 ## Configuring a project
 
 The `dbt_project.yml` file is responsible for configuring how dbt operates on your project.
-You can find a sample `dbt_project.yml` file [here](https://github.com/analyst-collective/dbt/blob/master/sample.dbt_project.yml).
+You can find a sample `dbt_project.yml` file [here](https://github.com/fishtown-analytics/dbt/blob/master/sample.dbt_project.yml).
 
 
 ## Configuring profiles
 
 `profiles.yml` defines how dbt connects to your data warehouse(s). You can find a sample
-`profiles.yml` file [here](https://github.com/analyst-collective/dbt/blob/master/sample.profiles.yml).
+`profiles.yml` file [here](https://github.com/fishtown-analytics/dbt/blob/master/sample.profiles.yml).
 By default, dbt expects this file to be located at `~/.dbt/profiles.yml`, but this location can be changed
 on the command line with the `--profiles-dir` option.
