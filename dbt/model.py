@@ -16,6 +16,7 @@ import dbt.flags
 class NodeType(object):
     Base = 'base'
     Model = 'model'
+    Analysis = 'analysis'
     Test = 'test'
     Archive = 'archive'
 

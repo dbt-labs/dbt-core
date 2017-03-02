@@ -37,16 +37,24 @@ graph_file_name = 'graph.yml'
 def compile_and_print_status(project, args):
     compiler = Compiler(project, args)
     compiler.initialize()
+    names = {
+        NodeType.Model: 'models',
+        NodeType.Test: 'tests',
+        NodeType.Archive: 'archives',
+        NodeType.Analysis: 'analyses',
+    }
+
     results = {
         NodeType.Model: 0,
         NodeType.Test: 0,
         NodeType.Archive: 0,
+        NodeType.Analysis: 0,
     }
 
     results.update(compiler.compile())
 
     stat_line = ", ".join(
-        ["{} {}s".format(ct, t) for t, ct in results.items()])
+        ["{} {}".format(ct, names.get(t)) for t, ct in results.items()])
 
     logger.info("Compiled {}".format(stat_line))
 
@@ -398,8 +406,9 @@ class Compiler(object):
         for name, injected_node in injected_nodes.items():
             # now turn model nodes back into the old-style model object for
             # wrapping
-            if injected_node.get('resource_type') == NodeType.Test:
-                # don't wrap tests.
+            if injected_node.get('resource_type') in [NodeType.Test,
+                                                      NodeType.Analysis]:
+                # don't wrap tests or analyses.
                 injected_node['wrapped_sql'] = injected_node['injected_sql']
                 wrapped_nodes[name] = injected_node
 
@@ -408,6 +417,7 @@ class Compiler(object):
                 # archives. in the future it'd be nice to generate
                 # the SQL at the parser level.
                 pass
+
             else:
                 model = Model(
                     self.project,
@@ -428,10 +438,11 @@ class Compiler(object):
 
             build_path = os.path.join('build', injected_node.get('path'))
 
-            if injected_node.get('resource_type') == NodeType.Model and \
+            if injected_node.get('resource_type') in (NodeType.Model,
+                                                      NodeType.Analysis) and \
                injected_node.get('config', {}) \
                             .get('materialized') != 'ephemeral':
-                self.__write(build_path, wrapped_stmt)
+                self.__write(build_path, injected_node.get('wrapped_sql'))
                 written_nodes.append(injected_node)
                 injected_node['build_path'] = build_path
 
@@ -494,6 +505,22 @@ class Compiler(object):
 
         return parsed_models
 
+    def get_parsed_analyses(self, root_project, all_projects, macro_generator):
+        parsed_models = {}
+
+        for name, project in all_projects.items():
+            parsed_models.update(
+                dbt.parser.load_and_parse_sql(
+                    package_name=name,
+                    root_project=root_project,
+                    all_projects=all_projects,
+                    root_dir=project.get('project-root'),
+                    relative_dirs=project.get('analysis-paths', []),
+                    resource_type=NodeType.Analysis,
+                    macro_generator=macro_generator))
+
+        return parsed_models
+
     def get_parsed_data_tests(self, root_project, all_projects,
                               macro_generator):
         parsed_tests = {}
@@ -531,6 +558,8 @@ class Compiler(object):
 
         all_nodes.update(self.get_parsed_models(root_project, all_projects,
                                                 macro_generator))
+        all_nodes.update(self.get_parsed_analyses(root_project, all_projects,
+                                                  macro_generator))
         all_nodes.update(
             self.get_parsed_data_tests(root_project, all_projects,
                                        macro_generator))
