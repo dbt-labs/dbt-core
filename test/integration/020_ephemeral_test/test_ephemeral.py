@@ -8,17 +8,17 @@ class TestEphemeral(DBTIntegrationTest):
 
     @property
     def schema(self):
-        return "ephemeral_019"
+        return "ephemeral_020"
 
     @property
     def models(self):
-        return "test/integration/019_ephemeral_test/models"
+        return "test/integration/020_ephemeral_test/models"
 
     @attr(type='postgres')
     def test__postgres(self):
         self.use_default_project()
         self.use_profile('postgres')
-        self.run_sql_file("test/integration/019_ephemeral_test/seed.sql")
+        self.run_sql_file("test/integration/020_ephemeral_test/seed.sql")
 
         result = self.run_dbt()
 
@@ -28,7 +28,7 @@ class TestEphemeral(DBTIntegrationTest):
     def test__snowflake(self):
         self.use_default_project()
         self.use_profile('snowflake')
-        self.run_sql_file("test/integration/019_ephemeral_test/seed.sql")
+        self.run_sql_file("test/integration/020_ephemeral_test/seed.sql")
 
         self.run_dbt()
 

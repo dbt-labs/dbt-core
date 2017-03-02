@@ -1,4 +1,4 @@
-create table "ephemeral_019"."seed" (
+create table "ephemeral_020"."seed" (
 	id BIGSERIAL PRIMARY KEY,
 	first_name VARCHAR(50),
 	last_name VARCHAR(50),
@@ -8,7 +8,7 @@ create table "ephemeral_019"."seed" (
 );
 
 
-insert into "ephemeral_019"."seed" (first_name, last_name, email, gender, ip_address) values
+insert into "ephemeral_020"."seed" (first_name, last_name, email, gender, ip_address) values
 ('Jack', 'Hunter', 'jhunter0@pbs.org', 'Male', '59.80.20.168'),
 ('Kathryn', 'Walker', 'kwalker1@ezinearticles.com', 'Female', '194.121.179.35'),
 ('Gerald', 'Ryan', 'gryan2@com.com', 'Male', '11.3.212.243'),
