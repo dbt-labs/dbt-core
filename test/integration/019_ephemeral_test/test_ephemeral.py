@@ -24,8 +24,6 @@ class TestEphemeral(DBTIntegrationTest):
 
         self.assertTablesEqual("seed", "dependent")
 
-        self.assertTrue(False)
-
     @attr(type='snowflake')
     def test__snowflake(self):
         self.use_default_project()
