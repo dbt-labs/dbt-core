@@ -5,6 +5,7 @@ import os
 
 import dbt.flags
 import dbt.compilation
+import collections
 
 
 class CompilerTest(unittest.TestCase):
@@ -65,7 +66,7 @@ class CompilerTest(unittest.TestCase):
                 'extra_cte_ids': [
                     'model.root.ephemeral'
                 ],
-                'extra_cte_sql': [],
+                'extra_cte_sql': collections.OrderedDict(),
                 'injected_sql': '',
                 'compiled_sql': ('with cte as (select * from something_else) '
                                  'select * from __dbt__CTE__ephemeral')
@@ -87,7 +88,7 @@ class CompilerTest(unittest.TestCase):
                 'compiled_sql': 'select * from source_table',
                 'extra_ctes_injected': False,
                 'extra_cte_ids': [],
-                'extra_cte_sql': [],
+                'extra_cte_sql': collections.OrderedDict(),
                 'injected_sql': ''
             }
         }
@@ -128,7 +129,7 @@ class CompilerTest(unittest.TestCase):
                 'compiled': True,
                 'extra_ctes_injected': False,
                 'extra_cte_ids': [],
-                'extra_cte_sql': [],
+                'extra_cte_sql': collections.OrderedDict(),
                 'injected_sql': '',
                 'compiled_sql': ('with cte as (select * from something_else) '
                                  'select * from source_table')
@@ -149,7 +150,7 @@ class CompilerTest(unittest.TestCase):
                 'compiled': True,
                 'extra_ctes_injected': False,
                 'extra_cte_ids': [],
-                'extra_cte_sql': [],
+                'extra_cte_sql': collections.OrderedDict(),
                 'injected_sql': '',
                 'compiled_sql': ('select * from source_table')
             }
@@ -201,7 +202,7 @@ class CompilerTest(unittest.TestCase):
                 'extra_cte_ids': [
                     'model.root.ephemeral'
                 ],
-                'extra_cte_sql': [],
+                'extra_cte_sql': collections.OrderedDict(),
                 'injected_sql': '',
                 'compiled_sql': 'select * from __dbt__CTE__ephemeral'
             },
@@ -221,7 +222,7 @@ class CompilerTest(unittest.TestCase):
                 'compiled': True,
                 'extra_ctes_injected': False,
                 'extra_cte_ids': [],
-                'extra_cte_sql': [],
+                'extra_cte_sql': collections.OrderedDict(),
                 'injected_sql': '',
                 'compiled_sql': 'select * from source_table'
             }
@@ -270,7 +271,7 @@ class CompilerTest(unittest.TestCase):
                 'extra_cte_ids': [
                     'model.root.ephemeral'
                 ],
-                'extra_cte_sql': [],
+                'extra_cte_sql': collections.OrderedDict(),
                 'injected_sql': '',
                 'compiled_sql': 'select * from __dbt__CTE__ephemeral'
             },
@@ -292,7 +293,7 @@ class CompilerTest(unittest.TestCase):
                 'extra_cte_ids': [
                     'model.root.ephemeral_level_two'
                 ],
-                'extra_cte_sql': [],
+                'extra_cte_sql': collections.OrderedDict(),
                 'injected_sql': '',
                 'compiled_sql': 'select * from __dbt__CTE__ephemeral_level_two'
             },
@@ -312,7 +313,7 @@ class CompilerTest(unittest.TestCase):
                 'compiled': True,
                 'extra_ctes_injected': False,
                 'extra_cte_ids': [],
-                'extra_cte_sql': [],
+                'extra_cte_sql': collections.OrderedDict(),
                 'injected_sql': '',
                 'compiled_sql': 'select * from source_table'
             }
