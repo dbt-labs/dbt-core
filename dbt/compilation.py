@@ -1,5 +1,5 @@
 import os
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 import time
 import sqlparse
 
@@ -69,7 +69,7 @@ def recursively_prepend_ctes(model, all_models):
         dbt.contracts.graph.compiled.validate(all_models)
 
     model = model.copy()
-    prepend_ctes = []
+    prepend_ctes = OrderedDict()
 
     if model.get('all_ctes_injected') is True:
         return (model, model.get('extra_cte_ids'), all_models)
@@ -79,11 +79,11 @@ def recursively_prepend_ctes(model, all_models):
         cte_to_add, new_prepend_ctes, all_models = recursively_prepend_ctes(
             cte_to_add, all_models)
 
-        prepend_ctes = new_prepend_ctes + prepend_ctes
+        prepend_ctes.update(new_prepend_ctes)
         new_cte_name = '__dbt__CTE__{}'.format(cte_to_add.get('name'))
-        prepend_ctes.append(' {} as (\n{}\n)'.format(
+        prepend_ctes[new_cte_name] = ' {} as (\n{}\n)'.format(
             new_cte_name,
-            cte_to_add.get('compiled_sql')))
+            cte_to_add.get('compiled_sql'))
 
     model['extra_ctes_injected'] = True
     model['extra_cte_sql'] = prepend_ctes
@@ -98,10 +98,12 @@ def recursively_prepend_ctes(model, all_models):
 
 def inject_ctes_into_sql(sql, ctes):
     """
-    `ctes` is a list of CTEs in the form:
+    `ctes` is a dict of CTEs in the form:
 
-      [ "__dbt__CTE__ephemeral as (select * from table)",
-        "__dbt__CTE__events as (select id, type from events)" ]
+      {
+        "cte_id_1": "__dbt__CTE__ephemeral as (select * from table)",
+        "cte_id_2": "__dbt__CTE__events as (select id, type from events)"
+      }
 
     Given `sql` like:
 
@@ -141,7 +143,7 @@ def inject_ctes_into_sql(sql, ctes):
 
     parsed.insert_after(
         with_stmt,
-        sqlparse.sql.Token(sqlparse.tokens.Keyword, ", ".join(ctes)))
+        sqlparse.sql.Token(sqlparse.tokens.Keyword, ", ".join(ctes.values())))
 
     return dbt.compat.to_string(parsed)
 
@@ -304,7 +306,7 @@ class Compiler(object):
             'compiled_sql': None,
             'extra_ctes_injected': False,
             'extra_cte_ids': [],
-            'extra_cte_sql': [],
+            'extra_cte_sql': {},
             'injected_sql': None,
         })
 

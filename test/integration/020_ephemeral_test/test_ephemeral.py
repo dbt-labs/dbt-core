@@ -23,6 +23,7 @@ class TestEphemeral(DBTIntegrationTest):
         result = self.run_dbt()
 
         self.assertTablesEqual("seed", "dependent")
+        self.assertTablesEqual("seed", "double_dependent")
 
     @attr(type='snowflake')
     def test__snowflake(self):
@@ -33,3 +34,4 @@ class TestEphemeral(DBTIntegrationTest):
         self.run_dbt()
 
         self.assertTablesEqual("seed", "dependent")
+        self.assertTablesEqual("seed", "double_dependent")
