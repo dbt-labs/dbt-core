@@ -13,6 +13,7 @@ import dbt.contracts.graph.unparsed
 import dbt.contracts.project
 
 from dbt.model import NodeType
+from dbt.logger import GLOBAL_LOGGER as logger
 
 QUERY_VALIDATE_NOT_NULL = """
 with validation as (
@@ -132,6 +133,7 @@ def get_fqn(path, package_project_config, extra=[]):
 
 def parse_node(node, node_path, root_project_config, package_project_config,
                macro_generator=None, tags=[], fqn_extra=[]):
+    logger.debug("Parsing {}".format(node_path))
     parsed_node = copy.deepcopy(node)
 
     parsed_node.update({
@@ -144,6 +146,9 @@ def parse_node(node, node_path, root_project_config, package_project_config,
         root_project_config, package_project_config, fqn)
 
     context = {}
+
+    context['ref'] = __ref(parsed_node)
+    context['config'] = __config(parsed_node, config)
 
     if macro_generator is not None:
         for macro_data in macro_generator(context):
@@ -159,9 +164,6 @@ def parse_node(node, node_path, root_project_config, package_project_config,
 
             if node.get('package_name') == project.get('name'):
                 context.update({macro_name: macro})
-
-    context['ref'] = __ref(parsed_node)
-    context['config'] = __config(parsed_node, config)
 
     env = jinja2.sandbox.SandboxedEnvironment(
         undefined=SilentUndefined)

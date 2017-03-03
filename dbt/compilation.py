@@ -258,22 +258,6 @@ class Compiler(object):
     def get_compiler_context(self, linker, model, models,
                              macro_generator=None):
         context = self.project.context()
-
-        if macro_generator is not None:
-            for macro_data in macro_generator(context):
-                macro = macro_data["macro"]
-                macro_name = macro_data["name"]
-                project = macro_data["project"]
-
-                if context.get(project.get('name')) is None:
-                    context[project.get('name')] = {}
-
-                context.get(project.get('name'), {}) \
-                       .update({macro_name: macro})
-
-                if model.get('package_name') == project.get('name'):
-                    context.update({macro_name: macro})
-
         adapter = get_adapter(self.project.run_environment())
 
         # built-ins
@@ -292,6 +276,21 @@ class Compiler(object):
         context['run_started_at'] = '{{ run_started_at }}'
         context['invocation_id'] = '{{ invocation_id }}'
         context['sql_now'] = adapter.date_function
+
+        if macro_generator is not None:
+            for macro_data in macro_generator(context):
+                macro = macro_data["macro"]
+                macro_name = macro_data["name"]
+                project = macro_data["project"]
+
+                if context.get(project.get('name')) is None:
+                    context[project.get('name')] = {}
+
+                context.get(project.get('name'), {}) \
+                       .update({macro_name: macro})
+
+                if model.get('package_name') == project.get('name'):
+                    context.update({macro_name: macro})
 
         return context
 
@@ -321,6 +320,7 @@ class Compiler(object):
         return runtime
 
     def compile_node(self, linker, node, nodes, macro_generator):
+        logger.debug("Compiling {}".format(node.get('unique_id')))
         try:
             compiled_node = node.copy()
             compiled_node.update({
