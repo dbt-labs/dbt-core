@@ -7,6 +7,7 @@
 ### Changes
 
 - Graph refactor: fix common issues with load order ([#292](https://github.com/fishtown-analytics/dbt/pull/292))
+- Speedup: detect cycles at the end of compilation ([#307](https://github.com/fishtown-analytics/dbt/pull/307))
 
 ## dbt 0.7.1 (February 28, 2017)
 
