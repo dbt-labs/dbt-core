@@ -21,7 +21,7 @@ from test.integration.base import FakeArgs
 class GraphTest(unittest.TestCase):
 
     def tearDown(self):
-        nx.write_yaml = self.real_write_yaml
+        nx.write_gpickle = self.real_write_gpickle
         dbt.utils.dependency_projects = self.real_dependency_projects
         dbt.clients.system.find_matching = self.real_find_matching
         dbt.clients.system.load_file_contents = self.real_load_file_contents
@@ -29,11 +29,11 @@ class GraphTest(unittest.TestCase):
     def setUp(self):
         dbt.flags.STRICT_MODE = True
 
-        def mock_write_yaml(graph, outfile):
+        def mock_write_gpickle(graph, outfile):
             self.graph_result = graph
 
-        self.real_write_yaml = nx.write_yaml
-        nx.write_yaml = mock_write_yaml
+        self.real_write_gpickle = nx.write_gpickle
+        nx.write_gpickle = mock_write_gpickle
 
         self.graph_result = None
 
