@@ -31,7 +31,7 @@ CompilableEntities = [
     "models", "data tests", "schema tests", "archives", "analyses"
 ]
 
-graph_file_name = 'graph.yml'
+graph_file_name = 'graph.gpickle'
 
 
 def compile_and_print_status(project, args):
