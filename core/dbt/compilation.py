@@ -360,11 +360,13 @@ class Compiler:
 
         data = node.to_dict(omit_none=True)
         data.update(
-            'compiled': False,
-            'compiled_sql': None,
-            'extra_ctes_injected': False,
+            {
+                "compiled": False,
+                "compiled_sql": None,
             'extra_ctes': [],
-        })
+                "extra_ctes": [],
+            }
+        )
         compiled_node = _compiled_type_for(node).from_dict(data)
 
         context = self._create_node_context(

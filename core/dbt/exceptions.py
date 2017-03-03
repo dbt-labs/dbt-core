@@ -663,7 +663,7 @@ def source_target_not_found(
 
 def dependency_not_found(model, target_model_name):
     raise_compiler_error(
-        "'{}' depends on '{}' which is not in the graph!"
+        "'{}' depends on '{}' which is not in the graph!".format(
             model.unique_id, target_model_name
         model)
 
