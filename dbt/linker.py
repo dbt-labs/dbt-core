@@ -120,7 +120,7 @@ class Linker(object):
         self.graph.add_node(node, data)
 
     def write_graph(self, outfile):
-        nx.write_yaml(self.graph, outfile)
+        nx.write_gpickle(self.graph, outfile)
 
     def read_graph(self, infile):
-        self.graph = nx.read_yaml(infile)
+        self.graph = nx.read_gpickle(infile)
