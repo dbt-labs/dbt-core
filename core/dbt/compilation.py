@@ -33,7 +33,7 @@ from dbt.node_types import NodeType
 from dbt.events.format import pluralize
 import dbt.tracking
 
-graph_file_name = 'graph.gpickle'
+graph_file_name = "graph.gpickle"
 
 
 def _compiled_type_for(model: ParsedNode):
