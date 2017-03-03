@@ -6,3 +6,10 @@
         '{{ bar2 }}' as bar2
 
 {% endmacro %}
+
+
+{% macro with_ref() %}
+
+   {{ref('dep_macro')}}
+
+{% endmacro %}
