@@ -1,3 +1,6 @@
+from dbt.compat import basestring
+
+
 class Exception(BaseException):
     pass
 
@@ -7,6 +10,10 @@ class RuntimeException(RuntimeError, Exception):
 
 
 class ValidationException(RuntimeException):
+    pass
+
+
+class CompilationException(RuntimeException):
     pass
 
 
@@ -20,3 +27,49 @@ class ProgrammingException(Exception):
 
 class FailedToConnectException(Exception):
     pass
+
+
+def raise_compiler_error(node, msg):
+    name = '<Unknown>'
+
+    if node is None:
+        name = '<None>'
+    elif isinstance(node, basestring):
+        name = node
+    elif isinstance(node, dict):
+        name = node.get('name')
+    else:
+        name = node.nice_name
+
+    raise CompilationException(
+        "! Compilation error while compiling model {}:\n! {}\n"
+        .format(name, msg))
+
+
+def ref_invalid_args(model, args):
+    raise_compiler_error(
+        model,
+        "ref() takes at most two arguments ({} given)".format(
+            len(args)))
+
+
+def ref_target_not_found(model, target_model_name):
+    raise_compiler_error(
+        model,
+        "Model '{}' depends on model '{}' which was not found."
+        .format(model.get('unique_id'), target_model_name))
+
+
+def ref_disabled_dependency(model, target_model):
+    raise_compiler_error(
+        model,
+        "Model '{}' depends on model '{}' which is disabled in "
+        "the project config".format(model.get('unique_id'),
+                                    target_model.get('unique_id')))
+
+
+def dependency_not_found(model, target_model_name):
+    raise_compiler_error(
+        model,
+        "'{}' depends on '{}' which is not in the graph!"
+        .format(model.get('unique_id'), target_model_name))

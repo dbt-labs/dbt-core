@@ -1,5 +1,4 @@
 import os
-import jinja2
 import json
 
 import dbt.project
@@ -101,10 +100,7 @@ class Var(object):
             if not isinstance(raw, basestring):
                 return raw
 
-            env = jinja2.Environment()
-            compiled = env.from_string(raw, self.context).render(self.context)
-
-            return compiled
+            return dbt.clients.jinja.get_rendered(raw, self.context)
         else:
             return default
 
@@ -191,3 +187,11 @@ def to_string(s):
         return s.encode('utf-8')
     except NameError:
         return s
+
+
+def get_materialization(node):
+    return node.get('config', {}).get('materialized')
+
+
+def is_enabled(node):
+    return node.get('config', {}).get('enabled') is True

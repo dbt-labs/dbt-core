@@ -1,12 +1,12 @@
 import copy
-import jinja2
-import jinja2.sandbox
 import os
 import yaml
 
 import dbt.flags
 import dbt.model
 import dbt.utils
+
+import dbt.clients.jinja
 
 import dbt.contracts.graph.parsed
 import dbt.contracts.graph.unparsed
@@ -60,23 +60,6 @@ with parent as (
 select count(*) from child
 where id not in (select id from parent) and id is not null
 """
-
-
-class SilentUndefined(jinja2.Undefined):
-    """
-    This class sets up the parser to just ignore undefined jinja2 calls. So,
-    for example, `env` is not defined here, but will not make the parser fail
-    with a fatal error.
-    """
-    def _fail_with_undefined_error(self, *args, **kwargs):
-        return None
-
-    __add__ = __radd__ = __mul__ = __rmul__ = __div__ = __rdiv__ = \
-        __truediv__ = __rtruediv__ = __floordiv__ = __rfloordiv__ = \
-        __mod__ = __rmod__ = __pos__ = __neg__ = __call__ = \
-        __getitem__ = __lt__ = __le__ = __gt__ = __ge__ = __int__ = \
-        __float__ = __complex__ = __pow__ = __rpow__ = \
-        _fail_with_undefined_error
 
 
 def get_path(resource_type, package_name, resource_name):
@@ -151,6 +134,7 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     context['config'] = __config(parsed_node, config)
     context['var'] = lambda *args: ''
     context['target'] = property(lambda x: '', lambda x: x)
+    context['this'] = ''
 
     if macro_generator is not None:
         for macro_data in macro_generator(context):
@@ -167,10 +151,8 @@ def parse_node(node, node_path, root_project_config, package_project_config,
             if node.get('package_name') == project.get('name'):
                 context.update({macro_name: macro})
 
-    env = jinja2.sandbox.SandboxedEnvironment(
-        undefined=SilentUndefined)
-
-    env.from_string(node.get('raw_sql')).render(context)
+    dbt.clients.jinja.get_rendered(
+        node.get('raw_sql'), context, node, silent_on_undefined=True)
 
     config_dict = node.get('config', {})
     config_dict.update(config.config)

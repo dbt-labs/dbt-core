@@ -1,16 +1,17 @@
 import os.path
-import yaml
-import jinja2
-import re
+import jinja2.runtime
 
+from dbt.adapters.factory import get_adapter
 from dbt.compat import basestring
+
+import dbt.clients.jinja
+import dbt.flags
+
 from dbt.templates import BaseCreateTemplate, ArchiveInsertTemplate
 from dbt.utils import split_path
 import dbt.project
-from dbt.adapters.factory import get_adapter
 from dbt.utils import deep_merge, DBTConfigKeys, compiler_error, \
     compiler_warning
-import dbt.flags
 
 
 class NodeType(object):
@@ -403,17 +404,7 @@ class Model(DBTSource):
         if not isinstance(string, basestring):
             return string
 
-        try:
-            fs_loader = jinja2.FileSystemLoader(
-                searchpath=self.project['macro-paths']
-            )
-            env = jinja2.Environment(loader=fs_loader)
-            template = env.from_string(string, globals=ctx)
-            return template.render(ctx)
-        except jinja2.exceptions.TemplateSyntaxError as e:
-            compiler_error(self, str(e))
-        except jinja2.exceptions.UndefinedError as e:
-            compiler_error(self, str(e))
+        return dbt.clients.jinja.get_rendered(string, ctx, self)
 
     def get_hooks(self, ctx, hook_key):
         hooks = self.config.get(hook_key, [])
@@ -512,11 +503,8 @@ class Macro(DBTSource):
         self.filepath = os.path.join(self.root_dir, self.rel_filepath)
 
     def get_macros(self, ctx):
-        env = jinja2.Environment()
-        try:
-            template = env.from_string(self.contents, globals=ctx)
-        except jinja2.exceptions.TemplateSyntaxError as e:
-            compiler_error(self, str(e))
+        template = dbt.clients.jinja.get_template(
+            self.contents, ctx, self)
 
         for key, item in template.module.__dict__.items():
             if type(item) == jinja2.runtime.Macro:

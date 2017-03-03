@@ -1,6 +1,4 @@
 import os
-import fnmatch
-import jinja2
 from collections import defaultdict
 import time
 import sqlparse
@@ -11,15 +9,15 @@ import dbt.utils
 from dbt.model import Model, NodeType
 from dbt.source import Source
 from dbt.utils import find_model_by_fqn, find_model_by_name, \
-     split_path, This, Var, compiler_error
+     split_path, This, Var, is_enabled, get_materialization
 
 from dbt.linker import Linker
 from dbt.runtime import RuntimeContext
 
 import dbt.compat
 import dbt.contracts.graph.compiled
-import dbt.contracts.graph.parsed
 import dbt.contracts.project
+import dbt.exceptions
 import dbt.flags
 import dbt.parser
 import dbt.templates
@@ -57,17 +55,6 @@ def compile_and_print_status(project, args):
         ["{} {}".format(ct, names.get(t)) for t, ct in results.items()])
 
     logger.info("Compiled {}".format(stat_line))
-
-
-def compile_string(string, ctx):
-    try:
-        env = jinja2.Environment()
-        template = env.from_string(dbt.compat.to_string(string), globals=ctx)
-        return template.render(ctx)
-    except jinja2.exceptions.TemplateSyntaxError as e:
-        compiler_error(None, str(e))
-    except jinja2.exceptions.UndefinedError as e:
-        compiler_error(None, str(e))
 
 
 def prepend_ctes(model, all_models):
@@ -204,12 +191,7 @@ class Compiler(object):
             elif len(args) == 2:
                 target_model_package, target_model_name = args
             else:
-                compiler_error(
-                    model,
-                    "ref() takes at most two arguments ({} given)".format(
-                        len(args)
-                    )
-                )
+                dbt.exceptions.ref_invalid_args(model, args)
 
             target_model = dbt.utils.find_model_by_name(
                 all_models,
@@ -217,29 +199,19 @@ class Compiler(object):
                 target_model_package)
 
             if target_model is None:
-                compiler_error(
-                    model,
-                    "Model '{}' depends on model '{}' which was not found."
-                    .format(model.get('unique_id'), target_model_name))
+                dbt.exceptions.ref_target_not_found(model, target_model_name)
+
+            if is_enabled(model) and not is_enabled(target_model):
+                dbt.exceptions.ref_disabled_dependency(model, target_model)
 
             target_model_id = target_model.get('unique_id')
 
-            if target_model.get('config', {}).get('enabled') is False and \
-               model.get('config', {}).get('enabled') is True:
-                compiler_error(
-                    model,
-                    "Model '{}' depends on model '{}' which is disabled in "
-                    "the project config".format(model.get('unique_id'),
-                                                target_model.get('unique_id')))
+            if target_model_id not in model['depends_on']:
+                model['depends_on'].append(target_model_id)
 
-            model['depends_on'].append(target_model_id)
-
-            if target_model.get('config', {}) \
-                           .get('materialized') == 'ephemeral':
-
+            if get_materialization(target_model) == 'ephemeral':
                 if target_model_id not in model['extra_cte_ids']:
                     model['extra_cte_ids'].append(target_model_id)
-
                 return '__dbt__CTE__{}'.format(target_model.get('name'))
             else:
                 return '"{}"."{}"'.format(schema, target_model.get('name'))
@@ -297,6 +269,8 @@ class Compiler(object):
         return context
 
     def get_context(self, linker, model, models):
+        # THIS IS STILL USED FOR WRAPPING, BUT SHOULD GO AWAY
+        #    - Connor
         runtime = RuntimeContext(model=model)
 
         context = self.project.context()
@@ -323,30 +297,26 @@ class Compiler(object):
 
     def compile_node(self, linker, node, nodes, macro_generator):
         logger.debug("Compiling {}".format(node.get('unique_id')))
-        try:
-            compiled_node = node.copy()
-            compiled_node.update({
-                'compiled': False,
-                'compiled_sql': None,
-                'extra_ctes_injected': False,
-                'extra_cte_ids': [],
-                'extra_cte_sql': [],
-                'injected_sql': None,
-            })
 
-            context = self.get_compiler_context(linker, compiled_node, nodes,
-                                                macro_generator)
+        compiled_node = node.copy()
+        compiled_node.update({
+            'compiled': False,
+            'compiled_sql': None,
+            'extra_ctes_injected': False,
+            'extra_cte_ids': [],
+            'extra_cte_sql': [],
+            'injected_sql': None,
+        })
 
-            env = jinja2.sandbox.SandboxedEnvironment()
+        context = self.get_compiler_context(linker, compiled_node, nodes,
+                                            macro_generator)
 
-            compiled_node['compiled_sql'] = env.from_string(
-                node.get('raw_sql')).render(context)
+        compiled_node['compiled_sql'] = dbt.clients.jinja.get_rendered(
+            node.get('raw_sql'),
+            context,
+            node)
 
-            compiled_node['compiled'] = True
-        except jinja2.exceptions.TemplateSyntaxError as e:
-            compiler_error(node, str(e))
-        except jinja2.exceptions.UndefinedError as e:
-            compiler_error(node, str(e))
+        compiled_node['compiled'] = True
 
         return compiled_node
 
@@ -354,34 +324,6 @@ class Compiler(object):
         filename = graph_file_name
         graph_path = os.path.join(self.project['target-path'], filename)
         linker.write_graph(graph_path)
-
-    def new_add_cte_to_rendered_query(self, linker, primary_model,
-                                      compiled_models):
-
-        fqn_to_model = {tuple(model.fqn): model for model in compiled_models}
-        sorted_nodes = linker.as_topological_ordering()
-
-        models_to_add = self.__recursive_add_ctes(linker, primary_model)
-
-        required_ctes = []
-        for node in sorted_nodes:
-
-            if node not in fqn_to_model:
-                continue
-
-            model = fqn_to_model[node]
-            # add these in topological sort order -- significant for CTEs
-            if model.is_ephemeral and model in models_to_add:
-                required_ctes.append(model)
-
-        query = compiled_models[primary_model]
-        if len(required_ctes) == 0:
-            return query
-        else:
-            compiled_query = self.combine_query_with_ctes(
-                primary_model, query, required_ctes, compiled_models
-            )
-            return compiled_query
 
     def compile_nodes(self, linker, nodes, macro_generator):
         all_projects = self.get_all_projects()
@@ -442,8 +384,7 @@ class Compiler(object):
 
             if injected_node.get('resource_type') in (NodeType.Model,
                                                       NodeType.Analysis) and \
-               injected_node.get('config', {}) \
-                            .get('materialized') != 'ephemeral':
+               get_materialization(injected_node) != 'ephemeral':
                 self.__write(build_path, injected_node.get('wrapped_sql'))
                 written_nodes.append(injected_node)
                 injected_node['build_path'] = build_path
@@ -461,10 +402,7 @@ class Compiler(object):
                         injected_node.get('unique_id'),
                         compiled_nodes.get(dependency).get('unique_id'))
                 else:
-                    compiler_error(
-                        model,
-                        "dependency {} not found in graph!".format(
-                            dependency))
+                    dbt.exceptions.dependency_not_found(model, dependency)
 
         cycle = linker.find_cycles()
 
@@ -588,8 +526,8 @@ class Compiler(object):
 
         for project in dbt.utils.dependency_projects(self.project):
             all_macros.extend(
-                self.get_macros(this_project=self.project, own_project=project)
-            )
+                self.get_macros(this_project=self.project,
+                                own_project=project))
 
         macro_generator = self.generate_macros(all_macros)
 
@@ -598,8 +536,6 @@ class Compiler(object):
 
         compiled_nodes, written_nodes = self.compile_nodes(linker, all_nodes,
                                                            macro_generator)
-
-        # TODO re-add archives
 
         self.write_graph_file(linker)
 

@@ -1,6 +1,5 @@
 from __future__ import print_function
 
-import jinja2
 import hashlib
 import psycopg2
 import os
@@ -17,9 +16,10 @@ from dbt.logger import GLOBAL_LOGGER as logger
 
 from dbt.source import Source
 from dbt.utils import find_model_by_fqn, find_model_by_name, \
-    dependency_projects
+    dependency_projects, get_materialization
 from dbt.model import NodeType
 
+import dbt.clients.jinja
 import dbt.compilation
 import dbt.exceptions
 import dbt.linker
@@ -36,10 +36,6 @@ ABORTED_TRANSACTION_STRING = ("current transaction is aborted, commands "
 
 def get_timestamp():
     return time.strftime("%H:%M:%S")
-
-
-def get_materialization(model):
-    return model.get('config', {}).get('materialized')
 
 
 def get_hash(model):
@@ -318,11 +314,8 @@ def execute_archive(profile, node, context):
     template_ctx = context.copy()
     template_ctx.update(node_cfg)
 
-    env = jinja2.Environment()
-    select = env.from_string(
-        dbt.templates.SCDArchiveTemplate,
-        template_ctx
-    ).render(node_cfg)
+    select = dbt.clients.jinja.get_rendered(dbt.templates.SCDArchiveTemplate,
+                                            template_ctx)
 
     insert_stmt = dbt.templates.ArchiveInsertTemplate().wrap(
         schema=node_cfg.get('target_schema'),
@@ -330,11 +323,8 @@ def execute_archive(profile, node, context):
         query=select,
         unique_key=node_cfg.get('unique_key'))
 
-    env = jinja2.Environment()
-    node['wrapped_sql'] = env.from_string(
-        insert_stmt,
-        template_ctx
-    ).render(node_cfg)
+    node['wrapped_sql'] = dbt.clients.jinja.get_rendered(insert_stmt,
+                                                         template_ctx)
 
     result = adapter.execute_model(
         profile=profile,
@@ -355,7 +345,7 @@ def run_hooks(profile, hooks, context, source):
     }
 
     compiled_hooks = [
-        dbt.compilation.compile_string(hook, ctx) for hook in hooks
+        dbt.clients.jinja.get_rendered(hook, ctx) for hook in hooks
     ]
 
     adapter = get_adapter(profile)
@@ -426,7 +416,7 @@ class RunManager(object):
         }
 
     def inject_runtime_config(self, node):
-        sql = dbt.compilation.compile_string(node.get('wrapped_sql'),
+        sql = dbt.clients.jinja.get_rendered(node.get('wrapped_sql'),
                                              self.context)
 
         node['wrapped_sql'] = sql
