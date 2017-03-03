@@ -50,10 +50,6 @@ def validate_one(parsed_graph_item):
        parsed_graph_item.get('config', {}).get('sql_where') is None:
         raise ValidationException(
             'missing `sql_where` for an incremental model')
-    elif (materialization != 'incremental' and
-          parsed_graph_item.get('config', {}).get('sql_where') is not None):
-        raise ValidationException(
-            'invalid field `sql_where` for a non-incremental model')
 
 
 def validate(parsed_graph):
