@@ -224,8 +224,8 @@ class Compiler(object):
 
             target_model_id = target_model.get('unique_id')
 
-            if target_model.get('config', {}) \
-                           .get('enabled') is False:
+            if target_model.get('config', {}).get('enabled') is False and \
+               model.get('config', {}).get('enabled') is True:
                 compiler_error(
                     model,
                     "Model '{}' depends on model '{}' which is disabled in "
