@@ -28,6 +28,18 @@ class Linker(object):
     def get_node(self, node):
         return self.graph.node[node]
 
+    def find_cycles(self):
+        try:
+            cycles = nx.algorithms.find_cycle(self.graph)
+        except nx.exception.NetworkXNoCycle:
+            return None
+
+        if cycles:
+            return " --> ".join([".".join(node) for node in cycles])
+
+        return None
+
+
     def as_topological_ordering(self, limit_to=None):
         try:
             return nx.topological_sort(self.graph, nbunch=limit_to)

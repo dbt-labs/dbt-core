@@ -70,3 +70,19 @@ class LinkerTest(unittest.TestCase):
             self.linker.dependency(l, r)
 
         self.assertRaises(RuntimeError, self.linker.as_dependency_list, ['ZZZ'])
+
+    def test__find_cycles__cycles(self):
+        actual_deps = [('A', 'B'), ('B', 'C'), ('C', 'A')]
+
+        for (l, r) in actual_deps:
+            self.linker.dependency(l, r)
+
+        self.assertIsNotNone(self.linker.find_cycles())
+
+    def test__find_cycles__no_cycles(self):
+        actual_deps = [('A', 'B'), ('B', 'C'), ('C', 'D')]
+
+        for (l, r) in actual_deps:
+            self.linker.dependency(l, r)
+
+        self.assertIsNone(self.linker.find_cycles())

@@ -464,6 +464,11 @@ class Compiler(object):
                         "dependency {} not found in graph!".format(
                             dependency))
 
+        cycle = linker.find_cycles()
+
+        if cycle:
+            raise RuntimeError("Found a cycle: {}".format(cycle))
+
         return wrapped_nodes, written_nodes
 
     def generate_macros(self, all_macros):
