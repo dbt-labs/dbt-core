@@ -39,7 +39,6 @@ class Linker(object):
 
         return None
 
-
     def as_topological_ordering(self, limit_to=None):
         try:
             return nx.topological_sort(self.graph, nbunch=limit_to)
@@ -114,11 +113,6 @@ class Linker(object):
         self.graph.add_node(node1)
         self.graph.add_node(node2)
         self.graph.add_edge(node2, node1)
-
-        if len(list(nx.simple_cycles(self.graph))) > 0:
-            raise ValidationException(
-                "Detected a cycle when adding dependency from {} to {}"
-                .format(node1, node2))
 
     def add_node(self, node):
         self.graph.add_node(node)
