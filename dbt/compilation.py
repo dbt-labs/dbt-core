@@ -237,7 +237,9 @@ class Compiler(object):
             if target_model.get('config', {}) \
                            .get('materialized') == 'ephemeral':
 
-                model['extra_cte_ids'].append(target_model_id)
+                if target_model_id not in model['extra_cte_ids']:
+                    model['extra_cte_ids'].append(target_model_id)
+
                 return '__dbt__CTE__{}'.format(target_model.get('name'))
             else:
                 return '"{}"."{}"'.format(schema, target_model.get('name'))
