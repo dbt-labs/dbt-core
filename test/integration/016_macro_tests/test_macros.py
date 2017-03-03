@@ -18,6 +18,11 @@ class TestMacros(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            "models": {
+                "vars": {
+                    "test": "DUMMY"
+                }
+            },
             "macro-paths": ["test/integration/016_macro_tests/macros"],
             "repositories": [
                 'https://github.com/fishtown-analytics/dbt-integration-project'

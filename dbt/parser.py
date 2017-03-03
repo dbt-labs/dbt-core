@@ -149,6 +149,8 @@ def parse_node(node, node_path, root_project_config, package_project_config,
 
     context['ref'] = __ref(parsed_node)
     context['config'] = __config(parsed_node, config)
+    context['var'] = lambda x: ''
+    context['target'] = property(lambda x: '', lambda x: x)
 
     if macro_generator is not None:
         for macro_data in macro_generator(context):
