@@ -380,10 +380,16 @@ class Compiler(object):
                 injected_node['wrapped_sql'] = wrapped_stmt
                 wrapped_nodes[name] = injected_node
 
-            build_path = os.path.join('build', injected_node.get('path'))
+            if injected_node.get('resource_type') == NodeType.Test:
+                source_path = dbt.utils.get_pseduo_test_path(injected_node)
+            else:
+                source_path = injected_node.get('path')
+
+            build_path = os.path.join('build', source_path)
 
             if injected_node.get('resource_type') in (NodeType.Model,
-                                                      NodeType.Analysis) and \
+                                                      NodeType.Analysis,
+                                                      NodeType.Test) and \
                get_materialization(injected_node) != 'ephemeral':
                 self.__write(build_path, injected_node.get('wrapped_sql'))
                 written_nodes.append(injected_node)
