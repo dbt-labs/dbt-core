@@ -212,7 +212,7 @@ class Compiler(object):
                 model['depends_on'].append(target_model_id)
 
             if get_materialization(target_model) == 'ephemeral':
-                    model['extra_cte_sql'][target_model_id] = None
+                model['extra_cte_sql'][target_model_id] = None
                 return '__dbt__CTE__{}'.format(target_model.get('name'))
             else:
                 return '"{}"."{}"'.format(schema, target_model.get('name'))
@@ -480,7 +480,7 @@ class Compiler(object):
                     relative_dirs=project.get('test-paths', []),
                     resource_type=NodeType.Test,
                     macro_generator=macro_generator,
-                    tags=['data']))
+                    tags=set(['data'])))
 
         return parsed_tests
 
