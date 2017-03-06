@@ -7,6 +7,10 @@ import dbt.flags
 import dbt.parser
 
 
+def get_os_path(unix_path):
+    return os.path.normpath(unix_path)
+
+
 class ParserTest(unittest.TestCase):
 
     def find_input_by_name(self, models, name):
@@ -45,7 +49,7 @@ class ParserTest(unittest.TestCase):
             'name': 'model_one',
             'resource_type': 'model',
             'package_name': 'root',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'path': 'model_one.sql',
             'raw_sql': ("select * from events"),
         }]
@@ -64,7 +68,7 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'model_one'],
                     'empty': False,
                     'package_name': 'root',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'depends_on': [],
                     'config': self.model_config,
                     'tags': [],
@@ -80,8 +84,8 @@ class ParserTest(unittest.TestCase):
             'name': 'model_one',
             'resource_type': 'model',
             'package_name': 'root',
-            'root_path': '/usr/src/app',
-            'path': 'nested/path/model_one.sql',
+            'root_path': get_os_path('/usr/src/app'),
+            'path': get_os_path('nested/path/model_one.sql'),
             'raw_sql': ("select * from events"),
         }]
 
@@ -121,11 +125,11 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'nested', 'path', 'model_one'],
                     'empty': False,
                     'package_name': 'root',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'depends_on': [],
                     'config': ephemeral_config,
                     'tags': [],
-                    'path': 'nested/path/model_one.sql',
+                    'path': get_os_path('nested/path/model_one.sql'),
                     'raw_sql': self.find_input_by_name(
                         models, 'model_one').get('raw_sql')
                 }
@@ -138,7 +142,7 @@ class ParserTest(unittest.TestCase):
             'resource_type': 'model',
             'package_name': 'root',
             'path': 'model_one.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': (" "),
         }]
 
@@ -159,7 +163,7 @@ class ParserTest(unittest.TestCase):
                     'config': self.model_config,
                     'tags': [],
                     'path': 'model_one.sql',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'raw_sql': self.find_input_by_name(
                         models, 'model_one').get('raw_sql')
                 }
@@ -172,14 +176,14 @@ class ParserTest(unittest.TestCase):
             'resource_type': 'model',
             'package_name': 'root',
             'path': 'base.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': 'select * from events'
         }, {
             'name': 'events_tx',
             'resource_type': 'model',
             'package_name': 'root',
             'path': 'events_tx.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': "select * from {{ref('base')}}"
         }]
 
@@ -201,7 +205,7 @@ class ParserTest(unittest.TestCase):
                     'config': self.model_config,
                     'tags': [],
                     'path': 'base.sql',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'raw_sql': self.find_input_by_name(
                         models, 'base').get('raw_sql')
                 },
@@ -216,7 +220,7 @@ class ParserTest(unittest.TestCase):
                     'config': self.model_config,
                     'tags': [],
                     'path': 'events_tx.sql',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'raw_sql': self.find_input_by_name(
                         models, 'events_tx').get('raw_sql')
                 }
@@ -229,21 +233,21 @@ class ParserTest(unittest.TestCase):
             'resource_type': 'model',
             'package_name': 'root',
             'path': 'events.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': 'select * from base.events',
         }, {
             'name': 'sessions',
             'resource_type': 'model',
             'package_name': 'root',
             'path': 'sessions.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': 'select * from base.sessions',
         }, {
             'name': 'events_tx',
             'resource_type': 'model',
             'package_name': 'root',
             'path': 'events_tx.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': ("with events as (select * from {{ref('events')}}) "
                         "select * from events"),
         }, {
@@ -251,7 +255,7 @@ class ParserTest(unittest.TestCase):
             'resource_type': 'model',
             'package_name': 'root',
             'path': 'sessions_tx.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': ("with sessions as (select * from {{ref('sessions')}}) "
                         "select * from sessions"),
         }, {
@@ -259,7 +263,7 @@ class ParserTest(unittest.TestCase):
             'resource_type': 'model',
             'package_name': 'root',
             'path': 'multi.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': ("with s as (select * from {{ref('sessions_tx')}}), "
                         "e as (select * from {{ref('events_tx')}}) "
                         "select * from e left join s on s.id = e.sid"),
@@ -283,7 +287,7 @@ class ParserTest(unittest.TestCase):
                     'config': self.model_config,
                     'tags': [],
                     'path': 'events.sql',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'raw_sql': self.find_input_by_name(
                         models, 'events').get('raw_sql')
                 },
@@ -298,7 +302,7 @@ class ParserTest(unittest.TestCase):
                     'config': self.model_config,
                     'tags': [],
                     'path': 'sessions.sql',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'raw_sql': self.find_input_by_name(
                         models, 'sessions').get('raw_sql')
                 },
@@ -313,7 +317,7 @@ class ParserTest(unittest.TestCase):
                     'config': self.model_config,
                     'tags': [],
                     'path': 'events_tx.sql',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'raw_sql': self.find_input_by_name(
                         models, 'events_tx').get('raw_sql')
                 },
@@ -328,7 +332,7 @@ class ParserTest(unittest.TestCase):
                     'config': self.model_config,
                     'tags': [],
                     'path': 'sessions_tx.sql',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'raw_sql': self.find_input_by_name(
                         models, 'sessions_tx').get('raw_sql')
                 },
@@ -343,7 +347,7 @@ class ParserTest(unittest.TestCase):
                     'config': self.model_config,
                     'tags': [],
                     'path': 'multi.sql',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'raw_sql': self.find_input_by_name(
                         models, 'multi').get('raw_sql')
                 }
@@ -356,21 +360,21 @@ class ParserTest(unittest.TestCase):
             'resource_type': 'model',
             'package_name': 'snowplow',
             'path': 'events.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': 'select * from base.events',
         }, {
             'name': 'sessions',
             'resource_type': 'model',
             'package_name': 'snowplow',
             'path': 'sessions.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': 'select * from base.sessions',
         }, {
             'name': 'events_tx',
             'resource_type': 'model',
             'package_name': 'snowplow',
             'path': 'events_tx.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': ("with events as (select * from {{ref('events')}}) "
                         "select * from events"),
         }, {
@@ -378,7 +382,7 @@ class ParserTest(unittest.TestCase):
             'resource_type': 'model',
             'package_name': 'snowplow',
             'path': 'sessions_tx.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': ("with sessions as (select * from {{ref('sessions')}}) "
                         "select * from sessions"),
         }, {
@@ -386,7 +390,7 @@ class ParserTest(unittest.TestCase):
             'resource_type': 'model',
             'package_name': 'root',
             'path': 'multi.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': ("with s as (select * from {{ref('snowplow', 'sessions_tx')}}), "
                         "e as (select * from {{ref('snowplow', 'events_tx')}}) "
                         "select * from e left join s on s.id = e.sid"),
@@ -410,7 +414,7 @@ class ParserTest(unittest.TestCase):
                     'config': self.model_config,
                     'tags': [],
                     'path': 'events.sql',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'raw_sql': self.find_input_by_name(
                         models, 'events').get('raw_sql')
                 },
@@ -425,7 +429,7 @@ class ParserTest(unittest.TestCase):
                     'config': self.model_config,
                     'tags': [],
                     'path': 'sessions.sql',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'raw_sql': self.find_input_by_name(
                         models, 'sessions').get('raw_sql')
                 },
@@ -440,7 +444,7 @@ class ParserTest(unittest.TestCase):
                     'config': self.model_config,
                     'tags': [],
                     'path': 'events_tx.sql',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'raw_sql': self.find_input_by_name(
                         models, 'events_tx').get('raw_sql')
                 },
@@ -455,7 +459,7 @@ class ParserTest(unittest.TestCase):
                     'config': self.model_config,
                     'tags': [],
                     'path': 'sessions_tx.sql',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'raw_sql': self.find_input_by_name(
                         models, 'sessions_tx').get('raw_sql')
                 },
@@ -470,7 +474,7 @@ class ParserTest(unittest.TestCase):
                     'config': self.model_config,
                     'tags': [],
                     'path': 'multi.sql',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'raw_sql': self.find_input_by_name(
                         models, 'multi').get('raw_sql')
                 }
@@ -483,7 +487,7 @@ class ParserTest(unittest.TestCase):
             'resource_type': 'model',
             'package_name': 'root',
             'path': 'model_one.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': ("{{config({'materialized':'table'})}}"
                         "select * from events"),
         }]
@@ -509,7 +513,7 @@ class ParserTest(unittest.TestCase):
                     'depends_on': [],
                     'config': self.model_config,
                     'tags': [],
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'path': 'model_one.sql',
                     'raw_sql': self.find_input_by_name(
                         models, 'model_one').get('raw_sql')
@@ -538,7 +542,7 @@ class ParserTest(unittest.TestCase):
             'resource_type': 'model',
             'package_name': 'root',
             'path': 'table.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': ("{{config({'materialized':'table'})}}"
                         "select * from events"),
         }, {
@@ -546,14 +550,14 @@ class ParserTest(unittest.TestCase):
             'resource_type': 'model',
             'package_name': 'root',
             'path': 'ephemeral.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': ("select * from events"),
         }, {
             'name': 'view',
             'resource_type': 'model',
             'package_name': 'root',
             'path': 'view.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': ("select * from events"),
         }]
 
@@ -589,7 +593,7 @@ class ParserTest(unittest.TestCase):
                     'path': 'table.sql',
                     'config': self.model_config,
                     'tags': [],
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'raw_sql': self.find_input_by_name(
                         models, 'table').get('raw_sql')
                 },
@@ -604,7 +608,7 @@ class ParserTest(unittest.TestCase):
                     'path': 'ephemeral.sql',
                     'config': ephemeral_config,
                     'tags': [],
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'raw_sql': self.find_input_by_name(
                         models, 'ephemeral').get('raw_sql')
                 },
@@ -617,7 +621,7 @@ class ParserTest(unittest.TestCase):
                     'package_name': 'root',
                     'depends_on': [],
                     'path': 'view.sql',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'config': view_config,
                     'tags': [],
                     'raw_sql': self.find_input_by_name(
@@ -669,7 +673,7 @@ class ParserTest(unittest.TestCase):
             'resource_type': 'model',
             'package_name': 'root',
             'path': 'table.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': ("{{config({'materialized':'table'})}}"
                         "select * from events"),
         }, {
@@ -677,28 +681,28 @@ class ParserTest(unittest.TestCase):
             'resource_type': 'model',
             'package_name': 'root',
             'path': 'ephemeral.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': ("select * from events"),
         }, {
             'name': 'view',
             'resource_type': 'model',
             'package_name': 'root',
             'path': 'view.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': ("select * from events"),
         }, {
             'name': 'disabled',
             'resource_type': 'model',
             'package_name': 'snowplow',
             'path': 'disabled.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': ("select * from events"),
         }, {
             'name': 'package',
             'resource_type': 'model',
             'package_name': 'snowplow',
             'path': 'views/package.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': ("select * from events"),
         }]
 
@@ -745,7 +749,7 @@ class ParserTest(unittest.TestCase):
                     'package_name': 'root',
                     'depends_on': [],
                     'path': 'table.sql',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'config': self.model_config,
                     'tags': [],
                     'raw_sql': self.find_input_by_name(
@@ -760,7 +764,7 @@ class ParserTest(unittest.TestCase):
                     'package_name': 'root',
                     'depends_on': [],
                     'path': 'ephemeral.sql',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'config': ephemeral_config,
                     'tags': [],
                     'raw_sql': self.find_input_by_name(
@@ -775,7 +779,7 @@ class ParserTest(unittest.TestCase):
                     'package_name': 'root',
                     'depends_on': [],
                     'path': 'view.sql',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'config': view_config,
                     'tags': [],
                     'raw_sql': self.find_input_by_name(
@@ -790,7 +794,7 @@ class ParserTest(unittest.TestCase):
                     'package_name': 'snowplow',
                     'depends_on': [],
                     'path': 'disabled.sql',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'config': disabled_config,
                     'tags': [],
                     'raw_sql': self.find_input_by_name(
@@ -804,8 +808,8 @@ class ParserTest(unittest.TestCase):
                     'empty': False,
                     'package_name': 'snowplow',
                     'depends_on': [],
-                    'path': 'views/package.sql',
-                    'root_path': '/usr/src/app',
+                    'path': get_os_path('views/package.sql'),
+                    'root_path': get_os_path('/usr/src/app'),
                     'config': sort_config,
                     'tags': [],
                     'raw_sql': self.find_input_by_name(
@@ -819,7 +823,7 @@ class ParserTest(unittest.TestCase):
             'name': 'test_one',
             'resource_type': 'test',
             'package_name': 'root',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'path': 'test_one.yml',
             'raw_sql': None,
             'raw_yml': ('{model_one: {constraints: {not_null: [id],'
@@ -866,7 +870,7 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'schema', 'test_one'],
                     'empty': False,
                     'package_name': 'root',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'depends_on': [],
                     'config': self.model_config,
                     'path': 'test_one.yml',
@@ -880,7 +884,7 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'schema', 'test_one'],
                     'empty': False,
                     'package_name': 'root',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'depends_on': [],
                     'config': self.model_config,
                     'path': 'test_one.yml',
@@ -894,7 +898,7 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'schema', 'test_one'],
                     'empty': False,
                     'package_name': 'root',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'depends_on': [],
                     'config': self.model_config,
                     'path': 'test_one.yml',
@@ -908,7 +912,7 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'schema', 'test_one'],
                     'empty': False,
                     'package_name': 'root',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'depends_on': [],
                     'config': self.model_config,
                     'path': 'test_one.yml',
@@ -927,7 +931,7 @@ class ParserTest(unittest.TestCase):
             'resource_type': 'test',
             'package_name': 'root',
             'path': 'no_events.sql',
-            'root_path': '/usr/src/app',
+            'root_path': get_os_path('/usr/src/app'),
             'raw_sql': "select * from {{ref('base')}}"
         }]
 
@@ -948,7 +952,7 @@ class ParserTest(unittest.TestCase):
                     'depends_on': [],
                     'config': self.model_config,
                     'path': 'no_events.sql',
-                    'root_path': '/usr/src/app',
+                    'root_path': get_os_path('/usr/src/app'),
                     'tags': [],
                     'raw_sql': self.find_input_by_name(
                         tests, 'no_events').get('raw_sql')
