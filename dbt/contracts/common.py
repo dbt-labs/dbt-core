@@ -9,9 +9,13 @@ def validate_with(schema, data):
         schema(data)
 
     except MultipleInvalid as e:
+        logger.debug(schema)
+        logger.debug(data)
         logger.error(str(e))
         raise ValidationException(str(e))
 
     except Invalid as e:
+        logger.debug(schema)
+        logger.debug(data)
         logger.error(str(e))
         raise ValidationException(str(e))
