@@ -323,7 +323,7 @@ def parse_schema_test(test_base, model_name, test_config, test_type,
                                     name),
                       root_project_config,
                       package_project_config,
-                      tags=set(['schema']),
+                      tags={'schema'},
                       fqn_extra=['schema'])
 
 

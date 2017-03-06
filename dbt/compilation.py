@@ -480,7 +480,7 @@ class Compiler(object):
                     relative_dirs=project.get('test-paths', []),
                     resource_type=NodeType.Test,
                     macro_generator=macro_generator,
-                    tags=set(['data'])))
+                    tags={'data'}))
 
         return parsed_tests
 
