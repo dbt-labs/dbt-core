@@ -808,7 +808,7 @@ class ParserTest(unittest.TestCase):
                     'empty': False,
                     'package_name': 'snowplow',
                     'depends_on': [],
-                    'path': get_os_path('views/package.sql'),
+                    'path': 'views/package.sql',
                     'root_path': get_os_path('/usr/src/app'),
                     'config': sort_config,
                     'tags': [],

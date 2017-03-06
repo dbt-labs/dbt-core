@@ -6,7 +6,10 @@ import time
 
 from dbt.adapters.factory import get_adapter
 
-DBT_CONFIG_DIR = os.path.expanduser(os.environ.get("DBT_CONFIG_DIR", '/root/.dbt'))
+DBT_CONFIG_DIR = os.path.abspath(
+    os.path.expanduser(os.environ.get("DBT_CONFIG_DIR", '/root/.dbt'))
+)
+
 DBT_PROFILES = os.path.join(DBT_CONFIG_DIR, 'profiles.yml')
 
 

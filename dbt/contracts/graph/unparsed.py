@@ -9,7 +9,7 @@ from dbt.model import NodeType
 
 unparsed_graph_item_contract = Schema({
     # identifiers
-    Required('name'): All(basestring, Length(min=1, max=63)),
+    Required('name'): All(basestring, Length(min=1, max=127)),
     Required('package_name'): basestring,
     Required('resource_type'): Any(NodeType.Model,
                                    NodeType.Test,
