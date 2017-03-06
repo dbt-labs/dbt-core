@@ -5,6 +5,7 @@ import os
 
 import dbt.flags
 import dbt.compilation
+from collections import OrderedDict
 
 
 class CompilerTest(unittest.TestCase):
@@ -57,15 +58,14 @@ class CompilerTest(unittest.TestCase):
                     'model.root.ephemeral'
                 ],
                 'config': self.model_config,
-                'tags': [],
+                'tags': set(),
                 'path': 'view.sql',
                 'raw_sql': 'select * from {{ref("ephemeral")}}',
                 'compiled': True,
                 'extra_ctes_injected': False,
-                'extra_cte_ids': [
-                    'model.root.ephemeral'
-                ],
-                'extra_cte_sql': [],
+                'extra_ctes': OrderedDict([
+                    ('model.root.ephemeral', None)
+                ]),
                 'injected_sql': '',
                 'compiled_sql': ('with cte as (select * from something_else) '
                                  'select * from __dbt__CTE__ephemeral')
@@ -80,14 +80,13 @@ class CompilerTest(unittest.TestCase):
                 'root_path': '/usr/src/app',
                 'depends_on': [],
                 'config': ephemeral_config,
-                'tags': [],
+                'tags': set(),
                 'path': 'ephemeral.sql',
                 'raw_sql': 'select * from source_table',
                 'compiled': True,
                 'compiled_sql': 'select * from source_table',
                 'extra_ctes_injected': False,
-                'extra_cte_ids': [],
-                'extra_cte_sql': [],
+                'extra_ctes': OrderedDict(),
                 'injected_sql': ''
             }
         }
@@ -121,14 +120,13 @@ class CompilerTest(unittest.TestCase):
                 'root_path': '/usr/src/app',
                 'depends_on': [],
                 'config': self.model_config,
-                'tags': [],
+                'tags': set(),
                 'path': 'view.sql',
                 'raw_sql': ('with cte as (select * from something_else) '
                             'select * from source_table'),
                 'compiled': True,
                 'extra_ctes_injected': False,
-                'extra_cte_ids': [],
-                'extra_cte_sql': [],
+                'extra_ctes': OrderedDict(),
                 'injected_sql': '',
                 'compiled_sql': ('with cte as (select * from something_else) '
                                  'select * from source_table')
@@ -143,13 +141,12 @@ class CompilerTest(unittest.TestCase):
                 'root_path': '/usr/src/app',
                 'depends_on': [],
                 'config': self.model_config,
-                'tags': [],
+                'tags': set(),
                 'path': 'view.sql',
                 'raw_sql': 'select * from source_table',
                 'compiled': True,
                 'extra_ctes_injected': False,
-                'extra_cte_ids': [],
-                'extra_cte_sql': [],
+                'extra_ctes': OrderedDict(),
                 'injected_sql': '',
                 'compiled_sql': ('select * from source_table')
             }
@@ -175,7 +172,6 @@ class CompilerTest(unittest.TestCase):
             result.get('injected_sql'),
             compiled_models.get('model.root.view_no_cte').get('compiled_sql'))
 
-
     def test__prepend_ctes(self):
         ephemeral_config = self.model_config.copy()
         ephemeral_config['materialized'] = 'ephemeral'
@@ -193,15 +189,14 @@ class CompilerTest(unittest.TestCase):
                     'model.root.ephemeral'
                 ],
                 'config': self.model_config,
-                'tags': [],
+                'tags': set(),
                 'path': 'view.sql',
                 'raw_sql': 'select * from {{ref("ephemeral")}}',
                 'compiled': True,
                 'extra_ctes_injected': False,
-                'extra_cte_ids': [
-                    'model.root.ephemeral'
-                ],
-                'extra_cte_sql': [],
+                'extra_ctes': OrderedDict([
+                    ('model.root.ephemeral', None)
+                ]),
                 'injected_sql': '',
                 'compiled_sql': 'select * from __dbt__CTE__ephemeral'
             },
@@ -215,13 +210,12 @@ class CompilerTest(unittest.TestCase):
                 'root_path': '/usr/src/app',
                 'depends_on': [],
                 'config': ephemeral_config,
-                'tags': [],
+                'tags': set(),
                 'path': 'ephemeral.sql',
                 'raw_sql': 'select * from source_table',
                 'compiled': True,
                 'extra_ctes_injected': False,
-                'extra_cte_ids': [],
-                'extra_cte_sql': [],
+                'extra_ctes': OrderedDict(),
                 'injected_sql': '',
                 'compiled_sql': 'select * from source_table'
             }
@@ -262,15 +256,14 @@ class CompilerTest(unittest.TestCase):
                     'model.root.ephemeral'
                 ],
                 'config': self.model_config,
-                'tags': [],
+                'tags': set(),
                 'path': 'view.sql',
                 'raw_sql': 'select * from {{ref("ephemeral")}}',
                 'compiled': True,
                 'extra_ctes_injected': False,
-                'extra_cte_ids': [
-                    'model.root.ephemeral'
-                ],
-                'extra_cte_sql': [],
+                'extra_ctes': OrderedDict([
+                    ('model.root.ephemeral', None)
+                ]),
                 'injected_sql': '',
                 'compiled_sql': 'select * from __dbt__CTE__ephemeral'
             },
@@ -284,15 +277,14 @@ class CompilerTest(unittest.TestCase):
                 'root_path': '/usr/src/app',
                 'depends_on': [],
                 'config': ephemeral_config,
-                'tags': [],
+                'tags': set(),
                 'path': 'ephemeral.sql',
                 'raw_sql': 'select * from {{ref("ephemeral_level_two")}}',
                 'compiled': True,
                 'extra_ctes_injected': False,
-                'extra_cte_ids': [
-                    'model.root.ephemeral_level_two'
-                ],
-                'extra_cte_sql': [],
+                'extra_ctes': OrderedDict([
+                    ('model.root.ephemeral_level_two', None)
+                ]),
                 'injected_sql': '',
                 'compiled_sql': 'select * from __dbt__CTE__ephemeral_level_two'
             },
@@ -306,13 +298,12 @@ class CompilerTest(unittest.TestCase):
                 'root_path': '/usr/src/app',
                 'depends_on': [],
                 'config': ephemeral_config,
-                'tags': [],
+                'tags': set(),
                 'path': 'ephemeral_level_two.sql',
                 'raw_sql': 'select * from source_table',
                 'compiled': True,
                 'extra_ctes_injected': False,
-                'extra_cte_ids': [],
-                'extra_cte_sql': [],
+                'extra_ctes': OrderedDict(),
                 'injected_sql': '',
                 'compiled_sql': 'select * from source_table'
             }

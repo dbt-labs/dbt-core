@@ -115,9 +115,15 @@ def get_fqn(path, package_project_config, extra=[]):
 
 
 def parse_node(node, node_path, root_project_config, package_project_config,
-               macro_generator=None, tags=[], fqn_extra=[]):
+               macro_generator=None, tags=None, fqn_extra=None):
     logger.debug("Parsing {}".format(node_path))
     parsed_node = copy.deepcopy(node)
+
+    if tags is None:
+        tags = set()
+
+    if fqn_extra is None:
+        fqn_extra = []
 
     parsed_node.update({
         'depends_on': [],
@@ -167,7 +173,11 @@ def parse_node(node, node_path, root_project_config, package_project_config,
 
 
 def parse_sql_nodes(nodes, root_project, projects, macro_generator=None,
-                    tags=[]):
+                    tags=None):
+
+    if tags is None:
+        tags = set()
+
     to_return = {}
 
     dbt.contracts.graph.unparsed.validate(nodes)
@@ -193,8 +203,12 @@ def parse_sql_nodes(nodes, root_project, projects, macro_generator=None,
 
 
 def load_and_parse_sql(package_name, root_project, all_projects, root_dir,
-                       relative_dirs, resource_type, macro_generator, tags=[]):
+                       relative_dirs, resource_type, macro_generator,
+                       tags=None):
     extension = "[!.#~]*.sql"
+
+    if tags is None:
+        tags = set()
 
     if dbt.flags.STRICT_MODE:
         dbt.contracts.project.validate_list(all_projects)
@@ -309,7 +323,7 @@ def parse_schema_test(test_base, model_name, test_config, test_type,
                                     name),
                       root_project_config,
                       package_project_config,
-                      tags=['schema'],
+                      tags={'schema'},
                       fqn_extra=['schema'])
 
 

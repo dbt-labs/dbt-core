@@ -7,6 +7,8 @@ import dbt.flags
 import dbt.parser
 import dbt.runner
 
+from collections import OrderedDict
+
 
 class TestRunner(unittest.TestCase):
 
@@ -48,10 +50,7 @@ class TestRunner(unittest.TestCase):
             'raw_sql': 'select * from {{ref("ephemeral")}}',
             'compiled': True,
             'extra_ctes_injected': False,
-            'extra_cte_ids': [
-                'model.root.ephemeral'
-            ],
-            'extra_cte_sql': [],
+            'extra_ctes': OrderedDict([('model.root.ephemeral', None)]),
             'compiled_sql': 'select * from __dbt__CTE__ephemeral',
             'injected_sql': ('with __dbt__CTE__ephemeral as ('
                              'select * from "public"."ephemeral"',

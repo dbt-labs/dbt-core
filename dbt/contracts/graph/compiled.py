@@ -1,6 +1,8 @@
 from voluptuous import Schema, Required, All, Any, Extra, Range, Optional, \
     Length
 
+from collections import OrderedDict
+
 from dbt.compat import basestring
 from dbt.exceptions import ValidationException
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -16,8 +18,9 @@ compiled_graph_item_contract = parsed_graph_item_contract.extend({
 
     # injected fields
     Required('extra_ctes_injected'): bool,
-    Required('extra_cte_ids'): All(list, [basestring]),
-    Required('extra_cte_sql'): All(list, [basestring]),
+    Required('extra_ctes'): All(OrderedDict, {
+        basestring: Any(basestring, None)
+    }),
     Required('injected_sql'): Any(basestring, None),
 })
 

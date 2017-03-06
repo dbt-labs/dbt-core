@@ -665,7 +665,7 @@ class RunManager(object):
                 get_materialization(graph.node.get(n)) != 'ephemeral' and
                 (len(tags) == 0 or
                  # does the node share any tags with the run?
-                 bool(set(graph.node.get(n).get('tags')) & set(tags))))
+                 bool(graph.node.get(n).get('tags') & tags)))
         ]
 
         return set(post_filter)
@@ -715,7 +715,7 @@ class RunManager(object):
         return self.run_types_from_graph(include_spec,
                                          exclude_spec,
                                          resource_types=[NodeType.Model],
-                                         tags=[],
+                                         tags=set(),
                                          should_run_hooks=True)
 
     def run_tests(self, include_spec, exclude_spec, tags):
@@ -728,4 +728,4 @@ class RunManager(object):
         return self.run_types_from_graph(include_spec,
                                          exclude_spec,
                                          [NodeType.Archive],
-                                         [])
+                                         set())

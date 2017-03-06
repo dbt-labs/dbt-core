@@ -31,11 +31,11 @@ class TestTask:
 
         if (self.args.data and self.args.schema) or \
            (not self.args.data and not self.args.schema):
-            res = runner.run_tests(include, exclude, [])
+            res = runner.run_tests(include, exclude, set())
         elif self.args.data:
-            res = runner.run_tests(include, exclude, ['data'])
+            res = runner.run_tests(include, exclude, {'data'})
         elif self.args.schema:
-            res = runner.run_tests(include, exclude, ['schema'])
+            res = runner.run_tests(include, exclude, {'schema'})
         else:
             raise RuntimeError("unexpected")
 
