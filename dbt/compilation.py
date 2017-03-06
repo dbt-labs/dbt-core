@@ -72,9 +72,9 @@ def recursively_prepend_ctes(model, all_models):
     prepend_ctes = OrderedDict()
 
     if model.get('all_ctes_injected') is True:
-        return (model, model.get('extra_cte_sql').keys(), all_models)
+        return (model, model.get('extra_ctes').keys(), all_models)
 
-    for cte_id in model.get('extra_cte_sql').keys():
+    for cte_id in model.get('extra_ctes').keys():
         cte_to_add = all_models.get(cte_id)
         cte_to_add, new_prepend_ctes, all_models = recursively_prepend_ctes(
             cte_to_add, all_models)
@@ -86,10 +86,10 @@ def recursively_prepend_ctes(model, all_models):
             cte_to_add.get('compiled_sql'))
 
     model['extra_ctes_injected'] = True
-    model['extra_cte_sql'] = prepend_ctes
+    model['extra_ctes'] = prepend_ctes
     model['injected_sql'] = inject_ctes_into_sql(
         model.get('compiled_sql'),
-        model.get('extra_cte_sql'))
+        model.get('extra_ctes'))
 
     all_models[model.get('unique_id')] = model
 
@@ -212,7 +212,7 @@ class Compiler(object):
                 model['depends_on'].append(target_model_id)
 
             if get_materialization(target_model) == 'ephemeral':
-                model['extra_cte_sql'][target_model_id] = None
+                model['extra_ctes'][target_model_id] = None
                 return '__dbt__CTE__{}'.format(target_model.get('name'))
             else:
                 return '"{}"."{}"'.format(schema, target_model.get('name'))
@@ -304,7 +304,7 @@ class Compiler(object):
             'compiled': False,
             'compiled_sql': None,
             'extra_ctes_injected': False,
-            'extra_cte_sql': OrderedDict(),
+            'extra_ctes': OrderedDict(),
             'injected_sql': None,
         })
 

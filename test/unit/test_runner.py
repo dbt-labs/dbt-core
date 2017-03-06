@@ -50,7 +50,7 @@ class TestRunner(unittest.TestCase):
             'raw_sql': 'select * from {{ref("ephemeral")}}',
             'compiled': True,
             'extra_ctes_injected': False,
-            'extra_cte_sql': OrderedDict([('model.root.ephemeral', None)]),
+            'extra_ctes': OrderedDict([('model.root.ephemeral', None)]),
             'compiled_sql': 'select * from __dbt__CTE__ephemeral',
             'injected_sql': ('with __dbt__CTE__ephemeral as ('
                              'select * from "public"."ephemeral"',

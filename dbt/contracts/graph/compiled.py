@@ -18,7 +18,7 @@ compiled_graph_item_contract = parsed_graph_item_contract.extend({
 
     # injected fields
     Required('extra_ctes_injected'): bool,
-    Required('extra_cte_sql'): All(OrderedDict, {
+    Required('extra_ctes'): All(OrderedDict, {
         basestring: Any(basestring, None)
     }),
     Required('injected_sql'): Any(basestring, None),

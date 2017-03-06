@@ -63,7 +63,7 @@ class CompilerTest(unittest.TestCase):
                 'raw_sql': 'select * from {{ref("ephemeral")}}',
                 'compiled': True,
                 'extra_ctes_injected': False,
-                'extra_cte_sql': OrderedDict([
+                'extra_ctes': OrderedDict([
                     ('model.root.ephemeral', None)
                 ]),
                 'injected_sql': '',
@@ -86,7 +86,7 @@ class CompilerTest(unittest.TestCase):
                 'compiled': True,
                 'compiled_sql': 'select * from source_table',
                 'extra_ctes_injected': False,
-                'extra_cte_sql': OrderedDict(),
+                'extra_ctes': OrderedDict(),
                 'injected_sql': ''
             }
         }
@@ -126,7 +126,7 @@ class CompilerTest(unittest.TestCase):
                             'select * from source_table'),
                 'compiled': True,
                 'extra_ctes_injected': False,
-                'extra_cte_sql': OrderedDict(),
+                'extra_ctes': OrderedDict(),
                 'injected_sql': '',
                 'compiled_sql': ('with cte as (select * from something_else) '
                                  'select * from source_table')
@@ -146,7 +146,7 @@ class CompilerTest(unittest.TestCase):
                 'raw_sql': 'select * from source_table',
                 'compiled': True,
                 'extra_ctes_injected': False,
-                'extra_cte_sql': OrderedDict(),
+                'extra_ctes': OrderedDict(),
                 'injected_sql': '',
                 'compiled_sql': ('select * from source_table')
             }
@@ -194,7 +194,7 @@ class CompilerTest(unittest.TestCase):
                 'raw_sql': 'select * from {{ref("ephemeral")}}',
                 'compiled': True,
                 'extra_ctes_injected': False,
-                'extra_cte_sql': OrderedDict([
+                'extra_ctes': OrderedDict([
                     ('model.root.ephemeral', None)
                 ]),
                 'injected_sql': '',
@@ -215,7 +215,7 @@ class CompilerTest(unittest.TestCase):
                 'raw_sql': 'select * from source_table',
                 'compiled': True,
                 'extra_ctes_injected': False,
-                'extra_cte_sql': OrderedDict(),
+                'extra_ctes': OrderedDict(),
                 'injected_sql': '',
                 'compiled_sql': 'select * from source_table'
             }
@@ -261,7 +261,7 @@ class CompilerTest(unittest.TestCase):
                 'raw_sql': 'select * from {{ref("ephemeral")}}',
                 'compiled': True,
                 'extra_ctes_injected': False,
-                'extra_cte_sql': OrderedDict([
+                'extra_ctes': OrderedDict([
                     ('model.root.ephemeral', None)
                 ]),
                 'injected_sql': '',
@@ -282,7 +282,7 @@ class CompilerTest(unittest.TestCase):
                 'raw_sql': 'select * from {{ref("ephemeral_level_two")}}',
                 'compiled': True,
                 'extra_ctes_injected': False,
-                'extra_cte_sql': OrderedDict([
+                'extra_ctes': OrderedDict([
                     ('model.root.ephemeral_level_two', None)
                 ]),
                 'injected_sql': '',
@@ -303,7 +303,7 @@ class CompilerTest(unittest.TestCase):
                 'raw_sql': 'select * from source_table',
                 'compiled': True,
                 'extra_ctes_injected': False,
-                'extra_cte_sql': OrderedDict(),
+                'extra_ctes': OrderedDict(),
                 'injected_sql': '',
                 'compiled_sql': 'select * from source_table'
             }
