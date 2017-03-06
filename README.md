@@ -1,4 +1,3 @@
-
 # dbt
 
 dbt (data build tool) helps analysts write reliable, modular code using a workflow that closely mirrors software development.

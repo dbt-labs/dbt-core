@@ -701,7 +701,7 @@ class ParserTest(unittest.TestCase):
             'name': 'package',
             'resource_type': 'model',
             'package_name': 'snowplow',
-            'path': 'views/package.sql',
+            'path': get_os_path('views/package.sql'),
             'root_path': get_os_path('/usr/src/app'),
             'raw_sql': ("select * from events"),
         }]
@@ -808,7 +808,7 @@ class ParserTest(unittest.TestCase):
                     'empty': False,
                     'package_name': 'snowplow',
                     'depends_on': [],
-                    'path': 'views/package.sql',
+                    'path': get_os_path('views/package.sql'),
                     'root_path': get_os_path('/usr/src/app'),
                     'config': sort_config,
                     'tags': set(),
