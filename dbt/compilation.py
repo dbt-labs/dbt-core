@@ -352,8 +352,10 @@ class Compiler(object):
             # wrapping
             if injected_node.get('resource_type') in [NodeType.Test,
                                                       NodeType.Analysis]:
-                if 'data' in injected_node['tags']:
-                    # data tests get wrapped in count(*)
+                # data tests get wrapped in count(*)
+                # TODO : move this somewhere more reasonable
+                if 'data' in injected_node['tags'] and \
+                        injected_node.get('resource_type') == NodeType.Test:
                     injected_node['wrapped_sql'] = (
                         "select count(*) from (\n{test_sql}\n) sbq").format(
                         test_sql=injected_node['injected_sql'])
@@ -388,12 +390,7 @@ class Compiler(object):
                 injected_node['wrapped_sql'] = wrapped_stmt
                 wrapped_nodes[name] = injected_node
 
-            if injected_node.get('resource_type') == NodeType.Test:
-                source_path = dbt.utils.get_pseduo_test_path(injected_node)
-            else:
-                source_path = injected_node.get('path')
-
-            build_path = os.path.join('build', source_path)
+            build_path = os.path.join('build', injected_node.get('path'))
 
             if injected_node.get('resource_type') in (NodeType.Model,
                                                       NodeType.Analysis,

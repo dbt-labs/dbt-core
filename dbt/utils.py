@@ -197,23 +197,8 @@ def is_enabled(node):
     return node.get('config', {}).get('enabled') is True
 
 
-def get_test_type(node):
-    if 'schema' in node.get('tags'):
-        test_type = 'schema_test'
-    elif 'data' in node.get('tags'):
-        test_type = 'data_test'
-    else:
-        test_type = 'test'
-
-    return test_type
-
-
-def get_pseduo_test_path(node):
+def get_pseudo_test_path(node_name, source_path, test_type):
     "schema tests all come from schema.yml files. fake a source sql file"
-    node_name = node.get('name')
-    source_path = node.get('path')
-    test_type = get_test_type(node)
-
     source_path_parts = split_path(source_path)
     source_path_parts.pop()  # ignore filename
     suffix = [test_type, "{}.sql".format(node_name)]
