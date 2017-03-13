@@ -352,8 +352,16 @@ class Compiler(object):
             # wrapping
             if injected_node.get('resource_type') in [NodeType.Test,
                                                       NodeType.Analysis]:
-                # don't wrap tests or analyses.
-                injected_node['wrapped_sql'] = injected_node['injected_sql']
+                if 'data' in injected_node['tags']:
+                    # data tests get wrapped in count(*)
+                    injected_node['wrapped_sql'] = (
+                        "select count(*) from (\n{test_sql}\n) sbq").format(
+                        test_sql=injected_node['injected_sql'])
+                else:
+                    # don't wrap schema tests or analyses.
+                    injected_node['wrapped_sql'] = injected_node.get(
+                        'injected_sql')
+
                 wrapped_nodes[name] = injected_node
 
             elif injected_node.get('resource_type') == NodeType.Archive:
