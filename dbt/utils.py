@@ -207,6 +207,7 @@ def get_test_type(node):
 
     return test_type
 
+
 def get_pseduo_test_path(node):
     "schema tests all come from schema.yml files. fake a source sql file"
     node_name = node.get('name')
