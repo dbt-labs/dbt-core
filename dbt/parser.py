@@ -333,7 +333,7 @@ def parse_schema_test(test_base, model_name, test_config, test_type,
                       root_project_config,
                       package_project_config,
                       tags={'schema'},
-                      fqn_extra=['schema'])
+                      fqn_extra=None)
 
 
 def load_and_parse_yml(package_name, root_project, all_projects, root_dir,
