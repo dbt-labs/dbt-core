@@ -109,10 +109,10 @@ def model_cte_name(model):
     return '__dbt__CTE__{}'.format(model.get('name'))
 
 
-def find_model_by_name(all_models, target_model_name,
+def find_model_by_name(flat_graph, target_model_name,
                        target_model_package):
 
-    for name, model in all_models.items():
+    for name, model in flat_graph.get('nodes').items():
         resource_type, package_name, model_name = name.split('.')
 
         if (resource_type == 'model' and

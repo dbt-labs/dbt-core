@@ -1,12 +1,15 @@
-from voluptuous import Schema, Required, All, Any, Extra, Range, Optional, \
-    Length
+from voluptuous import Schema, Required, All, Any, Length, Optional
+
+import jinja2.runtime
 
 from dbt.compat import basestring
-from dbt.exceptions import ValidationException
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.model import NodeType
 
 from dbt.contracts.common import validate_with
-from dbt.contracts.graph.unparsed import unparsed_graph_item_contract
+from dbt.contracts.graph.unparsed import unparsed_node_contract, \
+    unparsed_base_contract
+
+from dbt.logger import GLOBAL_LOGGER as logger # noqa
 
 
 config_contract = {
@@ -25,40 +28,54 @@ config_contract = {
     Optional('dist'): basestring,
 }
 
-
-parsed_graph_item_contract = unparsed_graph_item_contract.extend({
+parsed_node_contract = unparsed_node_contract.extend({
     # identifiers
     Required('unique_id'): All(basestring, Length(min=1, max=255)),
     Required('fqn'): All(list, [All(basestring)]),
 
     # parsed fields
-    Required('depends_on'): All(list,
-                                [All(basestring, Length(min=1, max=255))]),
+    Required('depends_on'): {
+        Required('nodes'): [All(basestring, Length(min=1, max=255))],
+        Required('macros'): [All(basestring, Length(min=1, max=255))],
+    },
     Required('empty'): bool,
     Required('config'): config_contract,
     Required('tags'): All(set),
 })
 
+parsed_nodes_contract = Schema({
+    str: parsed_node_contract,
+})
 
-def validate_one(parsed_graph_item):
-    validate_with(parsed_graph_item_contract, parsed_graph_item)
+parsed_macro_contract = unparsed_base_contract.extend({
+    # identifiers
+    Required('resource_type'): Any(NodeType.Macro),
+    Required('unique_id'): All(basestring, Length(min=1, max=255)),
+    Required('tags'): All(set),
 
-    materialization = parsed_graph_item.get('config', {}) \
-                                       .get('materialized')
+    # contents
+    Required('parsed_macro'): jinja2.runtime.Macro
 
-    if materialization == 'incremental' and \
-       parsed_graph_item.get('config', {}).get('sql_where') is None:
-        raise ValidationException(
-            'missing `sql_where` for an incremental model')
+})
+
+parsed_macros_contract = Schema({
+    str: parsed_macro_contract,
+})
+
+
+parsed_graph_contract = Schema({
+    Required('nodes'): parsed_nodes_contract,
+    Required('macros'): parsed_macros_contract,
+})
+
+
+def validate_nodes(parsed_nodes):
+    validate_with(parsed_nodes_contract, parsed_nodes)
+
+
+def validate_macros(parsed_macros):
+    validate_with(parsed_macros_contract, parsed_macros)
 
 
 def validate(parsed_graph):
-    for k, v in parsed_graph.items():
-        validate_one(v)
-
-        if v.get('unique_id') != k:
-            error_msg = ('unique_id must match key name in parsed graph!'
-                         'key: {}, model: {}'
-                         .format(k, v))
-            logger.info(error_msg)
-            raise ValidationException(error_msg)
+    validate_with(parsed_graph_contract, parsed_graph)

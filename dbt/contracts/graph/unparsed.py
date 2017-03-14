@@ -1,19 +1,14 @@
-from voluptuous import Schema, Required, All, Any, Extra, Range, Optional, \
-    Length
+from voluptuous import Schema, Required, All, Any, Length
 
 from dbt.compat import basestring
 from dbt.contracts.common import validate_with
-from dbt.logger import GLOBAL_LOGGER as logger
 
 from dbt.model import NodeType
 
-unparsed_graph_item_contract = Schema({
+unparsed_base_contract = Schema({
     # identifiers
     Required('name'): All(basestring, Length(min=1, max=127)),
     Required('package_name'): basestring,
-    Required('resource_type'): Any(NodeType.Model,
-                                   NodeType.Test,
-                                   NodeType.Analysis),
 
     # filesystem
     Required('root_path'): basestring,
@@ -21,7 +16,14 @@ unparsed_graph_item_contract = Schema({
     Required('raw_sql'): basestring,
 })
 
+unparsed_node_contract = unparsed_base_contract.extend({
+    Required('resource_type'): Any(NodeType.Model,
+                                   NodeType.Test,
+                                   NodeType.Analysis)
+})
 
-def validate(unparsed_graph):
-    for item in unparsed_graph:
-        validate_with(unparsed_graph_item_contract, item)
+unparsed_nodes_contract = Schema([unparsed_node_contract])
+
+
+def validate_nodes(nodes):
+    validate_with(unparsed_nodes_contract, nodes)

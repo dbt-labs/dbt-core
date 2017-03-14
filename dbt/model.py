@@ -20,6 +20,7 @@ class NodeType(object):
     Analysis = 'analysis'
     Test = 'test'
     Archive = 'archive'
+    Macro = 'macro'
 
 
 class SourceConfig(object):

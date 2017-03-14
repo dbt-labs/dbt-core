@@ -15,7 +15,7 @@ import dbt.utils
 import networkx as nx
 from test.integration.base import FakeArgs
 
-# from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.logger import GLOBAL_LOGGER as logger # noqa
 
 
 class GraphTest(unittest.TestCase):
