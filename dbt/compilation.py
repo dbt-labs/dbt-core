@@ -175,6 +175,8 @@ class Compiler(object):
 
         dbt.compat.write_file(target_path, payload)
 
+        return target_path
+
     def __model_config(self, model, linker):
         def do_config(*args, **kwargs):
             return ''
@@ -390,15 +392,18 @@ class Compiler(object):
                 injected_node['wrapped_sql'] = wrapped_stmt
                 wrapped_nodes[name] = injected_node
 
-            build_path = os.path.join('build', injected_node.get('path'))
+            build_path = os.path.join('build',
+                                      injected_node.get('package_name'),
+                                      injected_node.get('path'))
 
             if injected_node.get('resource_type') in (NodeType.Model,
                                                       NodeType.Analysis,
                                                       NodeType.Test) and \
                get_materialization(injected_node) != 'ephemeral':
-                self.__write(build_path, injected_node.get('wrapped_sql'))
+                written_path = self.__write(
+                    build_path, injected_node.get('wrapped_sql'))
                 written_nodes.append(injected_node)
-                injected_node['build_path'] = build_path
+                injected_node['build_path'] = written_path
 
             linker.add_node(injected_node.get('unique_id'))
             project = all_projects[injected_node.get('package_name')]
