@@ -256,6 +256,9 @@ def parse_schema_tests(tests, root_project, projects):
 
         for model_name, test_spec in test_yml.items():
             for test_type, configs in test_spec.get('constraints', {}).items():
+                if configs is None:
+                    continue
+
                 for config in configs:
                     to_add = parse_schema_test(
                         test, model_name, config, test_type,
