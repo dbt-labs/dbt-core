@@ -120,9 +120,9 @@ SCDArchiveTemplate = u"""
             {% for col in get_columns_in_table(source_schema, source_table) %}
                 "{{ col.name }}" {% if not loop.last %},{% endif %}
             {% endfor %},
-            "{{ updated_at }}" as "dbt_updated_at",
-            "{{ unique_key }}" as "dbt_pk",
-            "{{ updated_at }}" as "valid_from",
+            {{ updated_at }} as "dbt_updated_at",
+            {{ unique_key }} as "dbt_pk",
+            {{ updated_at }} as "valid_from",
             null::timestamp as "tmp_valid_to"
         from "{{ source_schema }}"."{{ source_table }}"
 
@@ -134,8 +134,8 @@ SCDArchiveTemplate = u"""
             {% for col in get_columns_in_table(source_schema, source_table) %}
                 "{{ col.name }}" {% if not loop.last %},{% endif %}
             {% endfor %},
-            "{{ updated_at }}" as "dbt_updated_at",
-            "{{ unique_key }}" as "dbt_pk",
+            {{ updated_at }} as "dbt_updated_at",
+            {{ unique_key }} as "dbt_pk",
             "valid_from",
             "valid_to" as "tmp_valid_to"
         from "{{ target_schema }}"."{{ target_table }}"

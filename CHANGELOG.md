@@ -3,6 +3,7 @@
 ### Bugfixes
 
 - Fix ephemeral load order bug ([#292](https://github.com/fishtown-analytics/dbt/pull/292), [#285](https://github.com/fishtown-analytics/dbt/pull/285))
+- Support composite unique key in archivals ([#324](https://github.com/fishtown-analytics/dbt/pull/324))
 
 ### Changes
 

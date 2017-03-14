@@ -288,6 +288,8 @@ def execute_archive(profile, node, context):
         profile, node_cfg.get('source_schema'), node_cfg.get('source_table'))
 
     if len(source_columns) == 0:
+        source_schema = node_cfg.get('source_schema')
+        source_table = node_cfg.get('source_table')
         raise RuntimeError(
             'Source table "{}"."{}" does not '
             'exist'.format(source_schema, source_table))
@@ -304,8 +306,8 @@ def execute_archive(profile, node, context):
         schema=node_cfg.get('target_schema'),
         table=node_cfg.get('target_table'),
         columns=dest_columns,
-        sort=node_cfg.get('updated_at'),
-        dist=node_cfg.get('unique_key'))
+        sort='dbt_updated_at',
+        dist='scd_id')
 
     # TODO move this to inject_runtime_config, generate archive SQL
     # in wrap step. can't do this right now because we actually need

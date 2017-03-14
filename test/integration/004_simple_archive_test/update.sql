@@ -26,7 +26,7 @@ select
     "updated_at" as "valid_from",
     null::timestamp as "valid_to",
     "updated_at" as "dbt_updated_at",
-    md5("id" || '|' || "updated_at"::text) as "scd_id"
+    md5("id" || '-' || "first_name" || '|' || "updated_at"::text) as "scd_id"
 from "simple_archive_004"."seed"
 where "id" >= 10 and "id" <= 20;
 
@@ -72,6 +72,6 @@ select
     "updated_at" as "valid_from",
     null::timestamp as "valid_to",
     "updated_at" as "dbt_updated_at",
-    md5("id" || '|' || "updated_at"::text) as "scd_id"
+    md5("id" || '-' || "first_name" || '|' || "updated_at"::text) as "scd_id"
 from "simple_archive_004"."seed"
 where "id" > 20;

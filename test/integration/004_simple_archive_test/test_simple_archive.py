@@ -26,7 +26,7 @@ class TestSimpleArchive(DBTIntegrationTest):
                             "source_table": "seed",
                             "target_table": "archive_actual",
                             "updated_at": "updated_at",
-                            "unique_key": "id"
+                            "unique_key": "id || '-' || first_name"
                         }
                     ]
                 }
