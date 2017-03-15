@@ -1,5 +1,5 @@
 import os
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 import sqlparse
 
 import dbt.project
@@ -579,14 +579,12 @@ class Compiler(object):
 
         self.write_graph_file(linker)
 
-        stats = {}
+        stats = defaultdict(int)
 
         for node_name, node in compiled_graph.get('nodes').items():
-            stats[node.get('resource_type')] = stats.get(
-                node.get('resource_type'), 0) + 1
+            stats[node.get('resource_type')] += 1
 
         for node_name, node in compiled_graph.get('macros').items():
-            stats[node.get('resource_type')] = stats.get(
-                node.get('resource_type'), 0) + 1
+            stats[node.get('resource_type')] += 1
 
         return stats
