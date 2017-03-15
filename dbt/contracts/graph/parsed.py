@@ -3,7 +3,7 @@ from voluptuous import Schema, Required, All, Any, Length, Optional
 import jinja2.runtime
 
 from dbt.compat import basestring
-from dbt.model import NodeType
+from dbt.utils import NodeType
 
 from dbt.contracts.common import validate_with
 from dbt.contracts.graph.unparsed import unparsed_node_contract, \

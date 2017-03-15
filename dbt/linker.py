@@ -2,7 +2,7 @@ import networkx as nx
 from collections import defaultdict
 
 import dbt.compilation
-import dbt.model
+from dbt.utils import NodeType
 
 
 def from_file(graph_file):
@@ -65,7 +65,7 @@ class Linker(object):
         if 'dbt_run_type' not in node_data or 'materialized' not in node_data:
             return False
 
-        return node_data['dbt_run_type'] == dbt.model.NodeType.Model \
+        return node_data['dbt_run_type'] == NodeType.Model \
             and node_data['materialized'] != 'ephemeral'
 
     def as_dependency_list(self, limit_to=None):

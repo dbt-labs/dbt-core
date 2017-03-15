@@ -3,21 +3,14 @@ from __future__ import print_function
 import hashlib
 import psycopg2
 import os
-import sys
-import logging
 import time
 import itertools
-import re
-import yaml
 from datetime import datetime
 
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
 
-from dbt.source import Source
-from dbt.utils import find_model_by_fqn, find_model_by_name, \
-    dependency_projects, get_materialization
-from dbt.model import NodeType
+from dbt.utils import get_materialization, NodeType
 
 import dbt.clients.jinja
 import dbt.compilation
@@ -162,13 +155,13 @@ def execute_test(profile, test):
     if len(rows) > 1:
         raise RuntimeError(
             "Bad test {name}: Returned {num_rows} rows instead of 1"
-            .format(name=model.name, num_rows=len(rows)))
+            .format(name=test.name, num_rows=len(rows)))
 
     row = rows[0]
     if len(row) > 1:
         raise RuntimeError(
             "Bad test {name}: Returned {num_cols} cols instead of 1"
-            .format(name=model.name, num_cols=len(row)))
+            .format(name=test.name, num_cols=len(row)))
 
     return row[0]
 

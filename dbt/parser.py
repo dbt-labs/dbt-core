@@ -13,7 +13,7 @@ import dbt.contracts.graph.parsed
 import dbt.contracts.graph.unparsed
 import dbt.contracts.project
 
-from dbt.model import NodeType
+from dbt.utils import NodeType
 from dbt.logger import GLOBAL_LOGGER as logger
 
 QUERY_VALIDATE_NOT_NULL = """
@@ -148,15 +148,10 @@ def parse_macro_file(macro_file_path,
     return to_return
 
 
-class FakeProject:
-    def __call__(*args, **kwargs):
-        return None
-
-
 def parse_node(node, node_path, root_project_config, package_project_config,
                all_projects, tags=None, fqn_extra=None):
     logger.debug("Parsing {}".format(node_path))
-    parsed_node = copy.deepcopy(node)
+    node = copy.deepcopy(node)
 
     if tags is None:
         tags = set()
@@ -164,7 +159,7 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     if fqn_extra is None:
         fqn_extra = []
 
-    parsed_node.update({
+    node.update({
         'depends_on': {
             'nodes': [],
             'macros': [],
@@ -179,27 +174,25 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     context = {}
 
     context['ref'] = lambda *args: ''
-    context['config'] = __config(parsed_node, config)
+    context['config'] = __config(node, config)
     context['var'] = lambda *args: ''
     context['target'] = property(lambda x: '', lambda x: x)
     context['this'] = ''
 
-    for name, project in all_projects.items():
-        context[name] = FakeProject()
-
     dbt.clients.jinja.get_rendered(
-        node.get('raw_sql'), context, node, silent_on_undefined=True)
+        node.get('raw_sql'), context, node,
+        capture_macros=True)
 
     config_dict = node.get('config', {})
     config_dict.update(config.config)
 
-    parsed_node['unique_id'] = node_path
-    parsed_node['config'] = config_dict
-    parsed_node['empty'] = (len(node.get('raw_sql').strip()) == 0)
-    parsed_node['fqn'] = fqn
-    parsed_node['tags'] = tags
+    node['unique_id'] = node_path
+    node['config'] = config_dict
+    node['empty'] = (len(node.get('raw_sql').strip()) == 0)
+    node['fqn'] = fqn
+    node['tags'] = tags
 
-    return parsed_node
+    return node
 
 
 def parse_sql_nodes(nodes, root_project, projects, tags=None):

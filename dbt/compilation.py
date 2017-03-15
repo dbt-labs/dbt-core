@@ -5,9 +5,9 @@ import sqlparse
 import dbt.project
 import dbt.utils
 
-from dbt.model import Model, NodeType
+from dbt.model import Model
 from dbt.source import Source
-from dbt.utils import This, Var, is_enabled, get_materialization
+from dbt.utils import This, Var, is_enabled, get_materialization, NodeType
 
 from dbt.linker import Linker
 from dbt.runtime import RuntimeContext
@@ -245,7 +245,12 @@ class Compiler(object):
         context['invocation_id'] = '{{ invocation_id }}'
         context['sql_now'] = adapter.date_function
 
-        for unique_id, macro in flat_graph.get('macros').items():
+        for unique_id in model.get('depends_on', {}).get('macros'):
+            macro = flat_graph.get('macros', {}).get(unique_id)
+
+            if macro is None:
+                dbt.exceptions.macro_not_found(model, unique_id)
+
             name = macro.get('name')
             package_name = macro.get('package_name')
 

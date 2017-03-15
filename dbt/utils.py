@@ -20,6 +20,15 @@ DBTConfigKeys = [
 ]
 
 
+class NodeType(object):
+    Base = 'base'
+    Model = 'model'
+    Analysis = 'analysis'
+    Test = 'test'
+    Archive = 'archive'
+    Macro = 'macro'
+
+
 class This(object):
     def __init__(self, schema, table, name):
         self.schema = schema
@@ -109,19 +118,29 @@ def model_cte_name(model):
     return '__dbt__CTE__{}'.format(model.get('name'))
 
 
-def find_model_by_name(flat_graph, target_model_name,
-                       target_model_package):
+def find_model_by_name(flat_graph, target_name, target_package):
+    return find_by_name(flat_graph, target_name, target_package,
+                        'nodes', NodeType.Model)
 
-    for name, model in flat_graph.get('nodes').items():
-        resource_type, package_name, model_name = name.split('.')
 
-        if (resource_type == 'model' and
-            ((target_model_name == model_name) and
-             (target_model_package is None or
-              target_model_package == package_name))):
+def find_macro_by_name(flat_graph, target_name, target_package):
+    return find_by_name(flat_graph, target_name, target_package,
+                        'macros', NodeType.Macro)
+
+
+def find_by_name(flat_graph, target_name, target_package, subgraph,
+                 nodetype):
+    for name, model in flat_graph.get(subgraph).items():
+        resource_type, package_name, node_name = name.split('.')
+
+        if (resource_type == nodetype and
+            ((target_name == node_name) and
+             (target_package is None or
+              target_package == package_name))):
             return model
 
     return None
+
 
 
 def find_model_by_fqn(models, fqn):

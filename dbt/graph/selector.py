@@ -1,10 +1,8 @@
-
 # import dbt.utils.compiler_error
 import networkx as nx
 from dbt.logger import GLOBAL_LOGGER as logger
 
-import dbt.model
-
+from dbt.utils import NodeType
 
 SELECTOR_PARENTS = '+'
 SELECTOR_CHILDREN = '+'
@@ -130,7 +128,7 @@ def get_nodes_from_spec(project, graph, spec):
         # they'll be filtered out later.
         child_tests = [n for n in graph.successors(node)
                        if graph.node.get(n).get('resource_type') ==
-                       dbt.model.NodeType.Test]
+                       NodeType.Test]
         test_nodes.update(child_tests)
 
     return model_nodes | test_nodes

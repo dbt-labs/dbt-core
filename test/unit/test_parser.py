@@ -1176,7 +1176,7 @@ another_model:
             'package_name': 'root',
             'root_path': get_os_path('/usr/src/app'),
             'path': 'model_one.sql',
-            'raw_sql': ("select *, {{root.simple(1, 2)}} from events"),
+            'raw_sql': ("select *, {{package.simple(1, 2)}} from events"),
         }]
 
         self.assertEquals(
@@ -1196,7 +1196,49 @@ another_model:
                     'root_path': get_os_path('/usr/src/app'),
                     'depends_on': {
                         'nodes': [],
-                        'macros': []
+                        'macros': [
+                            'macro.package.simple'
+                        ]
+                    },
+                    'config': self.model_config,
+                    'tags': set(),
+                    'path': 'model_one.sql',
+                    'raw_sql': self.find_input_by_name(
+                        models, 'model_one').get('raw_sql')
+                }
+            }
+        )
+
+    def test__macro_no_explicit_project_used_in_model(self):
+        models = [{
+            'name': 'model_one',
+            'resource_type': 'model',
+            'package_name': 'root',
+            'root_path': get_os_path('/usr/src/app'),
+            'path': 'model_one.sql',
+            'raw_sql': ("select *, {{ simple(1, 2) }} from events"),
+        }]
+
+        self.assertEquals(
+            dbt.parser.parse_sql_nodes(
+                models,
+                self.root_project_config,
+                {'root': self.root_project_config,
+                 'snowplow': self.snowplow_project_config}),
+            {
+                'model.root.model_one': {
+                    'name': 'model_one',
+                    'resource_type': 'model',
+                    'unique_id': 'model.root.model_one',
+                    'fqn': ['root', 'model_one'],
+                    'empty': False,
+                    'package_name': 'root',
+                    'root_path': get_os_path('/usr/src/app'),
+                    'depends_on': {
+                        'nodes': [],
+                        'macros': [
+                            'macro.root.simple'
+                        ]
                     },
                     'config': self.model_config,
                     'tags': set(),

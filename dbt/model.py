@@ -4,23 +4,14 @@ import jinja2.runtime
 from dbt.adapters.factory import get_adapter
 from dbt.compat import basestring
 
-import dbt.clients.jinja
 import dbt.flags
 
-from dbt.templates import BaseCreateTemplate, ArchiveInsertTemplate
-from dbt.utils import split_path
+from dbt.templates import BaseCreateTemplate
+from dbt.utils import split_path, NodeType
 import dbt.project
-from dbt.utils import deep_merge, DBTConfigKeys, compiler_error, \
-    compiler_warning
+from dbt.utils import deep_merge, DBTConfigKeys, compiler_error
 
-
-class NodeType(object):
-    Base = 'base'
-    Model = 'model'
-    Analysis = 'analysis'
-    Test = 'test'
-    Archive = 'archive'
-    Macro = 'macro'
+import dbt.clients.jinja
 
 
 class SourceConfig(object):
