@@ -1014,6 +1014,54 @@ class ParserTest(unittest.TestCase):
             }
         )
 
+    def test__schema_test_with_comments(self):
+        tests = [{
+            'name': 'commented_test',
+            'resource_type': 'test',
+            'package_name': 'root',
+            'root_path': get_os_path('/usr/src/app'),
+            'path': 'commented_test.yml',
+            'raw_sql': None,
+            'raw_yml': '''
+model:
+    constraints:
+        relationships:
+#            - {from: customer_id, to: accounts, field: id}
+
+another_model:
+    constraints:
+#       unique:
+#            - id
+'''
+        }]
+
+        self.assertEquals(
+            dbt.parser.parse_schema_tests(
+                tests,
+                self.root_project_config,
+                {'root': self.root_project_config,
+                 'snowplow': self.snowplow_project_config}),
+            {})
+
+    def test__empty_schema_test(self):
+        tests = [{
+            'name': 'commented_test',
+            'resource_type': 'test',
+            'package_name': 'root',
+            'root_path': get_os_path('/usr/src/app'),
+            'path': 'commented_test.yml',
+            'raw_sql': None,
+            'raw_yml': ''
+        }]
+
+        self.assertEquals(
+            dbt.parser.parse_schema_tests(
+                tests,
+                self.root_project_config,
+                {'root': self.root_project_config,
+                 'snowplow': self.snowplow_project_config}),
+            {})
+
     def test__simple_data_test(self):
         tests = [{
             'name': 'no_events',
