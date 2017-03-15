@@ -36,6 +36,7 @@ class TestMacros(DBTIntegrationTest):
 
         self.assertTablesEqual("expected_dep_macro","dep_macro")
         self.assertTablesEqual("expected_local_macro","local_macro")
+        self.assertTablesEqual("expected_local_macro","nested_macro")
 
 
 class TestInvalidMacros(DBTIntegrationTest):

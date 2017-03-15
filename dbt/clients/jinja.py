@@ -62,11 +62,15 @@ def get_template(string, ctx, node=None, capture_macros=False):
         dbt.exceptions.raise_compiler_error(node, str(e))
 
 
-def get_rendered(string, ctx, node=None, capture_macros=False):
+def render_template(template, ctx, node=None):
     try:
-        template = get_template(string, ctx, node, capture_macros)
         return template.render(ctx)
 
     except (jinja2.exceptions.TemplateSyntaxError,
             jinja2.exceptions.UndefinedError) as e:
         dbt.exceptions.raise_compiler_error(node, str(e))
+
+
+def get_rendered(string, ctx, node=None, capture_macros=False):
+    template = get_template(string, ctx, node, capture_macros)
+    return render_template(template, ctx, node=None)

@@ -1127,6 +1127,9 @@ another_model:
                     'resource_type': 'macro',
                     'unique_id': 'macro.root.simple',
                     'package_name': 'root',
+                    'depends_on': {
+                        'macros': []
+                    },
                     'root_path': get_os_path('/usr/src/app'),
                     'tags': set(),
                     'path': 'simple_macro.sql',
@@ -1162,6 +1165,9 @@ another_model:
                     'resource_type': 'macro',
                     'unique_id': 'macro.root.simple',
                     'package_name': 'root',
+                    'depends_on': {
+                        'macros': []
+                    },
                     'root_path': get_os_path('/usr/src/app'),
                     'tags': set(),
                     'path': 'simple_macro.sql',

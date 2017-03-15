@@ -111,7 +111,8 @@ def parse_macro_file(macro_file_path,
                      macro_file_contents,
                      root_path,
                      package_name,
-                     tags=None):
+                     tags=None,
+                     context=None):
 
     logger.debug("Parsing {}".format(macro_file_path))
 
@@ -120,12 +121,24 @@ def parse_macro_file(macro_file_path,
     if tags is None:
         tags = set()
 
-    template = dbt.clients.jinja.get_template(macro_file_contents, {
-        'ref': lambda *args: '',
-        'var': lambda *args: '',
-        'target': property(lambda x: '', lambda x: x),
-        'this': ''
-    })
+    if context is None:
+        context = {
+            'ref': lambda *args: '',
+            'var': lambda *args: '',
+            'target': property(lambda x: '', lambda x: x),
+            'this': ''
+        }
+
+    base_node = {
+        'resource_type': NodeType.Macro,
+        'package_name': package_name,
+        'depends_on': {
+            'macros': [],
+        }
+    }
+
+    template = dbt.clients.jinja.get_template(
+        macro_file_contents, context, node=base_node)
 
     for key, item in template.module.__dict__.items():
         if type(item) == jinja2.runtime.Macro:
@@ -133,17 +146,17 @@ def parse_macro_file(macro_file_path,
                                  package_name,
                                  key)
 
-            to_return[unique_id] = {
+            new_node = base_node.copy()
+            new_node.update({
                 'name': key,
                 'unique_id': unique_id,
                 'tags': tags,
-                'package_name': package_name,
-                'resource_type': NodeType.Macro,
                 'root_path': root_path,
                 'path': macro_file_path,
                 'raw_sql': macro_file_contents,
                 'parsed_macro': item
-            }
+            })
+            to_return[unique_id] = new_node
 
     return to_return
 

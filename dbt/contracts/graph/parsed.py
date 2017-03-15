@@ -53,6 +53,11 @@ parsed_macro_contract = unparsed_base_contract.extend({
     Required('unique_id'): All(basestring, Length(min=1, max=255)),
     Required('tags'): All(set),
 
+    # parsed fields
+    Required('depends_on'): {
+        Required('macros'): [All(basestring, Length(min=1, max=255))],
+    },
+
     # contents
     Required('parsed_macro'): jinja2.runtime.Macro
 
