@@ -148,8 +148,13 @@ def parse_macro_file(macro_file_path,
     return to_return
 
 
+class FakeProject:
+    def __call__(*args, **kwargs):
+        return None
+
+
 def parse_node(node, node_path, root_project_config, package_project_config,
-               tags=None, fqn_extra=None):
+               all_projects, tags=None, fqn_extra=None):
     logger.debug("Parsing {}".format(node_path))
     parsed_node = copy.deepcopy(node)
 
@@ -178,6 +183,9 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     context['var'] = lambda *args: ''
     context['target'] = property(lambda x: '', lambda x: x)
     context['this'] = ''
+
+    for name, project in all_projects.items():
+        context[name] = FakeProject()
 
     def undefined_callback(name):
         pass
@@ -217,6 +225,7 @@ def parse_sql_nodes(nodes, root_project, projects, tags=None):
                                           node_path,
                                           root_project,
                                           projects.get(package_name),
+                                          projects,
                                           tags=tags)
 
     dbt.contracts.graph.parsed.validate_nodes(to_return)
@@ -313,7 +322,8 @@ def parse_schema_tests(tests, root_project, projects):
                     to_add = parse_schema_test(
                         test, model_name, config, test_type,
                         root_project,
-                        projects.get(test.get('package_name')))
+                        projects.get(test.get('package_name')),
+                        all_projects=projects)
 
                     if to_add is not None:
                         to_return[to_add.get('unique_id')] = to_add
@@ -322,7 +332,8 @@ def parse_schema_tests(tests, root_project, projects):
 
 
 def parse_schema_test(test_base, model_name, test_config, test_type,
-                      root_project_config, package_project_config):
+                      root_project_config, package_project_config,
+                      all_projects):
     if test_type == 'not_null':
         raw_sql = QUERY_VALIDATE_NOT_NULL.format(
             ref="{{ref('"+model_name+"')}}", field=test_config)
@@ -385,6 +396,7 @@ def parse_schema_test(test_base, model_name, test_config, test_type,
                                     name),
                       root_project_config,
                       package_project_config,
+                      all_projects,
                       tags={'schema'},
                       fqn_extra=None)
 
@@ -438,7 +450,8 @@ def parse_archives_from_projects(root_project, all_projects):
             archive,
             node_path,
             root_project,
-            all_projects.get(archive.get('package_name')))
+            all_projects.get(archive.get('package_name')),
+            all_projects)
 
     return to_return
 

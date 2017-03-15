@@ -159,12 +159,6 @@ class Compiler(object):
         if not os.path.exists(self.project['modules-path']):
             os.makedirs(self.project['modules-path'])
 
-    def get_macros(self, this_project, own_project=None):
-        if own_project is None:
-            own_project = this_project
-        paths = own_project.get('macro-paths', [])
-        return Source(this_project, own_project=own_project).get_macros(paths)
-
     def __write(self, build_filepath, payload):
         target_path = os.path.join(self.project['target-path'], build_filepath)
 
@@ -228,12 +222,12 @@ class Compiler(object):
 
         return wrapped_do_ref
 
-    def get_compiler_context(self, linker, model, models):
+    def get_compiler_context(self, linker, model, flat_graph):
         context = self.project.context()
         adapter = get_adapter(self.project.run_environment())
 
         # built-ins
-        context['ref'] = self.__ref(context, model, models)
+        context['ref'] = self.__ref(context, model, flat_graph)
         context['config'] = self.__model_config(model, linker)
         context['this'] = This(
             context['env']['schema'],
@@ -249,21 +243,32 @@ class Compiler(object):
         context['invocation_id'] = '{{ invocation_id }}'
         context['sql_now'] = adapter.date_function
 
-        macro_generator = None
-        if macro_generator is not None:
-            for macro_data in macro_generator(context):
-                macro = macro_data["macro"]
-                macro_name = macro_data["name"]
-                project = macro_data["project"]
+        for unique_id, macro in flat_graph.get('macros').items():
+            name = macro.get('name')
+            package_name = macro.get('package_name')
 
-                if context.get(project.get('name')) is None:
-                    context[project.get('name')] = {}
+            if context.get(package_name, {}).get(name) is not None:
+                # we've already re-parsed this macro and added it to
+                # the context.
+                continue
 
-                context.get(project.get('name'), {}) \
-                       .update({macro_name: macro})
+            reparsed = dbt.parser.parse_macro_file(
+                macro_file_path=macro.get('path'),
+                macro_file_contents=macro.get('raw_sql'),
+                root_path=macro.get('root_path'),
+                package_name=package_name)
 
-                if model.get('package_name') == project.get('name'):
-                    context.update({macro_name: macro})
+            for unique_id, macro in reparsed.items():
+                macro_map = {macro.get('name'): macro.get('parsed_macro')}
+
+                if context.get(package_name) is None:
+                    context[package_name] = {}
+
+                context.get(package_name, {}) \
+                       .update(macro_map)
+
+                if package_name == model.get('package_name'):
+                    context.update(macro_map)
 
         return context
 
@@ -430,15 +435,6 @@ class Compiler(object):
             raise RuntimeError("Found a cycle: {}".format(cycle))
 
         return wrapped_graph, written_nodes
-
-    def generate_macros(self, all_macros):
-        def do_gen(ctx):
-            macros = []
-            for macro in all_macros:
-                new_macros = macro.get_macros(ctx)
-                macros.extend(new_macros)
-            return macros
-        return do_gen
 
     def get_all_projects(self):
         root_project = self.project.cfg

@@ -1,5 +1,6 @@
 import unittest
 
+import jinja2.runtime
 import os
 
 import dbt.flags
@@ -1051,14 +1052,83 @@ class ParserTest(unittest.TestCase):
             }
         )
 
-    def test__macro_parsing(self):
+    def test__simple_macro(self):
+        macro_file_contents = """
+{% macro simple(a, b) %}
+  {{a}} + {{b}}
+{% endmacro %}
+"""
+
+        result = dbt.parser.parse_macro_file(
+            macro_file_path='simple_macro.sql',
+            macro_file_contents=macro_file_contents,
+            root_path=get_os_path('/usr/src/app'),
+            package_name='root')
+
+        self.assertEquals(
+            type(result.get('macro.root.simple', {}).get('parsed_macro')),
+            jinja2.runtime.Macro)
+
+        del result['macro.root.simple']['parsed_macro']
+
+        self.assertEquals(
+            result,
+            {
+                'macro.root.simple': {
+                    'name': 'simple',
+                    'resource_type': 'macro',
+                    'unique_id': 'macro.root.simple',
+                    'package_name': 'root',
+                    'root_path': get_os_path('/usr/src/app'),
+                    'tags': set(),
+                    'path': 'simple_macro.sql',
+                    'raw_sql': macro_file_contents,
+                }
+            }
+        )
+
+    def test__simple_macro_used_in_model(self):
+        macro_file_contents = """
+{% macro simple(a, b) %}
+  {{a}} + {{b}}
+{% endmacro %}
+"""
+
+        result = dbt.parser.parse_macro_file(
+            macro_file_path='simple_macro.sql',
+            macro_file_contents=macro_file_contents,
+            root_path=get_os_path('/usr/src/app'),
+            package_name='root')
+
+        self.assertEquals(
+            type(result.get('macro.root.simple', {}).get('parsed_macro')),
+            jinja2.runtime.Macro)
+
+        del result['macro.root.simple']['parsed_macro']
+
+        self.assertEquals(
+            result,
+            {
+                'macro.root.simple': {
+                    'name': 'simple',
+                    'resource_type': 'macro',
+                    'unique_id': 'macro.root.simple',
+                    'package_name': 'root',
+                    'root_path': get_os_path('/usr/src/app'),
+                    'tags': set(),
+                    'path': 'simple_macro.sql',
+                    'raw_sql': macro_file_contents,
+                }
+            }
+        )
+
         models = [{
             'name': 'model_one',
             'resource_type': 'model',
             'package_name': 'root',
             'root_path': get_os_path('/usr/src/app'),
             'path': 'model_one.sql',
-            'raw_sql': ("select * from {{ macro_one('some_value') }}"),
+            'raw_sql': ("select *, {{root.simple(1, 2)}} from events"),
         }]
 
         self.assertEquals(
