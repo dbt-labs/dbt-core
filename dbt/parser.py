@@ -252,9 +252,13 @@ def parse_schema_tests(tests, root_project, projects):
     for test in tests:
         test_yml = yaml.safe_load(test.get('raw_yml'))
 
-        # validate schema test yml structure
+        if test_yml is None:
+            continue
 
         for model_name, test_spec in test_yml.items():
+            if test_spec is None or test_spec.get('constraints') is None:
+                continue
+
             for test_type, configs in test_spec.get('constraints', {}).items():
                 if configs is None:
                     continue
