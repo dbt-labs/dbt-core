@@ -424,7 +424,7 @@ class Compiler(object):
                 injected_node.get('unique_id'),
                 injected_node)
 
-            for dependency in injected_node['depends_on']['nodes']:
+            for dependency in injected_node.get('depends_on', {}).get('nodes'):
                 if compiled_graph.get('nodes').get(dependency):
                     linker.dependency(
                         injected_node.get('unique_id'),

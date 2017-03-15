@@ -187,9 +187,6 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     for name, project in all_projects.items():
         context[name] = FakeProject()
 
-    def undefined_callback(name):
-        pass
-
     dbt.clients.jinja.get_rendered(
         node.get('raw_sql'), context, node, silent_on_undefined=True)
 
