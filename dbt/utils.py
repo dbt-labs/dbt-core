@@ -142,7 +142,6 @@ def find_by_name(flat_graph, target_name, target_package, subgraph,
     return None
 
 
-
 def find_model_by_fqn(models, fqn):
     for model in models:
         if tuple(model.fqn) == tuple(fqn):
