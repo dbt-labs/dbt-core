@@ -32,6 +32,7 @@ graph_file_name = 'graph.gpickle'
 def recursively_parse_macros_for_node(node, flat_graph, context):
     # this once worked, but is now long dead
     # for unique_id in node.get('depends_on', {}).get('macros'):
+    # TODO: make it so that we only parse the necessary macros for any node.
 
     for unique_id, macro in flat_graph.get('macros').items():
         if macro is None:

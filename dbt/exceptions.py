@@ -78,5 +78,5 @@ def dependency_not_found(model, target_model_name):
 def macro_not_found(model, target_macro_id):
     raise_compiler_error(
         model,
-        "'{}' references macro '{}' which is not in the graph!"
+        "'{}' references macro '{}' which is not defined!"
         .format(model.get('unique_id'), target_macro_id))
