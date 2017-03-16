@@ -1,6 +1,7 @@
 from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 
+
 class TestMacros(DBTIntegrationTest):
 
     def setUp(self):
@@ -34,9 +35,8 @@ class TestMacros(DBTIntegrationTest):
         self.run_dbt(["deps"])
         self.run_dbt(["run"])
 
-        self.assertTablesEqual("expected_dep_macro","dep_macro")
-        self.assertTablesEqual("expected_local_macro","local_macro")
-        self.assertTablesEqual("expected_local_macro","nested_macro")
+        self.assertTablesEqual("expected_dep_macro", "dep_macro")
+        self.assertTablesEqual("expected_local_macro", "local_macro")
 
 
 class TestInvalidMacros(DBTIntegrationTest):
@@ -63,9 +63,12 @@ class TestInvalidMacros(DBTIntegrationTest):
 
         try:
             self.run_dbt(["compile"])
-            self.assertTrue(False, 'compiling bad macro should raise a runtime error')
-        except RuntimeError as e:
+            self.assertTrue(False,
+                            'compiling bad macro should raise a runtime error')
+
+        except RuntimeError:
             pass
+
 
 class TestMisusedMacros(DBTIntegrationTest):
 
@@ -96,5 +99,5 @@ class TestMisusedMacros(DBTIntegrationTest):
         try:
             self.run_dbt(["run"])
             self.assertTrue(False, 'invoked a package macro from global scope')
-        except RuntimeError as e:
+        except RuntimeError:
             pass

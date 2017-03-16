@@ -9,7 +9,7 @@ from dbt.contracts.common import validate_with
 from dbt.contracts.graph.unparsed import unparsed_node_contract, \
     unparsed_base_contract
 
-from dbt.logger import GLOBAL_LOGGER as logger # noqa
+from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
 config_contract = {
