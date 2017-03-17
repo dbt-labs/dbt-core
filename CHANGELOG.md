@@ -11,6 +11,7 @@
 
 - Graph refactor: fix common issues with load order ([#292](https://github.com/fishtown-analytics/dbt/pull/292))
 - Graph refactor: multiple references to an ephemeral models should share a CTE ([#316](https://github.com/fishtown-analytics/dbt/pull/316))
+- Graph refactor: macros in flat graph ([#332](https://github.com/fishtown-analytics/dbt/pull/332))
 - Refactor: factor out jinja interactions ([#309](https://github.com/fishtown-analytics/dbt/pull/309))
 - Speedup: detect cycles at the end of compilation ([#307](https://github.com/fishtown-analytics/dbt/pull/307))
 - Speedup: write graph file with gpickle instead of yaml ([#306](https://github.com/fishtown-analytics/dbt/pull/306))
