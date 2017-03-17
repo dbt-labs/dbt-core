@@ -16,52 +16,6 @@ import dbt.contracts.project
 from dbt.utils import NodeType
 from dbt.logger import GLOBAL_LOGGER as logger
 
-QUERY_VALIDATE_NOT_NULL = """
-with validation as (
-  select {field} as f
-  from {ref}
-)
-select count(*) from validation where f is null
-"""
-
-
-QUERY_VALIDATE_UNIQUE = """
-with validation as (
-  select {field} as f
-  from {ref}
-  where {field} is not null
-),
-validation_errors as (
-    select f from validation group by f having count(*) > 1
-)
-select count(*) from validation_errors
-"""
-
-
-QUERY_VALIDATE_ACCEPTED_VALUES = """
-with all_values as (
-  select distinct {field} as f
-  from {ref}
-),
-validation_errors as (
-    select f from all_values where f not in ({values_csv})
-)
-select count(*) from validation_errors
-"""
-
-
-QUERY_VALIDATE_REFERENTIAL_INTEGRITY = """
-with parent as (
-  select {parent_field} as id
-  from {parent_ref}
-), child as (
-  select {child_field} as id
-  from {child_ref}
-)
-select count(*) from child
-where id not in (select id from parent) and id is not null
-"""
-
 
 def get_path(resource_type, package_name, resource_name):
     return "{}.{}.{}".format(resource_type, package_name, resource_name)
