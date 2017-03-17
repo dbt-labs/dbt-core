@@ -89,6 +89,8 @@ def print_start_line(node, schema_name, index, total):
         print_model_start_line(node, schema_name, index, total)
     if node.get('resource_type') == NodeType.Test:
         print_test_start_line(node, schema_name, index, total)
+    if node.get('resource_type') == NodeType.Archive:
+        print_archive_start_line(node, index, total)
 
 
 def print_test_start_line(model, schema_name, index, total):
@@ -107,6 +109,14 @@ def print_model_start_line(model, schema_name, index, total):
     print_fancy_output_line(msg, 'RUN', index, total)
 
 
+def print_archive_start_line(model, index, total):
+    cfg = model.get('config', {})
+    msg = "START archive {source_schema}.{source_table} --> "\
+          "{target_schema}.{target_table}".format(**cfg)
+
+    print_fancy_output_line(msg, 'RUN', index, total)
+
+
 def print_result_line(result, schema_name, index, total):
     node = result.node
 
@@ -114,6 +124,8 @@ def print_result_line(result, schema_name, index, total):
         print_model_result_line(result, schema_name, index, total)
     elif node.get('resource_type') == NodeType.Test:
         print_test_result_line(result, schema_name, index, total)
+    elif node.get('resource_type') == NodeType.Archive:
+        print_archive_result_line(result, index, total)
 
 
 def print_test_result_line(result, schema_name, index, total):
@@ -134,6 +146,24 @@ def print_test_result_line(result, schema_name, index, total):
             info=info,
             name=model.get('name')),
         info,
+        index,
+        total,
+        result.execution_time)
+
+
+def print_archive_result_line(result, index, total):
+    model = result.node
+    info = 'OK archived'
+
+    if result.errored:
+        info = 'ERROR archiving'
+
+    cfg = model.get('config', {})
+
+    print_fancy_output_line(
+        "{info} {source_schema}.{source_table} --> "
+        "{target_schema}.{target_table}".format(info=info, **cfg),
+        result.status,
         index,
         total,
         result.execution_time)
@@ -281,6 +311,8 @@ def execute_archive(profile, node, context):
         profile, node_cfg.get('source_schema'), node_cfg.get('source_table'))
 
     if len(source_columns) == 0:
+        source_schema = node_cfg.get('source_schema')
+        source_table = node_cfg.get('source_table')
         raise RuntimeError(
             'Source table "{}"."{}" does not '
             'exist'.format(source_schema, source_table))
@@ -297,8 +329,8 @@ def execute_archive(profile, node, context):
         schema=node_cfg.get('target_schema'),
         table=node_cfg.get('target_table'),
         columns=dest_columns,
-        sort=node_cfg.get('updated_at'),
-        dist=node_cfg.get('unique_key'))
+        sort='dbt_updated_at',
+        dist='scd_id')
 
     # TODO move this to inject_runtime_config, generate archive SQL
     # in wrap step. can't do this right now because we actually need
