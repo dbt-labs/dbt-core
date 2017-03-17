@@ -195,3 +195,12 @@ def get_materialization(node):
 
 def is_enabled(node):
     return node.get('config', {}).get('enabled') is True
+
+
+def get_pseudo_test_path(node_name, source_path, test_type):
+    "schema tests all come from schema.yml files. fake a source sql file"
+    source_path_parts = split_path(source_path)
+    source_path_parts.pop()  # ignore filename
+    suffix = [test_type, "{}.sql".format(node_name)]
+    pseudo_path_parts = source_path_parts + suffix
+    return os.path.join(*pseudo_path_parts)

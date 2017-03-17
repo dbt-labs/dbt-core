@@ -5,4 +5,4 @@
     )
 }}
 
-select * from data_tests_009.seed
+select * from "data_tests_009"."seed"

@@ -867,13 +867,13 @@ class ParserTest(unittest.TestCase):
                     'name': 'not_null_model_one_id',
                     'resource_type': 'test',
                     'unique_id': 'test.root.not_null_model_one_id',
-                    'fqn': ['root', 'schema', 'test_one'],
+                    'fqn': ['root', 'schema_test', 'not_null_model_one_id'],
                     'empty': False,
                     'package_name': 'root',
                     'root_path': get_os_path('/usr/src/app'),
                     'depends_on': [],
                     'config': self.model_config,
-                    'path': 'test_one.yml',
+                    'path': get_os_path('schema_test/not_null_model_one_id.sql'),
                     'tags': set(['schema']),
                     'raw_sql': not_null_sql,
                 },
@@ -881,13 +881,13 @@ class ParserTest(unittest.TestCase):
                     'name': 'unique_model_one_id',
                     'resource_type': 'test',
                     'unique_id': 'test.root.unique_model_one_id',
-                    'fqn': ['root', 'schema', 'test_one'],
+                    'fqn': ['root', 'schema_test', 'unique_model_one_id'],
                     'empty': False,
                     'package_name': 'root',
                     'root_path': get_os_path('/usr/src/app'),
                     'depends_on': [],
                     'config': self.model_config,
-                    'path': 'test_one.yml',
+                    'path': get_os_path('schema_test/unique_model_one_id.sql'),
                     'tags': set(['schema']),
                     'raw_sql': unique_sql,
                 },
@@ -895,13 +895,13 @@ class ParserTest(unittest.TestCase):
                     'name': 'accepted_values_model_one_id',
                     'resource_type': 'test',
                     'unique_id': 'test.root.accepted_values_model_one_id',
-                    'fqn': ['root', 'schema', 'test_one'],
+                    'fqn': ['root', 'schema_test', 'accepted_values_model_one_id'],
                     'empty': False,
                     'package_name': 'root',
                     'root_path': get_os_path('/usr/src/app'),
                     'depends_on': [],
                     'config': self.model_config,
-                    'path': 'test_one.yml',
+                    'path': get_os_path('schema_test/accepted_values_model_one_id.sql'),
                     'tags': set(['schema']),
                     'raw_sql': accepted_values_sql,
                 },
@@ -909,13 +909,13 @@ class ParserTest(unittest.TestCase):
                     'name': 'relationships_model_one_id_to_model_two_id',
                     'resource_type': 'test',
                     'unique_id': 'test.root.relationships_model_one_id_to_model_two_id',
-                    'fqn': ['root', 'schema', 'test_one'],
+                    'fqn': ['root', 'schema_test', 'relationships_model_one_id_to_model_two_id'],
                     'empty': False,
                     'package_name': 'root',
                     'root_path': get_os_path('/usr/src/app'),
                     'depends_on': [],
                     'config': self.model_config,
-                    'path': 'test_one.yml',
+                    'path': get_os_path('schema_test/relationships_model_one_id_to_model_two_id.sql'),
                     'tags': set(['schema']),
                     'raw_sql': relationships_sql,
                 }
@@ -924,6 +924,53 @@ class ParserTest(unittest.TestCase):
             }
         )
 
+    def test__schema_test_with_comments(self):
+        tests = [{
+            'name': 'commented_test',
+            'resource_type': 'test',
+            'package_name': 'root',
+            'root_path': get_os_path('/usr/src/app'),
+            'path': 'commented_test.yml',
+            'raw_sql': None,
+            'raw_yml': '''
+model:
+    constraints:
+        relationships:
+#            - {from: customer_id, to: accounts, field: id}
+
+another_model:
+    constraints:
+#       unique:
+#            - id
+'''
+        }]
+
+        self.assertEquals(
+            dbt.parser.parse_schema_tests(
+                tests,
+                self.root_project_config,
+                {'root': self.root_project_config,
+                 'snowplow': self.snowplow_project_config}),
+            {})
+
+    def test__empty_schema_test(self):
+        tests = [{
+            'name': 'commented_test',
+            'resource_type': 'test',
+            'package_name': 'root',
+            'root_path': get_os_path('/usr/src/app'),
+            'path': 'commented_test.yml',
+            'raw_sql': None,
+            'raw_yml': ''
+        }]
+
+        self.assertEquals(
+            dbt.parser.parse_schema_tests(
+                tests,
+                self.root_project_config,
+                {'root': self.root_project_config,
+                 'snowplow': self.snowplow_project_config}),
+            {})
 
     def test__simple_data_test(self):
         tests = [{

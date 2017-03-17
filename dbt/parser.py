@@ -227,11 +227,17 @@ def load_and_parse_sql(package_name, root_project, all_projects, root_dir,
         parts = dbt.utils.split_path(file_match.get('relative_path', ''))
         name, _ = os.path.splitext(parts[-1])
 
+        if resource_type == NodeType.Test:
+            path = dbt.utils.get_pseudo_test_path(
+                name, file_match.get('relative_path'), 'data_test')
+        else:
+            path = file_match.get('relative_path')
+
         result.append({
             'name': name,
             'root_path': root_dir,
             'resource_type': resource_type,
-            'path': file_match.get('relative_path'),
+            'path': path,
             'package_name': package_name,
             'raw_sql': file_contents
         })
@@ -246,10 +252,17 @@ def parse_schema_tests(tests, root_project, projects):
     for test in tests:
         test_yml = yaml.safe_load(test.get('raw_yml'))
 
-        # validate schema test yml structure
+        if test_yml is None:
+            continue
 
         for model_name, test_spec in test_yml.items():
+            if test_spec is None or test_spec.get('constraints') is None:
+                continue
+
             for test_type, configs in test_spec.get('constraints', {}).items():
+                if configs is None:
+                    continue
+
                 for config in configs:
                     to_add = parse_schema_test(
                         test, model_name, config, test_type,
@@ -309,12 +322,15 @@ def parse_schema_test(test_base, model_name, test_config, test_type,
 
     name = '{}_{}_{}'.format(test_type, model_name, name_key)
 
+    pseudo_path = dbt.utils.get_pseudo_test_path(name, test_base.get('path'),
+                                                 'schema_test')
+
     to_return = {
         'name': name,
         'resource_type': test_base.get('resource_type'),
         'package_name': test_base.get('package_name'),
         'root_path': test_base.get('root_path'),
-        'path': test_base.get('path'),
+        'path': pseudo_path,
         'raw_sql': raw_sql
     }
 
@@ -324,7 +340,7 @@ def parse_schema_test(test_base, model_name, test_config, test_type,
                       root_project_config,
                       package_project_config,
                       tags={'schema'},
-                      fqn_extra=['schema'])
+                      fqn_extra=None)
 
 
 def load_and_parse_yml(package_name, root_project, all_projects, root_dir,

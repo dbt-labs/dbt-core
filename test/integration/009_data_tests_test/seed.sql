@@ -1,4 +1,4 @@
-create table data_tests_009.seed (
+create table "data_tests_009"."seed" (
     favorite_color VARCHAR(10),
 	id INTEGER,
 	first_name VARCHAR(11),
@@ -8,8 +8,8 @@ create table data_tests_009.seed (
 );
 
 
-INSERT INTO data_tests_009.seed
-    ("favorite_color", "id","first_name","email","ip_address","updated_at")
+INSERT INTO "data_tests_009"."seed"
+    (favorite_color, id, first_name, email, ip_address, updated_at)
 VALUES
     ('blue', 1,'Larry','lking0@miitbeian.gov.cn','69.135.206.194','2008-09-12 19:08:31'),
     ('blue', 2,'Larry','lperkins1@toplist.cz','64.210.133.162','1978-05-09 04:15:14'),
