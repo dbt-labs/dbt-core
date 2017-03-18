@@ -337,8 +337,8 @@ def parse_schema_test(test_base, model_name, test_config, test_type,
         arg_dict['arg'] = test_config
 
     args = ", ".join([
-        "{}={}".format(key, value.__repr__())
-        for (key, value) in arg_dict.items()
+        "{}={}".format(key, arg_dict[key].__repr__())
+        for key in sorted(arg_dict)
     ])
 
     raw_sql_contents = "{macro}({args})".format(macro=macro, args=args)

@@ -907,28 +907,10 @@ class ParserTest(unittest.TestCase):
                         '}}}')
         }]
 
-        not_null_sql = dbt.parser.QUERY_VALIDATE_NOT_NULL \
-                                 .format(
-                                     field='id',
-                                     ref="{{ref('model_one')}}")
-
-        unique_sql = dbt.parser.QUERY_VALIDATE_UNIQUE \
-                               .format(
-                                   field='id',
-                                   ref="{{ref('model_one')}}")
-
-        accepted_values_sql = dbt.parser.QUERY_VALIDATE_ACCEPTED_VALUES \
-                                        .format(
-                                            field='id',
-                                            ref="{{ref('model_one')}}",
-                                            values_csv="'a','b'")
-
-        relationships_sql = dbt.parser.QUERY_VALIDATE_REFERENTIAL_INTEGRITY \
-                                      .format(
-                                          parent_field='id',
-                                          parent_ref="{{ref('model_two')}}",
-                                          child_field='id',
-                                          child_ref="{{ref('model_one')}}")
+        not_null_sql = "{{ test_not_null(arg='id', model='model_one') }}"
+        unique_sql = "{{ test_unique(arg='id', model='model_one') }}"
+        accepted_values_sql = "{{ test_accepted_values(field='id', model='model_one', values=['a', 'b']) }}" # noqa
+        relationships_sql = "{{ test_relationships(field='id', from='id', model='model_one', to='model_two') }}" # noqa
 
         self.assertEquals(
             dbt.parser.parse_schema_tests(
@@ -947,7 +929,7 @@ class ParserTest(unittest.TestCase):
                     'root_path': get_os_path('/usr/src/app'),
                     'depends_on': {
                         'nodes': [],
-                        'macros': []
+                        'macros': ['macro.root.test_not_null']
                     },
                     'config': self.model_config,
                     'path': get_os_path(
@@ -965,47 +947,47 @@ class ParserTest(unittest.TestCase):
                     'root_path': get_os_path('/usr/src/app'),
                     'depends_on': {
                         'nodes': [],
-                        'macros': []
+                        'macros': ['macro.root.test_unique']
                     },
                     'config': self.model_config,
                     'path': get_os_path('schema_test/unique_model_one_id.sql'),
                     'tags': set(['schema']),
                     'raw_sql': unique_sql,
                 },
-                'test.root.accepted_values_model_one_id': {
-                    'name': 'accepted_values_model_one_id',
+                'test.root.accepted_values_model_one_id__a__b': {
+                    'name': 'accepted_values_model_one_id__a__b',
                     'resource_type': 'test',
-                    'unique_id': 'test.root.accepted_values_model_one_id',
+                    'unique_id': 'test.root.accepted_values_model_one_id__a__b', # noqa
                     'fqn': ['root', 'schema_test',
-                            'accepted_values_model_one_id'],
+                            'accepted_values_model_one_id__a__b'],
                     'empty': False,
                     'package_name': 'root',
                     'root_path': get_os_path('/usr/src/app'),
                     'depends_on': {
                         'nodes': [],
-                        'macros': []
+                        'macros': ['macro.root.test_accepted_values']
                     },
                     'config': self.model_config,
                     'path': get_os_path(
-                        'schema_test/accepted_values_model_one_id.sql'),
+                        'schema_test/accepted_values_model_one_id__a__b.sql'),
                     'tags': set(['schema']),
                     'raw_sql': accepted_values_sql,
                 },
-                'test.root.relationships_model_one_id_to_model_two_id': {
-                    'name': 'relationships_model_one_id_to_model_two_id',
+                'test.root.relationships_model_one_id__id__model_two': {
+                    'name': 'relationships_model_one_id__id__model_two',
                     'resource_type': 'test',
-                    'unique_id': 'test.root.relationships_model_one_id_to_model_two_id', # noqa
+                    'unique_id': 'test.root.relationships_model_one_id__id__model_two', # noqa
                     'fqn': ['root', 'schema_test',
-                            'relationships_model_one_id_to_model_two_id'],
+                            'relationships_model_one_id__id__model_two'],
                     'empty': False,
                     'package_name': 'root',
                     'root_path': get_os_path('/usr/src/app'),
                     'depends_on': {
                         'nodes': [],
-                        'macros': []
+                        'macros': ['macro.root.test_relationships']
                     },
                     'config': self.model_config,
-                    'path': get_os_path('schema_test/relationships_model_one_id_to_model_two_id.sql'), # noqa
+                    'path': get_os_path('schema_test/relationships_model_one_id__id__model_two.sql'), # noqa
                     'tags': set(['schema']),
                     'raw_sql': relationships_sql,
                 }
