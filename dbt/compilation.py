@@ -4,6 +4,7 @@ import sqlparse
 
 import dbt.project
 import dbt.utils
+import dbt.loader
 
 from dbt.model import Model
 from dbt.utils import This, Var, is_enabled, get_materialization, NodeType, \
@@ -63,7 +64,8 @@ def recursively_parse_macros_for_node(node, flat_graph, context):
             context.get(package_name, {}) \
                    .update(macro_map)
 
-            if package_name == node.get('package_name'):
+            if package_name in (node.get('package_name'),
+                                dbt.loader.GLOBAL_PROJECT_NAME):
                 context.update(macro_map)
 
     return context

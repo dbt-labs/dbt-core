@@ -60,9 +60,18 @@ def compiler_error(model, msg):
 
 
 def compiler_warning(model, msg):
+    if model is None:
+        name = '<None>'
+    elif isinstance(model, str):
+        name = model
+    elif isinstance(model, dict):
+        name = model.get('name')
+    else:
+        name = model.nice_name
+
     logger.info(
         "* Compilation warning while compiling model {}:\n* {}\n"
-        .format(model.nice_name, msg)
+        .format(name, msg)
     )
 
 

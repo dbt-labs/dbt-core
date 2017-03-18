@@ -282,6 +282,15 @@ def parse_schema_tests(tests, root_project, projects):
                 if configs is None:
                     continue
 
+                if type(configs) not in (list, tuple):
+
+                    dbt.utils.compiler_warning(
+                        model_name,
+                        "Invalid test config given in {} near {}".format(
+                            test.get('path'),
+                            configs))
+                    continue
+
                 for config in configs:
                     to_add = parse_schema_test(
                         test, model_name, config, test_type,
@@ -306,12 +315,12 @@ def get_nice_schema_test_name(test_type, test_name, args):
         elif type(arg_val) in (list, tuple):
             parts = arg_val
         else:
-            parts = [str(arg_val)]
+            parts = [arg_val]
 
-        flat_args.extend(parts)
+        flat_args.extend([str(part) for part in parts])
 
     unique = "__".join(flat_args)
-    return 'test_{}_{}_{}'.format(test_type, test_name, unique)
+    return '{}_{}_{}'.format(test_type, test_name, unique)
 
 
 def parse_schema_test(test_base, model_name, test_config, test_type,
@@ -332,7 +341,7 @@ def parse_schema_test(test_base, model_name, test_config, test_type,
         for (key, value) in arg_dict.items()
     ])
 
-    raw_sql_contents = "dbt.{macro}({args})".format(macro=macro, args=args)
+    raw_sql_contents = "{macro}({args})".format(macro=macro, args=args)
     raw_sql = "{{ " + raw_sql_contents + " }}"
 
     non_name_args = arg_dict.copy()

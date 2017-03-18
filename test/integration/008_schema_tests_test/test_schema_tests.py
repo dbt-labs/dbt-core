@@ -76,3 +76,39 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
 
         ran_tests = self.run_schema_validations()
         self.assertEqual(len(ran_tests), 2)
+
+
+class TestCustomSchemaTests(DBTIntegrationTest):
+
+    def setUp(self):
+        DBTIntegrationTest.setUp(self)
+        self.run_sql_file("test/integration/008_schema_tests_test/seed.sql")
+
+    @property
+    def schema(self):
+        return "schema_tests_008"
+
+    @property
+    def project_config(self):
+        return {
+            "macro-paths": ["test/integration/008_schema_tests_test/macros"],
+        }
+
+    @property
+    def models(self):
+        return "test/integration/008_schema_tests_test/models-custom"
+
+    def run_schema_validations(self):
+        project = read_project('dbt_project.yml')
+        args = FakeArgs()
+
+        test_task = TestTask(args, project)
+        return test_task.run()
+
+    @attr(type='postgres')
+    def test_schema_tests(self):
+        self.run_dbt()
+        test_results = self.run_schema_validations()
+
+        for result in test_results:
+            print(result.node, result.errored, result.skipped, result.status)

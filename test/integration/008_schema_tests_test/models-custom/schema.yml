@@ -1,0 +1,20 @@
+
+
+table_copy:
+    constraints:
+
+        # fail
+        not_null:
+            - email
+
+        # pass
+        unique:
+            - id
+
+        # fails
+        every_value_is_blue:
+            - color
+
+        # passes
+        rejected_values:
+            - { field: 'color', values: ['orange', 'purple'] }

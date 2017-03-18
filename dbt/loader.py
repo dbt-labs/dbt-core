@@ -2,6 +2,7 @@
 import os
 
 GLOBAL_PROJECT_DIRNAME = 'global_project'
+GLOBAL_PROJECT_NAME = 'dbt'
 
 
 def get_dbt_root_path():
