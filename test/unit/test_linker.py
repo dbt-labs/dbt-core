@@ -1,11 +1,21 @@
+import mock
 import unittest
 
+import dbt.utils
+
 from dbt.compilation import Linker
+
 
 class LinkerTest(unittest.TestCase):
 
     def setUp(self):
+        self.real_is_blocking_dependency = dbt.utils.is_blocking_dependency
         self.linker = Linker()
+
+        dbt.utils.is_blocking_dependency = mock.MagicMock(return_value=True)
+
+    def tearDown(self):
+        dbt.utils.is_blocking_dependency = self.real_is_blocking_dependency
 
     def test_linker_add_node(self):
         expected_nodes = ['A', 'B', 'C']
@@ -69,7 +79,8 @@ class LinkerTest(unittest.TestCase):
         for (l, r) in actual_deps:
             self.linker.dependency(l, r)
 
-        self.assertRaises(RuntimeError, self.linker.as_dependency_list, ['ZZZ'])
+        self.assertRaises(RuntimeError,
+                          self.linker.as_dependency_list, ['ZZZ'])
 
     def test__find_cycles__cycles(self):
         actual_deps = [('A', 'B'), ('B', 'C'), ('C', 'A')]

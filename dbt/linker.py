@@ -1,7 +1,7 @@
 import networkx as nx
 from collections import defaultdict
 
-from dbt.utils import NodeType, is_blocking_dependency
+import dbt.utils
 
 
 def from_file(graph_file):
@@ -81,7 +81,7 @@ class Linker(object):
             num_ancestors = len([
                 ancestor for ancestor in
                 nx.ancestors(self.graph, node)
-                if is_blocking_dependency(self.get_node(ancestor))
+                if dbt.utils.is_blocking_dependency(self.get_node(ancestor))
             ])
             depth_nodes[num_ancestors].append(node)
 
