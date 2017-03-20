@@ -207,12 +207,21 @@ def to_string(s):
         return s
 
 
+def is_blocking_dependency(node):
+    return (is_type(node, NodeType.Model) and
+            get_materialization(node) != 'ephemeral')
+
+
 def get_materialization(node):
     return node.get('config', {}).get('materialized')
 
 
 def is_enabled(node):
     return node.get('config', {}).get('enabled') is True
+
+
+def is_type(node, _type):
+    return node.get('resource_type') == _type
 
 
 def get_pseudo_test_path(node_name, source_path, test_type):
