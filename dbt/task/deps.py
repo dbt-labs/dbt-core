@@ -1,7 +1,8 @@
 import os
 import errno
 import re
-import subprocess
+
+import dbt.clients.git
 import dbt.project as project
 
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -18,57 +19,39 @@ class DepsTask:
         self.args = args
         self.project = project
 
-    def __checkout_branch(self, branch, full_path):
-        logger.info("  checking out branch {}".format(branch))
-        proc = subprocess.Popen(
-            ['git', 'checkout', branch],
-            cwd=full_path,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE)
-        out, err = proc.communicate()
-
     def __pull_repo(self, repo, branch=None):
-        proc = subprocess.Popen(
-            ['git', 'clone', '--depth', '1', repo],
-            cwd=self.project['modules-path'],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE)
+        modules_path = self.project['modules-path']
 
-        out, err = proc.communicate()
+        out, err = dbt.clients.git.clone(repo, modules_path)
 
-        exists = re.match(
-            "fatal: destination path '(.+)' already exists",
-            err.decode('utf-8')
-        )
+        exists = re.match("fatal: destination path '(.+)' already exists",
+                          err.decode('utf-8'))
 
         folder = None
+        start_sha = None
+
         if exists:
             folder = exists.group(1)
-            logger.info("updating existing dependency {}".format(folder))
-            full_path = os.path.join(self.project['modules-path'], folder)
-            proc = subprocess.Popen(
-                ['git', 'fetch', '--all'],
-                cwd=full_path,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE)
-            out, err = proc.communicate()
-            remote_branch = 'origin/master' if branch is None \
-                            else 'origin/{}'.format(branch)
-            proc = subprocess.Popen(
-                ['git', 'reset', '--hard', remote_branch],
-                cwd=full_path,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE)
-            out, err = proc.communicate()
-            if branch is not None:
-                self.__checkout_branch(branch, full_path)
+            logger.info('Updating existing dependency {}.'.format(folder))
         else:
             matches = re.match("Cloning into '(.+)'", err.decode('utf-8'))
             folder = matches.group(1)
-            full_path = os.path.join(self.project['modules-path'], folder)
-            logger.info("pulled new dependency {}".format(folder))
-            if branch is not None:
-                self.__checkout_branch(branch, full_path)
+            logger.info('Pulling new dependency {}.'.format(folder))
+
+        dependency_path = os.path.join(modules_path, folder)
+        start_sha = dbt.clients.git.get_current_sha(dependency_path)
+        dbt.clients.git.checkout(dependency_path, branch)
+        end_sha = dbt.clients.git.get_current_sha(dependency_path)
+
+        if exists:
+            if start_sha == end_sha:
+                logger.info('  Already at {}, nothing to do.'.format(
+                    start_sha[:6]))
+            else:
+                logger.info('  Updated checkout from {} to {}.'.format(
+                    start_sha[:6], end_sha[:6]))
+        else:
+            logger.info('  Checked out at {}.'.format(end_sha[:6]))
 
         return folder
 
