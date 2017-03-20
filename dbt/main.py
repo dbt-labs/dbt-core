@@ -93,7 +93,8 @@ def run_from_args(parsed):
     if proj is not None:
         log_path = proj.get('log-path', 'logs')
 
-    initialize_logger(parsed.debug, log_path)
+    initialize_logger(path=log_path, debug=parsed.debug, trace=parsed.trace)
+
     logger.debug("Tracking: {}".format(dbt.tracking.active_user.state()))
 
     dbt.tracking.track_invocation_start(project=proj, args=parsed)
@@ -216,6 +217,13 @@ def parse_args(args):
         action='store_true',
         help='''Display debug logging during dbt execution. Useful for
         debugging and making bug reports.''')
+
+    p.add_argument(
+        '-t',
+        '--trace',
+        action='store_true',
+        help='''Display trace logging during dbt execution. Way more output
+        than `--debug`. Useful for debugging and making bug reports.''')
 
     p.add_argument(
         '-S',

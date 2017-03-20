@@ -524,11 +524,11 @@ class PostgresAdapter:
         cursor = handle.cursor()
 
         with exception_handler(connection, cursor, model_name, query):
-            logger.debug("SQL: %s", query)
+            logger.trace("SQL: %s", query)
             pre = time.time()
             cursor.execute(query)
             post = time.time()
-            logger.debug(
+            logger.trace(
                 "SQL status: %s in %0.2f seconds",
                 cls.get_status(cursor), post-pre)
             return handle, cursor

@@ -174,11 +174,11 @@ def track(user, *args, **kwargs):
     if user.do_not_track:
         return
     else:
-        logger.debug("Sending event: {}".format(kwargs))
+        logger.trace("Sending event: {}".format(kwargs))
         try:
             tracker.track_struct_event(*args, **kwargs)
         except Exception as e:
-            logger.debug(
+            logger.trace(
                 "An error was encountered while trying to send an event"
             )
 

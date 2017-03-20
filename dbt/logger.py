@@ -9,6 +9,19 @@ logging.getLogger('requests').setLevel(logging.CRITICAL)
 logging.getLogger('urllib3').setLevel(logging.CRITICAL)
 logging.getLogger('snowflake.connector').setLevel(logging.CRITICAL)
 
+# add a trace log level
+logging.TRACE = 9
+logging.addLevelName(logging.TRACE, "TRACE")
+
+
+def trace(self, message, *args, **kws):
+    # Yes, logger takes its '*args' as 'args'.
+    if self.isEnabledFor(logging.TRACE):
+        self._log(logging.TRACE, message, args, **kws)
+
+
+logging.Logger.trace = trace
+
 # create a global console logger for dbt
 stdout_handler = logging.StreamHandler(sys.stdout)
 stdout_handler.setFormatter(logging.Formatter('%(message)s'))
@@ -16,7 +29,7 @@ stdout_handler.setLevel(logging.INFO)
 
 logger = logging.getLogger()
 logger.addHandler(stdout_handler)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.TRACE)
 
 initialized = False
 
@@ -26,13 +39,18 @@ def make_log_dir_if_missing(log_dir):
         os.makedirs(log_dir)
 
 
-def initialize_logger(debug_mode=False, path=None):
+def initialize_logger(path=None, debug=False, trace=False):
     global initialized, logger, stdout_handler
 
     if initialized:
         return
 
-    if debug_mode:
+    if trace:
+        stdout_handler.setFormatter(
+            logging.Formatter('[%(asctime)-18s] [%(filename)13s line %(lineno)3d] [%(levelname)5s] %(message)s'))  # noqa
+        stdout_handler.setLevel(logging.TRACE)
+
+    elif debug:
         stdout_handler.setFormatter(
             logging.Formatter('%(asctime)-18s: %(message)s'))
         stdout_handler.setLevel(logging.DEBUG)
@@ -51,7 +69,7 @@ def initialize_logger(debug_mode=False, path=None):
 
         logdir_handler.setFormatter(
             logging.Formatter('%(asctime)-18s: %(message)s'))
-        logdir_handler.setLevel(logging.DEBUG)
+        logdir_handler.setLevel(logging.TRACE)
 
         logger.addHandler(logdir_handler)
 
