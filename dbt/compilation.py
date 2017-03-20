@@ -6,7 +6,8 @@ import dbt.project
 import dbt.utils
 
 from dbt.model import Model
-from dbt.utils import This, Var, is_enabled, get_materialization, NodeType
+from dbt.utils import This, Var, is_enabled, get_materialization, NodeType, \
+    is_type
 
 from dbt.linker import Linker
 from dbt.runtime import RuntimeContext
@@ -256,7 +257,7 @@ class Compiler(object):
                 logger.info("Compiler error in {}".format(model.get('path')))
                 logger.info("Enabled models:")
                 for n, m in all_models.items():
-                    if m.get('resource_type') == NodeType.Model:
+                    if is_type(m, NodeType.Model):
                         logger.info(" - {}".format(m.get('unique_id')))
                 raise e
 
@@ -382,7 +383,7 @@ class Compiler(object):
                 # data tests get wrapped in count(*)
                 # TODO : move this somewhere more reasonable
                 if 'data' in injected_node['tags'] and \
-                        injected_node.get('resource_type') == NodeType.Test:
+                        is_type(injected_node, NodeType.Test):
                     injected_node['wrapped_sql'] = (
                         "select count(*) from (\n{test_sql}\n) sbq").format(
                         test_sql=injected_node['injected_sql'])
@@ -393,7 +394,7 @@ class Compiler(object):
 
                 wrapped_graph['nodes'][name] = injected_node
 
-            elif injected_node.get('resource_type') == NodeType.Archive:
+            elif is_type(injected_node, NodeType.Archive):
                 # unfortunately we do everything automagically for
                 # archives. in the future it'd be nice to generate
                 # the SQL at the parser level.

@@ -10,7 +10,7 @@ from datetime import datetime
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
 
-from dbt.utils import get_materialization, NodeType
+from dbt.utils import get_materialization, NodeType, is_type
 
 import dbt.clients.jinja
 import dbt.compilation
@@ -85,11 +85,11 @@ def print_counts(flat_nodes):
 
 
 def print_start_line(node, schema_name, index, total):
-    if node.get('resource_type') == NodeType.Model:
+    if is_type(node, NodeType.Model):
         print_model_start_line(node, schema_name, index, total)
-    if node.get('resource_type') == NodeType.Test:
+    if is_type(node, NodeType.Test):
         print_test_start_line(node, schema_name, index, total)
-    if node.get('resource_type') == NodeType.Archive:
+    if is_type(node, NodeType.Archive):
         print_archive_start_line(node, index, total)
 
 
@@ -120,11 +120,11 @@ def print_archive_start_line(model, index, total):
 def print_result_line(result, schema_name, index, total):
     node = result.node
 
-    if node.get('resource_type') == NodeType.Model:
+    if is_type(node, NodeType.Model):
         print_model_result_line(result, schema_name, index, total)
-    elif node.get('resource_type') == NodeType.Test:
+    elif is_type(node, NodeType.Test):
         print_test_result_line(result, schema_name, index, total)
-    elif node.get('resource_type') == NodeType.Archive:
+    elif is_type(node, NodeType.Archive):
         print_archive_result_line(result, index, total)
 
 
@@ -416,7 +416,6 @@ class RunManager(object):
             self.threads = self.args.threads
 
         adapter = get_adapter(profile)
-        schema_name = adapter.get_default_schema(profile)
 
         def call_get_columns_in_table(schema_name, table_name):
             return adapter.get_columns_in_table(
@@ -469,11 +468,11 @@ class RunManager(object):
 
         node = self.inject_runtime_config(node)
 
-        if node.get('resource_type') == NodeType.Model:
+        if is_type(node, NodeType.Model):
             result = execute_model(profile, node, existing)
-        elif node.get('resource_type') == NodeType.Test:
+        elif is_type(node, NodeType.Test):
             result = execute_test(profile, node)
-        elif node.get('resource_type') == NodeType.Archive:
+        elif is_type(node, NodeType.Archive):
             result = execute_archive(profile, node, self.context)
 
         return result
@@ -515,6 +514,9 @@ class RunManager(object):
                               error=error,
                               status=status,
                               execution_time=execution_time)
+
+    def as_flat_dep_list(self, linker, nodes_to_run):
+        return [[linker.get_node(node) for node in nodes_to_run]]
 
     def as_concurrent_dep_list(self, linker, nodes_to_run):
         dependency_list = linker.as_dependency_list(nodes_to_run)
@@ -640,11 +642,10 @@ class RunManager(object):
 
                 map_result = pool.map_async(
                     self.safe_execute_node,
-                    [(node, existing,) for node in local_nodes],
+                    [(local_node, existing,) for local_node in local_nodes],
                     callback=on_complete
                 )
                 map_result.wait()
-                run_model_results = map_result.get()
 
                 node_index += threads
 
@@ -711,7 +712,8 @@ class RunManager(object):
             raise
 
     def run_types_from_graph(self, include_spec, exclude_spec,
-                             resource_types, tags, should_run_hooks=False):
+                             resource_types, tags, should_run_hooks=False,
+                             flatten_graph=False):
         linker = self.deserialize_graph()
 
         selected_nodes = self.get_nodes_to_run(
@@ -721,9 +723,14 @@ class RunManager(object):
             resource_types,
             tags)
 
-        dependency_list = self.as_concurrent_dep_list(
-            linker,
-            selected_nodes)
+        dependency_list = []
+
+        if flatten_graph is False:
+            dependency_list = self.as_concurrent_dep_list(linker,
+                                                          selected_nodes)
+        else:
+            dependency_list = self.as_flat_dep_list(linker,
+                                                    selected_nodes)
 
         self.try_create_schema()
 
@@ -746,11 +753,13 @@ class RunManager(object):
     def run_tests(self, include_spec, exclude_spec, tags):
         return self.run_types_from_graph(include_spec,
                                          exclude_spec,
-                                         [NodeType.Test],
-                                         tags)
+                                         resource_types=[NodeType.Test],
+                                         tags=tags,
+                                         flatten_graph=True)
 
     def run_archives(self, include_spec, exclude_spec):
         return self.run_types_from_graph(include_spec,
                                          exclude_spec,
-                                         [NodeType.Archive],
-                                         set())
+                                         resource_types=[NodeType.Archive],
+                                         tags=set(),
+                                         flatten_graph=True)

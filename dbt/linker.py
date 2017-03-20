@@ -1,8 +1,7 @@
 import networkx as nx
 from collections import defaultdict
 
-import dbt.compilation
-from dbt.utils import NodeType
+import dbt.utils
 
 
 def from_file(graph_file):
@@ -58,16 +57,6 @@ class Linker(object):
                 "{}".format(cycle)
             )
 
-    def is_blocking_dependency(self, node_data):
-        # sorting by # ancestors works, but only if we strictly consider
-        # non-ephemeral models
-
-        if 'dbt_run_type' not in node_data or 'materialized' not in node_data:
-            return False
-
-        return node_data['dbt_run_type'] == NodeType.Model \
-            and node_data['materialized'] != 'ephemeral'
-
     def as_dependency_list(self, limit_to=None):
         """returns a list of list of nodes, eg. [[0,1], [2], [4,5,6]]. Each
         element contains nodes whose dependenices are subsumed by the union of
@@ -92,7 +81,7 @@ class Linker(object):
             num_ancestors = len([
                 ancestor for ancestor in
                 nx.ancestors(self.graph, node)
-                # if self.is_blocking_dependency(self.graph[ancestor])
+                if dbt.utils.is_blocking_dependency(self.get_node(ancestor))
             ])
             depth_nodes[num_ancestors].append(node)
 
