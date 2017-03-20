@@ -1,8 +1,6 @@
 import os
 import errno
 import re
-import yaml
-import pprint
 import subprocess
 import dbt.project as project
 
@@ -31,7 +29,7 @@ class DepsTask:
 
     def __pull_repo(self, repo, branch=None):
         proc = subprocess.Popen(
-            ['git', 'clone', repo],
+            ['git', 'clone', '--depth', '1', repo],
             cwd=self.project['modules-path'],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
