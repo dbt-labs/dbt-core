@@ -134,7 +134,7 @@ class SnowflakeAdapter(PostgresAdapter):
         queries = sql.strip().split(";")
         cursor = None
 
-        cls.add_query(
+        super(PostgresAdapter, cls).add_query(
             profile,
             'USE SCHEMA "{}"'.format(cls.get_default_schema(profile)),
             model_name)
