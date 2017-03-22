@@ -132,12 +132,12 @@ class SnowflakeAdapter(PostgresAdapter):
     def add_query(cls, profile, sql, model_name=None):
         # snowflake only allows one query per api call.
         queries = sql.strip().split(";")
-        connection = None
         cursor = None
 
         cls.add_query(
-            connection,
-            'USE SCHEMA "{}"'.format(cls.get_default_schema(profile)))
+            profile,
+            'USE SCHEMA "{}"'.format(cls.get_default_schema(profile)),
+            model_name)
 
         for individual_query in queries:
             # hack -- after the last ';', remove comments and don't run
