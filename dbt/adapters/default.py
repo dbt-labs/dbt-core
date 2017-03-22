@@ -396,7 +396,7 @@ class DefaultAdapter:
                 'Tried to begin a new transaction on connection "{}", but '
                 'it already had one open!'.format(connection.get('name')))
 
-        cls.add_query(connection, 'BEGIN')
+        cls.add_query(profile, 'BEGIN', name)
 
         connection['transaction_open'] = True
         connections_in_use[name] = connection

@@ -40,9 +40,9 @@ class SnowflakeAdapter(PostgresAdapter):
                 cls.rollback(connection)
                 raise dbt.exceptions.ProgrammingException(str(e))
         except Exception as e:
-            cls.rollback(connection)
             logger.debug("Error running SQL: %s", sql)
             logger.debug("Rolling back transaction.")
+            cls.rollback(connection)
             raise e
 
     @classmethod
@@ -119,6 +119,18 @@ class SnowflakeAdapter(PostgresAdapter):
         return dict(existing)
 
     @classmethod
+    def rename(cls, profile, from_name, to_name, model_name=None):
+        schema = cls.get_default_schema(profile)
+
+        sql = (('alter table "{schema}"."{from_name}" '
+                'rename to "{schema}"."{to_name}"')
+               .format(schema=schema,
+                       from_name=from_name,
+                       to_name=to_name))
+
+        connection, cursor = cls.add_query(profile, sql, model_name)
+
+    @classmethod
     def execute_model(cls, profile, model):
         connection = cls.get_connection(profile, model.get('name'))
 
@@ -136,7 +148,7 @@ class SnowflakeAdapter(PostgresAdapter):
 
         super(PostgresAdapter, cls).add_query(
             profile,
-            'USE SCHEMA "{}"'.format(cls.get_default_schema(profile)),
+            'use schema "{}"'.format(cls.get_default_schema(profile)),
             model_name)
 
         for individual_query in queries:

@@ -66,7 +66,7 @@ class DBTIntegrationTest(unittest.TestCase):
                 'outputs': {
                     'default2': {
                         'type': 'snowflake',
-                        'threads': 1,
+                        'threads': 4,
                         'account': os.getenv('SNOWFLAKE_TEST_ACCOUNT'),
                         'user': os.getenv('SNOWFLAKE_TEST_USER'),
                         'password': os.getenv('SNOWFLAKE_TEST_PASSWORD'),
@@ -76,7 +76,7 @@ class DBTIntegrationTest(unittest.TestCase):
                     },
                     'noaccess': {
                         'type': 'snowflake',
-                        'threads': 1,
+                        'threads': 4,
                         'account': os.getenv('SNOWFLAKE_TEST_ACCOUNT'),
                         'user': 'noaccess',
                         'password': 'password',

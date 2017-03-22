@@ -1,13 +1,10 @@
-import copy
 import psycopg2
 
 from contextlib import contextmanager
 
 import dbt.adapters.default
 import dbt.exceptions
-import dbt.flags as flags
 
-from dbt.contracts.connection import validate_connection
 from dbt.logger import GLOBAL_LOGGER as logger
 
 
@@ -41,9 +38,12 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
             yield
         except psycopg2.ProgrammingError as e:
             cls.rollback(connection)
-            error_data = {"model": model_name,
-                          "schema": schema,
-                          "user": connection.get('credentials', {}).get('user')}
+            error_data = {
+                "model": model_name,
+                "schema": schema,
+                "user": connection.get('credentials', {}).get('user')
+            }
+
             if 'must be owner of relation' in e.diag.message_primary:
                 raise RuntimeError(
                     RELATION_NOT_OWNER_MESSAGE.format(**error_data))
@@ -53,9 +53,9 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
             else:
                 raise e
         except Exception as e:
-            cls.rollback(connection)
             logger.debug("Error running SQL: %s", sql)
             logger.debug("Rolling back transaction.")
+            cls.rollback(connection)
             raise e
 
     @classmethod
