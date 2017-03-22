@@ -125,11 +125,6 @@ class SnowflakeAdapter(PostgresAdapter):
         if flags.STRICT_MODE:
             validate_connection(connection)
 
-        cls.add_query(
-            connection,
-            'USE SCHEMA "{}"'.format(
-                connection.get('credentials', {}).get('schema')))
-
         return super(PostgresAdapter, cls).execute_model(
             profile, model)
 
@@ -139,6 +134,11 @@ class SnowflakeAdapter(PostgresAdapter):
         queries = sql.strip().split(";")
         connection = None
         cursor = None
+
+        cls.add_query(
+            connection,
+            'USE SCHEMA "{}"'.format(
+                connection.get('credentials', {}).get('schema')))
 
         for individual_query in queries:
             # hack -- after the last ';', remove comments and don't run
