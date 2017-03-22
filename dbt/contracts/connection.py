@@ -7,7 +7,7 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 connection_contract = Schema({
     Required('type'): Any('postgres', 'redshift', 'snowflake'),
-    Required('name'): basestring,
+    Required('name'): Any(None, basestring),
     Required('state'): Any('init', 'open', 'closed', 'fail'),
     Required('transaction_open'): bool,
     Required('handle'): Any(None, object),

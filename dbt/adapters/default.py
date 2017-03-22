@@ -308,7 +308,10 @@ class DefaultAdapter(object):
 
             if len(connections_available) > 0:
                 logger.debug('Re-using an available connection from the pool.')
-                return connections_available.pop()
+                to_return = connections_available.pop()
+                to_return['name'] = name
+                return to_return
+
             elif num_allocated >= max_connections:
                 raise dbt.exceptions.InternalException(
                     'Tried to request a new connection "{}" but '
@@ -350,6 +353,7 @@ class DefaultAdapter(object):
             lock.acquire()
 
             if to_release.get('state') == 'open':
+                to_release['name'] = None
                 connections_available.append(to_release)
             else:
                 cls.close(to_release)
@@ -360,7 +364,7 @@ class DefaultAdapter(object):
 
     @classmethod
     def cleanup_connections(cls):
-        global connections_in_use
+        global connections_in_use, connections_available
 
         for name, connection in connections_in_use.items():
             if connection.get('state') != 'closed':
@@ -373,7 +377,10 @@ class DefaultAdapter(object):
         try:
             lock.acquire()
 
+            # garbage collect, but don't close them in case someone
+            # still has a handle
             connections_in_use = {}
+            connections_available = []
 
         finally:
             lock.release()
