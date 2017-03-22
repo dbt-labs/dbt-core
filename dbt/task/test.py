@@ -1,7 +1,7 @@
 import dbt.compilation
 
 from dbt.runner import RunManager
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
 class TestTask:

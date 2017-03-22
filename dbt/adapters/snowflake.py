@@ -137,8 +137,7 @@ class SnowflakeAdapter(PostgresAdapter):
 
         cls.add_query(
             connection,
-            'USE SCHEMA "{}"'.format(
-                connection.get('credentials', {}).get('schema')))
+            'USE SCHEMA "{}"'.format(cls.get_default_schema(profile)))
 
         for individual_query in queries:
             # hack -- after the last ';', remove comments and don't run
