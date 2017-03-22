@@ -19,7 +19,7 @@ connections_in_use = {}
 connections_available = []
 
 
-class DefaultAdapter:
+class DefaultAdapter(object):
 
     ###
     # ADAPTER-SPECIFIC FUNCTIONS -- each of these must be overridden in
