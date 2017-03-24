@@ -527,6 +527,7 @@ class RunManager(object):
                     node,
                     error='{}\n'.format(ABORTED_TRANSACTION_STRING),
                     status="SKIP")
+
         except dbt.exceptions.InternalException as e:
             error = ("Internal error executing {filepath}\n\n{error}"
                      "\n\nThis is an error in dbt. Please try again. If "
@@ -535,12 +536,7 @@ class RunManager(object):
                          filepath=node.get('build_path'),
                          error=str(e).strip())
             status = "ERROR"
-            if type(e) == psycopg2.InternalError and \
-               ABORTED_TRANSACTION_STRING == e.diag.message_primary:
-                return RunModelResult(
-                    node,
-                    error='{}\n'.format(ABORTED_TRANSACTION_STRING),
-                    status="SKIP")
+
         except Exception as e:
             error = ("Unhandled error while executing {filepath}\n{error}"
                      .format(

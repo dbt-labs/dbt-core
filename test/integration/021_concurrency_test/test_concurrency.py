@@ -25,6 +25,8 @@ class TestConcurrency(DBTIntegrationTest):
 
         self.assertTablesEqual("seed", "view")
         self.assertTablesEqual("seed", "dep")
+        self.assertTableDoesNotExist("invalid")
+        self.assertTableDoesNotExist("skip")
 
     @attr(type='snowflake')
     def test__snowflake__concurrency(self):

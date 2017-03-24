@@ -274,7 +274,7 @@ class DefaultAdapter(object):
         if connections_in_use.get(name):
             return connections_in_use.get(name)
 
-        if recache_if_missing is False:
+        if not recache_if_missing:
             raise dbt.exceptions.InternalException(
                 'Tried to get a connection "{}" which does not exist '
                 '(recache_if_missing is off).'.format(name))
