@@ -903,14 +903,14 @@ class ParserTest(unittest.TestCase):
             'raw_yml': ('{model_one: {constraints: {not_null: [id],'
                         'unique: [id],'
                         'accepted_values: [{field: id, values: ["a","b"]}],'
-                        'relationships: [{from: id, to: model_two, field: id}]'
+                        'relationships: [{from: id, to: ref(\'model_two\'), field: id}]' # noqa
                         '}}}')
         }]
 
-        not_null_sql = "{{ test_not_null(arg='id', model='model_one') }}"
-        unique_sql = "{{ test_unique(arg='id', model='model_one') }}"
-        accepted_values_sql = "{{ test_accepted_values(field='id', model='model_one', values=['a', 'b']) }}" # noqa
-        relationships_sql = "{{ test_relationships(field='id', from='id', model='model_one', to='model_two') }}" # noqa
+        not_null_sql = "{{ test_not_null(model=ref('model_one'), arg='id') }}"
+        unique_sql = "{{ test_unique(model=ref('model_one'), arg='id') }}"
+        accepted_values_sql = "{{ test_accepted_values(model=ref('model_one'), field='id', values=['a', 'b']) }}" # noqa
+        relationships_sql = "{{ test_relationships(model=ref('model_one'), field='id', from='id', to=ref('model_two')) }}" # noqa
 
         self.assertEquals(
             dbt.parser.parse_schema_tests(
@@ -973,12 +973,12 @@ class ParserTest(unittest.TestCase):
                     'tags': set(['schema']),
                     'raw_sql': accepted_values_sql,
                 },
-                'test.root.relationships_model_one_id__id__model_two': {
-                    'name': 'relationships_model_one_id__id__model_two',
+                'test.root.relationships_model_one_id__id__ref_model_two_': {
+                    'name': 'relationships_model_one_id__id__ref_model_two_',
                     'resource_type': 'test',
-                    'unique_id': 'test.root.relationships_model_one_id__id__model_two', # noqa
+                    'unique_id': 'test.root.relationships_model_one_id__id__ref_model_two_', # noqa
                     'fqn': ['root', 'schema_test',
-                            'relationships_model_one_id__id__model_two'],
+                            'relationships_model_one_id__id__ref_model_two_'],
                     'empty': False,
                     'package_name': 'root',
                     'root_path': get_os_path('/usr/src/app'),
@@ -987,7 +987,7 @@ class ParserTest(unittest.TestCase):
                         'macros': ['macro.root.test_relationships']
                     },
                     'config': self.model_config,
-                    'path': get_os_path('schema_test/relationships_model_one_id__id__model_two.sql'), # noqa
+                    'path': get_os_path('schema_test/relationships_model_one_id__id__ref_model_two_.sql'), # noqa
                     'tags': set(['schema']),
                     'raw_sql': relationships_sql,
                 }

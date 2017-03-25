@@ -2,7 +2,7 @@ import os
 import json
 
 import dbt.project
-from dbt.include import GLOBAL_DBT_MODULES_PATH 
+from dbt.include import GLOBAL_DBT_MODULES_PATH
 
 from dbt.compat import basestring
 from dbt.logger import GLOBAL_LOGGER as logger

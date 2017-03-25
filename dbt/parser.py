@@ -348,20 +348,14 @@ def parse_schema_test(test_base, model_name, test_config, test_type,
     else:
         test_args = test_config
 
-    kwargs = [as_kwarg(key, value) for (key, value) in test_args.items()]
+    # sort the dict so the keys are rendered deterministically (for tests)
+    kwargs = [as_kwarg(key, test_args[key]) for key in sorted(test_args)]
 
-    arg_dict = {
+    raw_sql = "{{{{ {macro}(model=ref('{model}'), {kwargs}) }}}}".format(**{
         'model': model_name,
         'macro': "test_{}".format(test_type),
         'kwargs': ", ".join(kwargs)
-    }
-
-    # escape the jinja brackets
-    raw_sql = """
-    {{{{
-        {macro}(model=ref('{model}'), {kwargs})
-    }}}}
-    """.format(**arg_dict)
+    })
 
     name = get_nice_schema_test_name(test_type, model_name, test_args)
 
