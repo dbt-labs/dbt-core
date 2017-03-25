@@ -1,6 +1,7 @@
 import copy
 import os
 import yaml
+import re
 
 import dbt.flags
 import dbt.model
@@ -320,50 +321,49 @@ def get_nice_schema_test_name(test_type, test_name, args):
 
         flat_args.extend([str(part) for part in parts])
 
-    unique = "__".join(flat_args)
+    clean_flat_args = [re.sub('[^0-9a-zA-Z_]+', '_', arg) for arg in flat_args]
+    unique = "__".join(clean_flat_args)
     return '{}_{}_{}'.format(test_type, test_name, unique)
 
 
-def parse_schema_test_arg(test_base, test_config):
-    if isinstance(test_config, (basestring, int, float, bool)):
-        return {"arg": test_config}
+def as_kwarg(key, value):
+    test_value = basestring(value)
+    is_function = re.match(r'^\s*(ref|var)\(.+\)$', test_value) is not None
 
-    elif isinstance(test_config, dict):
-        return {basestring(k): v for (k, v) in test_config.items()}
-
+    # if the value is a function, don't wrap it in quotes!
+    if is_function:
+        formatted_value = value
     else:
-        return None
+        formatted_value = value.__repr__()
+
+    return "{key}={value}".format(key=key, value=formatted_value)
 
 
 def parse_schema_test(test_base, model_name, test_config, test_type,
                       root_project_config, package_project_config,
                       all_projects):
-    macro = "test_{}".format(test_type)
+
+    if isinstance(test_config, (basestring, int, float, bool)):
+        test_args = {'arg': test_config}
+    else:
+        test_args = test_config
+
+    kwargs = [as_kwarg(key, value) for (key, value) in test_args.items()]
+
     arg_dict = {
-        'model': model_name
+        'model': model_name,
+        'macro': "test_{}".format(test_type),
+        'kwargs': ", ".join(kwargs)
     }
 
-    macro_args = parse_schema_test_arg(test_base, test_config)
-    if macro_args is None:
-        dbt.utils.compiler_warning(
-            test_base.get('path'),
-            "Invalid option supplied to schema test: {}".format(test_config)
-        )
-        return None
+    # escape the jinja brackets
+    raw_sql = """
+    {{{{
+        {macro}(model=ref('{model}'), {kwargs})
+    }}}}
+    """.format(**arg_dict)
 
-    arg_dict.update(macro_args)
-
-    args = ", ".join([
-        "{}={}".format(key, arg_dict[key].__repr__())
-        for key in sorted(arg_dict)
-    ])
-
-    raw_sql_contents = "{macro}({args})".format(macro=macro, args=args)
-    raw_sql = "{{ " + raw_sql_contents + " }}"
-
-    non_name_args = arg_dict.copy()
-    non_name_args.pop('model')
-    name = get_nice_schema_test_name(test_type, model_name, non_name_args)
+    name = get_nice_schema_test_name(test_type, model_name, test_args)
 
     pseudo_path = dbt.utils.get_pseudo_test_path(name, test_base.get('path'),
                                                  'schema_test')
