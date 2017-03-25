@@ -65,7 +65,7 @@ def recursively_parse_macros_for_node(node, flat_graph, context):
                    .update(macro_map)
 
             if package_name in (node.get('package_name'),
-                                dbt.loader.GLOBAL_PROJECT_NAME):
+                                dbt.include.GLOBAL_PROJECT_NAME):
                 context.update(macro_map)
 
     return context

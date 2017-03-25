@@ -2,7 +2,7 @@ import os
 import json
 
 import dbt.project
-import dbt.loader
+from dbt.include import GLOBAL_DBT_MODULES_PATH 
 
 from dbt.compat import basestring
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -43,16 +43,21 @@ class This(object):
         return self.schema_table(self.schema, self.table)
 
 
-def compiler_error(model, msg):
+def get_model_name_or_none(model):
     if model is None:
         name = '<None>'
-    elif isinstance(model, str):
+
+    elif isinstance(model, basestring):
         name = model
     elif isinstance(model, dict):
         name = model.get('name')
     else:
         name = model.nice_name
+    return name
 
+
+def compiler_error(model, msg):
+    name = get_model_name_or_none(model)
     raise RuntimeError(
         "! Compilation error while compiling model {}:\n! {}\n"
         .format(name, msg)
@@ -60,15 +65,7 @@ def compiler_error(model, msg):
 
 
 def compiler_warning(model, msg):
-    if model is None:
-        name = '<None>'
-    elif isinstance(model, str):
-        name = model
-    elif isinstance(model, dict):
-        name = model.get('name')
-    else:
-        name = model.nice_name
-
+    name = get_model_name_or_none(model)
     logger.info(
         "* Compilation warning while compiling model {}:\n* {}\n"
         .format(name, msg)
@@ -162,31 +159,34 @@ def find_model_by_fqn(models, fqn):
     )
 
 
-def dependency_projects(project, include_global=True):
-    if include_global:
-        module_paths = [
-            dbt.loader.get_include_path(),
-            project['modules-path']
-        ]
-    else:
-        module_paths = [project['modules-path']]
+def dependency_projects(project):
+    module_paths = [
+        GLOBAL_DBT_MODULES_PATH,
+        project['modules-path']
+    ]
 
     for module_path in module_paths:
         for obj in os.listdir(module_path):
             full_obj = os.path.join(module_path, obj)
-            if os.path.isdir(full_obj):
-                try:
-                    yield dbt.project.read_project(
-                        os.path.join(full_obj, 'dbt_project.yml'),
-                        project.profiles_dir,
-                        profile_to_load=project.profile_to_load,
-                        args=project.args)
-                except dbt.project.DbtProjectError as e:
-                    logger.info(
-                        "Error reading dependency project at {}".format(
-                            full_obj)
-                    )
-                    logger.info(str(e))
+
+            if not os.path.isdir(full_obj) or obj.startswith('__'):
+                # exclude non-dirs and dirs that start with __
+                # the latter could be something like __pycache__
+                # for the global dbt modules dir
+                continue
+
+            try:
+                yield dbt.project.read_project(
+                    os.path.join(full_obj, 'dbt_project.yml'),
+                    project.profiles_dir,
+                    profile_to_load=project.profile_to_load,
+                    args=project.args)
+            except dbt.project.DbtProjectError as e:
+                logger.info(
+                    "Error reading dependency project at {}".format(
+                        full_obj)
+                )
+                logger.info(str(e))
 
 
 def split_path(path):

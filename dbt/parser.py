@@ -14,6 +14,7 @@ import dbt.contracts.graph.unparsed
 import dbt.contracts.project
 
 from dbt.utils import NodeType
+from dbt.compat import basestring
 from dbt.logger import GLOBAL_LOGGER as logger
 
 
@@ -282,7 +283,7 @@ def parse_schema_tests(tests, root_project, projects):
                 if configs is None:
                     continue
 
-                if type(configs) not in (list, tuple):
+                if not isinstance(configs, (list, tuple)):
 
                     dbt.utils.compiler_warning(
                         model_name,
@@ -310,9 +311,9 @@ def get_nice_schema_test_name(test_type, test_name, args):
     for arg_name in sorted(args):
         arg_val = args[arg_name]
 
-        if type(arg_val) == dict:
+        if isinstance(arg_val, dict):
             parts = arg_val.values()
-        elif type(arg_val) in (list, tuple):
+        elif isinstance(arg_val, (list, tuple)):
             parts = arg_val
         else:
             parts = [arg_val]
@@ -323,6 +324,17 @@ def get_nice_schema_test_name(test_type, test_name, args):
     return '{}_{}_{}'.format(test_type, test_name, unique)
 
 
+def parse_schema_test_arg(test_base, test_config):
+    if isinstance(test_config, (basestring, int, float, bool)):
+        return {"arg": test_config}
+
+    elif isinstance(test_config, dict):
+        return {basestring(k): v for (k, v) in test_config.items()}
+
+    else:
+        return None
+
+
 def parse_schema_test(test_base, model_name, test_config, test_type,
                       root_project_config, package_project_config,
                       all_projects):
@@ -331,10 +343,15 @@ def parse_schema_test(test_base, model_name, test_config, test_type,
         'model': model_name
     }
 
-    if hasattr(test_config, 'items'):
-        arg_dict.update(test_config)
-    else:
-        arg_dict['arg'] = test_config
+    macro_args = parse_schema_test_arg(test_base, test_config)
+    if macro_args is None:
+        dbt.utils.compiler_warning(
+            test_base.get('path'),
+            "Invalid option supplied to schema test: {}".format(test_config)
+        )
+        return None
+
+    arg_dict.update(macro_args)
 
     args = ", ".join([
         "{}={}".format(key, arg_dict[key].__repr__())
