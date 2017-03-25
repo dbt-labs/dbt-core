@@ -4,7 +4,7 @@ import sqlparse
 
 import dbt.project
 import dbt.utils
-import dbt.loader
+import dbt.include
 
 from dbt.model import Model
 from dbt.utils import This, Var, is_enabled, get_materialization, NodeType, \
