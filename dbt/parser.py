@@ -15,7 +15,7 @@ import dbt.contracts.graph.unparsed
 import dbt.contracts.project
 
 from dbt.utils import NodeType
-from dbt.compat import basestring
+from dbt.compat import basestring, to_string
 from dbt.logger import GLOBAL_LOGGER as logger
 
 
@@ -327,7 +327,7 @@ def get_nice_schema_test_name(test_type, test_name, args):
 
 
 def as_kwarg(key, value):
-    test_value = basestring(value)
+    test_value = to_string(value)
     is_function = re.match(r'^\s*(ref|var)\(.+\)$', test_value) is not None
 
     # if the value is a function, don't wrap it in quotes!
