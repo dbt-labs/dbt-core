@@ -5,8 +5,7 @@
     select
         count(*)
 
-    from {{ ref(model) }}
-
+    from {{ model }}
     where {{ arg }} != 'blue'
 
 {% endmacro %}
@@ -16,8 +15,8 @@
 
     select
         count(*)
-    from {{ ref(model) }}
 
+    from {{ model }}
     where {{ field }} in (
         {% for value in values %}
             {{ value }} {% if not loop.last %} , {% endif %}

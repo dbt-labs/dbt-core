@@ -29,7 +29,7 @@ table_summary:
             - { field: favorite_color, values: ['blue', 'green'] }
 
         relationships:
-            - { from: favorite_color, to: table_copy, field: favorite_color }
+            - { from: favorite_color, to: ref('table_copy'), field: favorite_color }
 
 
 # all of these constraints will fail
@@ -52,4 +52,4 @@ table_failure_summary:
             - { field: favorite_color, values: ['red'] }
 
         relationships:
-            - { from: favorite_color, to: table_copy, field: favorite_color }
+            - { from: favorite_color, to: ref('table_copy'), field: favorite_color }

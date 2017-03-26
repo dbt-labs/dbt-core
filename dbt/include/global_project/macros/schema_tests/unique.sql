@@ -7,6 +7,7 @@ with validation as (
         {{ arg }} as unique_field
 
     from {{ model }}
+    where {{ arg }} is not null
 
 ),
 
