@@ -328,7 +328,7 @@ def get_nice_schema_test_name(test_type, test_name, args):
 
 def as_kwarg(key, value):
     test_value = to_string(value)
-    is_function = re.match(r'^\s*(ref|var)\(.+\)$', test_value) is not None
+    is_function = re.match(r'^\s*(ref|var)\s*\(.+\)\s*$', test_value)
 
     # if the value is a function, don't wrap it in quotes!
     if is_function:
