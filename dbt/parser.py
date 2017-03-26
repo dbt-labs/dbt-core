@@ -191,6 +191,7 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     context['var'] = lambda *args: ''
     context['target'] = property(lambda x: '', lambda x: x)
     context['this'] = ''
+    context['if_already_exists'] = lambda *args: lambda *args: ''
 
     dbt.clients.jinja.get_rendered(
         node.get('raw_sql'), context, node,

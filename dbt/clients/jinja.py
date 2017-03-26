@@ -1,5 +1,6 @@
 import dbt.compat
 import dbt.exceptions
+from dbt.operations import operations
 
 import jinja2
 import jinja2.sandbox
@@ -42,10 +43,12 @@ def create_macro_capture_env(node):
                 self.node['depends_on']['macros'].append(path)
 
     return jinja2.sandbox.SandboxedEnvironment(
+        extensions=[operations.OperationExtension],
         undefined=ParserMacroCapture)
 
 
-env = jinja2.sandbox.SandboxedEnvironment()
+env = jinja2.sandbox.SandboxedEnvironment(
+        extensions=[operations.OperationExtension])
 
 
 def get_template(string, ctx, node=None, capture_macros=False):
