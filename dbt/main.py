@@ -184,13 +184,8 @@ def invoke_dbt(parsed):
 
             return None
 
-    log_dir = proj.get('log-path', 'logs')
-
-    if hasattr(proj.args, 'non_destructive') and \
-       proj.args.non_destructive is True:
-        flags.NON_DESTRUCTIVE = True
-    else:
-        flags.NON_DESTRUCTIVE = False
+    flags.NON_DESTRUCTIVE = getattr(proj.args, 'non_destructive', False)
+    flags.FULL_REFRESH = getattr(proj.args, 'full_refresh', False)
 
     logger.debug("running dbt with arguments %s", parsed)
 
