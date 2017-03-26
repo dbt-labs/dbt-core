@@ -73,4 +73,4 @@ def render_template(template, ctx, node=None):
 
 def get_rendered(string, ctx, node=None, capture_macros=False):
     template = get_template(string, ctx, node, capture_macros)
-    return render_template(template, ctx, node=None)
+    return render_template(template, ctx, node)

@@ -30,45 +30,6 @@ CompilableEntities = [
 graph_file_name = 'graph.gpickle'
 
 
-def recursively_parse_macros_for_node(node, flat_graph, context):
-    # this once worked, but is now long dead
-    # for unique_id in node.get('depends_on', {}).get('macros'):
-    # TODO: make it so that we only parse the necessary macros for any node.
-
-    for unique_id, macro in flat_graph.get('macros').items():
-        if macro is None:
-            dbt.exceptions.macro_not_found(node, unique_id)
-
-        name = macro.get('name')
-        package_name = macro.get('package_name')
-
-        if context.get(package_name, {}).get(name) is not None:
-            # we've already re-parsed this macro and added it to
-            # the context.
-            continue
-
-        reparsed = dbt.parser.parse_macro_file(
-            macro_file_path=macro.get('path'),
-            macro_file_contents=macro.get('raw_sql'),
-            root_path=macro.get('root_path'),
-            package_name=package_name,
-            context=context)
-
-        for unique_id, macro in reparsed.items():
-            macro_map = {macro.get('name'): macro.get('parsed_macro')}
-
-            if context.get(package_name) is None:
-                context[package_name] = {}
-
-            context.get(package_name, {}) \
-                   .update(macro_map)
-
-            if package_name == node.get('package_name'):
-                context.update(macro_map)
-
-    return context
-
-
 def compile_and_print_status(project, args):
     compiler = Compiler(project, args)
     compiler.initialize()
@@ -288,8 +249,19 @@ class Compiler(object):
         context['invocation_id'] = '{{ invocation_id }}'
         context['sql_now'] = adapter.date_function()
 
-        context = recursively_parse_macros_for_node(
-            model, flat_graph, context)
+        for unique_id, macro in flat_graph.get('macros').items():
+            package_name = macro.get('package_name')
+
+            macro_map = {macro.get('name'): macro.get('parsed_macro')}
+
+            if context.get(package_name) is None:
+                context[package_name] = {}
+
+            context.get(package_name, {}) \
+                   .update(macro_map)
+
+            if package_name == model.get('package_name'):
+                context.update(macro_map)
 
         return context
 

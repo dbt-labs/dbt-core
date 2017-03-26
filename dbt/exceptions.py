@@ -42,6 +42,10 @@ def raise_compiler_error(node, msg):
         name = node
     elif isinstance(node, dict):
         name = node.get('name')
+        node_type = node.get('resource_type')
+
+        if node_type == dbt.utils.NodeType.Macro:
+            name = node.get('path')
     else:
         name = node.nice_name
 

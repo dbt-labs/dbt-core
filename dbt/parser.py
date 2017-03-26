@@ -121,15 +121,13 @@ def parse_macro_file(macro_file_path,
     if tags is None:
         tags = set()
 
-    if context is None:
-        context = {
-            'ref': lambda *args: '',
-            'var': lambda *args: '',
-            'target': property(lambda x: '', lambda x: x),
-            'this': ''
-        }
+    context = {
+        'target': property(lambda x: '', lambda x: x),
+    }
 
     base_node = {
+        'name': 'macro',
+        'path': macro_file_path,
         'resource_type': NodeType.Macro,
         'package_name': package_name,
         'depends_on': {
