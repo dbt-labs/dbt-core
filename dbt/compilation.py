@@ -20,6 +20,7 @@ import dbt.flags
 import dbt.parser
 import dbt.templates
 
+from dbt.operations import operations
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -228,7 +229,8 @@ class Compiler(object):
         context = self.project.context()
         adapter = get_adapter(self.project.run_environment())
 
-        if dbt.flags.NON_DESTRUCTIVE:
+        if dbt.flags.NON_DESTRUCTIVE or \
+           get_materialization(model) == 'incremental':
             this_table = model.get('name')
         else:
             this_table = '{}__dbt_tmp'.format(model.get('name'))
@@ -284,6 +286,7 @@ class Compiler(object):
         # these get re-interpolated at runtime!
         context['run_started_at'] = '{{ run_started_at }}'
         context['invocation_id'] = '{{ invocation_id }}'
+        context['if_already_exists'] = operations.if_already_exists
 
         adapter = get_adapter(self.project.run_environment())
         context['sql_now'] = adapter.date_function()
@@ -310,6 +313,7 @@ class Compiler(object):
             node.get('raw_sql'),
             context,
             node)
+
 
         compiled_node['compiled'] = True
 
