@@ -18,11 +18,17 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test_full_refresh(self):
+        # initial full-refresh should have no effect
         self.run_dbt(['run', '--full-refresh'])
 
         self.assertTablesEqual("seed","view")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
+
+        # adds one record to the incremental model. full-refresh should truncate then re-run
+        self.run_sql_file("test/integration/017_runtime_materialization_tests/invalidate_incremental.sql")
+        self.run_dbt(['run', '--full-refresh'])
+        self.assertTablesEqual("seed","incremental")
 
         self.run_sql_file("test/integration/017_runtime_materialization_tests/update.sql")
 
@@ -39,11 +45,13 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
         self.assertTablesEqual("seed","view")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
+        self.assertTableDoesNotExist('dependent_view')
 
         self.run_sql_file("test/integration/017_runtime_materialization_tests/update.sql")
 
         self.run_dbt(['run', '--non-destructive'])
 
+        self.assertTableDoesExist('dependent_view')
         self.assertTablesEqual("seed","view")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
@@ -55,11 +63,14 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
         self.assertTablesEqual("seed","view")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
+        self.assertTableDoesNotExist('dependent_view')
 
+        self.run_sql_file("test/integration/017_runtime_materialization_tests/invalidate_incremental.sql")
         self.run_sql_file("test/integration/017_runtime_materialization_tests/update.sql")
 
         self.run_dbt(['run', '--full-refresh', '--non-destructive'])
 
+        self.assertTableDoesExist('dependent_view')
         self.assertTablesEqual("seed","view")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")

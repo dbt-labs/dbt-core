@@ -333,6 +333,14 @@ class DBTIntegrationTest(unittest.TestCase):
             0
         )
 
+    def assertTableDoesExist(self, table):
+        columns = self.get_table_columns(table)
+
+        self.assertGreater(
+            len(columns),
+            0
+        )
+
     def assertTableColumnsEqual(self, table_a, table_b):
         table_a_result = self.get_table_columns(table_a)
         table_b_result = self.get_table_columns(table_b)
