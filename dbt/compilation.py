@@ -269,7 +269,7 @@ class Compiler(object):
         adapter = get_adapter(self.project.run_environment())
 
         if dbt.flags.NON_DESTRUCTIVE or \
-           get_materialization(model) == 'incremental':
+                get_materialization(model) == 'incremental':
             this_table = model.get('name')
         else:
             this_table = '{}__dbt_tmp'.format(model.get('name'))
