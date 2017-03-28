@@ -20,7 +20,6 @@ import dbt.flags
 import dbt.parser
 import dbt.templates
 
-from dbt.operations import operations
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
 

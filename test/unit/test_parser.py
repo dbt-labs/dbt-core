@@ -1154,6 +1154,38 @@ another_model:
                 root_path=get_os_path('/usr/src/app'),
                 package_name='root')
 
+    def test__macro_with_var__invalid(self):
+        macro_file_contents = """
+{% macro with_ref(a) -%}
+  {% if a: %}
+    {{ var('abc') }}
+  {% endif %}
+{%- endmacro %}
+"""
+
+        with self.assertRaises(dbt.exceptions.CompilationException):
+            dbt.parser.parse_macro_file(
+                macro_file_path='macro_with_var.sql',
+                macro_file_contents=macro_file_contents,
+                root_path=get_os_path('/usr/src/app'),
+                package_name='root')
+
+    def test__macro_with_this__invalid(self):
+        macro_file_contents = """
+{% macro with_ref(a) -%}
+  {% if a: %}
+    {{ this }}
+  {% endif %}
+{%- endmacro %}
+"""
+
+        with self.assertRaises(dbt.exceptions.CompilationException):
+            dbt.parser.parse_macro_file(
+                macro_file_path='macro_with_this.sql',
+                macro_file_contents=macro_file_contents,
+                root_path=get_os_path('/usr/src/app'),
+                package_name='root')
+
     def test__simple_macro_used_in_model(self):
         macro_file_contents = """
 {% macro simple(a, b) %}
