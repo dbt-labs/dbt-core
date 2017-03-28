@@ -491,7 +491,8 @@ class RunManager(object):
             elif is_type(node, NodeType.Test):
                 result = execute_test(profile, node)
             elif is_type(node, NodeType.Archive):
-                result = execute_archive(profile, node, self.node_context(node))
+                result = execute_archive(
+                    profile, node, self.node_context(node))
 
             adapter.commit(connection)
 
