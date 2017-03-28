@@ -286,7 +286,6 @@ class Compiler(object):
         # these get re-interpolated at runtime!
         context['run_started_at'] = '{{ run_started_at }}'
         context['invocation_id'] = '{{ invocation_id }}'
-        context['if_already_exists'] = operations.if_already_exists
 
         adapter = get_adapter(self.project.run_environment())
         context['sql_now'] = adapter.date_function()
@@ -313,7 +312,6 @@ class Compiler(object):
             node.get('raw_sql'),
             context,
             node)
-
 
         compiled_node['compiled'] = True
 
