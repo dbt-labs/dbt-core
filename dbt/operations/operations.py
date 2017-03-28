@@ -4,38 +4,49 @@ import jinja2.ext
 
 
 class OperationExtension(jinja2.ext.Extension):
-    tags = set(['op'])
 
-    def __init__(self, environment):
-        super(OperationExtension, self).__init__(environment)
+    def extract_method_name(self, tokens):
+        name = ""
+        import ipdb; ipdb.set_trace()
+        for token in tokens:
+            if token.test("variable_begin"):
+                continue
+            elif token.test("name"):
+                name += token.value
+            elif token.test("dot"):
+                name += token.value
+            else:
+                break
+        if not name:
+            name = "bind#0"
+        return name
 
-    def parse(self, parser):
-        lineno = next(parser.stream).lineno
-        args = [parser.parse_expression()]
-        body = parser.parse_statements(['name:endop'], drop_needle=True)
+    def filter_stream(self, stream):
+        """
+        We convert 
+        {{ some.variable | filter1 | filter 2}}
+            to 
+        {{ some.variable | filter1 | filter 2 | bind}}
+        
+        ... for all variable declarations in the template
+        This function is called by jinja2 immediately 
+        after the lexing stage, but before the parser is called. 
+        """
+        while not stream.eos:
+            token = next(stream)
 
-        return jinja2.nodes.CallBlock(
-            self.call_method('_operation', args),
-            [],
-            [],
-            body).set_lineno(lineno)
+            held = []
+            held.append(token)
 
-    def _operation(self, operation, caller):
-        return operation(caller())
-
-
-already_exists_sql = """
-{{% if {not_token} already_exists('{schema}', '{table}') %}}
-{contents}
-{{% endif %}}
-"""
+            if token.test('name') and token.value in ('ref', 'var'):
+                next_token = next(stream)
+                held.append(next_token)
+                if next_token.test('lparen'):
+                    raise RuntimeError('Used {} in a macro!'.format(token.value))
+            for token in held:
+                yield token
 
 
 def if_already_exists(model, does_exist=True):
-    def render(contents):
-        return already_exists_sql.format(
-                schema=model.schema,
-                table=model.name,
-                contents=contents,
-                not_token='not' if not does_exist else '')
-    return render
+    import ipdb; ipdb.set_trace()
+    return ""

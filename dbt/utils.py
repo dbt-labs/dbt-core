@@ -231,13 +231,3 @@ def get_pseudo_test_path(node_name, source_path, test_type):
     suffix = [test_type, "{}.sql".format(node_name)]
     pseudo_path_parts = source_path_parts + suffix
     return os.path.join(*pseudo_path_parts)
-
-
-def jinja_identity(func_name):
-    def identity(*args):
-        interp_args = [arg.__repr__() for arg in args]
-        return "{func}({args})".format(
-            func=func_name,
-            args=",".join(interp_args))
-
-    return identity
