@@ -1,4 +1,5 @@
 from dbt.compat import basestring
+import dbt.utils
 
 
 class Exception(BaseException):

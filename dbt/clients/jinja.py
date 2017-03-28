@@ -6,7 +6,7 @@ import jinja2.sandbox
 import jinja2.nodes
 import jinja2.ext
 
-from dbt.utils import NodeType, compiler_error
+from dbt.utils import NodeType
 
 
 def create_macro_validation_extension(node):
@@ -16,8 +16,9 @@ def create_macro_validation_extension(node):
         DisallowedVars = ('this',)
 
         def onError(self, token):
-            compiler_error(node, "The context variable '{}' is not allowed in "
-                           "macros.".format(token.value))
+            error = "The context variable '{}' is not allowed in macros." \
+                    .format(token.value)
+            dbt.exceptions.raise_compiler_error(node, error)
 
         def filter_stream(self, stream):
             while not stream.eos:
@@ -36,7 +37,8 @@ def create_macro_validation_extension(node):
                 for token in held:
                     yield token
 
-    return MacroContextCatcherExtension
+    return jinja2.sandbox.SandboxedEnvironment(
+        extensions=[MacroContextCatcherExtension])
 
 
 def create_macro_capture_env(node):
@@ -74,7 +76,6 @@ def create_macro_capture_env(node):
                 self.node['depends_on']['macros'].append(path)
 
     return jinja2.sandbox.SandboxedEnvironment(
-        extensions=[create_macro_validation_extension(node)],
         undefined=ParserMacroCapture)
 
 
@@ -86,13 +87,11 @@ def get_template(string, ctx, node=None, capture_macros=False,
     try:
         local_env = env
 
-        if capture_macros is True:
+        if capture_macros:
             local_env = create_macro_capture_env(node)
 
-        elif validate_macro is True:
-            local_env = jinja2.sandbox.SandboxedEnvironment(
-                extensions=[create_macro_validation_extension(node)]
-            )
+        elif validate_macro:
+            local_env = create_macro_validation_extension(node)
 
         return local_env.from_string(dbt.compat.to_string(string), globals=ctx)
 
