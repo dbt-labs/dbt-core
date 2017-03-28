@@ -13,7 +13,7 @@ def create_macro_validation_extension(node):
 
     class MacroContextCatcherExtension(jinja2.ext.Extension):
         DisallowedFuncs = ('ref', 'var')
-        DisallowedVars = ('this',)
+        DisallowedVars = ('this', 'target')
 
         def onError(self, token):
             error = "The context variable '{}' is not allowed in macros." \
