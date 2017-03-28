@@ -20,6 +20,7 @@ import dbt.flags
 import dbt.parser
 import dbt.templates
 
+from dbt.operations import operations
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -228,13 +229,18 @@ class Compiler(object):
         context = self.project.context()
         adapter = get_adapter(self.project.run_environment())
 
+        if dbt.flags.NON_DESTRUCTIVE or \
+                get_materialization(model) == 'incremental':
+            this_table = model.get('name')
+        else:
+            this_table = '{}__dbt_tmp'.format(model.get('name'))
+
         # built-ins
         context['ref'] = self.__ref(context, model, flat_graph)
         context['config'] = self.__model_config(model, linker)
         context['this'] = This(
             context['env']['schema'],
-            (model.get('name') if dbt.flags.NON_DESTRUCTIVE
-             else '{}__dbt_tmp'.format(model.get('name'))),
+            this_table,
             model.get('name')
         )
         context['var'] = Var(model, context=context)
