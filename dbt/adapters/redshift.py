@@ -1,5 +1,6 @@
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
+from dbt.compat import basestring
 
 
 class RedshiftAdapter(PostgresAdapter):
@@ -30,7 +31,7 @@ class RedshiftAdapter(PostgresAdapter):
                 .format(sort_type, valid_sort_types)
             )
 
-        if type(sort) == str:
+        if isinstance(sort, basestring):
             sort_keys = [sort]
         else:
             sort_keys = sort

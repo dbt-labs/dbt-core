@@ -345,47 +345,6 @@ class Model(DBTSource):
         blob = "\n".join("-- {}".format(s) for s in self.prologue)
         return "-- Compiled by DBT\n{}".format(blob)
 
-    def sort_qualifier(self, model_config):
-        if 'sort' not in model_config:
-            return ''
-
-        if (self.is_view or self.is_ephemeral) and 'sort' in model_config:
-            return ''
-
-        sort_keys = model_config['sort']
-        sort_type = model_config.get('sort_type', 'compound')
-
-        if type(sort_type) != str:
-            compiler_error(
-                self,
-                "The provided sort_type '{}' is not valid!".format(sort_type)
-            )
-
-        sort_type = sort_type.strip().lower()
-
-        adapter = get_adapter(self.project.run_environment())
-        return adapter.sort_qualifier(sort_type, sort_keys)
-
-    def dist_qualifier(self, model_config):
-        if 'dist' not in model_config:
-            return ''
-
-        if (self.is_view or self.is_ephemeral) and 'dist' in model_config:
-            return ''
-
-        dist_key = model_config['dist']
-
-        if type(dist_key) != str:
-            compiler_error(
-                self,
-                "The provided distkey '{}' is not valid!".format(dist_key)
-            )
-
-        dist_key = dist_key.strip().lower()
-
-        adapter = get_adapter(self.project.run_environment())
-        return adapter.dist_qualifier(dist_key)
-
     def build_path(self):
         filename = "{}.sql".format(self.name)
         path_parts = [self.build_dir] + self.fqn[:-1] + [filename]

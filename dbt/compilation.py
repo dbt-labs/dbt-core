@@ -5,6 +5,7 @@ import sqlparse
 import dbt.project
 import dbt.utils
 import dbt.include
+import dbt.wrapper
 
 from dbt.model import Model
 from dbt.utils import This, Var, is_enabled, get_materialization, NodeType, \
@@ -269,13 +270,18 @@ class Compiler(object):
         context = self.project.context()
         adapter = get_adapter(self.project.run_environment())
 
+        if dbt.flags.NON_DESTRUCTIVE or \
+                get_materialization(model) == 'incremental':
+            table_name = model.get('name')
+        else:
+            table_name = '{}__dbt_tmp'.format(model.get('name'))
+
         # built-ins
         context['ref'] = self.__ref(context, model, flat_graph)
         context['config'] = self.__model_config(model, linker)
         context['this'] = This(
             context['env']['schema'],
-            (model.get('name') if dbt.flags.NON_DESTRUCTIVE
-             else '{}__dbt_tmp'.format(model.get('name'))),
+            table_name,
             model.get('name')
         )
         context['var'] = Var(model, context=context)
@@ -290,33 +296,6 @@ class Compiler(object):
             model, flat_graph, context)
 
         return context
-
-    def get_context(self, linker, model, models):
-        # THIS IS STILL USED FOR WRAPPING, BUT SHOULD GO AWAY
-        #    - Connor
-        runtime = RuntimeContext(model=model)
-
-        context = self.project.context()
-
-        # built-ins
-        context['ref'] = self.__ref(context, model, models)
-        context['config'] = self.__model_config(model, linker)
-        context['this'] = This(
-            context['env']['schema'], model.immediate_name, model.name
-        )
-        context['var'] = Var(model, context=context)
-        context['target'] = self.project.get_target()
-
-        # these get re-interpolated at runtime!
-        context['run_started_at'] = '{{ run_started_at }}'
-        context['invocation_id'] = '{{ invocation_id }}'
-
-        adapter = get_adapter(self.project.run_environment())
-        context['sql_now'] = adapter.date_function()
-
-        runtime.update_global(context)
-
-        return runtime
 
     def compile_node(self, linker, node, flat_graph):
         logger.debug("Compiling {}".format(node.get('unique_id')))
@@ -403,21 +382,13 @@ class Compiler(object):
                 pass
 
             else:
-                model = Model(
+
+                context = self.get_compiler_context(linker, injected_node, injected_graph)
+                wrapped_stmt = dbt.wrapper.wrap(
+                    injected_node,
                     self.project,
-                    injected_node.get('root_path'),
-                    injected_node.get('path'),
-                    all_projects.get(injected_node.get('package_name')))
-
-                cfg = injected_node.get('config', {})
-                model._config = cfg
-
-                context = self.get_context(linker,
-                                           model,
-                                           injected_graph.get('nodes'))
-
-                wrapped_stmt = model.compile(
-                    injected_node.get('injected_sql'), self.project, context)
+                    context,
+                    flat_graph)
 
                 injected_node['wrapped_sql'] = wrapped_stmt
                 wrapped_graph['nodes'][name] = injected_node
