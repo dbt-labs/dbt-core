@@ -478,23 +478,26 @@ class RunManager(object):
         adapter = get_adapter(profile)
         connection = adapter.begin(profile, node.get('name'))
 
-        logger.debug("executing node %s", node.get('unique_id'))
+        try:
+            logger.debug("executing node %s", node.get('unique_id'))
 
-        if node.get('skip') is True:
-            return "SKIP"
+            if node.get('skip') is True:
+                return "SKIP"
 
-        node = self.inject_runtime_config(node)
+            node = self.inject_runtime_config(node)
 
-        if is_type(node, NodeType.Model):
-            result = execute_model(profile, node, existing)
-        elif is_type(node, NodeType.Test):
-            result = execute_test(profile, node)
-        elif is_type(node, NodeType.Archive):
-            result = execute_archive(profile, node, self.node_context(node))
+            if is_type(node, NodeType.Model):
+                result = execute_model(profile, node, existing)
+            elif is_type(node, NodeType.Test):
+                result = execute_test(profile, node)
+            elif is_type(node, NodeType.Archive):
+                result = execute_archive(
+                    profile, node, self.node_context(node))
 
-        adapter.commit(connection)
-        adapter.close(connection)
-        adapter.release_connection(profile, node.get('name'))
+            adapter.commit(connection)
+
+        finally:
+            adapter.release_connection(profile, node.get('name'))
 
         return result
 

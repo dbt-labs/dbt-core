@@ -1,3 +1,18 @@
+
+-- create a view on top of the models. Since they shouldn't be drop-cascaded,
+-- this view will still be around after the dbt run --non-destructive
+
+create view runtime_materialization_017.dependent_view as (
+
+    select count(*) from runtime_materialization_017.materialized
+    union all
+    select count(*) from runtime_materialization_017.view
+    union all
+    select count(*) from runtime_materialization_017.incremental
+
+);
+
+
 insert into runtime_materialization_017.seed (first_name, last_name, email, gender, ip_address) values ('Michael', 'Perez', 'mperez0@chronoengine.com', 'Male', '106.239.70.175');
 insert into runtime_materialization_017.seed (first_name, last_name, email, gender, ip_address) values ('Shawn', 'Mccoy', 'smccoy1@reddit.com', 'Male', '24.165.76.182');
 insert into runtime_materialization_017.seed (first_name, last_name, email, gender, ip_address) values ('Kathleen', 'Payne', 'kpayne2@cargocollective.com', 'Female', '113.207.168.106');

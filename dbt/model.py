@@ -92,11 +92,7 @@ class SourceConfig(object):
         return cfg
 
     def is_full_refresh(self):
-        if hasattr(self.active_project, 'args') and \
-           hasattr(self.active_project.args, 'full_refresh'):
-            return self.active_project.args.full_refresh
-        else:
-            return False
+        return dbt.flags.FULL_REFRESH
 
     def update_in_model_config(self, config):
         config = config.copy()
