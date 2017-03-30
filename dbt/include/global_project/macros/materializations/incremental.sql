@@ -1,12 +1,10 @@
 
 
 {# this shouldnt be duplicated - use the existing macro! #}
-{% macro dbt__create_table(schema, identifier, dist, sort, sql) -%}
-
+{% macro dbt__create_table_for_incremental(schema, identifier, dist, sort, sql, flags, funcs) -%}
     create table {{ schema }}.{{ identifier }} {{ dist }} {{ sort }} as (
         {{ sql }}
     );
-
 {%- endmacro %}
 
 {% macro dbt__incremental_delete(schema, identifier, unique_key) -%}
@@ -19,11 +17,11 @@
 
 {%- endmacro %}
 
-{% macro dbt__create_incremental(schema, identifier, dist, sort, sql, sql_where, funcs, unique_key=None) -%}
+{% macro dbt__create_incremental(schema, model, identifier, dist, sort, sql, sql_where, funcs, flags, unique_key=None) -%}
 
     {% if not funcs['already_exists'](schema, identifier) -%}
 
-        {{ dbt__create_table(schema, identifier, dist, sort, sql) }}
+        {{ dbt__create_table_for_incremental(schema, identifier, dist, sort, sql, flags, funcs) }}
 
     {%- else -%}
 
@@ -32,7 +30,8 @@
                 {{ sql }}
             )
             select * from dbt_incr_sbq
-            where coalesce({{ sql_where }}, TRUE)
+            where ({{ model.get('config', {}).get('sql_where', 'null') }})
+              or ({{ model.get('config', {}).get('sql_where', 'null') }}) is null
         );
 
         -- DBT_OPERATION { function: expand_column_types_if_needed, args: { temp_table: "{{ identifier }}__dbt_incremental_tmp", to_schema: "{{ schema }}", to_table: "{{ identifier }}"} }
@@ -40,7 +39,7 @@
         {% set dest_columns = funcs['get_columns_in_table'](schema, identifier) %}
         {% set dest_cols_csv = dest_columns | map(attribute='quoted') | join(', ') %}
 
-        {% if unique_key is defined -%}
+        {% if model.get('config', {}).get('unique_key') is not none -%}
 
             {{ dbt__incremental_delete(schema, identifier, unique_key) }}
 
