@@ -28,6 +28,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
 
         self.use_default_project()
         self.project = read_project('dbt_project.yml')
+        self.expected_ephemeral = ['base_users']
 
     def run_schema_and_assert(self, include, exclude, expected_tests):
         self.use_profile('postgres')
@@ -46,7 +47,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         print(test_results)
 
         ran_tests = sorted([test.node.get('name') for test in test_results])
-        expected_sorted = sorted(expected_tests)
+        expected_sorted = sorted(expected_tests + self.expected_ephemeral)
 
         self.assertEqual(ran_tests, expected_sorted)
 

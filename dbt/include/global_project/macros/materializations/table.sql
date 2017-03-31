@@ -1,24 +1,32 @@
+{% macro dbt__create_table(schema, model, dist, sort, sql, flags, funcs) -%}
 
-{% macro dbt__create_table(schema, identifier, dist, sort, sql, flags, funcs) -%}
+  {%- set identifier = model['name'] -%}
+  {%- set already_exists = funcs.already_exists(schema, identifier) -%}
+  {%- set non_destructive_mode = flags.NON_DESTRUCTIVE == True -%}
 
-    {% if not flags.NON_DESTRUCTIVE or
-          not funcs['already_exists'](schema, identifier) -%}
-        create table {{ schema }}.{{ identifier }} {{ dist }} {{ sort }} as (
-            {{ sql }}
-        );
-    {%- else -%}
-        create temporary table {{ identifier }}__dbt_tmp {{ dist }} {{ sort }} as (
-            {{ sql }}
-        );
+  {% if non_destructive_mode and already_exists -%}
+    create temporary table {{ identifier }}__dbt_tmp {{ dist }} {{ sort }} as (
+      {{ sql }}
+    );
 
-        {% set dest_columns = funcs['get_columns_in_table'](schema, identifier) %}
-        {% set dest_cols_csv = dest_columns | map(attribute='quoted') | join(', ') %}
+    {% set dest_columns = funcs.get_columns_in_table(schema, identifier) %}
+    {% set dest_cols_csv = dest_columns | map(attribute='quoted') | join(', ') %}
 
-        insert into {{ schema }}.{{ identifier }} ({{ dest_cols_csv }})
-        (
-            select {{ dest_cols_csv }}
-            from "{{ identifier }}__dbt_tmp"
-        );
-    {%- endif %}
+    insert into {{ schema }}.{{ identifier }} ({{ dest_cols_csv }})
+    (
+      select {{ dest_cols_csv }}
+      from "{{ identifier }}__dbt_tmp"
+    );
+  {%- elif non_destructive_mode -%}
+    create table "{{ schema }}"."{{ identifier }}"
+      {{ dist }} {{ sort }} as (
+        {{ sql }}
+    );
+  {%- else -%}
+    create table "{{ schema }}"."{{ identifier }}__dbt_tmp"
+      {{ dist }} {{ sort }} as (
+        {{ sql }}
+    );
+  {%- endif %}
 
 {%- endmacro %}

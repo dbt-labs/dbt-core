@@ -132,6 +132,32 @@ def do_wrap(model, opts, flat_graph, context, package):
         model)
 
 
+class DatabaseWrapper(object):
+    """
+    Wrapper for runtime database interaction. Should only call adapter
+    functions.
+    """
+
+    def __init__(self, model, adapter, profile):
+        self.model = model
+        self.adapter = adapter
+        self.profile = profile
+
+    def already_exists(self, schema, table):
+        return self.adapter.already_exists(
+            self.profile, schema, table, self.model.get('name'))
+
+    def get_columns_in_table(self, schema_name, table_name):
+        return self.adapter.get_columns_in_table(
+            self.profile, schema_name, table_name, self.model.get('name'))
+
+    def get_missing_columns(self, from_schema, from_table,
+                            to_schema, to_table):
+        return self.adapter.get_missing_columns(
+            self.profile, from_schema, from_table,
+            to_schema, to_table, self.model.get('name'))
+
+
 def wrap(model, project, context, injected_graph):
     adapter = get_adapter(project.run_environment())
     materialization = get_materialization(model)
@@ -175,39 +201,18 @@ def wrap(model, project, context, injected_graph):
 
     profile = project.run_environment()
 
-    def call_table_exists(schema, table):
-        return adapter.table_exists(
-            profile, schema, identifier, model.get('name'))
-
-    def call_get_columns_in_table(schema_name, table_name):
-        return adapter.get_columns_in_table(
-            profile, schema_name, table_name, model.get('name'))
-
-    def call_get_missing_columns(from_schema, from_table,
-                                 to_schema, to_table):
-        return adapter.get_missing_columns(
-            profile, from_schema, from_table,
-            to_schema, to_table, model.get('name'))
-
     opts = {
         "materialization": materialization,
         "model": model,
         "schema": schema,
-        "identifier": identifier,
         "dist": dist_qualifier,
         "sort": sort_qualifier,
-        "sql_where": sql_where,
-        "unique_key": unique_key,
         "pre_hooks": pre_hooks,
         "post_hooks": post_hooks,
         "non_destructive": non_destructive,
         "sql": rendered_query,
         "flags": dbt.flags,
-        "funcs": {
-            "already_exists": call_table_exists,
-            "get_columns_in_table": call_get_columns_in_table,
-            "get_missing_columns": call_get_missing_columns
-        },
+        "funcs": DatabaseWrapper(model, adapter, profile),
     }
 
     return do_wrap(model, opts, injected_graph, context, project)

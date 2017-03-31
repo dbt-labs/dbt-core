@@ -33,11 +33,14 @@ parsed_node_contract = unparsed_node_contract.extend({
     Required('unique_id'): All(basestring, Length(min=1, max=255)),
     Required('fqn'): All(list, [All(basestring)]),
 
+    Required('refs'): [All(tuple)],
+
     # parsed fields
     Required('depends_on'): {
         Required('nodes'): [All(basestring, Length(min=1, max=255))],
         Required('macros'): [All(basestring, Length(min=1, max=255))],
     },
+
     Required('empty'): bool,
     Required('config'): config_contract,
     Required('tags'): All(set),

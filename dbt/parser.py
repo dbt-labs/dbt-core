@@ -14,7 +14,7 @@ import dbt.contracts.graph.parsed
 import dbt.contracts.graph.unparsed
 import dbt.contracts.project
 
-from dbt.utils import NodeType
+from dbt.utils import NodeType, get_materialization
 from dbt.compat import basestring, to_string
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -50,6 +50,51 @@ def __config(model, cfg):
         cfg.update_in_model_config(opts)
 
     return config
+
+
+def __ref(model):
+
+    def ref(*args):
+        if len(args) == 1 or len(args) == 2:
+            model['refs'].append(args)
+
+        else:
+            dbt.exceptions.ref_invalid_args(model, args)
+
+    return ref
+
+
+def process_refs(flat_graph):
+    for _, node in flat_graph.get('nodes').items():
+        target_model_name = None
+        target_model_package = None
+
+        for ref in node.get('refs', []):
+            if len(ref) == 1:
+                target_model_name = ref[0]
+            elif len(ref) == 2:
+                target_model_package, target_model_name = ref
+
+            target_model = dbt.utils.find_model_by_name(
+                flat_graph,
+                target_model_name,
+                target_model_package)
+
+            if target_model is None:
+                dbt.exceptions.ref_target_not_found(
+                    node,
+                    target_model_name)
+
+            if (dbt.utils.is_enabled(node) and
+                    not dbt.utils.is_enabled(target_model)):
+                dbt.exceptions.ref_disabled_dependency(node, target_model)
+
+            target_model_id = target_model.get('unique_id')
+
+            node['depends_on']['nodes'].append(target_model_id)
+            flat_graph['nodes'][node['unique_id']] = node
+
+    return flat_graph
 
 
 def get_fqn(path, package_project_config, extra=[]):
@@ -129,6 +174,7 @@ def parse_node(node, node_path, root_project_config, package_project_config,
         fqn_extra = []
 
     node.update({
+        'refs': [],
         'depends_on': {
             'nodes': [],
             'macros': [],
@@ -142,7 +188,7 @@ def parse_node(node, node_path, root_project_config, package_project_config,
 
     context = {}
 
-    context['ref'] = lambda *args: ''
+    context['ref'] = __ref(node)
     context['config'] = __config(node, config)
     context['var'] = lambda *args: ''
     context['target'] = property(lambda x: '', lambda x: x)

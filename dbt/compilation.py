@@ -20,7 +20,6 @@ import dbt.contracts.project
 import dbt.exceptions
 import dbt.flags
 import dbt.parser
-import dbt.templates
 
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -72,9 +71,10 @@ def recursively_parse_macros_for_node(node, flat_graph, context):
     return context
 
 
-def compile_and_print_status(project, args):
-    compiler = Compiler(project, args)
+def compile_and_print_status(project):
+    compiler = Compiler(project)
     compiler.initialize()
+
     names = {
         NodeType.Model: 'models',
         NodeType.Test: 'tests',
@@ -189,9 +189,8 @@ def inject_ctes_into_sql(sql, ctes):
 
 
 class Compiler(object):
-    def __init__(self, project, args):
+    def __init__(self, project):
         self.project = project
-        self.args = args
         self.parsed_models = None
 
     def initialize(self):
@@ -211,7 +210,7 @@ class Compiler(object):
 
         return target_path
 
-    def __model_config(self, model, linker):
+    def __model_config(self, model):
         def do_config(*args, **kwargs):
             return ''
 
@@ -236,16 +235,10 @@ class Compiler(object):
                 target_model_name,
                 target_model_package)
 
-            if target_model is None:
-                dbt.exceptions.ref_target_not_found(model, target_model_name)
-
-            if is_enabled(model) and not is_enabled(target_model):
-                dbt.exceptions.ref_disabled_dependency(model, target_model)
-
             target_model_id = target_model.get('unique_id')
 
-            if target_model_id not in model['depends_on']['nodes']:
-                model['depends_on']['nodes'].append(target_model_id)
+            if target_model_id not in model.get('depends_on', {}).get('nodes'):
+                dbt.exceptions.ref_bad_context(model)
 
             if get_materialization(target_model) == 'ephemeral':
                 model['extra_ctes'][target_model_id] = None
@@ -266,7 +259,7 @@ class Compiler(object):
 
         return wrapped_do_ref
 
-    def get_compiler_context(self, linker, model, flat_graph):
+    def get_compiler_context(self, model, flat_graph):
         context = self.project.context()
         adapter = get_adapter(self.project.run_environment())
 
@@ -274,7 +267,7 @@ class Compiler(object):
 
         # built-ins
         context['ref'] = self.__ref(context, model, flat_graph)
-        context['config'] = self.__model_config(model, linker)
+        context['config'] = self.__model_config(model)
         context['this'] = This(
             context['env']['schema'],
             this_table,
@@ -293,7 +286,7 @@ class Compiler(object):
 
         return context
 
-    def compile_node(self, linker, node, flat_graph):
+    def compile_node(self, node, flat_graph):
         logger.debug("Compiling {}".format(node.get('unique_id')))
 
         compiled_node = node.copy()
@@ -305,7 +298,7 @@ class Compiler(object):
             'injected_sql': None,
         })
 
-        context = self.get_compiler_context(linker, compiled_node, flat_graph)
+        context = self.get_compiler_context(compiled_node, flat_graph)
 
         compiled_node['compiled_sql'] = dbt.clients.jinja.get_rendered(
             node.get('raw_sql'),
@@ -314,12 +307,82 @@ class Compiler(object):
 
         compiled_node['compiled'] = True
 
-        return compiled_node
+        injected_node, _ = prepend_ctes(compiled_node, flat_graph)
+
+        if compiled_node.get('resource_type') in [NodeType.Test,
+                                                  NodeType.Analysis]:
+            # data tests get wrapped in count(*)
+            # TODO : move this somewhere more reasonable
+            if 'data' in injected_node['tags'] and \
+               is_type(injected_node, NodeType.Test):
+                injected_node['wrapped_sql'] = (
+                    "select count(*) from (\n{test_sql}\n) sbq").format(
+                        test_sql=injected_node['injected_sql'])
+            else:
+                # don't wrap schema tests or analyses.
+                injected_node['wrapped_sql'] = injected_node.get(
+                    'injected_sql')
+
+        elif is_type(injected_node, NodeType.Archive):
+            # unfortunately we do everything automagically for
+            # archives. in the future it'd be nice to generate
+            # the SQL at the parser level.
+            pass
+
+        elif(is_type(injected_node, NodeType.Model) and
+             get_materialization(injected_node) == 'ephemeral'):
+            pass
+
+        else:
+            wrapped_stmt = dbt.wrapper.wrap(
+                injected_node,
+                self.project,
+                context,
+                flat_graph)
+
+            injected_node['wrapped_sql'] = wrapped_stmt
+
+        return injected_node
 
     def write_graph_file(self, linker):
         filename = graph_file_name
         graph_path = os.path.join(self.project['target-path'], filename)
         linker.write_graph(graph_path)
+
+    def link_node(self, linker, node, flat_graph):
+        linker.add_node(node.get('unique_id'))
+
+        linker.update_node_data(
+            node.get('unique_id'),
+            node)
+
+        for dependency in node.get('depends_on', {}).get('nodes'):
+            if flat_graph.get('nodes').get(dependency):
+                linker.dependency(
+                    node.get('unique_id'),
+                    (flat_graph.get('nodes')
+                               .get(dependency)
+                               .get('unique_id')))
+
+            else:
+                dbt.exceptions.dependency_not_found(node, dependency)
+
+    def link_graph(self, linker, flat_graph):
+        linked_graph = {
+            'nodes': {},
+            'macros': flat_graph.get('macros'),
+        }
+
+        for name, node in flat_graph.get('nodes').items():
+            self.link_node(linker, node, flat_graph)
+            linked_graph['nodes'][name] = node
+
+        cycle = linker.find_cycles()
+
+        if cycle:
+            raise RuntimeError("Found a cycle: {}".format(cycle))
+
+        return linked_graph
 
     def compile_graph(self, linker, flat_graph):
         all_projects = self.get_all_projects()
@@ -332,7 +395,7 @@ class Compiler(object):
             'nodes': {},
             'macros': {},
         }
-        wrapped_graph = {
+        linked_graph = {
             'nodes': {},
             'macros': {},
         }
@@ -345,53 +408,12 @@ class Compiler(object):
         if dbt.flags.STRICT_MODE:
             dbt.contracts.graph.compiled.validate(compiled_graph)
 
-        for name, node in compiled_graph.get('nodes').items():
-            node, compiled_graph = prepend_ctes(node, compiled_graph)
-            injected_graph['nodes'][name] = node
-
         if dbt.flags.STRICT_MODE:
             dbt.contracts.graph.compiled.validate(injected_graph)
 
         for name, injected_node in injected_graph.get('nodes').items():
             # now turn model nodes back into the old-style model object for
             # wrapping
-            if injected_node.get('resource_type') in [NodeType.Test,
-                                                      NodeType.Analysis]:
-                # data tests get wrapped in count(*)
-                # TODO : move this somewhere more reasonable
-                if 'data' in injected_node['tags'] and \
-                        is_type(injected_node, NodeType.Test):
-                    injected_node['wrapped_sql'] = (
-                        "select count(*) from (\n{test_sql}\n) sbq").format(
-                        test_sql=injected_node['injected_sql'])
-                else:
-                    # don't wrap schema tests or analyses.
-                    injected_node['wrapped_sql'] = injected_node.get(
-                        'injected_sql')
-
-                wrapped_graph['nodes'][name] = injected_node
-
-            elif is_type(injected_node, NodeType.Archive):
-                # unfortunately we do everything automagically for
-                # archives. in the future it'd be nice to generate
-                # the SQL at the parser level.
-                pass
-
-            elif(is_type(injected_node, NodeType.Model) and
-                 get_materialization(injected_node) == 'ephemeral'):
-                pass
-
-            else:
-                context = self.get_compiler_context(
-                    linker, injected_node, injected_graph)
-                wrapped_stmt = dbt.wrapper.wrap(
-                    injected_node,
-                    self.project,
-                    context,
-                    flat_graph)
-
-                injected_node['wrapped_sql'] = wrapped_stmt
-                wrapped_graph['nodes'][name] = injected_node
 
             build_path = os.path.join('build',
                                       injected_node.get('package_name'),
@@ -422,10 +444,6 @@ class Compiler(object):
                 else:
                     dbt.exceptions.dependency_not_found(model, dependency)
 
-        cycle = linker.find_cycles()
-
-        if cycle:
-            raise RuntimeError("Found a cycle: {}".format(cycle))
 
         return wrapped_graph, written_nodes
 
@@ -550,16 +568,22 @@ class Compiler(object):
             'macros': all_macros
         }
 
-        compiled_graph, written_nodes = self.compile_graph(linker, flat_graph)
+        flat_graph = dbt.parser.process_refs(flat_graph)
+
+        linked_graph = self.link_graph(linker, flat_graph)
+
+        return linked_graph, linker
+
+        # compiled_graph, written_nodes = self.compile_graph(linker, flat_graph)
 
         self.write_graph_file(linker)
 
         stats = defaultdict(int)
 
-        for node_name, node in compiled_graph.get('nodes').items():
+        for node_name, node in linked_graph.get('nodes').items():
             stats[node.get('resource_type')] += 1
 
-        for node_name, node in compiled_graph.get('macros').items():
+        for node_name, node in linked_graph.get('macros').items():
             stats[node.get('resource_type')] += 1
 
         return stats

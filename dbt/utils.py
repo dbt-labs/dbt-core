@@ -162,7 +162,7 @@ def find_model_by_fqn(models, fqn):
 def dependency_projects(project):
     module_paths = [
         GLOBAL_DBT_MODULES_PATH,
-        project['modules-path']
+        os.path.join(project['project-root'], project['modules-path'])
     ]
 
     for module_path in module_paths:
@@ -228,8 +228,7 @@ def to_string(s):
 
 
 def is_blocking_dependency(node):
-    return (is_type(node, NodeType.Model) and
-            get_materialization(node) != 'ephemeral')
+    return (is_type(node, NodeType.Model))
 
 
 def get_materialization(node):

@@ -57,6 +57,13 @@ def ref_invalid_args(model, args):
             len(args)))
 
 
+def ref_bad_context(model):
+    raise_compiler_error(
+        model,
+        ("ref() was used in an invalid context (probably in a "
+         "{% raw %} tag, or macro"))
+
+
 def ref_target_not_found(model, target_model_name):
     raise_compiler_error(
         model,

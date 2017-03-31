@@ -239,6 +239,9 @@ def execute_model(profile, model, existing):
 
     result = None
 
+    if get_materialization(model) == 'ephemeral':
+        return 'SKIP'
+
     # TRUNCATE / DROP
     if get_materialization(model) == 'table' and \
        dbt.flags.NON_DESTRUCTIVE and \
@@ -473,10 +476,13 @@ class RunManager(object):
 
         return dbt.linker.from_file(graph_file)
 
-    def execute_node(self, node, existing):
+    def execute_node(self, node, flat_graph, existing):
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
         connection = adapter.begin(profile, node.get('name'))
+
+        compiler = dbt.compilation.Compiler(self.project)
+        node = compiler.compile_node(node, flat_graph)
 
         try:
             logger.debug("executing node %s", node.get('unique_id'))
@@ -499,10 +505,10 @@ class RunManager(object):
         finally:
             adapter.release_connection(profile, node.get('name'))
 
-        return result
+        return node, result
 
     def safe_execute_node(self, data):
-        node, existing, schema_name, node_index, num_nodes = data
+        node, flat_graph, existing, schema_name, node_index, num_nodes = data
 
         start_time = time.time()
 
@@ -514,7 +520,9 @@ class RunManager(object):
                              node_index,
                              num_nodes)
 
-            status = self.execute_node(node, existing)
+            # TODO write model out to disk
+
+            node, status = self.execute_node(node, flat_graph, existing)
 
         except (RuntimeError,
                 dbt.exceptions.ProgrammingException,
@@ -583,7 +591,7 @@ class RunManager(object):
 
         return skip_dependent
 
-    def execute_nodes(self, node_dependency_list, on_failure,
+    def execute_nodes(self, flat_graph, node_dependency_list, on_failure,
                       should_run_hooks=False):
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
@@ -646,10 +654,15 @@ class RunManager(object):
 
             for result in pool.imap_unordered(
                     self.safe_execute_node,
-                    [(node, existing, schema_name, get_idx(node), num_nodes,)
+                    [(node, flat_graph, existing, schema_name,
+                      get_idx(node), num_nodes,)
                      for node in nodes_to_execute]):
 
                 node_results.append(result)
+
+                # propagate so that CTEs get injected properly
+                flat_graph[result.node.get('unique_id')] = result.node
+
                 index = get_idx(result.node)
                 track_model_run(index, num_nodes, result)
 
@@ -675,7 +688,7 @@ class RunManager(object):
         return node_results
 
     def get_nodes_to_run(self, graph, include_spec, exclude_spec,
-                         resource_types, tags):
+                         resource_types, tags, materializations=None):
 
         if include_spec is None:
             include_spec = ['*']
@@ -686,7 +699,11 @@ class RunManager(object):
         to_run = [
             n for n in graph.nodes()
             if (graph.node.get(n).get('empty') is False and
-                is_enabled(graph.node.get(n)))
+                is_enabled(graph.node.get(n)) and
+                (materializations is None or
+                 (graph.node.get(n).get('resource_type') == NodeType.Model and
+                  get_materialization(graph.node.get(n)) in materializations)))
+
         ]
 
         filtered_graph = graph.subgraph(to_run)
@@ -698,7 +715,6 @@ class RunManager(object):
         post_filter = [
             n for n in selected_nodes
             if ((graph.node.get(n).get('resource_type') in resource_types) and
-                get_materialization(graph.node.get(n)) != 'ephemeral' and
                 (len(tags) == 0 or
                  # does the node share any tags with the run?
                  bool(graph.node.get(n).get('tags') & tags)))
@@ -727,7 +743,9 @@ class RunManager(object):
     def run_types_from_graph(self, include_spec, exclude_spec,
                              resource_types, tags, should_run_hooks=False,
                              flatten_graph=False):
-        linker = self.deserialize_graph()
+        compiler = dbt.compilation.Compiler(self.project)
+        compiler.initialize()
+        (flat_graph, linker) = compiler.compile()
 
         selected_nodes = self.get_nodes_to_run(
             linker.graph,
@@ -735,6 +753,16 @@ class RunManager(object):
             exclude_spec,
             resource_types,
             tags)
+
+        ephemeral_models = self.get_nodes_to_run(
+            linker.graph,
+            include_spec=None,
+            exclude_spec=None,
+            resource_types=[NodeType.Model],
+            tags=[],
+            materializations=['ephemeral'])
+
+        selected_nodes = selected_nodes | ephemeral_models
 
         dependency_list = []
 
@@ -744,6 +772,7 @@ class RunManager(object):
         else:
             dependency_list = self.as_flat_dep_list(linker,
                                                     selected_nodes)
+
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
 
@@ -752,8 +781,8 @@ class RunManager(object):
 
             on_failure = self.on_model_failure(linker, selected_nodes)
 
-            results = self.execute_nodes(dependency_list, on_failure,
-                                         should_run_hooks)
+            results = self.execute_nodes(flat_graph, dependency_list,
+                                         on_failure, should_run_hooks)
 
         finally:
             adapter.cleanup_connections()
