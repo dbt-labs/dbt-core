@@ -477,14 +477,16 @@ class RunManager(object):
         return dbt.linker.from_file(graph_file)
 
     def execute_node(self, node, flat_graph, existing):
+        result = None
+
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
         connection = adapter.begin(profile, node.get('name'))
 
-        compiler = dbt.compilation.Compiler(self.project)
-        node = compiler.compile_node(node, flat_graph)
-
         try:
+            compiler = dbt.compilation.Compiler(self.project)
+            node = compiler.compile_node(node, flat_graph)
+
             logger.debug("executing node %s", node.get('unique_id'))
 
             if node.get('skip') is True:

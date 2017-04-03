@@ -381,8 +381,9 @@ class Model(DBTSource):
             if 'sql_where' not in model_config:
                 compiler_error(
                     self,
-                    """sql_where not specified in model materialized as
-                    incremental"""
+                    # TODO - this probably won't be an error now?
+                    "sql_where not specified in model materialized "
+                    "as incremental"
                 )
             raw_sql_where = model_config['sql_where']
             sql_where = self.compile_string(ctx, raw_sql_where)

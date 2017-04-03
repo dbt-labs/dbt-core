@@ -353,6 +353,10 @@ class DefaultAdapter(object):
             lock.acquire()
 
             if to_release.get('state') == 'open':
+
+                if to_release.get('transaction_open') is True:
+                    cls.rollback(to_release)
+
                 to_release['name'] = None
                 connections_available.append(to_release)
             else:

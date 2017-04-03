@@ -22,7 +22,7 @@ def get_sort_qualifier(model, project):
     sort_keys = model_config.get('sort')
     sort_type = model_config.get('sort_type', 'compound')
 
-    if type(sort_type) != str:
+    if type(sort_type) != basestring:
         compiler_error(
             model,
             "The provided sort_type '{}' is not valid!".format(sort_type)
