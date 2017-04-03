@@ -55,6 +55,7 @@ class CompilerTest(unittest.TestCase):
                     'empty': False,
                     'package_name': 'root',
                     'root_path': '/usr/src/app',
+                    'refs': [],
                     'depends_on': {
                         'nodes': [
                             'model.root.ephemeral'
@@ -83,6 +84,7 @@ class CompilerTest(unittest.TestCase):
                     'empty': False,
                     'package_name': 'root',
                     'root_path': '/usr/src/app',
+                    'refs': [],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -131,6 +133,7 @@ class CompilerTest(unittest.TestCase):
                     'empty': False,
                     'package_name': 'root',
                     'root_path': '/usr/src/app',
+                    'refs': [],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -155,6 +158,7 @@ class CompilerTest(unittest.TestCase):
                     'empty': False,
                     'package_name': 'root',
                     'root_path': '/usr/src/app',
+                    'refs': [],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -215,6 +219,7 @@ class CompilerTest(unittest.TestCase):
                     'empty': False,
                     'package_name': 'root',
                     'root_path': '/usr/src/app',
+                    'refs': [],
                     'depends_on': {
                         'nodes': [
                             'model.root.ephemeral'
@@ -241,6 +246,7 @@ class CompilerTest(unittest.TestCase):
                     'empty': False,
                     'package_name': 'root',
                     'root_path': '/usr/src/app',
+                    'refs': [],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -295,6 +301,7 @@ class CompilerTest(unittest.TestCase):
                     'empty': False,
                     'package_name': 'root',
                     'root_path': '/usr/src/app',
+                    'refs': [],
                     'depends_on': {
                         'nodes': [
                             'model.root.ephemeral'
@@ -321,6 +328,7 @@ class CompilerTest(unittest.TestCase):
                     'empty': False,
                     'package_name': 'root',
                     'root_path': '/usr/src/app',
+                    'refs': [],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -345,6 +353,7 @@ class CompilerTest(unittest.TestCase):
                     'empty': False,
                     'package_name': 'root',
                     'root_path': '/usr/src/app',
+                    'refs': [],
                     'depends_on': {
                         'nodes': [],
                         'macros': []

@@ -384,69 +384,6 @@ class Compiler(object):
 
         return linked_graph
 
-    def compile_graph(self, linker, flat_graph):
-        all_projects = self.get_all_projects()
-
-        compiled_graph = {
-            'nodes': {},
-            'macros': {},
-        }
-        injected_graph = {
-            'nodes': {},
-            'macros': {},
-        }
-        linked_graph = {
-            'nodes': {},
-            'macros': {},
-        }
-        written_nodes = []
-
-        for name, node in flat_graph.get('nodes').items():
-            compiled_graph['nodes'][name] = \
-                self.compile_node(linker, node, flat_graph)
-
-        if dbt.flags.STRICT_MODE:
-            dbt.contracts.graph.compiled.validate(compiled_graph)
-
-        if dbt.flags.STRICT_MODE:
-            dbt.contracts.graph.compiled.validate(injected_graph)
-
-        for name, injected_node in injected_graph.get('nodes').items():
-            # now turn model nodes back into the old-style model object for
-            # wrapping
-
-            build_path = os.path.join('build',
-                                      injected_node.get('package_name'),
-                                      injected_node.get('path'))
-
-            if injected_node.get('resource_type') in (NodeType.Model,
-                                                      NodeType.Analysis,
-                                                      NodeType.Test) and \
-               get_materialization(injected_node) != 'ephemeral':
-                written_path = self.__write(
-                    build_path, injected_node.get('wrapped_sql'))
-                written_nodes.append(injected_node)
-                injected_node['build_path'] = written_path
-
-            linker.add_node(injected_node.get('unique_id'))
-
-            linker.update_node_data(
-                injected_node.get('unique_id'),
-                injected_node)
-
-            for dependency in injected_node.get('depends_on', {}).get('nodes'):
-                if compiled_graph.get('nodes').get(dependency):
-                    linker.dependency(
-                        injected_node.get('unique_id'),
-                        (compiled_graph.get('nodes')
-                                       .get(dependency)
-                                       .get('unique_id')))
-                else:
-                    dbt.exceptions.dependency_not_found(model, dependency)
-
-
-        return wrapped_graph, written_nodes
-
     def get_all_projects(self):
         root_project = self.project.cfg
         all_projects = {root_project.get('name'): root_project}
@@ -572,12 +509,6 @@ class Compiler(object):
 
         linked_graph = self.link_graph(linker, flat_graph)
 
-        return linked_graph, linker
-
-        # compiled_graph, written_nodes = self.compile_graph(linker, flat_graph)
-
-        self.write_graph_file(linker)
-
         stats = defaultdict(int)
 
         for node_name, node in linked_graph.get('nodes').items():
@@ -586,4 +517,6 @@ class Compiler(object):
         for node_name, node in linked_graph.get('macros').items():
             stats[node.get('resource_type')] += 1
 
-        return stats
+        # write stats
+
+        return linked_graph, linker

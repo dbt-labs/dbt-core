@@ -91,3 +91,10 @@ def macro_not_found(model, target_macro_id):
         model,
         "'{}' references macro '{}' which is not defined!"
         .format(model.get('unique_id'), target_macro_id))
+
+
+def missing_sql_where(model):
+    raise_compiler_error(
+        model,
+        "Model '{}' is materialized as 'incremental', but does not have a "
+        "sql_where defined in its config.".format(model.get('unique_id')))

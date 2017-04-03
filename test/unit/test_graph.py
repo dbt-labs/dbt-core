@@ -3,6 +3,7 @@ import os
 import six
 import unittest
 
+import dbt.clients.system
 import dbt.compilation
 import dbt.exceptions
 import dbt.flags
@@ -13,7 +14,6 @@ import dbt.templates
 import dbt.utils
 
 import networkx as nx
-from test.integration.base import FakeArgs
 
 from dbt.logger import GLOBAL_LOGGER as logger # noqa
 
@@ -105,9 +105,7 @@ class GraphTest(unittest.TestCase):
         return project
 
     def get_compiler(self, project):
-        return dbt.compilation.Compiler(
-            project,
-            FakeArgs())
+        return dbt.compilation.Compiler(project)
 
     def use_models(self, models):
         for k, v in models.items():
@@ -124,14 +122,14 @@ class GraphTest(unittest.TestCase):
         })
 
         compiler = self.get_compiler(self.get_project())
-        compiler.compile()
+        graph, linker = compiler.compile()
 
         self.assertEquals(
-            self.graph_result.nodes(),
+            linker.nodes(),
             ['model.test_models_compile.model_one'])
 
         self.assertEquals(
-            self.graph_result.edges(),
+            linker.edges(),
             [])
 
     def test__two_models_simple_ref(self):
@@ -141,10 +139,10 @@ class GraphTest(unittest.TestCase):
         })
 
         compiler = self.get_compiler(self.get_project())
-        compiler.compile()
+        graph, linker = compiler.compile()
 
         six.assertCountEqual(self,
-                             self.graph_result.nodes(),
+                             linker.nodes(),
                              [
                                  'model.test_models_compile.model_one',
                                  'model.test_models_compile.model_two',
@@ -152,7 +150,7 @@ class GraphTest(unittest.TestCase):
 
         six.assertCountEqual(
             self,
-            self.graph_result.edges(),
+            linker.edges(),
             [ ('model.test_models_compile.model_one','model.test_models_compile.model_two',) ])
 
     def test__model_materializations(self):
@@ -175,7 +173,7 @@ class GraphTest(unittest.TestCase):
         }
 
         compiler = self.get_compiler(self.get_project(cfg))
-        compiler.compile()
+        graph, linker = compiler.compile()
 
         expected_materialization = {
             "model_one": "table",
@@ -184,7 +182,7 @@ class GraphTest(unittest.TestCase):
             "model_four": "table"
         }
 
-        nodes = self.graph_result.node
+        nodes = linker.graph.node
 
         for model, expected in expected_materialization.items():
             key = 'model.test_models_compile.{}'.format(model)
@@ -209,15 +207,15 @@ class GraphTest(unittest.TestCase):
         }
 
         compiler = self.get_compiler(self.get_project(cfg))
-        compiler.compile()
+        graph, linker = compiler.compile()
 
         six.assertCountEqual(
-            self, self.graph_result.nodes(),
+            self, linker.nodes(),
             ['model.test_models_compile.model_one',
              'model.test_models_compile.model_two'])
 
         six.assertCountEqual(
-            self, self.graph_result.edges(),
+            self, linker.edges(),
             [('model.test_models_compile.model_one',
               'model.test_models_compile.model_two',)])
 
@@ -237,7 +235,7 @@ class GraphTest(unittest.TestCase):
 
         compiler = self.get_compiler(self.get_project(cfg))
 
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(dbt.exceptions.CompilationException):
             compiler.compile()
 
     def test__model_incremental(self):
@@ -258,16 +256,15 @@ class GraphTest(unittest.TestCase):
         }
 
         compiler = self.get_compiler(self.get_project(cfg))
-        compiler.compile()
+        graph, linker = compiler.compile()
 
         node = 'model.test_models_compile.model_one'
 
-        self.assertEqual(self.graph_result.nodes(), [node])
-        self.assertEqual(self.graph_result.edges(), [])
+        self.assertEqual(linker.nodes(), [node])
+        self.assertEqual(linker.edges(), [])
 
         self.assertEqual(
-                self.graph_result.node[node].get('config', {}) \
-                                            .get('materialized'),
+                linker.graph.node[node].get('config', {}).get('materialized'),
                 'incremental')
 
     def test__topological_ordering(self):
@@ -283,10 +280,10 @@ class GraphTest(unittest.TestCase):
         })
 
         compiler = self.get_compiler(self.get_project({}))
-        compiler.compile()
+        graph, linker = compiler.compile()
 
         six.assertCountEqual(self,
-                             self.graph_result.nodes(),
+                             linker.nodes(),
                              [
                                  'model.test_models_compile.model_1',
                                  'model.test_models_compile.model_2',
@@ -295,7 +292,7 @@ class GraphTest(unittest.TestCase):
                              ])
 
         six.assertCountEqual(self,
-                             self.graph_result.edges(),
+                             linker.edges(),
                              [
                                  ('model.test_models_compile.model_1',
                                   'model.test_models_compile.model_2',),
@@ -306,9 +303,6 @@ class GraphTest(unittest.TestCase):
                                  ('model.test_models_compile.model_3',
                                   'model.test_models_compile.model_4',),
                              ])
-
-        linker = dbt.linker.Linker()
-        linker.graph = self.graph_result
 
         actual_ordering = linker.as_topological_ordering()
         expected_ordering = [
@@ -333,10 +327,7 @@ class GraphTest(unittest.TestCase):
         })
 
         compiler = self.get_compiler(self.get_project({}))
-        compiler.compile()
-
-        linker = dbt.linker.Linker()
-        linker.graph = self.graph_result
+        graph, linker = compiler.compile()
 
         actual_dep_list = linker.as_dependency_list()
 

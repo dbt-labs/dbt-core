@@ -18,6 +18,9 @@ class Linker(object):
         self.graph = nx.DiGraph(**data)
         self.cte_map = defaultdict(set)
 
+    def edges(self):
+        return self.graph.edges()
+
     def nodes(self):
         return self.graph.nodes()
 

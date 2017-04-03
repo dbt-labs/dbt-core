@@ -2,8 +2,10 @@ from voluptuous import Schema, Required, All, Any, Length, Optional
 
 import jinja2.runtime
 
+import dbt.exceptions
+
 from dbt.compat import basestring
-from dbt.utils import NodeType
+from dbt.utils import NodeType, get_materialization
 
 from dbt.contracts.common import validate_with
 from dbt.contracts.graph.unparsed import unparsed_node_contract, \
@@ -80,6 +82,9 @@ parsed_graph_contract = Schema({
 def validate_nodes(parsed_nodes):
     validate_with(parsed_nodes_contract, parsed_nodes)
 
+    [validate_incremental(node) for unique_id, node
+     in parsed_nodes.items()]
+
 
 def validate_macros(parsed_macros):
     validate_with(parsed_macros_contract, parsed_macros)
@@ -87,3 +92,13 @@ def validate_macros(parsed_macros):
 
 def validate(parsed_graph):
     validate_with(parsed_graph_contract, parsed_graph)
+
+    [validate_incremental(node) for unique_id, node
+     in parsed_graph.get('nodes').items()]
+
+
+def validate_incremental(node):
+    if(node.get('resource_type') == NodeType.Model and
+       get_materialization(node) == 'incremental' and
+       node.get('config', {}).get('sql_where') is None):
+        dbt.exceptions.missing_sql_where(node)
