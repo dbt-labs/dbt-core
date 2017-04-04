@@ -355,7 +355,7 @@ class Model(DBTSource):
 
     def get_hooks(self, ctx, hook_key):
         hooks = self.config.get(hook_key, [])
-        if type(hooks) == str:
+        if isinstance(hooks, basestring):
             hooks = [hooks]
 
         return [self.compile_string(ctx, hook) for hook in hooks]

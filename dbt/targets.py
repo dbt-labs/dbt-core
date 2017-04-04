@@ -105,7 +105,7 @@ class RedshiftTarget(BaseSQLTarget):
                 .format(sort_type, valid_sort_types)
             )
 
-        if type(sort_keys) == str:
+        if isinstance(sort_keys, basestring):
             sort_keys = [sort_keys]
 
         formatted_sort_keys = ['"{}"'.format(sort_key)
