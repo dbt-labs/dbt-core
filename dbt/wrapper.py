@@ -194,7 +194,7 @@ def wrap(model, project, context, injected_graph):
         "post_hooks": post_hooks,
         "sql": rendered_query,
         "flags": dbt.flags,
-        "funcs": DatabaseWrapper(model, adapter, profile),
+        "adapter": DatabaseWrapper(model, adapter, profile),
     }
 
     return do_wrap(model, opts, injected_graph, context, project)

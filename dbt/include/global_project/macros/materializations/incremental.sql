@@ -12,13 +12,13 @@
 
 {%- endmacro %}
 
-{% macro dbt__create_incremental(schema, model, dist, sort, sql, funcs) -%}
+{% macro dbt__create_incremental(schema, model, dist, sort, sql, adapter) -%}
 
   {%- set identifier = model['name'] -%}
   {%- set sql_where = model['config'].get('sql_where', 'null') -%}
   {%- set unique_key = model['config'].get('unique_key', 'null') -%}
 
-  {% if not funcs.already_exists(schema, identifier) -%}
+  {% if not adapter.already_exists(schema, identifier) -%}
 
     create table "{{ schema }}"."{{ identifier }}" {{ dist }} {{ sort }} as (
       {{ sql }}
@@ -37,7 +37,7 @@
 
     -- DBT_OPERATION { function: expand_column_types_if_needed, args: { temp_table: "{{ identifier }}__dbt_incremental_tmp", to_schema: "{{ schema }}", to_table: "{{ identifier }}"} }
 
-    {% set dest_columns = funcs.get_columns_in_table(schema, identifier) %}
+    {% set dest_columns = adapter.get_columns_in_table(schema, identifier) %}
     {% set dest_cols_csv = dest_columns | map(attribute='quoted') | join(', ') %}
 
     {% if model.get('config', {}).get('unique_key') is not none -%}
