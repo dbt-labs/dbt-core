@@ -37,6 +37,7 @@ def print_compile_stats(stats):
         NodeType.Test: 'tests',
         NodeType.Archive: 'archives',
         NodeType.Analysis: 'analyses',
+        NodeType.Macro: 'macros',
     }
 
     results = {
@@ -44,6 +45,7 @@ def print_compile_stats(stats):
         NodeType.Test: 0,
         NodeType.Archive: 0,
         NodeType.Analysis: 0,
+        NodeType.Macro: 0,
     }
 
     results.update(stats)
@@ -308,7 +310,15 @@ class Compiler(object):
                 context,
                 flat_graph)
 
+            build_path = os.path.join('build',
+                                      injected_node.get('package_name'),
+                                      injected_node.get('path'))
+
+            written_path = self.__write(build_path,
+                                        wrapped_stmt)
+
             injected_node['wrapped_sql'] = wrapped_stmt
+            injected_node['build_path'] = written_path
 
         return injected_node
 

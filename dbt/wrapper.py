@@ -9,6 +9,8 @@ import dbt.flags
 
 from collections import defaultdict
 
+from dbt.logger import GLOBAL_LOGGER as logger  # noqa
+
 
 def get_sort_qualifier(model, project):
     model_config = model.get('config', {})
@@ -86,6 +88,10 @@ def get_wrapping_macro(model, macros):
 
     materialization = get_materialization(model)
     uid = mapping[materialization]
+
+    if macros.get(uid) is None:
+        dbt.exceptions.macro_not_found(model, uid)
+
     return macros[uid]['parsed_macro']
 
 
@@ -117,7 +123,11 @@ def do_wrap(model, opts, flat_graph, context, package):
     rendered = macro(**relevant_opts)
 
     wrap_uid = get_dbt_materialization_macro_uid('wrap')
-    wrapper_macro = macros[wrap_uid]['parsed_macro']
+
+    wrapper_macro = macros.get(wrap_uid, {}).get('parsed_macro')
+
+    if wrapper_macro is None:
+        dbt.exceptions.macro_not_found(model, wrap_uid)
 
     wrapped = wrapper_macro(rendered, opts['pre_hooks'], opts['post_hooks'])
 
@@ -160,15 +170,6 @@ class DatabaseWrapper(object):
 
 def wrap(model, project, context, injected_graph):
     adapter = get_adapter(project.run_environment())
-    materialization = get_materialization(model)
-    model_config = model.get('config', {})
-
-    if materialization not in SourceConfig.Materializations:
-        compiler_error(
-            model,
-            "Invalid materializtion: '{}'. Must be one of {}"
-            .format(materialization, SourceConfig.Materializations)
-        )
 
     schema = context['env'].get('schema', 'public')
 
@@ -176,40 +177,21 @@ def wrap(model, project, context, injected_graph):
     dist_qualifier = get_dist_qualifier(model, project)
     sort_qualifier = get_sort_qualifier(model, project)
 
-    if materialization == 'incremental':
-        identifier = model['name']
-
-        if 'sql_where' not in model_config:
-            compiler_error(
-                model,
-                "sql_where not specified in model materialized as "
-                "incremental"
-            )
-        sql_where = model_config['sql_where']
-        unique_key = model_config.get('unique_key', None)
-
-    else:
-        identifier = get_model_identifier(model)
-        sql_where = None
-        unique_key = None
-
     pre_hooks = get_hooks(model, context, 'pre-hook')
     post_hooks = get_hooks(model, context, 'post-hook')
-    non_destructive = dbt.flags.NON_DESTRUCTIVE
 
     rendered_query = model['injected_sql']
 
     profile = project.run_environment()
 
     opts = {
-        "materialization": materialization,
+        "materialization": get_materialization(model),
         "model": model,
         "schema": schema,
         "dist": dist_qualifier,
         "sort": sort_qualifier,
         "pre_hooks": pre_hooks,
         "post_hooks": post_hooks,
-        "non_destructive": non_destructive,
         "sql": rendered_query,
         "flags": dbt.flags,
         "funcs": DatabaseWrapper(model, adapter, profile),

@@ -166,6 +166,8 @@ def dependency_projects(project):
     ]
 
     for module_path in module_paths:
+        logger.debug("Loading dependency project from {}".format(module_path))
+
         for obj in os.listdir(module_path):
             full_obj = os.path.join(module_path, obj)
 

@@ -932,10 +932,10 @@ class ParserTest(unittest.TestCase):
                         '}}}')
         }]
 
-        not_null_sql = "{{ test_not_null(model=ref('model_one'), arg='id') }}"
-        unique_sql = "{{ test_unique(model=ref('model_one'), arg='id') }}"
-        accepted_values_sql = "{{ test_accepted_values(model=ref('model_one'), field='id', values=['a', 'b']) }}" # noqa
-        relationships_sql = "{{ test_relationships(model=ref('model_one'), field='id', from='id', to=ref('model_two')) }}" # noqa
+        not_null_sql = "{{ dbt.test_not_null(model=ref('model_one'), arg='id') }}"
+        unique_sql = "{{ dbt.test_unique(model=ref('model_one'), arg='id') }}"
+        accepted_values_sql = "{{ dbt.test_accepted_values(model=ref('model_one'), field='id', values=['a', 'b']) }}" # noqa
+        relationships_sql = "{{ dbt.test_relationships(model=ref('model_one'), field='id', from='id', to=ref('model_two')) }}" # noqa
 
         self.assertEquals(
             dbt.parser.parse_schema_tests(
@@ -955,7 +955,7 @@ class ParserTest(unittest.TestCase):
                     'refs': [('model_one',)],
                     'depends_on': {
                         'nodes': [],
-                        'macros': ['macro.root.test_not_null']
+                        'macros': ['macro.dbt.test_not_null']
                     },
                     'config': self.model_config,
                     'path': get_os_path(
@@ -974,7 +974,7 @@ class ParserTest(unittest.TestCase):
                     'refs': [('model_one',)],
                     'depends_on': {
                         'nodes': [],
-                        'macros': ['macro.root.test_unique']
+                        'macros': ['macro.dbt.test_unique']
                     },
                     'config': self.model_config,
                     'path': get_os_path('schema_test/unique_model_one_id.sql'),
@@ -993,7 +993,7 @@ class ParserTest(unittest.TestCase):
                     'refs': [('model_one',)],
                     'depends_on': {
                         'nodes': [],
-                        'macros': ['macro.root.test_accepted_values']
+                        'macros': ['macro.dbt.test_accepted_values']
                     },
                     'config': self.model_config,
                     'path': get_os_path(
@@ -1013,7 +1013,7 @@ class ParserTest(unittest.TestCase):
                     'refs': [('model_one',), ('model_two',)],
                     'depends_on': {
                         'nodes': [],
-                        'macros': ['macro.root.test_relationships']
+                        'macros': ['macro.dbt.test_relationships']
                     },
                     'config': self.model_config,
                     'path': get_os_path('schema_test/relationships_model_one_id__id__ref_model_two_.sql'), # noqa
