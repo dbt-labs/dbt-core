@@ -1,1 +1,1 @@
-recursive-include dbt/include/*
+recursive-include dbt/include *.py *.sql *.yml
