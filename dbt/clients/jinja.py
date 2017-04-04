@@ -15,24 +15,74 @@ def create_macro_validation_extension(node):
         DisallowedFuncs = ('ref', 'var')
         DisallowedVars = ('this', 'target')
 
+        def __init__(self, *args, **kwargs):
+            self.macro_arguments = set()
+            super(MacroContextCatcherExtension, self).__init__(*args, **kwargs)
+
         def onError(self, token):
             error = "The context variable '{}' is not allowed in macros." \
                     .format(token.value)
             dbt.exceptions.raise_compiler_error(node, error)
+
+        def read_until(self, stream, token_type):
+            held = []
+            while not stream.eos:
+                token = next(stream)
+                held.append(token)
+                if token.test(token_type):
+                    break
+            return held
+
+        def parse_args(self, tokens):
+            expected_prefix_types = [
+                'name',
+                'name',
+                'lparen'
+            ]
+
+            expected_suffix_types = [
+                'rparen',
+                'block_end'
+            ]
+
+            min_len = len(expected_prefix_types) + len(expected_suffix_types)
+            if len(tokens) <= min_len:
+                return None
+
+            prefix_types = [t.type for t in tokens[:3]]
+            suffix_types = [t.type for t in tokens[-2:]]
+
+            # ensure the macro definition is valid. otherwise, garbage in, garbage out
+            if tokens[0].value != 'macro' or \
+               prefix_types != expected_prefix_types or \
+               suffix_types != expected_suffix_types:
+                return None
+
+            args = [token.value for token in tokens[3:-2] if not token.test('comma')]
+            return args
 
         def filter_stream(self, stream):
             while not stream.eos:
                 token = next(stream)
                 held = [token]
 
-                if token.test('name') and token.value in self.DisallowedFuncs:
+                if token.test('block_begin'):
+                    tokens = self.read_until(stream, 'block_end')
+                    args = self.parse_args(tokens)
+                    if args is not None:
+                        self.macro_arguments.update(args)
+                    held.extend(tokens)
+
+                elif token.test('name') and token.value in self.DisallowedFuncs:
                     next_token = next(stream)
                     held.append(next_token)
                     if next_token.test('lparen'):
                         self.onError(token)
 
                 elif token.test('name') and token.value in self.DisallowedVars:
-                    self.onError(token)
+                    # allow this var if it is passed in as an arg!
+                    if token.value not in self.macro_arguments:
+                        self.onError(token)
 
                 for token in held:
                     yield token
