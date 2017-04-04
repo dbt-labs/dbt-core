@@ -251,7 +251,8 @@ class Compiler(object):
             context.get(package_name, {}) \
                    .update(macro_map)
 
-            if package_name == model.get('package_name'):
+            if(package_name == model.get('package_name') or
+               package_name == dbt.include.GLOBAL_PROJECT_NAME):
                 context.update(macro_map)
 
         return context

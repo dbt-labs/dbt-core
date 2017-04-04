@@ -396,7 +396,7 @@ def parse_schema_test(test_base, model_name, test_config, test_type,
 
     raw_sql = "{{{{ {macro}(model=ref('{model}'), {kwargs}) }}}}".format(**{
         'model': model_name,
-        'macro': "dbt.test_{}".format(test_type),
+        'macro': "test_{}".format(test_type),
         'kwargs': ", ".join(kwargs)
     })
 
