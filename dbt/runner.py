@@ -534,6 +534,12 @@ class RunManager(object):
                 node, status = self.execute_node(node, flat_graph, existing,
                                                  profile, connection, adapter)
 
+        except dbt.exceptions.CompilationException as e:
+            return RunModelResult(
+                node,
+                error=str(e),
+                status='ERROR')
+
         except (RuntimeError,
                 dbt.exceptions.ProgrammingException,
                 psycopg2.ProgrammingError,
