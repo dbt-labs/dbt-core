@@ -14,7 +14,7 @@ import dbt.contracts.graph.parsed
 import dbt.contracts.graph.unparsed
 import dbt.contracts.project
 
-from dbt.utils import NodeType, get_materialization
+from dbt.utils import NodeType, get_materialization, Var
 from dbt.compat import basestring, to_string
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -182,19 +182,6 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     config = dbt.model.SourceConfig(
         root_project_config, package_project_config, fqn)
 
-    context = {}
-
-    context['ref'] = __ref(node)
-    context['config'] = __config(node, config)
-    context['var'] = lambda *args: ''
-    context['target'] = property(lambda x: '', lambda x: x)
-    context['this'] = ''
-    context['already_exists'] = lambda *args: lambda *args: ''
-
-    dbt.clients.jinja.get_rendered(
-        node.get('raw_sql'), context, node,
-        capture_macros=True)
-
     config_dict = node.get('config', {})
     config_dict.update(config.config)
 
@@ -203,6 +190,19 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     node['empty'] = (len(node.get('raw_sql').strip()) == 0)
     node['fqn'] = fqn
     node['tags'] = tags
+
+    context = {}
+
+    context['ref'] = __ref(node)
+    context['config'] = __config(node, config)
+    context['target'] = property(lambda x: '', lambda x: x)
+    context['this'] = ''
+    context['already_exists'] = lambda *args: lambda *args: ''
+    context['var'] = Var(node, context)
+
+    dbt.clients.jinja.get_rendered(
+        node.get('raw_sql'), context, node,
+        capture_macros=True)
 
     return node
 
