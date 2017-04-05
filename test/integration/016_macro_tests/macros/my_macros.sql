@@ -10,9 +10,4 @@
 
 {% macro with_ref() %}
 
-   {{ref('dep_macro')}}
---   {{this}}
---   {{var('test')}}
---   {{target.name}}
-
 {% endmacro %}

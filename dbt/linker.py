@@ -18,6 +18,9 @@ class Linker(object):
         self.graph = nx.DiGraph(**data)
         self.cte_map = defaultdict(set)
 
+    def edges(self):
+        return self.graph.edges()
+
     def nodes(self):
         return self.graph.nodes()
 
@@ -57,7 +60,7 @@ class Linker(object):
                 "{}".format(cycle)
             )
 
-    def as_dependency_list(self, limit_to=None):
+    def as_dependency_list(self, limit_to=None, ephemeral_only=False):
         """returns a list of list of nodes, eg. [[0,1], [2], [4,5,6]]. Each
         element contains nodes whose dependenices are subsumed by the union of
         all lists before it. In this way, all nodes in list `i` can be run
@@ -81,8 +84,13 @@ class Linker(object):
             num_ancestors = len([
                 ancestor for ancestor in
                 nx.ancestors(self.graph, node)
-                if dbt.utils.is_blocking_dependency(self.get_node(ancestor))
+                if (dbt.utils.is_blocking_dependency(
+                        self.get_node(ancestor)) and
+                    (ephemeral_only is False or
+                     dbt.utils.get_materialization(
+                         self.get_node(ancestor)) == 'ephemeral'))
             ])
+
             depth_nodes[num_ancestors].append(node)
 
         dependency_list = []

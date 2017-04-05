@@ -1,7 +1,5 @@
-import dbt.compilation
-
 from dbt.runner import RunManager
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
 class ArchiveTask:
@@ -10,9 +8,6 @@ class ArchiveTask:
         self.project = project
 
     def run(self):
-        dbt.compilation.compile_and_print_status(
-            self.project, self.args)
-
         runner = RunManager(
             self.project,
             self.project['target-path'],

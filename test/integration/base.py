@@ -6,6 +6,9 @@ import time
 
 from dbt.adapters.factory import get_adapter
 
+from dbt.logger import GLOBAL_LOGGER as logger
+
+
 DBT_CONFIG_DIR = os.path.abspath(
     os.path.expanduser(os.environ.get("DBT_CONFIG_DIR", '/root/.dbt'))
 )
@@ -213,6 +216,8 @@ class DBTIntegrationTest(unittest.TestCase):
 
         args = ["--strict"] + args
 
+        logger.info("Invoking dbt with {}".format(args))
+
         return dbt.handle(args)
 
     def run_sql_file(self, path):
@@ -329,6 +334,14 @@ class DBTIntegrationTest(unittest.TestCase):
         columns = self.get_table_columns(table)
 
         self.assertEquals(
+            len(columns),
+            0
+        )
+
+    def assertTableDoesExist(self, table):
+        columns = self.get_table_columns(table)
+
+        self.assertGreater(
             len(columns),
             0
         )

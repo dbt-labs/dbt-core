@@ -28,6 +28,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
 
         self.use_default_project()
         self.project = read_project('dbt_project.yml')
+        self.expected_ephemeral = []
 
     def run_schema_and_assert(self, include, exclude, expected_tests):
         self.use_profile('postgres')
@@ -46,7 +47,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         print(test_results)
 
         ran_tests = sorted([test.node.get('name') for test in test_results])
-        expected_sorted = sorted(expected_tests)
+        expected_sorted = sorted(expected_tests + self.expected_ephemeral)
 
         self.assertEqual(ran_tests, expected_sorted)
 
@@ -55,7 +56,10 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         self.run_schema_and_assert(
             None,
             None,
-            ['unique_table_id', 'unique_users_id', 'unique_users_rollup_gender']
+            ['base_users',
+             'unique_table_id',
+             'unique_users_id',
+             'unique_users_rollup_gender']
         )
 
     @attr(type='postgres')
@@ -63,7 +67,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         self.run_schema_and_assert(
             ['users'],
             None,
-            ['unique_users_id']
+            ['base_users', 'unique_users_id']
         )
 
     @attr(type='postgres')
@@ -71,7 +75,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         self.run_schema_and_assert(
             ['users+'],
             None,
-            ['unique_users_id', 'unique_users_rollup_gender']
+            ['base_users', 'unique_users_id', 'unique_users_rollup_gender']
         )
 
     @attr(type='postgres')
@@ -79,7 +83,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         self.run_schema_and_assert(
             ['+users_rollup'],
             None,
-            ['unique_users_id', 'unique_users_rollup_gender']
+            ['base_users', 'unique_users_id', 'unique_users_rollup_gender']
         )
 
     @attr(type='postgres')
@@ -87,7 +91,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         self.run_schema_and_assert(
             ['+users_rollup'],
             ['users_rollup'],
-            ['unique_users_id']
+            ['base_users', 'unique_users_id']
         )
 
     @attr(type='postgres')
@@ -95,7 +99,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         self.run_schema_and_assert(
             None,
             ['users_rollup'],
-            ['unique_table_id', 'unique_users_id']
+            ['base_users', 'unique_table_id', 'unique_users_id']
         )
 
     @attr(type='postgres')
@@ -103,7 +107,9 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         self.run_schema_and_assert(
             ['test.users_rollup'],
             None,
-            ['unique_users_rollup_gender']
+            # TODO: change this. there's no way to select only direct ancestors
+            # atm.
+            ['base_users', 'unique_users_rollup_gender']
         )
 
     @attr(type='postgres')
@@ -111,7 +117,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         self.run_schema_and_assert(
             ['*'],
             ['users'],
-            ['unique_table_id', 'unique_users_rollup_gender']
+            ['base_users', 'unique_table_id', 'unique_users_rollup_gender']
         )
 
     @attr(type='postgres')
@@ -135,5 +141,5 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         self.run_schema_and_assert(
             None,
             ['dbt_integration_project'],
-            ['unique_users_id', 'unique_users_rollup_gender']
+            ['base_users', 'unique_users_id', 'unique_users_rollup_gender']
         )

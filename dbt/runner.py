@@ -74,14 +74,21 @@ def print_skip_line(model, schema, relation, index, num_models):
 
 def print_counts(flat_nodes):
     counts = {}
+
     for node in flat_nodes:
         t = node.get('resource_type')
+
+        if node.get('resource_type') == NodeType.Model:
+            t = '{} {}'.format(get_materialization(node), t)
+
         counts[t] = counts.get(t, 0) + 1
 
-    for k, v in counts.items():
-        logger.info("")
-        print_timestamped_line("Running {} {}s".format(v, k))
-        print_timestamped_line("")
+    stat_line = ", ".join(
+        ["{} {}s".format(v, k) for k, v in counts.items()])
+
+    logger.info("")
+    print_timestamped_line("Running {}".format(stat_line))
+    print_timestamped_line("")
 
 
 def print_start_line(node, schema_name, index, total):
@@ -215,8 +222,12 @@ def print_results_line(results, execution_time):
     stats = {}
 
     for result in results:
-        stats[result.node.get('resource_type')] = stats.get(
-            result.node.get('resource_type'), 0) + 1
+        t = result.node.get('resource_type')
+
+        if result.node.get('resource_type') == NodeType.Model:
+            t = '{} {}'.format(get_materialization(result.node), t)
+
+        stats[t] = stats.get(t, 0) + 1
 
     stat_line = ", ".join(
         ["{} {}s".format(ct, t) for t, ct in stats.items()])
@@ -473,10 +484,9 @@ class RunManager(object):
 
         return dbt.linker.from_file(graph_file)
 
-    def execute_node(self, node, existing):
-        profile = self.project.run_environment()
-        adapter = get_adapter(profile)
-        connection = adapter.begin(profile, node.get('name'))
+    def execute_node(self, node, flat_graph, existing, profile, connection,
+                     adapter):
+        result = None
 
         logger.debug("executing node %s", node.get('unique_id'))
 
@@ -490,28 +500,45 @@ class RunManager(object):
         elif is_type(node, NodeType.Test):
             result = execute_test(profile, node)
         elif is_type(node, NodeType.Archive):
-            result = execute_archive(profile, node, self.node_context(node))
+            result = execute_archive(
+                profile, node, self.node_context(node))
 
         adapter.commit(connection)
-        adapter.close(connection)
-        adapter.release_connection(profile, node.get('name'))
 
-        return result
+        return node, result
 
     def safe_execute_node(self, data):
-        node, existing, schema_name, node_index, num_nodes = data
+        node, flat_graph, existing, schema_name, node_index, num_nodes = data
 
         start_time = time.time()
 
         error = None
+        status = None
+        is_ephemeral = (get_materialization(node) == 'ephemeral')
 
         try:
-            print_start_line(node,
-                             schema_name,
-                             node_index,
-                             num_nodes)
+            if not is_ephemeral:
+                print_start_line(node,
+                                 schema_name,
+                                 node_index,
+                                 num_nodes)
 
-            status = self.execute_node(node, existing)
+            profile = self.project.run_environment()
+            adapter = get_adapter(profile)
+            connection = adapter.begin(profile, node.get('name'))
+
+            compiler = dbt.compilation.Compiler(self.project)
+            node = compiler.compile_node(node, flat_graph)
+
+            if not is_ephemeral:
+                node, status = self.execute_node(node, flat_graph, existing,
+                                                 profile, connection, adapter)
+
+        except dbt.exceptions.CompilationException as e:
+            return RunModelResult(
+                node,
+                error=str(e),
+                status='ERROR')
 
         except (RuntimeError,
                 dbt.exceptions.ProgrammingException,
@@ -545,6 +572,9 @@ class RunManager(object):
             logger.debug(error)
             raise e
 
+        finally:
+            adapter.release_connection(profile, node.get('name'))
+
         execution_time = time.time() - start_time
 
         result = RunModelResult(node,
@@ -552,12 +582,22 @@ class RunManager(object):
                                 status=status,
                                 execution_time=execution_time)
 
-        print_result_line(result, schema_name, node_index, num_nodes)
+        if not is_ephemeral:
+            print_result_line(result, schema_name, node_index, num_nodes)
 
         return result
 
     def as_flat_dep_list(self, linker, nodes_to_run):
-        return [[linker.get_node(node) for node in nodes_to_run]]
+        dependency_list = linker.as_dependency_list(
+            nodes_to_run,
+            ephemeral_only=True)
+
+        concurrent_dependency_list = []
+        for level in dependency_list:
+            node_level = [linker.get_node(node) for node in level]
+            concurrent_dependency_list.append(node_level)
+
+        return concurrent_dependency_list
 
     def as_concurrent_dep_list(self, linker, nodes_to_run):
         dependency_list = linker.as_dependency_list(nodes_to_run)
@@ -580,7 +620,7 @@ class RunManager(object):
 
         return skip_dependent
 
-    def execute_nodes(self, node_dependency_list, on_failure,
+    def execute_nodes(self, flat_graph, node_dependency_list, on_failure,
                       should_run_hooks=False):
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
@@ -590,9 +630,7 @@ class RunManager(object):
         flat_nodes = list(itertools.chain.from_iterable(
             node_dependency_list))
 
-        num_nodes = len(flat_nodes)
-
-        if num_nodes == 0:
+        if len(flat_nodes) == 0:
             logger.info("WARNING: Nothing to do. Try checking your model "
                         "configs and running `dbt compile`".format(
                             self.target_path))
@@ -606,6 +644,16 @@ class RunManager(object):
         master_connection = adapter.begin(profile)
         existing = adapter.query_for_existing(profile, schema_name)
         master_connection = adapter.commit(master_connection)
+
+        node_id_to_index_map = {}
+        i = 1
+
+        for node in flat_nodes:
+            if get_materialization(node) != 'ephemeral':
+                node_id_to_index_map[node.get('unique_id')] = i
+                i += 1
+
+        num_nodes = len(node_id_to_index_map)
 
         pool = ThreadPool(num_threads)
 
@@ -621,11 +669,8 @@ class RunManager(object):
                       'on-run-start hooks')
             master_connection = adapter.commit(master_connection)
 
-        node_id_to_index_map = {node.get('unique_id'): i + 1 for (i, node)
-                                in enumerate(flat_nodes)}
-
         def get_idx(node):
-            return node_id_to_index_map[node.get('unique_id')]
+            return node_id_to_index_map.get(node.get('unique_id'))
 
         node_results = []
 
@@ -643,10 +688,15 @@ class RunManager(object):
 
             for result in pool.imap_unordered(
                     self.safe_execute_node,
-                    [(node, existing, schema_name, get_idx(node), num_nodes,)
+                    [(node, flat_graph, existing, schema_name,
+                      get_idx(node), num_nodes,)
                      for node in nodes_to_execute]):
 
                 node_results.append(result)
+
+                # propagate so that CTEs get injected properly
+                flat_graph['nodes'][result.node.get('unique_id')] = result.node
+
                 index = get_idx(result.node)
                 track_model_run(index, num_nodes, result)
 
@@ -670,6 +720,21 @@ class RunManager(object):
         print_results_line(node_results, execution_time)
 
         return node_results
+
+    def get_ancestor_ephemeral_nodes(self, flat_graph, linked_graph,
+                                     selected_nodes):
+        all_ancestors = dbt.graph.selector.select_nodes(
+            self.project,
+            linked_graph,
+            ['+{}'.format(flat_graph.get('nodes').get(node).get('name'))
+             for node in selected_nodes],
+            [])
+
+        return set([ancestor for ancestor in all_ancestors
+                    if(flat_graph['nodes'][ancestor].get(
+                            'resource_type') == NodeType.Model and
+                       get_materialization(
+                           flat_graph['nodes'][ancestor]) == 'ephemeral')])
 
     def get_nodes_to_run(self, graph, include_spec, exclude_spec,
                          resource_types, tags):
@@ -695,7 +760,6 @@ class RunManager(object):
         post_filter = [
             n for n in selected_nodes
             if ((graph.node.get(n).get('resource_type') in resource_types) and
-                get_materialization(graph.node.get(n)) != 'ephemeral' and
                 (len(tags) == 0 or
                  # does the node share any tags with the run?
                  bool(graph.node.get(n).get('tags') & tags)))
@@ -724,7 +788,9 @@ class RunManager(object):
     def run_types_from_graph(self, include_spec, exclude_spec,
                              resource_types, tags, should_run_hooks=False,
                              flatten_graph=False):
-        linker = self.deserialize_graph()
+        compiler = dbt.compilation.Compiler(self.project)
+        compiler.initialize()
+        (flat_graph, linker) = compiler.compile()
 
         selected_nodes = self.get_nodes_to_run(
             linker.graph,
@@ -732,6 +798,14 @@ class RunManager(object):
             exclude_spec,
             resource_types,
             tags)
+
+        # automatically pull in ephemeral models required by selected nodes.
+        ephemeral_models = self.get_ancestor_ephemeral_nodes(
+            flat_graph,
+            linker.graph,
+            selected_nodes)
+
+        selected_nodes = selected_nodes | ephemeral_models
 
         dependency_list = []
 
@@ -741,6 +815,7 @@ class RunManager(object):
         else:
             dependency_list = self.as_flat_dep_list(linker,
                                                     selected_nodes)
+
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
 
@@ -749,8 +824,8 @@ class RunManager(object):
 
             on_failure = self.on_model_failure(linker, selected_nodes)
 
-            results = self.execute_nodes(dependency_list, on_failure,
-                                         should_run_hooks)
+            results = self.execute_nodes(flat_graph, dependency_list,
+                                         on_failure, should_run_hooks)
 
         finally:
             adapter.cleanup_connections()

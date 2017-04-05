@@ -1,4 +1,5 @@
 from dbt.compat import basestring
+import dbt.utils
 
 
 class Exception(BaseException):
@@ -42,6 +43,10 @@ def raise_compiler_error(node, msg):
         name = node
     elif isinstance(node, dict):
         name = node.get('name')
+        node_type = node.get('resource_type')
+
+        if node_type == dbt.utils.NodeType.Macro:
+            name = node.get('path')
     else:
         name = node.nice_name
 
@@ -55,6 +60,13 @@ def ref_invalid_args(model, args):
         model,
         "ref() takes at most two arguments ({} given)".format(
             len(args)))
+
+
+def ref_bad_context(model):
+    raise_compiler_error(
+        model,
+        ("ref() was used in an invalid context (probably in a "
+         "{% raw %} tag, or macro"))
 
 
 def ref_target_not_found(model, target_model_name):
@@ -84,3 +96,10 @@ def macro_not_found(model, target_macro_id):
         model,
         "'{}' references macro '{}' which is not defined!"
         .format(model.get('unique_id'), target_macro_id))
+
+
+def missing_sql_where(model):
+    raise_compiler_error(
+        model,
+        "Model '{}' is materialized as 'incremental', but does not have a "
+        "sql_where defined in its config.".format(model.get('unique_id')))

@@ -1,16 +1,13 @@
-
 from dbt.logger import initialize_logger, GLOBAL_LOGGER as logger
 
 import argparse
 import os.path
 import sys
-import re
 
 import dbt.version
 import dbt.flags as flags
 import dbt.project as project
 import dbt.task.run as run_task
-import dbt.task.compile as compile_task
 import dbt.task.debug as debug_task
 import dbt.task.clean as clean_task
 import dbt.task.deps as deps_task
@@ -184,13 +181,8 @@ def invoke_dbt(parsed):
 
             return None
 
-    log_dir = proj.get('log-path', 'logs')
-
-    if hasattr(proj.args, 'non_destructive') and \
-       proj.args.non_destructive is True:
-        flags.NON_DESTRUCTIVE = True
-    else:
-        flags.NON_DESTRUCTIVE = False
+    flags.NON_DESTRUCTIVE = getattr(proj.args, 'non_destructive', False)
+    flags.FULL_REFRESH = getattr(proj.args, 'full_refresh', False)
 
     logger.debug("running dbt with arguments %s", parsed)
 
@@ -260,7 +252,6 @@ def parse_args(args):
     sub = subs.add_parser('clean', parents=[base_subparser])
     sub.set_defaults(cls=clean_task.CleanTask, which='clean')
 
-    sub = subs.add_parser('compile', parents=[base_subparser])
     sub.add_argument(
         '--non-destructive',
         action='store_true',
@@ -277,7 +268,6 @@ def parse_args(args):
         the incremental table from the model definition.
         """
     )
-    sub.set_defaults(cls=compile_task.CompileTask, which='compile')
 
     sub = subs.add_parser('debug', parents=[base_subparser])
     sub.set_defaults(cls=debug_task.DebugTask, which='debug')

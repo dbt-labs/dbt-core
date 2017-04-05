@@ -3,8 +3,38 @@ import dbt.exceptions
 
 import jinja2
 import jinja2.sandbox
+import jinja2.nodes
+import jinja2.ext
 
 from dbt.utils import NodeType
+
+
+def create_macro_validation_extension(node):
+
+    class MacroContextCatcherExtension(jinja2.ext.Extension):
+        DisallowedFuncs = ('ref', 'var')
+
+        def onError(self, token):
+            error = "The context variable '{}' is not allowed in macros." \
+                    .format(token.value)
+            dbt.exceptions.raise_compiler_error(node, error)
+
+        def filter_stream(self, stream):
+            while not stream.eos:
+                token = next(stream)
+                held = [token]
+
+                if token.test('name') and token.value in self.DisallowedFuncs:
+                    next_token = next(stream)
+                    held.append(next_token)
+                    if next_token.test('lparen'):
+                        self.onError(token)
+
+                for token in held:
+                    yield token
+
+    return jinja2.sandbox.SandboxedEnvironment(
+        extensions=[MacroContextCatcherExtension])
 
 
 def create_macro_capture_env(node):
@@ -48,12 +78,16 @@ def create_macro_capture_env(node):
 env = jinja2.sandbox.SandboxedEnvironment()
 
 
-def get_template(string, ctx, node=None, capture_macros=False):
+def get_template(string, ctx, node=None, capture_macros=False,
+                 validate_macro=False):
     try:
         local_env = env
 
-        if capture_macros is True:
+        if capture_macros:
             local_env = create_macro_capture_env(node)
+
+        elif validate_macro:
+            local_env = create_macro_validation_extension(node)
 
         return local_env.from_string(dbt.compat.to_string(string), globals=ctx)
 
@@ -73,4 +107,4 @@ def render_template(template, ctx, node=None):
 
 def get_rendered(string, ctx, node=None, capture_macros=False):
     template = get_template(string, ctx, node, capture_macros)
-    return render_template(template, ctx, node=None)
+    return render_template(template, ctx, node)

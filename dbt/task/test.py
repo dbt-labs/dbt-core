@@ -1,5 +1,3 @@
-import dbt.compilation
-
 from dbt.runner import RunManager
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -20,9 +18,6 @@ class TestTask:
         self.project = project
 
     def run(self):
-        dbt.compilation.compile_and_print_status(
-            self.project, self.args)
-
         runner = RunManager(
             self.project, self.project['target-path'], self.args)
 

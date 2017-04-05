@@ -353,6 +353,10 @@ class DefaultAdapter(object):
             lock.acquire()
 
             if to_release.get('state') == 'open':
+
+                if to_release.get('transaction_open') is True:
+                    cls.rollback(to_release)
+
                 to_release['name'] = None
                 connections_available.append(to_release)
             else:
@@ -366,16 +370,16 @@ class DefaultAdapter(object):
     def cleanup_connections(cls):
         global connections_in_use, connections_available
 
-        for name, connection in connections_in_use.items():
-            if connection.get('state') != 'closed':
-                logger.debug("Connection '{}' was left open."
-                             .format(name))
-            else:
-                logger.debug("Connection '{}' was properly closed."
-                             .format(name))
-
         try:
             lock.acquire()
+
+            for name, connection in connections_in_use.items():
+                if connection.get('state') != 'closed':
+                    logger.debug("Connection '{}' was left open."
+                                 .format(name))
+                else:
+                    logger.debug("Connection '{}' was properly closed."
+                                 .format(name))
 
             # garbage collect, but don't close them in case someone
             # still has a handle
@@ -525,3 +529,10 @@ class DefaultAdapter(object):
         tables = cls.query_for_existing(profile, schema, model_name)
         exists = tables.get(table) is not None
         return exists
+
+    @classmethod
+    def already_exists(cls, profile, schema, table, model_name=None):
+        """
+        Alias for `table_exists`.
+        """
+        return cls.table_exists(profile, schema, table, model_name)
