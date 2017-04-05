@@ -341,57 +341,52 @@ def parse_schema_tests(tests, root_project, projects):
     return to_return
 
 
+def get_nice_schema_test_name(test_type, test_name, args):
+
+    flat_args = []
+    for arg_name in sorted(args):
+        arg_val = args[arg_name]
+
+        if type(arg_val) == dict:
+            parts = arg_val.values()
+        elif type(arg_val) in (list, tuple):
+            parts = arg_val
+        else:
+            parts = [str(arg_val)]
+
+        flat_args.extend(parts)
+
+    unique = "__".join(flat_args)
+    return 'test_{}_{}_{}'.format(test_type, test_name, unique)
+
+
 def parse_schema_test(test_base, model_name, test_config, test_type,
                       root_project_config, package_project_config,
                       all_projects):
-    if test_type == 'not_null':
-        raw_sql = QUERY_VALIDATE_NOT_NULL.format(
-            ref="{{ref('"+model_name+"')}}", field=test_config)
-        name_key = test_config
+    macro = "test_{}".format(test_type)
+    arg_dict = {
+        'model': model_name
+    }
 
-    elif test_type == 'unique':
-        raw_sql = QUERY_VALIDATE_UNIQUE.format(
-            ref="{{ref('"+model_name+"')}}", field=test_config)
-        name_key = test_config
-
-    elif test_type == 'relationships':
-        if not isinstance(test_config, dict):
-            return None
-
-        child_field = test_config.get('from')
-        parent_field = test_config.get('field')
-        parent_model = test_config.get('to')
-
-        raw_sql = QUERY_VALIDATE_REFERENTIAL_INTEGRITY.format(
-            child_field=child_field,
-            child_ref="{{ref('"+model_name+"')}}",
-            parent_field=parent_field,
-            parent_ref=("{{ref('"+parent_model+"')}}"))
-
-        name_key = '{}_to_{}_{}'.format(child_field, parent_model,
-                                        parent_field)
-
-    elif test_type == 'accepted_values':
-        if not isinstance(test_config, dict):
-            return None
-
-        raw_sql = QUERY_VALIDATE_ACCEPTED_VALUES.format(
-            ref="{{ref('"+model_name+"')}}",
-            field=test_config.get('field', ''),
-            values_csv="'{}'".format(
-                "','".join([str(v) for v in test_config.get('values', [])])))
-
-        name_key = test_config.get('field')
-
+    if hasattr(test_config, 'items'):
+        arg_dict.update(test_config)
     else:
-        raise dbt.exceptions.ValidationException(
-            'Unknown schema test type {}'.format(test_type))
+        arg_dict['arg'] = test_config
 
-    name = '{}_{}_{}'.format(test_type, model_name, name_key)
+    args = ", ".join([
+        "{}={}".format(key, value.__repr__())
+        for (key, value) in arg_dict.items()
+    ])
+
+    raw_sql_contents = "dbt.{macro}({args})".format(macro=macro, args=args)
+    raw_sql = "{{ " + raw_sql_contents + " }}"
+
+    non_name_args = arg_dict.copy()
+    non_name_args.pop('model')
+    name = get_nice_schema_test_name(test_type, model_name, non_name_args)
 
     pseudo_path = dbt.utils.get_pseudo_test_path(name, test_base.get('path'),
                                                  'schema_test')
-
     to_return = {
         'name': name,
         'resource_type': test_base.get('resource_type'),

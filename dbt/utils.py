@@ -2,6 +2,7 @@ import os
 import json
 
 import dbt.project
+import dbt.loader
 
 from dbt.compat import basestring
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -152,21 +153,31 @@ def find_model_by_fqn(models, fqn):
     )
 
 
-def dependency_projects(project):
-    for obj in os.listdir(project['modules-path']):
-        full_obj = os.path.join(project['modules-path'], obj)
-        if os.path.isdir(full_obj):
-            try:
-                yield dbt.project.read_project(
-                    os.path.join(full_obj, 'dbt_project.yml'),
-                    project.profiles_dir,
-                    profile_to_load=project.profile_to_load,
-                    args=project.args)
-            except dbt.project.DbtProjectError as e:
-                logger.info(
-                    "Error reading dependency project at {}".format(full_obj)
-                )
-                logger.info(str(e))
+def dependency_projects(project, include_global=True):
+    if include_global:
+        module_paths = [
+            dbt.loader.get_include_path(),
+            project['modules-path']
+        ]
+    else:
+        module_paths = [project['modules-path']]
+
+    for module_path in module_paths:
+        for obj in os.listdir(module_path):
+            full_obj = os.path.join(module_path, obj)
+            if os.path.isdir(full_obj):
+                try:
+                    yield dbt.project.read_project(
+                        os.path.join(full_obj, 'dbt_project.yml'),
+                        project.profiles_dir,
+                        profile_to_load=project.profile_to_load,
+                        args=project.args)
+                except dbt.project.DbtProjectError as e:
+                    logger.info(
+                        "Error reading dependency project at {}".format(
+                            full_obj)
+                    )
+                    logger.info(str(e))
 
 
 def split_path(path):
