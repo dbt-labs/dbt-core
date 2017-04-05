@@ -20,6 +20,7 @@
 - Speedup: detect cycles at the end of compilation ([#307](https://github.com/fishtown-analytics/dbt/pull/307))
 - Speedup: write graph file with gpickle instead of yaml ([#306](https://github.com/fishtown-analytics/dbt/pull/306))
 - Clone dependencies with `--depth 1` to make them more compact ([#277](https://github.com/fishtown-analytics/dbt/issues/277), [#342](https://github.com/fishtown-analytics/dbt/pull/342))
+- Rewrite materializations as macros ([#356](https://github.com/fishtown-analytics/dbt/pull/356))
 
 ## dbt 0.7.1 (February 28, 2017)
 
