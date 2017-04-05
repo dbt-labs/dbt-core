@@ -26,6 +26,8 @@ class SnowflakeAdapter(PostgresAdapter):
         try:
             yield
         except snowflake.connector.errors.ProgrammingError as e:
+            logger.debug('Snowflake error: {}'.format(str(e)))
+
             if 'Empty SQL statement' in e.msg:
                 logger.debug("got empty sql statement, moving on")
             elif 'This session does not have a current database' in e.msg:
