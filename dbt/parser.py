@@ -121,15 +121,13 @@ def parse_macro_file(macro_file_path,
     if tags is None:
         tags = set()
 
-    if context is None:
-        context = {
-            'ref': lambda *args: '',
-            'var': lambda *args: '',
-            'target': property(lambda x: '', lambda x: x),
-            'this': ''
-        }
+    context = {
+        'target': property(lambda x: '', lambda x: x),
+    }
 
     base_node = {
+        'name': 'macro',
+        'path': macro_file_path,
         'resource_type': NodeType.Macro,
         'package_name': package_name,
         'depends_on': {
@@ -138,7 +136,7 @@ def parse_macro_file(macro_file_path,
     }
 
     template = dbt.clients.jinja.get_template(
-        macro_file_contents, context, node=base_node)
+        macro_file_contents, context, node=base_node, validate_macro=True)
 
     for key, item in template.module.__dict__.items():
         if type(item) == jinja2.runtime.Macro:
@@ -191,6 +189,7 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     context['var'] = lambda *args: ''
     context['target'] = property(lambda x: '', lambda x: x)
     context['this'] = ''
+    context['already_exists'] = lambda *args: lambda *args: ''
 
     dbt.clients.jinja.get_rendered(
         node.get('raw_sql'), context, node,
