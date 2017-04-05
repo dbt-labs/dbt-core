@@ -141,6 +141,7 @@ def invoke_dbt(parsed):
         logger.info("Valid profiles:")
 
         all_profiles = project.read_profiles(parsed.profiles_dir).keys()
+
         for profile in all_profiles:
             logger.info(" - {}".format(profile))
 
@@ -172,7 +173,8 @@ def invoke_dbt(parsed):
             logger.info("  ERROR Specified target {} is not a valid option "
                         "for profile {}"
                         .format(parsed.target, proj.profile_to_load))
-            logger.info("Valid targets are: {}".format(targets))
+            logger.info("Valid targets are: {}".format(
+                ', '.join(targets)))
             dbt.tracking.track_invalid_invocation(
                 project=proj,
                 args=parsed,
