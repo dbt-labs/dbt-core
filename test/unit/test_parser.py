@@ -1182,38 +1182,6 @@ another_model:
                 root_path=get_os_path('/usr/src/app'),
                 package_name='root')
 
-    def test__macro_with_this__invalid(self):
-        macro_file_contents = """
-{% macro with_this(a) -%}
-  {% if a: %}
-    {{ this }}
-  {% endif %}
-{%- endmacro %}
-"""
-
-        with self.assertRaises(dbt.exceptions.CompilationException):
-            dbt.parser.parse_macro_file(
-                macro_file_path='macro_with_this.sql',
-                macro_file_contents=macro_file_contents,
-                root_path=get_os_path('/usr/src/app'),
-                package_name='root')
-
-    def test__macro_with_target__invalid(self):
-        macro_file_contents = """
-{% macro with_target(a) -%}
-  {% if a: %}
-    {{ target.type }}
-  {% endif %}
-{%- endmacro %}
-"""
-
-        with self.assertRaises(dbt.exceptions.CompilationException):
-            dbt.parser.parse_macro_file(
-                macro_file_path='macro_with_this.sql',
-                macro_file_contents=macro_file_contents,
-                root_path=get_os_path('/usr/src/app'),
-                package_name='root')
-
     def test__simple_macro_used_in_model(self):
         macro_file_contents = """
 {% macro simple(a, b) %}

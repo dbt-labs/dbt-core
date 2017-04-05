@@ -13,7 +13,6 @@ def create_macro_validation_extension(node):
 
     class MacroContextCatcherExtension(jinja2.ext.Extension):
         DisallowedFuncs = ('ref', 'var')
-        DisallowedVars = ('this', 'target')
 
         def onError(self, token):
             error = "The context variable '{}' is not allowed in macros." \
@@ -30,9 +29,6 @@ def create_macro_validation_extension(node):
                     held.append(next_token)
                     if next_token.test('lparen'):
                         self.onError(token)
-
-                elif token.test('name') and token.value in self.DisallowedVars:
-                    self.onError(token)
 
                 for token in held:
                     yield token
