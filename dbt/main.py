@@ -28,7 +28,6 @@ def main(args=None):
         handle(args)
 
     except RuntimeError as e:
-        raise # tmp, debug
         logger.info("Encountered an error:")
         logger.info(str(e))
         sys.exit(1)
