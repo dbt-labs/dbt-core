@@ -92,6 +92,7 @@ class TestPrePostModelHooks(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'macro-paths': ['test/integration/014_hook_tests/macros'],
             'models': {
                 'test': {
                     'pre-hook': MODEL_PRE_HOOK,

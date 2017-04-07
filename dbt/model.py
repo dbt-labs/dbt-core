@@ -1,7 +1,6 @@
 import os.path
 import jinja2.runtime
 
-from dbt.adapters.factory import get_adapter
 from dbt.compat import basestring
 
 import dbt.flags
@@ -117,7 +116,7 @@ class SourceConfig(object):
             new_hooks = [new_hooks]
 
         for hook in new_hooks:
-            if type(hook) != str:
+            if not isinstance(hook, basestring):
                 name = ".".join(self.fqn)
                 compiler_error(None, "{} for model {} is not a string!".format(
                     key, name

@@ -174,19 +174,10 @@ def read_profiles(profiles_dir=None):
     if profiles_dir is None:
         profiles_dir = default_profiles_dir
 
-    profiles = {}
-    paths = [
-        os.path.join(profiles_dir, 'profiles.yml')
-    ]
-    for path in paths:
-        if os.path.isfile(path):
-            with open(path, 'r') as f:
-                m = yaml.safe_load(f)
-                valid_profiles = {k: v for (k, v) in m.items()
-                                  if k != 'config'}
-                profiles.update(valid_profiles)
+    raw_profiles = dbt.config.read_profile(profiles_dir)
 
-    return profiles
+    return {k: v for (k, v) in raw_profiles.items()
+            if k != 'config'}
 
 
 def read_project(filename, profiles_dir=None, validate=True,

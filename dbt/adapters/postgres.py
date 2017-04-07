@@ -37,6 +37,8 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         try:
             yield
         except psycopg2.ProgrammingError as e:
+            logger.debug('Postgres error: {}'.format(str(e)))
+
             cls.rollback(connection)
             error_data = {
                 "model": model_name,
