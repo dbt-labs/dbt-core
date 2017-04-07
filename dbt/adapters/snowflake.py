@@ -143,7 +143,7 @@ class SnowflakeAdapter(PostgresAdapter):
             profile, model)
 
     @classmethod
-    def add_query(cls, profile, sql, model_name=None):
+    def add_query(cls, profile, sql, model_name=None, auto_begin=True):
         # snowflake only allows one query per api call.
         queries = sql.strip().split(";")
         cursor = None
@@ -151,7 +151,8 @@ class SnowflakeAdapter(PostgresAdapter):
         super(PostgresAdapter, cls).add_query(
             profile,
             'use schema "{}"'.format(cls.get_default_schema(profile)),
-            model_name)
+            model_name,
+            auto_begin)
 
         for individual_query in queries:
             # hack -- after the last ';', remove comments and don't run
@@ -163,7 +164,8 @@ class SnowflakeAdapter(PostgresAdapter):
 
             if without_comments == "":
                 continue
+
             connection, cursor = super(PostgresAdapter, cls).add_query(
-                profile, individual_query, model_name)
+                profile, individual_query, model_name, auto_begin)
 
         return connection, cursor

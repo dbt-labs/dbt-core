@@ -484,8 +484,7 @@ class RunManager(object):
 
         return dbt.linker.from_file(graph_file)
 
-    def execute_node(self, node, flat_graph, existing, profile, connection,
-                     adapter):
+    def execute_node(self, node, flat_graph, existing, profile, adapter):
         result = None
 
         logger.debug("executing node %s", node.get('unique_id'))
@@ -503,7 +502,7 @@ class RunManager(object):
             result = execute_archive(
                 profile, node, self.node_context(node))
 
-        adapter.commit(connection)
+        adapter.commit_if_has_connection(profile, node.get('name'))
 
         return node, result
 
@@ -525,14 +524,13 @@ class RunManager(object):
 
             profile = self.project.run_environment()
             adapter = get_adapter(profile)
-            connection = adapter.begin(profile, node.get('name'))
 
             compiler = dbt.compilation.Compiler(self.project)
             node = compiler.compile_node(node, flat_graph)
 
             if not is_ephemeral:
                 node, status = self.execute_node(node, flat_graph, existing,
-                                                 profile, connection, adapter)
+                                                 profile, adapter)
 
         except dbt.exceptions.CompilationException as e:
             return RunModelResult(

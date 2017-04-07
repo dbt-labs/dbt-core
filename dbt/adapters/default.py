@@ -346,6 +346,9 @@ class DefaultAdapter(object):
     def release_connection(cls, profile, name):
         global connections_in_use, connections_available, lock
 
+        if connections_in_use.get(name) is None:
+            return
+
         to_release = cls.get_connection(profile, name,
                                         recache_if_missing=False)
 
@@ -407,12 +410,23 @@ class DefaultAdapter(object):
                 'Tried to begin a new transaction on connection "{}", but '
                 'it already had one open!'.format(connection.get('name')))
 
-        cls.add_query(profile, 'BEGIN', name)
+        cls.add_query(profile, 'BEGIN', name, auto_begin=False)
 
         connection['transaction_open'] = True
         connections_in_use[name] = connection
 
         return connection
+
+    @classmethod
+    def commit_if_has_connection(cls, profile, name):
+        global connections_in_use
+
+        if connections_in_use.get(name) is None:
+            return
+
+        connection = cls.get_connection(profile, name, False)
+
+        return cls.commit(connection)
 
     @classmethod
     def commit(cls, connection):
@@ -474,9 +488,12 @@ class DefaultAdapter(object):
         return connection
 
     @classmethod
-    def add_query(cls, profile, sql, model_name=None):
+    def add_query(cls, profile, sql, model_name=None, auto_begin=True):
         connection = cls.get_connection(profile, model_name)
         connection_name = connection.get('name')
+
+        if auto_begin and connection['transaction_open'] is False:
+            cls.begin(profile, connection_name)
 
         logger.debug('Using {} connection "{}".'
                      .format(cls.type(), connection_name))
