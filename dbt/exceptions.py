@@ -62,11 +62,21 @@ def ref_invalid_args(model, args):
             len(args)))
 
 
-def ref_bad_context(model):
+def ref_bad_context(model, target_model):
+    base_error_msg = """dbt was unable to infer all dependencies for the model "{model_name}".
+This typically happens when ref() is placed within a conditional block.
+
+To fix this, add the following hint to the top of the model "{model_name}":
+
+{model_path}:
+-- depends_on: {{{{ ref("{other_model_name}") }}}}"""
+    error_msg = base_error_msg.format(
+        model_name=model['name'],
+        model_path=model['path'],
+        other_model_name=target_model['name']
+    )
     raise_compiler_error(
-        model,
-        ("ref() was used in an invalid context (probably in a "
-         "{% raw %} tag, or macro"))
+        model, error_msg)
 
 
 def ref_target_not_found(model, target_model_name):

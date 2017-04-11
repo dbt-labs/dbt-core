@@ -199,7 +199,6 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     context['config'] = __config(node, config)
     context['target'] = property(lambda x: '', lambda x: x)
     context['this'] = ''
-    context['already_exists'] = lambda *args: lambda *args: ''
 
     context['var'] = Var(node, context)
 

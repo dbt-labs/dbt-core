@@ -71,6 +71,8 @@ def create_macro_capture_env(node):
             if path not in self.node['depends_on']['macros']:
                 self.node['depends_on']['macros'].append(path)
 
+            return True
+
     return jinja2.sandbox.SandboxedEnvironment(
         undefined=ParserMacroCapture)
 
