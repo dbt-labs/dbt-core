@@ -5,6 +5,7 @@ import jinja2
 import jinja2.sandbox
 import jinja2.nodes
 import jinja2.ext
+import jinja2.lexer
 
 from dbt.utils import NodeType
 
@@ -35,6 +36,58 @@ def create_macro_validation_extension(node):
 
     return jinja2.sandbox.SandboxedEnvironment(
         extensions=[MacroContextCatcherExtension])
+
+
+def create_ref_capture_env(ref_capture_node, do_ref_capture):
+
+    class RefCaptureExtension(jinja2.ext.Extension):
+        node = ref_capture_node
+        do_ref = do_ref_capture
+
+        def __init__(self, environment):
+            super(RefCaptureExtension, self).__init__(environment)
+
+        @classmethod
+        def extract_referenced_name(cls, tokens):
+            for _ in range(len(tokens)):
+                token = tokens.pop(0)
+                if token.test('name') and token.value == 'ref':
+                    break
+
+            ref_args = []
+            for token in tokens:
+                if token.test('lparen') or token.test('comma'):
+                    continue
+                elif token.test('rparen'):
+                    break
+                elif token.test('string'):
+                    ref_args.append(token.value)
+
+            return ref_args
+
+        @classmethod
+        def filter_stream(cls, stream):
+            while not stream.eos:
+                token = next(stream)
+                if token.test("variable_begin") or token.test('block_begin'):
+                    var_expr = []
+                    while not token.test("variable_end") and not token.test('block_begin'):
+                        var_expr.append(token)
+                        token = next(stream)
+                    variable_end = token
+
+                    is_ref_expr = any(t.value == 'ref' for t in var_expr)
+                    if is_ref_expr:
+                        referenced_model_tokens = cls.extract_referenced_name(var_expr[:])
+                        cls.do_ref(*referenced_model_tokens)
+
+                    var_expr.append(variable_end)
+                    for token in var_expr:
+                        yield token
+                else:
+                    yield token
+
+    return RefCaptureExtension
 
 
 def create_macro_capture_env(node):
@@ -88,6 +141,9 @@ def get_template(string, ctx, node=None, capture_macros=False,
 
         elif validate_macro:
             local_env = create_macro_validation_extension(node)
+
+        if 'ref' in ctx:
+            local_env.add_extension(create_ref_capture_env(node, ctx['ref']))
 
         return local_env.from_string(dbt.compat.to_string(string), globals=ctx)
 
