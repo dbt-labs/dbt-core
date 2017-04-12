@@ -567,7 +567,7 @@ def _get_target_failure_msg(
     reason: str,
     target_kind: str,
 ) -> str:
-    target_package_string = ''
+    target_package_string = ""
     if target_model_package is not None:
         target_package_string = "in package '{}' ".format(target_model_package)
 
