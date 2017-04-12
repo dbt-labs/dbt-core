@@ -197,7 +197,9 @@ class Compiler(object):
             target_model_id = target_model.get('unique_id')
 
             if target_model_id not in model.get('depends_on', {}).get('nodes'):
-                dbt.exceptions.ref_bad_context(model, target_model)
+                dbt.exceptions.ref_bad_context(model,
+                                               target_model_name,
+                                               target_model_package)
 
             if get_materialization(target_model) == 'ephemeral':
                 model['extra_ctes'][target_model_id] = None
