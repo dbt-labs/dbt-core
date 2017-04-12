@@ -83,7 +83,8 @@ def process_refs(flat_graph):
             if target_model is None:
                 dbt.exceptions.ref_target_not_found(
                     node,
-                    target_model_name)
+                    target_model_name,
+                    target_model_package)
 
             if (dbt.utils.is_enabled(node) and
                     not dbt.utils.is_enabled(target_model)):

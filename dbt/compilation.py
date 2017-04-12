@@ -194,6 +194,12 @@ class Compiler(object):
                 target_model_name,
                 target_model_package)
 
+            if target_model is None:
+                dbt.exceptions.ref_target_not_found(
+                    model,
+                    target_model_name,
+                    target_model_package)
+
             target_model_id = target_model.get('unique_id')
 
             if target_model_id not in model.get('depends_on', {}).get('nodes'):
