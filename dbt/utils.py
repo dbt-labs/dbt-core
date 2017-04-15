@@ -262,6 +262,7 @@ def get_pseudo_test_path(node_name, source_path, test_type):
     pseudo_path_parts = source_path_parts + suffix
     return os.path.join(*pseudo_path_parts)
 
+
 def get_run_status_line(results):
     total = len(results)
     errored = len([r for r in results if r.errored or r.failed])
