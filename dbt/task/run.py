@@ -2,6 +2,7 @@ from __future__ import print_function
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.runner import RunManager
+import dbt.utils
 
 THREAD_LIMIT = 9
 
@@ -18,17 +19,4 @@ class RunTask:
 
         results = runner.run_models(self.args.models, self.args.exclude)
 
-        total = len(results)
-        passed = len([r for r in results if not r.errored and not r.skipped])
-        errored = len([r for r in results if r.errored])
-        skipped = len([r for r in results if r.skipped])
-
-        logger.info(
-            "Done. PASS={passed} ERROR={errored} SKIP={skipped} TOTAL={total}"
-            .format(
-                total=total,
-                passed=passed,
-                errored=errored,
-                skipped=skipped
-            )
-        )
+        logger.info(dbt.utils.get_run_status_line(results))

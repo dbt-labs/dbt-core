@@ -1,6 +1,6 @@
 from dbt.runner import RunManager
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
-
+import dbt.utils
 
 class TestTask:
     """
@@ -24,8 +24,9 @@ class TestTask:
         include = self.args.models
         exclude = self.args.exclude
 
-        if (self.args.data and self.args.schema) or \
-           (not self.args.data and not self.args.schema):
+        test_types = [self.args.data, self.args.schema]
+
+        if all(test_types) or not any(test_types):
             results = runner.run_tests(include, exclude, set())
         elif self.args.data:
             results = runner.run_tests(include, exclude, {'data'})
@@ -34,19 +35,6 @@ class TestTask:
         else:
             raise RuntimeError("unexpected")
 
-        total = len(results)
-        passed = len([r for r in results if not r.errored and not r.skipped])
-        errored = len([r for r in results if r.errored])
-        skipped = len([r for r in results if r.skipped])
-
-        logger.info(
-            "Done. PASS={passed} ERROR={errored} SKIP={skipped} TOTAL={total}"
-            .format(
-                total=total,
-                passed=passed,
-                errored=errored,
-                skipped=skipped
-            )
-        )
+        logger.info(dbt.utils.get_run_status_line(results))
 
         return results
