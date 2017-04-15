@@ -264,9 +264,9 @@ def get_pseudo_test_path(node_name, source_path, test_type):
 
 def get_run_status_line(results):
     total = len(results)
-    passed = len([r for r in results if not r.errored and not r.skipped])
-    errored = len([r for r in results if r.errored])
+    errored = len([r for r in results if r.errored or r.failed])
     skipped = len([r for r in results if r.skipped])
+    passed = total - errored - skipped
 
     return (
         "Done. PASS={passed} ERROR={errored} SKIP={skipped} TOTAL={total}"

@@ -143,6 +143,7 @@ def print_test_result_line(result, schema_name, index, total):
         info = "ERROR"
     elif result.status > 0:
         info = 'FAIL {}'.format(result.status)
+        result.fail = True
     elif result.status == 0:
         info = 'PASS'
     else:
@@ -407,16 +408,21 @@ def track_model_run(index, num_nodes, run_model_result):
 
 class RunModelResult(object):
     def __init__(self, node, error=None, skip=False, status=None,
-                 execution_time=0):
+                 failed=None, execution_time=0):
         self.node = node
         self.error = error
         self.skip = skip
+        self.fail = failed
         self.status = status
         self.execution_time = execution_time
 
     @property
     def errored(self):
         return self.error is not None
+
+    @property
+    def failed(self):
+        return self.fail
 
     @property
     def skipped(self):
