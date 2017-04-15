@@ -312,14 +312,17 @@ class Compiler(object):
                 context,
                 flat_graph)
 
+            injected_node['wrapped_sql'] = wrapped_stmt
+
+
+        if 'wrapped_sql' in injected_node:
             build_path = os.path.join('build',
                                       injected_node.get('package_name'),
                                       injected_node.get('path'))
 
             written_path = self.__write(build_path,
-                                        wrapped_stmt)
+                                        injected_node['wrapped_sql'])
 
-            injected_node['wrapped_sql'] = wrapped_stmt
             injected_node['build_path'] = written_path
 
         return injected_node

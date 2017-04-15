@@ -26,12 +26,27 @@ class TestTask:
 
         if (self.args.data and self.args.schema) or \
            (not self.args.data and not self.args.schema):
-            res = runner.run_tests(include, exclude, set())
+            results = runner.run_tests(include, exclude, set())
         elif self.args.data:
-            res = runner.run_tests(include, exclude, {'data'})
+            results = runner.run_tests(include, exclude, {'data'})
         elif self.args.schema:
-            res = runner.run_tests(include, exclude, {'schema'})
+            results = runner.run_tests(include, exclude, {'schema'})
         else:
             raise RuntimeError("unexpected")
 
-        return res
+        total = len(results)
+        passed = len([r for r in results if not r.errored and not r.skipped])
+        errored = len([r for r in results if r.errored])
+        skipped = len([r for r in results if r.skipped])
+
+        logger.info(
+            "Done. PASS={passed} ERROR={errored} SKIP={skipped} TOTAL={total}"
+            .format(
+                total=total,
+                passed=passed,
+                errored=errored,
+                skipped=skipped
+            )
+        )
+
+        return results
