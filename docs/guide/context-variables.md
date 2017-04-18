@@ -49,6 +49,85 @@ Besides `{{ this }}`, there are a number of other helpful context variables avai
 | invocation_id    | A UUID generated for this dbt run (useful for auditing)              |
 
 
+## adapter
+
+`adapter` makes available some internal dbt functions that are useful for implementing custom logic in your
+dbt models. For example, you could write your own psuedo-incremental model using code like:
+
+```sql
+-- some_model.sql
+
+select * from {{ref('raw_table')}}
+
+{% if adapter.already_exists(this.schema, this.name) %}
+  where id > (select max(id) from {{this}})
+{% endif %}
+```
+
+### adapter.already_exists
+
+([Source](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/wrapper.py#L165-L167))
+
+Args:
+ - `schema`: The schema to test
+ - `table`: The relation to look for
+
+Returns true if a relation named like `table` exists in schema `schema`, false otherwise.
+
+Example:
+
+```sql
+select * from {{ref('raw_table')}}
+
+{% if adapter.already_exists(this.schema, this.name) %}
+  where id > (select max(id) from {{this}})
+{% endif %}
+```
+
+### adapter.get_columns_in_table
+
+([Source](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/wrapper.py#L169-L171))
+
+Args:
+ - `schema_name`: The schema to test
+ - `table_name`: The relation to look for
+
+Returns a list of [`Column`s](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/schema.py#L37) in a table. Useful for writing `INSERT ... SELECT` queries.
+
+Example:
+
+```sql
+{% set dest_columns = adapter.get_columns_in_table(schema, identifier) %}
+{% set dest_cols_csv = dest_columns | map(attribute='quoted') | join(', ') %}
+
+insert into {{ this }} ({{ dest_cols_csv }}) (
+  select {{ dest_cols_csv }}
+  from {{ref('another_table')}}
+);
+```
+
+### adapter.get_missing_columns
+
+([Source](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/wrapper.py#L173-L177))
+
+Args:
+ - `from_schema`: The schema for the `from_table`
+ - `from_table`: The `from_table` to check for differences
+ - `to_schema`: The schema for the `to_table`
+ - `to_table`: The `to_table` to check for differences
+
+Returns the set of [`Column`s](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/schema.py#L37) representing a the difference of the columns in the `from_table`
+and the columns in the `to_table`, i.e. (`set(from_table.columns) - set(to_table.columns)`).
+Useful for detecting new columns in a source table.
+
+Example:
+
+```sql
+{% for col in get_missing_columns(this.schema, 'source_table', this.schema, this.name) %}
+  alter table {{this}} add column "{{col.name}}" {{col.data_type}};
+{% endfor %}
+```
+
 ## Arbitrary configuration variables
 
 Variables can be passed from your `dbt_project.yml` file into models during compilation.
