@@ -67,9 +67,9 @@ select * from {{ref('raw_table')}}
 
 
 #### adapter.already_exists
-([Source on Github](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/wrapper.py#L165-L167))
 
 __Args__:
+
  * `schema`: The schema to test
  * `table`: The relation to look for
 
@@ -84,18 +84,20 @@ select * from {{ref('raw_table')}}
 {% endif %}
 ```
 
+([Source on Github](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/wrapper.py#L165-L167))
+
+---
 
 #### adapter.get_columns_in_table
-([Source](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/wrapper.py#L169-L171))
 
-Args:
+__Args__:
 
  * `schema_name`: The schema to test
  * `table_name`: The relation to look for
 
 Returns a list of [`Column`s](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/schema.py#L37) in a table. Useful for writing `INSERT ... SELECT` queries.
 
-Example:
+__Example__:
 
 ```sql
 {% set dest_columns = adapter.get_columns_in_table(schema, identifier) %}
@@ -107,11 +109,12 @@ insert into {{ this }} ({{ dest_cols_csv }}) (
 );
 ```
 
+([Source on Github](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/wrapper.py#L169-L171))
+
 #### adapter.get_missing_columns
 
-([Source](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/wrapper.py#L173-L177))
+__Args__:
 
-Args:
  * `from_schema`: The schema for the `from_table`
  * `from_table`: The `from_table` to check for differences
  * `to_schema`: The schema for the `to_table`
@@ -121,13 +124,15 @@ Returns the set of [`Column`s](https://github.com/fishtown-analytics/dbt/blob/v0
 and the columns in the `to_table`, i.e. (`set(from_table.columns) - set(to_table.columns)`).
 Useful for detecting new columns in a source table.
 
-Example:
+__Example__:
 
 ```sql
 {% for col in get_missing_columns(this.schema, 'source_table', this.schema, this.name) %}
   alter table {{this}} add column "{{col.name}}" {{col.data_type}};
 {% endfor %}
 ```
+
+([Source on Github](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/wrapper.py#L173-L177))
 
 ## Arbitrary configuration variables
 
