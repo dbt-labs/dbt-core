@@ -64,13 +64,14 @@ select * from {{ref('raw_table')}}
 {% endif %}
 ```
 
-### adapter.already_exists
+#### adapter.already_exists
 
 ([Source](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/wrapper.py#L165-L167))
 
 Args:
- - `schema`: The schema to test
- - `table`: The relation to look for
+
+ * `schema`: The schema to test
+ * `table`: The relation to look for
 
 Returns true if a relation named like `table` exists in schema `schema`, false otherwise.
 
@@ -84,13 +85,14 @@ select * from {{ref('raw_table')}}
 {% endif %}
 ```
 
-### adapter.get_columns_in_table
+#### adapter.get_columns_in_table
 
 ([Source](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/wrapper.py#L169-L171))
 
 Args:
- - `schema_name`: The schema to test
- - `table_name`: The relation to look for
+
+ * `schema_name`: The schema to test
+ * `table_name`: The relation to look for
 
 Returns a list of [`Column`s](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/schema.py#L37) in a table. Useful for writing `INSERT ... SELECT` queries.
 
@@ -106,15 +108,15 @@ insert into {{ this }} ({{ dest_cols_csv }}) (
 );
 ```
 
-### adapter.get_missing_columns
+#### adapter.get_missing_columns
 
 ([Source](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/wrapper.py#L173-L177))
 
 Args:
- - `from_schema`: The schema for the `from_table`
- - `from_table`: The `from_table` to check for differences
- - `to_schema`: The schema for the `to_table`
- - `to_table`: The `to_table` to check for differences
+ * `from_schema`: The schema for the `from_table`
+ * `from_table`: The `from_table` to check for differences
+ * `to_schema`: The schema for the `to_table`
+ * `to_table`: The `to_table` to check for differences
 
 Returns the set of [`Column`s](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/schema.py#L37) representing a the difference of the columns in the `from_table`
 and the columns in the `to_table`, i.e. (`set(from_table.columns) - set(to_table.columns)`).
