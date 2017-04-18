@@ -64,7 +64,9 @@ select * from {{ref('raw_table')}}
 {% endif %}
 ```
 
+Functions are documented below.
 
+---
 
 #### adapter.already_exists
 
@@ -111,6 +113,8 @@ insert into {{ this }} ({{ dest_cols_csv }}) (
 
 ([Source on Github](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/wrapper.py#L169-L171))
 
+---
+
 #### adapter.get_missing_columns
 
 __Args__:
@@ -133,6 +137,8 @@ __Example__:
 ```
 
 ([Source on Github](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/wrapper.py#L173-L177))
+
+---
 
 ## Arbitrary configuration variables
 
