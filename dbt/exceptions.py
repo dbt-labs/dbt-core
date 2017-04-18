@@ -63,7 +63,7 @@ def ref_invalid_args(model, args):
 
 
 def ref_bad_context(model, target_model_name, target_model_package):
-    ref_string = "{{ ref('" + target_model_name + "}') }}}}"
+    ref_string = "{{ ref('" + target_model_name + "') }}}}"
 
     if target_model_package is not None:
         ref_string = ("{{ ref('" + target_model_package +
