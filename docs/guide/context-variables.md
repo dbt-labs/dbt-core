@@ -64,19 +64,18 @@ select * from {{ref('raw_table')}}
 {% endif %}
 ```
 
+
+
 #### adapter.already_exists
+([Source on Github](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/wrapper.py#L165-L167))
 
-([Source](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/wrapper.py#L165-L167))
-
-Args:
-
+__Args__:
  * `schema`: The schema to test
  * `table`: The relation to look for
 
 Returns true if a relation named like `table` exists in schema `schema`, false otherwise.
 
-Example:
-
+__Example__:
 ```sql
 select * from {{ref('raw_table')}}
 
@@ -85,8 +84,8 @@ select * from {{ref('raw_table')}}
 {% endif %}
 ```
 
-#### adapter.get_columns_in_table
 
+#### adapter.get_columns_in_table
 ([Source](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/wrapper.py#L169-L171))
 
 Args:
