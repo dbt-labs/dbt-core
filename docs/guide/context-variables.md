@@ -131,7 +131,7 @@ Useful for detecting new columns in a source table.
 __Example__:
 
 ```sql
-{% for col in get_missing_columns(this.schema, 'source_table', this.schema, this.name) %}
+{% for col in adapter.get_missing_columns(this.schema, 'source_table', this.schema, this.name) %}
   alter table {{this}} add column "{{col.name}}" {{col.data_type}};
 {% endfor %}
 ```
