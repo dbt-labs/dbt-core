@@ -52,7 +52,7 @@ Besides `{{ this }}`, there are a number of other helpful context variables avai
 ## adapter
 
 `adapter` makes available some internal dbt functions that are useful for implementing custom logic in your
-dbt models. For example, you could write your own psuedo-incremental model using code like:
+dbt models. For example, you could write your own pseudo-incremental model using code like:
 
 ```sql
 -- some_model.sql
