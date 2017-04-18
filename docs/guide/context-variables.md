@@ -97,7 +97,7 @@ __Args__:
  * `schema_name`: The schema to test
  * `table_name`: The relation to look for
 
-Returns a list of [`Column`s](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/schema.py#L37) in a table. Useful for writing `INSERT ... SELECT` queries.
+Returns a list of [Columns](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/schema.py#L37) in a table. Useful for writing `INSERT ... SELECT` queries.
 
 __Example__:
 
@@ -124,7 +124,7 @@ __Args__:
  * `to_schema`: The schema for the `to_table`
  * `to_table`: The `to_table` to check for differences
 
-Returns the set of [`Column`s](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/schema.py#L37) representing a the difference of the columns in the `from_table`
+Returns the set of [Columns](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/schema.py#L37) representing a the difference of the columns in the `from_table`
 and the columns in the `to_table`, i.e. (`set(from_table.columns) - set(to_table.columns)`).
 Useful for detecting new columns in a source table.
 
