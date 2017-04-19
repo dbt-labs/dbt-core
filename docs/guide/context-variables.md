@@ -52,7 +52,7 @@ Besides `{{ this }}`, there are a number of other helpful context variables avai
 ## adapter
 
 `adapter` makes available some internal dbt functions that are useful for implementing custom logic in your
-dbt models. For example, you could write your own pseudo-incremental model using code like:
+dbt models. For example, you could write your own advanced incremental model using code like:
 
 ```sql
 -- some_model.sql
@@ -95,7 +95,7 @@ select * from {{ref('raw_table')}}
 __Args__:
 
  * `schema_name`: The schema to test
- * `table_name`: The relation to look for
+ * `table_name`: The relation from which to select columns
 
 Returns a list of [Columns](https://github.com/fishtown-analytics/dbt/blob/v0.8.0/dbt/schema.py#L37) in a table. Useful for writing `INSERT ... SELECT` queries.
 
