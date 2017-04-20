@@ -64,7 +64,45 @@ def __ref(model):
     return ref
 
 
-def process_refs(flat_graph):
+def resolve_ref(flat_graph, target_model_name, target_model_package,
+                current_project, node_package):
+
+    if target_model_package is not None:
+        return dbt.utils.find_model_by_name(
+            flat_graph,
+            target_model_name,
+            target_model_package)
+
+    target_model = None
+
+    # first pass: look for models in the current_project
+    target_model = dbt.utils.find_model_by_name(
+        flat_graph,
+        target_model_name,
+        current_project)
+
+    if target_model is not None and dbt.utils.is_enabled(target_model):
+        return target_model
+
+    # second pass: look for models in the node's package
+    target_model = dbt.utils.find_model_by_name(
+        flat_graph,
+        target_model_name,
+        node_package)
+
+    if target_model is not None and dbt.utils.is_enabled(target_model):
+        return target_model
+
+    # final pass: look for models in any package
+    # todo: exclude the packages we have already searched. overriding
+    # a package model in another package doesn't necessarily work atm
+    return dbt.utils.find_model_by_name(
+        flat_graph,
+        target_model_name,
+        None)
+
+
+def process_refs(flat_graph, current_project):
     for _, node in flat_graph.get('nodes').items():
         target_model = None
         target_model_name = None
@@ -76,13 +114,12 @@ def process_refs(flat_graph):
             elif len(ref) == 2:
                 target_model_package, target_model_name = ref
 
-            # first, look for a model that matches the current
-            # node's package. if that fails, look in all packages
-            if target_model_package is None:
-                target_model = dbt.utils.find_model_by_name(
-                    flat_graph,
-                    target_model_name,
-                    node.get('package_name'))
+            target_model = resolve_ref(
+                flat_graph,
+                target_model_name,
+                target_model_package,
+                current_project,
+                node.get('package_name'))
 
             if target_model is None:
                 target_model = dbt.utils.find_model_by_name(

@@ -614,7 +614,7 @@ class ParserTest(unittest.TestCase):
         }
 
         self.assertEquals(
-            dbt.parser.process_refs(graph),
+            dbt.parser.process_refs(graph, 'root'),
             {
                 'macros': {},
                 'nodes': {
