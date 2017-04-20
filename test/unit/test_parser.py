@@ -44,6 +44,14 @@ class ParserTest(unittest.TestCase):
             'vars': {},
         }
 
+        self.disabled_config = {
+            'enabled': False,
+            'materialized': 'view',
+            'post-hook': [],
+            'pre-hook': [],
+            'vars': {},
+        }
+
     def test__single_model(self):
         models = [{
             'name': 'model_one',
@@ -540,6 +548,130 @@ class ParserTest(unittest.TestCase):
                     'root_path': get_os_path('/usr/src/app'),
                     'raw_sql': self.find_input_by_name(
                         models, 'multi').get('raw_sql')
+                }
+            }
+        )
+
+    def test__process_refs__packages(self):
+        graph = {
+            'macros': {},
+            'nodes': {
+                'model.snowplow.events': {
+                    'name': 'events',
+                    'resource_type': 'model',
+                    'unique_id': 'model.snowplow.events',
+                    'fqn': ['snowplow', 'events'],
+                    'empty': False,
+                    'package_name': 'snowplow',
+                    'refs': [],
+                    'depends_on': {
+                        'nodes': [],
+                        'macros': []
+                    },
+                    'config': self.disabled_config,
+                    'tags': set(),
+                    'path': 'events.sql',
+                    'root_path': get_os_path('/usr/src/app'),
+                    'raw_sql': 'does not matter'
+                },
+                'model.root.events': {
+                    'name': 'events',
+                    'resource_type': 'model',
+                    'unique_id': 'model.snowplow.sessions_tx',
+                    'fqn': ['root', 'events'],
+                    'empty': False,
+                    'package_name': 'root',
+                    'refs': [],
+                    'depends_on': {
+                        'nodes': [],
+                        'macros': []
+                    },
+                    'config': self.model_config,
+                    'tags': set(),
+                    'path': 'sessions_tx.sql',
+                    'root_path': get_os_path('/usr/src/app'),
+                    'raw_sql': 'does not matter'
+                },
+                'model.root.dep': {
+                    'name': 'dep',
+                    'resource_type': 'model',
+                    'unique_id': 'model.root.dep',
+                    'fqn': ['root', 'dep'],
+                    'empty': False,
+                    'package_name': 'root',
+                    'refs': [('events',)],
+                    'depends_on': {
+                        'nodes': [],
+                        'macros': []
+                    },
+                    'config': self.model_config,
+                    'tags': set(),
+                    'path': 'multi.sql',
+                    'root_path': get_os_path('/usr/src/app'),
+                    'raw_sql': 'does not matter'
+                }
+            }
+        }
+
+        self.assertEquals(
+            dbt.parser.process_refs(graph),
+            {
+                'macros': {},
+                'nodes': {
+                    'model.snowplow.events': {
+                        'name': 'events',
+                        'resource_type': 'model',
+                        'unique_id': 'model.snowplow.events',
+                        'fqn': ['snowplow', 'events'],
+                        'empty': False,
+                        'package_name': 'snowplow',
+                        'refs': [],
+                        'depends_on': {
+                            'nodes': [],
+                            'macros': []
+                        },
+                        'config': self.disabled_config,
+                        'tags': set(),
+                        'path': 'events.sql',
+                        'root_path': get_os_path('/usr/src/app'),
+                        'raw_sql': 'does not matter'
+                    },
+                    'model.root.events': {
+                        'name': 'events',
+                        'resource_type': 'model',
+                        'unique_id': 'model.snowplow.sessions_tx',
+                        'fqn': ['root', 'events'],
+                        'empty': False,
+                        'package_name': 'root',
+                        'refs': [],
+                        'depends_on': {
+                            'nodes': [],
+                            'macros': []
+                        },
+                        'config': self.model_config,
+                        'tags': set(),
+                        'path': 'sessions_tx.sql',
+                        'root_path': get_os_path('/usr/src/app'),
+                        'raw_sql': 'does not matter'
+                    },
+                    'model.root.dep': {
+                        'name': 'dep',
+                        'resource_type': 'model',
+                        'unique_id': 'model.root.dep',
+                        'fqn': ['root', 'dep'],
+                        'empty': False,
+                        'package_name': 'root',
+                        'refs': [('events')],
+                        'depends_on': {
+                            'nodes': ['model.root.events'],
+                            'macros': []
+                        },
+                        'config': self.model_config,
+                        'tags': set(),
+                        'path': 'multi.sql',
+                        'root_path': get_os_path('/usr/src/app'),
+                        'raw_sql': 'does not matter'
+                    }
                 }
             }
         )
