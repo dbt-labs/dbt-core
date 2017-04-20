@@ -46,12 +46,12 @@ class DepsTask:
         if exists:
             if start_sha == end_sha:
                 logger.info('  Already at {}, nothing to do.'.format(
-                    start_sha[:6]))
+                    start_sha[:7]))
             else:
                 logger.info('  Updated checkout from {} to {}.'.format(
-                    start_sha[:6], end_sha[:6]))
+                    start_sha[:7], end_sha[:7]))
         else:
-            logger.info('  Checked out at {}.'.format(end_sha[:6]))
+            logger.info('  Checked out at {}.'.format(end_sha[:7]))
 
         return folder
 
