@@ -122,12 +122,6 @@ def process_refs(flat_graph, current_project):
                 node.get('package_name'))
 
             if target_model is None:
-                target_model = dbt.utils.find_model_by_name(
-                    flat_graph,
-                    target_model_name,
-                    target_model_package)
-
-            if target_model is None:
                 dbt.exceptions.ref_target_not_found(
                     node,
                     target_model_name,
