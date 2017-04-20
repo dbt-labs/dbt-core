@@ -577,7 +577,7 @@ class ParserTest(unittest.TestCase):
                 'model.root.events': {
                     'name': 'events',
                     'resource_type': 'model',
-                    'unique_id': 'model.snowplow.sessions_tx',
+                    'unique_id': 'model.root.events',
                     'fqn': ['root', 'events'],
                     'empty': False,
                     'package_name': 'root',
@@ -588,7 +588,7 @@ class ParserTest(unittest.TestCase):
                     },
                     'config': self.model_config,
                     'tags': set(),
-                    'path': 'sessions_tx.sql',
+                    'path': 'events.sql',
                     'root_path': get_os_path('/usr/src/app'),
                     'raw_sql': 'does not matter'
                 },
@@ -639,7 +639,7 @@ class ParserTest(unittest.TestCase):
                     'model.root.events': {
                         'name': 'events',
                         'resource_type': 'model',
-                        'unique_id': 'model.snowplow.sessions_tx',
+                        'unique_id': 'model.root.events',
                         'fqn': ['root', 'events'],
                         'empty': False,
                         'package_name': 'root',
@@ -650,7 +650,7 @@ class ParserTest(unittest.TestCase):
                         },
                         'config': self.model_config,
                         'tags': set(),
-                        'path': 'sessions_tx.sql',
+                        'path': 'events.sql',
                         'root_path': get_os_path('/usr/src/app'),
                         'raw_sql': 'does not matter'
                     },
@@ -661,7 +661,7 @@ class ParserTest(unittest.TestCase):
                         'fqn': ['root', 'dep'],
                         'empty': False,
                         'package_name': 'root',
-                        'refs': [('events')],
+                        'refs': [('events',)],
                         'depends_on': {
                             'nodes': ['model.root.events'],
                             'macros': []

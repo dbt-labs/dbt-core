@@ -66,6 +66,7 @@ def __ref(model):
 
 def process_refs(flat_graph):
     for _, node in flat_graph.get('nodes').items():
+        target_model = None
         target_model_name = None
         target_model_package = None
 
@@ -75,10 +76,19 @@ def process_refs(flat_graph):
             elif len(ref) == 2:
                 target_model_package, target_model_name = ref
 
-            target_model = dbt.utils.find_model_by_name(
-                flat_graph,
-                target_model_name,
-                target_model_package)
+            # first, look for a model that matches the current
+            # node's package. if that fails, look in all packages
+            if target_model_package is None:
+                target_model = dbt.utils.find_model_by_name(
+                    flat_graph,
+                    target_model_name,
+                    node.get('package_name'))
+
+            if target_model is None:
+                target_model = dbt.utils.find_model_by_name(
+                    flat_graph,
+                    target_model_name,
+                    target_model_package)
 
             if target_model is None:
                 dbt.exceptions.ref_target_not_found(
