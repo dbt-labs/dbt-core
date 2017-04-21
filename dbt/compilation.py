@@ -175,7 +175,7 @@ class Compiler(object):
 
         return do_config
 
-    def __ref(self, ctx, model, all_models):
+    def __ref(self, ctx, model, flat_graph, current_project):
         schema = ctx.get('env', {}).get('schema')
 
         def do_ref(*args):
@@ -189,10 +189,12 @@ class Compiler(object):
             else:
                 dbt.exceptions.ref_invalid_args(model, args)
 
-            target_model = dbt.utils.find_model_by_name(
-                all_models,
+            target_model = dbt.parser.resolve_ref(
+                flat_graph,
                 target_model_name,
-                target_model_package)
+                target_model_package,
+                current_project,
+                model.get('package_name'))
 
             if target_model is None:
                 dbt.exceptions.ref_target_not_found(
@@ -223,7 +225,8 @@ class Compiler(object):
         wrapper = dbt.wrapper.DatabaseWrapper(model, adapter, profile)
 
         # built-ins
-        context['ref'] = self.__ref(context, model, flat_graph)
+        context['ref'] = self.__ref(context, model, flat_graph,
+                                    self.project.cfg.get('name'))
         context['config'] = self.__model_config(model)
         context['this'] = This(
             context['env']['schema'],
