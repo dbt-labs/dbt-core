@@ -1,3 +1,9 @@
+## dbt 0.8.1 (Unreleased)
+
+### Bugfixes
+
+- Fix bug preventing overriding a disabled package model in the current project ([#391](https://github.com/fishtown-analytics/dbt/pull/391))
+
 ## dbt 0.8.0 (April 17, 2017)
 
 
