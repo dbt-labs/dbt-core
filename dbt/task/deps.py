@@ -118,7 +118,7 @@ class DepsTask:
                                         "dbt_project.yml not found"
                                         .format(repo))
 
-                    elif 'git' in basestring(e):
+                    elif 'git' in error_string:
                         error_string = ("Git CLI is a dependency of dbt, but "
                                         "it is not installed!")
 
