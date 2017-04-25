@@ -5,6 +5,7 @@ import re
 import dbt.clients.git
 import dbt.project as project
 
+from dbt.compat import basestring
 from dbt.logger import GLOBAL_LOGGER as logger
 
 
@@ -110,9 +111,19 @@ class DepsTask:
                     )
             except IOError as e:
                 if e.errno == errno.ENOENT:
-                    logger.info("'{}' is not a valid dbt project - "
-                                "dbt_project.yml not found".format(repo))
-                    exit(1)
+                    error_string = basestring(e)
+
+                    if 'dbt_project.yml' in error_string:
+                        error_string = ("'{}' is not a valid dbt project - "
+                                        "dbt_project.yml not found"
+                                        .format(repo))
+
+                    elif 'git' in basestring(e):
+                        error_string = ("Git CLI is a dependency of dbt, but "
+                                        "it is not installed!")
+
+                    raise dbt.exceptions.RuntimeException(error_string)
+
                 else:
                     raise e
 
