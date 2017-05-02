@@ -143,25 +143,29 @@ class SnowflakeAdapter(PostgresAdapter):
             profile, model)
 
     @classmethod
+    def add_begin_query(cls, profile, name):
+        return cls.add_query(profile, 'BEGIN', name, auto_begin=False,
+                             select_schema=False)
+
+    @classmethod
     def create_schema(cls, profile, schema, model_name=None):
         logger.debug('Creating schema "%s".', schema)
         sql = cls.get_create_schema_sql(schema)
-        return super(PostgresAdapter, cls).add_query(
-            profile,
-            sql,
-            model_name)
+        return cls.add_query(profile, sql, model_name, select_schema=False)
 
     @classmethod
-    def add_query(cls, profile, sql, model_name=None, auto_begin=True):
+    def add_query(cls, profile, sql, model_name=None, auto_begin=True,
+                  select_schema=True):
         # snowflake only allows one query per api call.
         queries = sql.strip().split(";")
         cursor = None
 
-        super(PostgresAdapter, cls).add_query(
-            profile,
-            'use schema "{}"'.format(cls.get_default_schema(profile)),
-            model_name,
-            auto_begin)
+        if select_schema:
+            super(PostgresAdapter, cls).add_query(
+                profile,
+                'use schema "{}"'.format(cls.get_default_schema(profile)),
+                model_name,
+                auto_begin)
 
         for individual_query in queries:
             # hack -- after the last ';', remove comments and don't run

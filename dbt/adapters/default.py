@@ -398,6 +398,10 @@ class DefaultAdapter(object):
                                   connection.get('name'))
 
     @classmethod
+    def add_begin_query(cls, profile, name):
+        return cls.add_query(profile, 'BEGIN', name, auto_begin=False)
+
+    @classmethod
     def begin(cls, profile, name='master'):
         global connections_in_use
         connection = cls.get_connection(profile, name)
@@ -410,7 +414,7 @@ class DefaultAdapter(object):
                 'Tried to begin a new transaction on connection "{}", but '
                 'it already had one open!'.format(connection.get('name')))
 
-        cls.add_query(profile, 'BEGIN', name, auto_begin=False)
+        cls.add_begin_query(profile, name)
 
         connection['transaction_open'] = True
         connections_in_use[name] = connection
