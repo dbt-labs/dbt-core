@@ -143,6 +143,15 @@ class SnowflakeAdapter(PostgresAdapter):
             profile, model)
 
     @classmethod
+    def create_schema(cls, profile, schema, model_name=None):
+        logger.debug('Creating schema "%s".', schema)
+        sql = cls.get_create_schema_sql(schema)
+        return super(PostgresAdapter, cls).add_query(
+            profile,
+            sql,
+            model_name)
+
+    @classmethod
     def add_query(cls, profile, sql, model_name=None, auto_begin=True):
         # snowflake only allows one query per api call.
         queries = sql.strip().split(";")
