@@ -185,17 +185,19 @@ def read_project(filename, profiles_dir=None, validate=True,
     if profiles_dir is None:
         profiles_dir = default_profiles_dir
 
-    with open(filename, 'r') as f:
-        project_cfg = yaml.safe_load(f)
-        project_cfg['project-root'] = os.path.dirname(
-            os.path.abspath(filename))
-        profiles = read_profiles(profiles_dir)
-        proj = Project(project_cfg,
-                       profiles,
-                       profiles_dir,
-                       profile_to_load=profile_to_load,
-                       args=args)
+    project_file_contents = dbt.clients.system.load_file_contents(filename)
 
-        if validate:
-            proj.validate()
-        return proj
+    project_cfg = yaml.loads(project_file_contents)
+    project_cfg['project-root'] = os.path.dirname(
+        os.path.abspath(filename))
+    profiles = read_profiles(profiles_dir)
+    proj = Project(project_cfg,
+                   profiles,
+                   profiles_dir,
+                   profile_to_load=profile_to_load,
+                   args=args)
+
+    if validate:
+        proj.validate()
+
+    return proj
