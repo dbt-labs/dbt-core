@@ -53,7 +53,7 @@ def print_compile_stats(stats):
     stat_line = ", ".join(
         ["{} {}".format(ct, names.get(t)) for t, ct in results.items()])
 
-    logger.info("Compiled {}".format(stat_line))
+    logger.info("Found {}".format(stat_line))
 
 
 def prepend_ctes(model, flat_graph):

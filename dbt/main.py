@@ -8,6 +8,7 @@ import dbt.version
 import dbt.flags as flags
 import dbt.project as project
 import dbt.task.run as run_task
+import dbt.task.compile as compile_task
 import dbt.task.debug as debug_task
 import dbt.task.clean as clean_task
 import dbt.task.deps as deps_task
@@ -289,48 +290,53 @@ def parse_args(args):
     )
     sub.set_defaults(cls=archive_task.ArchiveTask, which='archive')
 
-    sub = subs.add_parser('run', parents=[base_subparser])
-    sub.add_argument(
-        '--models',
-        required=False,
-        nargs='+',
-        help="""
-        Specify the models to include.
-        """
-    )
-    sub.add_argument(
-        '--exclude',
-        required=False,
-        nargs='+',
-        help="""
-        Specify the models to exclude.
-        """
-    )
-    sub.add_argument(
-        '--threads',
-        type=int,
-        required=False,
-        help="""
-        Specify number of threads to use while executing models. Overrides
-        settings in profiles.yml.
-        """
-    )
-    sub.add_argument(
-        '--non-destructive',
-        action='store_true',
-        help="""
-        If specified, DBT will not drop views. Tables will be truncated instead
-        of dropped.
-        """
-    )
-    sub.add_argument(
-        '--full-refresh',
-        action='store_true',
-        help="""
-        If specified, DBT will drop incremental models and fully-recalculate
-        the incremental table from the model definition.
-        """)
-    sub.set_defaults(cls=run_task.RunTask, which='run')
+    run_sub = subs.add_parser('run', parents=[base_subparser])
+    run_sub.set_defaults(cls=run_task.RunTask, which='run')
+
+    compile_sub = subs.add_parser('compile', parents=[base_subparser])
+    compile_sub.set_defaults(cls=compile_task.CompileTask, which='compile')
+
+    for sub in [run_sub, compile_sub]:
+        sub.add_argument(
+            '--models',
+            required=False,
+            nargs='+',
+            help="""
+            Specify the models to include.
+            """
+        )
+        sub.add_argument(
+            '--exclude',
+            required=False,
+            nargs='+',
+            help="""
+            Specify the models to exclude.
+            """
+        )
+        sub.add_argument(
+            '--threads',
+            type=int,
+            required=False,
+            help="""
+            Specify number of threads to use while executing models. Overrides
+            settings in profiles.yml.
+            """
+        )
+        sub.add_argument(
+            '--non-destructive',
+            action='store_true',
+            help="""
+            If specified, DBT will not drop views. Tables will be truncated instead
+            of dropped.
+            """
+        )
+        sub.add_argument(
+            '--full-refresh',
+            action='store_true',
+            help="""
+            If specified, DBT will drop incremental models and fully-recalculate
+            the incremental table from the model definition.
+            """)
 
     sub = subs.add_parser('seed', parents=[base_subparser])
     sub.add_argument(

@@ -512,6 +512,23 @@ class RunManager(object):
 
         return node, result
 
+    def compile_node(self, node, flat_graph):
+
+        compiler = dbt.compilation.Compiler(self.project)
+        node = compiler.compile_node(node, flat_graph)
+        return node
+
+    def safe_compile_node(self, data):
+        node, flat_graph, existing, schema_name, node_index, num_nodes = data
+        node = self.compile_node(node, flat_graph)
+
+        result = RunModelResult(node,
+                                error=None,
+                                status=None,
+                                execution_time=0)
+
+        return result
+
     def safe_execute_node(self, data):
         node, flat_graph, existing, schema_name, node_index, num_nodes = data
 
@@ -531,8 +548,7 @@ class RunManager(object):
             profile = self.project.run_environment()
             adapter = get_adapter(profile)
 
-            compiler = dbt.compilation.Compiler(self.project)
-            node = compiler.compile_node(node, flat_graph)
+            node = self.compile_node(node, flat_graph)
 
             if not is_ephemeral:
                 node, status = self.execute_node(node, flat_graph, existing,
@@ -625,7 +641,7 @@ class RunManager(object):
         return skip_dependent
 
     def execute_nodes(self, flat_graph, node_dependency_list, on_failure,
-                      should_run_hooks=False):
+                      should_run_hooks=False, should_execute=True):
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
         master_connection = adapter.get_connection(profile)
@@ -660,7 +676,8 @@ class RunManager(object):
 
         pool = ThreadPool(num_threads)
 
-        print_counts(flat_nodes)
+        if should_execute:
+            print_counts(flat_nodes)
 
         start_time = time.time()
 
@@ -689,8 +706,10 @@ class RunManager(object):
             nodes_to_execute = [node for node in node_list
                                 if not node.get('skip')]
 
+            action = self.safe_execute_node if should_execute else self.safe_compile_node
+
             for result in pool.imap_unordered(
-                    self.safe_execute_node,
+                    action,
                     [(node, flat_graph, existing, schema_name,
                       get_idx(node), num_nodes,)
                      for node in nodes_to_execute]):
@@ -720,7 +739,8 @@ class RunManager(object):
 
         execution_time = time.time() - start_time
 
-        print_results_line(node_results, execution_time)
+        if should_execute:
+            print_results_line(node_results, execution_time)
 
         return node_results
 
@@ -790,7 +810,8 @@ class RunManager(object):
 
     def run_types_from_graph(self, include_spec, exclude_spec,
                              resource_types, tags, should_run_hooks=False,
-                             flatten_graph=False):
+                             flatten_graph=False, should_execute=True):
+
         compiler = dbt.compilation.Compiler(self.project)
         compiler.initialize()
         (flat_graph, linker) = compiler.compile()
@@ -823,12 +844,13 @@ class RunManager(object):
         adapter = get_adapter(profile)
 
         try:
-            self.try_create_schema()
+            if should_execute:
+                self.try_create_schema()
 
             on_failure = self.on_model_failure(linker, selected_nodes)
 
             results = self.execute_nodes(flat_graph, dependency_list,
-                                         on_failure, should_run_hooks)
+                                         on_failure, should_run_hooks, should_execute)
 
         finally:
             adapter.cleanup_connections()
@@ -836,6 +858,20 @@ class RunManager(object):
         return results
 
     # ------------------------------------
+
+    def compile_models(self, include_spec, exclude_spec):
+        resource_types = [
+            NodeType.Model,
+            NodeType.Test,
+            NodeType.Archive
+        ]
+
+        return self.run_types_from_graph(include_spec,
+                                         exclude_spec,
+                                         resource_types=resource_types,
+                                         tags=set(),
+                                         should_run_hooks=False,
+                                         should_execute=False)
 
     def run_models(self, include_spec, exclude_spec):
         return self.run_types_from_graph(include_spec,
