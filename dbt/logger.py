@@ -1,3 +1,4 @@
+import dbt.clients.system
 import logging
 import os
 import sys
@@ -22,8 +23,7 @@ initialized = False
 
 
 def make_log_dir_if_missing(log_dir):
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+    dbt.clients.system.make_directory(log_dir)
 
 
 def initialize_logger(debug_mode=False, path=None):
@@ -56,5 +56,6 @@ def initialize_logger(debug_mode=False, path=None):
         logger.addHandler(logdir_handler)
 
     initialized = True
+
 
 GLOBAL_LOGGER = logger

@@ -153,23 +153,13 @@ class Compiler(object):
         self.parsed_models = None
 
     def initialize(self):
-        if not os.path.exists(self.project['target-path']):
-            os.makedirs(self.project['target-path'])
-
-        if not os.path.exists(self.project['modules-path']):
-            os.makedirs(self.project['modules-path'])
+        dbt.clients.system.make_directory(self.project['target-path'])
+        dbt.clients.system.make_directory(self.project['modules-path'])
 
     def __write(self, build_filepath, payload):
         target_path = os.path.join(self.project['target-path'], build_filepath)
 
-        if not os.path.exists(os.path.dirname(target_path)):
-            # concurrent writes that try to create the same dir can fail
-            try:
-                os.makedirs(os.path.dirname(target_path))
-            except FileExistsError:
-                logger.debug("Caught concurrent write: {}".format(target_path))
-                pass
-
+        dbt.clients.system.make_directory(target_path)
         dbt.compat.write_file(target_path, payload)
 
         return target_path
