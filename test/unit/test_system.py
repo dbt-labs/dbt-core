@@ -1,3 +1,4 @@
+import os
 import mock
 import unittest
 
@@ -7,7 +8,7 @@ import dbt.clients.system
 class SystemTest(unittest.TestCase):
 
     def test_make_directory(self):
-        target = '/tmp/abc'
+        target = os.path.join(os.path.expanduser('~'), '.directory')
 
         dbt.clients.system.make_directory(target)
 
