@@ -326,16 +326,16 @@ def parse_args(args):
             '--non-destructive',
             action='store_true',
             help="""
-            If specified, DBT will not drop views. Tables will be truncated instead
-            of dropped.
+            If specified, DBT will not drop views. Tables will be truncated
+            instead of dropped.
             """
         )
         sub.add_argument(
             '--full-refresh',
             action='store_true',
             help="""
-            If specified, DBT will drop incremental models and fully-recalculate
-            the incremental table from the model definition.
+            If specified, DBT will drop incremental models and
+            fully-recalculate the incremental table from the model definition.
             """)
 
     sub = subs.add_parser('seed', parents=[base_subparser])

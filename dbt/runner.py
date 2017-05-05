@@ -711,7 +711,10 @@ class RunManager(object):
             nodes_to_execute = [node for node in node_list
                                 if not node.get('skip')]
 
-            action = self.safe_execute_node if should_execute else self.safe_compile_node
+            if should_execute:
+                action = self.safe_execute_node
+            else:
+                action = self.safe_compile_node
 
             for result in pool.imap_unordered(
                     action,
@@ -856,7 +859,8 @@ class RunManager(object):
             on_failure = self.on_model_failure(linker, selected_nodes)
 
             results = self.execute_nodes(flat_graph, dependency_list,
-                                         on_failure, should_run_hooks, should_execute)
+                                         on_failure, should_run_hooks,
+                                         should_execute)
 
         finally:
             adapter.cleanup_connections()
