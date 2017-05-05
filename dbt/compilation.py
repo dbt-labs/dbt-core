@@ -166,8 +166,8 @@ class Compiler(object):
             # concurrent writes that try to create the same dir can fail
             try:
                 os.makedirs(os.path.dirname(target_path))
-            except FileExistsError:
-                logger.debug("Caught concurrent write: {}".format(target_path))
+            except OSError as e:
+                logger.debug("Caught concurrent write: {}\n{}".format(target_path, str(e)))
                 pass
 
         dbt.compat.write_file(target_path, payload)
