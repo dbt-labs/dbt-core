@@ -159,7 +159,7 @@ class Compiler(object):
     def __write(self, build_filepath, payload):
         target_path = os.path.join(self.project['target-path'], build_filepath)
 
-        dbt.clients.system.make_directory(target_path)
+        dbt.clients.system.make_directory(os.path.dirname(target_path))
         dbt.compat.write_file(target_path, payload)
 
         return target_path

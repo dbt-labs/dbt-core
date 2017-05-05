@@ -3,8 +3,6 @@ import fnmatch
 import os
 import os.path
 
-from dbt.logger import GLOBAL_LOGGER as logger
-
 
 def find_matching(root_path,
                   relative_paths_to_search,
@@ -62,13 +60,13 @@ def make_directory(path):
     exist. This function handles the case where two threads try to create
     a directory at once.
     """
-    if not os.path.exists(os.path.dirname(path)):
+    if not os.path.exists(path):
         # concurrent writes that try to create the same dir can fail
         try:
-            os.makedirs(os.path.dirname(path))
+            os.makedirs(path)
 
         except OSError as e:
             if e.errno == errno.EEXIST:
-                logger.debug("Caught concurrent write: {}".format(path))
+                pass
             else:
                 raise e
