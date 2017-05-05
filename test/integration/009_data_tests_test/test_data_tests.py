@@ -3,14 +3,17 @@ from test.integration.base import DBTIntegrationTest, FakeArgs
 
 from dbt.task.test import TestTask
 from dbt.project import read_project
+import os
 
 
 class TestDataTests(DBTIntegrationTest):
 
+    test_path = os.path.normpath("test/integration/009_data_tests_test/tests")
+
     @property
     def project_config(self):
         return {
-            "test-paths": ["test/integration/009_data_tests_test/tests"]
+            "test-paths": [self.test_path]
         }
 
     @property
@@ -51,6 +54,11 @@ class TestDataTests(DBTIntegrationTest):
                 self.assertFalse(result.skipped)
                 # status = # of failing rows
                 self.assertEqual(result.status, 0)
+
+        # check that all tests were run
+        defined_tests = os.listdir(self.test_path)
+        self.assertNotEqual(len(test_results), 0)
+        self.assertEqual(len(test_results), len(defined_tests))
 
     @attr(type='snowflake')
     def test_snowflake_data_tests(self):
