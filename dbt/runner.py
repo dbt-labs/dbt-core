@@ -869,7 +869,8 @@ class RunManager(object):
         resource_types = [
             NodeType.Model,
             NodeType.Test,
-            NodeType.Archive
+            NodeType.Archive,
+            NodeType.Analysis
         ]
 
         return self.run_types_from_graph(include_spec,

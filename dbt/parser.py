@@ -311,6 +311,8 @@ def load_and_parse_sql(package_name, root_project, all_projects, root_dir,
         if resource_type == NodeType.Test:
             path = dbt.utils.get_pseudo_test_path(
                 name, file_match.get('relative_path'), 'data_test')
+        elif resource_type == NodeType.Analysis:
+            path = os.path.join('analysis', file_match.get('relative_path'))
         else:
             path = file_match.get('relative_path')
 
