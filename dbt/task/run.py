@@ -4,8 +4,6 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.runner import RunManager
 import dbt.utils
 
-THREAD_LIMIT = 9
-
 
 class RunTask:
     def __init__(self, args, project):

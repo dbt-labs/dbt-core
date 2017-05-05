@@ -520,12 +520,17 @@ class RunManager(object):
 
     def safe_compile_node(self, data):
         node, flat_graph, existing, schema_name, node_index, num_nodes = data
-        node = self.compile_node(node, flat_graph)
 
-        result = RunModelResult(node,
-                                error=None,
-                                status=None,
-                                execution_time=0)
+        result = RunModelResult(node)
+        profile = self.project.run_environment()
+        adapter = get_adapter(profile)
+
+        try:
+            compiled_node = self.compile_node(node, flat_graph)
+            result = RunModelResult(compiled_node)
+
+        finally:
+            adapter.release_connection(profile, node.get('name'))
 
         return result
 
@@ -720,7 +725,8 @@ class RunManager(object):
                 flat_graph['nodes'][result.node.get('unique_id')] = result.node
 
                 index = get_idx(result.node)
-                track_model_run(index, num_nodes, result)
+                if should_execute:
+                    track_model_run(index, num_nodes, result)
 
                 if result.errored:
                     on_failure(result.node)
