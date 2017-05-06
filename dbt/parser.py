@@ -127,9 +127,9 @@ def process_refs(flat_graph, current_project):
                     target_model_name,
                     target_model_package)
 
-            if (dbt.utils.is_enabled(node) and
-                    not dbt.utils.is_enabled(target_model)):
+            if (dbt.utils.is_enabled(node) and not dbt.utils.is_enabled(target_model) and dbt.utils.is_type(node, NodeType.Model)):
                 dbt.exceptions.ref_disabled_dependency(node, target_model)
+                # TODO : tests probably shouldn't run for disabled models here?
 
             target_model_id = target_model.get('unique_id')
 
