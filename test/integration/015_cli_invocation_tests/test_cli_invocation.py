@@ -78,7 +78,7 @@ class TestCLIInvocationWithProfilesDir(DBTIntegrationTest):
 
     @property
     def custom_schema(self):
-        return "test_cli_invocation_015_custom"
+        return "{}_custom".format(self.unique_schema())
 
     @property
     def models(self):

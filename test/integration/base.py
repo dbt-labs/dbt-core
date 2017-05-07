@@ -207,6 +207,9 @@ class DBTIntegrationTest(unittest.TestCase):
         except:
             os.rename("dbt_modules", "dbt_modules-{}".format(time.time()))
 
+
+        self.run_sql('DROP SCHEMA IF EXISTS "{}" CASCADE'.format(self.unique_schema()))
+
         self.handle.close()
 
     @property
