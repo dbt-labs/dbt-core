@@ -3,6 +3,7 @@ import errno
 import re
 
 import dbt.clients.git
+import dbt.clients.system
 import dbt.project as project
 
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -117,7 +118,6 @@ class DepsTask:
                     raise e
 
     def run(self):
-        if not os.path.exists(self.project['modules-path']):
-            os.makedirs(self.project['modules-path'])
+        dbt.clients.system.make_directory(self.project['modules-path'])
 
         self.__pull_deps_recursive(self.project['repositories'])

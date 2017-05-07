@@ -10,6 +10,8 @@ import os
 import json
 import logging
 
+import dbt.clients.system
+
 disable_contracts()
 sp_logger.setLevel(100)
 
@@ -61,8 +63,7 @@ class User(object):
         cookie_dir = os.path.dirname(COOKIE_PATH)
         user = {"id": str(uuid.uuid4())}
 
-        if not os.path.exists(cookie_dir):
-            os.makedirs(cookie_dir)
+        dbt.clients.system.make_directory(cookie_dir)
 
         with open(COOKIE_PATH, "w") as fh:
             yaml.dump(user, fh)
