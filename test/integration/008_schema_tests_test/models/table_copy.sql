@@ -5,4 +5,4 @@
     )
 }}
 
-select * from schema_tests_008.seed
+select * from {{ this.schema }}.seed

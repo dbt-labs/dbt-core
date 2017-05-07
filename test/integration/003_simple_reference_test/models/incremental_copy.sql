@@ -5,4 +5,4 @@
   )
 }}
 
-select * from "simple_reference_003"."seed"
+select * from "{{ this.schema }}"."seed"

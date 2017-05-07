@@ -1,4 +1,4 @@
-create table simple_dependency_006.seed (
+create table {schema}.seed (
 	id INTEGER,
 	first_name VARCHAR(11),
 	email VARCHAR(31),
@@ -7,7 +7,7 @@ create table simple_dependency_006.seed (
 );
 
 
-INSERT INTO simple_dependency_006.seed
+INSERT INTO {schema}.seed
     ("id","first_name","email","ip_address","updated_at")
 VALUES
     (1,'Larry','lking0@miitbeian.gov.cn','69.135.206.194','2008-09-12 19:08:31'),
@@ -511,30 +511,30 @@ VALUES
     (499,'Evelyn','ethomasdu@hhs.gov','6.241.88.250','2007-09-14 13:03:34'),
     (500,'Paula','pshawdv@networksolutions.com','123.27.47.249','2003-10-30 21:19:20');
 
-create table simple_dependency_006.seed_config_expected_1 as (
+create table {schema}.seed_config_expected_1 as (
 
-    select *, 'default'::text as c1, 'default'::text as c2, 'was true'::text as some_bool from simple_dependency_006.seed
-
-);
-
-create table simple_dependency_006.seed_config_expected_2 as (
-
-    select *, 'abc'::text as c1, 'def'::text as c2, 'was true'::text as some_bool from simple_dependency_006.seed
+    select *, 'default'::text as c1, 'default'::text as c2, 'was true'::text as some_bool from {schema}.seed
 
 );
 
-create table simple_dependency_006.seed_config_expected_3 as (
+create table {schema}.seed_config_expected_2 as (
 
-    select *, 'ghi'::text as c1, 'jkl'::text as c2, 'was true'::text as some_bool from simple_dependency_006.seed
+    select *, 'abc'::text as c1, 'def'::text as c2, 'was true'::text as some_bool from {schema}.seed
 
 );
 
-create table simple_dependency_006.seed_summary (
+create table {schema}.seed_config_expected_3 as (
+
+    select *, 'ghi'::text as c1, 'jkl'::text as c2, 'was true'::text as some_bool from {schema}.seed
+
+);
+
+create table {schema}.seed_summary (
     year timestamp without time zone,
     count bigint
 );
 
-INSERT INTO simple_dependency_006.seed_summary
+INSERT INTO {schema}.seed_summary
     ("year","count")
 VALUES
     ('1970-01-01 00:00:00',10),

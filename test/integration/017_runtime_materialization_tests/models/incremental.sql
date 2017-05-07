@@ -5,4 +5,4 @@
   )
 }}
 
-select * from "runtime_materialization_017"."seed"
+select * from "{{ this.schema }}"."seed"

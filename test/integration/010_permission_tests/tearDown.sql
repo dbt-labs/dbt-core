@@ -1,2 +1,2 @@
 
-drop schema if exists private_010 cascade;
+drop schema if exists {schema}_private_010 cascade;

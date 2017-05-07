@@ -6,4 +6,4 @@
   )
 }}
 
-select * from "adaper_ddl_018"."seed"
+select * from "{{ this.schema }}"."seed"

@@ -1,7 +1,7 @@
 
-drop table if exists run_hooks_014.on_run_hook;
+drop table if exists {schema}.on_run_hook;
 
-create table run_hooks_014.on_run_hook (
+create table {schema}.on_run_hook (
     "state"            TEXT, -- start|end
 
     "target.dbname"    TEXT,

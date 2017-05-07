@@ -31,7 +31,7 @@ class TestNoRunTargetDeprecation(DBTIntegrationTest):
                         'user': 'root',
                         'pass': 'password',
                         'dbname': 'dbt',
-                        'schema': self.schema
+                        'schema': self.unique_schema()
                     }
                 },
                 'target': 'my-target'

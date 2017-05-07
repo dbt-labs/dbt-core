@@ -4,4 +4,4 @@
   )
 }}
 
-select * from "invalid_models_011"."seed"
+select * from "{{ this.schema }}"."seed"

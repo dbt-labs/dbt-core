@@ -5,4 +5,4 @@
   )
 }}
 
-select * from "varchar_widening_002"."seed"
+select * from "{{ this.schema }}"."seed"
