@@ -68,7 +68,7 @@ class TestContextVars(DBTIntegrationTest):
         field_list = ", ".join(['"{}"'.format(f) for f in self.fields])
         query = 'select {field_list} from {schema}.context'.format(
             field_list=field_list,
-            schema=self.schema)
+            schema=self.unique_schema())
 
         vals = self.run_sql(query, fetch='all')
         ctx = dict([(k, v) for (k, v) in zip(self.fields, vals[0])])
