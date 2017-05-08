@@ -3,7 +3,6 @@ import dbt.main as dbt
 import os, shutil
 import yaml
 import time
-import random
 
 from dbt.adapters.factory import get_adapter
 
@@ -29,7 +28,7 @@ class FakeArgs(object):
 
 class DBTIntegrationTest(unittest.TestCase):
 
-    prefix = "test{}".format(random.randint(0, 999))
+    prefix = "test{}".format(int(time.time()))
 
     def postgres_profile(self):
         return {
