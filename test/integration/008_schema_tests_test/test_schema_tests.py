@@ -25,7 +25,6 @@ class TestSchemaTests(DBTIntegrationTest):
         args = FakeArgs()
 
         test_task = TestTask(args, project)
-        print(project)
         return test_task.run()
 
     @attr(type='postgres')
