@@ -2,6 +2,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt import version as dbt_version
 from snowplow_tracker import Subject, Tracker, Emitter, logger as sp_logger
 from snowplow_tracker import SelfDescribingJson, disable_contracts
+from datetime import datetime
 
 import platform
 import uuid
@@ -42,15 +43,14 @@ class User(object):
         self.do_not_track = True
 
         self.id = None
-        self.invocation_id = None
+        self.invocation_id = str(uuid.uuid4())
+        self.run_started_at = datetime.now()
 
     def state(self):
         return "do not track" if self.do_not_track else "tracking"
 
     def initialize(self):
         self.do_not_track = False
-
-        self.invocation_id = str(uuid.uuid4())
 
         cookie = self.get_cookie()
         self.id = cookie.get('id')

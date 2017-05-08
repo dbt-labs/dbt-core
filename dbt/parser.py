@@ -328,6 +328,52 @@ def load_and_parse_sql(package_name, root_project, all_projects, root_dir,
     return parse_sql_nodes(result, root_project, all_projects, tags)
 
 
+def get_hooks_from_project(project_cfg, hook_type):
+    hooks = project_cfg.get(hook_type, [])
+
+    if type(hooks) not in (list, tuple):
+        hooks = [hooks]
+
+    return hooks
+
+
+def get_hooks(all_projects, hook_type):
+    project_hooks = {}
+
+    for project_name, project in all_projects.items():
+        hooks = get_hooks_from_project(project, hook_type)
+
+        if len(hooks) > 0:
+            project_hooks[project_name] = ";\n".join(hooks)
+
+    return project_hooks
+
+
+def load_and_parse_run_hooks(root_project, all_projects, hook_type):
+
+    if dbt.flags.STRICT_MODE:
+        dbt.contracts.project.validate_list(all_projects)
+
+    project_hooks = get_hooks(all_projects, hook_type)
+
+    result = []
+    for project_name, hooks in project_hooks.items():
+        project = all_projects[project_name]
+
+        hook_path = dbt.utils.get_pseudo_hook_path(hook_type)
+
+        result.append({
+            'name': hook_type,
+            'root_path': "{}/dbt_project.yml".format(project_name),
+            'resource_type': NodeType.Operation,
+            'path': hook_path,
+            'package_name': project_name,
+            'raw_sql': hooks
+        })
+
+    return parse_sql_nodes(result, root_project, all_projects, tags={hook_type})
+
+
 def load_and_parse_macros(package_name, root_project, all_projects, root_dir,
                           relative_dirs, resource_type, tags=None):
     extension = "[!.#~]*.sql"

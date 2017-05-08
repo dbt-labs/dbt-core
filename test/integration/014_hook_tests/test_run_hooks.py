@@ -1,66 +1,8 @@
 from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 
+import os.path
 
-RUN_START_HOOK = """
-   insert into run_hooks_014.on_run_hook (
-        "state",
-        "target.dbname",
-        "target.host",
-        "target.name",
-        "target.schema",
-        "target.type",
-        "target.user",
-        "target.pass",
-        "target.port",
-        "target.threads",
-        "run_started_at",
-        "invocation_id"
-   ) VALUES (
-    'start',
-    '{{ target.dbname }}',
-    '{{ target.host }}',
-    '{{ target.name }}',
-    '{{ target.schema }}',
-    '{{ target.type }}',
-    '{{ target.user }}',
-    '{{ target.pass }}',
-    {{ target.port }},
-    {{ target.threads }},
-    '{{ run_started_at }}',
-    '{{ invocation_id }}'
-   )
-"""
-
-RUN_END_HOOK = """
-   insert into run_hooks_014.on_run_hook (
-        "state",
-        "target.dbname",
-        "target.host",
-        "target.name",
-        "target.schema",
-        "target.type",
-        "target.user",
-        "target.pass",
-        "target.port",
-        "target.threads",
-        "run_started_at",
-        "invocation_id"
-   ) VALUES (
-    'end',
-    '{{ target.dbname }}',
-    '{{ target.host }}',
-    '{{ target.name }}',
-    '{{ target.schema }}',
-    '{{ target.type }}',
-    '{{ target.user }}',
-    '{{ target.pass }}',
-    {{ target.port }},
-    {{ target.threads }},
-    '{{ run_started_at }}',
-    '{{ invocation_id }}'
-   )
-"""
 
 class TestPrePostRunHooks(DBTIntegrationTest):
 
@@ -91,8 +33,10 @@ class TestPrePostRunHooks(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            "on-run-start": RUN_START_HOOK,
-            "on-run-end":   RUN_END_HOOK
+            'macro-paths': ['test/integration/014_hook_tests/macros'],
+
+            "on-run-start": "{{ custom_run_hook('start', target, run_started_at, invocation_id) }}",
+            "on-run-end": "{{ custom_run_hook('end', target, run_started_at, invocation_id) }}",
         }
 
     @property

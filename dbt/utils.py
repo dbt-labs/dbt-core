@@ -28,6 +28,7 @@ class NodeType(object):
     Test = 'test'
     Archive = 'archive'
     Macro = 'macro'
+    Operation = 'operation'
 
 
 class This(object):
@@ -263,6 +264,11 @@ def get_pseudo_test_path(node_name, source_path, test_type):
     return os.path.join(*pseudo_path_parts)
 
 
+def get_pseudo_hook_path(hook_name):
+    path_parts = ['hooks', "{}.sql".format(hook_name)]
+    return os.path.join(*path_parts)
+
+
 def get_run_status_line(results):
     total = len(results)
     errored = len([r for r in results if r.errored or r.failed])
@@ -277,3 +283,12 @@ def get_run_status_line(results):
             errored=errored,
             skipped=skipped
         ))
+
+
+def get_nodes_by_tags(flat_graph, match_tags, resource_type):
+    nodes = []
+    for node_name, node in flat_graph[resource_type].items():
+        node_tags = node.get('tags', set())
+        if len(node_tags & match_tags):
+            nodes.append(node)
+    return nodes

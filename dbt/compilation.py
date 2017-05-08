@@ -6,6 +6,7 @@ import dbt.project
 import dbt.utils
 import dbt.include
 import dbt.wrapper
+import dbt.tracking
 
 from dbt.model import Model
 from dbt.utils import This, Var, is_enabled, get_materialization, NodeType, \
@@ -38,6 +39,7 @@ def print_compile_stats(stats):
         NodeType.Archive: 'archives',
         NodeType.Analysis: 'analyses',
         NodeType.Macro: 'macros',
+        NodeType.Operation: 'operations',
     }
 
     results = {
@@ -46,6 +48,7 @@ def print_compile_stats(stats):
         NodeType.Archive: 0,
         NodeType.Analysis: 0,
         NodeType.Macro: 0,
+        NodeType.Operation: 0,
     }
 
     results.update(stats)
@@ -235,8 +238,8 @@ class Compiler(object):
 
         context.update(wrapper.get_context_functions())
 
-        context['run_started_at'] = '{{ run_started_at }}'
-        context['invocation_id'] = '{{ invocation_id }}'
+        context['run_started_at'] = dbt.tracking.active_user.run_started_at
+        context['invocation_id'] = dbt.tracking.active_user.invocation_id
         context['sql_now'] = adapter.date_function()
 
         for unique_id, macro in flat_graph.get('macros').items():
@@ -280,7 +283,8 @@ class Compiler(object):
         injected_node, _ = prepend_ctes(compiled_node, flat_graph)
 
         if compiled_node.get('resource_type') in [NodeType.Test,
-                                                  NodeType.Analysis]:
+                                                  NodeType.Analysis,
+                                                  NodeType.Operation]:
             # data tests get wrapped in count(*)
             # TODO : move this somewhere more reasonable
             if 'data' in injected_node['tags'] and \
@@ -351,11 +355,13 @@ class Compiler(object):
         linked_graph = {
             'nodes': {},
             'macros': flat_graph.get('macros'),
+            'operations': flat_graph.get('operations'),
         }
 
-        for name, node in flat_graph.get('nodes').items():
-            self.link_node(linker, node, flat_graph)
-            linked_graph['nodes'][name] = node
+        for node_type in ['nodes', 'operations']:
+            for name, node in flat_graph.get(node_type).items():
+                self.link_node(linker, node, flat_graph)
+                linked_graph[node_type][name] = node
 
         cycle = linker.find_cycles()
 
@@ -392,6 +398,17 @@ class Compiler(object):
                     resource_type=NodeType.Macro))
 
         return parsed_macros
+
+    def get_parsed_operations(self, root_project, all_projects):
+        parsed_operations = {}
+
+        for name, project in all_projects.items():
+            parsed_operations.update(
+                dbt.parser.load_and_parse_run_hooks(root_project, all_projects, 'on-run-start'))
+            parsed_operations.update(
+                dbt.parser.load_and_parse_run_hooks(root_project, all_projects, 'on-run-end'))
+
+        return parsed_operations
 
     def get_parsed_models(self, root_project, all_projects):
         parsed_models = {}
@@ -456,6 +473,9 @@ class Compiler(object):
     def load_all_macros(self, root_project, all_projects):
         return self.get_parsed_macros(root_project, all_projects)
 
+    def load_all_operations(self, root_project, all_projects):
+        return self.get_parsed_operations(root_project, all_projects)
+
     def load_all_nodes(self, root_project, all_projects):
         all_nodes = {}
 
@@ -479,10 +499,12 @@ class Compiler(object):
 
         all_macros = self.load_all_macros(root_project, all_projects)
         all_nodes = self.load_all_nodes(root_project, all_projects)
+        all_operations = self.load_all_operations(root_project, all_projects)
 
         flat_graph = {
             'nodes': all_nodes,
-            'macros': all_macros
+            'macros': all_macros,
+            'operations': all_operations
         }
 
         flat_graph = dbt.parser.process_refs(flat_graph,
@@ -496,6 +518,9 @@ class Compiler(object):
             stats[node.get('resource_type')] += 1
 
         for node_name, node in linked_graph.get('macros').items():
+            stats[node.get('resource_type')] += 1
+
+        for node_name, node in linked_graph.get('operations').items():
             stats[node.get('resource_type')] += 1
 
         print_compile_stats(stats)
