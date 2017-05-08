@@ -1,3 +1,4 @@
+import errno
 import fnmatch
 import os
 import os.path
@@ -51,3 +52,21 @@ def load_file_contents(path, strip=True):
         to_return = to_return.strip()
 
     return to_return
+
+
+def make_directory(path):
+    """
+    Make a directory and any intermediate directories that don't already
+    exist. This function handles the case where two threads try to create
+    a directory at once.
+    """
+    if not os.path.exists(path):
+        # concurrent writes that try to create the same dir can fail
+        try:
+            os.makedirs(path)
+
+        except OSError as e:
+            if e.errno == errno.EEXIST:
+                pass
+            else:
+                raise e
