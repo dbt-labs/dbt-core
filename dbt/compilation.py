@@ -498,6 +498,7 @@ class Compiler(object):
         for node_name, node in linked_graph.get('macros').items():
             stats[node.get('resource_type')] += 1
 
+        self.write_graph_file(linker)
         print_compile_stats(stats)
 
         return linked_graph, linker
