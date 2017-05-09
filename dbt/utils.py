@@ -31,6 +31,12 @@ class NodeType(object):
     Operation = 'operation'
 
 
+class RunHookTypes:
+    Start = 'on-run-start'
+    End = 'on-run-end'
+    Both = [RunHookTypes.Start, RunHookTypes.End]
+
+
 class This(object):
     def __init__(self, schema, table, name):
         self.schema = schema

@@ -374,13 +374,15 @@ def load_and_parse_run_hook_type(root_project, all_projects, hook_type):
             'raw_sql': hooks
         })
 
-    return parse_sql_nodes(result, root_project, all_projects, tags={hook_type})
+    tags = {hook_type}
+    return parse_sql_nodes(result, root_project, all_projects, tags=tags)
 
 
 def load_and_parse_run_hooks(root_project, all_projects):
     hook_nodes = {}
-    for hook_type in ['on-run-start', 'on-run-end']:
-        project_hooks = load_and_parse_run_hook_type(root_project, all_projects,
+    for hook_type in dbt.utils.RunHookTypes.Both:
+        project_hooks = load_and_parse_run_hook_type(root_project,
+                                                     all_projects,
                                                      hook_type)
         hook_nodes.update(project_hooks)
 
