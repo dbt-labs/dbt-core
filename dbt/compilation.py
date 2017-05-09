@@ -73,7 +73,7 @@ def recursively_prepend_ctes(model, flat_graph):
     if model.get('all_ctes_injected') is True:
         return (model, model.get('extra_ctes').keys(), flat_graph)
 
-    for cte_id in model.get('extra_ctes').keys():
+    for cte_id in model.get('extra_ctes', {}).keys():
         cte_to_add = flat_graph.get('nodes').get(cte_id)
         cte_to_add, new_prepend_ctes, flat_graph = recursively_prepend_ctes(
             cte_to_add, flat_graph)
