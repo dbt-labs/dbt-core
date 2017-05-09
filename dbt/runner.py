@@ -751,11 +751,18 @@ class RunManager(object):
             include_spec,
             [])
 
-        return set([ancestor for ancestor in all_ancestors
-                    if(flat_graph['nodes'][ancestor].get(
-                            'resource_type') == NodeType.Model and
-                       get_materialization(
-                           flat_graph['nodes'][ancestor]) == 'ephemeral')])
+        res = []
+
+        for ancestor in all_ancestors:
+            if ancestor not in flat_graph['nodes']:
+                continue
+            ancestor_node = flat_graph['nodes'][ancestor]
+            is_model = ancestor_node.get('resource_type') == NodeType.Model
+            is_ephemeral = get_materialization(ancestor_node) == 'ephemeral'
+            if is_model and is_ephemeral:
+                res.append(ancestor)
+
+        return set(res)
 
     def get_nodes_to_run(self, graph, include_spec, exclude_spec,
                          resource_types, tags):
