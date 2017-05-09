@@ -248,7 +248,7 @@ def get_pseudo_test_path(node_name, source_path):
 
 
 def get_pseudo_hook_path(hook_name):
-    path_parts = ['hooks', "{}.sql".format(hook_name)]
+    path_parts = ["hooks", "{}.sql".format(hook_name)]
     return os.path.join(*path_parts)
 
 
