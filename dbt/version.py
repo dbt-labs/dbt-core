@@ -42,7 +42,7 @@ def not_latest():
     return """Your version of dbt is out of date! You can find instructions
     for upgrading here:
 
-    http://dbt.readthedocs.io/en/master/guide/setup/
+    https://dbt.readme.io/docs/installation
     """
 
 

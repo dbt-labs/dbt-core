@@ -1,9 +1,9 @@
 
 # This configuration file specifies information about your package
 # that dbt needs in order to build your models. This file is _required_
-# 
+#
 # For more information, consult:
-# http://dbt.readthedocs.io/en/master/guide/configuring-models/
+# https://dbt.readme.io/reference#configuration
 
 
 #
@@ -192,4 +192,4 @@ repositories:
 #
 
 # Data archival is a powerful feature intended for advanced dbt users. For more
-# information, consult: http://dbt.readthedocs.io/en/master/guide/archival/
+# information, consult: https://dbt.readme.io/reference#archives
