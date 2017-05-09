@@ -352,7 +352,7 @@ def get_hooks(all_projects, hook_type):
     return project_hooks
 
 
-def load_and_parse_run_hooks(root_project, all_projects, hook_type):
+def load_and_parse_run_hook_type(root_project, all_projects, hook_type):
 
     if dbt.flags.STRICT_MODE:
         dbt.contracts.project.validate_list(all_projects)
@@ -375,6 +375,16 @@ def load_and_parse_run_hooks(root_project, all_projects, hook_type):
         })
 
     return parse_sql_nodes(result, root_project, all_projects, tags={hook_type})
+
+
+def load_and_parse_run_hooks(root_project, all_projects):
+    hook_nodes = {}
+    for hook_type in ['on-run-start', 'on-run-end']:
+        project_hooks = load_and_parse_run_hook_type(root_project, all_projects,
+                                                     hook_type)
+        hook_nodes.update(project_hooks)
+
+    return hook_nodes
 
 
 def load_and_parse_macros(package_name, root_project, all_projects, root_dir,

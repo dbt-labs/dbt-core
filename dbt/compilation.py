@@ -354,14 +354,12 @@ class Compiler(object):
     def link_graph(self, linker, flat_graph):
         linked_graph = {
             'nodes': {},
-            'macros': flat_graph.get('macros'),
-            'operations': flat_graph.get('operations'),
+            'macros': flat_graph.get('macros')
         }
 
-        for node_type in ['nodes', 'operations']:
-            for name, node in flat_graph.get(node_type).items():
-                self.link_node(linker, node, flat_graph)
-                linked_graph[node_type][name] = node
+        for name, node in flat_graph.get('nodes').items():
+            self.link_node(linker, node, flat_graph)
+            linked_graph['nodes'][name] = node
 
         cycle = linker.find_cycles()
 
@@ -398,17 +396,6 @@ class Compiler(object):
                     resource_type=NodeType.Macro))
 
         return parsed_macros
-
-    def get_parsed_operations(self, root_project, all_projects):
-        parsed_operations = {}
-
-        for name, project in all_projects.items():
-            parsed_operations.update(
-                dbt.parser.load_and_parse_run_hooks(root_project, all_projects, 'on-run-start'))
-            parsed_operations.update(
-                dbt.parser.load_and_parse_run_hooks(root_project, all_projects, 'on-run-end'))
-
-        return parsed_operations
 
     def get_parsed_models(self, root_project, all_projects):
         parsed_models = {}
@@ -473,9 +460,6 @@ class Compiler(object):
     def load_all_macros(self, root_project, all_projects):
         return self.get_parsed_macros(root_project, all_projects)
 
-    def load_all_operations(self, root_project, all_projects):
-        return self.get_parsed_operations(root_project, all_projects)
-
     def load_all_nodes(self, root_project, all_projects):
         all_nodes = {}
 
@@ -488,6 +472,8 @@ class Compiler(object):
         all_nodes.update(
             dbt.parser.parse_archives_from_projects(root_project,
                                                     all_projects))
+        all_nodes.update(
+            dbt.parser.load_and_parse_run_hooks(root_project, all_projects))
 
         return all_nodes
 
@@ -498,13 +484,12 @@ class Compiler(object):
         all_projects = self.get_all_projects()
 
         all_macros = self.load_all_macros(root_project, all_projects)
+
         all_nodes = self.load_all_nodes(root_project, all_projects)
-        all_operations = self.load_all_operations(root_project, all_projects)
 
         flat_graph = {
             'nodes': all_nodes,
-            'macros': all_macros,
-            'operations': all_operations
+            'macros': all_macros
         }
 
         flat_graph = dbt.parser.process_refs(flat_graph,
@@ -518,9 +503,6 @@ class Compiler(object):
             stats[node.get('resource_type')] += 1
 
         for node_name, node in linked_graph.get('macros').items():
-            stats[node.get('resource_type')] += 1
-
-        for node_name, node in linked_graph.get('operations').items():
             stats[node.get('resource_type')] += 1
 
         print_compile_stats(stats)

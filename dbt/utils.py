@@ -285,10 +285,10 @@ def get_run_status_line(results):
         ))
 
 
-def get_nodes_by_tags(flat_graph, match_tags, resource_type):
-    nodes = []
-    for node_name, node in flat_graph[resource_type].items():
+def get_nodes_by_tags(nodes, match_tags, resource_type):
+    matched_nodes = []
+    for node in nodes:
         node_tags = node.get('tags', set())
         if len(node_tags & match_tags):
-            nodes.append(node)
-    return nodes
+            matched_nodes.append(node)
+    return matched_nodes

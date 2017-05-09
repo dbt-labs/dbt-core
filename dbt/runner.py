@@ -9,7 +9,7 @@ import itertools
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
 
-from dbt.utils import get_materialization, NodeType, is_type
+from dbt.utils import get_materialization, NodeType, is_type, get_nodes_by_tags
 
 import dbt.clients.jinja
 import dbt.compilation
@@ -369,15 +369,6 @@ def execute_archive(profile, node, context):
     return result
 
 
-def run_hooks(profile, hooks):
-    adapter = get_adapter(profile)
-
-    master_connection = adapter.begin(profile)
-    compiled_hooks = [hook['wrapped_sql'] for hook in hooks]
-    adapter.execute_all(profile=profile, sqls=compiled_hooks)
-    master_connection = adapter.commit(master_connection)
-
-
 def track_model_run(index, num_nodes, run_model_result):
     invocation_id = dbt.tracking.active_user.invocation_id
     dbt.tracking.track_model_run({
@@ -619,6 +610,18 @@ class RunManager(object):
 
         return concurrent_dependency_list
 
+    def run_hooks(self, profile, flat_graph, hook_type):
+        adapter = get_adapter(profile)
+
+        nodes = flat_graph.get('nodes', {}).values()
+        start_hooks = get_nodes_by_tags(nodes, {hook_type}, NodeType.Operation)
+        hooks = [self.compile_node(hook, flat_graph) for hook in start_hooks]
+
+        master_connection = adapter.begin(profile)
+        compiled_hooks = [hook['wrapped_sql'] for hook in hooks]
+        adapter.execute_all(profile=profile, sqls=compiled_hooks)
+        master_connection = adapter.commit(master_connection)
+
     def on_model_failure(self, linker, selected_nodes):
         def skip_dependent(node):
             dependent_nodes = linker.get_dependent_nodes(node.get('unique_id'))
@@ -672,9 +675,7 @@ class RunManager(object):
         start_time = time.time()
 
         if should_run_hooks:
-            start_hooks = dbt.utils.get_nodes_by_tags(flat_graph, {'on-run-start'}, "operations")
-            hooks = [self.compile_node(hook, flat_graph) for hook in start_hooks]
-            run_hooks(profile, hooks)
+            self.run_hooks(profile, flat_graph, 'on-run-start')
 
         def get_idx(node):
             return node_id_to_index_map.get(node.get('unique_id'))
@@ -721,9 +722,7 @@ class RunManager(object):
         pool.join()
 
         if should_run_hooks:
-            end_hooks = dbt.utils.get_nodes_by_tags(flat_graph, {'on-run-end'}, "operations")
-            hooks = [self.compile_node(hook, flat_graph) for hook in end_hooks]
-            run_hooks(profile, hooks)
+            self.run_hooks(profile, flat_graph, 'on-run-end')
 
         execution_time = time.time() - start_time
 
@@ -879,8 +878,7 @@ class RunManager(object):
                                          resource_types=resource_types,
                                          tags=set(),
                                          should_run_hooks=False,
-                                         should_execute=False,
-                                         flatten_graph=True)
+                                         should_execute=False)
 
     def run_models(self, include_spec, exclude_spec):
         return self.run_types_from_graph(include_spec,
