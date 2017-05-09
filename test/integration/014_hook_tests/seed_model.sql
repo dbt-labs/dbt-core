@@ -1,7 +1,7 @@
 
-drop table if exists model_hooks_014.on_model_hook;
+drop table if exists {schema}.on_model_hook;
 
-create table model_hooks_014.on_model_hook (
+create table {schema}.on_model_hook (
     "state"            TEXT, -- start|end
 
     "target.dbname"    TEXT,

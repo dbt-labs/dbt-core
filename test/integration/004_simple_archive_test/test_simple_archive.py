@@ -19,8 +19,8 @@ class TestSimpleArchive(DBTIntegrationTest):
         return {
             "archive": [
                 {
-                    "source_schema": "simple_archive_004",
-                    "target_schema": "simple_archive_004",
+                    "source_schema": self.unique_schema(),
+                    "target_schema": self.unique_schema(),
                     "tables": [
                         {
                             "source_table": "seed",

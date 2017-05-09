@@ -1,4 +1,4 @@
-create table simple_seed_005.seed_expected (
+create table {schema}.seed_expected (
 	id INTEGER,
 	first_name VARCHAR(11),
 	email VARCHAR(31),
@@ -7,7 +7,7 @@ create table simple_seed_005.seed_expected (
 );
 
 
-INSERT INTO simple_seed_005.seed_expected
+INSERT INTO {schema}.seed_expected
     ("id","first_name","email","ip_address","birthday")
 VALUES
     (1,'Larry','lking0@miitbeian.gov.cn','69.135.206.194','2008-09-12 19:08:31'),

@@ -1,4 +1,4 @@
-create table schema_tests_008.seed_failure (
+create table {schema}.seed_failure (
     favorite_color VARCHAR(10),
 	id INTEGER,
 	first_name VARCHAR(11),
@@ -8,7 +8,7 @@ create table schema_tests_008.seed_failure (
 );
 
 
-INSERT INTO schema_tests_008.seed_failure
+INSERT INTO {schema}.seed_failure
     ("favorite_color", "id","first_name","email","ip_address","updated_at")
 VALUES
     -- unaccepted 'red' favorite_color

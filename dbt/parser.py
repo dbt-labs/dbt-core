@@ -14,7 +14,7 @@ import dbt.contracts.graph.parsed
 import dbt.contracts.graph.unparsed
 import dbt.contracts.project
 
-from dbt.utils import NodeType, get_materialization, Var
+from dbt.utils import NodeType, Var
 from dbt.compat import basestring, to_string
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -127,9 +127,12 @@ def process_refs(flat_graph, current_project):
                     target_model_name,
                     target_model_package)
 
-            if (dbt.utils.is_enabled(node) and
-                    not dbt.utils.is_enabled(target_model)):
-                dbt.exceptions.ref_disabled_dependency(node, target_model)
+            if (dbt.utils.is_enabled(node) and not
+                    dbt.utils.is_enabled(target_model)):
+                if dbt.utils.is_type(node, NodeType.Model):
+                    dbt.exceptions.ref_disabled_dependency(node, target_model)
+                else:
+                    node.get('config', {})['enabled'] = False
 
             target_model_id = target_model.get('unique_id')
 

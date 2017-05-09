@@ -47,7 +47,7 @@ class TestContextVars(DBTIntegrationTest):
                         'user': 'root',
                         'pass': 'password',
                         'dbname': 'dbt',
-                        'schema': self.schema
+                        'schema': self.unique_schema()
                     },
                     'prod': {
                         'type': 'postgres',
@@ -57,7 +57,7 @@ class TestContextVars(DBTIntegrationTest):
                         'user': 'root',
                         'pass': 'password',
                         'dbname': 'dbt',
-                        'schema': self.schema
+                        'schema': self.unique_schema()
                     }
                 },
                 'target': 'dev'
@@ -68,7 +68,7 @@ class TestContextVars(DBTIntegrationTest):
         field_list = ", ".join(['"{}"'.format(f) for f in self.fields])
         query = 'select {field_list} from {schema}.context'.format(
             field_list=field_list,
-            schema=self.schema)
+            schema=self.unique_schema())
 
         vals = self.run_sql(query, fetch='all')
         ctx = dict([(k, v) for (k, v) in zip(self.fields, vals[0])])
@@ -80,16 +80,16 @@ class TestContextVars(DBTIntegrationTest):
         self.run_dbt(['run'])
         ctx = self.get_ctx_vars()
 
-        self.assertEqual(ctx['this'], '"context_vars_013"."context__dbt_tmp"')
+        self.assertEqual(ctx['this'], '"{}"."context__dbt_tmp"'.format(self.unique_schema()))
         self.assertEqual(ctx['this.name'], 'context')
-        self.assertEqual(ctx['this.schema'], 'context_vars_013')
+        self.assertEqual(ctx['this.schema'], self.unique_schema())
         self.assertEqual(ctx['this.table'], 'context__dbt_tmp')
 
         self.assertEqual(ctx['target.dbname'], 'dbt')
         self.assertEqual(ctx['target.host'], 'database')
         self.assertEqual(ctx['target.name'], 'dev')
         self.assertEqual(ctx['target.port'], 5432)
-        self.assertEqual(ctx['target.schema'], 'context_vars_013')
+        self.assertEqual(ctx['target.schema'], self.unique_schema())
         self.assertEqual(ctx['target.threads'], 1)
         self.assertEqual(ctx['target.type'], 'postgres')
         self.assertEqual(ctx['target.user'], 'root')
@@ -100,16 +100,16 @@ class TestContextVars(DBTIntegrationTest):
         self.run_dbt(['run', '--target', 'prod'])
         ctx = self.get_ctx_vars()
 
-        self.assertEqual(ctx['this'], '"context_vars_013"."context__dbt_tmp"')
+        self.assertEqual(ctx['this'], '"{}"."context__dbt_tmp"'.format(self.unique_schema()))
         self.assertEqual(ctx['this.name'], 'context')
-        self.assertEqual(ctx['this.schema'], 'context_vars_013')
+        self.assertEqual(ctx['this.schema'], self.unique_schema())
         self.assertEqual(ctx['this.table'], 'context__dbt_tmp')
 
         self.assertEqual(ctx['target.dbname'], 'dbt')
         self.assertEqual(ctx['target.host'], 'database')
         self.assertEqual(ctx['target.name'], 'prod')
         self.assertEqual(ctx['target.port'], 5432)
-        self.assertEqual(ctx['target.schema'], 'context_vars_013')
+        self.assertEqual(ctx['target.schema'], self.unique_schema())
         self.assertEqual(ctx['target.threads'], 1)
         self.assertEqual(ctx['target.type'], 'postgres')
         self.assertEqual(ctx['target.user'], 'root')

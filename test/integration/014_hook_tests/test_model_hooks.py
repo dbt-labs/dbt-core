@@ -3,7 +3,7 @@ from test.integration.base import DBTIntegrationTest
 
 
 MODEL_PRE_HOOK = """
-   insert into model_hooks_014.on_model_hook (
+   insert into {{this.schema}}.on_model_hook (
         "state",
         "target.dbname",
         "target.host",
@@ -33,7 +33,7 @@ MODEL_PRE_HOOK = """
 """
 
 MODEL_POST_HOOK = """
-   insert into model_hooks_014.on_model_hook (
+   insert into {{this.schema}}.on_model_hook (
         "state",
         "target.dbname",
         "target.host",
@@ -107,7 +107,7 @@ class TestPrePostModelHooks(DBTIntegrationTest):
 
     def get_ctx_vars(self, state):
         field_list = ", ".join(['"{}"'.format(f) for f in self.fields])
-        query = "select {field_list} from {schema}.on_model_hook where state = '{state}'".format(field_list=field_list, schema=self.schema, state=state)
+        query = "select {field_list} from {schema}.on_model_hook where state = '{state}'".format(field_list=field_list, schema=self.unique_schema(), state=state)
 
         vals = self.run_sql(query, fetch='all')
         self.assertFalse(len(vals) == 0, 'nothing inserted into hooks table')
@@ -124,7 +124,7 @@ class TestPrePostModelHooks(DBTIntegrationTest):
         self.assertEqual(ctx['target.host'], 'database')
         self.assertEqual(ctx['target.name'], 'default2')
         self.assertEqual(ctx['target.port'], 5432)
-        self.assertEqual(ctx['target.schema'], self.schema)
+        self.assertEqual(ctx['target.schema'], self.unique_schema())
         self.assertEqual(ctx['target.threads'], 4)
         self.assertEqual(ctx['target.type'], 'postgres')
         self.assertEqual(ctx['target.user'], 'root')

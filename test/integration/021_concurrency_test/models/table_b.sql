@@ -4,4 +4,4 @@
   )
 }}
 
-select * from "concurrency_021"."seed"
+select * from "{{ this.schema }}"."seed"

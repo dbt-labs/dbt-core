@@ -1,3 +1,3 @@
 {{ config(materialized='ephemeral') }}
 
-select * from "ephemeral_020"."seed"
+select * from "{{ this.schema }}"."seed"

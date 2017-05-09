@@ -4,4 +4,4 @@
   )
 }}
 
-select * from "profile_config_012"."seed"
+select * from "{{ this.schema }}"."seed"

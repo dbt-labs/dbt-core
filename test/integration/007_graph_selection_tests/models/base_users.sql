@@ -5,4 +5,4 @@
     )
 }}
 
-select * from "graph_selection_tests_007"."seed"
+select * from "{{ this.schema }}"."seed"

@@ -1,4 +1,4 @@
-create table schema_tests_008.seed (
+create table {schema}.seed (
     favorite_color VARCHAR(10),
 	id INTEGER,
 	first_name VARCHAR(11),
@@ -8,7 +8,7 @@ create table schema_tests_008.seed (
 );
 
 
-INSERT INTO schema_tests_008.seed
+INSERT INTO {schema}.seed
     ("favorite_color", "id","first_name","email","ip_address","updated_at")
 VALUES
     ('blue', 1,'Larry',null,'69.135.206.194','2008-09-12 19:08:31'),
