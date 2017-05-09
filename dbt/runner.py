@@ -675,7 +675,7 @@ class RunManager(object):
         start_time = time.time()
 
         if should_run_hooks:
-            self.run_hooks(profile, flat_graph, dbt.utils.RunHookTypes.Start)
+            self.run_hooks(profile, flat_graph, dbt.utils.RunHookType.Start)
 
         def get_idx(node):
             return node_id_to_index_map.get(node.get('unique_id'))
@@ -722,7 +722,7 @@ class RunManager(object):
         pool.join()
 
         if should_run_hooks:
-            self.run_hooks(profile, flat_graph, dbt.utils.RunHookTypes.End)
+            self.run_hooks(profile, flat_graph, dbt.utils.RunHookType.End)
 
         execution_time = time.time() - start_time
 

@@ -31,7 +31,7 @@ class NodeType(object):
     Operation = 'operation'
 
 
-class RunHookTypes:
+class RunHookType:
     Start = 'on-run-start'
     End = 'on-run-end'
     Both = [Start, End]

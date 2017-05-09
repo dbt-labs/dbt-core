@@ -380,7 +380,7 @@ def load_and_parse_run_hook_type(root_project, all_projects, hook_type):
 
 def load_and_parse_run_hooks(root_project, all_projects):
     hook_nodes = {}
-    for hook_type in dbt.utils.RunHookTypes.Both:
+    for hook_type in dbt.utils.RunHookType.Both:
         project_hooks = load_and_parse_run_hook_type(root_project,
                                                      all_projects,
                                                      hook_type)
