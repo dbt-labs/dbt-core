@@ -34,7 +34,7 @@ class NodeType(object):
 class RunHookTypes:
     Start = 'on-run-start'
     End = 'on-run-end'
-    Both = [RunHookTypes.Start, RunHookTypes.End]
+    Both = [Start, End]
 
 
 class This(object):
