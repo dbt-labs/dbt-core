@@ -30,6 +30,6 @@ Everyone interacting in the dbt project's codebases, issue trackers, chat rooms,
 
 [PyPA Code of Conduct]: https://www.pypa.io/en/latest/code-of-conduct/
 [slack-url]: http://ac-slackin.herokuapp.com/
-[Installation]: http://dbt.readthedocs.io/en/master/guide/setup/
-[What is dbt]: http://dbt.readthedocs.io/en/master/about/overview/
-[dbt viewpoint]: http://dbt.readthedocs.io/en/master/about/viewpoint/
+[Installation]: https://dbt.readme.io/docs/installation
+[What is dbt]: https://dbt.readme.io/docs/overview
+[dbt viewpoint]: https://dbt.readme.io/docs/viewpoint
