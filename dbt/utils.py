@@ -112,10 +112,11 @@ class Var(object):
         elif var_name in self.local_vars:
             raw = self.local_vars[var_name]
             if raw is None:
+                model_name = get_model_name_or_none(self.model)
                 compiler_error(
                     self.model,
                     self.NoneVarError.format(
-                        var_name, self.model.nice_name, pretty_vars
+                        var_name, model_name, pretty_vars
                     )
                 )
 
