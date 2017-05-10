@@ -1,8 +1,27 @@
-## dbt 0.8.1 (Unreleased)
+## dbt 0.8.1 (May 10, 2017)
+
+
+### Overview
+- Bugfixes
+- Reintroduce `compile` command
+- Moved docs to [readme.io](https://dbt.readme.io/v0.8.1)
+
 
 ### Bugfixes
 
 - Fix bug preventing overriding a disabled package model in the current project ([#391](https://github.com/fishtown-analytics/dbt/pull/391))
+- Fix bug which prevented multiple sort keys (provided as an array) on Redshift ([#397](https://github.com/fishtown-analytics/dbt/pull/397))
+- Fix race condition while compiling schema tests in an empty `target` directory ([#398](https://github.com/fishtown-analytics/dbt/pull/398))
+
+### Changes
+
+- Reintroduce dbt `compile` command ([#407](https://github.com/fishtown-analytics/dbt/pull/407))
+- Compile `on-run-start` and `on-run-end` hooks to a file ([#412](https://github.com/fishtown-analytics/dbt/pull/412))
+
+### Documentation
+- Move docs to readme.io ([#414](https://github.com/fishtown-analytics/dbt/pull/414))
+- Add docs for event tracking opt-out ([#399](https://github.com/fishtown-analytics/dbt/issues/399))
+
 
 ## dbt 0.8.0 (April 17, 2017)
 
