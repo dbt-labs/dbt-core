@@ -82,7 +82,7 @@ def compiler_warning(model, msg):
 class Var(object):
     UndefinedVarError = "Required var '{}' not found in config:\nVars "\
                         "supplied to {} = {}"
-    NoneVarError = "Supplied var '{}' is undefined in config:\nVars supplied"\
+    NoneVarError = "Supplied var '{}' is undefined in config:\nVars supplied "\
                    "to {} = {}"
 
     def __init__(self, model, context):
