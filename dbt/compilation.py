@@ -1,3 +1,4 @@
+import itertools
 import os
 from collections import OrderedDict, defaultdict
 import sqlparse
@@ -8,18 +9,16 @@ import dbt.include
 import dbt.wrapper
 import dbt.tracking
 
-from dbt.model import Model
-from dbt.utils import This, Var, is_enabled, get_materialization, NodeType, \
-    is_type
+from dbt.utils import This, Var, get_materialization, NodeType, is_type
 
 from dbt.linker import Linker
-from dbt.runtime import RuntimeContext
 
 import dbt.compat
 import dbt.contracts.graph.compiled
 import dbt.contracts.project
 import dbt.exceptions
 import dbt.flags
+import dbt.loader
 import dbt.parser
 
 from dbt.adapters.factory import get_adapter
@@ -382,115 +381,14 @@ class Compiler(object):
 
         return all_projects
 
-    def get_parsed_macros(self, root_project, all_projects):
-        parsed_macros = {}
-
-        for name, project in all_projects.items():
-            parsed_macros.update(
-                dbt.parser.load_and_parse_macros(
-                    package_name=name,
-                    root_project=root_project,
-                    all_projects=all_projects,
-                    root_dir=project.get('project-root'),
-                    relative_dirs=project.get('macro-paths', []),
-                    resource_type=NodeType.Macro))
-
-        return parsed_macros
-
-    def get_parsed_models(self, root_project, all_projects):
-        parsed_models = {}
-
-        for name, project in all_projects.items():
-            parsed_models.update(
-                dbt.parser.load_and_parse_sql(
-                    package_name=name,
-                    root_project=root_project,
-                    all_projects=all_projects,
-                    root_dir=project.get('project-root'),
-                    relative_dirs=project.get('source-paths', []),
-                    resource_type=NodeType.Model))
-
-        return parsed_models
-
-    def get_parsed_analyses(self, root_project, all_projects):
-        parsed_models = {}
-
-        for name, project in all_projects.items():
-            parsed_models.update(
-                dbt.parser.load_and_parse_sql(
-                    package_name=name,
-                    root_project=root_project,
-                    all_projects=all_projects,
-                    root_dir=project.get('project-root'),
-                    relative_dirs=project.get('analysis-paths', []),
-                    resource_type=NodeType.Analysis))
-
-        return parsed_models
-
-    def get_parsed_data_tests(self, root_project, all_projects):
-        parsed_tests = {}
-
-        for name, project in all_projects.items():
-            parsed_tests.update(
-                dbt.parser.load_and_parse_sql(
-                    package_name=name,
-                    root_project=root_project,
-                    all_projects=all_projects,
-                    root_dir=project.get('project-root'),
-                    relative_dirs=project.get('test-paths', []),
-                    resource_type=NodeType.Test,
-                    tags={'data'}))
-
-        return parsed_tests
-
-    def get_parsed_schema_tests(self, root_project, all_projects):
-        parsed_tests = {}
-
-        for name, project in all_projects.items():
-            parsed_tests.update(
-                dbt.parser.load_and_parse_yml(
-                    package_name=name,
-                    root_project=root_project,
-                    all_projects=all_projects,
-                    root_dir=project.get('project-root'),
-                    relative_dirs=project.get('source-paths', [])))
-
-        return parsed_tests
-
-    def load_all_macros(self, root_project, all_projects):
-        return self.get_parsed_macros(root_project, all_projects)
-
-    def load_all_nodes(self, root_project, all_projects):
-        all_nodes = {}
-
-        all_nodes.update(self.get_parsed_models(root_project, all_projects))
-        all_nodes.update(self.get_parsed_analyses(root_project, all_projects))
-        all_nodes.update(
-            self.get_parsed_data_tests(root_project, all_projects))
-        all_nodes.update(
-            self.get_parsed_schema_tests(root_project, all_projects))
-        all_nodes.update(
-            dbt.parser.parse_archives_from_projects(root_project,
-                                                    all_projects))
-        all_nodes.update(
-            dbt.parser.load_and_parse_run_hooks(root_project, all_projects))
-
-        return all_nodes
-
     def compile(self):
         linker = Linker()
 
         root_project = self.project.cfg
         all_projects = self.get_all_projects()
 
-        all_macros = self.load_all_macros(root_project, all_projects)
-
-        all_nodes = self.load_all_nodes(root_project, all_projects)
-
-        flat_graph = {
-            'nodes': all_nodes,
-            'macros': all_macros
-        }
+        flat_graph = dbt.loader.GraphLoader.load_all(
+            root_project, all_projects)
 
         flat_graph = dbt.parser.process_refs(flat_graph,
                                              root_project.get('name'))
@@ -499,10 +397,9 @@ class Compiler(object):
 
         stats = defaultdict(int)
 
-        for node_name, node in linked_graph.get('nodes').items():
-            stats[node.get('resource_type')] += 1
-
-        for node_name, node in linked_graph.get('macros').items():
+        for node_name, node in itertools.chain(
+                linked_graph.get('nodes').items(),
+                linked_graph.get('macros').items()):
             stats[node.get('resource_type')] += 1
 
         self.write_graph_file(linker)
