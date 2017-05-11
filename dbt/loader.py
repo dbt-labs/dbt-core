@@ -39,12 +39,12 @@ class ResourceLoader(object):
 
     @classmethod
     def load_all(cls, root_project, all_projects):
-        for project_name, project_config in all_projects.items():
+        for project_name, project in all_projects.items():
             cls.load_project(root_project, all_projects,
-                             project_config, project_name)
+                             project, project_name)
 
     @classmethod
-    def load_project(root_project, all_projects, project_config, project_name):
+    def load_project(root_project, all_projects, project, project_name):
         raise dbt.exceptions.NotImplementedException(
             'load_project is not implemented for this loader!')
 
@@ -52,69 +52,64 @@ class ResourceLoader(object):
 class MacroLoader(ResourceLoader):
 
     @classmethod
-    def load_project(cls, root_project, all_projects, project_config,
-                     project_name):
+    def load_project(cls, root_project, all_projects, project, project_name):
         return dbt.parser.load_and_parse_macros(
             package_name=project_name,
             root_project=root_project,
             all_projects=all_projects,
-            root_dir=project_config.get('project-root'),
-            relative_dirs=project_config.get('macro-paths', []),
+            root_dir=project.get('project-root'),
+            relative_dirs=project.get('macro-paths', []),
             resource_type=NodeType.Macro)
 
 
 class ModelLoader(ResourceLoader):
 
     @classmethod
-    def load_project(cls, root_project, all_projects, project_config,
-                     project_name):
+    def load_project(cls, root_project, all_projects, project, project_name):
         return dbt.parser.load_and_parse_sql(
                 package_name=project_name,
                 root_project=root_project,
                 all_projects=all_projects,
-                root_dir=project_config.get('project-root'),
-                relative_dirs=project_config.get('source-paths', []),
+                root_dir=project.get('project-root'),
+                relative_dirs=project.get('source-paths', []),
                 resource_type=NodeType.Model)
 
 
 class AnalysisLoader(ResourceLoader):
 
     @classmethod
-    def load_project(cls, root_project, all_projects, project_config,
-                     project_name):
+    def load_project(cls, root_project, all_projects, project, project_name):
         return dbt.parser.load_and_parse_sql(
             package_name=project_name,
             root_project=root_project,
             all_projects=all_projects,
-            root_dir=project_config.get('project-root'),
-            relative_dirs=project_config.get('analysis-paths', []),
+            root_dir=project.get('project-root'),
+            relative_dirs=project.get('analysis-paths', []),
             resource_type=NodeType.Analysis)
 
 
 class SchemaTestLoader(ResourceLoader):
 
     @classmethod
-    def load_project(cls, root_project, all_projects, project_config,
-                     project_name):
+    def load_project(cls, root_project, all_projects, project, project_name):
         return dbt.parser.load_and_parse_yml(
             package_name=project_name,
             root_project=root_project,
             all_projects=all_projects,
-            root_dir=project_config.get('project-root'),
-            relative_dirs=project_config.get('source-paths', []))
+            root_dir=project.get('project-root'),
+            relative_dirs=project.get('source-paths', []))
 
 
 class DataTestLoader(ResourceLoader):
 
     @classmethod
-    def load_project(cls, root_project, all_projects, project_config,
-                     project_name):
+    def load_project(cls, root_project, all_projects, project, project_name):
         return dbt.parser.load_and_parse_sql(
             package_name=project_name,
             root_project=root_project,
             all_projects=all_projects,
-            root_dir=project_config.get('project-root'),
-            relative_dirs=project_config.get('test-paths', []),
+            root_dir=project.get('project-root'),
+            relative_dirs=project.get('test-paths', []),
             resource_type=NodeType.Test,
             tags={'data'})
 
@@ -122,8 +117,7 @@ class DataTestLoader(ResourceLoader):
 class ArchiveLoader(ResourceLoader):
 
     @classmethod
-    def load_project(cls, root_project, all_projects, project_config,
-                     project_name):
+    def load_project(cls, root_project, all_projects, project, project_name):
         return dbt.parser.parse_archives_from_projects(root_project,
                                                        all_projects)
 
@@ -131,8 +125,7 @@ class ArchiveLoader(ResourceLoader):
 class RunHookLoader(ResourceLoader):
 
     @classmethod
-    def load_project(cls, root_project, all_projects, project_config,
-                     project_name):
+    def load_project(cls, root_project, all_projects, project, project_name):
         return dbt.parser.load_and_parse_run_hooks(root_project, all_projects)
 
 
