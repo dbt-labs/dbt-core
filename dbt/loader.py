@@ -39,9 +39,13 @@ class ResourceLoader(object):
 
     @classmethod
     def load_all(cls, root_project, all_projects):
+        to_return = {}
+
         for project_name, project in all_projects.items():
-            cls.load_project(root_project, all_projects,
-                             project, project_name)
+            to_return.update(cls.load_project(root_project, all_projects,
+                                              project, project_name))
+
+        return to_return
 
     @classmethod
     def load_project(root_project, all_projects, project, project_name):
