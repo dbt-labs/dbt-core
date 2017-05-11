@@ -18,7 +18,8 @@ class GraphLoader(object):
             subgraph_nodes = {}
 
             for loader in cls._LOADERS[subgraph]:
-                subgraph_nodes.update(loader.load_all(root_project, all_projects))
+                subgraph_nodes.update(
+                    loader.load_all(root_project, all_projects))
 
             to_return[subgraph] = subgraph_nodes
 
