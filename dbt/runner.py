@@ -72,6 +72,11 @@ def print_skip_line(model, schema, relation, index, num_models):
     print_fancy_output_line(msg, 'SKIP', index, num_models)
 
 
+def print_cancel_line(model, schema):
+    msg = 'CANCEL query {}.{}'.format(schema, model)
+    print_fancy_output_line(msg, 'CANCEL', None, None)
+
+
 def print_counts(flat_nodes):
     counts = {}
 
@@ -706,23 +711,23 @@ class RunManager(object):
                 res = pool.apply_async(action, [args])
                 results.append(res)
 
-            canceled = False
             for async_result in results:
                 try:
                     result = async_result.get()
                 except KeyboardInterrupt:
+                    pool.close()
+                    pool.terminate()
+
                     profile = self.project.run_environment()
                     adapter = get_adapter(profile)
 
                     connections = adapter.get_connections_in_use(profile)
                     for connection in connections:
-                        print_timestamped_line('Cancelling {}'.format(connection))
                         adapter.cancel_connection(profile, connection)
+                        print_cancel_line(connection, schema_name)
 
-                    print_timestamped_line("Cancelled {} queries".format(len(connections)))
-                    canceled = True
-                    break
-
+                    pool.join()
+                    raise
 
                 node_results.append(result)
 
@@ -736,22 +741,16 @@ class RunManager(object):
                 if result.errored:
                     on_failure(result.node)
                     logger.info(result.error)
-            if canceled:
-                break
 
         pool.close()
         pool.join()
 
-        if should_run_hooks and not canceled:
+        if should_run_hooks:
             self.run_hooks(profile, flat_graph, dbt.utils.RunHookType.End)
 
         execution_time = time.time() - start_time
 
-        if canceled:
-            print_timestamped_line("Canceled at user's request")
-            return None
-
-        elif should_execute:
+        if should_execute:
             print_results_line(node_results, execution_time)
 
         return node_results
