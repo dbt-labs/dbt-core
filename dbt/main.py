@@ -20,6 +20,9 @@ import dbt.tracking
 import dbt.config as config
 import dbt.adapters.cache as adapter_cache
 
+import colorama
+colorama.init()
+
 
 def main(args=None):
     if args is None:

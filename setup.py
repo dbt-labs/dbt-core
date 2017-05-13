@@ -40,5 +40,6 @@ setup(
         'celery==3.1.23',
         'voluptuous==0.9.3',
         'snowflake-connector-python==1.3.15',
+        'colorama==0.3.9'
     ],
 )

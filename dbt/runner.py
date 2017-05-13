@@ -22,6 +22,10 @@ import dbt.model
 
 from multiprocessing.dummy import Pool as ThreadPool
 
+
+from colorama import Fore, Back, Style
+
+
 ABORTED_TRANSACTION_STRING = ("current transaction is aborted, commands "
                               "ignored until end of transaction block")
 
@@ -60,15 +64,18 @@ def print_fancy_output_line(msg, status, index, total, execution_time=None):
         status_time = " in {execution_time:0.2f}s".format(
             execution_time=execution_time)
 
+    colors = {"ERROR" : Fore.RED, "SKIP" : Fore.YELLOW}
+    status_txt = colors.get(status, Fore.GREEN) + status + Style.RESET_ALL
     output = "{justified} [{status}{status_time}]".format(
-        justified=justified, status=status, status_time=status_time)
+        justified=justified, status=status_txt, status_time=status_time)
 
     logger.info(output)
 
 
 def print_skip_line(model, schema, relation, index, num_models):
     msg = 'SKIP relation {}.{}'.format(schema, relation)
-    print_fancy_output_line(msg, 'SKIP', index, num_models)
+    skip_txt = Fore.YELLOW + 'SKIP' + Style.RESET_ALL
+    print_fancy_output_line(msg, skip_txt, index, num_models)
 
 
 def print_counts(flat_nodes):
@@ -137,22 +144,32 @@ def print_result_line(result, schema_name, index, total):
 def print_test_result_line(result, schema_name, index, total):
     model = result.node
     info = 'PASS'
+    color = Fore.GREEN
 
     if result.errored:
         info = "ERROR"
+        color = Fore.RED
+
     elif result.status > 0:
         info = 'FAIL {}'.format(result.status)
+        color = Fore.RED
+
         result.fail = True
     elif result.status == 0:
         info = 'PASS'
+        color = Fore.GREEN
+
     else:
         raise RuntimeError("unexpected status: {}".format(result.status))
 
+    info_text = color + info + Style.RESET_ALL
+
+
     print_fancy_output_line(
         "{info} {name}".format(
-            info=info,
+            info=info_text,
             name=model.get('name')),
-        info,
+        info_text,
         index,
         total,
         result.execution_time)
