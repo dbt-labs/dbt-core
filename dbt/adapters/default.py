@@ -288,6 +288,27 @@ class DefaultAdapter(object):
         return cls.get_connection(profile, name)
 
     @classmethod
+    def get_connections_in_use(cls, profile):
+        global connections_in_use
+
+        return set(connections_in_use.keys()) - {'master'}
+
+    @classmethod
+    def cancel_connection(cls, profile, connection_name):
+
+        master = cls.get_connection(profile, 'master')
+
+        connection = connections_in_use.get(connection_name)
+        if connection:
+            pid = connection.get('handle').get_backend_pid()
+            sql = "select pg_terminate_backend({})".format(pid)
+            logger.debug("Cancelling query '{}' ({})".format(connection_name, pid))
+            cls.execute_one(profile, sql, 'master')
+
+            cls.commit_if_has_connection(profile, 'master')
+
+
+    @classmethod
     def total_connections_allocated(cls):
         global connections_in_use, connections_available
 

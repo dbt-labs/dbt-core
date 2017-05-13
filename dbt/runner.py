@@ -21,6 +21,7 @@ import dbt.graph.selector
 import dbt.model
 
 from multiprocessing.dummy import Pool as ThreadPool
+import signal
 
 ABORTED_TRANSACTION_STRING = ("current transaction is aborted, commands "
                               "ignored until end of transaction block")
@@ -699,15 +700,33 @@ class RunManager(object):
             else:
                 action = self.safe_compile_node
 
-            for result in pool.imap_unordered(
-                    action,
-                    [(node, flat_graph, existing, schema_name,
-                      get_idx(node), num_nodes,)
-                     for node in nodes_to_execute]):
+            results = []
+            for node in nodes_to_execute:
+                args = (node, flat_graph, existing, schema_name, get_idx(node), num_nodes,)
+                res = pool.apply_async(action, [args])
+                results.append(res)
+
+            canceled = False
+            for async_result in results:
+                try:
+                    result = async_result.get()
+                except KeyboardInterrupt:
+                    profile = self.project.run_environment()
+                    adapter = get_adapter(profile)
+
+                    connections = adapter.get_connections_in_use(profile)
+                    for connection in connections:
+                        print_timestamped_line('Cancelling {}'.format(connection))
+                        adapter.cancel_connection(profile, connection)
+
+                    print_timestamped_line("Cancelled {} queries".format(len(connections)))
+                    canceled = True
+                    break
+
 
                 node_results.append(result)
 
-                # propagate so that CTEs get injected properly
+                ## propagate so that CTEs get injected properly
                 flat_graph['nodes'][result.node.get('unique_id')] = result.node
 
                 index = get_idx(result.node)
@@ -717,16 +736,22 @@ class RunManager(object):
                 if result.errored:
                     on_failure(result.node)
                     logger.info(result.error)
+            if canceled:
+                break
 
         pool.close()
         pool.join()
 
-        if should_run_hooks:
+        if should_run_hooks and not canceled:
             self.run_hooks(profile, flat_graph, dbt.utils.RunHookType.End)
 
         execution_time = time.time() - start_time
 
-        if should_execute:
+        if canceled:
+            print_timestamped_line("Canceled at user's request")
+            return None
+
+        elif should_execute:
             print_results_line(node_results, execution_time)
 
         return node_results
