@@ -72,9 +72,9 @@ def print_skip_line(model, schema, relation, index, num_models):
     print_fancy_output_line(msg, 'SKIP', index, num_models)
 
 
-def print_cancel_line(model, schema):
-    msg = 'CANCEL query {}.{}'.format(schema, model)
-    print_fancy_output_line(msg, 'CANCEL', None, None)
+def print_cancel_line(model, schema, relation, index, num_models):
+    msg = 'CANCEL query {}.{}'.format(schema, relation)
+    print_fancy_output_line(msg, 'CANCEL', index, num_models)
 
 
 def print_counts(flat_nodes):
@@ -705,13 +705,17 @@ class RunManager(object):
             else:
                 action = self.safe_compile_node
 
-            results = []
+            results = {}
             for node in nodes_to_execute:
                 args = (node, flat_graph, existing, schema_name, get_idx(node), num_nodes,)
                 res = pool.apply_async(action, [args])
-                results.append(res)
+                node_id = node.get('unique_id')
+                results[node_id] = {'node': node, 'result': res}
 
-            for async_result in results:
+            for node_id, data in results.items():
+                async_result = data['result']
+                node = data['node']
+
                 try:
                     result = async_result.get()
                 except KeyboardInterrupt:
@@ -722,7 +726,7 @@ class RunManager(object):
                     adapter = get_adapter(profile)
 
                     for connection_name in adapter.cancel_open_connections(profile):
-                        print_cancel_line(connection_name, schema_name)
+                        print_cancel_line(node, schema_name, node.get('name'), get_idx(node), num_nodes)
 
                     pool.join()
                     raise
