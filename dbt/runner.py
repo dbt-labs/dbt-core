@@ -721,10 +721,8 @@ class RunManager(object):
                     profile = self.project.run_environment()
                     adapter = get_adapter(profile)
 
-                    connections = adapter.get_connections_in_use(profile)
-                    for connection in connections:
-                        adapter.cancel_connection(profile, connection)
-                        print_cancel_line(connection, schema_name)
+                    for connection_name in adapter.cancel_open_connections(profile):
+                        print_cancel_line(connection_name, schema_name)
 
                     pool.join()
                     raise
