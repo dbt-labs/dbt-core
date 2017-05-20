@@ -7,7 +7,7 @@ import dbt.clients.system
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
-STARTER_REPO = 'https://github.com/drewbanin/dbt-first-time-flow.git'
+STARTER_REPO = 'https://github.com/fishtown-analytics/dbt-starter-project.git'
 DOCS_URL = 'https://dbt.readme.io/docs/configure-your-profile'
 SAMPLE_PROFILES_YML_FILE = 'https://github.com/fishtown-analytics/dbt/blob/master/sample.profiles.yml' #noqa
 
