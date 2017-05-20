@@ -1,66 +1,110 @@
 import pprint
 import os
 
-SAMPLE_CONFIG = """
-name: 'package_name'
-version: '1.0'
+import dbt.project
+import dbt.clients.git
+import dbt.clients.system
 
-source-paths: ["models"]   # paths with source code to compile
-analysis-paths: ["analysis"] # path with analysis files which are compiled, but
-                             # not run
-target-path: "target"      # path for compiled code
-clean-targets: ["target"]  # directories removed by the clean task
-test-paths: ["test"]       # where to store test results
-data-paths: ["data"]       # load CSVs from this directory with `dbt seed`
+from dbt.logger import GLOBAL_LOGGER as logger
 
-# specify per-model configs
-#models:
-#  package_name:             # define configs for this package (called
-#                            # "package_name" above)
-#    pardot:                 # assuming pardot is listed in models/
-#      enabled: false        # disable all pardot models except where overriden
-#      pardot_emails:        # override the configs for the pardot_emails model
-#        enabled: true       # enable this specific model
-#        materialized: true  # create a table instead of a view
+STARTER_REPO = 'https://github.com/drewbanin/dbt-first-time-flow.git'
+DOCS_URL = 'https://dbt.readme.io/docs/configure-your-profile'
+SAMPLE_PROFILES_YML_FILE = 'https://github.com/fishtown-analytics/dbt/blob/master/sample.profiles.yml' #noqa
 
-# uncomment below and add real repositories to add dependencies to this project
-#repositories:
-#  - "git@github.com:[your-org]/[some-repo-1]"
-#  - "git@github.com:[your-org]/[some-repo-2]"
+ON_COMPLETE_MESSAGE = """
+Your new dbt project "{project_name}" was created! If this is your first time
+using dbt, you'll need to set up your profiles.yml file -- this file will
+tell dbt how to connect to your database. You can find this file by running:
+
+  {open_cmd} {profiles_path}
+
+For more information on how to configure the profiles.yml file,
+please consult the dbt documentation here:
+
+  {docs_url}
+
+One more thing:
+
+Need help? Don't hesitate to reach out to us via GitHub issues or on Slack --
+There's a link to our Slack group in the GitHub Readme. Happy modeling!
 """
 
-GIT_IGNORE = """
-target/
-dbt_modules/
-"""
 
+STARTER_PROFILE = """
+# For more information on how to configure this file, please see:
+# {profiles_sample}
+
+default:
+  outputs:
+    dev:
+      type: redshift
+      threads: 1
+      host: 127.0.0.1
+      port: 5439
+      user: alice
+      pass: pa55word
+      dbname: warehouse
+      schema: dbt_alice
+    prod:
+      type: redshift
+      threads: 1
+      host: 127.0.0.1
+      port: 5439
+      user: alice
+      pass: pa55word
+      dbname: warehouse
+      schema: analytics
+""".format(profiles_sample=SAMPLE_PROFILES_YML_FILE)
 
 class InitTask:
     def __init__(self, args, project=None):
         self.args = args
         self.project = project
 
-    def __write(self, path, filename, contents):
-        file_path = os.path.join(path, filename)
+    def clone_starter_repo(self, project_name):
+        dbt.clients.git.clone(STARTER_REPO, '.', project_name)
+        dbt.clients.git.remove_remote(project_name)
 
-        with open(file_path, 'w') as fh:
-            fh.write(contents)
+    def create_profiles_dir(self, profiles_dir):
+        if not os.path.exists(profiles_dir):
+            dbt.clients.system.make_directory(profiles_dir)
+            return True
+        return False
+
+    def create_profiles_file(self, profiles_file):
+        if not os.path.exists(profiles_file):
+            dbt.clients.system.make_file(profiles_file, STARTER_PROFILE)
+            return True
+        return False
+
+    def get_addendum(self, project_name, profiles_path):
+        open_cmd = dbt.clients.system.open_dir_cmd()
+
+        return ON_COMPLETE_MESSAGE.format(
+            open_cmd=open_cmd,
+            project_name=project_name,
+            profiles_path=profiles_path,
+            docs_url=DOCS_URL
+        )
 
     def run(self):
         project_dir = self.args.project_name
+
+        profiles_dir = dbt.project.default_profiles_dir
+        profiles_file = os.path.join(profiles_dir, 'profiles.yml')
+
+        self.create_profiles_dir(profiles_dir)
+        self.create_profiles_file(profiles_file)
+
+        msg = "Creating dbt configuration folder at {}"
+        logger.info(msg.format(profiles_dir))
 
         if os.path.exists(project_dir):
             raise RuntimeError("directory {} already exists!".format(
                 project_dir
             ))
 
-        os.mkdir(project_dir)
+        self.clone_starter_repo(project_dir)
 
-        project_dir = self.args.project_name
-        self.__write(project_dir, 'dbt_project.yml', SAMPLE_CONFIG)
-        self.__write(project_dir, '.gitignore', GIT_IGNORE)
-
-        dirs = ['models', 'analysis', 'tests', 'data']
-        for dir_name in dirs:
-            dir_path = os.path.join(project_dir, dir_name)
-            os.mkdir(dir_path)
+        addendum = self.get_addendum(project_dir, profiles_dir)
+        logger.info(addendum)

@@ -2,6 +2,7 @@ import errno
 import fnmatch
 import os
 import os.path
+import sys
 
 
 def find_matching(root_path,
@@ -70,3 +71,25 @@ def make_directory(path):
                 pass
             else:
                 raise e
+
+
+def make_file(path, contents=''):
+    """
+    Make a file at `path` assuming that the directory it resides in already
+    exists. The file is saved with contents `contents`
+    """
+    with open(path, 'w') as fh:
+        fh.write(contents)
+
+
+def open_dir_cmd():
+    # https://docs.python.org/2/library/sys.html#sys.platform
+    # TODO : what is sys.platform when running thru git bash on windows?
+    if sys.platform == 'win32':
+        return 'start'
+
+    elif sys.platform == 'darwin':
+        return 'open'
+
+    else:
+        return 'xdg-open'
