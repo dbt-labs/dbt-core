@@ -54,6 +54,7 @@ default:
       pass: pa55word
       dbname: warehouse
       schema: analytics
+  target: dev
 """.format(profiles_sample=SAMPLE_PROFILES_YML_FILE)
 
 class InitTask:
