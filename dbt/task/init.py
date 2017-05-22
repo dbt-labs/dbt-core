@@ -1,4 +1,3 @@
-import pprint
 import os
 
 import dbt.project
@@ -9,7 +8,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 
 STARTER_REPO = 'https://github.com/fishtown-analytics/dbt-starter-project.git'
 DOCS_URL = 'https://dbt.readme.io/docs/configure-your-profile'
-SAMPLE_PROFILES_YML_FILE = 'https://github.com/fishtown-analytics/dbt/blob/master/sample.profiles.yml' #noqa
+SAMPLE_PROFILES_YML_FILE = 'https://github.com/fishtown-analytics/dbt/blob/master/sample.profiles.yml' # noqa
 
 ON_COMPLETE_MESSAGE = """
 Your new dbt project "{project_name}" was created! If this is your first time
@@ -56,6 +55,7 @@ default:
       schema: analytics
   target: dev
 """.format(profiles_sample=SAMPLE_PROFILES_YML_FILE)
+
 
 class InitTask:
     def __init__(self, args, project=None):
