@@ -275,23 +275,6 @@ def get_pseudo_hook_path(hook_name):
     path_parts = ['hooks', "{}.sql".format(hook_name)]
     return os.path.join(*path_parts)
 
-
-def get_run_status_line(results):
-    total = len(results)
-    errored = len([r for r in results if r.errored or r.failed])
-    skipped = len([r for r in results if r.skipped])
-    passed = total - errored - skipped
-
-    return (
-        "Done. PASS={passed} ERROR={errored} SKIP={skipped} TOTAL={total}"
-        .format(
-            total=total,
-            passed=passed,
-            errored=errored,
-            skipped=skipped
-        ))
-
-
 def get_nodes_by_tags(nodes, match_tags, resource_type):
     matched_nodes = []
     for node in nodes:
