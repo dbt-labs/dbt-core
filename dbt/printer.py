@@ -1,12 +1,9 @@
 
 from dbt.logger import GLOBAL_LOGGER as logger
-
 from dbt.utils import get_materialization, NodeType
-from dbt.compat import to_unicode
 
-from colorama import Fore, Back, Style
+from colorama import Fore, Style
 import time
-import string
 
 
 def get_timestamp():
@@ -185,17 +182,14 @@ def get_run_status_line(results):
     passed = total - errored - skipped
 
     if errored == 0:
-        penultimate_line = green('Completed successfully')
+        message = green('Completed successfully')
     else:
-        penultimate_line = red('Completed with errors')
+        message = red('Completed with errors')
 
-    return (
-        "\n{status}\nDone. PASS={passed} ERROR={errored} SKIP={skipped} TOTAL={total}"
-        .format(
-            status=penultimate_line,
-            total=total,
-            passed=passed,
-            errored=errored,
-            skipped=skipped
-        ))
+    stats = "Done. PASS={passed} ERROR={errored} SKIP={skipped} TOTAL={total}"
+    stats = stats.format(total=total,
+                         passed=passed,
+                         errored=errored,
+                         skipped=skipped)
 
+    return "{}\n{}".format(message, stats)

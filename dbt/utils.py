@@ -209,7 +209,6 @@ def dependency_projects(project):
 
 
 def split_path(path):
-    norm = os.path.normpath(path)
     return path.split(os.sep)
 
 
@@ -274,6 +273,7 @@ def get_pseudo_test_path(node_name, source_path, test_type):
 def get_pseudo_hook_path(hook_name):
     path_parts = ['hooks', "{}.sql".format(hook_name)]
     return os.path.join(*path_parts)
+
 
 def get_nodes_by_tags(nodes, match_tags, resource_type):
     matched_nodes = []

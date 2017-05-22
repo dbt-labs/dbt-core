@@ -25,6 +25,10 @@ from multiprocessing.dummy import Pool as ThreadPool
 ABORTED_TRANSACTION_STRING = ("current transaction is aborted, commands "
                               "ignored until end of transaction block")
 
+INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If \
+the error persists, open an issue at https://github.com/fishtown-analytics/dbt
+""".strip()
+
 
 def get_hash(model):
     return hashlib.md5(model.get('unique_id').encode('utf-8')).hexdigest()
@@ -404,10 +408,13 @@ class RunManager(object):
                 error=str(e),
                 status='ERROR')
 
-        except (RuntimeError, dbt.exceptions.ProgrammingException, psycopg2.ProgrammingError, psycopg2.InternalError) as e: # noqa
-            prefix = dbt.printer.red("Error executing {filepath}\n".format(
-                filepath=node.get('build_path')))
-            error = "{prefix}{error}".format(prefix=prefix, error=str(e).strip())
+        except (RuntimeError,
+                dbt.exceptions.ProgrammingException,
+                psycopg2.ProgrammingError,
+                psycopg2.InternalError) as e:
+
+            prefix = "Error executing {}\n".format(node.get('build_path'))
+            error = "{}{}".format(dbt.printer.red(prefix), str(e).strip())
 
             status = "ERROR"
             logger.debug(error)
@@ -419,22 +426,29 @@ class RunManager(object):
                     status="SKIP")
 
         except dbt.exceptions.InternalException as e:
-            prefix= 'Internal error executing {filepath}'.format(
-                         filepath=node.get('build_path'))
-            error = ("{prefix}\n\n{error}"
-                     "\n\nThis is an error in dbt. Please try again. If "
-                     "the error persists, open an issue at "
-                     "https://github.com/fishtown-analytics/dbt").format(
+
+            build_path = node.get('build_path')
+            prefix = 'Internal error executing {}'.format(build_path)
+
+            error = "{prefix}\n{error}\n\n{note}".format(
                          prefix=dbt.printer.red(prefix),
-                         error=str(e).strip())
+                         error=str(e).strip(),
+                         note=INTERNAL_ERROR_STRING)
+            logger.debug(error)
+
             status = "ERROR"
 
         except Exception as e:
-            error = ("Unhandled error while executing {filepath}\n{error}"
-                     .format(
-                         filepath=node.get('build_path'),
-                         error=str(e).strip()))
+
+            prefix = "Unhandled error while executing {filepath}".format(
+                        filepath=node.get('build_path'))
+
+            error = "{prefix}\n{error}".format(
+                         prefix=dbt.printer.red(prefix),
+                         error=str(e).strip())
+
             logger.debug(error)
+
             raise e
 
         finally:
@@ -550,7 +564,7 @@ class RunManager(object):
             for i, node in enumerate([node for node in node_list
                                       if node.get('skip')]):
                 printer.print_skip_line(node, schema_name, node.get('name'),
-                                get_idx(node), num_nodes)
+                                        get_idx(node), num_nodes)
 
                 node_result = RunModelResult(node, skip=True)
                 node_results.append(node_result)
