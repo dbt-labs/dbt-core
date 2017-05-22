@@ -273,6 +273,13 @@ def parse_args(args):
     )
 
     sub = subs.add_parser('debug', parents=[base_subparser])
+    sub.add_argument(
+        '--config-dir',
+        action='store_true',
+        help="""
+        If specified, DBT will show path information for this project
+        """
+    )
     sub.set_defaults(cls=debug_task.DebugTask, which='debug')
 
     sub = subs.add_parser('deps', parents=[base_subparser])
