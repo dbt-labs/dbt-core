@@ -132,16 +132,21 @@ def print_test_result_line(result, schema_name, index, total):
         result.execution_time)
 
 
+def get_printable_result(result, success, error):
+    if result.errored:
+        info = 'ERROR {}'.format(error)
+        status = red(result.status)
+    else:
+        info = 'OK {}'.format(success)
+        status = green(result.status)
+
+    return info, status
+
+
 def print_archive_result_line(result, index, total):
     model = result.node
 
-    if result.errored:
-        info = 'ERROR archiving'
-        status = red(result.status)
-    else:
-        info = 'OK archived'
-        status = green(result.status)
-
+    info, status = get_printable_result(result, 'archived', 'archiving')
     cfg = model.get('config', {})
 
     print_fancy_output_line(
@@ -156,12 +161,7 @@ def print_archive_result_line(result, index, total):
 def print_model_result_line(result, schema_name, index, total):
     model = result.node
 
-    if result.errored:
-        info = 'ERROR creating'
-        status = red(result.status)
-    else:
-        info = 'OK created'
-        status = green(result.status)
+    info, status = get_printable_result(result, 'created', 'creating')
 
     print_fancy_output_line(
         "{info} {model_type} model {schema}.{relation}".format(
@@ -175,21 +175,34 @@ def print_model_result_line(result, schema_name, index, total):
         result.execution_time)
 
 
-def get_run_status_line(results):
-    total = len(results)
-    errored = len([r for r in results if r.errored or r.failed])
-    skipped = len([r for r in results if r.skipped])
-    passed = total - errored - skipped
+def interpret_run_result(result):
+    if result.errored or result.failed:
+        return 'error'
+    elif result.skipped:
+        return 'skip'
+    else:
+        return 'pass'
 
-    if errored == 0:
+
+def get_run_status_line(results):
+    stats = {
+        'error': 0,
+        'skip': 0,
+        'pass': 0,
+        'total': 0,
+    }
+
+    for r in results:
+        result_type = interpret_run_result(r)
+        stats[result_type] += 1
+        stats['total'] += 1
+
+    if stats['error'] == 0:
         message = green('Completed successfully')
     else:
         message = red('Completed with errors')
 
-    stats = "Done. PASS={passed} ERROR={errored} SKIP={skipped} TOTAL={total}"
-    stats = stats.format(total=total,
-                         passed=passed,
-                         errored=errored,
-                         skipped=skipped)
+    stats_line = "Done. PASS={pass} ERROR={error} SKIP={skip} TOTAL={total}"
+    stats_line = stats_line.format(**stats)
 
-    return "{}\n{}".format(message, stats)
+    return "{}\n{}".format(message, stats_line)
