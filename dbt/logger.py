@@ -12,16 +12,26 @@ logging.getLogger('requests').setLevel(logging.CRITICAL)
 logging.getLogger('urllib3').setLevel(logging.CRITICAL)
 logging.getLogger('snowflake.connector').setLevel(logging.CRITICAL)
 
-if sys.platform == 'win32' and not os.environ.get('TERM'):
-    colorama.init(wrap=False)
-    stdout = colorama.AnsiToWin32(sys.stdout).stream
-else:
-    colorama.init()
-    stdout = sys.stdout
 
+# Colorama needs some help on windows because we're using logger.info
+# intead of print(). If the Windows env doesn't have a TERM var set,
+# then we should override the logging stream to use the colorama
+# converter. If the TERM var is set (as with Git Bash), then it's safe
+# to send escape characters and no log handler injection is needed.
+colorama_stdout = sys.stdout
+colorama_wrap = True
+
+if sys.platform == 'win32' and not os.environ.get('TERM'):
+    colorama_wrap = False
+    colorama_stdout = colorama.AnsiToWin32(sys.stdout).stream
+
+elif sys.platform == 'win32':
+    colorama_wrap = False
+
+colorama.init(wrap=colorama_wrap)
 
 # create a global console logger for dbt
-stdout_handler = logging.StreamHandler(stdout)
+stdout_handler = logging.StreamHandler(colorama_stdout)
 stdout_handler.setFormatter(logging.Formatter('%(message)s'))
 stdout_handler.setLevel(logging.INFO)
 
