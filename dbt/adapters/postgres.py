@@ -158,3 +158,17 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         existing = [(name, relation_type) for (name, relation_type) in results]
 
         return dict(existing)
+
+    @classmethod
+    def cancel_connection(cls, profile, connection):
+        connection_name = connection.get('name')
+        pid = connection.get('handle').get_backend_pid()
+
+        sql = "select pg_terminate_backend({})".format(pid)
+
+        logger.debug("Cancelling query '{}' ({})".format(connection_name, pid))
+
+        _, cursor = cls.add_query(profile, sql, 'master')
+        res = cursor.fetchone()
+
+        logger.debug("Cancel query '{}': {}".format(connection_name, res))

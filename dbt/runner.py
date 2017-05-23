@@ -21,6 +21,7 @@ import dbt.graph.selector
 import dbt.model
 
 from multiprocessing.dummy import Pool as ThreadPool
+import signal
 
 ABORTED_TRANSACTION_STRING = ("current transaction is aborted, commands "
                               "ignored until end of transaction block")
@@ -69,6 +70,11 @@ def print_fancy_output_line(msg, status, index, total, execution_time=None):
 def print_skip_line(model, schema, relation, index, num_models):
     msg = 'SKIP relation {}.{}'.format(schema, relation)
     print_fancy_output_line(msg, 'SKIP', index, num_models)
+
+
+def print_cancel_line(model, schema, relation, index, num_models):
+    msg = 'CANCEL query {}.{}'.format(schema, relation)
+    print_fancy_output_line(msg, 'CANCEL', index, num_models)
 
 
 def print_counts(flat_nodes):
@@ -699,15 +705,35 @@ class RunManager(object):
             else:
                 action = self.safe_compile_node
 
-            for result in pool.imap_unordered(
-                    action,
-                    [(node, flat_graph, existing, schema_name,
-                      get_idx(node), num_nodes,)
-                     for node in nodes_to_execute]):
+            results = {}
+            for node in nodes_to_execute:
+                args = (node, flat_graph, existing, schema_name, get_idx(node), num_nodes,)
+                res = pool.apply_async(action, [args])
+                node_id = node.get('unique_id')
+                results[node_id] = {'node': node, 'result': res}
+
+            for node_id, data in results.items():
+                async_result = data['result']
+                node = data['node']
+
+                try:
+                    result = async_result.get()
+                except KeyboardInterrupt:
+                    pool.close()
+                    pool.terminate()
+
+                    profile = self.project.run_environment()
+                    adapter = get_adapter(profile)
+
+                    for connection_name in adapter.cancel_open_connections(profile):
+                        print_cancel_line(node, schema_name, node.get('name'), get_idx(node), num_nodes)
+
+                    pool.join()
+                    raise
 
                 node_results.append(result)
 
-                # propagate so that CTEs get injected properly
+                ## propagate so that CTEs get injected properly
                 flat_graph['nodes'][result.node.get('unique_id')] = result.node
 
                 index = get_idx(result.node)
