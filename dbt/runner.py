@@ -353,7 +353,12 @@ class RunManager(object):
         return node
 
     def safe_compile_node(self, data):
-        node, flat_graph, existing, schema_name, node_index, num_nodes = data
+        node = data['node']
+        flat_graph = data['flat_graph']
+        existing = data['existing']
+        schema_name = data['schema_name']
+        node_index = data['node_index']
+        num_nodes = data['num_nodes']
 
         result = RunModelResult(node)
         profile = self.project.run_environment()
@@ -369,7 +374,12 @@ class RunManager(object):
         return result
 
     def safe_execute_node(self, data):
-        node, flat_graph, existing, schema_name, node_index, num_nodes = data
+        node = data['node']
+        flat_graph = data['flat_graph']
+        existing = data['existing']
+        schema_name = data['schema_name']
+        node_index = data['node_index']
+        num_nodes = data['num_nodes']
 
         start_time = time.time()
 
@@ -502,6 +512,10 @@ class RunManager(object):
 
         return skip_dependent
 
+    def run_concurrently(self, pool, action, args_list):
+        for result in pool.imap_unordered(action, args_list):
+            yield result
+
     def execute_nodes(self, flat_graph, node_dependency_list, on_failure,
                       should_run_hooks=False, should_execute=True):
         profile = self.project.run_environment()
@@ -574,13 +588,21 @@ class RunManager(object):
             else:
                 action = self.safe_compile_node
 
+            node_result = []
             try:
-                for result in pool.imap_unordered(
-                    action,
-                    [(node, flat_graph, existing, schema_name,
-                      get_idx(node), num_nodes,)
-                     for node in nodes_to_execute]):
+                args_list = []
+                for node in nodes_to_execute:
+                    args_list.append({
+                        'node': node,
+                        'flat_graph': flat_graph,
+                        'existing': existing,
+                        'schema_name': schema_name,
+                        'node_index': get_idx(node),
+                        'num_nodes': num_nodes
+                    })
 
+                #args_list = [(node, flat_graph, existing, schema_name, get_idx(node), num_nodes,) for node in nodes_to_execute]
+                for result in self.run_concurrently(pool, action, args_list):
                     node_results.append(result)
 
                     # propagate so that CTEs get injected properly
