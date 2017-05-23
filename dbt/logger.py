@@ -3,6 +3,8 @@ import logging
 import os
 import sys
 
+import colorama
+
 # disable logs from other modules, excepting CRITICAL logs
 logging.getLogger('botocore').setLevel(logging.CRITICAL)
 logging.getLogger('contracts').setLevel(logging.CRITICAL)
@@ -10,8 +12,16 @@ logging.getLogger('requests').setLevel(logging.CRITICAL)
 logging.getLogger('urllib3').setLevel(logging.CRITICAL)
 logging.getLogger('snowflake.connector').setLevel(logging.CRITICAL)
 
+if sys.platform == 'win32' and not os.environ.get('TERM'):
+    colorama.init(wrap=False)
+    stdout = colorama.AnsiToWin32(sys.stdout).stream
+else:
+    colorama.init()
+    stdout = sys.stdout
+
+
 # create a global console logger for dbt
-stdout_handler = logging.StreamHandler(sys.stdout)
+stdout_handler = logging.StreamHandler(stdout)
 stdout_handler.setFormatter(logging.Formatter('%(message)s'))
 stdout_handler.setLevel(logging.INFO)
 

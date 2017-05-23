@@ -47,7 +47,7 @@ def handle(args):
         dbt.tracking.initialize_tracking()
 
     if profile_config.get('use_colors', True):
-        dbt.printer.initialize()
+        dbt.printer.use_colors()
 
     res = run_from_args(parsed)
     dbt.tracking.flush()

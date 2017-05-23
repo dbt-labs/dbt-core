@@ -5,20 +5,18 @@ from dbt.utils import get_materialization, NodeType
 import colorama
 import time
 
-use_colors = False
+USE_COLORS = False
 
-def initialize():
-    global use_colors
-    use_colors = True
-    colorama.init()
-
+def use_colors():
+    global USE_COLORS
+    USE_COLORS = True
 
 def get_timestamp():
     return time.strftime("%H:%M:%S")
 
 
 def color(text, color_code):
-    if use_colors:
+    if USE_COLORS:
         return "{}{}{}".format(color_code, text, colorama.Style.RESET_ALL)
     else:
         return text
