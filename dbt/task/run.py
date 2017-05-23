@@ -2,7 +2,7 @@ from __future__ import print_function
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.runner import RunManager
-import dbt.utils
+import dbt.ui.printer
 
 
 class RunTask:
@@ -18,4 +18,4 @@ class RunTask:
         results = runner.run_models(self.args.models, self.args.exclude)
 
         if results:
-            logger.info(dbt.utils.get_run_status_line(results))
+            logger.info(dbt.ui.printer.get_run_status_line(results))

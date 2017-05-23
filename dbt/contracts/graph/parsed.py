@@ -28,6 +28,8 @@ config_contract = {
     # adapter optional fields
     Optional('sort'): Any(basestring, list),
     Optional('dist'): basestring,
+
+    Optional('sort_type'): Any('compound', 'interleaved'),
 }
 
 parsed_node_contract = unparsed_node_contract.extend({

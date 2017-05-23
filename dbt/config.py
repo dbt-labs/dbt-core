@@ -25,14 +25,12 @@ def read_profile(profiles_dir):
 
 def read_config(profiles_dir):
     profile = read_profile(profiles_dir)
-    return profile.get('config')
+    return profile.get('config', {})
 
 
-def send_anonymous_usage_stats(profiles_dir):
-    config = read_config(profiles_dir)
+def send_anonymous_usage_stats(config):
+    return config.get('send_anonymous_usage_stats', True)
 
-    if config is not None \
-       and not config.get("send_anonymous_usage_stats", True):
-        return False
 
-    return True
+def colorize_output(config):
+    return config.get('use_colors', True)

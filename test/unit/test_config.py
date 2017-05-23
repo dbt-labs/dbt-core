@@ -17,15 +17,15 @@ class ConfigTest(unittest.TestCase):
         with open(profiles_path, 'w') as f:
             f.write(yaml.dump({}))
 
-    def set_up_config_options(self, send_anonymous_usage_stats=False):
+    def set_up_config_options(self, **kwargs):
         profiles_path = '{}/profiles.yml'.format(TMPDIR)
 
+        config = {
+            'config': kwargs
+        }
+
         with open(profiles_path, 'w') as f:
-            f.write(yaml.dump({
-                'config': {
-                    'send_anonymous_usage_stats': send_anonymous_usage_stats
-                }
-            }))
+            f.write(yaml.dump(config))
 
     def tearDown(self):
         profiles_path = '{}/profiles.yml'.format(TMPDIR)
@@ -37,12 +37,30 @@ class ConfigTest(unittest.TestCase):
 
     def test__implicit_opt_in(self):
         self.set_up_empty_config()
-        self.assertTrue(dbt.config.send_anonymous_usage_stats(TMPDIR))
+        config = dbt.config.read_config(TMPDIR)
+        self.assertTrue(dbt.config.send_anonymous_usage_stats(config))
 
     def test__explicit_opt_out(self):
         self.set_up_config_options(send_anonymous_usage_stats=False)
-        self.assertFalse(dbt.config.send_anonymous_usage_stats(TMPDIR))
+        config = dbt.config.read_config(TMPDIR)
+        self.assertFalse(dbt.config.send_anonymous_usage_stats(config))
 
     def test__explicit_opt_in(self):
         self.set_up_config_options(send_anonymous_usage_stats=True)
-        self.assertTrue(dbt.config.send_anonymous_usage_stats(TMPDIR))
+        config = dbt.config.read_config(TMPDIR)
+        self.assertTrue(dbt.config.send_anonymous_usage_stats(config))
+
+    def test__implicit_colors(self):
+        self.set_up_empty_config()
+        config = dbt.config.read_config(TMPDIR)
+        self.assertTrue(dbt.config.colorize_output(config))
+
+    def test__explicit_opt_out(self):
+        self.set_up_config_options(use_colors=False)
+        config = dbt.config.read_config(TMPDIR)
+        self.assertFalse(dbt.config.colorize_output(config))
+
+    def test__explicit_opt_in(self):
+        self.set_up_config_options(use_colors=True)
+        config = dbt.config.read_config(TMPDIR)
+        self.assertTrue(dbt.config.colorize_output(config))
