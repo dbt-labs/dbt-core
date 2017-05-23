@@ -7,9 +7,15 @@ import time
 
 USE_COLORS = False
 
+COLOR_FG_RED = colorama.Fore.RED
+COLOR_FG_GREEN = colorama.Fore.GREEN
+COLOR_FG_YELLOW = colorama.Fore.YELLOW
+
+
 def use_colors():
     global USE_COLORS
     USE_COLORS = True
+
 
 def get_timestamp():
     return time.strftime("%H:%M:%S")
@@ -23,15 +29,15 @@ def color(text, color_code):
 
 
 def green(text):
-    return color(text, colorama.Fore.GREEN)
+    return color(text, COLOR_FG_GREEN)
 
 
 def yellow(text):
-    return color(text, colorama.Fore.YELLOW)
+    return color(text, COLOR_FG_YELLOW)
 
 
 def red(text):
-    return color(text, colorama.Fore.RED)
+    return color(text, COLOR_FG_RED)
 
 
 def print_timestamped_line(msg):

@@ -17,7 +17,7 @@ import dbt.tracking
 import dbt.schema
 import dbt.graph.selector
 import dbt.model
-import dbt.printer as printer
+import dbt.printer
 
 from multiprocessing.dummy import Pool as ThreadPool
 
@@ -44,30 +44,30 @@ def is_enabled(model):
 
 def print_start_line(node, schema_name, index, total):
     if is_type(node, NodeType.Model):
-        printer.print_model_start_line(node, schema_name, index, total)
+        dbt.printer.print_model_start_line(node, schema_name, index, total)
     if is_type(node, NodeType.Test):
-        printer.print_test_start_line(node, schema_name, index, total)
+        dbt.printer.print_test_start_line(node, schema_name, index, total)
     if is_type(node, NodeType.Archive):
-        printer.print_archive_start_line(node, index, total)
+        dbt.printer.print_archive_start_line(node, index, total)
 
 
 def print_result_line(result, schema_name, index, total):
     node = result.node
 
     if is_type(node, NodeType.Model):
-        printer.print_model_result_line(result, schema_name, index, total)
+        dbt.printer.print_model_result_line(result, schema_name, index, total)
     elif is_type(node, NodeType.Test):
-        printer.print_test_result_line(result, schema_name, index, total)
+        dbt.printer.print_test_result_line(result, schema_name, index, total)
     elif is_type(node, NodeType.Archive):
-        printer.print_archive_result_line(result, index, total)
+        dbt.printer.print_archive_result_line(result, index, total)
 
 
 def print_results_line(results, execution_time):
     nodes = [r.node for r in results]
-    stat_line = printer.get_counts(nodes)
+    stat_line = dbt.printer.get_counts(nodes)
 
-    printer.print_timestamped_line("")
-    printer.print_timestamped_line(
+    dbt.printer.print_timestamped_line("")
+    dbt.printer.print_timestamped_line(
         "Finished running {stat_line} in {execution_time:0.2f}s."
         .format(stat_line=stat_line, execution_time=execution_time))
 
@@ -538,10 +538,10 @@ class RunManager(object):
         pool = ThreadPool(num_threads)
 
         if should_execute:
-            stat_line = printer.get_counts(flat_nodes)
+            stat_line = dbt.printer.get_counts(flat_nodes)
             logger.info("")
-            printer.print_timestamped_line("Running {}".format(stat_line))
-            printer.print_timestamped_line("")
+            dbt.printer.print_timestamped_line("Running {}".format(stat_line))
+            dbt.printer.print_timestamped_line("")
 
         start_time = time.time()
 
@@ -556,8 +556,9 @@ class RunManager(object):
         for node_list in node_dependency_list:
             for i, node in enumerate([node for node in node_list
                                       if node.get('skip')]):
-                printer.print_skip_line(node, schema_name, node.get('name'),
-                                        get_idx(node), num_nodes)
+                node_name = node.get('name')
+                dbt.printer.print_skip_line(node, schema_name, node_name,
+                                            get_idx(node), num_nodes)
 
                 node_result = RunModelResult(node, skip=True)
                 node_results.append(node_result)

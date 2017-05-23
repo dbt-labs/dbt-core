@@ -30,3 +30,7 @@ def read_config(profiles_dir):
 
 def send_anonymous_usage_stats(config):
     return config.get('send_anonymous_usage_stats', True)
+
+
+def colorize_output(config):
+    return config.get('use_colors', True)
