@@ -36,7 +36,6 @@ class TestTask:
         else:
             raise RuntimeError("unexpected")
 
-
         dbt.ui.printer.print_run_end_messages(results)
 
         return results
