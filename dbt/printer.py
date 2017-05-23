@@ -2,8 +2,15 @@
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import get_materialization, NodeType
 
-from colorama import Fore, Style
+import colorama
 import time
+
+use_colors = False
+
+def initialize():
+    global use_colors
+    use_colors = True
+    colorama.init()
 
 
 def get_timestamp():
@@ -11,19 +18,22 @@ def get_timestamp():
 
 
 def color(text, color_code):
-    return "{}{}{}".format(color_code, text, Style.RESET_ALL)
+    if use_colors:
+        return "{}{}{}".format(color_code, text, colorama.Style.RESET_ALL)
+    else:
+        return text
 
 
 def green(text):
-    return color(text, Fore.GREEN)
+    return color(text, colorama.Fore.GREEN)
 
 
 def yellow(text):
-    return color(text, Fore.YELLOW)
+    return color(text, colorama.Fore.YELLOW)
 
 
 def red(text):
-    return color(text, Fore.RED)
+    return color(text, colorama.Fore.RED)
 
 
 def print_timestamped_line(msg):

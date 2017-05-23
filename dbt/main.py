@@ -20,9 +20,7 @@ import dbt.tracking
 import dbt.config as config
 import dbt.adapters.cache as adapter_cache
 
-import colorama
-colorama.init()
-
+import dbt.printer
 
 def main(args=None):
     if args is None:
@@ -42,10 +40,14 @@ def handle(args):
 
     # this needs to happen after args are parsed so we can determine the
     # correct profiles.yml file
-    if not config.send_anonymous_usage_stats(parsed.profiles_dir):
+    profile_config = config.read_config(parsed.profiles_dir)
+    if not config.send_anonymous_usage_stats(profile_config):
         dbt.tracking.do_not_track()
     else:
         dbt.tracking.initialize_tracking()
+
+    if profile_config.get('use_colors', True):
+        dbt.printer.initialize()
 
     res = run_from_args(parsed)
     dbt.tracking.flush()
