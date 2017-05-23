@@ -595,7 +595,7 @@ class RunManager(object):
                     adapter = get_adapter(profile)
 
                     for connection_name in adapter.cancel_open_connections(profile):
-                        print_cancel_line(node, schema_name, node.get('name'), get_idx(node), num_nodes)
+                        dbt.ui.printer.print_cancel_line(connection_name, schema_name)
 
                     pool.join()
                     raise
