@@ -1,6 +1,6 @@
 from dbt.runner import RunManager
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
-import dbt.printer
+import dbt.ui.printer
 
 
 class ArchiveTask:
@@ -17,4 +17,4 @@ class ArchiveTask:
 
         results = runner.run_archives(['*'], [])
 
-        logger.info(dbt.printer.get_run_status_line(results))
+        logger.info(dbt.ui.printer.get_run_status_line(results))

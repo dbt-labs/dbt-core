@@ -17,7 +17,7 @@ import dbt.tracking
 import dbt.schema
 import dbt.graph.selector
 import dbt.model
-import dbt.printer
+import dbt.ui.printer
 
 from multiprocessing.dummy import Pool as ThreadPool
 
@@ -42,32 +42,32 @@ def is_enabled(model):
     return model.get('config', {}).get('enabled') is True
 
 
-def print_start_line(node, schema_name, index, total):
+def print_start_line(node, schema, index, total):
     if is_type(node, NodeType.Model):
-        dbt.printer.print_model_start_line(node, schema_name, index, total)
+        dbt.ui.printer.print_model_start_line(node, schema, index, total)
     if is_type(node, NodeType.Test):
-        dbt.printer.print_test_start_line(node, schema_name, index, total)
+        dbt.ui.printer.print_test_start_line(node, schema, index, total)
     if is_type(node, NodeType.Archive):
-        dbt.printer.print_archive_start_line(node, index, total)
+        dbt.ui.printer.print_archive_start_line(node, index, total)
 
 
-def print_result_line(result, schema_name, index, total):
+def print_result_line(result, schema, index, total):
     node = result.node
 
     if is_type(node, NodeType.Model):
-        dbt.printer.print_model_result_line(result, schema_name, index, total)
+        dbt.ui.printer.print_model_result_line(result, schema, index, total)
     elif is_type(node, NodeType.Test):
-        dbt.printer.print_test_result_line(result, schema_name, index, total)
+        dbt.ui.printer.print_test_result_line(result, schema, index, total)
     elif is_type(node, NodeType.Archive):
-        dbt.printer.print_archive_result_line(result, index, total)
+        dbt.ui.printer.print_archive_result_line(result, index, total)
 
 
 def print_results_line(results, execution_time):
     nodes = [r.node for r in results]
-    stat_line = dbt.printer.get_counts(nodes)
+    stat_line = dbt.ui.printer.get_counts(nodes)
 
-    dbt.printer.print_timestamped_line("")
-    dbt.printer.print_timestamped_line(
+    dbt.ui.printer.print_timestamped_line("")
+    dbt.ui.printer.print_timestamped_line(
         "Finished running {stat_line} in {execution_time:0.2f}s."
         .format(stat_line=stat_line, execution_time=execution_time))
 
@@ -404,7 +404,7 @@ class RunManager(object):
                 psycopg2.InternalError) as e:
 
             prefix = "Error executing {}\n".format(node.get('build_path'))
-            error = "{}{}".format(dbt.printer.red(prefix), str(e).strip())
+            error = "{}{}".format(dbt.ui.printer.red(prefix), str(e).strip())
 
             status = "ERROR"
             logger.debug(error)
@@ -421,7 +421,7 @@ class RunManager(object):
             prefix = 'Internal error executing {}'.format(build_path)
 
             error = "{prefix}\n{error}\n\n{note}".format(
-                         prefix=dbt.printer.red(prefix),
+                         prefix=dbt.ui.printer.red(prefix),
                          error=str(e).strip(),
                          note=INTERNAL_ERROR_STRING)
             logger.debug(error)
@@ -434,7 +434,7 @@ class RunManager(object):
                         filepath=node.get('build_path'))
 
             error = "{prefix}\n{error}".format(
-                         prefix=dbt.printer.red(prefix),
+                         prefix=dbt.ui.printer.red(prefix),
                          error=str(e).strip())
 
             logger.debug(error)
@@ -538,10 +538,12 @@ class RunManager(object):
         pool = ThreadPool(num_threads)
 
         if should_execute:
-            stat_line = dbt.printer.get_counts(flat_nodes)
+            stat_line = dbt.ui.printer.get_counts(flat_nodes)
+            full_line = "Running {}".format(stat_line)
+
             logger.info("")
-            dbt.printer.print_timestamped_line("Running {}".format(stat_line))
-            dbt.printer.print_timestamped_line("")
+            dbt.ui.printer.print_timestamped_line(full_line)
+            dbt.ui.printer.print_timestamped_line("")
 
         start_time = time.time()
 
@@ -557,8 +559,8 @@ class RunManager(object):
             for i, node in enumerate([node for node in node_list
                                       if node.get('skip')]):
                 node_name = node.get('name')
-                dbt.printer.print_skip_line(node, schema_name, node_name,
-                                            get_idx(node), num_nodes)
+                dbt.ui.printer.print_skip_line(node, schema_name, node_name,
+                                               get_idx(node), num_nodes)
 
                 node_result = RunModelResult(node, skip=True)
                 node_results.append(node_result)

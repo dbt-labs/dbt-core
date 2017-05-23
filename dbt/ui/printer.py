@@ -1,15 +1,16 @@
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import get_materialization, NodeType
+import dbt.ui.colors
 
-import colorama
 import time
 
 USE_COLORS = False
 
-COLOR_FG_RED = colorama.Fore.RED
-COLOR_FG_GREEN = colorama.Fore.GREEN
-COLOR_FG_YELLOW = colorama.Fore.YELLOW
+COLOR_FG_RED = dbt.ui.colors.COLORS['red']
+COLOR_FG_GREEN = dbt.ui.colors.COLORS['green']
+COLOR_FG_YELLOW = dbt.ui.colors.COLORS['yellow']
+COLOR_RESET_ALL = dbt.ui.colors.COLORS['reset_all']
 
 
 def use_colors():
@@ -23,7 +24,7 @@ def get_timestamp():
 
 def color(text, color_code):
     if USE_COLORS:
-        return "{}{}{}".format(color_code, text, colorama.Style.RESET_ALL)
+        return "{}{}{}".format(color_code, text, COLOR_RESET_ALL)
     else:
         return text
 

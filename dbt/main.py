@@ -19,7 +19,7 @@ import dbt.task.archive as archive_task
 import dbt.tracking
 import dbt.config as config
 import dbt.adapters.cache as adapter_cache
-import dbt.printer
+import dbt.ui.printer
 
 
 def main(args=None):
@@ -47,7 +47,7 @@ def handle(args):
         dbt.tracking.initialize_tracking()
 
     if dbt.config.colorize_output(profile_config):
-        dbt.printer.use_colors()
+        dbt.ui.printer.use_colors()
 
     res = run_from_args(parsed)
     dbt.tracking.flush()

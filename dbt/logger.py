@@ -2,7 +2,6 @@ import dbt.clients.system
 import logging
 import os
 import sys
-import re
 
 import colorama
 
@@ -48,12 +47,13 @@ def make_log_dir_if_missing(log_dir):
 
 
 class ColorFilter:
-    color_regexp = re.compile(r'\x1b\[[\d;]+m')
-
     @classmethod
     def filter(cls, line):
-        subbed = re.sub(cls.color_regexp, '', line.msg)
+        subbed = line.msg
+        for escape_sequence in dbt.ui.colors.COLORS.values():
+            subbed = subbed.replace(escape_sequence, '')
         line.msg = subbed
+
         return True
 
 
