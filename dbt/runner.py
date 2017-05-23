@@ -20,7 +20,6 @@ import dbt.model
 import dbt.ui.printer
 
 from multiprocessing.dummy import Pool as ThreadPool
-import signal
 
 
 ABORTED_TRANSACTION_STRING = ("current transaction is aborted, commands "
@@ -355,10 +354,6 @@ class RunManager(object):
     def safe_compile_node(self, data):
         node = data['node']
         flat_graph = data['flat_graph']
-        existing = data['existing']
-        schema_name = data['schema_name']
-        node_index = data['node_index']
-        num_nodes = data['num_nodes']
 
         result = RunModelResult(node)
         profile = self.project.run_environment()
@@ -601,12 +596,12 @@ class RunManager(object):
                         'num_nodes': num_nodes
                     })
 
-                #args_list = [(node, flat_graph, existing, schema_name, get_idx(node), num_nodes,) for node in nodes_to_execute]
                 for result in self.run_concurrently(pool, action, args_list):
                     node_results.append(result)
 
                     # propagate so that CTEs get injected properly
-                    flat_graph['nodes'][result.node.get('unique_id')] = result.node
+                    node_id = result.node.get('unique_id')
+                    flat_graph['nodes'][node_id] = result.node
 
                     index = get_idx(result.node)
                     if should_execute:
@@ -623,8 +618,8 @@ class RunManager(object):
                 profile = self.project.run_environment()
                 adapter = get_adapter(profile)
 
-                for connection_name in adapter.cancel_open_connections(profile):
-                    dbt.ui.printer.print_cancel_line(connection_name, schema_name)
+                for conn_name in adapter.cancel_open_connections(profile):
+                    dbt.ui.printer.print_cancel_line(conn_name, schema_name)
 
                 pool.join()
                 raise
