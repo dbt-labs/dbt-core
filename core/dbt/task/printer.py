@@ -48,30 +48,30 @@ def get_counts(flat_nodes) -> str:
 
 def interpret_run_result(result) -> str:
     if result.status in (NodeStatus.Error, NodeStatus.Fail):
-        return 'error'
+        return "error"
     elif result.status == NodeStatus.Skipped:
-        return 'skip'
+        return "skip"
     elif result.status == NodeStatus.Warn:
         return "warn"
     elif result.status in (NodeStatus.Pass, NodeStatus.Success):
-        return 'pass'
+        return "pass"
     else:
         raise RuntimeError(f"unhandled result {result}")
 
 
 def print_run_status_line(results) -> None:
     stats = {
-        'error': 0,
-        'skip': 0,
-        'pass': 0,
+        "error": 0,
+        "skip": 0,
+        "pass": 0,
         "warn": 0,
-        'total': 0,
+        "total": 0,
     }
 
     for r in results:
         result_type = interpret_run_result(r)
         stats[result_type] += 1
-        stats['total'] += 1
+        stats["total"] += 1
 
     with TextOnly():
         fire_event(EmptyLine())
