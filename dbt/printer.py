@@ -68,7 +68,7 @@ def print_skip_line(model, schema, relation, index, num_models):
     print_fancy_output_line(msg, yellow('SKIP'), index, num_models)
 
 
-def print_counts(flat_nodes):
+def get_counts(flat_nodes):
     counts = {}
 
     for node in flat_nodes:
@@ -82,9 +82,7 @@ def print_counts(flat_nodes):
     stat_line = ", ".join(
         ["{} {}s".format(v, k) for k, v in counts.items()])
 
-    logger.info("")
-    print_timestamped_line("Running {}".format(stat_line))
-    print_timestamped_line("")
+    return stat_line
 
 
 def print_test_start_line(model, schema_name, index, total):

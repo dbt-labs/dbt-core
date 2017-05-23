@@ -63,18 +63,8 @@ def print_result_line(result, schema_name, index, total):
 
 
 def print_results_line(results, execution_time):
-    stats = {}
-
-    for result in results:
-        t = result.node.get('resource_type')
-
-        if result.node.get('resource_type') == NodeType.Model:
-            t = '{} {}'.format(get_materialization(result.node), t)
-
-        stats[t] = stats.get(t, 0) + 1
-
-    stat_line = ", ".join(
-        ["{} {}s".format(ct, t) for t, ct in stats.items()])
+    nodes = [r.node for r in results]
+    stat_line = printer.get_counts(nodes)
 
     printer.print_timestamped_line("")
     printer.print_timestamped_line(
@@ -548,7 +538,10 @@ class RunManager(object):
         pool = ThreadPool(num_threads)
 
         if should_execute:
-            printer.print_counts(flat_nodes)
+            stat_line = printer.get_counts(flat_nodes)
+            logger.info("")
+            printer.print_timestamped_line("Running {}".format(stat_line))
+            printer.print_timestamped_line("")
 
         start_time = time.time()
 
