@@ -49,10 +49,10 @@ def make_log_dir_if_missing(log_dir):
 
 class ColorFilter(logging.Filter):
     def filter(self, record):
-        subbed = dbt.compat.basestring(line.msg)
+        subbed = dbt.compat.to_string(record.msg)
         for escape_sequence in dbt.ui.colors.COLORS.values():
             subbed = subbed.replace(escape_sequence, '')
-        line.msg = subbed
+        record.msg = subbed
 
         return True
 
@@ -80,7 +80,8 @@ def initialize_logger(debug_mode=False, path=None):
             backupCount=7,
         )
 
-        logdir_handler.addFilter(ColorFilter)
+        color_filter = ColorFilter()
+        logdir_handler.addFilter(color_filter)
 
         logdir_handler.setFormatter(
             logging.Formatter('%(asctime)-18s: %(message)s'))
