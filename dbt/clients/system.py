@@ -84,7 +84,6 @@ def make_file(path, contents=''):
 
 def open_dir_cmd():
     # https://docs.python.org/2/library/sys.html#sys.platform
-    # TODO : what is sys.platform when running thru git bash on windows?
     if sys.platform == 'win32':
         return 'start'
 
