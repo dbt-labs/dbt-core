@@ -36,6 +36,7 @@ class TestTask:
         else:
             raise RuntimeError("unexpected")
 
-        logger.info(dbt.ui.printer.get_run_status_line(results))
+
+        dbt.ui.printer.print_run_end_messages(results)
 
         return results

@@ -197,7 +197,7 @@ def interpret_run_result(result):
         return 'pass'
 
 
-def get_run_status_line(results):
+def print_run_status_line(results):
     stats = {
         'error': 0,
         'skip': 0,
@@ -210,12 +210,42 @@ def get_run_status_line(results):
         stats[result_type] += 1
         stats['total'] += 1
 
-    if stats['error'] == 0:
-        message = green('Completed successfully')
+    stats_line = "\nDone. PASS={pass} ERROR={error} SKIP={skip} TOTAL={total}"
+    logger.info(stats_line.format(**stats))
+
+
+def print_run_result_error(result):
+    node = result.node
+
+    if result.failed:
+        status = 'FAIL {}'.format(result.status)
     else:
-        message = red('Completed with errors')
+        status = result.status
 
-    stats_line = "Done. PASS={pass} ERROR={error} SKIP={skip} TOTAL={total}"
-    stats_line = stats_line.format(**stats)
+    msg = " - {status} in {type} {package_name}.{node_name} ({path})".format(
+        status=red(status),
+        type=node.get('resource_type'),
+        package_name=node.get('package_name'),
+        node_name=node.get('name'),
+        path=node.get('build_path')
+    )
+    logger.info(msg)
 
-    return "{}\n{}".format(message, stats_line)
+
+def print_end_of_run_summary(num_errors):
+    if num_errors > 0:
+        message = red('Completed with {} errors:'.format(num_errors))
+    else:
+        message = green('Completed successfully')
+
+    logger.info('\n{}'.format(message))
+
+
+def print_run_end_messages(results):
+    errors = [r for r in results if r.errored or r.failed]
+    print_end_of_run_summary(len(errors))
+
+    for error in errors:
+        print_run_result_error(error)
+
+    print_run_status_line(results)

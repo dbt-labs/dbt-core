@@ -17,4 +17,4 @@ class ArchiveTask:
 
         results = runner.run_archives(['*'], [])
 
-        logger.info(dbt.ui.printer.get_run_status_line(results))
+        dbt.ui.printer.print_run_end_messages(results)
