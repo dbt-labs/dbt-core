@@ -574,44 +574,38 @@ class RunManager(object):
             else:
                 action = self.safe_compile_node
 
-            results = {}
-            for node in nodes_to_execute:
-                args = (node, flat_graph, existing, schema_name, get_idx(node), num_nodes,)
-                res = pool.apply_async(action, [args])
-                node_id = node.get('unique_id')
-                results[node_id] = {'node': node, 'result': res}
+            try:
+                for result in pool.imap_unordered(
+                    action,
+                    [(node, flat_graph, existing, schema_name,
+                      get_idx(node), num_nodes,)
+                     for node in nodes_to_execute]):
 
-            for node_id, data in results.items():
-                async_result = data['result']
-                node = data['node']
+                    node_results.append(result)
 
-                try:
-                    result = async_result.get()
-                except KeyboardInterrupt:
-                    pool.close()
-                    pool.terminate()
+                    # propagate so that CTEs get injected properly
+                    flat_graph['nodes'][result.node.get('unique_id')] = result.node
 
-                    profile = self.project.run_environment()
-                    adapter = get_adapter(profile)
+                    index = get_idx(result.node)
+                    if should_execute:
+                        track_model_run(index, num_nodes, result)
 
-                    for connection_name in adapter.cancel_open_connections(profile):
-                        dbt.ui.printer.print_cancel_line(connection_name, schema_name)
+                    if result.errored:
+                        on_failure(result.node)
+                        logger.info(result.error)
 
-                    pool.join()
-                    raise
+            except KeyboardInterrupt:
+                pool.close()
+                pool.terminate()
 
-                node_results.append(result)
+                profile = self.project.run_environment()
+                adapter = get_adapter(profile)
 
-                ## propagate so that CTEs get injected properly
-                flat_graph['nodes'][result.node.get('unique_id')] = result.node
+                for connection_name in adapter.cancel_open_connections(profile):
+                    dbt.ui.printer.print_cancel_line(connection_name, schema_name)
 
-                index = get_idx(result.node)
-                if should_execute:
-                    track_model_run(index, num_nodes, result)
-
-                if result.errored:
-                    on_failure(result.node)
-                    logger.info(result.error)
+                pool.join()
+                raise
 
         pool.close()
         pool.join()
