@@ -7,22 +7,50 @@
 # can be configured when dbt is invoked with the --profiles-dir option:
 #
 #  $ dbt run --profiles-dir /opt/dbt/
-#
 
-# Profiles should adhere to the structure defined below:
+# Top-level configs that apply to all profiles are set here
+config:
+    send_anonymous_usage_stats: True
+    use_colors: True
+
+# Profiles configurations should adhere to the structure defined below:
 #
-# [profile-name]:
-#   outputs:
-#     [target-name]:
-#       type: {redshift, postgres}
-#       threads: [1 - 8]
-#       host: [host ip or fully qualified domain name]
-#       port: [port]
-#       user: [user]
-#       pass: [password]
-#       dbname: [dbname]
-#       schema: [schema name]
-#   target: [target-name]
+# Postgres / Redshift
+# -------------------
+#
+#   [profile-name]:
+#     outputs:
+#       [target-name]:
+#         type: {redshift, postgres}
+#         threads: [1 - 8]
+#         host: [host ip or fully qualified domain name]
+#         port: [port]
+#         user: [user]
+#         pass: [password]
+#         dbname: [dbname]
+#         schema: [schema name]
+#     target: [target-name]
+#
+#
+# Snowflake
+# -------------------
+#
+#   [profile-name]:
+#     outputs:
+#       [target-name]:
+#         type: snowflake
+#         threads: [1 - 8]
+#         account: [url prefix for your snowflake connection]
+#
+#         user: [user]
+#         password: [password]
+#         role: [optional, the snowflake role you want to use]
+#
+#         database: [db name]
+#         warehouse: [warehouse]
+#         schema: [schema name]
+#     target: [target-name]
+#
 #
 # Commonly, it's helpful to define multiple targets for a profile. For example,
 # these targets might be `dev` and `prod`. Whereas the `dev` target points to
@@ -30,13 +58,13 @@
 # prod schema (eg. analytics). Analytical/BI tools should point to the
 # prod schema so that local development does not interfere with analysis.
 #
-# In practice, a profile might look like this:
+# The following are some examples of well-formatted profile configurations
 
 evil-corp:
     outputs:
         dev:                      # specify the dev connection
             type: redshift
-            threads: 8
+            threads: 1
             host: 12.34.56.78
             port: 5439
             user: elliot
@@ -71,7 +99,7 @@ mr-robot:
     outputs:
         dev:                      # specify the dev connection
             type: postgres
-            threads: 6
+            threads: 2
             host: 87.65.43.21
             port: 5439
             user: mr_robot

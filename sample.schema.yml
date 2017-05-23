@@ -54,8 +54,9 @@ people:
       - id
 
     # count number of rows where `people.account_id` points to a nonexistent `accounts.id` (should be 0)
+    # Note: the 'accounts' model needs to be `ref`d here
     relationships:
-      - {from: account_id, to: accounts, field: id}
+      - {from: account_id, to: ref('accounts'), field: id}
 
 accounts:
   constraints:

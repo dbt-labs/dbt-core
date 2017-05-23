@@ -16,7 +16,7 @@ name: 'your_package_name'
 
 # version: Required. This indicates the current version of your package and
 # should conform to semantic versioning. The field is currently unused
-version: '0.0.1'
+version: '0.1.0'
 
 
 
@@ -40,7 +40,7 @@ target-path: "target"
 
 # test-paths: Optional. Specify which path(s) dbt should look in to find data
 # test definitions.
-test-paths: ["test"]
+test-paths: ["tests"]
 
 # data-paths: Optional. Specify which path(s) dbt should look in to find CSV
 # files. Running `dbt seed` will load these CSVs as tables in your warehouse
@@ -191,5 +191,18 @@ repositories:
 # Archival
 #
 
-# Data archival is a powerful feature intended for advanced dbt users. For more
-# information, consult: https://dbt.readme.io/reference#archives
+# dbt's archival process records snapshots of specified tables so that
+# you can analyze how these tables change over time. In the example below,
+# the public.users table is configured for archival. When the `updated_at`
+# value changes for a given user record (identified by the `id` field), dbt
+# will record a new record in `users_archived` table which reflects the
+# changed state of that row. For more information on this command, consult
+# the dbt documentation: https://dbt.readme.io/reference#archive
+archive:
+  - source_schema: public
+    target_schema: public
+    tables:
+    - source_table: users
+      target_table: users_archived
+      updated_at: updated_at
+      unique_key: id
