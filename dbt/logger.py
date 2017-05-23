@@ -1,4 +1,5 @@
 import dbt.clients.system
+import dbt.compat
 import logging
 import os
 import sys
@@ -46,10 +47,9 @@ def make_log_dir_if_missing(log_dir):
     dbt.clients.system.make_directory(log_dir)
 
 
-class ColorFilter:
-    @classmethod
-    def filter(cls, line):
-        subbed = line.msg
+class ColorFilter(logging.Filter):
+    def filter(self, record):
+        subbed = dbt.compat.basestring(line.msg)
         for escape_sequence in dbt.ui.colors.COLORS.values():
             subbed = subbed.replace(escape_sequence, '')
         line.msg = subbed
