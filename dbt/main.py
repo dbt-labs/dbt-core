@@ -20,7 +20,13 @@ import dbt.tracking
 import dbt.config as config
 import dbt.adapters.cache as adapter_cache
 import dbt.ui.printer
+import dbt.compat
 
+PROFILES_HELP_MESSAGE = """
+For more information on configuring profiles, please consult the dbt docs:
+
+https://dbt.readme.io/docs/configure-your-profile
+"""
 
 def main(args=None):
     if args is None:
@@ -139,17 +145,19 @@ def invoke_dbt(parsed):
         proj.validate()
     except project.DbtProjectError as e:
         logger.info("Encountered an error while reading the project:")
-        logger.info("  ERROR {}".format(str(e)))
-        logger.info(
-            "Did you set the correct --profile? Using: {}"
-            .format(parsed.profile))
-
-        logger.info("Valid profiles:")
+        logger.info(dbt.compat.to_string(e))
 
         all_profiles = project.read_profiles(parsed.profiles_dir).keys()
 
-        for profile in all_profiles:
-            logger.info(" - {}".format(profile))
+        if len(all_profiles) > 0:
+            logger.info("Defined profiles:")
+            for profile in all_profiles:
+                logger.info(" - {}".format(profile))
+        else:
+            logger.info("There are no profiles defined in your "
+                        "profiles.yml file")
+
+        logger.info(PROFILES_HELP_MESSAGE)
 
         dbt.tracking.track_invalid_invocation(
             project=proj,
