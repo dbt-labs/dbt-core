@@ -2,6 +2,7 @@ import dbt.clients.system
 import logging
 import os
 import sys
+import re
 
 import colorama
 
@@ -46,6 +47,16 @@ def make_log_dir_if_missing(log_dir):
     dbt.clients.system.make_directory(log_dir)
 
 
+class ColorFilter:
+    color_regexp = re.compile(r'\x1b\[[\d;]+m')
+
+    @classmethod
+    def filter(cls, line):
+        subbed = re.sub(cls.color_regexp, '', line.msg)
+        line.msg = subbed
+        return True
+
+
 def initialize_logger(debug_mode=False, path=None):
     global initialized, logger, stdout_handler
 
@@ -68,6 +79,8 @@ def initialize_logger(debug_mode=False, path=None):
             interval=1,
             backupCount=7,
         )
+
+        logdir_handler.addFilter(ColorFilter)
 
         logdir_handler.setFormatter(
             logging.Formatter('%(asctime)-18s: %(message)s'))
