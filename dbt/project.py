@@ -1,5 +1,4 @@
 import os.path
-import yaml
 import pprint
 import copy
 import hashlib
@@ -9,6 +8,7 @@ from voluptuous import Required, Invalid
 import dbt.deprecations
 import dbt.contracts.connection
 import dbt.ui.printer
+import dbt.clients.yaml
 from dbt.logger import GLOBAL_LOGGER as logger
 
 default_project_cfg = {
@@ -198,7 +198,7 @@ def read_project(filename, profiles_dir=None, validate=True,
 
     project_file_contents = dbt.clients.system.load_file_contents(filename)
 
-    project_cfg = yaml.safe_load(project_file_contents)
+    project_cfg = dbt.clients.yaml.load_yaml_text(project_file_contents)
     project_cfg['project-root'] = os.path.dirname(
         os.path.abspath(filename))
     profiles = read_profiles(profiles_dir)
