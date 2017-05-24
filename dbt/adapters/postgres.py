@@ -158,3 +158,14 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         existing = [(name, relation_type) for (name, relation_type) in results]
 
         return dict(existing)
+
+    @classmethod
+    def check_schema_exists(cls, profile, schema, model_name=None):
+        sql = """
+        select count(*) from pg_namespace where nspname = '{schema}'
+        """.format(schema=schema).strip()  # noqa
+
+        connection, cursor = cls.add_query(profile, sql, model_name)
+        results = cursor.fetchone()
+
+        return results[0] > 0

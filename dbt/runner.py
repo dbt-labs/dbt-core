@@ -672,9 +672,19 @@ class RunManager(object):
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
 
-        try:
-            schema_name = adapter.get_default_schema(profile)
+        schema_name = adapter.get_default_schema(profile)
+        model_name = None
 
+        connection = adapter.begin(profile)
+        schema_exists = adapter.check_schema_exists(profile, schema_name)
+        adapter.commit(connection)
+
+        if schema_exists:
+            logger.debug('schema {} already exists -- '
+                         'not creating'.format(schema_name))
+            return
+
+        try:
             connection = adapter.begin(profile)
             adapter.create_schema(profile, schema_name)
             adapter.commit(connection)

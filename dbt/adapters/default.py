@@ -68,6 +68,11 @@ class DefaultAdapter(object):
         raise dbt.exceptions.NotImplementedException(
             '`query_for_existing` is not implemented for this adapter!')
 
+    @classmethod
+    def check_schema_exists(cls, profile, schema):
+        raise dbt.exceptions.NotImplementedException(
+            '`check_schema_exists` is not implemented for this adapter!')
+
     ###
     # FUNCTIONS THAT SHOULD BE ABSTRACT
     ###
@@ -550,6 +555,10 @@ class DefaultAdapter(object):
         tables = cls.query_for_existing(profile, schema, model_name)
         exists = tables.get(table) is not None
         return exists
+
+    @classmethod
+    def schema_exists(cls, profile, schema):
+        return cls.check_schema_exists(profile, schema)
 
     @classmethod
     def already_exists(cls, profile, schema, table, model_name=None):
