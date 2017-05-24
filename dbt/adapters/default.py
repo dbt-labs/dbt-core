@@ -557,7 +557,7 @@ class DefaultAdapter(object):
         return exists
 
     @classmethod
-    def schema_exists(cls, profile, schema):
+    def check_schema_exists(cls, profile, schema):
         return cls.check_schema_exists(profile, schema)
 
     @classmethod
