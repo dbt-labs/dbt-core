@@ -507,10 +507,6 @@ class RunManager(object):
 
         return skip_dependent
 
-    def run_concurrently(self, pool, action, args_list):
-        for result in pool.imap_unordered(action, args_list):
-            yield result
-
     def execute_nodes(self, flat_graph, node_dependency_list, on_failure,
                       should_run_hooks=False, should_execute=True):
         profile = self.project.run_environment()
@@ -596,7 +592,7 @@ class RunManager(object):
                         'num_nodes': num_nodes
                     })
 
-                for result in self.run_concurrently(pool, action, args_list):
+                for result in pool.imap_unordered(action, args_list):
                     node_results.append(result)
 
                     # propagate so that CTEs get injected properly
