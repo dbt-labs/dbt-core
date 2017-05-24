@@ -352,7 +352,8 @@ class RunManager(object):
         return node
 
     def safe_compile_node(self, data):
-        node, flat_graph, existing, schema_name, node_index, num_nodes = data
+        node = data['node']
+        flat_graph = data['flat_graph']
 
         result = RunModelResult(node)
         profile = self.project.run_environment()
@@ -368,7 +369,12 @@ class RunManager(object):
         return result
 
     def safe_execute_node(self, data):
-        node, flat_graph, existing, schema_name, node_index, num_nodes = data
+        node = data['node']
+        flat_graph = data['flat_graph']
+        existing = data['existing']
+        schema_name = data['schema_name']
+        node_index = data['node_index']
+        num_nodes = data['num_nodes']
 
         start_time = time.time()
 
@@ -573,24 +579,46 @@ class RunManager(object):
             else:
                 action = self.safe_compile_node
 
-            for result in pool.imap_unordered(
-                    action,
-                    [(node, flat_graph, existing, schema_name,
-                      get_idx(node), num_nodes,)
-                     for node in nodes_to_execute]):
+            node_result = []
+            try:
+                args_list = []
+                for node in nodes_to_execute:
+                    args_list.append({
+                        'node': node,
+                        'flat_graph': flat_graph,
+                        'existing': existing,
+                        'schema_name': schema_name,
+                        'node_index': get_idx(node),
+                        'num_nodes': num_nodes
+                    })
 
-                node_results.append(result)
+                for result in pool.imap_unordered(action, args_list):
+                    node_results.append(result)
 
-                # propagate so that CTEs get injected properly
-                flat_graph['nodes'][result.node.get('unique_id')] = result.node
+                    # propagate so that CTEs get injected properly
+                    node_id = result.node.get('unique_id')
+                    flat_graph['nodes'][node_id] = result.node
 
-                index = get_idx(result.node)
-                if should_execute:
-                    track_model_run(index, num_nodes, result)
+                    index = get_idx(result.node)
+                    if should_execute:
+                        track_model_run(index, num_nodes, result)
 
-                if result.errored:
-                    on_failure(result.node)
-                    logger.info(result.error)
+                    if result.errored:
+                        on_failure(result.node)
+                        logger.info(result.error)
+
+            except KeyboardInterrupt:
+                pool.close()
+                pool.terminate()
+
+                profile = self.project.run_environment()
+                adapter = get_adapter(profile)
+
+                for conn_name in adapter.cancel_open_connections(profile):
+                    dbt.ui.printer.print_cancel_line(conn_name, schema_name)
+
+                pool.join()
+                raise
 
         pool.close()
         pool.join()

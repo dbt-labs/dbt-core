@@ -17,4 +17,5 @@ class RunTask:
 
         results = runner.run_models(self.args.models, self.args.exclude)
 
-        dbt.ui.printer.print_run_end_messages(results)
+        if results:
+            dbt.ui.printer.print_run_end_messages(results)

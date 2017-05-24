@@ -288,6 +288,17 @@ class DefaultAdapter(object):
         return cls.get_connection(profile, name)
 
     @classmethod
+    def cancel_open_connections(cls, profile):
+        global connections_in_use
+
+        for name, connection in connections_in_use.items():
+            if name == 'master':
+                continue
+
+            cls.cancel_connection(profile, connection)
+            yield name
+
+    @classmethod
     def total_connections_allocated(cls):
         global connections_in_use, connections_available
 
