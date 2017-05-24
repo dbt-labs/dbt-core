@@ -1,14 +1,13 @@
 import os.path
-import yaml
 import pprint
 import copy
-import sys
 import hashlib
 import re
-from voluptuous import Schema, Required, Invalid
+from voluptuous import Required, Invalid
 
 import dbt.deprecations
 import dbt.contracts.connection
+import dbt.clients.yaml_helper
 from dbt.logger import GLOBAL_LOGGER as logger
 
 default_project_cfg = {
@@ -29,6 +28,19 @@ default_project_cfg = {
 default_profiles = {}
 
 default_profiles_dir = os.path.join(os.path.expanduser('~'), '.dbt')
+
+NO_SUPPLIED_PROFILE_ERROR = """\
+dbt cannot run because no profile was specified for this dbt project.
+To specify a profile for this project, add a line like the this to
+your dbt_project.yml file:
+
+profile: [profile name]
+
+Here, [profile name] should be replaced with a profile name
+defined in your profiles.yml file. You can find profiles.yml here:
+
+{profiles_file}/profiles.yml
+""".format(profiles_file=default_profiles_dir)
 
 
 class DbtProjectError(Exception):
@@ -60,9 +72,7 @@ class Project(object):
             self.profile_to_load = self.cfg['profile']
 
         if self.profile_to_load is None:
-            raise DbtProjectError(
-                "No profile was supplied in the dbt_project.yml file, or the "
-                "command line", self)
+            raise DbtProjectError(NO_SUPPLIED_PROFILE_ERROR, self)
 
         if self.profile_to_load in self.profiles:
             self.cfg.update(self.profiles[self.profile_to_load])
@@ -187,7 +197,7 @@ def read_project(filename, profiles_dir=None, validate=True,
 
     project_file_contents = dbt.clients.system.load_file_contents(filename)
 
-    project_cfg = yaml.safe_load(project_file_contents)
+    project_cfg = dbt.clients.yaml_helper.load_yaml_text(project_file_contents)
     project_cfg['project-root'] = os.path.dirname(
         os.path.abspath(filename))
     profiles = read_profiles(profiles_dir)

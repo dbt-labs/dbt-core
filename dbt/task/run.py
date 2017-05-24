@@ -17,4 +17,5 @@ class RunTask:
 
         results = runner.run_models(self.args.models, self.args.exclude)
 
-        logger.info(dbt.ui.printer.get_run_status_line(results))
+        if results:
+            logger.info(dbt.ui.printer.get_run_status_line(results))

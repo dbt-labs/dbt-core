@@ -1,6 +1,5 @@
 import copy
 import os
-import yaml
 import re
 
 import dbt.flags
@@ -9,6 +8,7 @@ import dbt.utils
 
 import jinja2.runtime
 import dbt.clients.jinja
+import dbt.clients.yaml_helper
 
 import dbt.contracts.graph.parsed
 import dbt.contracts.graph.unparsed
@@ -426,7 +426,14 @@ def parse_schema_tests(tests, root_project, projects):
     to_return = {}
 
     for test in tests:
-        test_yml = yaml.safe_load(test.get('raw_yml'))
+        raw_yml = test.get('raw_yml')
+        test_name = "{}:{}".format(test.get('package_name'), test.get('path'))
+
+        try:
+            test_yml = dbt.clients.yaml_helper.load_yaml_text(raw_yml)
+        except dbt.exceptions.ValidationException as e:
+            test_yml = None
+            logger.info("Error reading {} - Skipping\n{}".format(test_name, e))
 
         if test_yml is None:
             continue
@@ -551,7 +558,7 @@ def load_and_parse_yml(package_name, root_project, all_projects, root_dir,
 
     for file_match in file_matches:
         file_contents = dbt.clients.system.load_file_contents(
-            file_match.get('absolute_path'))
+            file_match.get('absolute_path'), strip=False)
 
         parts = dbt.utils.split_path(file_match.get('relative_path', ''))
         name, _ = os.path.splitext(parts[-1])

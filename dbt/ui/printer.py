@@ -46,10 +46,13 @@ def print_timestamped_line(msg):
 
 
 def print_fancy_output_line(msg, status, index, total, execution_time=None):
-    prefix = "{timestamp} | {index} of {total} {message}".format(
+    if index is None or total is None:
+        progress = ''
+    else:
+        progress = '{} of {} '.format(index, total)
+    prefix = "{timestamp} | {progress}{message}".format(
         timestamp=get_timestamp(),
-        index=index,
-        total=total,
+        progress=progress,
         message=msg)
 
     justified = prefix.ljust(80, ".")
@@ -71,6 +74,11 @@ def print_fancy_output_line(msg, status, index, total, execution_time=None):
 def print_skip_line(model, schema, relation, index, num_models):
     msg = 'SKIP relation {}.{}'.format(schema, relation)
     print_fancy_output_line(msg, yellow('SKIP'), index, num_models)
+
+
+def print_cancel_line(model, schema):
+    msg = 'CANCEL query {}.{}'.format(schema, model)
+    print_fancy_output_line(msg, red('CANCEL'), index=None, total=None)
 
 
 def get_counts(flat_nodes):
