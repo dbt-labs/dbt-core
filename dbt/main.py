@@ -28,6 +28,7 @@ For more information on configuring profiles, please consult the dbt docs:
 https://dbt.readme.io/docs/configure-your-profile
 """
 
+
 def main(args=None):
     if args is None:
         args = sys.argv[1:]
