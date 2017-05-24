@@ -5,42 +5,44 @@ import yaml
 import yaml.scanner
 
 
+YAML_ERROR_MESSAGE = """
+Syntax error near line {line_number}
+------------------------------
+{nice_error}
+
+Raw Error:
+------------------------------
+{raw_error}
+""".strip()
+
+
 def line_no(i, line, width=3):
     line_number = dbt.compat.to_string(i).ljust(width)
     return "{}| {}".format(line_number, line)
 
 
-def prefix_with_line_numbers(line_list, starting_number):
-    numbers = range(starting_number, starting_number + len(line_list))
+def prefix_with_line_numbers(string, no_start, no_end):
+    line_list = string.split('\n')
 
-    lines = [line_no(i, line) for (i, line) in zip(numbers, line_list)]
-    return "\n".join(lines)
+    numbers = range(no_start, no_end)
+    relevant_lines = line_list[no_start:no_end]
+
+    return "\n".join([
+        line_no(i + 1, line) for (i, line) in zip(numbers, relevant_lines)
+    ])
 
 
-def contextualized_yaml_erro(raw_contents, error):
+def contextualized_yaml_error(raw_contents, error):
     mark = error.problem_mark
 
-    line = mark.line
-    human_line = line + 1
+    min_line = max(mark.line - 3, 0)
+    max_line = mark.line + 4
 
-    line_list = raw_contents.split('\n')
+    nice_error = prefix_with_line_numbers(raw_contents, min_line, max_line)
 
-    min_line = max(line - 3, 0)
-    max_line = line + 3
-
-    relevant_lines = line_list[min_line:max_line]
-    lines = prefix_with_line_numbers(relevant_lines, min_line + 1)
-
-    output = [
-        "Syntax error near line {}".format(human_line),
-        "-" * 30,
-        lines,
-        "\nRaw Error:",
-        "-" * 30,
-        dbt.compat.to_string(error)
-    ]
-
-    return "\n".join(output)
+    return YAML_ERROR_MESSAGE.format(line_number=mark.line + 1,
+                                     nice_error=nice_error,
+                                     raw_error=error)
 
 
 def load_yaml_text(contents):
@@ -48,7 +50,7 @@ def load_yaml_text(contents):
         return yaml.safe_load(contents)
     except (yaml.scanner.ScannerError, yaml.YAMLError) as e:
         if hasattr(e, 'problem_mark'):
-            error = contextualized_yaml_erro(contents, e)
+            error = contextualized_yaml_error(contents, e)
         else:
             error = dbt.compat.to_string(e)
 
