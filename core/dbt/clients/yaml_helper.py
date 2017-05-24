@@ -26,14 +26,12 @@ def line_no(i, line, width=3):
 
 
 def prefix_with_line_numbers(string, no_start, no_end):
-    line_list = string.split('\n')
+    line_list = string.split("\n")
 
     numbers = range(no_start, no_end)
     relevant_lines = line_list[no_start:no_end]
 
-    return "\n".join([
-        line_no(i + 1, line) for (i, line) in zip(numbers, relevant_lines)
-    ])
+    return "\n".join([line_no(i + 1, line) for (i, line) in zip(numbers, relevant_lines)])
 
 
 def contextualized_yaml_error(raw_contents, error):
@@ -44,9 +42,9 @@ def contextualized_yaml_error(raw_contents, error):
 
     nice_error = prefix_with_line_numbers(raw_contents, min_line, max_line)
 
-    return YAML_ERROR_MESSAGE.format(line_number=mark.line + 1,
-                                     nice_error=nice_error,
-                                     raw_error=error)
+    return YAML_ERROR_MESSAGE.format(
+        line_number=mark.line + 1, nice_error=nice_error, raw_error=error
+    )
 
 
 def safe_load(contents) -> Optional[Dict[str, Any]]:
@@ -57,7 +55,7 @@ def load_yaml_text(contents):
     try:
         return safe_load(contents)
     except (yaml.scanner.ScannerError, yaml.YAMLError) as e:
-        if hasattr(e, 'problem_mark'):
+        if hasattr(e, "problem_mark"):
             error = contextualized_yaml_error(contents, e)
         else:
             error = str(e)
