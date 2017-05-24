@@ -1,7 +1,7 @@
 import os.path
 
 import dbt.exceptions
-import dbt.clients.yaml
+import dbt.clients.yaml_helper
 import dbt.clients.system
 
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -21,7 +21,7 @@ def read_profile(profiles_dir):
     if os.path.isfile(path):
         try:
             contents = dbt.clients.system.load_file_contents(path, strip=False)
-            return dbt.clients.yaml.load_yaml_text(contents)
+            return dbt.clients.yaml_helper.load_yaml_text(contents)
         except dbt.exceptions.ValidationException as e:
             msg = INVALID_PROFILE_MESSAGE.format(error_string=e)
             raise dbt.exceptions.ValidationException(msg)

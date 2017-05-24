@@ -8,7 +8,7 @@ import dbt.utils
 
 import jinja2.runtime
 import dbt.clients.jinja
-import dbt.clients.yaml
+import dbt.clients.yaml_helper
 
 import dbt.contracts.graph.parsed
 import dbt.contracts.graph.unparsed
@@ -430,7 +430,7 @@ def parse_schema_tests(tests, root_project, projects):
         test_name = "{}:{}".format(test.get('package_name'), test.get('path'))
 
         try:
-            test_yml = dbt.clients.yaml.load_yaml_text(raw_yml)
+            test_yml = dbt.clients.yaml_helper.load_yaml_text(raw_yml)
         except dbt.exceptions.ValidationException as e:
             test_yml = None
             logger.info("Error reading {} - Skipping\n{}".format(test_name, e))
