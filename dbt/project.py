@@ -7,7 +7,6 @@ from voluptuous import Required, Invalid
 
 import dbt.deprecations
 import dbt.contracts.connection
-import dbt.ui.printer
 import dbt.clients.yaml
 from dbt.logger import GLOBAL_LOGGER as logger
 

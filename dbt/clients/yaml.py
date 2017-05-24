@@ -2,6 +2,7 @@ import dbt.compat
 import dbt.exceptions
 
 import yaml
+import yaml.scanner
 
 
 def line_no(i, line, width=3):
