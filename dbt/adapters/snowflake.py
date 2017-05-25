@@ -154,6 +154,20 @@ class SnowflakeAdapter(PostgresAdapter):
         return cls.add_query(profile, sql, model_name, select_schema=False)
 
     @classmethod
+    def check_schema_exists(cls, profile, schema, model_name=None):
+        sql = """
+        select count(*)
+        from INFORMATION_SCHEMA.SCHEMATA
+        where SCHEMA_NAME = '{schema}'
+        """.format(schema=schema).strip()  # noqa
+
+        connection, cursor = cls.add_query(profile, sql, model_name,
+                                           select_schema=False)
+        results = cursor.fetchone()
+
+        return results[0] > 0
+
+    @classmethod
     def add_query(cls, profile, sql, model_name=None, auto_begin=True,
                   select_schema=True):
         # snowflake only allows one query per api call.
@@ -182,3 +196,19 @@ class SnowflakeAdapter(PostgresAdapter):
                 profile, individual_query, model_name, auto_begin)
 
         return connection, cursor
+
+    @classmethod
+    def cancel_connection(cls, profile, connection):
+        handle = connection['handle']
+        sid = handle.session_id
+
+        connection_name = connection.get('name')
+
+        sql = 'select system$abort_session({})'.format(sid)
+
+        logger.debug("Cancelling query '{}' ({})".format(connection_name, sid))
+
+        _, cursor = cls.add_query(profile, sql, 'master')
+        res = cursor.fetchone()
+
+        logger.debug("Cancel query '{}': {}".format(connection_name, res))

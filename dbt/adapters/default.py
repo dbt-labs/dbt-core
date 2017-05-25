@@ -68,6 +68,11 @@ class DefaultAdapter(object):
         raise dbt.exceptions.NotImplementedException(
             '`query_for_existing` is not implemented for this adapter!')
 
+    @classmethod
+    def check_schema_exists(cls, profile, schema):
+        raise dbt.exceptions.NotImplementedException(
+            '`check_schema_exists` is not implemented for this adapter!')
+
     ###
     # FUNCTIONS THAT SHOULD BE ABSTRACT
     ###
@@ -286,6 +291,17 @@ class DefaultAdapter(object):
         connections_in_use[name] = connection
 
         return cls.get_connection(profile, name)
+
+    @classmethod
+    def cancel_open_connections(cls, profile):
+        global connections_in_use
+
+        for name, connection in connections_in_use.items():
+            if name == 'master':
+                continue
+
+            cls.cancel_connection(profile, connection)
+            yield name
 
     @classmethod
     def total_connections_allocated(cls):
@@ -550,6 +566,10 @@ class DefaultAdapter(object):
         tables = cls.query_for_existing(profile, schema, model_name)
         exists = tables.get(table) is not None
         return exists
+
+    @classmethod
+    def check_schema_exists(cls, profile, schema):
+        return cls.check_schema_exists(profile, schema)
 
     @classmethod
     def already_exists(cls, profile, schema, table, model_name=None):

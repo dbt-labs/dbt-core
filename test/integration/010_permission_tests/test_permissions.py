@@ -6,7 +6,6 @@ class TestPermissions(DBTIntegrationTest):
     def setUp(self):
         DBTIntegrationTest.setUp(self)
 
-        self.run_sql_file("test/integration/010_permission_tests/tearDown.sql")
         self.run_sql_file("test/integration/010_permission_tests/seed.sql")
 
     def tearDown(self):
@@ -23,16 +22,20 @@ class TestPermissions(DBTIntegrationTest):
         return "test/integration/010_permission_tests/models"
 
     @attr(type='postgres')
-    def test_read_permissions(self):
+    def test_create_schema_permissions(self):
+        # the noaccess user does not have permissions to create a schema -- this should fail
 
         failed = False
-
-        # run model as the noaccess user
-        # this will fail with a RuntimeError, which should be caught by the dbt runner
-
-        # it's not, wrapping this for now
-        # TODO handle RuntimeErrors for connection failure
+        self.run_sql('drop schema if exists "{}" cascade'.format(self.unique_schema()))
         try:
             self.run_dbt(['run', '--target', 'noaccess'])
-        except:
-            pass
+        except RuntimeError:
+            failed = True
+
+        self.assertTrue(failed)
+
+        # now it should work!
+        self.run_sql('create schema "{}"'.format(self.unique_schema()))
+        self.run_sql('grant usage on schema "{}" to noaccess'.format(self.unique_schema()))
+
+        self.run_dbt(['run', '--target', 'noaccess'])

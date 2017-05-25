@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import hashlib
 import psycopg2
 import os
@@ -19,15 +17,17 @@ import dbt.tracking
 import dbt.schema
 import dbt.graph.selector
 import dbt.model
+import dbt.ui.printer
 
 from multiprocessing.dummy import Pool as ThreadPool
+
 
 ABORTED_TRANSACTION_STRING = ("current transaction is aborted, commands "
                               "ignored until end of transaction block")
 
-
-def get_timestamp():
-    return time.strftime("%H:%M:%S")
+INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If \
+the error persists, open an issue at https://github.com/fishtown-analytics/dbt
+""".strip()
 
 
 def get_hash(model):
@@ -42,138 +42,34 @@ def is_enabled(model):
     return model.get('config', {}).get('enabled') is True
 
 
-def print_timestamped_line(msg):
-    logger.info("{} | {}".format(get_timestamp(), msg))
-
-
-def print_fancy_output_line(msg, status, index, total, execution_time=None):
-    prefix = "{timestamp} | {index} of {total} {message}".format(
-        timestamp=get_timestamp(),
-        index=index,
-        total=total,
-        message=msg)
-    justified = prefix.ljust(80, ".")
-
-    if execution_time is None:
-        status_time = ""
-    else:
-        status_time = " in {execution_time:0.2f}s".format(
-            execution_time=execution_time)
-
-    output = "{justified} [{status}{status_time}]".format(
-        justified=justified, status=status, status_time=status_time)
-
-    logger.info(output)
-
-
-def print_skip_line(model, schema, relation, index, num_models):
-    msg = 'SKIP relation {}.{}'.format(schema, relation)
-    print_fancy_output_line(msg, 'SKIP', index, num_models)
-
-
-def print_counts(flat_nodes):
-    counts = {}
-
-    for node in flat_nodes:
-        t = node.get('resource_type')
-
-        if node.get('resource_type') == NodeType.Model:
-            t = '{} {}'.format(get_materialization(node), t)
-
-        counts[t] = counts.get(t, 0) + 1
-
-    stat_line = ", ".join(
-        ["{} {}s".format(v, k) for k, v in counts.items()])
-
-    logger.info("")
-    print_timestamped_line("Running {}".format(stat_line))
-    print_timestamped_line("")
-
-
-def print_start_line(node, schema_name, index, total):
+def print_start_line(node, schema, index, total):
     if is_type(node, NodeType.Model):
-        print_model_start_line(node, schema_name, index, total)
+        dbt.ui.printer.print_model_start_line(node, schema, index, total)
     if is_type(node, NodeType.Test):
-        print_test_start_line(node, schema_name, index, total)
+        dbt.ui.printer.print_test_start_line(node, schema, index, total)
     if is_type(node, NodeType.Archive):
-        print_archive_start_line(node, index, total)
+        dbt.ui.printer.print_archive_start_line(node, index, total)
 
 
-def print_test_start_line(model, schema_name, index, total):
-    msg = "START test {name}".format(
-        name=model.get('name'))
-
-    print_fancy_output_line(msg, 'RUN', index, total)
-
-
-def print_model_start_line(model, schema_name, index, total):
-    msg = "START {model_type} model {schema}.{relation}".format(
-        model_type=get_materialization(model),
-        schema=schema_name,
-        relation=model.get('name'))
-
-    print_fancy_output_line(msg, 'RUN', index, total)
-
-
-def print_archive_start_line(model, index, total):
-    cfg = model.get('config', {})
-    msg = "START archive {source_schema}.{source_table} --> "\
-          "{target_schema}.{target_table}".format(**cfg)
-
-    print_fancy_output_line(msg, 'RUN', index, total)
-
-
-def print_result_line(result, schema_name, index, total):
+def print_result_line(result, schema, index, total):
     node = result.node
 
     if is_type(node, NodeType.Model):
-        print_model_result_line(result, schema_name, index, total)
+        dbt.ui.printer.print_model_result_line(result, schema, index, total)
     elif is_type(node, NodeType.Test):
-        print_test_result_line(result, schema_name, index, total)
+        dbt.ui.printer.print_test_result_line(result, schema, index, total)
     elif is_type(node, NodeType.Archive):
-        print_archive_result_line(result, index, total)
+        dbt.ui.printer.print_archive_result_line(result, index, total)
 
 
-def print_test_result_line(result, schema_name, index, total):
-    model = result.node
-    info = 'PASS'
+def print_results_line(results, execution_time):
+    nodes = [r.node for r in results]
+    stat_line = dbt.ui.printer.get_counts(nodes)
 
-    if result.errored:
-        info = "ERROR"
-    elif result.status > 0:
-        info = 'FAIL {}'.format(result.status)
-        result.fail = True
-    elif result.status == 0:
-        info = 'PASS'
-    else:
-        raise RuntimeError("unexpected status: {}".format(result.status))
-
-    print_fancy_output_line(
-        "{info} {name}".format(
-            info=info,
-            name=model.get('name')),
-        info,
-        index,
-        total,
-        result.execution_time)
-
-
-def print_archive_result_line(result, index, total):
-    model = result.node
-    info = 'OK archived'
-
-    if result.errored:
-        info = 'ERROR archiving'
-
-    cfg = model.get('config', {})
-
-    print_fancy_output_line(
-        "{info} {source_schema}.{source_table} --> "
-        "{target_schema}.{target_table}".format(info=info, **cfg),
-        result.status,
-        index,
-        total,
-        result.execution_time)
+    dbt.ui.printer.print_timestamped_line("")
+    dbt.ui.printer.print_timestamped_line(
+        "Finished running {stat_line} in {execution_time:0.2f}s."
+        .format(stat_line=stat_line, execution_time=execution_time))
 
 
 def execute_test(profile, test):
@@ -197,45 +93,6 @@ def execute_test(profile, test):
             .format(name=test.name, num_cols=len(row)))
 
     return row[0]
-
-
-def print_model_result_line(result, schema_name, index, total):
-    model = result.node
-    info = 'OK created'
-
-    if result.errored:
-        info = 'ERROR creating'
-
-    print_fancy_output_line(
-        "{info} {model_type} model {schema}.{relation}".format(
-            info=info,
-            model_type=get_materialization(model),
-            schema=schema_name,
-            relation=model.get('name')),
-        result.status,
-        index,
-        total,
-        result.execution_time)
-
-
-def print_results_line(results, execution_time):
-    stats = {}
-
-    for result in results:
-        t = result.node.get('resource_type')
-
-        if result.node.get('resource_type') == NodeType.Model:
-            t = '{} {}'.format(get_materialization(result.node), t)
-
-        stats[t] = stats.get(t, 0) + 1
-
-    stat_line = ", ".join(
-        ["{} {}s".format(ct, t) for t, ct in stats.items()])
-
-    print_timestamped_line("")
-    print_timestamped_line(
-        "Finished running {stat_line} in {execution_time:0.2f}s."
-        .format(stat_line=stat_line, execution_time=execution_time))
 
 
 def execute_model(profile, model, existing):
@@ -495,7 +352,8 @@ class RunManager(object):
         return node
 
     def safe_compile_node(self, data):
-        node, flat_graph, existing, schema_name, node_index, num_nodes = data
+        node = data['node']
+        flat_graph = data['flat_graph']
 
         result = RunModelResult(node)
         profile = self.project.run_environment()
@@ -511,7 +369,12 @@ class RunManager(object):
         return result
 
     def safe_execute_node(self, data):
-        node, flat_graph, existing, schema_name, node_index, num_nodes = data
+        node = data['node']
+        flat_graph = data['flat_graph']
+        existing = data['existing']
+        schema_name = data['schema_name']
+        node_index = data['node_index']
+        num_nodes = data['num_nodes']
 
         start_time = time.time()
 
@@ -545,8 +408,10 @@ class RunManager(object):
                 dbt.exceptions.ProgrammingException,
                 psycopg2.ProgrammingError,
                 psycopg2.InternalError) as e:
-            error = "Error executing {filepath}\n{error}".format(
-                filepath=node.get('build_path'), error=str(e).strip())
+
+            prefix = "Error executing {}\n".format(node.get('build_path'))
+            error = "{}{}".format(dbt.ui.printer.red(prefix), str(e).strip())
+
             status = "ERROR"
             logger.debug(error)
             if type(e) == psycopg2.InternalError and \
@@ -557,20 +422,29 @@ class RunManager(object):
                     status="SKIP")
 
         except dbt.exceptions.InternalException as e:
-            error = ("Internal error executing {filepath}\n\n{error}"
-                     "\n\nThis is an error in dbt. Please try again. If "
-                     "the error persists, open an issue at "
-                     "https://github.com/fishtown-analytics/dbt").format(
-                         filepath=node.get('build_path'),
-                         error=str(e).strip())
+
+            build_path = node.get('build_path')
+            prefix = 'Internal error executing {}'.format(build_path)
+
+            error = "{prefix}\n{error}\n\n{note}".format(
+                         prefix=dbt.ui.printer.red(prefix),
+                         error=str(e).strip(),
+                         note=INTERNAL_ERROR_STRING)
+            logger.debug(error)
+
             status = "ERROR"
 
         except Exception as e:
-            error = ("Unhandled error while executing {filepath}\n{error}"
-                     .format(
-                         filepath=node.get('build_path'),
-                         error=str(e).strip()))
+
+            prefix = "Unhandled error while executing {filepath}".format(
+                        filepath=node.get('build_path'))
+
+            error = "{prefix}\n{error}".format(
+                         prefix=dbt.ui.printer.red(prefix),
+                         error=str(e).strip())
+
             logger.debug(error)
+
             raise e
 
         finally:
@@ -670,7 +544,12 @@ class RunManager(object):
         pool = ThreadPool(num_threads)
 
         if should_execute:
-            print_counts(flat_nodes)
+            stat_line = dbt.ui.printer.get_counts(flat_nodes)
+            full_line = "Running {}".format(stat_line)
+
+            logger.info("")
+            dbt.ui.printer.print_timestamped_line(full_line)
+            dbt.ui.printer.print_timestamped_line("")
 
         start_time = time.time()
 
@@ -685,8 +564,9 @@ class RunManager(object):
         for node_list in node_dependency_list:
             for i, node in enumerate([node for node in node_list
                                       if node.get('skip')]):
-                print_skip_line(node, schema_name, node.get('name'),
-                                get_idx(node), num_nodes)
+                node_name = node.get('name')
+                dbt.ui.printer.print_skip_line(node, schema_name, node_name,
+                                               get_idx(node), num_nodes)
 
                 node_result = RunModelResult(node, skip=True)
                 node_results.append(node_result)
@@ -699,24 +579,46 @@ class RunManager(object):
             else:
                 action = self.safe_compile_node
 
-            for result in pool.imap_unordered(
-                    action,
-                    [(node, flat_graph, existing, schema_name,
-                      get_idx(node), num_nodes,)
-                     for node in nodes_to_execute]):
+            node_result = []
+            try:
+                args_list = []
+                for node in nodes_to_execute:
+                    args_list.append({
+                        'node': node,
+                        'flat_graph': flat_graph,
+                        'existing': existing,
+                        'schema_name': schema_name,
+                        'node_index': get_idx(node),
+                        'num_nodes': num_nodes
+                    })
 
-                node_results.append(result)
+                for result in pool.imap_unordered(action, args_list):
+                    node_results.append(result)
 
-                # propagate so that CTEs get injected properly
-                flat_graph['nodes'][result.node.get('unique_id')] = result.node
+                    # propagate so that CTEs get injected properly
+                    node_id = result.node.get('unique_id')
+                    flat_graph['nodes'][node_id] = result.node
 
-                index = get_idx(result.node)
-                if should_execute:
-                    track_model_run(index, num_nodes, result)
+                    index = get_idx(result.node)
+                    if should_execute:
+                        track_model_run(index, num_nodes, result)
 
-                if result.errored:
-                    on_failure(result.node)
-                    logger.info(result.error)
+                    if result.errored:
+                        on_failure(result.node)
+                        logger.info(result.error)
+
+            except KeyboardInterrupt:
+                pool.close()
+                pool.terminate()
+
+                profile = self.project.run_environment()
+                adapter = get_adapter(profile)
+
+                for conn_name in adapter.cancel_open_connections(profile):
+                    dbt.ui.printer.print_cancel_line(conn_name, schema_name)
+
+                pool.join()
+                raise
 
         pool.close()
         pool.join()
@@ -798,9 +700,19 @@ class RunManager(object):
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
 
-        try:
-            schema_name = adapter.get_default_schema(profile)
+        schema_name = adapter.get_default_schema(profile)
+        model_name = None
 
+        connection = adapter.begin(profile)
+        schema_exists = adapter.check_schema_exists(profile, schema_name)
+        adapter.commit(connection)
+
+        if schema_exists:
+            logger.debug('schema {} already exists -- '
+                         'not creating'.format(schema_name))
+            return
+
+        try:
             connection = adapter.begin(profile)
             adapter.create_schema(profile, schema_name)
             adapter.commit(connection)

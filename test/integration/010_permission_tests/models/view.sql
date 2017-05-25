@@ -1,3 +1,2 @@
 
--- permission should be denied here
-select * from "private"."seed"
+select * from "{{ this.schema }}"."seed"
