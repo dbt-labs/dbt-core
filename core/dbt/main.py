@@ -445,8 +445,8 @@ def _build_debug_subparser(subparsers, base_subparser):
         '''
     )
     sub.add_argument(
-        '--config-dir',
-        action='store_true',
+        "--config-dir",
+        action="store_true",
         help='''
         If specified, DBT will show path information for this project
         '''

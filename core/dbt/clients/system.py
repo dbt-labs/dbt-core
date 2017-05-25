@@ -119,7 +119,7 @@ def make_file(path: str, contents: str = "", overwrite: bool = False) -> bool:
     """
     if overwrite or not os.path.exists(path):
         path = convert_path(path)
-        with open(path, 'w') as fh:
+        with open(path, "w") as fh:
             fh.write(contents)
         return True
 
@@ -305,14 +305,14 @@ def path_is_symlink(path: str) -> bool:
 
 def open_dir_cmd() -> str:
     # https://docs.python.org/2/library/sys.html#sys.platform
-    if sys.platform == 'win32':
-        return 'start'
+    if sys.platform == "win32":
+        return "start"
 
-    elif sys.platform == 'darwin':
-        return 'open'
+    elif sys.platform == "darwin":
+        return "open"
 
     else:
-        return 'xdg-open'
+        return "xdg-open"
 
 
 def _handle_posix_cwd_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
