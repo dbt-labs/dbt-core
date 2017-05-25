@@ -73,13 +73,17 @@ def make_directory(path):
                 raise e
 
 
-def make_file(path, contents=''):
+def make_file(path, contents='', overwrite=False):
     """
     Make a file at `path` assuming that the directory it resides in already
     exists. The file is saved with contents `contents`
     """
-    with open(path, 'w') as fh:
-        fh.write(contents)
+    if overwrite or not os.path.exists(path):
+        with open(path, 'w') as fh:
+            fh.write(contents)
+        return True
+
+    return False
 
 
 def open_dir_cmd():
