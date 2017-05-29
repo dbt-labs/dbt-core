@@ -33,10 +33,17 @@ snowflake_credentials_contract = Schema({
     Optional('role'): basestring,
 })
 
+bigquery_credentials_contract = Schema({
+    Required('method'): basestring,
+    Required('project'): basestring,
+    Required('schema'): basestring,
+})
+
 credentials_mapping = {
     'postgres': postgres_credentials_contract,
     'redshift': postgres_credentials_contract,
     'snowflake': snowflake_credentials_contract,
+    'bigquery': bigquery_credentials_contract,
 }
 
 
