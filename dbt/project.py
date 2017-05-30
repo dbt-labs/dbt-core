@@ -132,8 +132,6 @@ class Project(object):
         self.handle_deprecations()
 
         target_cfg = self.run_environment()
-        target_name = self.cfg['target']
-
         package_name = self.cfg.get('name', None)
         package_version = self.cfg.get('version', None)
 
@@ -146,14 +144,15 @@ class Project(object):
                 ('Package name can only contain letters, numbers, and '
                  'underscores, and must start with a letter.'), self)
 
-        validator = dbt.contracts.connection.credentials_mapping.get(
-            target_cfg.get('type'), None)
+        db_type = target_cfg.get('type')
+        validator = dbt.contracts.connection.credentials_mapping.get(db_type)
 
         if validator is None:
-            valid_types = ', '.join(validator.keys())
+            valid_types = dbt.contracts.connection.credentials_mapping.keys()
             raise DbtProjectError(
-                "Expected project configuration '{}' should be one of {}"
-                .format(key, valid_types), self)
+                "Invalid db type '{}' should be one of [{}]".format(
+                    db_type,
+                    ", ".join(valid_types)), self)
 
         validator = validator.extend({
             Required('type'): str,
