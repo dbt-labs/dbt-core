@@ -101,7 +101,7 @@ def execute_model(profile, model, existing):
 
     tmp_name = '{}__dbt_tmp'.format(model.get('name'))
 
-    if dbt.flags.NON_DESTRUCTIVE:
+    if dbt.flags.NON_DESTRUCTIVE or profile.get('type') == 'bigquery': # TODO
         # for non destructive mode, we only look at the already existing table.
         tmp_name = model.get('name')
 

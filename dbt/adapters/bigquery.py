@@ -2,7 +2,7 @@ from __future__ import absolute_import
 
 import re
 
-from google.cloud import bigquery as bigquery_client
+from google.cloud import bigquery
 
 from contextlib import contextmanager
 
@@ -55,6 +55,14 @@ class BigQueryAdapter(PostgresAdapter):
         return 'CURRENT_TIMESTAMP()'
 
     @classmethod
+    def begin(cls, profile, name='master'):
+        pass
+
+    @classmethod
+    def commit(cls, connection):
+        pass
+
+    @classmethod
     def get_status(cls, cursor):
         raise Exception("Not implemented")
         state = cursor.sqlstate
@@ -74,8 +82,8 @@ class BigQueryAdapter(PostgresAdapter):
 
         try:
             credentials = connection.get('credentials', {})
-            handle = bigquery_client.Client(
-                project=credentials.get('Project', None),
+            handle = bigquery.Client(
+                project = credentials.get('project', None),
             )
 
             result['handle'] = handle
@@ -94,7 +102,6 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def query_for_existing(cls, profile, schema, model_name=None):
-
         dataset = cls.get_dataset(profile, schema, model_name)
         tables = dataset.list_tables()
 
@@ -104,13 +111,20 @@ class BigQueryAdapter(PostgresAdapter):
         }
 
         existing = [(table.name, relation_type_lookup.get(table.table_type))
-                    for table in results]
+                    for table in tables]
 
         return dict(existing)
 
     @classmethod
+    def drop_view(cls, profile, view_name, model_name):
+        schema = cls.get_default_schema(profile)
+        dataset = cls.get_dataset(profile, schema, model_name)
+        view = dataset.table(view_name)
+        view.delete()
+
+    @classmethod
     def rename(cls, profile, from_name, to_name, model_name=None):
-        raise Exception("Not implemented")
+        return # TODO
         schema = cls.get_default_schema(profile)
 
         sql = (('alter table "{schema}"."{from_name}" '
@@ -128,10 +142,27 @@ class BigQueryAdapter(PostgresAdapter):
         if flags.STRICT_MODE:
             validate_connection(connection)
 
-        # WTF do i do here??
+        model_name = model.get('name')
 
-        return super(PostgresAdapter, cls).execute_model(
-            profile, model)
+        # TODO: injected_sql?
+        model_sql = "#standardSQL\n{}".format(model.get('compiled_sql'))
+
+        schema = cls.get_default_schema(profile)
+        dataset = cls.get_dataset(profile, schema, model_name)
+
+        view = dataset.table(model_name)
+        view.view_query = model_sql
+
+        try:
+            view.create()
+        except Exception as err:
+            errors = "\n".join([e['message'] for e in err.errors])
+            raise RuntimeError(errors)
+
+        if view.created is None:
+            raise RuntimeError("Error creating view {}".format(model_name))
+
+        return "CREATE VIEW"
 
     @classmethod
     def add_begin_query(cls, profile, name):
@@ -150,7 +181,7 @@ class BigQueryAdapter(PostgresAdapter):
         conn = cls.get_connection(profile, model_name)
 
         client = conn.get('handle')
-        all_datasets = bigquery_client.list_datasets()
+        all_datasets = client.list_datasets()
         return any([ds.name == schema for ds in all_datasets])
 
     @classmethod
@@ -160,16 +191,6 @@ class BigQueryAdapter(PostgresAdapter):
         client = conn.get('handle')
         dataset = client.dataset(dataset_name)
         return dataset
-
-    @classmethod
-    def get_connection(cls, profile, model_name=None, auto_begin=True):
-        connection = cls.get_connection(profile, model_name)
-        connection_name = connection.get('name')
-
-        logger.debug('Using {} connection "{}".'
-                     .format(cls.type(), connection_name))
-
-        return connection
 
     @classmethod
     def add_query(cls, profile, sql, model_name=None, auto_begin=True):

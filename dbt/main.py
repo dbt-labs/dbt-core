@@ -41,6 +41,7 @@ def main(args=None):
         sys.exit(1)
 
     except RuntimeError as e:
+        raise
         logger.info("Encountered an error:")
         logger.info(str(e))
         sys.exit(1)

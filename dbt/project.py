@@ -167,6 +167,7 @@ class Project(object):
                     "Extra project configuration '{}' is not recognized"
                     .format('.'.join(e.path)), self)
             else:
+                # TODO : does this fail if eg. project is missing?
                 raise DbtProjectError(
                     "Expected project configuration '{}' was not supplied"
                     .format('.'.join(e.path)), self)
