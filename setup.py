@@ -9,9 +9,9 @@ package_version = "0.8.2"
 setup(
     name=package_name,
     version=package_version,
-    description="Data build tool for Analyst Collective",
-    author="Analyst Collective",
-    author_email="admin@analystcollective.org",
+    description="data build tool",
+    author="Fishtown Analytics",
+    author_email="info@fishtownanalytics.com",
     url="https://github.com/fishtown-analytics/dbt",
     packages=find_packages(),
     package_data={

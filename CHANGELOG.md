@@ -1,4 +1,4 @@
-## dbt 0.8.2 (Unreleased)
+## dbt 0.8.2 (May 31, 2017)
 
 ### Overview
 
