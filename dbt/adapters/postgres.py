@@ -160,6 +160,3 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         res = cursor.fetchone()
 
         logger.debug("Cancel query '{}': {}".format(connection_name, res))
-
-
-adapter = PostgresAdapter

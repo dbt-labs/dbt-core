@@ -218,5 +218,3 @@ class SnowflakeAdapter(PostgresAdapter):
         res = cursor.fetchone()
 
         logger.debug("Cancel query '{}': {}".format(connection_name, res))
-
-adapter = SnowflakeAdapter
