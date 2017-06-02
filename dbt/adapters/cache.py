@@ -1,5 +1,9 @@
-import dbt.adapters.postgres as postgres
 
 
 def reset():
-    postgres.connection_cache = {}
+    # TODO
+    try:
+        import dbt.adapters.postgres as postgres
+        postgres.connection_cache = {}
+    except ModuleNotFoundError:
+        pass
