@@ -210,7 +210,10 @@ class Compiler(object):
                 model['extra_ctes'][target_model_id] = None
                 return '__dbt__CTE__{}'.format(target_model.get('name'))
             else:
-                return '"{}"."{}"'.format(schema, target_model.get('name'))
+                profile = self.project.run_environment()
+                adapter = get_adapter(profile)
+                table = target_model.get('name')
+                return adapter.quote_schema_and_table(profile, schema, table)
 
         return do_ref
 

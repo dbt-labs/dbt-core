@@ -577,3 +577,7 @@ class DefaultAdapter(object):
         Alias for `table_exists`.
         """
         return cls.table_exists(profile, schema, table, model_name)
+
+    @classmethod
+    def quote_schema_and_table(cls, profile, schema, table):
+        return '"{}"."{}"'.format(schema, table)

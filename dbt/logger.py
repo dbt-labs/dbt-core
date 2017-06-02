@@ -11,8 +11,8 @@ logging.getLogger('botocore').setLevel(logging.CRITICAL)
 logging.getLogger('contracts').setLevel(logging.CRITICAL)
 logging.getLogger('requests').setLevel(logging.CRITICAL)
 logging.getLogger('urllib3').setLevel(logging.CRITICAL)
+logging.getLogger('google').setLevel(logging.CRITICAL)
 logging.getLogger('snowflake.connector').setLevel(logging.CRITICAL)
-
 
 # Colorama needs some help on windows because we're using logger.info
 # intead of print(). If the Windows env doesn't have a TERM var set,

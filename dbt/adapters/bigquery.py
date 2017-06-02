@@ -212,3 +212,10 @@ class BigQueryAdapter(PostgresAdapter):
         res = cursor.fetchone()
 
         logger.debug("Cancel query '{}': {}".format(connection_name, res))
+
+    @classmethod
+    def quote_schema_and_table(cls, profile, schema, table):
+        connection = cls.get_connection(profile)
+        credentials = connection.get('credentials', {})
+        project = credentials.get('project')
+        return '`{}`.`{}`.`{}`'.format(project, schema, table)
