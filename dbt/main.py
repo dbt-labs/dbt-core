@@ -137,8 +137,6 @@ def invoke_dbt(parsed):
     task = None
     proj = None
 
-    adapter_cache.reset()
-
     try:
         proj = project.read_project(
             'dbt_project.yml',
