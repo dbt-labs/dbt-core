@@ -2,7 +2,6 @@ from __future__ import absolute_import
 
 import re
 
-from google.cloud import bigquery
 
 from contextlib import contextmanager
 
@@ -15,6 +14,13 @@ from dbt.logger import GLOBAL_LOGGER as logger
 
 
 class BigQueryAdapter(PostgresAdapter):
+
+    requires = {'bigquery': 'google-cloud-bigquery==0.24.0'}
+
+    @classmethod
+    def initialize(cls):
+        import importlib
+        globals()['bigquery'] = importlib.import_module('google.cloud.bigquery')
 
     @classmethod
     @contextmanager
