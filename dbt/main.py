@@ -18,7 +18,6 @@ import dbt.task.test as test_task
 import dbt.task.archive as archive_task
 import dbt.tracking
 import dbt.config as config
-import dbt.adapters.cache as adapter_cache
 import dbt.ui.printer
 import dbt.compat
 

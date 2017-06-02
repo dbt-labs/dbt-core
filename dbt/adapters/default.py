@@ -31,6 +31,7 @@ class DefaultAdapter(object):
         for package, require in cls.requires.items():
             logger.info("Installing {}".format(require))
             pip_main(['install', require])
+            logger.info("Installed {} successfully!".format(require))
 
 
     ###
