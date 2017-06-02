@@ -32,14 +32,17 @@ setup(
     install_requires=[
         'Jinja2>=2.8',
         'PyYAML>=3.11',
-        'psycopg2==2.7.1',
         'sqlparse==0.2.3',
         'networkx==1.11',
         'csvkit==0.9.1',
         'snowplow-tracker==0.7.2',
         'celery==3.1.23',
         'voluptuous==0.10.5',
-        'snowflake-connector-python==1.3.16',
         'colorama==0.3.9'
     ],
+    extras_require={
+        'bigquery':['google-cloud-bigquery==0.24.0'],
+        'postgres':['psycopg2==2.7.1'],
+        'snowflake':['snowflake-connector-python==1.3.16'],
+    }
 )

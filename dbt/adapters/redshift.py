@@ -75,3 +75,5 @@ class RedshiftAdapter(PostgresAdapter):
 
         finally:
             drop_lock.release()
+
+adapter = RedshiftAdapter

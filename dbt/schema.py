@@ -1,7 +1,6 @@
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
-import psycopg2
 import logging
 import time
 import re

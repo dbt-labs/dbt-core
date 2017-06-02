@@ -1,4 +1,7 @@
+from dbt.logger import GLOBAL_LOGGER as logger
+
 import platform
+import pip
 
 import dbt.exceptions
 
@@ -24,5 +27,15 @@ def get_adapter(profile):
         raise RuntimeError(
             "Invalid adapter type {}!"
             .format(adapter_type))
+
+    try:
+        adapter.initialize()
+    except ImportError as e:
+        logger.debug(e)
+        logger.info("Installing required libraries for {}".format(adapter_type))
+        adapter.install_requires()
+
+        # try again
+        adapter.initialize()
 
     return adapter

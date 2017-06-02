@@ -21,6 +21,18 @@ connections_available = []
 
 class DefaultAdapter(object):
 
+    requires = {}
+
+    @classmethod
+    def install_requires(cls):
+        from pip import main as pip_main
+        import importlib
+
+        for package, require in cls.requires.items():
+            logger.info("Installing {}".format(require))
+            pip_main(['install', require])
+
+
     ###
     # ADAPTER-SPECIFIC FUNCTIONS -- each of these must be overridden in
     #                               every adapter

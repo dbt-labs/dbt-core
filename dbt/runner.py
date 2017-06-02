@@ -1,5 +1,4 @@
 import hashlib
-import psycopg2
 import os
 import time
 import itertools
@@ -21,9 +20,6 @@ import dbt.ui.printer
 
 from multiprocessing.dummy import Pool as ThreadPool
 
-
-ABORTED_TRANSACTION_STRING = ("current transaction is aborted, commands "
-                              "ignored until end of transaction block")
 
 INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If \
 the error persists, open an issue at https://github.com/fishtown-analytics/dbt
@@ -404,23 +400,6 @@ class RunManager(object):
                 error=str(e),
                 status='ERROR')
 
-        except (RuntimeError,
-                dbt.exceptions.ProgrammingException,
-                psycopg2.ProgrammingError,
-                psycopg2.InternalError) as e:
-
-            prefix = "Error executing {}\n".format(node.get('build_path'))
-            error = "{}{}".format(dbt.ui.printer.red(prefix), str(e).strip())
-
-            status = "ERROR"
-            logger.debug(error)
-            if type(e) == psycopg2.InternalError and \
-               ABORTED_TRANSACTION_STRING == e.diag.message_primary:
-                return RunModelResult(
-                    node,
-                    error='{}\n'.format(ABORTED_TRANSACTION_STRING),
-                    status="SKIP")
-
         except dbt.exceptions.InternalException as e:
 
             build_path = node.get('build_path')
@@ -712,17 +691,9 @@ class RunManager(object):
                          'not creating'.format(schema_name))
             return
 
-        try:
-            connection = adapter.begin(profile)
-            adapter.create_schema(profile, schema_name)
-            adapter.commit(connection)
-
-        except (dbt.exceptions.FailedToConnectException,
-                psycopg2.OperationalError) as e:
-            logger.info("ERROR: Could not connect to the target database. Try "
-                        "`dbt debug` for more information.")
-            logger.info(str(e))
-            raise
+        connection = adapter.begin(profile)
+        adapter.create_schema(profile, schema_name)
+        adapter.commit(connection)
 
     def run_types_from_graph(self, include_spec, exclude_spec,
                              resource_types, tags, should_run_hooks=False,
