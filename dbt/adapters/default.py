@@ -24,6 +24,14 @@ class DefaultAdapter(object):
     requires = {}
 
     @classmethod
+    def is_installed(cls):
+        try:
+            cls.initialize()
+            return True
+        except ImportError:
+            return False
+
+    @classmethod
     def install_requires(cls):
         from pip import main as pip_main
         import importlib

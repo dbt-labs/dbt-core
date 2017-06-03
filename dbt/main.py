@@ -16,6 +16,7 @@ import dbt.task.init as init_task
 import dbt.task.seed as seed_task
 import dbt.task.test as test_task
 import dbt.task.archive as archive_task
+import dbt.task.adapter as adapter_task
 import dbt.tracking
 import dbt.config as config
 import dbt.ui.printer
@@ -270,23 +271,6 @@ def parse_args(args):
     sub = subs.add_parser('clean', parents=[base_subparser])
     sub.set_defaults(cls=clean_task.CleanTask, which='clean')
 
-    sub.add_argument(
-        '--non-destructive',
-        action='store_true',
-        help="""
-        If specified, DBT will not drop views. Tables will be truncated instead
-        of dropped.
-        """
-    )
-    sub.add_argument(
-        '--full-refresh',
-        action='store_true',
-        help="""
-        If specified, DBT will drop incremental models and fully-recalculate
-        the incremental table from the model definition.
-        """
-    )
-
     sub = subs.add_parser('debug', parents=[base_subparser])
     sub.add_argument(
         '--config-dir',
@@ -406,6 +390,24 @@ def parse_args(args):
     )
 
     sub.set_defaults(cls=test_task.TestTask, which='test')
+
+    sub = subs.add_parser('adapter', parents=[base_subparser])
+    sub.add_argument(
+        '--list',
+        action='store_true',
+        help='List dbt adapters.'
+    )
+    sub.add_argument(
+        '--install',
+        type=str,
+        required=False,
+        help="""
+        Install a dbt adapter. Valid adapters can be shown with\n
+        dbt adapter --list
+        """
+    )
+
+    sub.set_defaults(cls=adapter_task.AdapterTask, which='adapter')
 
     if len(args) == 0:
         p.print_help()
