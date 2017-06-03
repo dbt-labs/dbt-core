@@ -24,6 +24,14 @@ class DefaultAdapter(object):
     requires = {}
 
     @classmethod
+    def is_installed(cls):
+        try:
+            cls.initialize()
+            return True
+        except ImportError:
+            return False
+
+    @classmethod
     def install_requires(cls):
         from pip import main as pip_main
         import importlib
@@ -31,6 +39,7 @@ class DefaultAdapter(object):
         for package, require in cls.requires.items():
             logger.info("Installing {}".format(require))
             pip_main(['install', require])
+            logger.info("Installed {} successfully!".format(require))
 
 
     ###

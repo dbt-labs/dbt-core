@@ -394,7 +394,8 @@ class RunManager(object):
                 node, status = self.execute_node(node, flat_graph, existing,
                                                  profile, adapter)
 
-        except dbt.exceptions.CompilationException as e:
+        except (dbt.exceptions.CompilationException,
+                dbt.exceptions.RuntimeException) as e:
             return RunModelResult(
                 node,
                 error=str(e),
