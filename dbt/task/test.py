@@ -1,5 +1,7 @@
 from dbt.runner import RunManager
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
+from dbt.node_runners import TestRunner
+from dbt.utils import NodeType
 import dbt.ui.printer
 
 
@@ -25,16 +27,25 @@ class TestTask:
         include = self.args.models
         exclude = self.args.exclude
 
+        query = {
+            "include": self.args.models,
+            "exclude": self.args.exclude,
+            "resource_types": NodeType.Test
+        }
+
         test_types = [self.args.data, self.args.schema]
 
         if all(test_types) or not any(test_types):
-            results = runner.run_tests(include, exclude, set())
+            tags = set()
         elif self.args.data:
-            results = runner.run_tests(include, exclude, {'data'})
+            tags = {'data'}
         elif self.args.schema:
-            results = runner.run_tests(include, exclude, {'schema'})
+            tags = {'schema'}
         else:
             raise RuntimeError("unexpected")
+
+        query['tags'] = tags
+        results = runner.run_flat(query, TestRunner)
 
         dbt.ui.printer.print_run_end_messages(results)
 

@@ -113,7 +113,7 @@ class SnowflakeAdapter(PostgresAdapter):
         where TABLE_SCHEMA = '{schema}'
         """.format(schema=schema).strip()  # noqa
 
-        _, cursor = cls.add_query(profile, sql, model_name)
+        _, cursor = cls.add_query(profile, sql, model_name, auto_begin=False)
         results = cursor.fetchall()
 
         relation_type_lookup = {
@@ -168,7 +168,7 @@ class SnowflakeAdapter(PostgresAdapter):
         """.format(schema=schema).strip()  # noqa
 
         connection, cursor = cls.add_query(profile, sql, model_name,
-                                           select_schema=False)
+                                           select_schema=False, auto_begin=False)
         results = cursor.fetchone()
 
         return results[0] > 0

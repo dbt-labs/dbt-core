@@ -552,10 +552,10 @@ class DefaultAdapter(object):
             return connection, cursor
 
     @classmethod
-    def execute_one(cls, profile, sql, model_name=None):
+    def execute_one(cls, profile, sql, model_name=None, auto_begin=False):
         cls.get_connection(profile, model_name)
 
-        return cls.add_query(profile, sql, model_name)
+        return cls.add_query(profile, sql, model_name, auto_begin)
 
     @classmethod
     def execute_all(cls, profile, sqls, model_name=None):
@@ -587,10 +587,6 @@ class DefaultAdapter(object):
         tables = cls.query_for_existing(profile, schema, model_name)
         exists = tables.get(table) is not None
         return exists
-
-    @classmethod
-    def check_schema_exists(cls, profile, schema):
-        return cls.check_schema_exists(profile, schema)
 
     @classmethod
     def already_exists(cls, profile, schema, table, model_name=None):

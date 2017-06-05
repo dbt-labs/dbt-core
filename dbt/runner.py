@@ -1,10 +1,9 @@
-import hashlib
 import os
 import time
-import itertools
 
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.node_runners import RunModelResult
 
 from dbt.utils import get_materialization, NodeType, is_type, get_nodes_by_tags
 
@@ -14,9 +13,11 @@ import dbt.exceptions
 import dbt.linker
 import dbt.tracking
 import dbt.schema
-import dbt.graph.selector
 import dbt.model
 import dbt.ui.printer
+
+
+from  dbt.graph.selector import NodeSelector, FlatNodeSelector
 
 from multiprocessing.dummy import Pool as ThreadPool
 
@@ -26,26 +27,48 @@ the error persists, open an issue at https://github.com/fishtown-analytics/dbt
 """.strip()
 
 
-def get_hash(model):
-    return hashlib.md5(model.get('unique_id').encode('utf-8')).hexdigest()
-
-
-def get_hashed_contents(model):
-    return hashlib.md5(model.get('raw_sql').encode('utf-8')).hexdigest()
-
-
 def is_enabled(model):
     return model.get('config', {}).get('enabled') is True
 
 
-def print_start_line(node, schema, index, total):
-    if is_type(node, NodeType.Model):
-        dbt.ui.printer.print_model_start_line(node, schema, index, total)
-    if is_type(node, NodeType.Test):
-        dbt.ui.printer.print_test_start_line(node, schema, index, total)
-    if is_type(node, NodeType.Archive):
-        dbt.ui.printer.print_archive_start_line(node, index, total)
+@contextmanager
+def model_error_handler(profile, adapter, node, run_model_result):
+    catchable_errors = (dbt.exceptions.CompilationException,
+                        dbt.exceptions.RuntimeException)
 
+    try:
+        yield
+
+    except catchable_errors as e:
+        run_model_result.error = str(e)
+        run_model_result.status = 'ERROR'
+
+    except dbt.exceptions.InternalException as e:
+        build_path = node.get('build_path')
+        prefix = 'Internal error executing {}'.format(build_path)
+
+        error = "{prefix}\n{error}\n\n{note}".format(
+                     prefix=dbt.ui.printer.red(prefix),
+                     error=str(e).strip(),
+                     note=INTERNAL_ERROR_STRING)
+        logger.debug(error)
+
+        run_model_result.error = str(e)
+        run_model_result.status = 'ERROR'
+
+    except Exception as e:
+        prefix = "Unhandled error while executing {filepath}".format(
+                    filepath=node.get('build_path'))
+
+        error = "{prefix}\n{error}".format(
+                     prefix=dbt.ui.printer.red(prefix),
+                     error=str(e).strip())
+
+        logger.debug(error)
+        raise e
+
+    finally:
+        adapter.release_connection(profile, node.get('name'))
 
 def print_result_line(result, schema, index, total):
     node = result.node
@@ -56,16 +79,6 @@ def print_result_line(result, schema, index, total):
         dbt.ui.printer.print_test_result_line(result, schema, index, total)
     elif is_type(node, NodeType.Archive):
         dbt.ui.printer.print_archive_result_line(result, index, total)
-
-
-def print_results_line(results, execution_time):
-    nodes = [r.node for r in results]
-    stat_line = dbt.ui.printer.get_counts(nodes)
-
-    dbt.ui.printer.print_timestamped_line("")
-    dbt.ui.printer.print_timestamped_line(
-        "Finished running {stat_line} in {execution_time:0.2f}s."
-        .format(stat_line=stat_line, execution_time=execution_time))
 
 
 def execute_test(profile, test):
@@ -222,45 +235,6 @@ def execute_archive(profile, node, context):
     return result
 
 
-def track_model_run(index, num_nodes, run_model_result):
-    invocation_id = dbt.tracking.active_user.invocation_id
-    dbt.tracking.track_model_run({
-        "invocation_id": invocation_id,
-        "index": index,
-        "total": num_nodes,
-        "execution_time": run_model_result.execution_time,
-        "run_status": run_model_result.status,
-        "run_skipped": run_model_result.skip,
-        "run_error": run_model_result.error,
-        "model_materialization": get_materialization(run_model_result.node),  # noqa
-        "model_id": get_hash(run_model_result.node),
-        "hashed_contents": get_hashed_contents(run_model_result.node),  # noqa
-    })
-
-
-class RunModelResult(object):
-    def __init__(self, node, error=None, skip=False, status=None,
-                 failed=None, execution_time=0):
-        self.node = node
-        self.error = error
-        self.skip = skip
-        self.fail = failed
-        self.status = status
-        self.execution_time = execution_time
-
-    @property
-    def errored(self):
-        return self.error is not None
-
-    @property
-    def failed(self):
-        return self.fail
-
-    @property
-    def skipped(self):
-        return self.skip
-
-
 class RunManager(object):
     def __init__(self, project, target_path, args):
         self.project = project
@@ -342,28 +316,6 @@ class RunManager(object):
 
         return node, result
 
-    def compile_node(self, node, flat_graph):
-        compiler = dbt.compilation.Compiler(self.project)
-        node = compiler.compile_node(node, flat_graph)
-        return node
-
-    def safe_compile_node(self, data):
-        node = data['node']
-        flat_graph = data['flat_graph']
-
-        result = RunModelResult(node)
-        profile = self.project.run_environment()
-        adapter = get_adapter(profile)
-
-        try:
-            compiled_node = self.compile_node(node, flat_graph)
-            result = RunModelResult(compiled_node)
-
-        finally:
-            adapter.release_connection(profile, node.get('name'))
-
-        return result
-
     def safe_execute_node(self, data):
         node = data['node']
         flat_graph = data['flat_graph']
@@ -378,57 +330,22 @@ class RunManager(object):
         status = None
         is_ephemeral = (get_materialization(node) == 'ephemeral')
 
-        try:
-            if not is_ephemeral:
-                print_start_line(node,
-                                 schema_name,
-                                 node_index,
-                                 num_nodes)
+        if not is_ephemeral:
+            print_start_line(node,
+                             schema_name,
+                             node_index,
+                             num_nodes)
 
-            profile = self.project.run_environment()
-            adapter = get_adapter(profile)
+        profile = self.project.run_environment()
+        adapter = get_adapter(profile)
 
-            node = self.compile_node(node, flat_graph)
+        node = self.compile_node(node, flat_graph)
 
-            if not is_ephemeral:
-                node, status = self.execute_node(node, flat_graph, existing,
-                                                 profile, adapter)
+        if not is_ephemeral:
+            node, status = self.execute_node(node, flat_graph, existing,
+                                             profile, adapter)
 
-        except (dbt.exceptions.CompilationException,
-                dbt.exceptions.RuntimeException) as e:
-            return RunModelResult(
-                node,
-                error=str(e),
-                status='ERROR')
-
-        except dbt.exceptions.InternalException as e:
-
-            build_path = node.get('build_path')
-            prefix = 'Internal error executing {}'.format(build_path)
-
-            error = "{prefix}\n{error}\n\n{note}".format(
-                         prefix=dbt.ui.printer.red(prefix),
-                         error=str(e).strip(),
-                         note=INTERNAL_ERROR_STRING)
-            logger.debug(error)
-
-            status = "ERROR"
-
-        except Exception as e:
-
-            prefix = "Unhandled error while executing {filepath}".format(
-                        filepath=node.get('build_path'))
-
-            error = "{prefix}\n{error}".format(
-                         prefix=dbt.ui.printer.red(prefix),
-                         error=str(e).strip())
-
-            logger.debug(error)
-
-            raise e
-
-        finally:
-            adapter.release_connection(profile, node.get('name'))
+        # ---
 
         execution_time = time.time() - start_time
 
@@ -442,40 +359,6 @@ class RunManager(object):
 
         return result
 
-    def as_flat_dep_list(self, linker, nodes_to_run):
-        dependency_list = linker.as_dependency_list(
-            nodes_to_run,
-            ephemeral_only=True)
-
-        concurrent_dependency_list = []
-        for level in dependency_list:
-            node_level = [linker.get_node(node) for node in level]
-            concurrent_dependency_list.append(node_level)
-
-        return concurrent_dependency_list
-
-    def as_concurrent_dep_list(self, linker, nodes_to_run):
-        dependency_list = linker.as_dependency_list(nodes_to_run)
-
-        concurrent_dependency_list = []
-        for level in dependency_list:
-            node_level = [linker.get_node(node) for node in level]
-            concurrent_dependency_list.append(node_level)
-
-        return concurrent_dependency_list
-
-    def run_hooks(self, profile, flat_graph, hook_type):
-        adapter = get_adapter(profile)
-
-        nodes = flat_graph.get('nodes', {}).values()
-        start_hooks = get_nodes_by_tags(nodes, {hook_type}, NodeType.Operation)
-        hooks = [self.compile_node(hook, flat_graph) for hook in start_hooks]
-
-        master_connection = adapter.begin(profile)
-        compiled_hooks = [hook['wrapped_sql'] for hook in hooks]
-        adapter.execute_all(profile=profile, sqls=compiled_hooks)
-        master_connection = adapter.commit(master_connection)
-
     def on_model_failure(self, linker, selected_nodes):
         def skip_dependent(node):
             dependent_nodes = linker.get_dependent_nodes(node.get('unique_id'))
@@ -487,101 +370,67 @@ class RunManager(object):
 
         return skip_dependent
 
-    def execute_nodes(self, flat_graph, node_dependency_list, on_failure,
-                      should_run_hooks=False, should_execute=True):
+    def get_runners(self, Runner, adapter, node_dependency_list):
+        all_nodes = dbt.utils.flatten_nodes(node_dependency_list)
+        nodes = [n for n in all_nodes if get_materialization(n) != 'ephemeral']
+        num_nodes = len(nodes)
+
+        node_runners = {}
+        for i, node in enumerate(nodes):
+            uid = node.get('unique_id')
+            runner = Runner(adapter, node, i + 1, num_nodes)
+            node_runners[uid] = runner
+
+        return node_runners
+
+    def call_runner(self, data):
+        runner = data['runner']
+        existing = data['existing']
+
+        node = runner.node
+        adapter = runner.adapter
+        profile = self.project.run_environment()
+        # mtutable - this is set in context manager
+        error_result = RunModelResult(node)
+
+        result = None
+        with model_error_handler(profile, adapter, node, error_result):
+            result = runner.execute(self.project, existing)
+
+        if result is None:
+            return error_result
+        else:
+            return return
+
+    def execute_nodes(self, Runner, flat_graph, node_dependency_list):
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
-        master_connection = adapter.get_connection(profile)
         schema_name = adapter.get_default_schema(profile)
-
-        flat_nodes = list(itertools.chain.from_iterable(
-            node_dependency_list))
-
-        if len(flat_nodes) == 0:
-            logger.info("WARNING: Nothing to do. Try checking your model "
-                        "configs and model specification args")
-            return []
 
         num_threads = self.threads
         logger.info("Concurrency: {} threads (target='{}')".format(
             num_threads, self.project.get_target().get('name'))
         )
 
-        master_connection = adapter.begin(profile)
         existing = adapter.query_for_existing(profile, schema_name)
-        master_connection = adapter.commit(master_connection)
-
-        node_id_to_index_map = {}
-        i = 1
-
-        for node in flat_nodes:
-            if get_materialization(node) != 'ephemeral':
-                node_id_to_index_map[node.get('unique_id')] = i
-                i += 1
-
-        num_nodes = len(node_id_to_index_map)
+        node_runners = self.get_runners(Runner, adapter, node_dependency_list)
 
         pool = ThreadPool(num_threads)
-
-        if should_execute:
-            stat_line = dbt.ui.printer.get_counts(flat_nodes)
-            full_line = "Running {}".format(stat_line)
-
-            logger.info("")
-            dbt.ui.printer.print_timestamped_line(full_line)
-            dbt.ui.printer.print_timestamped_line("")
-
-        start_time = time.time()
-
-        if should_run_hooks:
-            self.run_hooks(profile, flat_graph, dbt.utils.RunHookType.Start)
-
-        def get_idx(node):
-            return node_id_to_index_map.get(node.get('unique_id'))
-
         node_results = []
-
         for node_list in node_dependency_list:
-            for i, node in enumerate([node for node in node_list
-                                      if node.get('skip')]):
-                node_name = node.get('name')
-                dbt.ui.printer.print_skip_line(node, schema_name, node_name,
-                                               get_idx(node), num_nodes)
+            runners = [node_runners[n.get('unique_id')] for n in node_list]
 
-                node_result = RunModelResult(node, skip=True)
-                node_results.append(node_result)
+            args_list = [{'runner': runner, 'existing': existing} for runner in runners] # noqa
 
-            nodes_to_execute = [node for node in node_list
-                                if not node.get('skip')]
-
-            if should_execute:
-                action = self.safe_execute_node
-            else:
-                action = self.safe_compile_node
-
-            node_result = []
             try:
-                args_list = []
-                for node in nodes_to_execute:
-                    args_list.append({
-                        'node': node,
-                        'flat_graph': flat_graph,
-                        'existing': existing,
-                        'schema_name': schema_name,
-                        'node_index': get_idx(node),
-                        'num_nodes': num_nodes
-                    })
-
-                for result in pool.imap_unordered(action, args_list):
+                for result in pool.imap_unordered(self.call_runner, args_list):
                     node_results.append(result)
 
                     # propagate so that CTEs get injected properly
+                    # TODO : is how does this work now????? Did we pass flat_graph by reference?
+                    # is that terrible? Will this just work??
                     node_id = result.node.get('unique_id')
                     flat_graph['nodes'][node_id] = result.node
-
-                    index = get_idx(result.node)
-                    if should_execute:
-                        track_model_run(index, num_nodes, result)
 
                     if result.errored:
                         on_failure(result.node)
@@ -603,143 +452,39 @@ class RunManager(object):
         pool.close()
         pool.join()
 
-        if should_run_hooks:
-            self.run_hooks(profile, flat_graph, dbt.utils.RunHookType.End)
-
-        execution_time = time.time() - start_time
-
-        if should_execute:
-            print_results_line(node_results, execution_time)
-
         return node_results
 
-    def get_ancestor_ephemeral_nodes(self, flat_graph, linked_graph,
-                                     selected_nodes):
-        node_names = {
-            node: flat_graph['nodes'].get(node).get('name')
-            for node in selected_nodes
-            if node in flat_graph['nodes']
-        }
-
-        include_spec = [
-            '+{}'.format(node_names[node])
-            for node in selected_nodes if node in node_names
-        ]
-
-        all_ancestors = dbt.graph.selector.select_nodes(
-            self.project,
-            linked_graph,
-            include_spec,
-            [])
-
-        res = []
-
-        for ancestor in all_ancestors:
-            if ancestor not in flat_graph['nodes']:
-                continue
-            ancestor_node = flat_graph['nodes'][ancestor]
-            is_model = ancestor_node.get('resource_type') == NodeType.Model
-            is_ephemeral = get_materialization(ancestor_node) == 'ephemeral'
-            if is_model and is_ephemeral:
-                res.append(ancestor)
-
-        return set(res)
-
-    def get_nodes_to_run(self, graph, include_spec, exclude_spec,
-                         resource_types, tags):
-
-        if include_spec is None:
-            include_spec = ['*']
-
-        if exclude_spec is None:
-            exclude_spec = []
-
-        to_run = [
-            n for n in graph.nodes()
-            if (graph.node.get(n).get('empty') is False and
-                is_enabled(graph.node.get(n)))
-        ]
-
-        filtered_graph = graph.subgraph(to_run)
-        selected_nodes = dbt.graph.selector.select_nodes(self.project,
-                                                         filtered_graph,
-                                                         include_spec,
-                                                         exclude_spec)
-
-        post_filter = [
-            n for n in selected_nodes
-            if ((graph.node.get(n).get('resource_type') in resource_types) and
-                (len(tags) == 0 or
-                 # does the node share any tags with the run?
-                 bool(graph.node.get(n).get('tags') & tags)))
-        ]
-
-        return set(post_filter)
-
-    def try_create_schema(self):
-        profile = self.project.run_environment()
-        adapter = get_adapter(profile)
-
-        schema_name = adapter.get_default_schema(profile)
-        model_name = None
-
-        connection = adapter.begin(profile)
-        schema_exists = adapter.check_schema_exists(profile, schema_name)
-        adapter.commit(connection)
-
-        if schema_exists:
-            logger.debug('schema {} already exists -- '
-                         'not creating'.format(schema_name))
-            return
-
-        connection = adapter.begin(profile)
-        adapter.create_schema(profile, schema_name)
-        adapter.commit(connection)
-
-    def run_types_from_graph(self, include_spec, exclude_spec,
-                             resource_types, tags, should_run_hooks=False,
-                             flatten_graph=False, should_execute=True):
-
+    def run_from_graph(self, Selector, Runner, query):
         compiler = dbt.compilation.Compiler(self.project)
         compiler.initialize()
         (flat_graph, linker) = compiler.compile()
 
-        selected_nodes = self.get_nodes_to_run(
-            linker.graph,
-            include_spec,
-            exclude_spec,
-            resource_types,
-            tags)
-
-        # automatically pull in ephemeral models required by selected nodes.
-        ephemeral_models = self.get_ancestor_ephemeral_nodes(
-            flat_graph,
-            linker.graph,
-            selected_nodes)
-
-        selected_nodes = selected_nodes | ephemeral_models
-
-        dependency_list = []
-
-        if flatten_graph is False:
-            dependency_list = self.as_concurrent_dep_list(linker,
-                                                          selected_nodes)
-        else:
-            dependency_list = self.as_flat_dep_list(linker,
-                                                    selected_nodes)
+        selector = Selector(linker, flat_graph)
+        selected_nodes = selector.select(query)
+        dependency_list = selector.as_node_list(selected_nodes)
 
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
 
+        flat_nodes = dbt.utils.flatten_nodes(dependency_list)
+        if len(flat_nodes) == 0:
+            logger.info("WARNING: Nothing to do. Try checking your model "
+                        "configs and model specification args")
+            return []
+        else:
+            stat_line = dbt.ui.printer.get_counts(flat_nodes)
+            full_line = "{} {}".format(Runner.verb, stat_line)
+
+            logger.info("")
+            dbt.ui.printer.print_timestamped_line(full_line)
+            dbt.ui.printer.print_timestamped_line("")
+
         try:
-            if should_execute:
-                self.try_create_schema()
-
-            on_failure = self.on_model_failure(linker, selected_nodes)
-
-            results = self.execute_nodes(flat_graph, dependency_list,
-                                         on_failure, should_run_hooks,
-                                         should_execute)
+            Runner.before_run(self.project, adapter, flat_graph)
+            started = time.time()
+            results = self.execute_nodes(Runner, flat_graph, dependency_list)
+            elapsed = time.time() - start_time
+            Runner.after_run(self.project, adapter, results, elapsed)
 
         finally:
             adapter.cleanup_connections()
@@ -748,39 +493,10 @@ class RunManager(object):
 
     # ------------------------------------
 
-    def compile_models(self, include_spec, exclude_spec):
-        resource_types = [
-            NodeType.Model,
-            NodeType.Test,
-            NodeType.Archive,
-            NodeType.Analysis,
-            NodeType.Operation
-        ]
+    def run(self, query, Runner):
+        Selector = NodeSelector
+        return self.run_from_graph(Selector, Runner, query)
 
-        return self.run_types_from_graph(include_spec,
-                                         exclude_spec,
-                                         resource_types=resource_types,
-                                         tags=set(),
-                                         should_run_hooks=False,
-                                         should_execute=False)
-
-    def run_models(self, include_spec, exclude_spec):
-        return self.run_types_from_graph(include_spec,
-                                         exclude_spec,
-                                         resource_types=[NodeType.Model],
-                                         tags=set(),
-                                         should_run_hooks=True)
-
-    def run_tests(self, include_spec, exclude_spec, tags):
-        return self.run_types_from_graph(include_spec,
-                                         exclude_spec,
-                                         resource_types=[NodeType.Test],
-                                         tags=tags,
-                                         flatten_graph=True)
-
-    def run_archives(self, include_spec, exclude_spec):
-        return self.run_types_from_graph(include_spec,
-                                         exclude_spec,
-                                         resource_types=[NodeType.Archive],
-                                         tags=set(),
-                                         flatten_graph=True)
+    def run_flat(self, query, Runner):
+        Selector = FlatNodeSelector
+        return self.run_from_graph(Selector, Runner, query)

@@ -44,7 +44,7 @@ def get_adapter(profile):
         adapter.initialize()
     except ImportError as e:
         logger.debug(e)
-        logger.info("TODO")
+        logger.info("TODO") # TODO
         raise RuntimeError("not installed")
 
     return adapter

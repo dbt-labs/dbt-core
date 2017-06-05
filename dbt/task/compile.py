@@ -2,6 +2,8 @@ from __future__ import print_function
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.runner import RunManager
+from dbt.node_runners import CompileRunner
+from dbt.utils import NodeType
 
 
 class CompileTask:
@@ -14,6 +16,13 @@ class CompileTask:
             self.project, self.project['target-path'], self.args
         )
 
-        runner.compile_models(self.args.models, self.args.exclude)
+        query = {
+            "include": self.args.models,
+            "exclude": self.args.exclude,
+            "resource_types": NodeType.all,
+            "tags": set()
+        }
+
+        runner.run(query, CompileRunner)
 
         logger.info('Done.')

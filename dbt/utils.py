@@ -1,5 +1,7 @@
 import os
 import json
+import hashlib
+import itertools
 
 import dbt.project
 from dbt.include import GLOBAL_DBT_MODULES_PATH
@@ -29,6 +31,16 @@ class NodeType(object):
     Archive = 'archive'
     Macro = 'macro'
     Operation = 'operation'
+
+    @classmethod
+    def all(cls):
+        return [
+            cls.Model,
+            cls.Test,
+            cls.Archive,
+            cls.Analysis,
+            cls.Operation
+        ]
 
 
 class RunHookType:
@@ -282,3 +294,15 @@ def get_nodes_by_tags(nodes, match_tags, resource_type):
         if len(node_tags & match_tags):
             matched_nodes.append(node)
     return matched_nodes
+
+
+def get_hash(model):
+    return hashlib.md5(model.get('unique_id').encode('utf-8')).hexdigest()
+
+
+def get_hashed_contents(model):
+    return hashlib.md5(model.get('raw_sql').encode('utf-8')).hexdigest()
+
+
+def flatten_nodes(dep_list):
+    return list(itertools.chain.from_iterable(dep_list))

@@ -128,7 +128,7 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         where schemaname = '{schema}'
         """.format(schema=schema).strip()  # noqa
 
-        connection, cursor = cls.add_query(profile, sql, model_name)
+        connection, cursor = cls.add_query(profile, sql, model_name, auto_begin=False)
 
         results = cursor.fetchall()
 
@@ -142,7 +142,7 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         select count(*) from pg_namespace where nspname = '{schema}'
         """.format(schema=schema).strip()  # noqa
 
-        connection, cursor = cls.add_query(profile, sql, model_name)
+        connection, cursor = cls.add_query(profile, sql, model_name, auto_begin=False)
         results = cursor.fetchone()
 
         return results[0] > 0

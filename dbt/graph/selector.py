@@ -2,7 +2,7 @@
 import networkx as nx
 from dbt.logger import GLOBAL_LOGGER as logger
 
-from dbt.utils import NodeType
+from dbt.utils import NodeType, is_enabled, get_materialization
 
 SELECTOR_PARENTS = '+'
 SELECTOR_CHILDREN = '+'
@@ -73,7 +73,7 @@ def is_selected_node(real_node, node_selector):
     return True
 
 
-def get_nodes_by_qualified_name(project, graph, qualified_name):
+def get_nodes_by_qualified_name(graph, qualified_name):
     """ returns a node if matched, else throws a CompilerError. qualified_name
     should be either 1) a node name or 2) a dot-notation qualified selector"""
 
@@ -97,13 +97,12 @@ def get_nodes_by_qualified_name(project, graph, qualified_name):
                     break
 
 
-def get_nodes_from_spec(project, graph, spec):
+def get_nodes_from_spec(graph, spec):
     select_parents = spec['select_parents']
     select_children = spec['select_children']
     qualified_node_name = spec['qualified_node_name']
 
-    selected_nodes = set(get_nodes_by_qualified_name(project,
-                                                     graph,
+    selected_nodes = set(get_nodes_by_qualified_name(graph,
                                                      qualified_node_name))
 
     additional_nodes = set()
@@ -142,7 +141,7 @@ def warn_if_useless_spec(spec, nodes):
     )
 
 
-def select_nodes(project, graph, raw_include_specs, raw_exclude_specs):
+def select_nodes(graph, raw_include_specs, raw_exclude_specs):
     selected_nodes = set()
 
     split_include_specs = split_specs(raw_include_specs)
@@ -152,13 +151,117 @@ def select_nodes(project, graph, raw_include_specs, raw_exclude_specs):
     exclude_specs = [parse_spec(spec) for spec in split_exclude_specs]
 
     for spec in include_specs:
-        included_nodes = get_nodes_from_spec(project, graph, spec)
+        included_nodes = get_nodes_from_spec(graph, spec)
         warn_if_useless_spec(spec, included_nodes)
         selected_nodes = selected_nodes | included_nodes
 
     for spec in exclude_specs:
-        excluded_nodes = get_nodes_from_spec(project, graph, spec)
+        excluded_nodes = get_nodes_from_spec(graph, spec)
         warn_if_useless_spec(spec, excluded_nodes)
         selected_nodes = selected_nodes - excluded_nodes
 
     return selected_nodes
+
+
+class NodeSelector(object):
+    def __init__(self, linker, flat_graph):
+        self.linker = linker
+        self.flat_graph = flat_graph
+
+    def get_selected(self, include, exclude, resource_types, tags):
+        graph = self.linker.graph
+
+        if include is None:
+            include = ['*']
+
+        if exclude is None:
+            exclude = []
+
+        to_run = []
+        for node_name in graph.nodes():
+            node = graph.node.get(node_name)
+
+            if not node.get('empty') and is_enabled(node):
+                to_run.append(node_name)
+
+        filtered_graph = graph.subgraph(to_run)
+        selected_nodes = select_nodes(filtered_graph, include, exclude)
+
+        filtered_nodes = set()
+        for node_name in selected_nodes:
+            node = graph.node.get(node_name)
+
+            matched_resource = node.get('resource_type') in resource_types
+            matched_tags = (len(tags) == 0 or bool(node.get('tags') & tags))
+
+            if matched_resource and matched_tags:
+                filtered_nodes.add(node_name)
+
+        return filtered_nodes
+
+    def get_ancestor_ephemeral_nodes(self, flat_graph, linked_graph,
+                                     selected_nodes):
+
+        node_names = {
+            node: flat_graph['nodes'].get(node).get('name')
+            for node in selected_nodes
+            if node in flat_graph['nodes']
+        }
+
+        include_spec = [
+            '+{}'.format(node_names[node])
+            for node in selected_nodes if node in node_names
+        ]
+
+        all_ancestors = select_nodes(linked_graph, include_spec, [])
+
+        res = []
+        for ancestor in all_ancestors:
+            if ancestor not in flat_graph['nodes']:
+                continue
+            ancestor_node = flat_graph['nodes'][ancestor]
+            is_model = ancestor_node.get('resource_type') == NodeType.Model
+            is_ephemeral = get_materialization(ancestor_node) == 'ephemeral'
+            if is_model and is_ephemeral:
+                res.append(ancestor)
+
+        return set(res)
+
+    def select(self, query):
+        include = query.get('include')
+        exclude = query.get('exclude')
+        resource_types = query.get('resource_types')
+        tags = query.get('tags')
+
+        flat_graph = self.flat_graph
+        graph = self.linker.graph
+
+        selected = self.get_selected(include, exclude, resource_types, tags)
+        addins = self.get_ancestor_ephemeral_nodes(flat_graph, graph, selected)
+
+        return selected | addins
+
+    def as_node_list(self, selected_nodes):
+        dependency_list = self.linker.as_dependency_list(selected_nodes)
+
+        concurrent_dependency_list = []
+        for level in dependency_list:
+            node_level = [self.linker.get_node(node) for node in level]
+            concurrent_dependency_list.append(node_level)
+
+        return concurrent_dependency_list
+
+
+class FlatNodeSelector(object):
+
+    def as_node_list(self, selected_nodes):
+        dependency_list = self.linker.as_dependency_list(
+            selected_nodes,
+            ephemeral_only=True)
+
+        concurrent_dependency_list = []
+        for level in dependency_list:
+            node_level = [self.linker.get_node(node) for node in level]
+            concurrent_dependency_list.append(node_level)
+
+        return concurrent_dependency_list

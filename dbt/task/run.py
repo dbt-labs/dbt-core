@@ -2,6 +2,9 @@ from __future__ import print_function
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.runner import RunManager
+from dbt.utils import NodeType
+from dbt.node_runners import ModelRunner
+
 import dbt.ui.printer
 
 
@@ -15,7 +18,14 @@ class RunTask:
             self.project, self.project['target-path'], self.args
         )
 
-        results = runner.run_models(self.args.models, self.args.exclude)
+        query = {
+            "include": self.args.models,
+            "exclude": self.args.exclude,
+            "resource_types": [NodeType.Model],
+            "tags": set()
+        }
+
+        results = runner.run(query, ModelRunner)
 
         if results:
             dbt.ui.printer.print_run_end_messages(results)

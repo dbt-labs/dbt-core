@@ -1,5 +1,8 @@
 from dbt.runner import RunManager
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
+from dbt.node_runners import ArchiveRunner
+from dbt.utils import NodeType
+
 import dbt.ui.printer
 
 
@@ -15,6 +18,12 @@ class ArchiveTask:
             self.args
         )
 
-        results = runner.run_archives(['*'], [])
+        query = {
+            'include': ['*'],
+            'exclude': [],
+            'resource_types': [NodeType.Archive]
+        }
+
+        results = runner.run_flat(query, ArchiveRunner)
 
         dbt.ui.printer.print_run_end_messages(results)
