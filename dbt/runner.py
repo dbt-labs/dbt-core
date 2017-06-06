@@ -20,11 +20,6 @@ from  dbt.graph.selector import NodeSelector, FlatNodeSelector
 from multiprocessing.dummy import Pool as ThreadPool
 
 
-INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If \
-the error persists, open an issue at https://github.com/fishtown-analytics/dbt
-""".strip()
-
-
 class RunManager(object):
     def __init__(self, project, target_path, args):
         self.project = project
@@ -49,49 +44,6 @@ class RunManager(object):
         )
 
         return dbt.linker.from_file(graph_file)
-
-    def safe_execute_node(self, data):
-        node = data['node']
-        flat_graph = data['flat_graph']
-        existing = data['existing']
-        schema_name = data['schema_name']
-        node_index = data['node_index']
-        num_nodes = data['num_nodes']
-
-        start_time = time.time()
-
-        error = None
-        status = None
-        is_ephemeral = (get_materialization(node) == 'ephemeral')
-
-        if not is_ephemeral:
-            print_start_line(node,
-                             schema_name,
-                             node_index,
-                             num_nodes)
-
-        profile = self.project.run_environment()
-        adapter = get_adapter(profile)
-
-        node = self.compile_node(node, flat_graph)
-
-        if not is_ephemeral:
-            node, status = self.execute_node(node, flat_graph, existing,
-                                             profile, adapter)
-
-        # ---
-
-        execution_time = time.time() - start_time
-
-        result = RunModelResult(node,
-                                error=error,
-                                status=status,
-                                execution_time=execution_time)
-
-        if not is_ephemeral:
-            print_result_line(result, schema_name, node_index, num_nodes)
-
-        return result
 
     def get_dependent(self, linker, node_id):
         dependent_nodes = linker.get_dependent_nodes(node_id)

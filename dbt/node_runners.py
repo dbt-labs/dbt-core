@@ -13,6 +13,11 @@ import dbt.clients.jinja
 import time
 
 
+INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If \
+the error persists, open an issue at https://github.com/fishtown-analytics/dbt
+""".strip()
+
+
 def track_model_run(index, num_nodes, run_model_result):
     invocation_id = dbt.tracking.active_user.invocation_id
     dbt.tracking.track_model_run({
@@ -380,11 +385,11 @@ class TestRunner(CompileRunner):
         handle, cursor = self.adapter.execute_one(
             self.profile,
             test.get('wrapped_sql'),
-            test.get('name'))
+            test.get('name'),
+            auto_begin=True)
 
         # TODO 
         rows = cursor.fetchall()
-        self.adapter.commit_if_has_connection(self.profile, self.node.get('name'))
 
         if len(rows) > 1:
             raise RuntimeError(
