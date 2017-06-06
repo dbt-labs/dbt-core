@@ -65,22 +65,26 @@ class BaseRunner(object):
 
         self.skip = False
 
-    def error_handler(self, func):
+    def safe_run(self, flat_graph, existing):
         catchable_errors = (dbt.exceptions.CompilationException,
                             dbt.exceptions.RuntimeException)
 
         result = RunModelResult(self.node)
 
         try:
-            status = func(*args, **kwargs)
-            result.status = status
+            # if we fail here, we still have a compiled node to return
+            # this has the benefit of showing a build path for the errant model
+            compiled_node = self.compile(flat_graph)
+            result.node = compiled_node
+
+            result = self.run(compiled_node, flat_graph, existing)
 
         except catchable_errors as e:
-            result.error = str(e)
+            result.error = str(e).strip()
             result.status = 'ERROR'
 
         except dbt.exceptions.InternalException as e:
-            build_path = node.get('build_path')
+            build_path = self.node.get('build_path')
             prefix = 'Internal error executing {}'.format(build_path)
 
             error = "{prefix}\n{error}\n\n{note}".format(
@@ -89,12 +93,12 @@ class BaseRunner(object):
                          note=INTERNAL_ERROR_STRING)
             logger.debug(error)
 
-            result.error = str(e)
+            result.error = str(e).strip()
             result.status = 'ERROR'
 
         except Exception as e:
             prefix = "Unhandled error while executing {filepath}".format(
-                        filepath=node.get('build_path'))
+                        filepath=self.node.get('build_path'))
 
             error = "{prefix}\n{error}".format(
                          prefix=dbt.ui.printer.red(prefix),
@@ -104,7 +108,7 @@ class BaseRunner(object):
             raise e
 
         finally:
-            adapter.release_connection(self.profile, node.get('name'))
+            self.adapter.release_connection(self.profile, self.node.get('name'))
 
         return result
 
@@ -115,19 +119,13 @@ class BaseRunner(object):
     def before_execute(self):
         raise NotImplementedException()
 
-    def execute(self, flat_graph, existing):
+    def execute(self, compiled_node, flat_graph, existing):
         raise NotImplementedException()
 
-    def run(self, flat_graph, existing):
-        if self.skip:
-            return self.on_skip()
-
-        self.before_execute()
+    def run(self, compiled_node, flat_graph, existing):
         started = time.time()
-        result = self.execute(flat_graph, existing)
+        result = self.execute(compiled_node, flat_graph, existing)
         result.execution_time = time.time() - started
-        self.after_execute(result)
-
         return result
 
     def after_execute(self, result):
@@ -143,7 +141,7 @@ class BaseRunner(object):
         node_result = RunModelResult(self.node, skip=True)
         return node_result
 
-    def skip(self):
+    def do_skip(self):
         self.skip = True
 
     @classmethod
@@ -164,8 +162,7 @@ class CompileRunner(BaseRunner):
     def after_execute(self, result):
         pass
 
-    def execute(self, flat_graph, existing):
-        compiled_node = self.compile(flat_graph)
+    def execute(self, compiled_node, flat_graph, existing):
         return RunModelResult(compiled_node)
 
     def compile(self, flat_graph):
@@ -345,14 +342,12 @@ class ModelRunner(CompileRunner):
         dbt.ui.printer.print_model_result_line(result, schema_name,
                 self.node_index, self.num_nodes)
 
-    def execute_model(self, flat_graph, existing):
+    def execute_model(self, compiled_node, flat_graph, existing):
         is_ephemeral = (dbt.utils.get_materialization(self.node) == 'ephemeral')
-        compiled_node = self.compile(flat_graph)
 
         if not is_ephemeral:
             status = self.do_execute_model(compiled_node, existing)
-
-        return RunModelResult(compiled_node, status=status)
+        return status
 
     def before_execute(self):
         is_ephemeral = (dbt.utils.get_materialization(self.node) == 'ephemeral')
@@ -366,9 +361,9 @@ class ModelRunner(CompileRunner):
         if not is_ephemeral:
             self.print_result_line(result)
 
-    def execute(self, flat_graph, existing):
-        run_model_result = self.execute_model(flat_graph, existing)
-        return run_model_result
+    def execute(self, model, flat_graph, existing):
+        status = self.execute_model(model, flat_graph, existing)
+        return RunModelResult(model, status=status)
 
 class TestRunner(CompileRunner):
     def print_start_line(self):
@@ -407,8 +402,7 @@ class TestRunner(CompileRunner):
     def before_execute(self):
         self.print_start_line()
 
-    def execute(self, flat_graph, existing):
-        test = self.compile(flat_graph)
+    def execute(self, test, flat_graph, existing):
         status = self.execute_test(test)
         return RunModelResult(test, status=status)
 
@@ -429,18 +423,9 @@ class ArchiveRunner(CompileRunner):
     def after_execute(self, result):
         self.print_result_line(result)
 
-    def execute(self, flat_graph, existing):
-        self.before_archive()
-        started = time.time()
+    def execute(self, archive, flat_graph, existing):
         status = self.execute_archive(self.project)
-        execution_time = time.time() - started
-
-        error = None # TODO
-        result = RunModelResult(self.node, error=error, status=status,
-                                execution_time=execution_time)
-        self.after_archive(result)
-
-        return result
+        return RunModelResult(archive, status=status)
 
     def execute_archive(self):
         node = self.node

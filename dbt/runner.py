@@ -93,16 +93,10 @@ class RunManager(object):
 
         return result
 
-    def on_model_failure(self, linker, selected_nodes):
-        def skip_dependent(node):
-            dependent_nodes = linker.get_dependent_nodes(node.get('unique_id'))
-            for node in dependent_nodes:
-                if node in selected_nodes:
-                    node_data = linker.get_node(node)
-                    node_data['skip'] = True
-                    linker.update_node_data(node, node_data)
-
-        return skip_dependent
+    def get_dependent(self, linker, node_id):
+        dependent_nodes = linker.get_dependent_nodes(node_id)
+        for node_id in dependent_nodes:
+            yield node_id
 
     def get_runners(self, Runner, adapter, node_dependency_list):
         all_nodes = dbt.utils.flatten_nodes(node_dependency_list)
@@ -122,9 +116,15 @@ class RunManager(object):
         existing = data['existing']
         flat_graph = data['flat_graph']
 
-        return runner.run(flat_graph, existing)
+        if runner.skip:
+            return runner.on_skip()
 
-    def execute_nodes(self, Runner, flat_graph, node_dependency_list):
+        runner.before_execute()
+        result = runner.safe_run(flat_graph, existing)
+        runner.after_execute(result)
+        return result
+
+    def execute_nodes(self, linker, Runner, flat_graph, node_dependency_list):
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
         schema_name = adapter.get_default_schema(profile)
@@ -133,6 +133,7 @@ class RunManager(object):
         concurrency_line = "Concurrency: {} threads (target='{}')".format(
                 num_threads, self.project.get_target().get('name'))
         dbt.ui.printer.print_timestamped_line(concurrency_line)
+        dbt.ui.printer.print_timestamped_line("")
 
         existing = adapter.query_for_existing(profile, schema_name)
         node_runners = self.get_runners(Runner, adapter, node_dependency_list)
@@ -154,15 +155,15 @@ class RunManager(object):
                 for result in pool.imap_unordered(self.call_runner, args_list):
                     node_results.append(result)
 
-                    # propagate so that CTEs get injected properly
-                    # TODO : is how does this work now????? Did we pass flat_graph by reference?
-                    # is that terrible? Will this just work??
                     node_id = result.node.get('unique_id')
                     flat_graph['nodes'][node_id] = result.node
 
                     if result.errored:
-                        #on_failure(result.node)
-                        print("FAIL: ", result.node) # TODO TODO TODO
+                        for dep_node_id in self.get_dependent(linker, node_id):
+                            runner = node_runners.get(dep_node_id)
+                            if runner:
+                                runner.do_skip()
+
                         logger.info(result.error)
 
             except KeyboardInterrupt:
@@ -211,7 +212,7 @@ class RunManager(object):
         try:
             Runner.before_run(self.project, adapter, flat_graph)
             started = time.time()
-            results = self.execute_nodes(Runner, flat_graph, dependency_list)
+            results = self.execute_nodes(linker, Runner, flat_graph, dependency_list)
             elapsed = time.time() - started
             Runner.after_run(self.project, adapter, results, flat_graph, elapsed)
 
