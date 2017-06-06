@@ -33,7 +33,7 @@ class NodeType(object):
     Operation = 'operation'
 
     @classmethod
-    def all(cls):
+    def executable(cls):
         return [
             cls.Model,
             cls.Test,

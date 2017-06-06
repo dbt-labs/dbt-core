@@ -16,7 +16,6 @@ import dbt.model
 import dbt.ui.printer
 
 from  dbt.graph.selector import NodeSelector, FlatNodeSelector
-from contextlib import contextmanager
 
 from multiprocessing.dummy import Pool as ThreadPool
 
@@ -24,46 +23,6 @@ from multiprocessing.dummy import Pool as ThreadPool
 INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If \
 the error persists, open an issue at https://github.com/fishtown-analytics/dbt
 """.strip()
-
-
-@contextmanager
-def model_error_handler(profile, adapter, node, run_model_result):
-    catchable_errors = (dbt.exceptions.CompilationException,
-                        dbt.exceptions.RuntimeException)
-
-    try:
-        yield
-
-    except catchable_errors as e:
-        run_model_result.error = str(e)
-        run_model_result.status = 'ERROR'
-
-    except dbt.exceptions.InternalException as e:
-        build_path = node.get('build_path')
-        prefix = 'Internal error executing {}'.format(build_path)
-
-        error = "{prefix}\n{error}\n\n{note}".format(
-                     prefix=dbt.ui.printer.red(prefix),
-                     error=str(e).strip(),
-                     note=INTERNAL_ERROR_STRING)
-        logger.debug(error)
-
-        run_model_result.error = str(e)
-        run_model_result.status = 'ERROR'
-
-    except Exception as e:
-        prefix = "Unhandled error while executing {filepath}".format(
-                    filepath=node.get('build_path'))
-
-        error = "{prefix}\n{error}".format(
-                     prefix=dbt.ui.printer.red(prefix),
-                     error=str(e).strip())
-
-        logger.debug(error)
-        raise e
-
-    finally:
-        adapter.release_connection(profile, node.get('name'))
 
 
 class RunManager(object):
@@ -153,7 +112,7 @@ class RunManager(object):
         node_runners = {}
         for i, node in enumerate(nodes):
             uid = node.get('unique_id')
-            runner = Runner(adapter, node, i + 1, num_nodes)
+            runner = Runner(self.project, adapter, node, i + 1, num_nodes)
             node_runners[uid] = runner
 
         return node_runners
@@ -163,21 +122,7 @@ class RunManager(object):
         existing = data['existing']
         flat_graph = data['flat_graph']
 
-        node = runner.node
-        adapter = runner.adapter
-        profile = self.project.run_environment()
-        # mtutable - this is set in context manager
-        error_result = RunModelResult(node)
-
-        result = None
-        # TODO : what is this?
-        with model_error_handler(profile, adapter, node, error_result):
-            result = runner.execute(self.project, flat_graph, existing)
-
-        if result is None:
-            return error_result
-        else:
-            return result
+        return runner.run(flat_graph, existing)
 
     def execute_nodes(self, Runner, flat_graph, node_dependency_list):
         profile = self.project.run_environment()
@@ -185,9 +130,9 @@ class RunManager(object):
         schema_name = adapter.get_default_schema(profile)
 
         num_threads = self.threads
-        logger.info("Concurrency: {} threads (target='{}')".format(
-            num_threads, self.project.get_target().get('name'))
-        )
+        concurrency_line = "Concurrency: {} threads (target='{}')".format(
+                num_threads, self.project.get_target().get('name'))
+        dbt.ui.printer.print_timestamped_line(concurrency_line)
 
         existing = adapter.query_for_existing(profile, schema_name)
         node_runners = self.get_runners(Runner, adapter, node_dependency_list)
@@ -197,7 +142,13 @@ class RunManager(object):
         for node_list in node_dependency_list:
             runners = [node_runners[n.get('unique_id')] for n in node_list]
 
-            args_list = [{'runner': runner, 'existing': existing, 'flat_graph': flat_graph} for runner in runners] # noqa
+            args_list = []
+            for runner in runners:
+                args_list.append({
+                    'existing': existing,
+                    'flat_graph': flat_graph,
+                    'runner': runner
+                })
 
             try:
                 for result in pool.imap_unordered(self.call_runner, args_list):
@@ -249,13 +200,13 @@ class RunManager(object):
             logger.info("WARNING: Nothing to do. Try checking your model "
                         "configs and model specification args")
             return []
-        else:
+        elif Runner.print_header:
             stat_line = dbt.ui.printer.get_counts(flat_nodes)
-            full_line = "{} {}".format(Runner.verb, stat_line)
-
             logger.info("")
-            dbt.ui.printer.print_timestamped_line(full_line)
+            dbt.ui.printer.print_timestamped_line(stat_line)
             dbt.ui.printer.print_timestamped_line("")
+        else:
+            logger.info("")
 
         try:
             Runner.before_run(self.project, adapter, flat_graph)

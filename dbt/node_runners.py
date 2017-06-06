@@ -53,9 +53,11 @@ class RunModelResult(object):
 
 
 class BaseRunner(object):
-    Verb = ""
+    print_header = True
 
-    def __init__(self, adapter, node, node_index, num_nodes):
+    def __init__(self, project, adapter, node, node_index, num_nodes):
+        self.project = project
+        self.profile = project.run_environment()
         self.adapter = adapter
         self.node = node
         self.node_index = node_index
@@ -63,18 +65,83 @@ class BaseRunner(object):
 
         self.skip = False
 
+    def error_handler(self, func):
+        catchable_errors = (dbt.exceptions.CompilationException,
+                            dbt.exceptions.RuntimeException)
+
+        result = RunModelResult(self.node)
+
+        try:
+            status = func(*args, **kwargs)
+            result.status = status
+
+        except catchable_errors as e:
+            result.error = str(e)
+            result.status = 'ERROR'
+
+        except dbt.exceptions.InternalException as e:
+            build_path = node.get('build_path')
+            prefix = 'Internal error executing {}'.format(build_path)
+
+            error = "{prefix}\n{error}\n\n{note}".format(
+                         prefix=dbt.ui.printer.red(prefix),
+                         error=str(e).strip(),
+                         note=INTERNAL_ERROR_STRING)
+            logger.debug(error)
+
+            result.error = str(e)
+            result.status = 'ERROR'
+
+        except Exception as e:
+            prefix = "Unhandled error while executing {filepath}".format(
+                        filepath=node.get('build_path'))
+
+            error = "{prefix}\n{error}".format(
+                         prefix=dbt.ui.printer.red(prefix),
+                         error=str(e).strip())
+
+            logger.debug(error)
+            raise e
+
+        finally:
+            adapter.release_connection(self.profile, node.get('name'))
+
+        return result
+
     @classmethod
     def get_schema(cls, adapter, profile):
         return adapter.get_default_schema(profile)
 
-    def before_model(self):
-        pass
-
-    def execute(self, project, flat_graph, existing):
+    def before_execute(self):
         raise NotImplementedException()
 
-    def after_model(self):
-        pass
+    def execute(self, flat_graph, existing):
+        raise NotImplementedException()
+
+    def run(self, flat_graph, existing):
+        if self.skip:
+            return self.on_skip()
+
+        self.before_execute()
+        started = time.time()
+        result = self.execute(flat_graph, existing)
+        result.execution_time = time.time() - started
+        self.after_execute(result)
+
+        return result
+
+    def after_execute(self, result):
+        raise NotImplementedException()
+
+    def on_skip(self):
+        schema_name = self.get_schema(self.adapter, self.profile)
+
+        node_name = self.node.get('name')
+        dbt.ui.printer.print_skip_line(self.node, schema_name, node_name,
+                                       self.node_index, self.num_nodes)
+
+        node_result = RunModelResult(self.node, skip=True)
+        return node_result
 
     def skip(self):
         self.skip = True
@@ -89,21 +156,20 @@ class BaseRunner(object):
 
 
 class CompileRunner(BaseRunner):
-    verb = "Compiling"
+    print_header = False
 
-    def execute(self, project, flat_graph, existing):
-        compiled_node = self.compile(project, flat_graph)
+    def before_execute(self):
+        pass
+
+    def after_execute(self, result):
+        pass
+
+    def execute(self, flat_graph, existing):
+        compiled_node = self.compile(flat_graph)
         return RunModelResult(compiled_node)
 
-    def compile(self, project, flat_graph):
-        profile = project.run_environment()
-
-        try:
-            return self.compile_node(self.adapter, project, self.node, flat_graph)
-
-        finally:
-            self.adapter.release_connection(profile, self.node.get('name'))
-
+    def compile(self, flat_graph):
+        return self.compile_node(self.adapter, self.project, self.node, flat_graph)
 
     @classmethod
     def compile_node(cls, adapter, project, node, flat_graph):
@@ -124,7 +190,6 @@ class CompileRunner(BaseRunner):
     @classmethod
     def node_context(cls, adapter, project, node):
         profile = project.run_environment()
-
         def call_get_columns_in_table(schema_name, table_name):
             return adapter.adapter.get_columns_in_table(
                 profile, schema_name, table_name, node.get('name'))
@@ -149,8 +214,6 @@ class CompileRunner(BaseRunner):
 
 
 class ModelRunner(CompileRunner):
-    verb = "Running"
-
     @classmethod
     def try_create_schema(cls, project, adapter):
         profile = project.run_environment()
@@ -197,24 +260,13 @@ class ModelRunner(CompileRunner):
         cls.run_hooks(project, adapter, flat_graph, RunHookType.End)
         cls.print_results_line(results, elapsed)
 
-    def on_skip(self, project):
-        profile = project.run_environment()
-        schema_name = self.get_schema(self.adapter, profile)
-
-        node_name = self.node.get('name')
-        dbt.ui.printer.print_skip_line(self.node, schema_name, node_name,
-                                       self.node_index, self.num_nodes)
-
-        node_result = RunModelResult(self.node, skip=True)
-        return node_result
-
     # TODO - terrible
-    def do_execute_model(self, adapter, profile, model, existing):
-        schema = adapter.get_default_schema(profile)
+    def do_execute_model(self, model, existing):
+        schema = self.adapter.get_default_schema(self.profile)
 
         tmp_name = '{}__dbt_tmp'.format(model.get('name'))
 
-        if dbt.flags.NON_DESTRUCTIVE or profile.get('type') == 'bigquery': # TODO
+        if dbt.flags.NON_DESTRUCTIVE or self.profile.get('type') == 'bigquery': # TODO
             # for non destructive mode, we only look at the already existing table.
             tmp_name = model.get('name')
 
@@ -225,8 +277,8 @@ class ModelRunner(CompileRunner):
            dbt.flags.NON_DESTRUCTIVE and \
            existing.get(tmp_name) == 'table':
             # tables get truncated instead of dropped in non-destructive mode.
-            adapter.truncate(
-                profile=profile,
+            self.adapter.truncate(
+                profile=self.profile,
                 table=tmp_name,
                 model_name=model.get('name'))
 
@@ -237,15 +289,15 @@ class ModelRunner(CompileRunner):
         elif (get_materialization(model) != 'incremental' and
               existing.get(tmp_name) is not None):
             # otherwise, for non-incremental things, drop them with IF EXISTS
-            adapter.drop(
-                profile=profile,
+            self.adapter.drop(
+                profile=self.profile,
                 relation=tmp_name,
                 relation_type=existing.get(tmp_name),
                 model_name=model.get('name'))
 
             # and update the list of what exists
-            existing = adapter.query_for_existing(
-                profile,
+            existing = self.adapter.query_for_existing(
+                self.profile,
                 schema,
                 model_name=model.get('name'))
 
@@ -257,7 +309,7 @@ class ModelRunner(CompileRunner):
             # views either.
             pass
         elif dbt.utils.is_enabled(model) and get_materialization(model) != 'ephemeral':
-            result = adapter.execute_model(profile, model)
+            result = self.adapter.execute_model(self.profile, model)
 
         # DROP OLD RELATION AND RENAME
         if dbt.flags.NON_DESTRUCTIVE:
@@ -268,94 +320,76 @@ class ModelRunner(CompileRunner):
             # otherwise, drop tables and views, and rename tmp tables/views to
             # their new names
             if existing.get(model.get('name')) is not None:
-                adapter.drop(
-                    profile=profile,
+                self.adapter.drop(
+                    profile=self.profile,
                     relation=model.get('name'),
                     relation_type=existing.get(model.get('name')),
                     model_name=model.get('name'))
 
-            adapter.rename(profile=profile,
+            self.adapter.rename(profile=self.profile,
                            from_name=tmp_name,
                            to_name=model.get('name'),
                            model_name=model.get('name'))
 
 
-        self.adapter.commit_if_has_connection(profile, self.node.get('name'))
+        self.adapter.commit_if_has_connection(self.profile, self.node.get('name'))
         return result
 
-    def print_start_line(self, profile):
-        schema_name = self.get_schema(self.adapter, profile)
+    def print_start_line(self):
+        schema_name = self.get_schema(self.adapter, self.profile)
         dbt.ui.printer.print_model_start_line(self.node, schema_name,
                 self.node_index, self.num_nodes)
 
-    def print_result_line(self, profile, result):
-        schema_name = self.get_schema(self.adapter, profile)
+    def print_result_line(self, result):
+        schema_name = self.get_schema(self.adapter, self.profile)
         dbt.ui.printer.print_model_result_line(result, schema_name,
                 self.node_index, self.num_nodes)
 
-    def execute_model(self, project, flat_graph, existing):
-        start_time = time.time()
-
-        profile = project.run_environment()
+    def execute_model(self, flat_graph, existing):
         is_ephemeral = (dbt.utils.get_materialization(self.node) == 'ephemeral')
-
-        compiled_node = self.compile(project, flat_graph)
+        compiled_node = self.compile(flat_graph)
 
         if not is_ephemeral:
-            status = self.do_execute_model(self.adapter, profile, compiled_node, existing)
+            status = self.do_execute_model(compiled_node, existing)
 
-        execution_time = time.time() - start_time
-        error = None # TODO
+        return RunModelResult(compiled_node, status=status)
 
-        result = RunModelResult(compiled_node, error=error, status=status,
-                                execution_time=execution_time)
-
-        return result
-
-    def execute(self, project, flat_graph, existing):
-
-        if self.skip:
-            return self.on_skip()
-        else:
-            self.before_model(project)
-            run_model_result = self.execute_model(project, flat_graph, existing)
-            self.after_model(project, run_model_result)
-
-    def before_model(self, project):
-        profile = project.run_environment()
+    def before_execute(self):
         is_ephemeral = (dbt.utils.get_materialization(self.node) == 'ephemeral')
         if not is_ephemeral:
-            self.print_start_line(profile)
+            self.print_start_line()
 
-    def after_model(self, project, result):
-        profile = project.run_environment()
+    def after_execute(self, result):
         track_model_run(self.node_index, self.num_nodes, result)
 
         is_ephemeral = (dbt.utils.get_materialization(self.node) == 'ephemeral')
         if not is_ephemeral:
-            self.print_result_line(profile, result)
+            self.print_result_line(result)
 
+    def execute(self, flat_graph, existing):
+        run_model_result = self.execute_model(flat_graph, existing)
+        return run_model_result
 
 class TestRunner(CompileRunner):
-    def print_start_line(self, profile):
-        schema_name = self.get_schema(self.adapter, profile)
+    def print_start_line(self):
+        schema_name = self.get_schema(self.adapter, self.profile)
         dbt.ui.printer.print_test_start_line(self.node, schema_name,
                 self.node_index, self.num_nodes)
 
-    def print_result_line(self, profile, result):
-        schema_name = self.get_schema(self.adapter, profile)
+    def print_result_line(self, result):
+        schema_name = self.get_schema(self.adapter, self.profile)
         dbt.ui.printer.print_test_result_line(result, schema_name,
                 self.node_index, self.num_nodes)
 
-    def execute_test(self, profile, test):
+    def execute_test(self, test):
         handle, cursor = self.adapter.execute_one(
-            profile,
+            self.profile,
             test.get('wrapped_sql'),
             test.get('name'))
 
         # TODO 
         rows = cursor.fetchall()
-        self.adapter.commit_if_has_connection(profile, self.node.get('name'))
+        self.adapter.commit_if_has_connection(self.profile, self.node.get('name'))
 
         if len(rows) > 1:
             raise RuntimeError(
@@ -370,25 +404,16 @@ class TestRunner(CompileRunner):
 
         return row[0]
 
-    def before_test(self, profile):
-        self.print_start_line(profile)
+    def before_execute(self):
+        self.print_start_line()
 
-    def execute(self, project, flat_graph, existing):
-        test = self.compile(project, flat_graph)
-        profile = project.run_environment()
+    def execute(self, flat_graph, existing):
+        test = self.compile(flat_graph)
+        status = self.execute_test(test)
+        return RunModelResult(test, status=status)
 
-        start_time = time.time()
-        num_fail = self.execute_test(profile, test)
-        execution_time = time.time() - start_time # TODO
-
-        error = None # TODO
-        result = RunModelResult(test, error=error, status=num_fail,
-                                execution_time=execution_time)
-
-        self.after_test(profile, result)
-
-    def after_test(self, profile, result):
-        self.print_result_line(profile, result)
+    def after_execute(self, result):
+        self.print_result_line(result)
 
 
 class ArchiveRunner(CompileRunner):
@@ -398,16 +423,16 @@ class ArchiveRunner(CompileRunner):
     def print_result_line(self, result):
         dbt.ui.printer.print_archive_result_line(result, self.node_index, self.num_nodes)
 
-    def before_archive(self):
+    def before_execute(self):
         self.print_start_line()
 
-    def after_archive(self, result):
+    def after_execute(self, result):
         self.print_result_line(result)
 
-    def execute(self, project, flat_graph, existing):
+    def execute(self, flat_graph, existing):
         self.before_archive()
         started = time.time()
-        status = self.execute_archive(project)
+        status = self.execute_archive(self.project)
         execution_time = time.time() - started
 
         error = None # TODO
@@ -415,16 +440,16 @@ class ArchiveRunner(CompileRunner):
                                 execution_time=execution_time)
         self.after_archive(result)
 
-    def execute_archive(self, project):
-        profile = project.run_environment()
+        return result
 
+    def execute_archive(self):
         node = self.node
         node_cfg = node.get('config', {})
 
-        context = self.node_context(self.adapter, project, self.node)
+        context = self.node_context(self.adapter, self.project, self.node)
 
         source_columns = self.adapter.get_columns_in_table(
-            profile, node_cfg.get('source_schema'), node_cfg.get('source_table'))
+            self.profile, node_cfg.get('source_schema'), node_cfg.get('source_table'))
 
         if len(source_columns) == 0:
             source_schema = node_cfg.get('source_schema')
@@ -441,7 +466,7 @@ class ArchiveRunner(CompileRunner):
         ]
 
         self.adapter.create_table(
-            profile,
+            self.profile,
             schema=node_cfg.get('target_schema'),
             table=node_cfg.get('target_table'),
             columns=dest_columns,
@@ -469,7 +494,7 @@ class ArchiveRunner(CompileRunner):
                                                              template_ctx)
 
         result = self.adapter.execute_model(
-            profile=profile,
+            profile=self.profile,
             model=node)
 
         return result

@@ -4,6 +4,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.runner import RunManager
 from dbt.node_runners import CompileRunner
 from dbt.utils import NodeType
+import dbt.ui.printer
 
 
 class CompileTask:
@@ -19,10 +20,10 @@ class CompileTask:
         query = {
             "include": self.args.models,
             "exclude": self.args.exclude,
-            "resource_types": NodeType.all,
+            "resource_types": NodeType.executable(),
             "tags": set()
         }
 
         runner.run(query, CompileRunner)
 
-        logger.info('Done.')
+        dbt.ui.printer.print_timestamped_line('Done.')
