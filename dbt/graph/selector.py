@@ -252,8 +252,7 @@ class NodeSelector(object):
         return concurrent_dependency_list
 
 
-class FlatNodeSelector(object):
-
+class FlatNodeSelector(NodeSelector):
     def as_node_list(self, selected_nodes):
         dependency_list = self.linker.as_dependency_list(
             selected_nodes,
