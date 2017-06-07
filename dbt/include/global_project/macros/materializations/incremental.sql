@@ -12,13 +12,15 @@
 
 {%- endmacro %}
 
-{% macro dbt__create_incremental(schema, model, dist, sort, sql, adapter) -%}
+{% macro dbt__create_incremental(schema, model, dist, sort, sql, flags, adapter) -%}
 
   {%- set identifier = model['name'] -%}
   {%- set sql_where = model['config'].get('sql_where', 'null') -%}
   {%- set unique_key = model['config'].get('unique_key', 'null') -%}
 
-  {% if not adapter.already_exists(schema, identifier) -%}
+  {%- set force_create = (flags.FULL_REFRESH and not flags.NON_DESTRUCTIVE) -%}
+
+  {% if force_create or not adapter.already_exists(schema, identifier) -%}
 
     create table "{{ schema }}"."{{ identifier }}" {{ dist }} {{ sort }} as (
       {{ sql }}

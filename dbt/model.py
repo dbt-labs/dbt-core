@@ -83,15 +83,7 @@ class SourceConfig(object):
                 defaults, own_config, self.in_model_config, active_config
             )
 
-        # mask this as a table if it's an incremental model with
-        # --full-refresh provided
-        if cfg.get('materialized') == 'incremental' and self.is_full_refresh():
-            cfg['materialized'] = 'table'
-
         return cfg
-
-    def is_full_refresh(self):
-        return dbt.flags.FULL_REFRESH
 
     def update_in_model_config(self, config):
         config = config.copy()

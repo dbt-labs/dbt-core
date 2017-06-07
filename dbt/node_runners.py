@@ -8,6 +8,7 @@ import dbt.tracking
 import dbt.ui.printer
 import dbt.flags
 import dbt.schema
+import dbt.materializers
 
 import dbt.clients.jinja
 import time
@@ -262,81 +263,6 @@ class ModelRunner(CompileRunner):
         cls.run_hooks(project, adapter, flat_graph, RunHookType.End)
         cls.print_results_line(results, elapsed)
 
-    # TODO - terrible
-    def do_execute_model(self, model, existing):
-        schema = self.adapter.get_default_schema(self.profile)
-
-        tmp_name = '{}__dbt_tmp'.format(model.get('name'))
-
-        if dbt.flags.NON_DESTRUCTIVE or self.profile.get('type') == 'bigquery': # TODO
-            # for non destructive mode, we only look at the already existing table.
-            tmp_name = model.get('name')
-
-        result = None
-
-        # TRUNCATE / DROP
-        if get_materialization(model) == 'table' and \
-           dbt.flags.NON_DESTRUCTIVE and \
-           existing.get(tmp_name) == 'table':
-            # tables get truncated instead of dropped in non-destructive mode.
-            self.adapter.truncate(
-                profile=self.profile,
-                table=tmp_name,
-                model_name=model.get('name'))
-
-        elif dbt.flags.NON_DESTRUCTIVE:
-            # never drop existing relations in non destructive mode.
-            pass
-
-        elif (get_materialization(model) != 'incremental' and
-              existing.get(tmp_name) is not None):
-            # otherwise, for non-incremental things, drop them with IF EXISTS
-            self.adapter.drop(
-                profile=self.profile,
-                relation=tmp_name,
-                relation_type=existing.get(tmp_name),
-                model_name=model.get('name'))
-
-            # and update the list of what exists
-            existing = self.adapter.query_for_existing(
-                self.profile,
-                schema,
-                model_name=model.get('name'))
-
-        # EXECUTE
-        if get_materialization(model) == 'view' and dbt.flags.NON_DESTRUCTIVE and \
-           model.get('name') in existing:
-            # views don't need to be recreated in non destructive mode since they
-            # will repopulate automatically. note that we won't run DDL for these
-            # views either.
-            pass
-        elif dbt.utils.is_enabled(model) and get_materialization(model) != 'ephemeral':
-            result = self.adapter.execute_model(self.profile, model)
-
-        # DROP OLD RELATION AND RENAME
-        if dbt.flags.NON_DESTRUCTIVE:
-            # in non-destructive mode, we truncate and repopulate tables, and
-            # don't modify views.
-            pass
-        elif get_materialization(model) in ['table', 'view']:
-            # otherwise, drop tables and views, and rename tmp tables/views to
-            # their new names
-            if existing.get(model.get('name')) is not None:
-                self.adapter.drop(
-                    profile=self.profile,
-                    relation=model.get('name'),
-                    relation_type=existing.get(model.get('name')),
-                    model_name=model.get('name'))
-
-            self.adapter.rename(profile=self.profile,
-                           from_name=tmp_name,
-                           to_name=model.get('name'),
-                           model_name=model.get('name'))
-
-
-        self.adapter.commit_if_has_connection(self.profile, self.node.get('name'))
-        return result
-
     def print_start_line(self):
         schema_name = self.get_schema(self.adapter, self.profile)
         dbt.ui.printer.print_model_start_line(self.node, schema_name,
@@ -346,13 +272,6 @@ class ModelRunner(CompileRunner):
         schema_name = self.get_schema(self.adapter, self.profile)
         dbt.ui.printer.print_model_result_line(result, schema_name,
                 self.node_index, self.num_nodes)
-
-    def execute_model(self, compiled_node, flat_graph, existing):
-        is_ephemeral = (dbt.utils.get_materialization(self.node) == 'ephemeral')
-
-        if not is_ephemeral:
-            status = self.do_execute_model(compiled_node, existing)
-        return status
 
     def before_execute(self):
         is_ephemeral = (dbt.utils.get_materialization(self.node) == 'ephemeral')
@@ -367,7 +286,13 @@ class ModelRunner(CompileRunner):
             self.print_result_line(result)
 
     def execute(self, model, flat_graph, existing):
-        status = self.execute_model(model, flat_graph, existing)
+        is_ephemeral = (dbt.utils.get_materialization(self.node) == 'ephemeral')
+
+        if not is_ephemeral:
+            materializer = dbt.materializers.get_materializer(self.adapter,
+                    model, existing)
+            status = materializer.materialize(self.profile)
+
         return RunModelResult(model, status=status)
 
 class TestRunner(CompileRunner):

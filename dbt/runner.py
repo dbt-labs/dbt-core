@@ -74,6 +74,10 @@ class RunManager(object):
         runner.before_execute()
         result = runner.safe_run(flat_graph, existing)
         runner.after_execute(result)
+
+        if result.errored:
+            logger.info(result.error)
+
         return result
 
     def execute_nodes(self, linker, Runner, flat_graph, node_dependency_list):
@@ -115,8 +119,6 @@ class RunManager(object):
                             runner = node_runners.get(dep_node_id)
                             if runner:
                                 runner.do_skip()
-
-                        logger.info(result.error)
 
             except KeyboardInterrupt:
                 pool.close()
