@@ -109,6 +109,7 @@ class DefaultAdapter(object):
         elif relation_type == 'table':
             return cls.drop_table(profile, relation, model_name)
         else:
+            import ipdb; ipdb.set_trace()
             raise RuntimeError(
                 "Invalid relation_type '{}'"
                 .format(relation_type))

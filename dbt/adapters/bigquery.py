@@ -31,7 +31,7 @@ class BigQueryAdapter(PostgresAdapter):
     def get_materializer(cls, node, existing):
         # use InPlaceMaterializer b/c BigQuery doesn't have transactions
         # and can't rename views
-        materializer = dbt.materializers.InPlaceMaterializer
+        materializer = dbt.materializers.NonDDLMaterializer
         return dbt.materializers.make_materializer(materializer,
                                                    cls,
                                                    node,

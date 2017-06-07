@@ -86,7 +86,6 @@ class RunManager(object):
             result = runner.safe_run(flat_graph, existing)
             runner.after_execute(result)
 
-
         if result.errored:
             logger.info(result.error)
 

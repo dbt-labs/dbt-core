@@ -41,6 +41,8 @@ class BaseMaterializer(object):
         self.before_materialize(profile)
         result = self.do_materialize(profile)
         self.after_materialize(profile)
+
+        self.commit(profile)
         return result
 
     def do_materialize(self, profile):
@@ -61,6 +63,10 @@ class BaseMaterializer(object):
         return self.adapter.rename(profile, from_name, to_name,
                                    self.node.get('name'))
 
+    def commit(self, profile):
+        model_name = self.node.get('name')
+        return self.adapter.commit_if_has_connection(profile, model_name)
+
 class TableMaterializer(BaseMaterializer):
 
     def before_materialize(self, profile):
@@ -76,7 +82,10 @@ class TableMaterializer(BaseMaterializer):
         if self.non_destructive:
             return
 
-        self.drop(profile, self.final_name(), 'table')
+        existing_type = self.existing_final_type()
+        if existing_type is not None:
+            self.drop(profile, self.final_name(), 'table')
+
         self.rename(profile, self.tmp_name(), self.final_name())
 
 class ViewMaterializer(BaseMaterializer):
@@ -94,8 +103,9 @@ class ViewMaterializer(BaseMaterializer):
 
         if self.non_destructive and existing_type == 'view':
             return
+        elif existing_type is not None:
+            self.drop(profile, self.final_name(), existing_type)
 
-        self.drop(profile, self.final_name(), existing_type)
         self.rename(profile, self.tmp_name(), self.final_name())
 
 class IncrementalMaterializer(BaseMaterializer):
@@ -104,16 +114,18 @@ class IncrementalMaterializer(BaseMaterializer):
         existing_type = self.existing_final_type()
         exists_as_table = (existing_type == 'table')
 
-        if self.non_destructive and self.full_refresh and exists_as_table:
+        if existing_type is None:
+            pass
+        elif self.non_destructive and self.full_refresh and exists_as_table:
             self.truncate(profile, self.final_name())
-        elif self.full_refresh or not exists_as_table:
+        elif (self.full_refresh or not exists_as_table):
             self.drop(profile, self.final_name(), existing_type)
 
     def after_materialize(self, profile):
         pass
 
 
-class InPlaceMaterializer(BaseMaterializer):
+class NonDDLMaterializer(BaseMaterializer):
     def before_materialize(self, profile):
         existing_type = self.existing_final_type()
         existing_type = self.existing_final_type()
@@ -121,6 +133,9 @@ class InPlaceMaterializer(BaseMaterializer):
             self.drop(profile, self.final_name(), existing_type)
 
     def after_materialize(self, profile):
+        pass
+
+    def commit(self, profile):
         pass
 
 
