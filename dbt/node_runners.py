@@ -75,13 +75,13 @@ class BaseRunner(object):
                             dbt.exceptions.RuntimeException)
 
         result = RunModelResult(self.node)
+        started = time.time()
 
         try:
             # if we fail here, we still have a compiled node to return
             # this has the benefit of showing a build path for the errant model
             compiled_node = self.compile(flat_graph)
             result.node = compiled_node
-
             result = self.run(compiled_node, flat_graph, existing)
 
         except catchable_errors as e:
@@ -115,6 +115,7 @@ class BaseRunner(object):
         finally:
             self.adapter.release_connection(self.profile, self.node.get('name'))
 
+        result.execution_time = time.time() - started
         return result
 
     @classmethod
@@ -128,10 +129,7 @@ class BaseRunner(object):
         raise NotImplementedException()
 
     def run(self, compiled_node, flat_graph, existing):
-        started = time.time()
-        result = self.execute(compiled_node, flat_graph, existing)
-        result.execution_time = time.time() - started
-        return result
+        return self.execute(compiled_node, flat_graph, existing)
 
     def after_execute(self, result):
         raise NotImplementedException()

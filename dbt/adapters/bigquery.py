@@ -18,7 +18,13 @@ class BigQueryAdapter(PostgresAdapter):
     @classmethod
     def initialize(cls):
         import importlib
-        globals()['bigquery'] = importlib.import_module('google.cloud.bigquery')
+
+        google = importlib.import_module('google')
+        google.cloud = importlib.import_module('google.cloud')
+        google.cloud.bigquery = importlib.import_module('google.cloud.bigquery')
+        google.cloud.exceptions = importlib.import_module('google.cloud.exceptions')
+
+        globals()['google'] = google
 
     @classmethod
     def get_materializer(cls, node, existing):
@@ -38,27 +44,16 @@ class BigQueryAdapter(PostgresAdapter):
 
         try:
             yield
-        #except snowflake.connector.errors.ProgrammingError as e:
-        #    logger.debug('Snowflake error: {}'.format(str(e)))
+        except google.cloud.exceptions.BadRequest as e:
+            logger.debug("Bad request while running:\n{}".format(sql))
+            logger.debug(e)
+            error_msg = "\n".join([error['message'] for error in e.errors])
+            raise dbt.exceptions.RuntimeException(error_msg)
 
-        #    if 'Empty SQL statement' in e.msg:
-        #        logger.debug("got empty sql statement, moving on")
-        #    elif 'This session does not have a current database' in e.msg:
-        #        cls.rollback(connection)
-        #        raise dbt.exceptions.FailedToConnectException(
-        #            ('{}\n\nThis error sometimes occurs when invalid '
-        #             'credentials are provided, or when your default role '
-        #             'does not have access to use the specified database. '
-        #             'Please double check your profile and try again.')
-        #            .format(str(e)))
-        #    else:
-        #        cls.rollback(connection)
-        #        raise dbt.exceptions.ProgrammingException(str(e))
         except Exception as e:
-            logger.debug("Error running SQL: %s", sql)
-            logger.debug("Rolling back transaction.")
-            cls.rollback(connection)
-            raise e
+            logger.debug("Unhandled error while running:\n{}".format(sql))
+            logger.debug(e)
+            raise dbt.exceptions.RuntimeException(e)
 
     @classmethod
     def type(cls):
@@ -96,7 +91,7 @@ class BigQueryAdapter(PostgresAdapter):
 
         try:
             credentials = connection.get('credentials', {})
-            handle = bigquery.Client(
+            handle = google.cloud.bigquery.Client(
                 project = credentials.get('project', None),
             )
 
@@ -158,8 +153,7 @@ class BigQueryAdapter(PostgresAdapter):
 
         model_name = model.get('name')
 
-        # TODO: injected_sql?
-        model_sql = "#standardSQL\n{}".format(model.get('compiled_sql'))
+        model_sql = "#standardSQL\n{}".format(model.get('injected_sql'))
 
         schema = cls.get_default_schema(profile)
         dataset = cls.get_dataset(profile, schema, model_name)
@@ -167,11 +161,10 @@ class BigQueryAdapter(PostgresAdapter):
         view = dataset.table(model_name)
         view.view_query = model_sql
 
-        try:
+        logger.debug("Model SQL ({}):\n{}".format(model_name, model_sql))
+
+        with cls.exception_handler(profile, model_sql, model_name, model_name):
             view.create()
-        except Exception as err:
-            errors = "\n".join([e['message'] for e in err.errors])
-            raise RuntimeError(errors)
 
         if view.created is None:
             raise RuntimeError("Error creating view {}".format(model_name))
