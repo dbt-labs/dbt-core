@@ -52,13 +52,20 @@ class RunManager(object):
 
     def get_runners(self, Runner, adapter, node_dependency_list):
         all_nodes = dbt.utils.flatten_nodes(node_dependency_list)
-        nodes = [n for n in all_nodes if get_materialization(n) != 'ephemeral']
-        num_nodes = len(nodes)
+
+        num_nodes = len([
+            n for n in all_nodes if get_materialization(n) != 'ephemeral'
+        ])
 
         node_runners = {}
-        for i, node in enumerate(nodes):
+        i = 0
+        for node in all_nodes:
             uid = node.get('unique_id')
-            runner = Runner(self.project, adapter, node, i + 1, num_nodes)
+            if get_materialization(node) == 'ephemeral':
+                runner = Runner(self.project, adapter, node, 0, 0)
+            else:
+                i += 1
+                runner = Runner(self.project, adapter, node, i, num_nodes)
             node_runners[uid] = runner
 
         return node_runners
@@ -80,14 +87,24 @@ class RunManager(object):
 
         return result
 
+    def get_relevant_runners(self, node_runners, node_subset):
+        runners = []
+        for node in node_subset:
+            unique_id = node.get('unique_id')
+            if unique_id in node_runners:
+                runners.append(node_runners[unique_id])
+        return runners
+
     def execute_nodes(self, linker, Runner, flat_graph, node_dependency_list):
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
         schema_name = adapter.get_default_schema(profile)
 
         num_threads = self.threads
-        concurrency_line = "Concurrency: {} threads (target='{}')".format(
-                num_threads, self.project.get_target().get('name'))
+        target_name = self.project.get_target().get('name')
+
+        text = "Concurrency: {} threads (target='{}')"
+        concurrency_line = text.format(num_threads, target_name)
         dbt.ui.printer.print_timestamped_line(concurrency_line)
         dbt.ui.printer.print_timestamped_line("")
 
@@ -97,7 +114,7 @@ class RunManager(object):
         pool = ThreadPool(num_threads)
         node_results = []
         for node_list in node_dependency_list:
-            runners = [node_runners[n.get('unique_id')] for n in node_list]
+            runners = self.get_relevant_runners(node_runners, node_list)
 
             args_list = []
             for runner in runners:

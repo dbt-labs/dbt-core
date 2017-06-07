@@ -288,6 +288,7 @@ class ModelRunner(CompileRunner):
     def execute(self, model, flat_graph, existing):
         is_ephemeral = (dbt.utils.get_materialization(self.node) == 'ephemeral')
 
+        status = None
         if not is_ephemeral:
             materializer = dbt.materializers.get_materializer(self.adapter,
                     model, existing)
