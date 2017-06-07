@@ -15,7 +15,7 @@ import dbt.tracking
 import dbt.model
 import dbt.ui.printer
 
-from  dbt.graph.selector import NodeSelector, FlatNodeSelector
+import dbt.graph.selector
 
 from multiprocessing.dummy import Pool as ThreadPool
 
@@ -78,9 +78,14 @@ class RunManager(object):
         if runner.skip:
             return runner.on_skip()
 
-        runner.before_execute()
-        result = runner.safe_run(flat_graph, existing)
-        runner.after_execute(result)
+        # no before/after printing for ephemeral mdoels
+        if runner.is_ephemeral():
+            result = runner.safe_run(flat_graph, existing)
+        else:
+            runner.before_execute()
+            result = runner.safe_run(flat_graph, existing)
+            runner.after_execute(result)
+
 
         if result.errored:
             logger.info(result.error)
@@ -195,9 +200,9 @@ class RunManager(object):
     # ------------------------------------
 
     def run(self, query, Runner):
-        Selector = NodeSelector
+        Selector = dbt.graph.selector.NodeSelector
         return self.run_from_graph(Selector, Runner, query)
 
     def run_flat(self, query, Runner):
-        Selector = FlatNodeSelector
+        Selector = dbt.graph.selector.FlatNodeSelector
         return self.run_from_graph(Selector, Runner, query)

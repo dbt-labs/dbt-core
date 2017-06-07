@@ -563,6 +563,12 @@ class DefaultAdapter(object):
         return cls.add_query(profile, sql, model_name, auto_begin)
 
     @classmethod
+    def execute_and_fetch(cls, profile, sql, model_name=None, auto_begin=False):
+        _, cursor = cls.execute_one(profile, sql, model_name, auto_begin)
+
+        return cursor.fetchall()
+
+    @classmethod
     def execute_all(cls, profile, sqls, model_name=None):
         connection = cls.get_connection(profile, model_name)
 

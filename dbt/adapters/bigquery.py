@@ -13,6 +13,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 
 class BigQueryAdapter(PostgresAdapter):
 
+    QUERY_TIMEOUT = 60 * 1000
     requires = {'bigquery': 'google-cloud-bigquery==0.24.0'}
 
     @classmethod
@@ -144,6 +145,11 @@ class BigQueryAdapter(PostgresAdapter):
 
         connection, cursor = cls.add_query(profile, sql, model_name)
 
+    # hack because of current API limitations
+    @classmethod
+    def format_sql_for_bigquery(cls, sql):
+        return "#standardSQL\n{}".format(sql)
+
     @classmethod
     def execute_model(cls, profile, model):
         connection = cls.get_connection(profile, model.get('name'))
@@ -152,8 +158,7 @@ class BigQueryAdapter(PostgresAdapter):
             validate_connection(connection)
 
         model_name = model.get('name')
-
-        model_sql = "#standardSQL\n{}".format(model.get('injected_sql'))
+        model_sql = cls.format_sql_for_bigquery(model.get('injected_sql'))
 
         schema = cls.get_default_schema(profile)
         dataset = cls.get_dataset(profile, schema, model_name)
@@ -170,6 +175,33 @@ class BigQueryAdapter(PostgresAdapter):
             raise RuntimeError("Error creating view {}".format(model_name))
 
         return "CREATE VIEW"
+
+    @classmethod
+    def fetch_query_results(cls, query):
+        all_rows = []
+
+        rows = query.rows
+        token = query.page_token
+
+        while True:
+            all_rows.extend(rows)
+            if token is None:
+                break
+            rows, total_count, token = query.fetch_data(page_token=token)
+        return rows
+
+    @classmethod
+    def execute_and_fetch(cls, profile, sql, model_name=None, **kwargs):
+        conn = cls.get_connection(profile, model_name)
+        client = conn.get('handle')
+
+        formatted_sql = cls.format_sql_for_bigquery(sql)
+        query = client.run_sync_query(formatted_sql)
+        query.timeout_ms = cls.QUERY_TIMEOUT
+        logger.debug("Fetching data for query {}:\n{}".format(model_name, formatted_sql))
+        query.run()
+
+        return cls.fetch_query_results(query)
 
     @classmethod
     def add_begin_query(cls, profile, name):

@@ -70,6 +70,9 @@ class BaseRunner(object):
 
         self.skip = False
 
+    def is_ephemeral(self):
+        return dbt.utils.get_materialization(self.node) == 'ephemeral'
+
     def safe_run(self, flat_graph, existing):
         catchable_errors = (dbt.exceptions.CompilationException,
                             dbt.exceptions.RuntimeException)
@@ -82,7 +85,10 @@ class BaseRunner(object):
             # this has the benefit of showing a build path for the errant model
             compiled_node = self.compile(flat_graph)
             result.node = compiled_node
-            result = self.run(compiled_node, flat_graph, existing)
+
+            # for ephemeral nodes, we only want to compile, not run
+            if not self.is_ephemeral():
+                result = self.run(compiled_node, flat_graph, existing)
 
         except catchable_errors as e:
             result.error = str(e).strip()
@@ -271,24 +277,15 @@ class ModelRunner(CompileRunner):
                 self.node_index, self.num_nodes)
 
     def before_execute(self):
-        is_ephemeral = (dbt.utils.get_materialization(self.node) == 'ephemeral')
-        if not is_ephemeral:
-            self.print_start_line()
+        self.print_start_line()
 
     def after_execute(self, result):
         track_model_run(self.node_index, self.num_nodes, result)
-
-        is_ephemeral = (dbt.utils.get_materialization(self.node) == 'ephemeral')
-        if not is_ephemeral:
-            self.print_result_line(result)
+        self.print_result_line(result)
 
     def execute(self, model, flat_graph, existing):
-        is_ephemeral = (dbt.utils.get_materialization(self.node) == 'ephemeral')
-
-        status = None
-        if not is_ephemeral:
-            materializer = self.adapter.get_materializer(model, existing)
-            status = materializer.materialize(self.profile)
+        materializer = self.adapter.get_materializer(model, existing)
+        status = materializer.materialize(self.profile)
 
         return RunModelResult(model, status=status)
 
@@ -304,14 +301,11 @@ class TestRunner(CompileRunner):
                 self.node_index, self.num_nodes)
 
     def execute_test(self, test):
-        handle, cursor = self.adapter.execute_one(
+        rows = self.adapter.execute_and_fetch(
             self.profile,
             test.get('wrapped_sql'),
             test.get('name'),
             auto_begin=True)
-
-        # TODO 
-        rows = cursor.fetchall()
 
         if len(rows) > 1:
             raise RuntimeError(
