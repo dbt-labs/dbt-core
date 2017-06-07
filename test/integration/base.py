@@ -94,6 +94,41 @@ class DBTIntegrationTest(unittest.TestCase):
             }
         }
 
+    def bigquery_profile(self):
+        credential_env_vars = {
+            'type': 'BIGQUERY_TYPE',
+            'project_id': 'BIGQUERY_PROJECT_ID',
+            'private_key_id': 'BIGQUERY_PRIVATE_KEY_ID',
+            'private_key': 'BIGQUERY_PRIVATE_KEY',
+            'client_email': 'BIGQUERY_CLIENT_EMAIL',
+            'client_id': 'BIGQUERY_CLIENT_ID',
+            'auth_uri': 'BIGQUERY_AUTH_URI',
+            'token_uri': 'BIGQUERY_TOKEN_URI',
+            'auth_provider_x509_cert_url': 'BIGQUERY_AUTH_PROVIDER_X509_CERT_URL',
+            'client_x509_cert_url': 'BIGQUERY_CLIENT_X509_CERT_URL',
+        }
+
+        credentials = {key: os.getenv(var) for (key,var) in credential_env_vars.items()}
+
+        return {
+            'config': {
+                'send_anonymous_usage_stats': False
+            },
+            'test': {
+                'outputs': {
+                    'default2': {
+                        'type': 'bigquery',
+                        'threads': 1,
+                        'method': 'service-account-json',
+                        'project': os.getenv('BIGQUERY_PROJECT_ID'),
+                        'credentials': credentials,
+                        'schema': self.unique_schema(),
+                    },
+                },
+                'target': 'default2'
+            }
+        }
+
     def unique_schema(self):
         schema =  self.schema
         return "{}_{}".format(self.prefix, schema)

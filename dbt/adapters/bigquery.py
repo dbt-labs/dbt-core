@@ -105,6 +105,15 @@ class BigQueryAdapter(PostgresAdapter):
         return google.cloud.bigquery.Client(project=project_name, credentials=creds)
 
     @classmethod
+    def get_bigquery_client_from_service_account_json(cls, credentials):
+        project_name = credentials.get('project')
+        details = credentials.get('credentials')
+
+        Creds = google.oauth2.service_account.Credentials
+        creds = Creds.from_service_account_info(details)
+        return google.cloud.bigquery.Client(project=project_name, credentials=creds)
+
+    @classmethod
     def get_bigquery_client(cls, credentials):
         method = credentials.get('method')
 
@@ -112,6 +121,8 @@ class BigQueryAdapter(PostgresAdapter):
             return cls.get_bigquery_client_from_oauth(credentials)
         elif method == 'service-account':
             return cls.get_bigquery_client_from_service_account(credentials)
+        elif method == 'service-account-json':
+            return cls.get_bigquery_client_from_service_account_json(credentials)
         else:
             error = ('Bad `method` in profile: "{}". '
                     'Should be "oauth" or "service-account"'.format(method))

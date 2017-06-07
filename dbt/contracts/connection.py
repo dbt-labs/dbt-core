@@ -38,6 +38,7 @@ bigquery_credentials_contract = Schema({
     Required('project'): basestring,
     Required('schema'): basestring,
     Optional('keyfile'): basestring,
+    Optional('credentials'): basestring,
 })
 
 credentials_mapping = {
