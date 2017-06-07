@@ -5,6 +5,7 @@ from contextlib import contextmanager
 import dbt.exceptions
 import dbt.flags as flags
 import dbt.materializers
+import dbt.clients.gcloud
 
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.contracts.connection import validate_connection
@@ -21,6 +22,9 @@ class BigQueryAdapter(PostgresAdapter):
         import importlib
 
         google = importlib.import_module('google')
+        google.auth = importlib.import_module('google.auth')
+        google.oauth2 = importlib.import_module('google.oauth2')
+
         google.cloud = importlib.import_module('google.cloud')
         google.cloud.bigquery = importlib.import_module('google.cloud.bigquery')
         google.cloud.exceptions = importlib.import_module('google.cloud.exceptions')
@@ -41,12 +45,16 @@ class BigQueryAdapter(PostgresAdapter):
     @contextmanager
     def exception_handler(cls, profile, sql, model_name=None,
                           connection_name='master'):
-        connection = cls.get_connection(profile, connection_name)
-
         try:
             yield
         except google.cloud.exceptions.BadRequest as e:
             logger.debug("Bad request while running:\n{}".format(sql))
+            logger.debug(e)
+            error_msg = "\n".join([error['message'] for error in e.errors])
+            raise dbt.exceptions.RuntimeException(error_msg)
+
+        except google.cloud.exceptions.Forbidden as e:
+            logger.debug("Access denied while running:\n{}".format(sql))
             logger.debug(e)
             error_msg = "\n".join([error['message'] for error in e.errors])
             raise dbt.exceptions.RuntimeException(error_msg)
@@ -83,31 +91,61 @@ class BigQueryAdapter(PostgresAdapter):
         return "{} {}".format(state, cursor.rowcount)
 
     @classmethod
+    def get_bigquery_client_from_oauth(cls, credentials):
+        project_name = credentials.get('project')
+        return google.cloud.bigquery.Client(project=project_name)
+
+    @classmethod
+    def get_bigquery_client_from_service_account(cls, credentials):
+        project_name = credentials.get('project')
+        keyfile = credentials.get('keyfile')
+
+        Creds = google.oauth2.service_account.Credentials
+        creds = Creds.from_service_account_file(keyfile)
+        return google.cloud.bigquery.Client(project=project_name, credentials=creds)
+
+    @classmethod
+    def get_bigquery_client(cls, credentials):
+        method = credentials.get('method')
+
+        if method == 'oauth':
+            return cls.get_bigquery_client_from_oauth(credentials)
+        elif method == 'service-account':
+            return cls.get_bigquery_client_from_service_account(credentials)
+        else:
+            error = ('Bad `method` in profile: "{}". '
+                    'Should be "oauth" or "service-account"'.format(method))
+            raise dbt.exceptions.FailedToConnectException(error)
+
+    @classmethod
     def open_connection(cls, connection):
         if connection.get('state') == 'open':
             logger.debug('Connection is already open, skipping open.')
             return connection
 
         result = connection.copy()
+        credentials = connection.get('credentials', {})
 
         try:
-            credentials = connection.get('credentials', {})
-            handle = google.cloud.bigquery.Client(
-                project = credentials.get('project', None),
-            )
+            handle = cls.get_bigquery_client(credentials)
 
-            result['handle'] = handle
-            result['state'] = 'open'
-        except Exception as e: # TODO
+        except google.auth.exceptions.DefaultCredentialsError as e:
+            logger.info("Please log into GCP to continue")
+            dbt.clients.gcloud.setup_default_credentials()
+
+            handle = cls.get_bigquery_client(credentials)
+
+        except Exception as e:
             logger.debug("Got an error when attempting to create a bigquery "
-                         "client: '{}'"
-                         .format(e))
+                         "client: '{}'".format(e))
 
             result['handle'] = None
             result['state'] = 'fail'
 
             raise dbt.exceptions.FailedToConnectException(str(e))
 
+        result['handle'] = handle
+        result['state'] = 'open'
         return result
 
     @classmethod
@@ -212,16 +250,21 @@ class BigQueryAdapter(PostgresAdapter):
     @classmethod
     def create_schema(cls, profile, schema, model_name=None):
         logger.debug('Creating schema "%s".', schema)
+
         dataset = cls.get_dataset(profile, schema, model_name)
-        dataset.create()
+
+        with cls.exception_handler(profile, 'create dataset', model_name):
+            dataset.create()
 
     @classmethod
     def check_schema_exists(cls, profile, schema, model_name=None):
         conn = cls.get_connection(profile, model_name)
 
         client = conn.get('handle')
-        all_datasets = client.list_datasets()
-        return any([ds.name == schema for ds in all_datasets])
+
+        with cls.exception_handler(profile, 'create dataset', model_name):
+            all_datasets = client.list_datasets()
+            return any([ds.name == schema for ds in all_datasets])
 
     @classmethod
     def get_dataset(cls, profile, dataset_name, model_name=None):
