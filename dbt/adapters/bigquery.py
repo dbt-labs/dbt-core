@@ -1,12 +1,10 @@
 from __future__ import absolute_import
 
-import re
-
-
 from contextlib import contextmanager
 
 import dbt.exceptions
 import dbt.flags as flags
+import dbt.materializers
 
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.contracts.connection import validate_connection
@@ -21,6 +19,16 @@ class BigQueryAdapter(PostgresAdapter):
     def initialize(cls):
         import importlib
         globals()['bigquery'] = importlib.import_module('google.cloud.bigquery')
+
+    @classmethod
+    def get_materializer(cls, node, existing):
+        # use InPlaceMaterializer b/c BigQuery doesn't have transactions
+        # and can't rename views
+        materializer = dbt.materializers.InPlaceMaterializer
+        return dbt.materializers.make_materializer(materializer,
+                                                   cls,
+                                                   node,
+                                                   existing)
 
     @classmethod
     @contextmanager

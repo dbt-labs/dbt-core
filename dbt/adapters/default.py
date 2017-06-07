@@ -8,6 +8,7 @@ from contextlib import contextmanager
 
 import dbt.exceptions
 import dbt.flags
+import dbt.materializers
 
 from dbt.contracts.connection import validate_connection
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -41,6 +42,10 @@ class DefaultAdapter(object):
             pip_main(['install', require])
             logger.info("Installed {} successfully!".format(require))
 
+
+    @classmethod
+    def get_materializer(cls, model, existing):
+        return dbt.materializers.get_materializer(cls, model, existing)
 
     ###
     # ADAPTER-SPECIFIC FUNCTIONS -- each of these must be overridden in

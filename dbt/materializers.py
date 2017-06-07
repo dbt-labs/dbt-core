@@ -113,6 +113,23 @@ class IncrementalMaterializer(BaseMaterializer):
         pass
 
 
+class InPlaceMaterializer(BaseMaterializer):
+    def before_materialize(self, profile):
+        existing_type = self.existing_final_type()
+        existing_type = self.existing_final_type()
+        if existing_type is not None:
+            self.drop(profile, self.final_name(), existing_type)
+
+    def after_materialize(self, profile):
+        pass
+
+
+def make_materializer(materializer_class, adapter, node, existing):
+    return materializer_class(adapter, node, existing,
+                              dbt.flags.NON_DESTRUCTIVE,
+                              dbt.flags.FULL_REFRESH)
+
+
 def get_materializer(adapter, node, existing):
     materializer_classes = {
         "table": TableMaterializer,
@@ -126,7 +143,5 @@ def get_materializer(adapter, node, existing):
     if klass is None:
         raise RuntimeError("Base materialization: {}".format(materialized))
     else:
-        return klass(adapter, node, existing, dbt.flags.NON_DESTRUCTIVE,
-                     dbt.flags.FULL_REFRESH)
-
+        return make_materializer(klass, adapter, node, existing)
 

@@ -8,7 +8,6 @@ import dbt.tracking
 import dbt.ui.printer
 import dbt.flags
 import dbt.schema
-import dbt.materializers
 
 import dbt.clients.jinja
 import time
@@ -290,8 +289,7 @@ class ModelRunner(CompileRunner):
 
         status = None
         if not is_ephemeral:
-            materializer = dbt.materializers.get_materializer(self.adapter,
-                    model, existing)
+            materializer = self.adapter.get_materializer(model, existing)
             status = materializer.materialize(self.profile)
 
         return RunModelResult(model, status=status)
