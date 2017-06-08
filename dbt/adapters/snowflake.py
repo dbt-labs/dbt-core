@@ -19,9 +19,11 @@ class SnowflakeAdapter(PostgresAdapter):
     @classmethod
     def initialize(cls):
         import importlib
-        globals()['snowflake'] = importlib.import_module('snowflake')
-        import snowflake.connector
-        import snowflake.connector.errors
+        snowflake = importlib.import_module('snowflake')
+        snowflake.connector = importlib.import_module('snowflake.connector')
+        snowflake.connector.errors = importlib.import_module('snowflake.connector.errors')
+
+        globals()['snowflake'] = snowflake
 
     @classmethod
     @contextmanager

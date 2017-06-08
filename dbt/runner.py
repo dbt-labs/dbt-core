@@ -159,10 +159,14 @@ class RunManager(object):
 
         return node_results
 
-    def run_from_graph(self, Selector, Runner, query):
+    def compile(self, project):
         compiler = dbt.compilation.Compiler(self.project)
         compiler.initialize()
         (flat_graph, linker) = compiler.compile()
+        return (flat_graph, linker)
+
+    def run_from_graph(self, Selector, Runner, query):
+        flat_graph, linker = self.compile()
 
         selector = Selector(linker, flat_graph)
         selected_nodes = selector.select(query)

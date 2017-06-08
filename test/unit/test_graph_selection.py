@@ -67,7 +67,6 @@ class GraphSelectionTest(unittest.TestCase):
 
     def run_specs_and_assert(self, graph, include, exclude, expected):
         selected = graph_selector.select_nodes(
-            self.project,
             graph,
             include,
             exclude

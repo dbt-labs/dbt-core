@@ -23,6 +23,7 @@ class TestPostgresAdapter(unittest.TestCase):
 
     def test_acquire_connection_validations(self):
         try:
+            PostgresAdapter.initialize()
             connection = PostgresAdapter.acquire_connection(self.profile,
                                                             'dummy')
             self.assertEquals(connection.get('type'), 'postgres')
@@ -33,6 +34,7 @@ class TestPostgresAdapter(unittest.TestCase):
                       .format(str(e)))
 
     def test_acquire_connection(self):
+        PostgresAdapter.initialize()
         connection = PostgresAdapter.acquire_connection(self.profile, 'dummy')
 
         self.assertEquals(connection.get('state'), 'open')

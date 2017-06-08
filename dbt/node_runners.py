@@ -88,7 +88,7 @@ class BaseRunner(object):
 
             # for ephemeral nodes, we only want to compile, not run
             if not self.is_ephemeral():
-                result = self.run(compiled_node, flat_graph, existing)
+                result = self.run(compiled_node, existing)
 
         except catchable_errors as e:
             result.error = str(e).strip()
@@ -131,11 +131,11 @@ class BaseRunner(object):
     def before_execute(self):
         raise NotImplementedException()
 
-    def execute(self, compiled_node, flat_graph, existing):
+    def execute(self, compiled_node, existing):
         raise NotImplementedException()
 
-    def run(self, compiled_node, flat_graph, existing):
-        return self.execute(compiled_node, flat_graph, existing)
+    def run(self, compiled_node, existing):
+        return self.execute(compiled_node, existing)
 
     def after_execute(self, result):
         raise NotImplementedException()
@@ -171,7 +171,7 @@ class CompileRunner(BaseRunner):
     def after_execute(self, result):
         pass
 
-    def execute(self, compiled_node, flat_graph, existing):
+    def execute(self, compiled_node, existing):
         return RunModelResult(compiled_node)
 
     def compile(self, flat_graph):
@@ -283,7 +283,7 @@ class ModelRunner(CompileRunner):
         track_model_run(self.node_index, self.num_nodes, result)
         self.print_result_line(result)
 
-    def execute(self, model, flat_graph, existing):
+    def execute(self, model, existing):
         materializer = self.adapter.get_materializer(model, existing)
         status = materializer.materialize(self.profile)
 
@@ -323,7 +323,7 @@ class TestRunner(CompileRunner):
     def before_execute(self):
         self.print_start_line()
 
-    def execute(self, test, flat_graph, existing):
+    def execute(self, test, existing):
         status = self.execute_test(test)
         return RunModelResult(test, status=status)
 
@@ -344,7 +344,7 @@ class ArchiveRunner(CompileRunner):
     def after_execute(self, result):
         self.print_result_line(result)
 
-    def execute(self, archive, flat_graph, existing):
+    def execute(self, archive, existing):
         status = self.execute_archive(self.project)
         return RunModelResult(archive, status=status)
 
