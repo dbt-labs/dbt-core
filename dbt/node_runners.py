@@ -200,17 +200,17 @@ class CompileRunner(BaseRunner):
         profile = project.run_environment()
 
         def call_get_columns_in_table(schema_name, table_name):
-            return adapter.adapter.get_columns_in_table(
+            return adapter.get_columns_in_table(
                 profile, schema_name, table_name, node.get('name'))
 
         def call_get_missing_columns(from_schema, from_table,
                                      to_schema, to_table):
-            return cls.adapter.get_missing_columns(
+            return adapter.get_missing_columns(
                 profile, from_schema, from_table,
                 to_schema, to_table, node.get('name'))
 
         def call_table_exists(schema, table):
-            return cls.adapter.table_exists(
+            return adapter.table_exists(
                 profile, schema, table, node.get('name'))
 
         return {
@@ -246,8 +246,11 @@ class ModelRunner(CompileRunner):
 
         for hook in hooks:
             compiled = cls.compile_node(adapter, project, hook, flat_graph)
+            model_name = compiled.get('name')
             sql = compiled['wrapped_sql']
-            adapter.execute_one(profile, sql, auto_begin=False)
+            adapter.execute_one(profile, sql, model_name=model_name,
+                                auto_begin=True)
+            adapter.commit_if_has_connection(profile, model_name)
 
     @classmethod
     def before_run(cls, project, adapter, flat_graph):
@@ -359,7 +362,7 @@ class ArchiveRunner(CompileRunner):
         self.print_result_line(result)
 
     def execute(self, archive, existing):
-        status = self.execute_archive(self.project)
+        status = self.execute_archive()
         return RunModelResult(archive, status=status)
 
     def execute_archive(self):
@@ -419,4 +422,5 @@ class ArchiveRunner(CompileRunner):
             profile=self.profile,
             model=node)
 
+        self.adapter.commit_if_has_connection(self.profile, node.get('name'))
         return result

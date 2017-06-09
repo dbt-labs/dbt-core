@@ -177,6 +177,9 @@ class NodeSelector(object):
         if exclude is None:
             exclude = []
 
+        if tags is None:
+            tags = set()
+
         to_run = []
         for node_name in graph.nodes():
             node = graph.node.get(node_name)
