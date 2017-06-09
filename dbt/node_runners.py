@@ -1,7 +1,7 @@
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.exceptions import NotImplementedException
-from dbt.utils import RunHookType, NodeType, get_nodes_by_tags, get_materialization
+from dbt.utils import RunHookType, NodeType, get_nodes_by_tags
 
 import dbt.utils
 import dbt.tracking
@@ -119,7 +119,8 @@ class BaseRunner(object):
             raise e
 
         finally:
-            self.adapter.release_connection(self.profile, self.node.get('name'))
+            node_name = self.node.get('name')
+            self.adapter.release_connection(self.profile, node_name)
 
         result.execution_time = time.time() - started
         return result
@@ -175,7 +176,8 @@ class CompileRunner(BaseRunner):
         return RunModelResult(compiled_node)
 
     def compile(self, flat_graph):
-        return self.compile_node(self.adapter, self.project, self.node, flat_graph)
+        return self.compile_node(self.adapter, self.project, self.node,
+                                 flat_graph)
 
     @classmethod
     def compile_node(cls, adapter, project, node, flat_graph):
@@ -196,6 +198,7 @@ class CompileRunner(BaseRunner):
     @classmethod
     def node_context(cls, adapter, project, node):
         profile = project.run_environment()
+
         def call_get_columns_in_table(schema_name, table_name):
             return adapter.adapter.get_columns_in_table(
                 profile, schema_name, table_name, node.get('name'))
@@ -268,13 +271,17 @@ class ModelRunner(CompileRunner):
 
     def print_start_line(self):
         schema_name = self.get_schema(self.adapter, self.profile)
-        dbt.ui.printer.print_model_start_line(self.node, schema_name,
-                self.node_index, self.num_nodes)
+        dbt.ui.printer.print_model_start_line(self.node,
+                                              schema_name,
+                                              self.node_index,
+                                              self.num_nodes)
 
     def print_result_line(self, result):
         schema_name = self.get_schema(self.adapter, self.profile)
-        dbt.ui.printer.print_model_result_line(result, schema_name,
-                self.node_index, self.num_nodes)
+        dbt.ui.printer.print_model_result_line(result,
+                                               schema_name,
+                                               self.node_index,
+                                               self.num_nodes)
 
     def before_execute(self):
         self.print_start_line()
@@ -289,16 +296,21 @@ class ModelRunner(CompileRunner):
 
         return RunModelResult(model, status=status)
 
+
 class TestRunner(CompileRunner):
     def print_start_line(self):
         schema_name = self.get_schema(self.adapter, self.profile)
-        dbt.ui.printer.print_test_start_line(self.node, schema_name,
-                self.node_index, self.num_nodes)
+        dbt.ui.printer.print_test_start_line(self.node,
+                                             schema_name,
+                                             self.node_index,
+                                             self.num_nodes)
 
     def print_result_line(self, result):
         schema_name = self.get_schema(self.adapter, self.profile)
-        dbt.ui.printer.print_test_result_line(result, schema_name,
-                self.node_index, self.num_nodes)
+        dbt.ui.printer.print_test_result_line(result,
+                                              schema_name,
+                                              self.node_index,
+                                              self.num_nodes)
 
     def execute_test(self, test):
         rows = self.adapter.execute_and_fetch(
@@ -333,10 +345,12 @@ class TestRunner(CompileRunner):
 
 class ArchiveRunner(CompileRunner):
     def print_start_line(self):
-        dbt.ui.printer.print_archive_start_line(self.node, self.node_index, self.num_nodes)
+        dbt.ui.printer.print_archive_start_line(self.node, self.node_index,
+                                                self.num_nodes)
 
     def print_result_line(self, result):
-        dbt.ui.printer.print_archive_result_line(result, self.node_index, self.num_nodes)
+        dbt.ui.printer.print_archive_result_line(result, self.node_index,
+                                                 self.num_nodes)
 
     def before_execute(self):
         self.print_start_line()
@@ -354,12 +368,14 @@ class ArchiveRunner(CompileRunner):
 
         context = self.node_context(self.adapter, self.project, self.node)
 
-        source_columns = self.adapter.get_columns_in_table(
-            self.profile, node_cfg.get('source_schema'), node_cfg.get('source_table'))
+        source_schema = node_cfg.get('source_schema')
+        source_table = node_cfg.get('source_table')
+
+        source_columns = self.adapter.get_columns_in_table(self.profile,
+                                                           source_schema,
+                                                           source_table)
 
         if len(source_columns) == 0:
-            source_schema = node_cfg.get('source_schema')
-            source_table = node_cfg.get('source_table')
             raise RuntimeError(
                 'Source table "{}"."{}" does not '
                 'exist'.format(source_schema, source_table))
@@ -387,8 +403,8 @@ class ArchiveRunner(CompileRunner):
         template_ctx = context.copy()
         template_ctx.update(node_cfg)
 
-        select = dbt.clients.jinja.get_rendered(dbt.templates.SCDArchiveTemplate,
-                                                template_ctx)
+        template = dbt.templates.SCDArchiveTemplate
+        select = dbt.clients.jinja.get_rendered(template, template_ctx)
 
         insert_stmt = dbt.templates.ArchiveInsertTemplate().wrap(
             schema=node_cfg.get('target_schema'),

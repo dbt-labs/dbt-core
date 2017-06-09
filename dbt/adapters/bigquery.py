@@ -19,22 +19,18 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def initialize(cls):
-        import importlib
+        google = cls._import('google')
+        google.auth = cls._import('google.auth')
+        google.oauth2 = cls._import('google.oauth2')
 
-        google = importlib.import_module('google')
-        google.auth = importlib.import_module('google.auth')
-        google.oauth2 = importlib.import_module('google.oauth2')
-
-        google.cloud = importlib.import_module('google.cloud')
-        google.cloud.bigquery = importlib.import_module('google.cloud.bigquery')
-        google.cloud.exceptions = importlib.import_module('google.cloud.exceptions')
+        google.cloud = cls._import('google.cloud')
+        google.cloud.bigquery = cls._import('google.cloud.bigquery')
+        google.cloud.exceptions = cls._import('google.cloud.exceptions')
 
         globals()['google'] = google
 
     @classmethod
     def get_materializer(cls, node, existing):
-        # use InPlaceMaterializer b/c BigQuery doesn't have transactions
-        # and can't rename views
         materializer = dbt.materializers.NonDDLMaterializer
         return dbt.materializers.make_materializer(materializer,
                                                    cls,
@@ -91,41 +87,43 @@ class BigQueryAdapter(PostgresAdapter):
         return "{} {}".format(state, cursor.rowcount)
 
     @classmethod
-    def get_bigquery_client_from_oauth(cls, credentials):
-        project_name = credentials.get('project')
+    def get_bigquery_client_from_oauth(cls, config):
+        project_name = config.get('project')
         return google.cloud.bigquery.Client(project=project_name)
 
     @classmethod
-    def get_bigquery_client_from_service_account(cls, credentials):
-        project_name = credentials.get('project')
-        keyfile = credentials.get('keyfile')
+    def get_bigquery_client_from_service_account(cls, config):
+        project_name = config.get('project')
+        keyfile = config.get('keyfile')
 
         Creds = google.oauth2.service_account.Credentials
         creds = Creds.from_service_account_file(keyfile)
-        return google.cloud.bigquery.Client(project=project_name, credentials=creds)
+        return google.cloud.bigquery.Client(project=project_name,
+                                            credentials=creds)
 
     @classmethod
-    def get_bigquery_client_from_service_account_json(cls, credentials):
-        project_name = credentials.get('project')
-        details = credentials.get('credentials')
+    def get_bigquery_client_from_service_account_json(cls, config):
+        project_name = config.get('project')
+        details = config.get('config')
 
         Creds = google.oauth2.service_account.Credentials
         creds = Creds.from_service_account_info(details)
-        return google.cloud.bigquery.Client(project=project_name, credentials=creds)
+        return google.cloud.bigquery.Client(project=project_name,
+                                            credentials=creds)
 
     @classmethod
-    def get_bigquery_client(cls, credentials):
-        method = credentials.get('method')
+    def get_bigquery_client(cls, config):
+        method = config.get('method')
 
         if method == 'oauth':
-            return cls.get_bigquery_client_from_oauth(credentials)
+            return cls.get_bigquery_client_from_oauth(config)
         elif method == 'service-account':
-            return cls.get_bigquery_client_from_service_account(credentials)
+            return cls.get_bigquery_client_from_service_account(config)
         elif method == 'service-account-json':
-            return cls.get_bigquery_client_from_service_account_json(credentials)
+            return cls.get_bigquery_client_from_service_account_json(config)
         else:
             error = ('Bad `method` in profile: "{}". '
-                    'Should be "oauth" or "service-account"'.format(method))
+                     'Should be "oauth" or "service-account"'.format(method))
             raise dbt.exceptions.FailedToConnectException(error)
 
     @classmethod
@@ -183,16 +181,9 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def rename(cls, profile, from_name, to_name, model_name=None):
-        return # TODO
-        schema = cls.get_default_schema(profile)
-
-        sql = (('alter table "{schema}"."{from_name}" '
-                'rename to "{schema}"."{to_name}"')
-               .format(schema=schema,
-                       from_name=from_name,
-                       to_name=to_name))
-
-        connection, cursor = cls.add_query(profile, sql, model_name)
+        message = 'Cannot rename bigquery relation {} to {}'.format(
+                  from_name, to_name)
+        raise dbt.exceptions.NotImplementedException(message)
 
     # hack because of current API limitations
     @classmethod
@@ -247,7 +238,10 @@ class BigQueryAdapter(PostgresAdapter):
         formatted_sql = cls.format_sql_for_bigquery(sql)
         query = client.run_sync_query(formatted_sql)
         query.timeout_ms = cls.QUERY_TIMEOUT
-        logger.debug("Fetching data for query {}:\n{}".format(model_name, formatted_sql))
+
+        debug_message = "Fetching data for query {}:\n{}"
+        logger.debug(debug_message.format(model_name, formatted_sql))
+
         query.run()
 
         return cls.fetch_query_results(query)

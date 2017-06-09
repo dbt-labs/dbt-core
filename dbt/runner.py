@@ -3,9 +3,8 @@ import time
 
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.node_runners import RunModelResult
 
-from dbt.utils import get_materialization, NodeType, is_type, get_nodes_by_tags
+from dbt.utils import get_materialization
 
 import dbt.clients.jinja
 import dbt.compilation
@@ -170,12 +169,12 @@ class RunManager(object):
 
         selector = Selector(linker, flat_graph)
         selected_nodes = selector.select(query)
-        dependency_list = selector.as_node_list(selected_nodes)
+        dep_list = selector.as_node_list(selected_nodes)
 
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
 
-        flat_nodes = dbt.utils.flatten_nodes(dependency_list)
+        flat_nodes = dbt.utils.flatten_nodes(dep_list)
         if len(flat_nodes) == 0:
             logger.info("WARNING: Nothing to do. Try checking your model "
                         "configs and model specification args")
@@ -191,14 +190,14 @@ class RunManager(object):
         try:
             Runner.before_run(self.project, adapter, flat_graph)
             started = time.time()
-            results = self.execute_nodes(linker, Runner, flat_graph, dependency_list)
+            res = self.execute_nodes(linker, Runner, flat_graph, dep_list)
             elapsed = time.time() - started
-            Runner.after_run(self.project, adapter, results, flat_graph, elapsed)
+            Runner.after_run(self.project, adapter, res, flat_graph, elapsed)
 
         finally:
             adapter.cleanup_connections()
 
-        return results
+        return res
 
     # ------------------------------------
 

@@ -25,7 +25,7 @@ class BaseMaterializer(object):
     def existing_final_type(self):
         return self.existing.get(self.final_name())
 
-    def __drop_tmp_if_any(self, profile): 
+    def __drop_tmp_if_any(self, profile):
         existing_type = self.existing_tmp_type()
         if existing_type is not None:
             self.drop(profile, self.tmp_name(), existing_type)
@@ -67,6 +67,7 @@ class BaseMaterializer(object):
         model_name = self.node.get('name')
         return self.adapter.commit_if_has_connection(profile, model_name)
 
+
 class TableMaterializer(BaseMaterializer):
 
     def before_materialize(self, profile):
@@ -88,6 +89,7 @@ class TableMaterializer(BaseMaterializer):
 
         self.rename(profile, self.tmp_name(), self.final_name())
 
+
 class ViewMaterializer(BaseMaterializer):
 
     def do_materialize(self, profile):
@@ -107,6 +109,7 @@ class ViewMaterializer(BaseMaterializer):
             self.drop(profile, self.final_name(), existing_type)
 
         self.rename(profile, self.tmp_name(), self.final_name())
+
 
 class IncrementalMaterializer(BaseMaterializer):
 
@@ -159,4 +162,3 @@ def get_materializer(adapter, node, existing):
         raise RuntimeError("Base materialization: {}".format(materialized))
     else:
         return make_materializer(klass, adapter, node, existing)
-

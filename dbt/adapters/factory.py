@@ -25,6 +25,7 @@ The following modules will be installed:
 {module_list}
 """
 
+
 def list_adapters():
     adapter_list = {}
     for name, adapter in adapters.items():

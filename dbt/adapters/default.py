@@ -3,6 +3,7 @@ import multiprocessing
 import re
 import time
 import yaml
+import importlib
 
 from contextlib import contextmanager
 
@@ -33,15 +34,17 @@ class DefaultAdapter(object):
             return False
 
     @classmethod
+    def _import(cls, name):
+        return importlib.import_module(name)
+
+    @classmethod
     def install_requires(cls):
         from pip import main as pip_main
-        import importlib
 
         for package, require in cls.requires.items():
             logger.info("Installing {}".format(require))
             pip_main(['install', require])
             logger.info("Installed {} successfully!".format(require))
-
 
     @classmethod
     def get_materializer(cls, model, existing):
@@ -109,7 +112,6 @@ class DefaultAdapter(object):
         elif relation_type == 'table':
             return cls.drop_table(profile, relation, model_name)
         else:
-            import ipdb; ipdb.set_trace()
             raise RuntimeError(
                 "Invalid relation_type '{}'"
                 .format(relation_type))
@@ -564,7 +566,8 @@ class DefaultAdapter(object):
         return cls.add_query(profile, sql, model_name, auto_begin)
 
     @classmethod
-    def execute_and_fetch(cls, profile, sql, model_name=None, auto_begin=False):
+    def execute_and_fetch(cls, profile, sql, model_name=None,
+                          auto_begin=False):
         _, cursor = cls.execute_one(profile, sql, model_name, auto_begin)
 
         return cursor.fetchall()

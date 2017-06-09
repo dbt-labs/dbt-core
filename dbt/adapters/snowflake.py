@@ -18,10 +18,9 @@ class SnowflakeAdapter(PostgresAdapter):
 
     @classmethod
     def initialize(cls):
-        import importlib
-        snowflake = importlib.import_module('snowflake')
-        snowflake.connector = importlib.import_module('snowflake.connector')
-        snowflake.connector.errors = importlib.import_module('snowflake.connector.errors')
+        snowflake = cls._import('snowflake')
+        snowflake.connector = cls._import('snowflake.connector')
+        snowflake.connector.errors = cls._import('snowflake.connector.errors')
 
         globals()['snowflake'] = snowflake
 
@@ -170,7 +169,8 @@ class SnowflakeAdapter(PostgresAdapter):
         """.format(schema=schema).strip()  # noqa
 
         connection, cursor = cls.add_query(profile, sql, model_name,
-                                           select_schema=False, auto_begin=False)
+                                           select_schema=False,
+                                           auto_begin=False)
         results = cursor.fetchone()
 
         return results[0] > 0

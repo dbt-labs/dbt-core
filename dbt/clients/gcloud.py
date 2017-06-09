@@ -10,6 +10,7 @@ Please download and install the SDK, or use a Service Account instead.
 https://cloud.google.com/sdk/
 """
 
+
 def log_cmd(cmd):
     logger.debug('Executing "{}"'.format(' '.join(cmd)))
 
@@ -27,7 +28,7 @@ def run_cmd(cwd, cmd):
 
 def gcloud_installed():
     try:
-        result = run_cmd('.', ['gcloud', '--version'])
+        run_cmd('.', ['gcloud', '--version'])
         return True
     except OSError as e:
         logger.debug(e)
