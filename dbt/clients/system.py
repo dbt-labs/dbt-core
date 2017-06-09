@@ -3,6 +3,9 @@ import fnmatch
 import os
 import os.path
 import sys
+import subprocess
+
+from dbt.logger import GLOBAL_LOGGER as logger
 
 
 def find_matching(root_path,
@@ -96,3 +99,14 @@ def open_dir_cmd():
 
     else:
         return 'xdg-open'
+
+
+def run_cmd(cwd, cmd):
+    logger.debug('Executing "{}"'.format(' '.join(cmd)))
+    proc = subprocess.Popen(
+        cmd,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE)
+
+    return proc.communicate()

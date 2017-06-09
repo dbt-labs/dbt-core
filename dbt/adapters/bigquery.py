@@ -38,22 +38,26 @@ class BigQueryAdapter(PostgresAdapter):
                                                    existing)
 
     @classmethod
+    def handle_error(cls, error, message):
+        logger.debug(message.format(sql=sql))
+        logger.debug(error)
+        error_msg = "\n".join([error['message'] for error in error.errors])
+        raise dbt.exceptions.RuntimeException(error_msg)
+
+    @classmethod
     @contextmanager
     def exception_handler(cls, profile, sql, model_name=None,
                           connection_name='master'):
         try:
             yield
+
         except google.cloud.exceptions.BadRequest as e:
-            logger.debug("Bad request while running:\n{}".format(sql))
-            logger.debug(e)
-            error_msg = "\n".join([error['message'] for error in e.errors])
-            raise dbt.exceptions.RuntimeException(error_msg)
+            message = "Bad request while running:\n{sql}"
+            cls.handle_error(e, message)
 
         except google.cloud.exceptions.Forbidden as e:
-            logger.debug("Access denied while running:\n{}".format(sql))
-            logger.debug(e)
-            error_msg = "\n".join([error['message'] for error in e.errors])
-            raise dbt.exceptions.RuntimeException(error_msg)
+            message = "Access denied while running:\n{sql}"
+            cls.handle_error(e, message)
 
         except Exception as e:
             logger.debug("Unhandled error while running:\n{}".format(sql))
@@ -87,44 +91,34 @@ class BigQueryAdapter(PostgresAdapter):
         return "{} {}".format(state, cursor.rowcount)
 
     @classmethod
-    def get_bigquery_client_from_oauth(cls, config):
-        project_name = config.get('project')
-        return google.cloud.bigquery.Client(project=project_name)
-
-    @classmethod
-    def get_bigquery_client_from_service_account(cls, config):
-        project_name = config.get('project')
-        keyfile = config.get('keyfile')
-
+    def get_bigquery_credentials(cls, config):
+        method = config.get('method')
         Creds = google.oauth2.service_account.Credentials
-        creds = Creds.from_service_account_file(keyfile)
-        return google.cloud.bigquery.Client(project=project_name,
-                                            credentials=creds)
 
-    @classmethod
-    def get_bigquery_client_from_service_account_json(cls, config):
-        project_name = config.get('project')
-        details = config.get('config')
+        if method == 'oauth':
+            return None
 
-        Creds = google.oauth2.service_account.Credentials
-        creds = Creds.from_service_account_info(details)
-        return google.cloud.bigquery.Client(project=project_name,
+        elif method == 'service-account':
+            keyfile = config.get('keyfile')
+            return Creds.from_service_account_file(keyfile)
+
+        elif method == 'service-account-json':
+            details = config.get('config')
+            return Creds.from_service_account_info(details)
+
+        error = ('Bad `method` in profile: "{}". '
+                 'Should be "oauth" or "service-account"'.format(method))
+        raise dbt.exceptions.FailedToConnectException(error)
+
                                             credentials=creds)
 
     @classmethod
     def get_bigquery_client(cls, config):
-        method = config.get('method')
+        project_name = config.get('project')
+        creds = cls.get_bigquery_credentials(config)
 
-        if method == 'oauth':
-            return cls.get_bigquery_client_from_oauth(config)
-        elif method == 'service-account':
-            return cls.get_bigquery_client_from_service_account(config)
-        elif method == 'service-account-json':
-            return cls.get_bigquery_client_from_service_account_json(config)
-        else:
-            error = ('Bad `method` in profile: "{}". '
-                     'Should be "oauth" or "service-account"'.format(method))
-            raise dbt.exceptions.FailedToConnectException(error)
+        return google.cloud.bigquery.Client(project=project_name,
+                                            credentials=creds)
 
     @classmethod
     def open_connection(cls, connection):
