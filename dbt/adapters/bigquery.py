@@ -38,7 +38,7 @@ class BigQueryAdapter(PostgresAdapter):
                                                    existing)
 
     @classmethod
-    def handle_error(cls, error, message):
+    def handle_error(cls, error, message, sql):
         logger.debug(message.format(sql=sql))
         logger.debug(error)
         error_msg = "\n".join([error['message'] for error in error.errors])
@@ -53,11 +53,11 @@ class BigQueryAdapter(PostgresAdapter):
 
         except google.cloud.exceptions.BadRequest as e:
             message = "Bad request while running:\n{sql}"
-            cls.handle_error(e, message)
+            cls.handle_error(e, message, sql)
 
         except google.cloud.exceptions.Forbidden as e:
             message = "Access denied while running:\n{sql}"
-            cls.handle_error(e, message)
+            cls.handle_error(e, message, sql)
 
         except Exception as e:
             logger.debug("Unhandled error while running:\n{}".format(sql))
@@ -109,8 +109,6 @@ class BigQueryAdapter(PostgresAdapter):
         error = ('Bad `method` in profile: "{}". '
                  'Should be "oauth" or "service-account"'.format(method))
         raise dbt.exceptions.FailedToConnectException(error)
-
-                                            credentials=creds)
 
     @classmethod
     def get_bigquery_client(cls, config):
