@@ -75,7 +75,8 @@ class BaseRunner(object):
 
     def safe_run(self, flat_graph, existing):
         catchable_errors = (dbt.exceptions.CompilationException,
-                            dbt.exceptions.RuntimeException)
+                            dbt.exceptions.RuntimeException,
+                            dbt.exceptions.ProgrammingException)
 
         result = RunModelResult(self.node)
         started = time.time()
