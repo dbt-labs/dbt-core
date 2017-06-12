@@ -93,21 +93,20 @@ class BigQueryAdapter(PostgresAdapter):
     @classmethod
     def get_bigquery_credentials(cls, config):
         method = config.get('method')
-        Creds = google.oauth2.service_account.Credentials
+        creds = google.oauth2.service_account.Credentials
 
         if method == 'oauth':
             return None
 
         elif method == 'service-account':
             keyfile = config.get('keyfile')
-            return Creds.from_service_account_file(keyfile)
+            return creds.from_service_account_file(keyfile)
 
         elif method == 'service-account-json':
             details = config.get('config')
-            return Creds.from_service_account_info(details)
+            return creds.from_service_account_info(details)
 
-        error = ('Bad `method` in profile: "{}". '
-                 'Should be "oauth" or "service-account"'.format(method))
+        error = ('Invalid `method` in profile: "{}"'.format(method))
         raise dbt.exceptions.FailedToConnectException(error)
 
     @classmethod
@@ -273,7 +272,8 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def add_query(cls, profile, sql, model_name=None, auto_begin=True):
-        raise Exception("Not implemented")
+        raise dbt.exceptions.NotImplementedException(
+            '`add_query` is not implemented for this adapter!')
 
     @classmethod
     def cancel_connection(cls, profile, connection):
