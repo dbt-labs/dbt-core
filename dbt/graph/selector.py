@@ -43,6 +43,13 @@ def parse_spec(node_spec):
     }
 
 
+def coalesce(*args):
+    for arg in args:
+        if arg is not None:
+            return arg
+    return None
+
+
 def get_package_names(graph):
     return set([node.split(".")[1] for node in graph.nodes()])
 
@@ -168,25 +175,23 @@ class NodeSelector(object):
         self.linker = linker
         self.flat_graph = flat_graph
 
-    def get_selected(self, include, exclude, resource_types, tags):
-        graph = self.linker.graph
-
-        if include is None:
-            include = ['*']
-
-        if exclude is None:
-            exclude = []
-
-        if tags is None:
-            tags = set()
-
-        to_run = []
+    def get_valid_nodes(self, graph):
+        valid = []
         for node_name in graph.nodes():
             node = graph.node.get(node_name)
 
             if not node.get('empty') and is_enabled(node):
-                to_run.append(node_name)
+                valid.append(node_name)
+        return valid
 
+    def get_selected(self, include, exclude, resource_types, tags):
+        graph = self.linker.graph
+
+        include = coalesce(include, ['*'])
+        exclude = coalesce(exclude, [])
+        tags = coalesce(tags, set())
+
+        to_run = self.get_valid_nodes(graph)
         filtered_graph = graph.subgraph(to_run)
         selected_nodes = select_nodes(filtered_graph, include, exclude)
 
@@ -201,6 +206,11 @@ class NodeSelector(object):
                 filtered_nodes.add(node_name)
 
         return filtered_nodes
+
+    def is_ephemeral_model(self, node):
+        is_model = node.get('resource_type') == NodeType.Model
+        is_ephemeral = get_materialization(node) == 'ephemeral'
+        return is_model and is_ephemeral
 
     def get_ancestor_ephemeral_nodes(self, flat_graph, linked_graph,
                                      selected_nodes):
@@ -220,12 +230,9 @@ class NodeSelector(object):
 
         res = []
         for ancestor in all_ancestors:
-            if ancestor not in flat_graph['nodes']:
-                continue
-            ancestor_node = flat_graph['nodes'][ancestor]
-            is_model = ancestor_node.get('resource_type') == NodeType.Model
-            is_ephemeral = get_materialization(ancestor_node) == 'ephemeral'
-            if is_model and is_ephemeral:
+            ancestor_node = flat_graph['nodes'].get(ancestor, None)
+
+            if ancestor_node and self.is_ephemeral_model(ancestor_node):
                 res.append(ancestor)
 
         return set(res)
@@ -244,8 +251,10 @@ class NodeSelector(object):
 
         return selected | addins
 
-    def as_node_list(self, selected_nodes):
-        dependency_list = self.linker.as_dependency_list(selected_nodes)
+    def as_node_list(self, selected_nodes, ephemeral_only=False):
+        dependency_list = self.linker.as_dependency_list(
+            selected_nodes,
+            ephemeral_only=ephemeral_only)
 
         concurrent_dependency_list = []
         for level in dependency_list:
@@ -257,13 +266,5 @@ class NodeSelector(object):
 
 class FlatNodeSelector(NodeSelector):
     def as_node_list(self, selected_nodes):
-        dependency_list = self.linker.as_dependency_list(
-            selected_nodes,
-            ephemeral_only=True)
-
-        concurrent_dependency_list = []
-        for level in dependency_list:
-            node_level = [self.linker.get_node(node) for node in level]
-            concurrent_dependency_list.append(node_level)
-
-        return concurrent_dependency_list
+        return super(FlatNodeSelector, self).as_node_list(selected_nodes,
+                                                          ephemeral_only=True)
