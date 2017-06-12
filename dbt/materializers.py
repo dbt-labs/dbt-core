@@ -113,15 +113,22 @@ class ViewMaterializer(BaseMaterializer):
 
 class IncrementalMaterializer(BaseMaterializer):
 
+    def should_drop(self, existing_type):
+        exists_as_table = (existing_type == 'table')
+        return self.full_refresh or not exists_as_table
+
+    def should_truncate(self, existing_type):
+        exists_as_table = (existing_type == 'table')
+        return self.non_destructive and self.full_refresh and exists_as_table
+
     def before_materialize(self, profile):
         existing_type = self.existing_final_type()
-        exists_as_table = (existing_type == 'table')
 
         if existing_type is None:
             pass
-        elif self.non_destructive and self.full_refresh and exists_as_table:
+        elif self.should_truncate(existing_type):
             self.truncate(profile, self.final_name())
-        elif (self.full_refresh or not exists_as_table):
+        elif self.should_drop(existing_type):
             self.drop(profile, self.final_name(), existing_type)
 
     def after_materialize(self, profile):

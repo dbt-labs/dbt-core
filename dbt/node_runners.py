@@ -273,12 +273,17 @@ class ModelRunner(CompileRunner):
         cls.run_hooks(project, adapter, flat_graph, RunHookType.End)
         cls.print_results_line(results, elapsed)
 
-    def print_start_line(self):
+    def describe_node(self):
+        materialization = dbt.utils.get_materialization(self.node)
         schema_name = self.get_schema(self.adapter, self.profile)
-        dbt.ui.printer.print_model_start_line(self.node,
-                                              schema_name,
-                                              self.node_index,
-                                              self.num_nodes)
+        node_name = self.node.get('name')
+
+        return "{} model {}.{}".format(materialization, schema_name, node_name)
+
+    def print_start_line(self):
+        description = self.describe()
+        dbt.ui.printer.print_start_line(description, self.node_index,
+                                        self.num_nodes)
 
     def print_result_line(self, result):
         schema_name = self.get_schema(self.adapter, self.profile)
@@ -302,12 +307,9 @@ class ModelRunner(CompileRunner):
 
 
 class TestRunner(CompileRunner):
-    def print_start_line(self):
-        schema_name = self.get_schema(self.adapter, self.profile)
-        dbt.ui.printer.print_test_start_line(self.node,
-                                             schema_name,
-                                             self.node_index,
-                                             self.num_nodes)
+    def describe_node(self):
+        node_name = self.node.get('name')
+        return "test {}".format(node_name)
 
     def print_result_line(self, result):
         schema_name = self.get_schema(self.adapter, self.profile)
@@ -323,18 +325,14 @@ class TestRunner(CompileRunner):
             test.get('name'),
             auto_begin=True)
 
-        if len(rows) > 1:
+        num_rows = len(rows)
+        if num_rows > 1:
+            num_cols = len(rows[0])
             raise RuntimeError(
-                "Bad test {name}: Returned {num_rows} rows instead of 1"
-                .format(name=test.name, num_rows=len(rows)))
+                "Bad test {name}: Returned {rows} rows and {cols} cols"
+                .format(name=test.name, rows=num_rows, cols=num_cols))
 
-        row = rows[0]
-        if len(row) > 1:
-            raise RuntimeError(
-                "Bad test {name}: Returned {num_cols} cols instead of 1"
-                .format(name=test.name, num_cols=len(row)))
-
-        return row[0]
+        return rows[0][0]
 
     def before_execute(self):
         self.print_start_line()
@@ -348,9 +346,10 @@ class TestRunner(CompileRunner):
 
 
 class ArchiveRunner(CompileRunner):
-    def print_start_line(self):
-        dbt.ui.printer.print_archive_start_line(self.node, self.node_index,
-                                                self.num_nodes)
+    def describe_node(self):
+        cfg = self.node.get('config', {})
+        return "archive {source_schema}.{source_table} --> "\
+               "{target_schema}.{target_table}".format(**cfg)
 
     def print_result_line(self, result):
         dbt.ui.printer.print_archive_result_line(result, self.node_index,

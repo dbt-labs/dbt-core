@@ -71,16 +71,6 @@ def print_fancy_output_line(msg, status, index, total, execution_time=None):
     logger.info(output)
 
 
-def print_skip_line(model, schema, relation, index, num_models):
-    msg = 'SKIP relation {}.{}'.format(schema, relation)
-    print_fancy_output_line(msg, yellow('SKIP'), index, num_models)
-
-
-def print_cancel_line(model, schema):
-    msg = 'CANCEL query {}.{}'.format(schema, model)
-    print_fancy_output_line(msg, red('CANCEL'), index=None, total=None)
-
-
 def get_counts(flat_nodes):
     counts = {}
 
@@ -98,31 +88,30 @@ def get_counts(flat_nodes):
     return stat_line
 
 
-def print_test_start_line(model, schema_name, index, total):
-    msg = "START test {name}".format(
-        name=model.get('name'))
-
-    run = 'RUN'
-    print_fancy_output_line(msg, run, index, total)
+def print_start_line(description, index, total):
+    msg = "START {}".format(description)
+    print_fancy_output_line(msg, 'RUN', index, total)
 
 
-def print_model_start_line(model, schema_name, index, total):
-    msg = "START {model_type} model {schema}.{relation}".format(
-        model_type=get_materialization(model),
-        schema=schema_name,
-        relation=model.get('name'))
-
-    run = 'RUN'
-    print_fancy_output_line(msg, run, index, total)
+def print_skip_line(model, schema, relation, index, num_models):
+    msg = 'SKIP relation {}.{}'.format(schema, relation)
+    print_fancy_output_line(msg, yellow('SKIP'), index, num_models)
 
 
-def print_archive_start_line(model, index, total):
-    cfg = model.get('config', {})
-    msg = "START archive {source_schema}.{source_table} --> "\
-          "{target_schema}.{target_table}".format(**cfg)
+def print_cancel_line(model, schema):
+    msg = 'CANCEL query {}.{}'.format(schema, model)
+    print_fancy_output_line(msg, red('CANCEL'), index=None, total=None)
 
-    run = 'RUN'
-    print_fancy_output_line(msg, run, index, total)
+
+def get_printable_result(result, success, error):
+    if result.errored:
+        info = 'ERROR {}'.format(error)
+        status = red(result.status)
+    else:
+        info = 'OK {}'.format(success)
+        status = green(result.status)
+
+    return info, status
 
 
 def print_test_result_line(result, schema_name, index, total):
@@ -153,32 +142,6 @@ def print_test_result_line(result, schema_name, index, total):
         result.execution_time)
 
 
-def get_printable_result(result, success, error):
-    if result.errored:
-        info = 'ERROR {}'.format(error)
-        status = red(result.status)
-    else:
-        info = 'OK {}'.format(success)
-        status = green(result.status)
-
-    return info, status
-
-
-def print_archive_result_line(result, index, total):
-    model = result.node
-
-    info, status = get_printable_result(result, 'archived', 'archiving')
-    cfg = model.get('config', {})
-
-    print_fancy_output_line(
-        "{info} {source_schema}.{source_table} --> "
-        "{target_schema}.{target_table}".format(info=info, **cfg),
-        status,
-        index,
-        total,
-        result.execution_time)
-
-
 def print_model_result_line(result, schema_name, index, total):
     model = result.node
 
@@ -190,6 +153,21 @@ def print_model_result_line(result, schema_name, index, total):
             model_type=get_materialization(model),
             schema=schema_name,
             relation=model.get('name')),
+        status,
+        index,
+        total,
+        result.execution_time)
+
+
+def print_archive_result_line(result, index, total):
+    model = result.node
+
+    info, status = get_printable_result(result, 'archived', 'archiving')
+    cfg = model.get('config', {})
+
+    print_fancy_output_line(
+        "{info} {source_schema}.{source_table} --> "
+        "{target_schema}.{target_table}".format(info=info, **cfg),
         status,
         index,
         total,
