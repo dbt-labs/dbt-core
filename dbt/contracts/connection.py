@@ -35,7 +35,7 @@ snowflake_credentials_contract = Schema({
 
 bigquery_auth_methods = ['oauth', 'service-account', 'service-account-json']
 bigquery_credentials_contract = Schema({
-    Required('method'): All(basestring, Any(bigquery_auth_methods)),
+    Required('method'): basestring,
     Required('project'): basestring,
     Required('schema'): basestring,
     Optional('keyfile'): basestring,
