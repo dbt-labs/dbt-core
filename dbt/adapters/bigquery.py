@@ -176,7 +176,9 @@ class BigQueryAdapter(PostgresAdapter):
                   from_name, to_name)
         raise dbt.exceptions.NotImplementedException(message)
 
-    # hack because of current API limitations
+    # Hack because of current API limitations. We should set a flag on the
+    # Table object indicating StandardSQL when it's implemented
+    # https://github.com/GoogleCloudPlatform/google-cloud-python/issues/3388
     @classmethod
     def format_sql_for_bigquery(cls, sql):
         return "#standardSQL\n{}".format(sql)
