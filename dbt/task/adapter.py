@@ -13,7 +13,13 @@ class AdapterTask:
 
     def install(self, adapter_type):
         logger.info("Installing {}".format(adapter_type))
-        dbt.adapters.factory.install_adapter(adapter_type)
+        dbt.adapters.factory.install_adapter(adapter_type,
+                                             install_or_uninstall='install')
+
+    def uninstall(self, adapter_type):
+        logger.info("Uninstalling {}".format(adapter_type))
+        dbt.adapters.factory.install_adapter(adapter_type,
+                                             install_or_uninstall='uninstall')
 
     def list(self):
         logger.info("Using python {}".format(sys.executable))
@@ -33,6 +39,9 @@ class AdapterTask:
 
         elif self.args.install:
             self.install(self.args.install)
+
+        elif self.args.uninstall:
+            self.uninstall(self.args.uninstall)
 
         else:
             self.list()

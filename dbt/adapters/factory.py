@@ -45,10 +45,10 @@ def get_adapter_by_name(adapter_name):
         return adapter
 
 
-def install_adapter(adapter_name):
+def install_adapter(adapter_name, install_or_uninstall='install'):
     adapter = get_adapter_by_name(adapter_name)
     try:
-        adapter.install_requires()
+        adapter.install_requires(install_or_uninstall)
     except Exception as e:
         raise dbt.exceptions.RuntimeException(e)
 

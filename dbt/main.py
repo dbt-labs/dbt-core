@@ -392,17 +392,27 @@ def parse_args(args):
     sub.set_defaults(cls=test_task.TestTask, which='test')
 
     sub = subs.add_parser('adapter', parents=[base_subparser])
-    sub.add_argument(
+    sub_group = sub.add_mutually_exclusive_group()
+    sub_group.add_argument(
         '--list',
         action='store_true',
         help='List dbt adapters.'
     )
-    sub.add_argument(
+    sub_group.add_argument(
         '--install',
         type=str,
         required=False,
         help="""
         Install a dbt adapter. Valid adapters can be shown with\n
+        dbt adapter --list
+        """
+    )
+    sub_group.add_argument(
+        '--uninstall',
+        type=str,
+        required=False,
+        help="""
+        Uninstall a dbt adapter. Installed  adapters can be shown with\n
         dbt adapter --list
         """
     )
