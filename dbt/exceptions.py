@@ -1,5 +1,4 @@
 from dbt.compat import basestring
-import dbt.utils
 
 
 class Exception(BaseException):
@@ -45,7 +44,7 @@ def raise_compiler_error(node, msg):
         name = node.get('name')
         node_type = node.get('resource_type')
 
-        if node_type == dbt.utils.NodeType.Macro:
+        if node_type == 'macro':
             name = node.get('path')
     else:
         name = node.nice_name
