@@ -102,6 +102,11 @@ class DefaultAdapter(object):
         raise dbt.exceptions.NotImplementedException(
             '`check_schema_exists` is not implemented for this adapter!')
 
+    @classmethod
+    def cancel_connection(cls, project, connection):
+        raise dbt.exceptions.NotImplementedException(
+            '`cancel_connection` is not implemented for this adapter!')
+
     ###
     # FUNCTIONS THAT SHOULD BE ABSTRACT
     ###
@@ -156,6 +161,10 @@ class DefaultAdapter(object):
                        to_name=to_name))
 
         connection, cursor = cls.add_query(profile, sql, model_name)
+
+    @classmethod
+    def is_cancelable(cls):
+        return True
 
     @classmethod
     def execute_model(cls, profile, model):

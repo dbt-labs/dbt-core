@@ -278,21 +278,8 @@ class BigQueryAdapter(PostgresAdapter):
             '`add_query` is not implemented for this adapter!')
 
     @classmethod
-    def cancel_connection(cls, profile, connection):
-        raise Exception("Not implemented")
-        handle = connection['handle']
-        sid = handle.session_id
-
-        connection_name = connection.get('name')
-
-        sql = 'select system$abort_session({})'.format(sid)
-
-        logger.debug("Cancelling query '{}' ({})".format(connection_name, sid))
-
-        _, cursor = cls.add_query(profile, sql, 'master')
-        res = cursor.fetchone()
-
-        logger.debug("Cancel query '{}': {}".format(connection_name, res))
+    def is_cancelable(cls):
+        return False
 
     @classmethod
     def quote_schema_and_table(cls, profile, schema, table):

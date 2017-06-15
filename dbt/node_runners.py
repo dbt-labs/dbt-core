@@ -281,7 +281,7 @@ class ModelRunner(CompileRunner):
         return "{} model {}.{}".format(materialization, schema_name, node_name)
 
     def print_start_line(self):
-        description = self.describe()
+        description = self.describe_node()
         dbt.ui.printer.print_start_line(description, self.node_index,
                                         self.num_nodes)
 
@@ -317,6 +317,11 @@ class TestRunner(CompileRunner):
                                               schema_name,
                                               self.node_index,
                                               self.num_nodes)
+
+    def print_start_line(self):
+        description = self.describe_node()
+        dbt.ui.printer.print_start_line(description, self.node_index,
+                                        self.num_nodes)
 
     def execute_test(self, test):
         rows = self.adapter.execute_and_fetch(
@@ -354,6 +359,11 @@ class ArchiveRunner(CompileRunner):
     def print_result_line(self, result):
         dbt.ui.printer.print_archive_result_line(result, self.node_index,
                                                  self.num_nodes)
+
+    def print_start_line(self):
+        description = self.describe_node()
+        dbt.ui.printer.print_start_line(description, self.node_index,
+                                        self.num_nodes)
 
     def before_execute(self):
         self.print_start_line()

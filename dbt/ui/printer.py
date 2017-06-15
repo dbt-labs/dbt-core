@@ -41,7 +41,10 @@ def red(text):
     return color(text, COLOR_FG_RED)
 
 
-def print_timestamped_line(msg):
+def print_timestamped_line(msg, use_color=None):
+    if use_color is not None:
+        msg = color(msg, use_color)
+
     logger.info("{} | {}".format(get_timestamp(), msg))
 
 
