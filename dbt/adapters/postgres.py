@@ -1,3 +1,5 @@
+import psycopg2
+
 from contextlib import contextmanager
 
 import dbt.adapters.default
@@ -7,12 +9,6 @@ from dbt.logger import GLOBAL_LOGGER as logger
 
 
 class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
-
-    requires = {'psycopg2': 'psycopg2==2.7.1'}
-
-    @classmethod
-    def initialize(cls):
-        globals()['psycopg2'] = cls._import('psycopg2')
 
     @classmethod
     @contextmanager

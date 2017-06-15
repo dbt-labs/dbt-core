@@ -26,25 +26,6 @@ class DefaultAdapter(object):
     requires = {}
 
     @classmethod
-    def is_installed(cls):
-        try:
-            cls.initialize()
-            return True
-        except ImportError:
-            return False
-
-    @classmethod
-    def _import(cls, name):
-        return importlib.import_module(name)
-
-    @classmethod
-    def install_requires(cls, action='install'):
-        from pip import main as pip_main
-
-        for package, require in cls.requires.items():
-            pip_main([action, require])
-
-    @classmethod
     def get_materializer(cls, model, existing):
         return dbt.materializers.get_materializer(cls, model, existing)
 

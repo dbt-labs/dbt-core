@@ -11,23 +11,15 @@ from dbt.adapters.postgres import PostgresAdapter
 from dbt.contracts.connection import validate_connection
 from dbt.logger import GLOBAL_LOGGER as logger
 
+import google.auth
+import google.oauth2
+import google.cloud.exceptions
+import google.cloud.bigquery
+
 
 class BigQueryAdapter(PostgresAdapter):
 
     QUERY_TIMEOUT = 60 * 1000
-    requires = {'bigquery': 'google-cloud-bigquery==0.24.0'}
-
-    @classmethod
-    def initialize(cls):
-        google = cls._import('google')
-        google.auth = cls._import('google.auth')
-        google.oauth2 = cls._import('google.oauth2')
-
-        google.cloud = cls._import('google.cloud')
-        google.cloud.bigquery = cls._import('google.cloud.bigquery')
-        google.cloud.exceptions = cls._import('google.cloud.exceptions')
-
-        globals()['google'] = google
 
     @classmethod
     def get_materializer(cls, node, existing):

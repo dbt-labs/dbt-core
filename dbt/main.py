@@ -16,7 +16,6 @@ import dbt.task.init as init_task
 import dbt.task.seed as seed_task
 import dbt.task.test as test_task
 import dbt.task.archive as archive_task
-import dbt.task.adapter as adapter_task
 import dbt.tracking
 import dbt.config as config
 import dbt.ui.printer
@@ -390,34 +389,6 @@ def parse_args(args):
     )
 
     sub.set_defaults(cls=test_task.TestTask, which='test')
-
-    sub = subs.add_parser('adapter', parents=[base_subparser])
-    sub_group = sub.add_mutually_exclusive_group()
-    sub_group.add_argument(
-        '--list',
-        action='store_true',
-        help='List dbt adapters.'
-    )
-    sub_group.add_argument(
-        '--install',
-        type=str,
-        required=False,
-        help="""
-        Install a dbt adapter. Valid adapters can be shown with\n
-        dbt adapter --list
-        """
-    )
-    sub_group.add_argument(
-        '--uninstall',
-        type=str,
-        required=False,
-        help="""
-        Uninstall a dbt adapter. Installed  adapters can be shown with\n
-        dbt adapter --list
-        """
-    )
-
-    sub.set_defaults(cls=adapter_task.AdapterTask, which='adapter')
 
     if len(args) == 0:
         p.print_help()

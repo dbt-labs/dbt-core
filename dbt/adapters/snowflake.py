@@ -2,6 +2,9 @@ from __future__ import absolute_import
 
 import re
 
+import snowflake.connector
+import snowflake.connector.errors
+
 from contextlib import contextmanager
 
 import dbt.exceptions
@@ -13,16 +16,6 @@ from dbt.logger import GLOBAL_LOGGER as logger
 
 
 class SnowflakeAdapter(PostgresAdapter):
-
-    requires = {'snowflake': 'snowflake-connector-python==1.3.16'}
-
-    @classmethod
-    def initialize(cls):
-        snowflake = cls._import('snowflake')
-        snowflake.connector = cls._import('snowflake.connector')
-        snowflake.connector.errors = cls._import('snowflake.connector.errors')
-
-        globals()['snowflake'] = snowflake
 
     @classmethod
     @contextmanager
