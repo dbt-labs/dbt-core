@@ -6,6 +6,8 @@ import dbt.clients.system
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
+from dbt.task.base_task import BaseTask
+
 STARTER_REPO = 'https://github.com/fishtown-analytics/dbt-starter-project.git'
 DOCS_URL = 'https://dbt.readme.io/docs/configure-your-profile'
 SAMPLE_PROFILES_YML_FILE = 'https://github.com/fishtown-analytics/dbt/blob/master/sample.profiles.yml'  # noqa
@@ -57,11 +59,7 @@ default:
 """.format(profiles_sample=SAMPLE_PROFILES_YML_FILE)
 
 
-class InitTask:
-    def __init__(self, args, project=None):
-        self.args = args
-        self.project = project
-
+class InitTask(BaseTask):
     def clone_starter_repo(self, project_name):
         dbt.clients.git.clone(STARTER_REPO, '.', project_name)
         dbt.clients.git.remove_remote(project_name)

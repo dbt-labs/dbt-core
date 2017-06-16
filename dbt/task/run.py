@@ -7,12 +7,10 @@ from dbt.node_runners import ModelRunner
 
 import dbt.ui.printer
 
+from dbt.task.base_task import BaseTask
 
-class RunTask:
-    def __init__(self, args, project):
-        self.args = args
-        self.project = project
 
+class RunTask(BaseTask):
     def run(self):
         runner = RunManager(
             self.project, self.project['target-path'], self.args

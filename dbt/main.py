@@ -33,16 +33,25 @@ def main(args=None):
         args = sys.argv[1:]
 
     try:
-        handle(args)
+        success = handle(args)
+        if success:
+            sys.exit(0)
+        else:
+            sys.exit(1)
 
     except KeyboardInterrupt as e:
         logger.info("ctrl-c")
-        sys.exit(1)
+        sys.exit(2)
 
     except RuntimeError as e:
         logger.info("Encountered an error:")
         logger.info(str(e))
-        sys.exit(1)
+        sys.exit(2)
+
+    except BaseException as e:
+        logger.info("Encoune:")
+        logger.info(str(e))
+        sys.exit(3)
 
 
 def handle(args):
