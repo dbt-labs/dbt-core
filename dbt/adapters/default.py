@@ -3,7 +3,6 @@ import multiprocessing
 import re
 import time
 import yaml
-import importlib
 
 from contextlib import contextmanager
 
@@ -253,6 +252,11 @@ class DefaultAdapter(object):
     @classmethod
     def get_create_schema_sql(cls, schema):
         return ('create schema if not exists "{schema}"'
+                .format(schema=schema))
+
+    @classmethod
+    def get_drop_schema_sql(cls, schema):
+        return ('drop schema if exists "{schema} cascade"'
                 .format(schema=schema))
 
     @classmethod
@@ -576,6 +580,12 @@ class DefaultAdapter(object):
     def create_schema(cls, profile, schema, model_name=None):
         logger.debug('Creating schema "%s".', schema)
         sql = cls.get_create_schema_sql(schema)
+        return cls.add_query(profile, sql, model_name)
+
+    @classmethod
+    def drop_schema(cls, profile, schema, model_name=None):
+        logger.debug('Dropping schema "%s".', schema)
+        sql = cls.get_drop_schema_sql(schema)
         return cls.add_query(profile, sql, model_name)
 
     @classmethod

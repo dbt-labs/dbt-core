@@ -1,0 +1,10 @@
+
+view:
+    constraints:
+        not_null:
+            - id
+            - updated_at
+
+        unique:
+            - id
+            - dupe    # fails

@@ -15,7 +15,7 @@ test-unit:
 
 test-integration:
 	@echo "Integration test run starting..."
-	@time docker-compose run test tox -e integration-postgres-py27,integration-postgres-py35,integration-snowflake-py27,integration-snowflake-py35
+	@time docker-compose run test tox -e integration-postgres-py27,integration-postgres-py35,integration-snowflake-py27,integration-snowflake-py35,integration-bigquery-py27,integration-bigquery-py35
 
 test-new:
 	@echo "Test run starting..."

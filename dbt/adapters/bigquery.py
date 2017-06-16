@@ -88,14 +88,14 @@ class BigQueryAdapter(PostgresAdapter):
         creds = google.oauth2.service_account.Credentials
 
         if method == 'oauth':
-            return None
+            return google.auth.default()
 
         elif method == 'service-account':
             keyfile = config.get('keyfile')
             return creds.from_service_account_file(keyfile)
 
         elif method == 'service-account-json':
-            details = config.get('config')
+            details = config.get('keyfile_json')
             return creds.from_service_account_info(details)
 
         error = ('Invalid `method` in profile: "{}"'.format(method))
@@ -106,8 +106,7 @@ class BigQueryAdapter(PostgresAdapter):
         project_name = config.get('project')
         creds = cls.get_bigquery_credentials(config)
 
-        return google.cloud.bigquery.Client(project=project_name,
-                                            credentials=creds)
+        return google.cloud.bigquery.Client(project_name, creds)
 
     @classmethod
     def open_connection(cls, connection):
@@ -128,6 +127,7 @@ class BigQueryAdapter(PostgresAdapter):
             handle = cls.get_bigquery_client(credentials)
 
         except Exception as e:
+            raise
             logger.debug("Got an error when attempting to create a bigquery "
                          "client: '{}'".format(e))
 
@@ -245,6 +245,21 @@ class BigQueryAdapter(PostgresAdapter):
 
         with cls.exception_handler(profile, 'create dataset', model_name):
             dataset.create()
+
+    @classmethod
+    def drop_tables_in_schema(cls, dataset):
+        for table in  dataset.list_tables():
+            table.delete()
+
+    @classmethod
+    def drop_schema(cls, profile, schema, model_name=None):
+        logger.debug('Dropping schema "%s".', schema)
+
+        dataset = cls.get_dataset(profile, schema, model_name)
+
+        with cls.exception_handler(profile, 'drop dataset', model_name):
+            cls.drop_tables_in_schema(dataset)
+            dataset.delete()
 
     @classmethod
     def check_schema_exists(cls, profile, schema, model_name=None):
