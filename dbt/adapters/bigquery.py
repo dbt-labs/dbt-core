@@ -248,7 +248,7 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def drop_tables_in_schema(cls, dataset):
-        for table in  dataset.list_tables():
+        for table in dataset.list_tables():
             table.delete()
 
     @classmethod
