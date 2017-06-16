@@ -255,6 +255,9 @@ class BigQueryAdapter(PostgresAdapter):
     def drop_schema(cls, profile, schema, model_name=None):
         logger.debug('Dropping schema "%s".', schema)
 
+        if not cls.check_schema_exists(profile, schema, model_name):
+            return
+
         dataset = cls.get_dataset(profile, schema, model_name)
 
         with cls.exception_handler(profile, 'drop dataset', model_name):
