@@ -164,9 +164,8 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def rename(cls, profile, from_name, to_name, model_name=None):
-        message = 'Cannot rename bigquery relation {} to {}'.format(
-                  from_name, to_name)
-        raise dbt.exceptions.NotImplementedException(message)
+        raise dbt.exceptions.NotImplementedException(
+            '`rename` is not implemented for this adapter!')
 
     # Hack because of current API limitations. We should set a flag on the
     # Table object indicating StandardSQL when it's implemented
@@ -233,9 +232,8 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def add_begin_query(cls, profile, name):
-        raise Exception("not implemented")
-        return cls.add_query(profile, 'BEGIN', name, auto_begin=False,
-                             select_schema=False)
+        raise dbt.exceptions.NotImplementedException(
+            '`add_begin_query` is not implemented for this adapter!')
 
     @classmethod
     def create_schema(cls, profile, schema, model_name=None):
