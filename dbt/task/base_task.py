@@ -12,6 +12,7 @@ class BaseTask(object):
     def interpret_results(self, results):
         return True
 
-    def run_and_get_status(self):
-        results = self.run()
-        return self.results_indicate_success(results):
+class RunnableTask(BaseTask):
+    def interpret_results(self, results):
+        failures = [r for r in results if r.error or r.fail]
+        return len(failures) == 0

@@ -7,10 +7,10 @@ from dbt.node_runners import ModelRunner
 
 import dbt.ui.printer
 
-from dbt.task.base_task import BaseTask
+from dbt.task.base_task import RunnableTask
 
 
-class RunTask(BaseTask):
+class RunTask(RunnableTask):
     def run(self):
         runner = RunManager(
             self.project, self.project['target-path'], self.args
@@ -27,3 +27,5 @@ class RunTask(BaseTask):
 
         if results:
             dbt.ui.printer.print_run_end_messages(results)
+
+        return results

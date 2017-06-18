@@ -3,10 +3,10 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.node_runners import TestRunner
 from dbt.utils import NodeType
 import dbt.ui.printer
-from dbt.task.base_task import BaseTask
+from dbt.task.base_task import RunnableTask
 
 
-class TestTask(BaseTask):
+class TestTask(RunnableTask):
     """
     Testing:
         1) Create tmp views w/ 0 rows to ensure all tables, schemas, and SQL

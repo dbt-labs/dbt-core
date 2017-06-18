@@ -33,28 +33,30 @@ def main(args=None):
         args = sys.argv[1:]
 
     try:
-        success = handle(args)
-        if success:
-            sys.exit(0)
+        results, succeeded = handle_and_check(args)
+        if succeeded:
+            exit_code = 0
         else:
-            sys.exit(1)
+            exit_code = 1
 
     except KeyboardInterrupt as e:
         logger.info("ctrl-c")
-        sys.exit(2)
-
-    except RuntimeError as e:
-        logger.info("Encountered an error:")
-        logger.info(str(e))
-        sys.exit(2)
+        exit_code = 2
 
     except BaseException as e:
-        logger.info("Encoune:")
+        logger.info("Encountered an error:")
         logger.info(str(e))
-        sys.exit(3)
+        exit_code = 2
+
+    sys.exit(exit_code)
 
 
+# here for backwards compatibility
 def handle(args):
+    res, success = do_handle(args)
+    return res
+
+def handle_and_check(args):
     parsed = parse_args(args)
 
     # this needs to happen after args are parsed so we can determine the
@@ -68,10 +70,12 @@ def handle(args):
     if dbt.config.colorize_output(profile_config):
         dbt.ui.printer.use_colors()
 
-    res = run_from_args(parsed)
+    task, res = run_from_args(parsed)
     dbt.tracking.flush()
 
-    return res
+    success = task.interpret_results(res)
+
+    return res, success
 
 
 def get_nearest_project_dir():
@@ -120,21 +124,27 @@ def run_from_args(parsed):
 
     dbt.tracking.track_invocation_start(project=proj, args=parsed)
 
+    results = run_from_task(task, proj, parsed)
+
+    return task, results
+
+
+def run_from_task(task, proj, parsed_arguments):
     result = None
     try:
         result = task.run()
         dbt.tracking.track_invocation_end(
-            project=proj, args=parsed, result_type="ok", result=None
+            project=proj, args=parsed_arguments, result_type="ok", result=None
         )
     except (dbt.exceptions.NotImplementedException,
             dbt.exceptions.FailedToConnectException) as e:
         logger.info('ERROR: {}'.format(e))
         dbt.tracking.track_invocation_end(
-            project=proj, args=parsed, result_type="error", result=str(e)
+            project=proj, args=parsed_arguments, result_type="error", result=str(e)
         )
     except Exception as e:
         dbt.tracking.track_invocation_end(
-            project=proj, args=parsed, result_type="error", result=str(e)
+            project=proj, args=parsed_arguments, result_type="error", result=str(e)
         )
         raise
 
