@@ -74,13 +74,8 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def get_status(cls, cursor):
-        raise Exception("Not implemented")
-        state = cursor.sqlstate
-
-        if state is None:
-            state = 'SUCCESS'
-
-        return "{} {}".format(state, cursor.rowcount)
+        raise dbt.exceptions.NotImplementedException(
+            '`get_status` is not implemented for this adapter!')
 
     @classmethod
     def get_bigquery_credentials(cls, config):
