@@ -346,6 +346,7 @@ initialized = False
 
 def make_log_dir_if_missing(log_dir):
     import dbt.clients.system
+
     dbt.clients.system.make_directory(log_dir)
 
 
