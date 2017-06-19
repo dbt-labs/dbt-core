@@ -23,6 +23,12 @@ DBTConfigKeys = [
 ]
 
 
+class ExitCodes(object):
+    Success = 0
+    ModelError = 1
+    UnhandledError = 2
+
+
 class NodeType(object):
     Base = 'base'
     Model = 'model'

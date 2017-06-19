@@ -16,10 +16,13 @@ import dbt.task.init as init_task
 import dbt.task.seed as seed_task
 import dbt.task.test as test_task
 import dbt.task.archive as archive_task
+
 import dbt.tracking
 import dbt.config as config
 import dbt.ui.printer
 import dbt.compat
+
+from dbt.utils import ExitCodes
 
 PROFILES_HELP_MESSAGE = """
 For more information on configuring profiles, please consult the dbt docs:
@@ -33,19 +36,31 @@ def main(args=None):
         args = sys.argv[1:]
 
     try:
-        handle(args)
+        results, succeeded = handle_and_check(args)
+        if succeeded:
+            exit_code = ExitCodes.Success
+        else:
+            exit_code = ExitCodes.ModelError
 
     except KeyboardInterrupt as e:
         logger.info("ctrl-c")
-        sys.exit(1)
+        exit_code = ExitCodes.UnhandledError
 
-    except RuntimeError as e:
+    except BaseException as e:
         logger.info("Encountered an error:")
         logger.info(str(e))
-        sys.exit(1)
+        exit_code = ExitCodes.UnhandledError
+
+    sys.exit(exit_code)
 
 
+# here for backwards compatibility
 def handle(args):
+    res, success = handle_and_check(args)
+    return res
+
+
+def handle_and_check(args):
     parsed = parse_args(args)
 
     # this needs to happen after args are parsed so we can determine the
@@ -59,10 +74,12 @@ def handle(args):
     if dbt.config.colorize_output(profile_config):
         dbt.ui.printer.use_colors()
 
-    res = run_from_args(parsed)
+    task, res = run_from_args(parsed)
     dbt.tracking.flush()
 
-    return res
+    success = task.interpret_results(res)
+
+    return res, success
 
 
 def get_nearest_project_dir():
@@ -111,21 +128,27 @@ def run_from_args(parsed):
 
     dbt.tracking.track_invocation_start(project=proj, args=parsed)
 
+    results = run_from_task(task, proj, parsed)
+
+    return task, results
+
+
+def run_from_task(task, proj, parsed_args):
     result = None
     try:
         result = task.run()
         dbt.tracking.track_invocation_end(
-            project=proj, args=parsed, result_type="ok", result=None
+            project=proj, args=parsed_args, result_type="ok", result=None
         )
     except (dbt.exceptions.NotImplementedException,
             dbt.exceptions.FailedToConnectException) as e:
         logger.info('ERROR: {}'.format(e))
         dbt.tracking.track_invocation_end(
-            project=proj, args=parsed, result_type="error", result=str(e)
+            project=proj, args=parsed_args, result_type="error", result=str(e)
         )
     except Exception as e:
         dbt.tracking.track_invocation_end(
-            project=proj, args=parsed, result_type="error", result=str(e)
+            project=proj, args=parsed_args, result_type="error", result=str(e)
         )
         raise
 

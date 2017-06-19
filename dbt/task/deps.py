@@ -9,6 +9,8 @@ import dbt.project as project
 from dbt.compat import basestring
 from dbt.logger import GLOBAL_LOGGER as logger
 
+from dbt.task.base_task import BaseTask
+
 
 def folder_from_git_remote(remote_spec):
     start = remote_spec.rfind('/') + 1
@@ -16,11 +18,7 @@ def folder_from_git_remote(remote_spec):
     return remote_spec[start:end]
 
 
-class DepsTask:
-    def __init__(self, args, project):
-        self.args = args
-        self.project = project
-
+class DepsTask(BaseTask):
     def __pull_repo(self, repo, branch=None):
         modules_path = self.project['modules-path']
 

@@ -6,12 +6,10 @@ from dbt.node_runners import CompileRunner
 from dbt.utils import NodeType
 import dbt.ui.printer
 
+from dbt.task.base_task import RunnableTask
 
-class CompileTask:
-    def __init__(self, args, project):
-        self.args = args
-        self.project = project
 
+class CompileTask(RunnableTask):
     def run(self):
         runner = RunManager(
             self.project, self.project['target-path'], self.args
@@ -24,6 +22,8 @@ class CompileTask:
             "tags": set()
         }
 
-        runner.run(query, CompileRunner)
+        results = runner.run(query, CompileRunner)
 
         dbt.ui.printer.print_timestamped_line('Done.')
+
+        return results

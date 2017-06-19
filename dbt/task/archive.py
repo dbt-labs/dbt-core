@@ -3,14 +3,12 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.node_runners import ArchiveRunner
 from dbt.utils import NodeType
 
+from dbt.task.base_task import RunnableTask
+
 import dbt.ui.printer
 
 
-class ArchiveTask:
-    def __init__(self, args, project):
-        self.args = args
-        self.project = project
-
+class ArchiveTask(RunnableTask):
     def run(self):
         runner = RunManager(
             self.project,
@@ -27,3 +25,5 @@ class ArchiveTask:
         results = runner.run_flat(query, ArchiveRunner)
 
         dbt.ui.printer.print_run_end_messages(results)
+
+        return results
