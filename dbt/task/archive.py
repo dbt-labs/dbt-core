@@ -4,7 +4,6 @@ from dbt.node_runners import ArchiveRunner
 from dbt.utils import NodeType
 
 from dbt.task.base_task import RunnableTask
-
 import dbt.ui.printer
 
 
