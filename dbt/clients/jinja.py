@@ -9,6 +9,29 @@ import jinja2.ext
 from dbt.utils import NodeType
 
 
+class MaterializationExtension(jinja2.ext.Extension):
+    tags = set(['materialization'])
+
+    def parse_signature(self, node):
+        node.args = []
+        node.defaults = []
+
+        # TODO add the exhaustive list of automatically passed
+        # materialization macro args here
+        return
+
+    def parse(self, parser):
+        node = jinja2.nodes.Macro(lineno=next(parser.stream).lineno)
+        materialization_name = parser.parse_assign_target(name_only=True).name
+        node.name = "dbt__{}".format(materialization_name)
+        self.parse_signature(node)
+        node.body = parser.parse_statements(('name:endmaterialization',),
+                                            drop_needle=True)
+
+        print(node)
+        return node
+
+
 def create_macro_validation_extension(node):
 
     class MacroContextCatcherExtension(jinja2.ext.Extension):
@@ -77,11 +100,14 @@ def create_macro_capture_env(node):
         undefined=ParserMacroCapture)
 
 
-env = jinja2.sandbox.SandboxedEnvironment()
+env = jinja2.sandbox.SandboxedEnvironment(
+    extensions=[MaterializationExtension])
 
 
 def get_template(string, ctx, node=None, capture_macros=False,
                  validate_macro=False):
+    global env
+
     try:
         local_env = env
 
