@@ -12,24 +12,58 @@ from dbt.utils import NodeType
 class MaterializationExtension(jinja2.ext.Extension):
     tags = set(['materialization'])
 
-    def parse_signature(self, node):
-        node.args = []
-        node.defaults = []
+    def get_args(self):
+        args = [
+            'materialization',
+            'model',
+            'schema',
+            'dist',
+            'sort',
+            'pre_hooks',
+            'post_hooks',
+            'sql',
+            'flags',
+            'adapter',
+        ]
 
-        # TODO add the exhaustive list of automatically passed
-        # materialization macro args here
-        return
+        return [jinja2.nodes.Name(arg, 'param') for arg in args]
 
     def parse(self, parser):
         node = jinja2.nodes.Macro(lineno=next(parser.stream).lineno)
         materialization_name = parser.parse_assign_target(name_only=True).name
-        node.name = "dbt__{}".format(materialization_name)
-        self.parse_signature(node)
+
+        node.name = "dbt__create_{}".format(materialization_name)
+        node.args = self.get_args()
+        node.defaults = []
         node.body = parser.parse_statements(('name:endmaterialization',),
                                             drop_needle=True)
 
-        print(node)
         return node
+
+
+def create_statement_extension(node, ctx, execute):
+
+    class SQLStatementExtension(jinja2.ext.Extension):
+        tags = set(['statement'])
+
+        def parse(self, parser):
+            lineno = next(parser.stream).lineno
+
+            body = parser.parse_statements(['name:endstatement'],
+                                           drop_needle=True)
+
+            return jinja2.nodes.CallBlock(self.call_method('_run_statement', [jinja2.nodes.Const(execute)]),
+                                          [], [], body).set_lineno(lineno)
+
+        def _run_statement(self, execute, caller):
+            body = caller()
+
+            if execute:
+                ctx['adapter'].add_query(ctx['profile'], body, node['name'])
+
+            return body
+
+    return SQLStatementExtension
 
 
 def create_macro_validation_extension(node):
@@ -56,8 +90,7 @@ def create_macro_validation_extension(node):
                 for token in held:
                     yield token
 
-    return jinja2.sandbox.SandboxedEnvironment(
-        extensions=[MacroContextCatcherExtension])
+    return MacroContextCatcherExtension
 
 
 def create_macro_capture_env(node):
@@ -96,28 +129,29 @@ def create_macro_capture_env(node):
 
             return True
 
-    return jinja2.sandbox.SandboxedEnvironment(
-        undefined=ParserMacroCapture)
-
-
-env = jinja2.sandbox.SandboxedEnvironment(
-    extensions=[MaterializationExtension])
+    return ParserMacroCapture
 
 
 def get_template(string, ctx, node=None, capture_macros=False,
-                 validate_macro=False):
-    global env
-
+                 validate_macro=False, execute_statements=False):
     try:
-        local_env = env
+        args = {
+            'extensions': []
+        }
 
         if capture_macros:
-            local_env = create_macro_capture_env(node)
+            args['undefined'] = create_macro_capture_env(node)
 
-        elif validate_macro:
-            local_env = create_macro_validation_extension(node)
+        if validate_macro:
+            args['extensions'].append(create_macro_validation_extension(node))
 
-        return local_env.from_string(dbt.compat.to_string(string), globals=ctx)
+        args['extensions'].append(MaterializationExtension)
+        args['extensions'].append(
+            create_statement_extension(node, ctx, execute_statements))
+
+        env = jinja2.sandbox.SandboxedEnvironment(**args)
+
+        return env.from_string(dbt.compat.to_string(string), globals=ctx)
 
     except (jinja2.exceptions.TemplateSyntaxError,
             jinja2.exceptions.UndefinedError) as e:
@@ -133,6 +167,10 @@ def render_template(template, ctx, node=None):
         dbt.exceptions.raise_compiler_error(node, str(e))
 
 
-def get_rendered(string, ctx, node=None, capture_macros=False):
-    template = get_template(string, ctx, node, capture_macros)
+def get_rendered(string, ctx, node=None,
+                 capture_macros=False,
+                 execute_statements=False):
+    template = get_template(string, ctx, node,
+                            capture_macros=capture_macros,
+                            execute_statements=execute_statements)
     return render_template(template, ctx, node)
