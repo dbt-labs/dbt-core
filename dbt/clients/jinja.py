@@ -52,8 +52,10 @@ def create_statement_extension(node, ctx, execute):
             body = parser.parse_statements(['name:endstatement'],
                                            drop_needle=True)
 
-            return jinja2.nodes.CallBlock(self.call_method('_run_statement', [jinja2.nodes.Const(execute)]),
-                                          [], [], body).set_lineno(lineno)
+            return jinja2.nodes.CallBlock(
+                self.call_method('_run_statement',
+                                 [jinja2.nodes.Const(execute)]),
+                [], [], body).set_lineno(lineno)
 
         def _run_statement(self, execute, caller):
             body = caller()
