@@ -8,12 +8,15 @@ import jinja2.ext
 
 from dbt.node_types import NodeType
 
+from dbt.logger import GLOBAL_LOGGER as logger  # noqa
+
 
 class MaterializationExtension(jinja2.ext.Extension):
     tags = set(['materialization'])
 
     def get_args(self):
         args = [
+            '_is_materialization_block',
             'materialization',
             'model',
             'schema',
@@ -24,6 +27,7 @@ class MaterializationExtension(jinja2.ext.Extension):
             'sql',
             'flags',
             'adapter',
+            'execute',
         ]
 
         return [jinja2.nodes.Name(arg, 'param') for arg in args]
@@ -41,29 +45,34 @@ class MaterializationExtension(jinja2.ext.Extension):
         return node
 
 
-def create_statement_extension(node, ctx, execute):
+def create_statement_extension(node):
 
     class SQLStatementExtension(jinja2.ext.Extension):
         tags = set(['statement'])
 
-        def parse(self, parser):
-            lineno = next(parser.stream).lineno
-
-            body = parser.parse_statements(['name:endstatement'],
-                                           drop_needle=True)
-
-            return jinja2.nodes.CallBlock(
-                self.call_method('_run_statement',
-                                 [jinja2.nodes.Const(execute)]),
-                [], [], body).set_lineno(lineno)
-
-        def _run_statement(self, execute, caller):
+        def _execute_body(self, execute, adapter, caller):
             body = caller()
 
             if execute:
-                ctx['adapter'].add_query(ctx['profile'], body, node['name'])
+                adapter.add_query(body)
 
             return body
+
+        def parse(self, parser):
+            lineno = next(parser.stream).lineno
+
+            body = parser.parse_statements(
+                ['name:endstatement'],
+                drop_needle=True)
+
+            callblock = jinja2.nodes.CallBlock(
+                self.call_method(
+                    '_execute_body',
+                    [jinja2.nodes.Name('execute', 'load'),
+                     jinja2.nodes.Name('adapter', 'load')]),
+                [], [], body).set_lineno(lineno)
+
+            return callblock
 
     return SQLStatementExtension
 
@@ -148,8 +157,7 @@ def get_template(string, ctx, node=None, capture_macros=False,
             args['extensions'].append(create_macro_validation_extension(node))
 
         args['extensions'].append(MaterializationExtension)
-        args['extensions'].append(
-            create_statement_extension(node, ctx, execute_statements))
+        args['extensions'].append(create_statement_extension(node))
 
         env = jinja2.sandbox.SandboxedEnvironment(**args)
 
@@ -175,6 +183,7 @@ def get_rendered(string, ctx, node=None,
     template = get_template(string, ctx, node,
                             capture_macros=capture_macros,
                             execute_statements=execute_statements)
+
     return render_template(template, ctx, node)
 
 

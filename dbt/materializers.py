@@ -71,23 +71,13 @@ class BaseMaterializer(object):
 class TableMaterializer(BaseMaterializer):
 
     def before_materialize(self, profile):
-        existing_type = self.existing_final_type()
-
-        if self.non_destructive and existing_type == 'table':
-            self.truncate(profile, self.final_name())
-
-        elif self.non_destructive and existing_type == 'view':
-            self.drop(profile, self.final_name(), existing_type)
+        pass
 
     def after_materialize(self, profile):
-        if self.non_destructive:
-            return
+        pass
 
-        existing_type = self.existing_final_type()
-        if existing_type is not None:
-            self.drop(profile, self.final_name(), 'table')
-
-        self.rename(profile, self.tmp_name(), self.final_name())
+    def do_materialize(self, profile):
+        pass
 
 
 class ViewMaterializer(BaseMaterializer):

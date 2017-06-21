@@ -75,19 +75,9 @@ def get_model_identifier(model):
         return "{}__dbt_tmp".format(model['name'])
 
 
-def get_dbt_materialization_macro_uid(macro_name):
-    return 'macro.dbt.dbt__{}'.format(macro_name)
-
-
-def get_wrapping_macro(model, macros):
-    mapping = {
-        'incremental': get_dbt_materialization_macro_uid('create_incremental'),
-        'table': get_dbt_materialization_macro_uid('create_table'),
-        'view': get_dbt_materialization_macro_uid('create_view')
-    }
-
+def _get_wrapping_macro(model, macros):
     materialization = get_materialization(model)
-    uid = mapping[materialization]
+    uid = "macro.dbt.dbt__create_{}".format(materialization)
 
     if macros.get(uid) is None:
         dbt.exceptions.macro_not_found(model, uid)
@@ -113,7 +103,7 @@ def get_macro_context(package, macros):
 def do_wrap(model, opts, flat_graph, context, package):
     macros = flat_graph['macros']
 
-    macro = get_wrapping_macro(model, macros)
+    macro = _get_wrapping_macro(model, macros)
     macro_args = macro.arguments
 
     relevant_opts = {
@@ -122,7 +112,12 @@ def do_wrap(model, opts, flat_graph, context, package):
 
     rendered = macro(**relevant_opts)
 
-    wrap_uid = get_dbt_materialization_macro_uid('wrap')
+    if relevant_opts.get('_is_materialization_block'):
+        return rendered
+
+    # TODO: remove this when all materializations are re-written as
+    #       materialization blocks
+    wrap_uid = "macro.dbt.dbt__wrap"
 
     wrapper_macro = macros.get(wrap_uid, {}).get('parsed_macro')
 
@@ -151,7 +146,12 @@ class DatabaseWrapper(object):
     context_functions = [
         "already_exists",
         "get_columns_in_table",
-        "get_missing_columns"
+        "get_missing_columns",
+        "query_for_existing",
+        "rename",
+        "drop",
+        "truncate",
+        "add_query",
     ]
 
     def __init__(self, model, adapter, profile):
@@ -175,6 +175,26 @@ class DatabaseWrapper(object):
         return self.adapter.get_missing_columns(
             self.profile, from_schema, from_table,
             to_schema, to_table, self.model.get('name'))
+
+    def query_for_existing(self, schema):
+        return self.adapter.query_for_existing(
+            self.profile, schema, self.model.get('name'))
+
+    def rename(self, from_name, to_name):
+        return self.adapter.rename(
+            self.profile, from_name, to_name, self.model.get('name'))
+
+    def drop(self, relation, relation_type):
+        return self.adapter.drop(
+            self.profile, relation, relation_type, self.model.get('name'))
+
+    def truncate(self, table):
+        return self.adapter.truncate(
+            self.profile, table, self.model.get('name'))
+
+    def add_query(self, sql, auto_begin=True):
+        return self.adapter.add_query(
+            self.profile, sql, self.model.get('name'), auto_begin)
 
 
 def wrap(model, project, context, injected_graph):
@@ -205,7 +225,9 @@ def wrap(model, project, context, injected_graph):
         "post_hooks": post_hooks,
         "sql": rendered_query,
         "flags": dbt.flags,
-        "adapter": db_wrapper
+        "adapter": db_wrapper,
+        "execute": True,
+        "_is_materialization_block": True,
     }
 
     opts.update(db_wrapper.get_context_functions())
