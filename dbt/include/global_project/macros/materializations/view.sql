@@ -1,11 +1,3 @@
-{% macro run_hooks(hooks) -%}
-  {% statement %}
-    {% for hook in hooks %}
-      {{ hook }};
-    {% endfor %}
-  {% endstatement %}
-{% endmacro %}
-
 {% materialization view -%}
 
   {%- set identifier = model['name'] -%}
@@ -14,7 +6,11 @@
   {%- set existing = adapter.query_for_existing(schema) -%}
   {%- set existing_type = existing.get(identifier) -%}
 
-  {{ run_hooks(pre_hooks) }}
+  {% for hook in pre_hooks %}
+    {% statement %}
+      {{ hook }};
+    {% endstatement %}
+  {% endfor %}
 
   -- build model
   {% if non_destructive_mode and existing_type == 'view' -%}
@@ -27,7 +23,11 @@
     {% endstatement %}
   {%- endif %}
 
-  {{ run_hooks(post_hooks) }}
+  {% for hook in post_hooks %}
+    {% statement %}
+      {{ hook }};
+    {% endstatement %}
+  {% endfor %}
 
   -- cleanup
   {% if non_destructive_mode and existing_type == 'view' -%}

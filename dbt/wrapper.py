@@ -152,6 +152,7 @@ class DatabaseWrapper(object):
         "drop",
         "truncate",
         "add_query",
+        "expand_target_column_types",
     ]
 
     def __init__(self, model, adapter, profile):
@@ -196,6 +197,11 @@ class DatabaseWrapper(object):
         return self.adapter.add_query(
             self.profile, sql, self.model.get('name'), auto_begin)
 
+    def expand_target_column_types(self, temp_table, to_schema, to_table):
+        return self.adapter.expand_target_column_types(
+            self.profile, temp_table, to_schema, to_table,
+            self.model.get('name'))
+
 
 def wrap(model, project, context, injected_graph):
     adapter = get_adapter(project.run_environment())
@@ -216,6 +222,7 @@ def wrap(model, project, context, injected_graph):
     db_wrapper = DatabaseWrapper(model, adapter, profile)
 
     opts = {
+        "_is_materialization_block": True,
         "materialization": get_materialization(model),
         "model": model,
         "schema": schema,
@@ -227,7 +234,7 @@ def wrap(model, project, context, injected_graph):
         "flags": dbt.flags,
         "adapter": db_wrapper,
         "execute": True,
-        "_is_materialization_block": True,
+        "context": context,
     }
 
     opts.update(db_wrapper.get_context_functions())

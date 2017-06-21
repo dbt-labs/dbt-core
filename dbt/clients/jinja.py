@@ -28,6 +28,7 @@ class MaterializationExtension(jinja2.ext.Extension):
             'flags',
             'adapter',
             'execute',
+            'context',
         ]
 
         return [jinja2.nodes.Name(arg, 'param') for arg in args]
@@ -50,8 +51,19 @@ def create_statement_extension(node):
     class SQLStatementExtension(jinja2.ext.Extension):
         tags = set(['statement'])
 
-        def _execute_body(self, execute, adapter, caller):
+        def _execute_body(self, execute, adapter, context, model, caller):
             body = caller()
+
+            # TODO: if execute, adapter, context, or model are None,
+            #       then something is wrong.
+
+            # we have to re-render the body to handle cases where jinja
+            # was actually passed in, i.e. where an incremental sql_where
+            # includes {{this}}
+            body = dbt.clients.jinja.get_rendered(
+                body,
+                context,
+                model)
 
             if execute:
                 adapter.add_query(body)
@@ -69,7 +81,9 @@ def create_statement_extension(node):
                 self.call_method(
                     '_execute_body',
                     [jinja2.nodes.Name('execute', 'load'),
-                     jinja2.nodes.Name('adapter', 'load')]),
+                     jinja2.nodes.Name('adapter', 'load'),
+                     jinja2.nodes.Name('context', 'load'),
+                     jinja2.nodes.Name('model', 'load')]),
                 [], [], body).set_lineno(lineno)
 
             return callblock

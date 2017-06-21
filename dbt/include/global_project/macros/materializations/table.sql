@@ -1,11 +1,3 @@
-{% macro run_hooks(hooks) -%}
-  {% statement %}
-    {% for hook in hooks %}
-      {{ hook }};
-    {% endfor %}
-  {% endstatement %}
-{% endmacro %}
-
 {% macro dbt__simple_create_table(schema, identifier, dist, sort, sql) -%}
     create table "{{ schema }}"."{{ identifier }}"
       {{ dist }} {{ sort }} as (
@@ -23,13 +15,17 @@
   -- setup
   {% if non_destructive_mode -%}
     {% if existing_type == 'table' -%}
-      {{ adapter.truncate(profile, identifier) }}
+      {{ adapter.truncate(identifier) }}
     {% elif existing_type == 'view' -%}
       {{ adapter.drop(identifier, existing_type) }}
     {%- endif %}
   {%- endif %}
 
-  {{ run_hooks(pre_hooks) }}
+  {% for hook in pre_hooks %}
+    {% statement %}
+      {{ hook }};
+    {% endstatement %}
+  {% endfor %}
 
   -- build model
   {% statement -%}
@@ -54,7 +50,11 @@
     {%- endif -%}
   {%- endstatement %}
 
-  {{ run_hooks(post_hooks) }}
+  {% for hook in post_hooks %}
+    {% statement %}
+      {{ hook }};
+    {% endstatement %}
+  {% endfor%}
 
   -- cleanup
   {% if non_destructive_mode -%}
