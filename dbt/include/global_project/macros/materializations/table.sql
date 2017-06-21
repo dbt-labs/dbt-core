@@ -33,9 +33,9 @@
 
   -- build model
   {% statement -%}
-    {%- if existing_type is not none -%}
-      {%- if non_destructive_mode -%}
-        create temporary table {{ identifier }}__dbt_tmp {{ dist }} {{ sort }} as (
+    {%- if non_destructive_mode -%}
+      {%- if adapter.already_exists(schema, identifier) -%}
+        create temporary table {{ tmp_identifier }} {{ dist }} {{ sort }} as (
           {{ sql }}
         );
 
@@ -47,20 +47,23 @@
           from "{{ identifier }}__dbt_tmp"
         );
       {%- else -%}
-        {{ dbt__simple_create_table(schema, tmp_identifier, dist, sort, sql) }}
+        {{ dbt__simple_create_table(schema, identifier, dist, sort, sql) }}
       {%- endif -%}
     {%- else -%}
-      {{ dbt__simple_create_table(schema, identifier, dist, sort, sql) }}
+      {{ dbt__simple_create_table(schema, tmp_identifier, dist, sort, sql) }}
     {%- endif -%}
   {%- endstatement %}
 
   {{ run_hooks(post_hooks) }}
 
   -- cleanup
-  {% if not non_destructive_mode -%}
+  {% if non_destructive_mode -%}
+    -- noop
+  {%- else -%}
     {%- if existing_type is not none -%}
       {{ adapter.drop(identifier, existing_type) }}
-      {{ adapter.rename(tmp_identifier, identifier) }}
     {%- endif %}
+
+    {{ adapter.rename(tmp_identifier, identifier) }}
   {%- endif %}
 {% endmaterialization %}

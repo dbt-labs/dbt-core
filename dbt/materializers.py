@@ -82,24 +82,14 @@ class TableMaterializer(BaseMaterializer):
 
 class ViewMaterializer(BaseMaterializer):
 
-    def do_materialize(self, profile):
-        existing_type = self.existing_final_type()
+    def before_materialize(self, profile):
+        pass
 
-        if self.non_destructive and existing_type == 'view':
-            return 'PASS'
-        else:
-            return super(ViewMaterializer, self).do_materialize(profile)
+    def do_materialize(self, profile):
+        pass
 
     def after_materialize(self, profile):
-        existing_type = self.existing_final_type()
-
-        if self.non_destructive and existing_type == 'view':
-            return
-        elif existing_type is not None:
-            self.drop(profile, self.final_name(), existing_type)
-
-        self.rename(profile, self.tmp_name(), self.final_name())
-
+        pass
 
 class IncrementalMaterializer(BaseMaterializer):
 
