@@ -100,43 +100,6 @@ def get_macro_context(package, macros):
     return global_context
 
 
-def do_wrap(model, opts, flat_graph, context, package):
-    macros = flat_graph['macros']
-
-    macro = _get_wrapping_macro(model, macros)
-    macro_args = macro.arguments
-
-    relevant_opts = {
-        opt: val for (opt, val) in opts.items() if opt in macro_args
-    }
-
-    rendered = macro(**relevant_opts)
-
-    if relevant_opts.get('_is_materialization_block'):
-        return rendered
-
-    # TODO: remove this when all materializations are re-written as
-    #       materialization blocks
-    wrap_uid = "macro.dbt.dbt__wrap"
-
-    wrapper_macro = macros.get(wrap_uid, {}).get('parsed_macro')
-
-    if wrapper_macro is None:
-        dbt.exceptions.macro_not_found(model, wrap_uid)
-
-    wrapped = wrapper_macro(rendered, opts['pre_hooks'], opts['post_hooks'])
-
-    macro_context = get_macro_context(package, flat_graph['macros'])
-
-    context = context.copy()
-    context.update(macro_context)
-
-    return dbt.clients.jinja.get_rendered(
-        wrapped,
-        context,
-        model)
-
-
 class DatabaseWrapper(object):
     """
     Wrapper for runtime database interaction. Should only call adapter
@@ -153,6 +116,8 @@ class DatabaseWrapper(object):
         "truncate",
         "add_query",
         "expand_target_column_types",
+        "commit",
+        "get_status",
     ]
 
     def __init__(self, model, adapter, profile):
@@ -202,8 +167,15 @@ class DatabaseWrapper(object):
             self.profile, temp_table, to_schema, to_table,
             self.model.get('name'))
 
+    def commit(self):
+        return self.adapter.commit_if_has_connection(
+            self.profile, self.model.get('name'))
 
-def wrap(model, project, context, injected_graph):
+    def get_status(self, cursor):
+        return self.adapter.get_status(cursor)
+
+
+def get_materialization_arguments(model, project, context):
     adapter = get_adapter(project.run_environment())
 
     schema = context['env'].get('schema', 'public')
@@ -239,4 +211,4 @@ def wrap(model, project, context, injected_graph):
 
     opts.update(db_wrapper.get_context_functions())
 
-    return do_wrap(model, opts, injected_graph, context, project)
+    return opts

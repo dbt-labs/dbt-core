@@ -29,6 +29,7 @@ class MaterializationExtension(jinja2.ext.Extension):
             'adapter',
             'execute',
             'context',
+            'statement_result_callback',
         ]
 
         return [jinja2.nodes.Name(arg, 'param') for arg in args]
@@ -51,27 +52,45 @@ def create_statement_extension(node):
     class SQLStatementExtension(jinja2.ext.Extension):
         tags = set(['statement'])
 
-        def _execute_body(self, execute, adapter, context, model, caller):
+        def _execute_body(self, capture_query_result,
+                          statement_result_callback,
+                          execute, adapter, context, model, caller):
             body = caller()
 
             # TODO: if execute, adapter, context, or model are None,
             #       then something is wrong.
 
             # we have to re-render the body to handle cases where jinja
-            # was actually passed in, i.e. where an incremental sql_where
-            # includes {{this}}
+            # is passed in as an argument, i.e. where an incremental
+            # `sql_where` includes {{this}}
             body = dbt.clients.jinja.get_rendered(
                 body,
                 context,
                 model)
 
             if execute:
-                adapter.add_query(body)
+                connection, cursor = adapter.add_query(body)
+
+                if capture_query_result and statement_result_callback:
+                    status = adapter.get_status(cursor)
+
+                    statement_result_callback(status)
 
             return body
 
         def parse(self, parser):
             lineno = next(parser.stream).lineno
+
+            capture_result = False
+
+            token = parser.stream.next_if('name')
+
+            if token is not None:
+                if token.value == 'capture_result':
+                    capture_result = True
+                else:
+                    # todo exception
+                    pass
 
             body = parser.parse_statements(
                 ['name:endstatement'],
@@ -80,7 +99,9 @@ def create_statement_extension(node):
             callblock = jinja2.nodes.CallBlock(
                 self.call_method(
                     '_execute_body',
-                    [jinja2.nodes.Name('execute', 'load'),
+                    [jinja2.nodes.Const(capture_result),
+                     jinja2.nodes.Name('statement_result_callback', 'load'),
+                     jinja2.nodes.Name('execute', 'load'),
                      jinja2.nodes.Name('adapter', 'load'),
                      jinja2.nodes.Name('context', 'load'),
                      jinja2.nodes.Name('model', 'load')]),

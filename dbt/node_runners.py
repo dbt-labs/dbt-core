@@ -93,7 +93,7 @@ class BaseRunner(object):
 
             # for ephemeral nodes, we only want to compile, not run
             if not self.is_ephemeral():
-                result = self.run(compiled_node, existing)
+                result = self.run(compiled_node, existing, flat_graph)
 
         except catchable_errors as e:
             result.error = str(e).strip()
@@ -137,11 +137,11 @@ class BaseRunner(object):
     def before_execute(self):
         raise NotImplementedException()
 
-    def execute(self, compiled_node, existing):
+    def execute(self, compiled_node, existing, flat_graph):
         raise NotImplementedException()
 
-    def run(self, compiled_node, existing):
-        return self.execute(compiled_node, existing)
+    def run(self, compiled_node, existing, flat_graph):
+        return self.execute(compiled_node, existing, flat_graph)
 
     def after_execute(self, result):
         raise NotImplementedException()
@@ -180,7 +180,7 @@ class CompileRunner(BaseRunner):
     def after_execute(self, result):
         pass
 
-    def execute(self, compiled_node, existing):
+    def execute(self, compiled_node, existing, flat_graph):
         return RunModelResult(compiled_node)
 
     def compile(self, flat_graph):
@@ -318,11 +318,46 @@ class ModelRunner(CompileRunner):
         track_model_run(self.node_index, self.num_nodes, result)
         self.print_result_line(result)
 
-    def execute(self, model, existing):
-        materializer = self.adapter.get_materializer(model, existing)
-        status = materializer.materialize(self.profile)
+    def execute(self, model, existing, flat_graph):
+        compiler = dbt.compilation.Compiler(self.project)
+        context = compiler.get_compiler_context(model, flat_graph)
 
-        return RunModelResult(model, status=status)
+        materialization_macro = dbt.utils.get_materialization_macro(
+            flat_graph,
+            dbt.utils.get_materialization(model))
+
+        parsed_macro = materialization_macro['parsed_macro']
+
+        if materialization_macro is None:
+            dbt.exceptions.macro_not_found(
+                model,
+                dbt.utils.get_materialization_macro_name(model))
+
+        available_arguments = dbt.wrapper.get_materialization_arguments(
+            model,
+            self.project,
+            context)
+
+        # use a mutable type to store the result so it can be mutated
+        # via lexical scoping below.
+        # see also: https://www.farside.org.uk/201307/understanding_python_scope  # noqa
+        statement_result = [None]
+
+        def _statement_result_callback(result):
+            logger.info('Storing result {}'.format(result))
+            statement_result[0] = result
+
+        relevant_arguments = {
+            arg: val for (arg, val) in available_arguments.items()
+            if arg in parsed_macro.arguments
+        }
+
+        relevant_arguments['statement_result_callback'] = \
+            _statement_result_callback
+
+        parsed_macro(**relevant_arguments)
+
+        return RunModelResult(model, status=statement_result[0])
 
 
 class TestRunner(CompileRunner):
@@ -365,7 +400,7 @@ class TestRunner(CompileRunner):
     def before_execute(self):
         self.print_start_line()
 
-    def execute(self, test, existing):
+    def execute(self, test, existing, flat_graph):
         status = self.execute_test(test)
         return RunModelResult(test, status=status)
 
@@ -398,7 +433,7 @@ class ArchiveRunner(CompileRunner):
     def after_execute(self, result):
         self.print_result_line(result)
 
-    def execute(self, archive, existing):
+    def execute(self, archive, existing, flat_graph):
         status = self.execute_archive()
         return RunModelResult(archive, status=status)
 

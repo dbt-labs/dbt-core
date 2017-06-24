@@ -176,6 +176,20 @@ def find_model_by_fqn(models, fqn):
     )
 
 
+def get_materialization_macro_name(materialization_name):
+    return 'dbt__create_{}'.format(materialization_name)
+
+
+def get_materialization_macro(flat_graph, materialization_name):
+    macro_name = get_materialization_macro_name(materialization_name)
+    macro = find_macro_by_name(
+        flat_graph,
+        macro_name,
+        None)
+
+    return macro
+
+
 def dependency_projects(project):
     import dbt.project
     module_paths = [

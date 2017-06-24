@@ -311,13 +311,7 @@ class Compiler(object):
             pass
 
         else:
-            wrapped_stmt = dbt.wrapper.wrap(
-                injected_node,
-                self.project,
-                context,
-                flat_graph)
-
-            injected_node['wrapped_sql'] = wrapped_stmt
+            injected_node['wrapped_sql'] = None
 
         if 'wrapped_sql' in injected_node:
             build_path = os.path.join('build',

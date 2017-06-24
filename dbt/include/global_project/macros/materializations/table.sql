@@ -28,7 +28,7 @@
   {% endfor %}
 
   -- build model
-  {% statement -%}
+  {% statement capture_result -%}
     {%- if non_destructive_mode -%}
       {%- if adapter.already_exists(schema, identifier) -%}
         create temporary table {{ tmp_identifier }} {{ dist }} {{ sort }} as (
@@ -66,4 +66,6 @@
 
     {{ adapter.rename(tmp_identifier, identifier) }}
   {%- endif %}
+
+  {{ adapter.commit() }}
 {% endmaterialization %}

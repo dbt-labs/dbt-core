@@ -16,7 +16,7 @@
   {% if non_destructive_mode and existing_type == 'view' -%}
     -- noop
   {%- else -%}
-    {% statement %}
+    {% statement capture_result %}
       create view "{{ schema }}"."{{ identifier }}__dbt_tmp" as (
         {{ sql }}
       );
@@ -39,4 +39,7 @@
 
     {{ adapter.rename(tmp_identifier, identifier) }}
   {%- endif %}
+
+  {{ adapter.commit() }}
+
 {%- endmaterialization %}
