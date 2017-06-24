@@ -344,7 +344,6 @@ class ModelRunner(CompileRunner):
         statement_result = [None]
 
         def _statement_result_callback(result):
-            logger.info('Storing result {}'.format(result))
             statement_result[0] = result
 
         relevant_arguments = {
