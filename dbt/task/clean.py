@@ -4,6 +4,7 @@ import shutil
 
 from dbt.task.base_task import BaseTask
 
+
 class CleanTask(BaseTask):
 
     def __is_project_path(self, path):
