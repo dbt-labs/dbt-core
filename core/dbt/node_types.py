@@ -4,11 +4,11 @@ from dbt.dataclass_schema import StrEnum
 
 
 class NodeType(StrEnum):
-    Model = 'model'
-    Analysis = 'analysis'
-    Test = 'test'
+    Model = "model"
+    Analysis = "analysis"
+    Test = "test"
     Snapshot = 'snapshot'
-    Operation = 'operation'
+    Operation = "operation"
     Seed = "seed"
     # TODO: rm?
     RPCCall = "rpc"
