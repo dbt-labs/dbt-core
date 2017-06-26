@@ -210,6 +210,7 @@ def get_materialization_arguments(model, project, context):
         "flags": dbt.flags,
         "adapter": db_wrapper,
         "execute": True,
+        "profile": project.run_environment(),
         "context": context,
     }
 

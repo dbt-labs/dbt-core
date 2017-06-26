@@ -29,6 +29,7 @@ class MaterializationExtension(jinja2.ext.Extension):
             'adapter',
             'execute',
             'context',
+            'profile',
             'statement_result_callback',
         ]
 
