@@ -1,5 +1,4 @@
 from dbt.compat import basestring
-from dbt.utils import get_materialization
 
 
 class Exception(BaseException):
@@ -32,6 +31,9 @@ class ProgrammingException(Exception):
 
 class FailedToConnectException(Exception):
     pass
+
+
+from dbt.utils import get_materialization  # noqa
 
 
 def raise_compiler_error(node, msg):
