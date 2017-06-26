@@ -1,4 +1,5 @@
 from dbt.compat import basestring
+from dbt.utils import get_materialization
 
 
 class Exception(BaseException):
@@ -117,6 +118,20 @@ def macro_not_found(model, target_macro_id):
         model,
         "'{}' references macro '{}' which is not defined!"
         .format(model.get('unique_id'), target_macro_id))
+
+
+def missing_materialization(model, adapter_type):
+    materialization = get_materialization(model)
+
+    valid_types = "'base'"
+
+    if adapter_type != 'base':
+        valid_types = "'base' and '{}'".format(adapter_type)
+
+    raise_compiler_error(
+        model,
+        "No materialization '{}' was found for adapter {}! (searched types {})"
+        .format(materialization, adapter_type, valid_types))
 
 
 def missing_sql_where(model):

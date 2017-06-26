@@ -176,16 +176,29 @@ def find_model_by_fqn(models, fqn):
     )
 
 
-def get_materialization_macro_name(materialization_name):
-    return 'dbt__create_{}'.format(materialization_name)
+def get_materialization_macro_name(materialization_name, adapter_type=None):
+    if adapter_type is None:
+        adapter_type = 'base'
+
+    return 'dbt__{}__{}'.format(materialization_name, adapter_type)
 
 
-def get_materialization_macro(flat_graph, materialization_name):
-    macro_name = get_materialization_macro_name(materialization_name)
+def get_materialization_macro(flat_graph, materialization_name,
+                              adapter_type=None):
+    macro_name = get_materialization_macro_name(materialization_name,
+                                                adapter_type)
     macro = find_macro_by_name(
         flat_graph,
         macro_name,
         None)
+
+    if adapter_type != 'base' and macro is None:
+        macro_name = get_materialization_macro_name(materialization_name,
+                                                    adapter_type='base')
+        macro = find_macro_by_name(
+            flat_graph,
+            macro_name,
+            None)
 
     return macro
 

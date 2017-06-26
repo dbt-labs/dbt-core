@@ -324,14 +324,15 @@ class ModelRunner(CompileRunner):
 
         materialization_macro = dbt.utils.get_materialization_macro(
             flat_graph,
-            dbt.utils.get_materialization(model))
-
-        parsed_macro = materialization_macro['parsed_macro']
+            dbt.utils.get_materialization(model),
+            self.adapter.type())
 
         if materialization_macro is None:
-            dbt.exceptions.macro_not_found(
+            dbt.exceptions.missing_materialization(
                 model,
-                dbt.utils.get_materialization_macro_name(model))
+                self.adapter.type())
+
+        parsed_macro = materialization_macro['parsed_macro']
 
         available_arguments = dbt.wrapper.get_materialization_arguments(
             model,

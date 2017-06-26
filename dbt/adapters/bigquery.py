@@ -4,7 +4,6 @@ from contextlib import contextmanager
 
 import dbt.exceptions
 import dbt.flags as flags
-import dbt.materializers
 import dbt.clients.gcloud
 
 from dbt.adapters.postgres import PostgresAdapter
@@ -20,14 +19,6 @@ import google.cloud.bigquery
 class BigQueryAdapter(PostgresAdapter):
 
     QUERY_TIMEOUT = 60 * 1000
-
-    @classmethod
-    def get_materializer(cls, node, existing):
-        materializer = dbt.materializers.NonDDLMaterializer
-        return dbt.materializers.make_materializer(materializer,
-                                                   cls,
-                                                   node,
-                                                   existing)
 
     @classmethod
     def handle_error(cls, error, message, sql):

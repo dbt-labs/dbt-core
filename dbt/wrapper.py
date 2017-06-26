@@ -125,6 +125,10 @@ class DatabaseWrapper(object):
         self.adapter = adapter
         self.profile = profile
 
+    @property
+    def raw(self):
+        return self.adapter
+
     def get_context_functions(self):
         return {name: getattr(self, name) for name in self.context_functions}
 

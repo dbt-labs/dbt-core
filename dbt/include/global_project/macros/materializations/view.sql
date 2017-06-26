@@ -1,4 +1,4 @@
-{% materialization view -%}
+{% materialization view, adapter='base' -%}
 
   {%- set identifier = model['name'] -%}
   {%- set tmp_identifier = identifier + '__dbt_tmp' -%}

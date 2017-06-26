@@ -38,7 +38,23 @@ class MaterializationExtension(jinja2.ext.Extension):
         node = jinja2.nodes.Macro(lineno=next(parser.stream).lineno)
         materialization_name = parser.parse_assign_target(name_only=True).name
 
-        node.name = "dbt__create_{}".format(materialization_name)
+        adapter_name = 'base'
+
+        if parser.stream.skip_if('comma'):
+            target = parser.parse_assign_target(name_only=True)
+            parser.stream.expect('assign')
+            value = parser.parse_expression()
+
+            if target.name == 'adapter':
+                adapter_name = value.value
+
+            else:
+                logger.error('fuck you')
+                exit(1)
+
+        node.name = dbt.utils.get_materialization_macro_name(
+            materialization_name, adapter_name)
+
         node.args = self.get_args()
         node.defaults = []
         node.body = parser.parse_statements(('name:endmaterialization',),

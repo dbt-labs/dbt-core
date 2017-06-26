@@ -12,7 +12,7 @@
 
 {%- endmacro %}
 
-{% materialization incremental -%}
+{% materialization incremental, adapter='base'-%}
 
   {%- set identifier = model['name'] -%}
   {%- set tmp_identifier = model['name'] + '__dbt_incremental_tmp' -%}
