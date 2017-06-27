@@ -247,7 +247,7 @@ class Compiler(object):
         context['execute'] = True
         context['schema'] = schema
         context['sql'] = model['injected_sql']
-        context['log'] = logger.info
+        context['log'] = logger.debug
 
         context['pre_hooks'] = dbt.wrapper.get_hooks(
             model, context, 'pre-hook')

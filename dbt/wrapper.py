@@ -5,8 +5,6 @@ from dbt.compat import basestring
 import dbt.clients.jinja
 import dbt.flags
 
-from collections import defaultdict
-
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
@@ -17,8 +15,6 @@ def macro_generator(template, name):
                 context, False, {})
             macro = module.__dict__[name]
             module.__dict__ = context
-            import pprint
-            logger.info(pprint.pformat(module.__dict__))
             return macro(*args, **kwargs)
 
         return call

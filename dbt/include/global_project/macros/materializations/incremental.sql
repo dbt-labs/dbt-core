@@ -82,7 +82,7 @@
      {% endstatement %}
   {%- endif %}
 
-  {{ run_hooks(post_hooks) %}
+  {{ run_hooks(post_hooks) }}
 
   {{ adapter.commit() }}
 
