@@ -67,8 +67,7 @@ parsed_macro_contract = unparsed_base_contract.extend({
     },
 
     # contents
-    Required('parsed_macro'): jinja2.runtime.Macro
-
+    Required('generator'): callable
 })
 
 parsed_macros_contract = Schema({

@@ -14,27 +14,6 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 class MaterializationExtension(jinja2.ext.Extension):
     tags = set(['materialization'])
 
-    def get_args(self):
-        args = [
-            '_is_materialization_block',
-            'materialization',
-            'model',
-            'schema',
-            'dist',
-            'sort',
-            'pre_hooks',
-            'post_hooks',
-            'sql',
-            'flags',
-            'adapter',
-            'execute',
-            'context',
-            'profile',
-            'statement_result_callback',
-        ]
-
-        return [jinja2.nodes.Name(arg, 'param') for arg in args]
-
     def parse(self, parser):
         node = jinja2.nodes.Macro(lineno=next(parser.stream).lineno)
         materialization_name = parser.parse_assign_target(name_only=True).name
@@ -50,13 +29,13 @@ class MaterializationExtension(jinja2.ext.Extension):
                 adapter_name = value.value
 
             else:
-                logger.error('fuck you')
-                exit(1)
+                # TODO throw
+                pass
 
         node.name = dbt.utils.get_materialization_macro_name(
             materialization_name, adapter_name)
 
-        node.args = self.get_args()
+        node.args = []
         node.defaults = []
         node.body = parser.parse_statements(('name:endmaterialization',),
                                             drop_needle=True)

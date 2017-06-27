@@ -6,11 +6,7 @@
   {%- set existing = adapter.query_for_existing(schema) -%}
   {%- set existing_type = existing.get(identifier) -%}
 
-  {% for hook in pre_hooks %}
-    {% statement %}
-      {{ hook }};
-    {% endstatement %}
-  {% endfor %}
+  {{ run_hooks(pre_hooks) }}
 
   -- build model
   {% if non_destructive_mode and existing_type == 'view' -%}
@@ -23,11 +19,7 @@
     {% endstatement %}
   {%- endif %}
 
-  {% for hook in post_hooks %}
-    {% statement %}
-      {{ hook }};
-    {% endstatement %}
-  {% endfor %}
+  {{ run_hooks(post_hooks) }}
 
   -- cleanup
   {% if non_destructive_mode and existing_type == 'view' -%}

@@ -21,11 +21,7 @@
     {%- endif %}
   {%- endif %}
 
-  {% for hook in pre_hooks %}
-    {% statement %}
-      {{ hook }};
-    {% endstatement %}
-  {% endfor %}
+  {{ run_hooks(pre_hooks) }}
 
   -- build model
   {% statement capture_result -%}
@@ -50,11 +46,7 @@
     {%- endif -%}
   {%- endstatement %}
 
-  {% for hook in post_hooks %}
-    {% statement %}
-      {{ hook }};
-    {% endstatement %}
-  {% endfor%}
+  {{ run_hooks(post_hooks) }}
 
   -- cleanup
   {% if non_destructive_mode -%}

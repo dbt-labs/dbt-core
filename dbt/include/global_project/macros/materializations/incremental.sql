@@ -39,11 +39,7 @@
     {{ adapter.drop(identifier, existing_type) }}
   {%- endif %}
 
-  {% for hook in pre_hooks %}
-    {% statement %}
-      {{ hook }};
-    {% endstatement %}
-  {% endfor %}
+  {{ run_hooks(pre_hooks) }}
 
   -- build model
   {% if force_create or not adapter.already_exists(schema, identifier) -%}
@@ -86,11 +82,7 @@
      {% endstatement %}
   {%- endif %}
 
-  {% for hook in post_hooks %}
-    {% statement %}
-      {{ hook }};
-    {% endstatement %}
-  {% endfor %}
+  {{ run_hooks(post_hooks) %}
 
   {{ adapter.commit() }}
 

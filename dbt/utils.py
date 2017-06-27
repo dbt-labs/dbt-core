@@ -241,7 +241,24 @@ def split_path(path):
 
 
 # http://stackoverflow.com/questions/20656135/python-deep-merge-dictionary-data
-def deep_merge(destination, source):
+def deep_merge(*args):
+    """
+    >>> dbt.utils.deep_merge({'a': 1, 'b': 2, 'c': 3}, {'a': 2}, {'a': 3, 'b': 1})  # noqa
+    {'a': 3, 'b': 1, 'c': 3}
+    """
+    if len(args) == 0:
+        return None
+
+    if len(args) == 1:
+        return args[0]
+
+    l = list(args)
+    last = l.pop(len(l)-1)
+
+    return _deep_merge(deep_merge(*l), last)
+
+
+def _deep_merge(destination, source):
     if isinstance(source, dict):
         for key, value in source.items():
             if isinstance(value, dict):

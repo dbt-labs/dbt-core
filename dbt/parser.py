@@ -197,7 +197,8 @@ def parse_macro_file(macro_file_path,
                 'root_path': root_path,
                 'path': macro_file_path,
                 'raw_sql': macro_file_contents,
-                'parsed_macro': item
+                'generator': dbt.wrapper.macro_generator(
+                    template, key),
             })
             to_return[unique_id] = new_node
 

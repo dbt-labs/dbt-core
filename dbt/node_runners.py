@@ -332,13 +332,6 @@ class ModelRunner(CompileRunner):
                 model,
                 self.adapter.type())
 
-        parsed_macro = materialization_macro['parsed_macro']
-
-        available_arguments = dbt.wrapper.get_materialization_arguments(
-            model,
-            self.project,
-            context)
-
         # use a mutable type to store the result so it can be mutated
         # via lexical scoping below.
         # see also: https://www.farside.org.uk/201307/understanding_python_scope  # noqa
@@ -347,15 +340,9 @@ class ModelRunner(CompileRunner):
         def _statement_result_callback(result):
             statement_result[0] = result
 
-        relevant_arguments = {
-            arg: val for (arg, val) in available_arguments.items()
-            if arg in parsed_macro.arguments
-        }
+        context['statement_result_callback'] = _statement_result_callback
 
-        relevant_arguments['statement_result_callback'] = \
-            _statement_result_callback
-
-        parsed_macro(**relevant_arguments)
+        materialization_macro.get('generator')(context)()
 
         return RunModelResult(model, status=statement_result[0])
 

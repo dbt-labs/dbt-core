@@ -1,5 +1,3 @@
-
-from dbt.model import SourceConfig
 from dbt.utils import get_materialization, compiler_error
 from dbt.adapters.factory import get_adapter
 from dbt.compat import basestring
@@ -10,6 +8,21 @@ import dbt.flags
 from collections import defaultdict
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
+
+
+def macro_generator(template, name):
+    def apply_context(context):
+        def call(*args, **kwargs):
+            module = template.make_module(
+                context, False, {})
+            macro = module.__dict__[name]
+            module.__dict__ = context
+            import pprint
+            logger.info(pprint.pformat(module.__dict__))
+            return macro(*args, **kwargs)
+
+        return call
+    return apply_context
 
 
 def get_sort_qualifier(model, project):
@@ -73,31 +86,6 @@ def get_model_identifier(model):
         return model['name']
     else:
         return "{}__dbt_tmp".format(model['name'])
-
-
-def _get_wrapping_macro(model, macros):
-    materialization = get_materialization(model)
-    uid = "macro.dbt.dbt__create_{}".format(materialization)
-
-    if macros.get(uid) is None:
-        dbt.exceptions.macro_not_found(model, uid)
-
-    return macros[uid]['parsed_macro']
-
-
-def get_macro_context(package, macros):
-    global_context = defaultdict(dict)
-    package_context = {}
-
-    for _, macro in macros.items():
-        if macro['package_name'] in ('dbt', package['name']):
-            global_context[macro['name']] = macro['parsed_macro']
-
-        global_context[macro['package_name']][macro['name']] = \
-            macro['parsed_macro']
-
-    global_context.update(package_context)
-    return global_context
 
 
 class DatabaseWrapper(object):
@@ -201,6 +189,7 @@ def get_materialization_arguments(model, project, context):
         "_is_materialization_block": True,
         "materialization": get_materialization(model),
         "model": model,
+        "this": context['this'],
         "schema": schema,
         "dist": dist_qualifier,
         "sort": sort_qualifier,
@@ -212,6 +201,7 @@ def get_materialization_arguments(model, project, context):
         "execute": True,
         "profile": project.run_environment(),
         "context": context,
+        "log": logger.info,
     }
 
     opts.update(db_wrapper.get_context_functions())

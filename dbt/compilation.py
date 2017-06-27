@@ -223,6 +223,7 @@ class Compiler(object):
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
 
+        schema = context['env']['schema']
         wrapper = dbt.wrapper.DatabaseWrapper(model, adapter, profile)
 
         # built-ins
@@ -230,7 +231,7 @@ class Compiler(object):
                                     self.project.cfg.get('name'))
         context['config'] = self.__model_config(model)
         context['this'] = This(
-            context['env']['schema'],
+            schema,
             dbt.utils.model_immediate_name(model, dbt.flags.NON_DESTRUCTIVE),
             model.get('name')
         )
@@ -239,16 +240,27 @@ class Compiler(object):
         context['adapter'] = wrapper
         context['flags'] = dbt.flags
 
-        context.update(wrapper.get_context_functions())
-
         context['run_started_at'] = dbt.tracking.active_user.run_started_at
         context['invocation_id'] = dbt.tracking.active_user.invocation_id
         context['sql_now'] = adapter.date_function()
+        context['model'] = model
+        context['execute'] = True
+        context['schema'] = schema
+        context['sql'] = model['injected_sql']
+        context['log'] = logger.info
+
+        context['pre_hooks'] = dbt.wrapper.get_hooks(
+            model, context, 'pre-hook')
+
+        context['post_hooks'] = dbt.wrapper.get_hooks(
+            model, context, 'post-hook')
 
         for unique_id, macro in flat_graph.get('macros').items():
             package_name = macro.get('package_name')
 
-            macro_map = {macro.get('name'): macro.get('parsed_macro')}
+            macro_map = {
+                macro.get('name'): macro.get('generator')(context)
+            }
 
             if context.get(package_name) is None:
                 context[package_name] = {}
@@ -259,6 +271,8 @@ class Compiler(object):
             if(package_name == model.get('package_name') or
                package_name == dbt.include.GLOBAL_PROJECT_NAME):
                 context.update(macro_map)
+
+        context['context'] = context
 
         return context
 
