@@ -1,6 +1,5 @@
 import unittest
 
-import jinja2.runtime
 import os
 
 import dbt.flags

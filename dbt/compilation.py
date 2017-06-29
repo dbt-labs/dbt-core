@@ -15,6 +15,7 @@ from dbt.node_types import NodeType
 from dbt.linker import Linker
 
 import dbt.compat
+import dbt.context
 import dbt.contracts.graph.compiled
 import dbt.contracts.project
 import dbt.exceptions
@@ -167,115 +168,6 @@ class Compiler(object):
 
         return target_path
 
-    def __model_config(self, model):
-        def do_config(*args, **kwargs):
-            return ''
-
-        return do_config
-
-    def __ref(self, ctx, model, flat_graph, current_project):
-        schema = ctx.get('env', {}).get('schema')
-
-        def do_ref(*args):
-            target_model_name = None
-            target_model_package = None
-
-            if len(args) == 1:
-                target_model_name = args[0]
-            elif len(args) == 2:
-                target_model_package, target_model_name = args
-            else:
-                dbt.exceptions.ref_invalid_args(model, args)
-
-            target_model = dbt.parser.resolve_ref(
-                flat_graph,
-                target_model_name,
-                target_model_package,
-                current_project,
-                model.get('package_name'))
-
-            if target_model is None:
-                dbt.exceptions.ref_target_not_found(
-                    model,
-                    target_model_name,
-                    target_model_package)
-
-            target_model_id = target_model.get('unique_id')
-
-            if target_model_id not in model.get('depends_on', {}).get('nodes'):
-                dbt.exceptions.ref_bad_context(model,
-                                               target_model_name,
-                                               target_model_package)
-
-            if get_materialization(target_model) == 'ephemeral':
-                model['extra_ctes'][target_model_id] = None
-                return '__dbt__CTE__{}'.format(target_model.get('name'))
-            else:
-                profile = self.project.run_environment()
-                adapter = get_adapter(profile)
-                table = target_model.get('name')
-                return adapter.quote_schema_and_table(profile, schema, table)
-
-        return do_ref
-
-    def get_compiler_context(self, model, flat_graph):
-        context = self.project.context()
-        profile = self.project.run_environment()
-        adapter = get_adapter(profile)
-
-        schema = context['env']['schema']
-        wrapper = dbt.wrapper.DatabaseWrapper(model, adapter, profile)
-
-        # built-ins
-        context['ref'] = self.__ref(context, model, flat_graph,
-                                    self.project.cfg.get('name'))
-        context['config'] = self.__model_config(model)
-        context['this'] = This(
-            schema,
-            dbt.utils.model_immediate_name(model, dbt.flags.NON_DESTRUCTIVE),
-            model.get('name')
-        )
-        context['var'] = Var(model, context=context)
-        context['target'] = self.project.get_target()
-        context['adapter'] = wrapper
-        context['flags'] = dbt.flags
-
-        context['run_started_at'] = dbt.tracking.active_user.run_started_at
-        context['invocation_id'] = dbt.tracking.active_user.invocation_id
-        context['sql_now'] = adapter.date_function()
-        context['model'] = model
-        context['execute'] = True
-        context['schema'] = schema
-        context['sql'] = model['injected_sql']
-        context['log'] = logger.debug
-
-        context['pre_hooks'] = dbt.wrapper.get_hooks(
-            model, context, 'pre-hook')
-
-        context['post_hooks'] = dbt.wrapper.get_hooks(
-            model, context, 'post-hook')
-
-        for unique_id, macro in flat_graph.get('macros').items():
-            package_name = macro.get('package_name')
-
-            macro_map = {
-                macro.get('name'): macro.get('generator')(context)
-            }
-
-            if context.get(package_name) is None:
-                context[package_name] = {}
-
-            context.get(package_name, {}) \
-                   .update(macro_map)
-
-            if(package_name == model.get('package_name') or
-               package_name == dbt.include.GLOBAL_PROJECT_NAME):
-                context.update(macro_map)
-
-        context['context'] = context
-
-        return context
-
     def compile_node(self, node, flat_graph):
         logger.debug("Compiling {}".format(node.get('unique_id')))
 
@@ -288,7 +180,7 @@ class Compiler(object):
             'injected_sql': None,
         })
 
-        context = self.get_compiler_context(compiled_node, flat_graph)
+        context = dbt.context.generate(compiled_node, self.project, flat_graph)
 
         compiled_node['compiled_sql'] = dbt.clients.jinja.get_rendered(
             node.get('raw_sql'),

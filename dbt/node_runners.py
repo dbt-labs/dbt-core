@@ -4,6 +4,7 @@ from dbt.exceptions import NotImplementedException
 from dbt.utils import get_nodes_by_tags
 from dbt.node_types import NodeType, RunHookType
 
+import dbt.context
 import dbt.utils
 import dbt.tracking
 import dbt.ui.printer
@@ -319,8 +320,7 @@ class ModelRunner(CompileRunner):
         self.print_result_line(result)
 
     def execute(self, model, existing, flat_graph):
-        compiler = dbt.compilation.Compiler(self.project)
-        context = compiler.get_compiler_context(model, flat_graph)
+        context = dbt.context.generate(model, self.project, flat_graph)
 
         materialization_macro = dbt.utils.get_materialization_macro(
             flat_graph,

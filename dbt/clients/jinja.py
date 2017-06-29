@@ -99,7 +99,7 @@ def create_statement_extension(node):
                      jinja2.nodes.Name('statement_result_callback', 'load'),
                      jinja2.nodes.Name('execute', 'load'),
                      jinja2.nodes.Name('adapter', 'load'),
-                     jinja2.nodes.Name('context', 'load'),
+                     jinja2.nodes.ContextReference(),
                      jinja2.nodes.Name('model', 'load')]),
                 [], [], body).set_lineno(lineno)
 
