@@ -6,7 +6,6 @@ import sqlparse
 import dbt.project
 import dbt.utils
 import dbt.include
-import dbt.wrapper
 import dbt.tracking
 
 from dbt.utils import This, Var, get_materialization, is_type
