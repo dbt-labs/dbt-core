@@ -1296,11 +1296,9 @@ another_model:
             root_path=get_os_path('/usr/src/app'),
             package_name='root')
 
-        self.assertEquals(
-            type(result.get('macro.root.simple', {}).get('parsed_macro')),
-            jinja2.runtime.Macro)
+        self.assertTrue(callable(result['macro.root.simple']['generator']))
 
-        del result['macro.root.simple']['parsed_macro']
+        del result['macro.root.simple']['generator']
 
         self.assertEquals(
             result,
@@ -1366,11 +1364,9 @@ another_model:
             root_path=get_os_path('/usr/src/app'),
             package_name='root')
 
-        self.assertEquals(
-            type(result.get('macro.root.simple', {}).get('parsed_macro')),
-            jinja2.runtime.Macro)
+        self.assertTrue(callable(result['macro.root.simple']['generator']))
 
-        del result['macro.root.simple']['parsed_macro']
+        del result['macro.root.simple']['generator']
 
         self.assertEquals(
             result,
