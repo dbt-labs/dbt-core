@@ -71,6 +71,23 @@ class DatabaseWrapper(object):
     functions.
     """
 
+    def __init__(self, model, adapter, profile):
+        self.model = model
+        self.adapter = adapter
+        self.profile = profile
+
+    @property
+    def raw(self):
+        return self.adapter
+
+    def wrap_with_profile_and_model_name(fn):
+        def wrapped(self, *args, **kwargs):
+            args = (self.profile,) + args
+            kwargs['model_name'] = self.model.get('name')
+            return getattr(self.adapter, fn)(*args, **kwargs)
+
+        return wrapped
+
     context_functions = [
         "already_exists",
         "get_columns_in_table",
@@ -81,67 +98,22 @@ class DatabaseWrapper(object):
         "truncate",
         "add_query",
         "expand_target_column_types",
-        "commit",
-        "get_status",
     ]
 
-    def __init__(self, model, adapter, profile):
-        self.model = model
-        self.adapter = adapter
-        self.profile = profile
+    # Fun with metaprogramming
+    # Most adapter functions take `profile` as the first argument, and
+    # `model_name` as the last. This automatically injects those arguments.
+    # In model code, these functions can be called without those two arguments.
+    for context_function in context_functions:
+        locals()[context_function] = wrap_with_profile_and_model_name(
+            context_function)
 
-    @property
-    def raw(self):
-        return self.adapter
-
-    def get_context_functions(self):
-        return {name: getattr(self, name) for name in self.context_functions}
-
-    def already_exists(self, schema, table):
-        return self.adapter.already_exists(
-            self.profile, schema, table, self.model.get('name'))
-
-    def get_columns_in_table(self, schema_name, table_name):
-        return self.adapter.get_columns_in_table(
-            self.profile, schema_name, table_name, self.model.get('name'))
-
-    def get_missing_columns(self, from_schema, from_table,
-                            to_schema, to_table):
-        return self.adapter.get_missing_columns(
-            self.profile, from_schema, from_table,
-            to_schema, to_table, self.model.get('name'))
-
-    def query_for_existing(self, schema):
-        return self.adapter.query_for_existing(
-            self.profile, schema, self.model.get('name'))
-
-    def rename(self, from_name, to_name):
-        return self.adapter.rename(
-            self.profile, from_name, to_name, self.model.get('name'))
-
-    def drop(self, relation, relation_type):
-        return self.adapter.drop(
-            self.profile, relation, relation_type, self.model.get('name'))
-
-    def truncate(self, table):
-        return self.adapter.truncate(
-            self.profile, table, self.model.get('name'))
-
-    def add_query(self, sql, auto_begin=True):
-        return self.adapter.add_query(
-            self.profile, sql, self.model.get('name'), auto_begin)
-
-    def expand_target_column_types(self, temp_table, to_schema, to_table):
-        return self.adapter.expand_target_column_types(
-            self.profile, temp_table, to_schema, to_table,
-            self.model.get('name'))
+    def get_status(self, cursor):
+        return self.adapter.get_status(cursor)
 
     def commit(self):
         return self.adapter.commit_if_has_connection(
             self.profile, self.model.get('name'))
-
-    def get_status(self, cursor):
-        return self.adapter.get_status(cursor)
 
 
 def _add_macros(context, model, flat_graph):
@@ -232,7 +204,7 @@ def generate(model, project, flat_graph, provider=None):
         "log": logger.debug,
         "sql_now": adapter.date_function(),
         "target": target,
-    }, db_wrapper.get_context_functions())
+    })
 
     context = _add_tracking(context)
     context = _add_macros(context, model, flat_graph)
