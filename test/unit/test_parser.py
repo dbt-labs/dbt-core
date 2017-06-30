@@ -27,12 +27,26 @@ class ParserTest(unittest.TestCase):
             'version': '0.1',
             'profile': 'test',
             'project-root': os.path.abspath('.'),
+            'target': 'test',
+            'outputs': {
+                'test': {
+                    'type': 'postgres',
+                    'host': 'localhost',
+                }
+            }
         }
 
         self.snowplow_project_config = {
             'name': 'snowplow',
             'version': '0.1',
             'project-root': os.path.abspath('./dbt_modules/snowplow'),
+            'target': 'test',
+            'outputs': {
+                'test': {
+                    'type': 'postgres',
+                    'host': 'localhost',
+                }
+            }
         }
 
         self.model_config = {
@@ -100,18 +114,12 @@ class ParserTest(unittest.TestCase):
             'raw_sql': ("select * from events"),
         }]
 
-        self.root_project_config = {
-            'name': 'root',
-            'version': '0.1',
-            'profile': 'test',
-            'project-root': os.path.abspath('.'),
-            'models': {
-                'materialized': 'ephemeral',
-                'root': {
-                    'nested': {
-                        'path': {
-                            'materialized': 'ephemeral'
-                        }
+        self.root_project_config['models'] = {
+            'materialized': 'ephemeral',
+            'root': {
+                'nested': {
+                    'path': {
+                        'materialized': 'ephemeral'
                     }
                 }
             }
@@ -720,17 +728,11 @@ class ParserTest(unittest.TestCase):
         )
 
     def test__root_project_config(self):
-        self.root_project_config = {
-            'name': 'root',
-            'version': '0.1',
-            'profile': 'test',
-            'project-root': os.path.abspath('.'),
-            'models': {
-                'materialized': 'ephemeral',
-                'root': {
-                    'view': {
-                        'materialized': 'view'
-                    }
+        self.root_project_config['models'] = {
+            'materialized': 'ephemeral',
+            'root': {
+                'view': {
+                    'materialized': 'view'
                 }
             }
         }
@@ -842,44 +844,33 @@ class ParserTest(unittest.TestCase):
         )
 
     def test__other_project_config(self):
-        self.root_project_config = {
-            'name': 'root',
-            'version': '0.1',
-            'profile': 'test',
-            'project-root': os.path.abspath('.'),
-            'models': {
-                'materialized': 'ephemeral',
-                'root': {
-                    'view': {
-                        'materialized': 'view'
-                    }
-                },
-                'snowplow': {
-                    'enabled': False,
-                    'views': {
-                        'materialized': 'view',
-                        'multi_sort': {
-                            'enabled': True,
-                            'materialized': 'table'
-                        }
+        self.root_project_config['models'] = {
+            'materialized': 'ephemeral',
+            'root': {
+                'view': {
+                    'materialized': 'view'
+                }
+            },
+            'snowplow': {
+                'enabled': False,
+                'views': {
+                    'materialized': 'view',
+                    'multi_sort': {
+                        'enabled': True,
+                        'materialized': 'table'
                     }
                 }
             }
         }
 
-        self.snowplow_project_config = {
-            'name': 'snowplow',
-            'version': '0.1',
-            'project-root': os.path.abspath('./dbt_modules/snowplow'),
-            'models': {
-                'snowplow': {
-                    'enabled': False,
-                    'views': {
-                        'materialized': 'table',
-                        'sort': 'timestamp',
-                        'multi_sort': {
-                            'sort': ['timestamp', 'id'],
-                        }
+        self.snowplow_project_config['models'] = {
+            'snowplow': {
+                'enabled': False,
+                'views': {
+                    'materialized': 'table',
+                    'sort': 'timestamp',
+                    'multi_sort': {
+                        'sort': ['timestamp', 'id'],
                     }
                 }
             }

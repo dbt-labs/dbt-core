@@ -1,6 +1,4 @@
-import os.path
-import fnmatch
-from dbt.model import Model, Csv, Macro
+from dbt.model import Csv
 
 import dbt.clients.system
 
@@ -30,16 +28,6 @@ class Source(object):
 
         return [to_build(*args) for args in build_args]
 
-    def get_models(self, model_dirs):
-        file_matches = dbt.clients.system.find_matching(
-            self.own_project_root,
-            model_dirs,
-            "[!.#~]*.sql")
-
-        return self.build_models_from_file_matches(
-            Model,
-            file_matches)
-
     def get_csvs(self, csv_dirs):
         file_matches = dbt.clients.system.find_matching(
             self.own_project_root,
@@ -48,14 +36,4 @@ class Source(object):
 
         return self.build_models_from_file_matches(
             Csv,
-            file_matches)
-
-    def get_macros(self, macro_dirs):
-        file_matches = dbt.clients.system.find_matching(
-            self.own_project_root,
-            macro_dirs,
-            "[!.#~]*.sql")
-
-        return self.build_models_from_file_matches(
-            Macro,
             file_matches)

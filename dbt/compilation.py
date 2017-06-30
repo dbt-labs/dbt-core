@@ -14,7 +14,7 @@ from dbt.node_types import NodeType
 from dbt.linker import Linker
 
 import dbt.compat
-import dbt.context
+import dbt.context.runtime
 import dbt.contracts.graph.compiled
 import dbt.contracts.project
 import dbt.exceptions
@@ -179,7 +179,8 @@ class Compiler(object):
             'injected_sql': None,
         })
 
-        context = dbt.context.generate(compiled_node, self.project, flat_graph)
+        context = dbt.context.runtime.generate(
+            compiled_node, self.project.cfg, flat_graph)
 
         compiled_node['compiled_sql'] = dbt.clients.jinja.get_rendered(
             node.get('raw_sql'),

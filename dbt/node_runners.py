@@ -4,12 +4,13 @@ from dbt.exceptions import NotImplementedException
 from dbt.utils import get_nodes_by_tags
 from dbt.node_types import NodeType, RunHookType
 
-import dbt.context
+import dbt.context.runtime
 import dbt.utils
 import dbt.tracking
 import dbt.ui.printer
 import dbt.flags
 import dbt.schema
+import dbt.templates
 
 import dbt.clients.jinja
 import time
@@ -320,7 +321,7 @@ class ModelRunner(CompileRunner):
         self.print_result_line(result)
 
     def execute(self, model, existing, flat_graph):
-        context = dbt.context.generate(model, self.project, flat_graph)
+        context = dbt.context.runtime.generate(model, self.project, flat_graph)
 
         materialization_macro = dbt.utils.get_materialization_macro(
             flat_graph,
