@@ -12,6 +12,6 @@
   {%- endif -%}
 
   -- build model
-  {{ statement_result_callback(adapter.raw.execute_model(profile, model)) }}
+  {{ statement_result_callback(adapter.execute_model(model)) }}
 
 {%- endmaterialization %}

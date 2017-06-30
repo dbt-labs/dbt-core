@@ -38,6 +38,7 @@ from dbt.utils import get_materialization  # noqa
 
 def raise_compiler_error(node, msg):
     name = '<Unknown>'
+    node_type = 'model'
 
     if node is None:
         name = '<None>'
@@ -53,8 +54,8 @@ def raise_compiler_error(node, msg):
         name = node.nice_name
 
     raise CompilationException(
-        "! Compilation error while compiling model {}:\n! {}\n"
-        .format(name, msg))
+        "! Compilation error while compiling {} {}:\n! {}\n"
+        .format(node_type, name, msg))
 
 
 def ref_invalid_args(model, args):
@@ -147,3 +148,11 @@ def bad_package_spec(repo, spec, error_message):
     raise RuntimeException(
         "Error checking out spec='{}' for repo {}\n{}".format(
             spec, repo, error_message))
+
+
+def invalid_materialization_argument(name, argument):
+    msg = "Received an unknown argument '{}'.".format(argument)
+
+    raise CompilationException(
+        "! Compilation error while compiling materialization {}:\n! {}\n"
+        .format(name, msg))

@@ -23,6 +23,18 @@ class DefaultAdapter(object):
 
     requires = {}
 
+    context_functions = [
+        "already_exists",
+        "get_columns_in_table",
+        "get_missing_columns",
+        "query_for_existing",
+        "rename",
+        "drop",
+        "truncate",
+        "add_query",
+        "expand_target_column_types",
+    ]
+
     ###
     # ADAPTER-SPECIFIC FUNCTIONS -- each of these must be overridden in
     #                               every adapter

@@ -42,8 +42,8 @@ class MaterializationExtension(jinja2.ext.Extension):
                 adapter_name = value.value
 
             else:
-                # TODO throw
-                pass
+                dbt.exceptions.invalid_materialization_argument(
+                    materialization_name, target.name)
 
         node.name = dbt.utils.get_materialization_macro_name(
             materialization_name, adapter_name)
@@ -64,16 +64,11 @@ def create_statement_extension(node):
         def _execute_body(self, capture_query_result,
                           statement_result_callback,
                           execute, adapter, context, model, caller):
-            body = caller()
-
-            # TODO: if execute, adapter, context, or model are None,
-            #       then something is wrong.
-
             # we have to re-render the body to handle cases where jinja
             # is passed in as an argument, i.e. where an incremental
             # `sql_where` includes {{this}}
             body = dbt.clients.jinja.get_rendered(
-                body,
+                caller(),
                 context,
                 model)
 

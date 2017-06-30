@@ -76,37 +76,24 @@ class DatabaseWrapper(object):
         self.adapter = adapter
         self.profile = profile
 
-    @property
-    def raw(self):
-        return self.adapter
+        context_functions = self.adapter.context_functions
 
-    def wrap_with_profile_and_model_name(fn):
-        def wrapped(self, *args, **kwargs):
+        # Fun with metaprogramming
+        # Most adapter functions take `profile` as the first argument, and
+        # `model_name` as the last. This automatically injects those arguments.
+        # In model code, these functions can be called without those two args.
+        for context_function in context_functions:
+            setattr(self,
+                    context_function,
+                    self.wrap_with_profile_and_model_name(context_function))
+
+    def wrap_with_profile_and_model_name(self, fn):
+        def wrapped(*args, **kwargs):
             args = (self.profile,) + args
             kwargs['model_name'] = self.model.get('name')
             return getattr(self.adapter, fn)(*args, **kwargs)
 
         return wrapped
-
-    context_functions = [
-        "already_exists",
-        "get_columns_in_table",
-        "get_missing_columns",
-        "query_for_existing",
-        "rename",
-        "drop",
-        "truncate",
-        "add_query",
-        "expand_target_column_types",
-    ]
-
-    # Fun with metaprogramming
-    # Most adapter functions take `profile` as the first argument, and
-    # `model_name` as the last. This automatically injects those arguments.
-    # In model code, these functions can be called without those two arguments.
-    for context_function in context_functions:
-        locals()[context_function] = wrap_with_profile_and_model_name(
-            context_function)
 
     def get_status(self, cursor):
         return self.adapter.get_status(cursor)
@@ -166,10 +153,11 @@ def generate(model, project, flat_graph, provider=None):
     target_name = project.get('target')
     profile = project.get('outputs').get(target_name)
     target = profile.copy()
+    target.pop('pass', None)
     target['name'] = target_name
     adapter = get_adapter(profile)
 
-    context = {'env': profile}
+    context = {'env': target}
     schema = profile.get('schema', 'public')
 
     # these are empty strings if configs aren't provided
@@ -200,7 +188,6 @@ def generate(model, project, flat_graph, provider=None):
         "flags": dbt.flags,
         "adapter": db_wrapper,
         "execute": True,
-        "profile": profile,
         "log": logger.debug,
         "sql_now": adapter.date_function(),
         "target": target,

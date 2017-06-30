@@ -18,6 +18,12 @@ import google.cloud.bigquery
 
 class BigQueryAdapter(PostgresAdapter):
 
+    context_functions = [
+        "query_for_existing",
+        "drop_view",
+        "execute_model",
+    ]
+
     QUERY_TIMEOUT = 60 * 1000
 
     @classmethod
@@ -162,7 +168,7 @@ class BigQueryAdapter(PostgresAdapter):
         return "#standardSQL\n{}".format(sql)
 
     @classmethod
-    def execute_model(cls, profile, model):
+    def execute_model(cls, profile, model, model_name=None):
         connection = cls.get_connection(profile, model.get('name'))
 
         if flags.STRICT_MODE:
