@@ -144,6 +144,42 @@ class DatabaseWrapper(object):
         return self.adapter.get_status(cursor)
 
 
+def _add_macros(context, model, flat_graph):
+    for unique_id, macro in flat_graph.get('macros', {}).items():
+        package_name = macro.get('package_name')
+
+        macro_map = {
+            macro.get('name'): macro.get('generator')(context)
+        }
+
+        if context.get(package_name) is None:
+            context[package_name] = {}
+
+        context.get(package_name, {}) \
+               .update(macro_map)
+
+        if(package_name == model.get('package_name') or
+           package_name == dbt.include.GLOBAL_PROJECT_NAME):
+            context.update(macro_map)
+
+    return context
+
+
+def _add_tracking(context):
+    if dbt.tracking.active_user is not None:
+        context = dbt.utils.deep_merge(context, {
+            "run_started_at": dbt.tracking.active_user.run_started_at,
+            "invocation_id": dbt.tracking.active_user.invocation_id,
+        })
+    else:
+        context = dbt.utils.deep_merge(context, {
+            "run_started_at": None,
+            "invocation_id": None
+        })
+
+    return context
+
+
 def generate(model, project, flat_graph, provider=None):
     """
     Not meant to be called directly. Call with either:
@@ -157,14 +193,12 @@ def generate(model, project, flat_graph, provider=None):
 
     target_name = project.get('target')
     profile = project.get('outputs').get(target_name)
-    context = {
-        'env': profile
-    }
     target = profile.copy()
     target['name'] = target_name
     adapter = get_adapter(profile)
 
-    schema = context['env'].get('schema', 'public')
+    context = {'env': profile}
+    schema = profile.get('schema', 'public')
 
     # these are empty strings if configs aren't provided
     dist_qualifier = get_dist_qualifier(model, profile)
@@ -200,32 +234,7 @@ def generate(model, project, flat_graph, provider=None):
         "target": target,
     }, db_wrapper.get_context_functions())
 
-    if dbt.tracking.active_user is not None:
-        context = dbt.utils.deep_merge(context, {
-            "run_started_at": dbt.tracking.active_user.run_started_at,
-            "invocation_id": dbt.tracking.active_user.invocation_id,
-        })
-    else:
-        context = dbt.utils.deep_merge(context, {
-            "run_started_at": None,
-            "invocation_id": None
-        })
-
-    for unique_id, macro in flat_graph.get('macros', {}).items():
-        package_name = macro.get('package_name')
-
-        macro_map = {
-            macro.get('name'): macro.get('generator')(context)
-        }
-
-        if context.get(package_name) is None:
-            context[package_name] = {}
-
-        context.get(package_name, {}) \
-               .update(macro_map)
-
-        if(package_name == model.get('package_name') or
-           package_name == dbt.include.GLOBAL_PROJECT_NAME):
-            context.update(macro_map)
+    context = _add_tracking(context)
+    context = _add_macros(context, model, flat_graph)
 
     return context
