@@ -1,3 +1,1 @@
-# Upgrading
-
-View complete upgrading instructions [here](setup/)
+Moved to [https://dbt.readme.io/docs/installation](https://dbt.readme.io/docs/installation)
