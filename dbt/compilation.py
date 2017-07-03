@@ -8,8 +8,7 @@ import dbt.utils
 import dbt.include
 import dbt.tracking
 
-from dbt.utils import This, Var, get_materialization, is_type
-from dbt.node_types import NodeType
+from dbt.utils import get_materialization, NodeType, is_type
 
 from dbt.linker import Linker
 
@@ -22,7 +21,6 @@ import dbt.flags
 import dbt.loader
 import dbt.parser
 
-from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
 
 CompilableEntities = [

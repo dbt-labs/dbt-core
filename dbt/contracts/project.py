@@ -1,8 +1,7 @@
-from voluptuous import Schema, Required, All, Any, Extra, Range, Optional, \
-    Length, ALLOW_EXTRA
+from voluptuous import Schema, Required, ALLOW_EXTRA
 
 from dbt.contracts.common import validate_with
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 project_contract = Schema({
     Required('name'): str

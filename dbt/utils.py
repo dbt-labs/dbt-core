@@ -123,10 +123,6 @@ class Var(object):
             return default
 
 
-def model_cte_name(model):
-    return '__dbt__CTE__{}'.format(model.get('name'))
-
-
 def model_immediate_name(model, non_destructive):
     "The name of the model table/view within the transaction"
     model_name = model.get('name')
@@ -164,16 +160,6 @@ def find_by_name(flat_graph, target_name, target_package, subgraph,
             return model
 
     return None
-
-
-def find_model_by_fqn(models, fqn):
-    for model in models:
-        if tuple(model.fqn) == tuple(fqn):
-            return model
-
-    raise RuntimeError(
-        "Couldn't find a compiled model with fqn: '{}'".format(fqn)
-    )
 
 
 def get_materialization_macro_name(materialization_name, adapter_type=None):
