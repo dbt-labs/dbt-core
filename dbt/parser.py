@@ -25,16 +25,8 @@ def get_path(resource_type, package_name, resource_name):
     return "{}.{}.{}".format(resource_type, package_name, resource_name)
 
 
-def get_model_path(package_name, resource_name):
-    return get_path(NodeType.Model, package_name, resource_name)
-
-
 def get_test_path(package_name, resource_name):
     return get_path(NodeType.Test, package_name, resource_name)
-
-
-def get_macro_path(package_name, resource_name):
-    return get_path('macros', package_name, resource_name)
 
 
 def resolve_ref(flat_graph, target_model_name, target_model_package,

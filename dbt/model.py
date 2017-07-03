@@ -6,7 +6,6 @@ from dbt.utils import split_path, deep_merge, DBTConfigKeys, compiler_error
 
 
 class SourceConfig(object):
-    Materializations = ['view', 'table', 'incremental', 'ephemeral']
     ConfigKeys = DBTConfigKeys
 
     AppendListFields = ['pre-hook', 'post-hook']

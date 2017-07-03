@@ -267,53 +267,6 @@ class GraphTest(unittest.TestCase):
                 linker.graph.node[node].get('config', {}).get('materialized'),
                 'incremental')
 
-    def test__topological_ordering(self):
-        self.use_models({
-            'model_1': 'select * from events',
-            'model_2': 'select * from {{ ref("model_1") }}',
-            'model_3': '''
-                select * from {{ ref("model_1") }}
-                union all
-                select * from {{ ref("model_2") }}
-            ''',
-            'model_4': 'select * from {{ ref("model_3") }}'
-        })
-
-        compiler = self.get_compiler(self.get_project({}))
-        graph, linker = compiler.compile()
-
-        six.assertCountEqual(self,
-                             linker.nodes(),
-                             [
-                                 'model.test_models_compile.model_1',
-                                 'model.test_models_compile.model_2',
-                                 'model.test_models_compile.model_3',
-                                 'model.test_models_compile.model_4',
-                             ])
-
-        six.assertCountEqual(self,
-                             linker.edges(),
-                             [
-                                 ('model.test_models_compile.model_1',
-                                  'model.test_models_compile.model_2',),
-                                 ('model.test_models_compile.model_1',
-                                  'model.test_models_compile.model_3',),
-                                 ('model.test_models_compile.model_2',
-                                  'model.test_models_compile.model_3',),
-                                 ('model.test_models_compile.model_3',
-                                  'model.test_models_compile.model_4',),
-                             ])
-
-        actual_ordering = linker.as_topological_ordering()
-        expected_ordering = [
-            'model.test_models_compile.model_1',
-            'model.test_models_compile.model_2',
-            'model.test_models_compile.model_3',
-            'model.test_models_compile.model_4',
-        ]
-
-        self.assertEqual(actual_ordering, expected_ordering)
-
     def test__dependency_list(self):
         self.use_models({
             'model_1': 'select * from events',

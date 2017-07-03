@@ -1,36 +1,4 @@
-
-from dbt.logger import GLOBAL_LOGGER as logger
-
-import logging
-import time
-import re
-
-SCHEMA_PERMISSION_DENIED_MESSAGE = """
-The user '{user}' does not have sufficient permissions to create the schema
-'{schema}'. Either create the schema manually, or adjust the permissions of
-the '{user}' user."""
-
-RELATION_PERMISSION_DENIED_MESSAGE = """
-The user '{user}' does not have sufficient permissions to create the model
-'{model}' in the schema '{schema}'. Please adjust the permissions of the
-'{user}' user on the '{schema}' schema. With a superuser account, execute the
-following commands, then re-run dbt.
-
-grant usage, create on schema "{schema}" to "{user}";
-grant select, insert, delete on all tables in schema "{schema}" to "{user}";"""
-
-RELATION_NOT_OWNER_MESSAGE = """
-The user '{user}' does not have sufficient permissions to drop the model
-'{model}' in the schema '{schema}'. This is likely because the relation was
-created by a different user. Either delete the model "{schema}"."{model}"
-manually, or adjust the permissions of the '{user}' user in the '{schema}'
-schema."""
-
-READ_PERMISSION_DENIED_ERROR = """
-Encountered an error while executing model '{model}'.
-> {error}
-Check that the user '{user}' has sufficient permissions to read from all
-necessary source tables"""
+from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
 class Column(object):

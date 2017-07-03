@@ -23,10 +23,6 @@ import dbt.parser
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
-CompilableEntities = [
-    "models", "data tests", "schema tests", "archives", "analyses"
-]
-
 graph_file_name = 'graph.gpickle'
 
 
@@ -151,7 +147,6 @@ def inject_ctes_into_sql(sql, ctes):
 class Compiler(object):
     def __init__(self, project):
         self.project = project
-        self.parsed_models = None
 
     def initialize(self):
         dbt.clients.system.make_directory(self.project['target-path'])
