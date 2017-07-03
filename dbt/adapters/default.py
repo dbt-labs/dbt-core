@@ -33,6 +33,7 @@ class DefaultAdapter(object):
         "truncate",
         "add_query",
         "expand_target_column_types",
+        "create_table",
     ]
 
     ###
@@ -150,35 +151,6 @@ class DefaultAdapter(object):
     @classmethod
     def is_cancelable(cls):
         return True
-
-    @classmethod
-    def execute_model(cls, profile, model):
-        parts = re.split(r'-- (DBT_OPERATION .*)', model.get('wrapped_sql'))
-
-        for i, part in enumerate(parts):
-            matches = re.match(r'^DBT_OPERATION ({.*})$', part)
-            if matches is not None:
-                instruction_string = matches.groups()[0]
-                instruction = yaml.safe_load(instruction_string)
-                function = instruction['function']
-                kwargs = instruction['args']
-
-                def call_expand_target_column_types(kwargs):
-                    kwargs.update({'profile': profile,
-                                   'model_name': model.get('name')})
-                    return cls.expand_target_column_types(**kwargs)
-
-                func_map = {
-                    'expand_column_types_if_needed':
-                    call_expand_target_column_types
-                }
-
-                func_map[function](kwargs)
-            else:
-                connection, cursor = cls.add_query(
-                    profile, part, model.get('name'))
-
-        return cls.get_status(cursor)
 
     @classmethod
     def get_missing_columns(cls, profile,

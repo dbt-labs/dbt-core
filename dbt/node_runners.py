@@ -396,7 +396,7 @@ class TestRunner(CompileRunner):
         self.print_result_line(result)
 
 
-class ArchiveRunner(CompileRunner):
+class ArchiveRunner(ModelRunner):
 
     def raise_on_first_error(self):
         return False
@@ -409,78 +409,3 @@ class ArchiveRunner(CompileRunner):
     def print_result_line(self, result):
         dbt.ui.printer.print_archive_result_line(result, self.node_index,
                                                  self.num_nodes)
-
-    def print_start_line(self):
-        description = self.describe_node()
-        dbt.ui.printer.print_start_line(description, self.node_index,
-                                        self.num_nodes)
-
-    def before_execute(self):
-        self.print_start_line()
-
-    def after_execute(self, result):
-        self.print_result_line(result)
-
-    def execute(self, archive, existing, flat_graph):
-        status = self.execute_archive()
-        return RunModelResult(archive, status=status)
-
-    def execute_archive(self):
-        node = self.node
-        node_cfg = node.get('config', {})
-
-        context = self.node_context(self.adapter, self.project, self.node)
-
-        source_schema = node_cfg.get('source_schema')
-        source_table = node_cfg.get('source_table')
-
-        source_columns = self.adapter.get_columns_in_table(self.profile,
-                                                           source_schema,
-                                                           source_table)
-
-        if len(source_columns) == 0:
-            raise RuntimeError(
-                'Source table "{}"."{}" does not '
-                'exist'.format(source_schema, source_table))
-
-        dest_columns = source_columns + [
-            dbt.schema.Column("valid_from", "timestamp", None),
-            dbt.schema.Column("valid_to", "timestamp", None),
-            dbt.schema.Column("scd_id", "text", None),
-            dbt.schema.Column("dbt_updated_at", "timestamp", None)
-        ]
-
-        self.adapter.create_table(
-            self.profile,
-            schema=node_cfg.get('target_schema'),
-            table=node_cfg.get('target_table'),
-            columns=dest_columns,
-            sort='dbt_updated_at',
-            dist='scd_id',
-            model_name=node.get('name'))
-
-        # TODO move this to inject_runtime_config, generate archive SQL
-        # in wrap step. can't do this right now because we actually need
-        # to inspect status of the schema at runtime and archive requires
-        # a lot of information about the schema to generate queries.
-        template_ctx = context.copy()
-        template_ctx.update(node_cfg)
-
-        template = dbt.templates.SCDArchiveTemplate
-        select = dbt.clients.jinja.get_rendered(template, template_ctx)
-
-        insert_stmt = dbt.templates.ArchiveInsertTemplate().wrap(
-            schema=node_cfg.get('target_schema'),
-            table=node_cfg.get('target_table'),
-            query=select,
-            unique_key=node_cfg.get('unique_key'))
-
-        node['wrapped_sql'] = dbt.clients.jinja.get_rendered(insert_stmt,
-                                                             template_ctx)
-
-        result = self.adapter.execute_model(
-            profile=self.profile,
-            model=node)
-
-        self.adapter.commit_if_has_connection(self.profile, node.get('name'))
-        return result

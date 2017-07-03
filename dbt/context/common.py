@@ -4,6 +4,7 @@ from dbt.compat import basestring
 
 import dbt.clients.jinja
 import dbt.flags
+import dbt.schema
 import dbt.tracking
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
@@ -191,6 +192,7 @@ def generate(model, project, flat_graph, provider=None):
         "log": logger.debug,
         "sql_now": adapter.date_function(),
         "target": target,
+        "column": dbt.schema.Column
     })
 
     context = _add_tracking(context)

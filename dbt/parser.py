@@ -591,7 +591,7 @@ def parse_archives_from_project(project):
                 'path': os.path.join('archive', *fake_path),
                 'package_name': project.get('name'),
                 'config': config,
-                'raw_sql': '-- noop'
+                'raw_sql': '{{config(materialized="archive")}} -- noop'
             })
 
     return archives
