@@ -256,7 +256,12 @@ class ModelRunner(CompileRunner):
     @classmethod
     def before_run(cls, project, adapter, flat_graph):
         cls.try_create_schema(project, adapter)
-        cls.run_hooks(project, adapter, flat_graph, RunHookType.Start)
+        try:
+            cls.run_hooks(project, adapter, flat_graph, RunHookType.Start)
+        except dbt.exceptions.RuntimeException as e:
+            msg = "Database error while running {}"
+            logger.info(msg.format(RunHookType.Start))
+            raise
 
     @classmethod
     def print_results_line(cls, results, execution_time):
@@ -270,7 +275,12 @@ class ModelRunner(CompileRunner):
 
     @classmethod
     def after_run(cls, project, adapter, results, flat_graph, elapsed):
-        cls.run_hooks(project, adapter, flat_graph, RunHookType.End)
+        try:
+            cls.run_hooks(project, adapter, flat_graph, RunHookType.End)
+        except dbt.exceptions.RuntimeException as e:
+            msg = "Database error while running {}"
+            logger.info(msg.format(RunHookType.End))
+            raise
         cls.print_results_line(results, elapsed)
 
     def describe_node(self):
