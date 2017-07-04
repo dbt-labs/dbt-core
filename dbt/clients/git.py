@@ -11,17 +11,30 @@ def clone(repo, cwd, dirname=None):
     return run_cmd(cwd, clone_cmd)
 
 
+def list_tags(cwd):
+    out, err = run_cmd(cwd, ['git', 'tag', '--list'])
+    tags = set(out.decode('utf-8').strip().split("\n"))
+    return tags
+
+
 def checkout(cwd, branch=None):
     if branch is None:
         branch = 'master'
 
-    remote_branch = 'origin/{}'.format(branch)
-
     logger.info('  Checking out branch {}.'.format(branch))
 
     run_cmd(cwd, ['git', 'remote', 'set-branches', 'origin', branch])
-    run_cmd(cwd, ['git', 'fetch', '--depth', '1', 'origin', branch])
-    run_cmd(cwd, ['git', 'reset', '--hard', remote_branch])
+    run_cmd(cwd, ['git', 'fetch', '--tags', '--depth', '1', 'origin', branch])
+
+    tags = list_tags(cwd)
+
+    # Prefer tags to branches if one exists
+    if branch in tags:
+        spec = 'tags/{}'.format(branch)
+    else:
+        spec = 'origin/{}'.format(branch)
+
+    run_cmd(cwd, ['git', 'reset', '--hard', spec])
 
 
 def get_current_sha(cwd):
