@@ -269,10 +269,16 @@ class DBTIntegrationTest(unittest.TestCase):
             args = ["run"]
 
         args = ["--strict"] + args
-
         logger.info("Invoking dbt with {}".format(args))
-
         return dbt.handle(args)
+
+    def run_dbt_and_check(self, args=None):
+        if args is None:
+            args = ["run"]
+
+        args = ["--strict"] + args
+        logger.info("Invoking dbt with {}".format(args))
+        return dbt.handle_and_check(args)
 
     def run_sql_file(self, path):
         with open(path, 'r') as f:

@@ -3,7 +3,7 @@ from voluptuous import Schema, Required, All, Any, Length
 from dbt.compat import basestring
 from dbt.contracts.common import validate_with
 
-from dbt.utils import NodeType
+from dbt.node_types import NodeType
 
 unparsed_base_contract = Schema({
     # identifiers

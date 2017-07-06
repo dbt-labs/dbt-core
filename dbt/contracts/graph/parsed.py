@@ -5,7 +5,8 @@ import jinja2.runtime
 import dbt.exceptions
 
 from dbt.compat import basestring
-from dbt.utils import NodeType, get_materialization
+from dbt.utils import get_materialization
+from dbt.node_types import NodeType
 
 from dbt.contracts.common import validate_with
 from dbt.contracts.graph.unparsed import unparsed_node_contract, \

@@ -6,7 +6,8 @@ from dbt.compat import basestring
 import dbt.flags
 
 from dbt.templates import BaseCreateTemplate
-from dbt.utils import split_path, NodeType
+from dbt.utils import split_path
+from dbt.node_types import NodeType
 import dbt.project
 from dbt.utils import deep_merge, DBTConfigKeys, compiler_error
 

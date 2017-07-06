@@ -6,7 +6,7 @@ import jinja2.sandbox
 import jinja2.nodes
 import jinja2.ext
 
-from dbt.utils import NodeType
+from dbt.node_types import NodeType
 
 
 class MaterializationExtension(jinja2.ext.Extension):
@@ -176,3 +176,7 @@ def get_rendered(string, ctx, node=None,
                             capture_macros=capture_macros,
                             execute_statements=execute_statements)
     return render_template(template, ctx, node)
+
+
+def undefined_error(msg):
+    raise jinja2.exceptions.UndefinedError(msg)

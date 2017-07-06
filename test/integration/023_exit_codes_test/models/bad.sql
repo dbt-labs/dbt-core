@@ -1,0 +1,2 @@
+
+select bad sql here

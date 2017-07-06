@@ -9,7 +9,8 @@ import dbt.include
 import dbt.wrapper
 import dbt.tracking
 
-from dbt.utils import This, Var, get_materialization, NodeType, is_type
+from dbt.utils import This, Var, get_materialization, is_type
+from dbt.node_types import NodeType
 
 from dbt.linker import Linker
 

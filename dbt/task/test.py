@@ -1,11 +1,12 @@
 from dbt.runner import RunManager
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.node_runners import TestRunner
-from dbt.utils import NodeType
+from dbt.node_types import NodeType
 import dbt.ui.printer
+from dbt.task.base_task import RunnableTask
 
 
-class TestTask:
+class TestTask(RunnableTask):
     """
     Testing:
         1) Create tmp views w/ 0 rows to ensure all tables, schemas, and SQL
@@ -16,10 +17,6 @@ class TestTask:
            c) referential integrity
            d) accepted value
     """
-    def __init__(self, args, project):
-        self.args = args
-        self.project = project
-
     def run(self):
         runner = RunManager(
             self.project, self.project['target-path'], self.args)

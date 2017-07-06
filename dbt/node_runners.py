@@ -1,7 +1,8 @@
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.exceptions import NotImplementedException
-from dbt.utils import RunHookType, NodeType, get_nodes_by_tags
+from dbt.utils import get_nodes_by_tags
+from dbt.node_types import NodeType, RunHookType
 
 import dbt.utils
 import dbt.tracking
@@ -69,6 +70,9 @@ class BaseRunner(object):
         self.num_nodes = num_nodes
 
         self.skip = False
+
+    def raise_on_first_error(self):
+        return False
 
     def is_ephemeral(self):
         return dbt.utils.get_materialization(self.node) == 'ephemeral'
@@ -167,6 +171,9 @@ class BaseRunner(object):
 class CompileRunner(BaseRunner):
     print_header = False
 
+    def raise_on_first_error(self):
+        return True
+
     def before_execute(self):
         pass
 
@@ -224,6 +231,10 @@ class CompileRunner(BaseRunner):
 
 
 class ModelRunner(CompileRunner):
+
+    def raise_on_first_error(self):
+        return False
+
     @classmethod
     def try_create_schema(cls, project, adapter):
         profile = project.run_environment()
@@ -254,9 +265,17 @@ class ModelRunner(CompileRunner):
             adapter.commit_if_has_connection(profile, model_name)
 
     @classmethod
+    def safe_run_hooks(cls, project, adapter, flat_graph, hook_type):
+        try:
+            cls.run_hooks(project, adapter, flat_graph, hook_type)
+        except dbt.exceptions.RuntimeException as e:
+            logger.info("Database error while running {}".format(hook_type))
+            raise
+
+    @classmethod
     def before_run(cls, project, adapter, flat_graph):
         cls.try_create_schema(project, adapter)
-        cls.run_hooks(project, adapter, flat_graph, RunHookType.Start)
+        cls.safe_run_hooks(project, adapter, flat_graph, RunHookType.Start)
 
     @classmethod
     def print_results_line(cls, results, execution_time):
@@ -270,7 +289,7 @@ class ModelRunner(CompileRunner):
 
     @classmethod
     def after_run(cls, project, adapter, results, flat_graph, elapsed):
-        cls.run_hooks(project, adapter, flat_graph, RunHookType.End)
+        cls.safe_run_hooks(project, adapter, flat_graph, RunHookType.End)
         cls.print_results_line(results, elapsed)
 
     def describe_node(self):
@@ -307,6 +326,10 @@ class ModelRunner(CompileRunner):
 
 
 class TestRunner(CompileRunner):
+
+    def raise_on_first_error(self):
+        return False
+
     def describe_node(self):
         node_name = self.node.get('name')
         return "test {}".format(node_name)
@@ -351,6 +374,10 @@ class TestRunner(CompileRunner):
 
 
 class ArchiveRunner(CompileRunner):
+
+    def raise_on_first_error(self):
+        return False
+
     def describe_node(self):
         cfg = self.node.get('config', {})
         return "archive {source_schema}.{source_table} --> "\

@@ -1,12 +1,12 @@
 import os
 from dbt.seeder import Seeder
+from dbt.task.base_task import BaseTask
 
 
-class SeedTask:
-    def __init__(self, args, project):
-        self.args = args
-        self.project = project
-
+class SeedTask(BaseTask):
     def run(self):
         seeder = Seeder(self.project)
-        seeder.seed(self.args.drop_existing)
+        self.success = seeder.seed(self.args.drop_existing)
+
+    def interpret_results(self, results):
+        return self.success

@@ -25,7 +25,6 @@ select
 
     -- runtime variables
     '{{ run_started_at }}' as run_started_at,
-    '{{ invocation_id }}'  as invocation_id
+    '{{ invocation_id }}'  as invocation_id,
 
-
-
+    '{{ env_var("DBT_TEST_013_ENV_VAR") }}' as env_var

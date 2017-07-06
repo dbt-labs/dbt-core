@@ -79,6 +79,7 @@ class Seeder:
         existing_tables = self.existing_tables(cursor, schema)
 
         csvs = self.find_csvs()
+        statuses = []
         for csv in csvs:
 
             table_name = csv.name
@@ -103,7 +104,10 @@ class Seeder:
                 self.insert_into_table(
                     cursor, schema, table_name, virtual_table
                 )
+                statuses.append(True)
+
             except psycopg2.ProgrammingError as e:
+                statuses.append(False)
                 logger.info(
                     'Encountered an error while inserting into table "{}"."{}"'
                     .format(schema, table_name)
@@ -116,6 +120,7 @@ class Seeder:
                     'instead'
                 )
                 logger.info(str(e))
+        return all(statuses)
 
     def seed(self, drop_existing=False):
         profile = self.project.run_environment()
@@ -131,4 +136,4 @@ class Seeder:
 
         with connection.get('handle') as handle:
             with handle.cursor() as cursor:
-                self.do_seed(schema, cursor, drop_existing)
+                return self.do_seed(schema, cursor, drop_existing)

@@ -83,7 +83,8 @@ class BigQueryAdapter(PostgresAdapter):
         creds = google.oauth2.service_account.Credentials
 
         if method == 'oauth':
-            return google.auth.default()
+            credentials, project_id = google.auth.default()
+            return credentials
 
         elif method == 'service-account':
             keyfile = config.get('keyfile')
@@ -178,6 +179,13 @@ class BigQueryAdapter(PostgresAdapter):
 
         model_name = model.get('name')
         model_sql = cls.format_sql_for_bigquery(model.get('injected_sql'))
+
+        materialization = dbt.utils.get_materialization(model)
+        allowed_materializations = ['view', 'ephemeral']
+
+        if materialization not in allowed_materializations:
+            msg = "Unsupported materialization: {}".format(materialization)
+            raise dbt.exceptions.RuntimeException(msg)
 
         schema = cls.get_default_schema(profile)
         dataset = cls.get_dataset(profile, schema, model_name)
@@ -276,9 +284,18 @@ class BigQueryAdapter(PostgresAdapter):
         return dataset
 
     @classmethod
+    def warning_on_hooks(cls, hook_type):
+        msg = "{} is not supported in bigquery and will be ignored"
+        dbt.ui.printer.print_timestamped_line(msg.format(hook_type),
+                                              dbt.ui.printer.COLOR_FG_YELLOW)
+
+    @classmethod
     def add_query(cls, profile, sql, model_name=None, auto_begin=True):
-        raise dbt.exceptions.NotImplementedException(
-            '`add_query` is not implemented for this adapter!')
+        if model_name in ['on-run-start', 'on-run-end']:
+            cls.warning_on_hooks(model_name)
+        else:
+            raise dbt.exceptions.NotImplementedException(
+                '`add_query` is not implemented for this adapter!')
 
     @classmethod
     def is_cancelable(cls):

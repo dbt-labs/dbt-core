@@ -2,11 +2,13 @@ from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 
 import dbt.flags
+import os
 
 class TestContextVars(DBTIntegrationTest):
 
     def setUp(self):
         DBTIntegrationTest.setUp(self)
+        os.environ["DBT_TEST_013_ENV_VAR"] = "1"
 
         self.fields = [
             'this',
@@ -23,7 +25,8 @@ class TestContextVars(DBTIntegrationTest):
             'target.user',
             'target.pass',
             'run_started_at',
-            'invocation_id'
+            'invocation_id',
+            'env_var'
         ]
 
     @property
@@ -95,6 +98,8 @@ class TestContextVars(DBTIntegrationTest):
         self.assertEqual(ctx['target.user'], 'root')
         self.assertEqual(ctx['target.pass'], '')
 
+        self.assertEqual(ctx['env_var'], '1')
+
     @attr(type='postgres')
     def test_env_vars_prod(self):
         self.run_dbt(['run', '--target', 'prod'])
@@ -114,3 +119,4 @@ class TestContextVars(DBTIntegrationTest):
         self.assertEqual(ctx['target.type'], 'postgres')
         self.assertEqual(ctx['target.user'], 'root')
         self.assertEqual(ctx['target.pass'], '')
+        self.assertEqual(ctx['env_var'], '1')

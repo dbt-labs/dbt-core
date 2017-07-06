@@ -1,7 +1,7 @@
 import dbt.exceptions
 import dbt.parser
 
-from dbt.utils import NodeType
+from dbt.node_types import NodeType
 
 
 class GraphLoader(object):

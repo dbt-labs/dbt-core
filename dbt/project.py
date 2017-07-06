@@ -8,6 +8,8 @@ from voluptuous import Required, Invalid
 import dbt.deprecations
 import dbt.contracts.connection
 import dbt.clients.yaml_helper
+import dbt.clients.jinja
+import dbt.compat
 from dbt.logger import GLOBAL_LOGGER as logger
 
 default_project_cfg = {
@@ -108,10 +110,28 @@ class Project(object):
         else:
             return False
 
+    def compile_target(self, target_cfg):
+        ctx = self.base_context()
+
+        compiled = {}
+        for (key, value) in target_cfg.items():
+            is_str = isinstance(value, dbt.compat.basestring)
+
+            if is_str:
+                node = "config key: '{}'".format(key)
+                compiled_val = dbt.clients.jinja.get_rendered(value, ctx, node)
+            else:
+                compiled_val = value
+
+            compiled[key] = compiled_val
+
+        return compiled
+
     def run_environment(self):
         target_name = self.cfg['target']
         if target_name in self.cfg['outputs']:
-            return self.cfg['outputs'][target_name]
+            target_cfg = self.cfg['outputs'][target_name]
+            return self.compile_target(target_cfg)
         else:
             raise DbtProfileError(
                     "'target' config was not found in profile entry for "
@@ -122,11 +142,31 @@ class Project(object):
         ctx['name'] = self.cfg['target']
         return ctx
 
+    def get_env_var(self, var, default=None):
+        if var in os.environ:
+            return os.environ[var]
+        elif default is not None:
+            return default
+        else:
+            msg = "Env var required but not provided: '{}'".format(var)
+            dbt.clients.jinja.undefined_error(msg)
+
+    def base_context(self):
+        return {
+            'env_var': self.get_env_var
+        }
+
     def context(self):
         target_cfg = self.run_environment()
         filtered_target = copy.deepcopy(target_cfg)
         filtered_target.pop('pass', None)
-        return {'env': filtered_target}
+
+        ctx = self.base_context()
+        ctx.update({
+            'env': filtered_target
+        })
+
+        return ctx
 
     def validate(self):
         self.handle_deprecations()
@@ -155,7 +195,7 @@ class Project(object):
                     ", ".join(valid_types)), self)
 
         validator = validator.extend({
-            Required('type'): str,
+            Required('type'): dbt.compat.basestring,
             Required('threads'): int,
         })
 
@@ -186,8 +226,8 @@ def read_profiles(profiles_dir=None):
 
     raw_profiles = dbt.config.read_profile(profiles_dir)
 
-    return {k: v for (k, v) in raw_profiles.items()
-            if k != 'config'}
+    profiles = {k: v for (k, v) in raw_profiles.items() if k != 'config'}
+    return profiles
 
 
 def read_project(filename, profiles_dir=None, validate=True,

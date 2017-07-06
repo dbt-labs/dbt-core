@@ -4,16 +4,14 @@ from dbt.logger import GLOBAL_LOGGER as logger
 import dbt.clients.system
 import dbt.project
 
+from dbt.task.base_task import BaseTask
+
 PROFILE_DIR_MESSAGE = """To view your profiles.yml file, run:
 
 {open_cmd} {profiles_dir}"""
 
 
-class DebugTask:
-    def __init__(self, args, project):
-        self.args = args
-        self.project = project
-
+class DebugTask(BaseTask):
     def path_info(self):
         open_cmd = dbt.clients.system.open_dir_cmd()
         profiles_dir = dbt.project.default_profiles_dir
