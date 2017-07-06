@@ -1,7 +1,5 @@
 from voluptuous import Schema, Required, All, Any, Length, Optional
 
-import jinja2.runtime
-
 import dbt.exceptions
 
 from dbt.compat import basestring
@@ -47,7 +45,7 @@ parsed_node_contract = unparsed_node_contract.extend({
     },
 
     Required('empty'): bool,
-    Required('config'): config_contract,
+    Required('config'): dict,
     Required('tags'): All(set),
 })
 

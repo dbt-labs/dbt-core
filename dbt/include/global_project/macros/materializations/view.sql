@@ -1,4 +1,4 @@
-{% materialization view, adapter='base' -%}
+{% materialization view, default -%}
 
   {%- set identifier = model['name'] -%}
   {%- set tmp_identifier = identifier + '__dbt_tmp' -%}
@@ -13,9 +13,7 @@
     -- noop
   {%- else -%}
     {% statement capture_result %}
-      create view "{{ schema }}"."{{ identifier }}__dbt_tmp" as (
-        {{ sql }}
-      );
+      {{ create_view_as(tmp_identifier, sql) }}
     {% endstatement %}
   {%- endif %}
 

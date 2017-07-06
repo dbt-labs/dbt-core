@@ -1,3 +1,5 @@
+import voluptuous
+
 from dbt.utils import get_materialization, compiler_error
 from dbt.adapters.factory import get_adapter
 from dbt.compat import basestring
@@ -8,53 +10,6 @@ import dbt.schema
 import dbt.tracking
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
-
-
-def get_sort_qualifier(model, profile):
-    model_config = model.get('config', {})
-
-    if 'sort' not in model['config']:
-        return ''
-
-    if get_materialization(model) not in ('table', 'incremental'):
-        return ''
-
-    sort_keys = model_config.get('sort')
-    sort_type = model_config.get('sort_type', 'compound')
-
-    if not isinstance(sort_type, basestring):
-        compiler_error(
-            model,
-            "The provided sort_type '{}' is not valid!".format(sort_type)
-        )
-
-    sort_type = sort_type.strip().lower()
-
-    adapter = get_adapter(profile)
-    return adapter.sort_qualifier(sort_type, sort_keys)
-
-
-def get_dist_qualifier(model, profile):
-    model_config = model.get('config', {})
-
-    if 'dist' not in model_config:
-        return ''
-
-    if get_materialization(model) not in ('table', 'incremental'):
-        return ''
-
-    dist_key = model_config.get('dist')
-
-    if not isinstance(dist_key, basestring):
-        compiler_error(
-            model,
-            "The provided distkey '{}' is not valid!".format(dist_key)
-        )
-
-    dist_key = dist_key.strip().lower()
-
-    adapter = get_adapter(profile)
-    return adapter.dist_qualifier(dist_key)
 
 
 def get_hooks(model, context, hook_key):
@@ -77,16 +32,19 @@ class DatabaseWrapper(object):
         self.adapter = adapter
         self.profile = profile
 
-        context_functions = self.adapter.context_functions
-
         # Fun with metaprogramming
         # Most adapter functions take `profile` as the first argument, and
         # `model_name` as the last. This automatically injects those arguments.
         # In model code, these functions can be called without those two args.
-        for context_function in context_functions:
+        for context_function in self.adapter.context_functions:
             setattr(self,
                     context_function,
                     self.wrap_with_profile_and_model_name(context_function))
+
+        for raw_function in self.adapter.raw_functions:
+            setattr(self,
+                    raw_function,
+                    getattr(self.adapter, raw_function))
 
     def wrap_with_profile_and_model_name(self, fn):
         def wrapped(*args, **kwargs):
@@ -96,8 +54,8 @@ class DatabaseWrapper(object):
 
         return wrapped
 
-    def get_status(self, cursor):
-        return self.adapter.get_status(cursor)
+    def type(self):
+        return self.adapter.type()
 
     def commit(self):
         return self.adapter.commit_if_has_connection(
@@ -140,6 +98,28 @@ def _add_tracking(context):
     return context
 
 
+class AttrDict(dict):
+    def __init__(self, *args, **kwargs):
+        super(AttrDict, self).__init__(*args, **kwargs)
+        self.__dict__ = self
+
+
+def _add_validation(context):
+    validation_utils = AttrDict({
+        'any': voluptuous.Any,
+        'all': voluptuous.All,
+    })
+
+    return dbt.utils.deep_merge(
+        context,
+        {'validation': validation_utils})
+
+
+def log(msg):
+    logger.debug(msg)
+    return ''
+
+
 def generate(model, project, flat_graph, provider=None):
     """
     Not meant to be called directly. Call with either:
@@ -161,41 +141,39 @@ def generate(model, project, flat_graph, provider=None):
     context = {'env': target}
     schema = profile.get('schema', 'public')
 
-    # these are empty strings if configs aren't provided
-    dist_qualifier = get_dist_qualifier(model, profile)
-    sort_qualifier = get_sort_qualifier(model, profile)
-
     pre_hooks = get_hooks(model, context, 'pre-hook')
     post_hooks = get_hooks(model, context, 'post-hook')
 
     db_wrapper = DatabaseWrapper(model, adapter, profile)
 
     context = dbt.utils.deep_merge(context, {
+        "adapter": db_wrapper,
+        "column": dbt.schema.Column,
+        "config": provider.Config(model),
+        "execute": True,
+        "flags": dbt.flags,
+        "graph": flat_graph,
+        "log": log,
         "model": model,
+        "post_hooks": post_hooks,
+        "pre_hooks": pre_hooks,
+        "ref": provider.ref(model, project, profile, schema, flat_graph),
+        "schema": schema,
+        "sql": model.get('injected_sql'),
+        "sql_now": adapter.date_function(),
+        "target": target,
         "this": dbt.utils.This(
             schema,
             dbt.utils.model_immediate_name(model, dbt.flags.NON_DESTRUCTIVE),
             model.get('name')
         ),
-        "ref": provider.ref(model, project, profile, schema, flat_graph),
         "var": dbt.utils.Var(model, context=context),
-        "config": provider.config(model),
-        "schema": schema,
-        "dist": dist_qualifier,
-        "sort": sort_qualifier,
-        "pre_hooks": pre_hooks,
-        "post_hooks": post_hooks,
-        "sql": model.get('injected_sql'),
-        "flags": dbt.flags,
-        "adapter": db_wrapper,
-        "execute": True,
-        "log": logger.debug,
-        "sql_now": adapter.date_function(),
-        "target": target,
-        "column": dbt.schema.Column
     })
 
     context = _add_tracking(context)
     context = _add_macros(context, model, flat_graph)
+    context = _add_validation(context)
+
+    context['context'] = context
 
     return context

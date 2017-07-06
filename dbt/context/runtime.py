@@ -55,11 +55,37 @@ def ref(model, project, profile, schema, flat_graph):
     return do_ref
 
 
-def config(model):
-    def do_config(*args, **kwargs):
+class Config:
+    def __init__(self, model):
+        self.model = model
+
+    def __call__(*args, **kwargs):
         return ''
 
-    return do_config
+    def set(self, name, value):
+        return self.__call__({name: value})
+
+    def _validate(self, validator, value):
+        validator(value)
+
+    def require(self, name, validator=None):
+        if name not in self.model['config']:
+            dbt.exceptions.missing_config(self.model, name)
+
+        to_return = self.model['config'][name]
+
+        if validator is not None:
+            self._validate(validator, to_return)
+
+        return to_return
+
+    def get(self, name, validator=None, default=None):
+        to_return = self.model['config'].get(name, default)
+
+        if validator is not None and default is not None:
+            self._validate(validator, to_return)
+
+        return to_return
 
 
 def generate(model, project, flat_graph):

@@ -18,6 +18,7 @@ def macro_generator(template, name):
                 context, False, {})
             macro = module.__dict__[name]
             module.__dict__ = context
+
             return macro(*args, **kwargs)
 
         return call
@@ -29,16 +30,22 @@ class MaterializationExtension(jinja2.ext.Extension):
 
     def parse(self, parser):
         node = jinja2.nodes.Macro(lineno=next(parser.stream).lineno)
-        materialization_name = parser.parse_assign_target(name_only=True).name
+        materialization_name = \
+            parser.parse_assign_target(name_only=True).name
 
-        adapter_name = 'base'
+        adapter_name = 'default'
+        node.args = []
+        node.defaults = []
 
-        if parser.stream.skip_if('comma'):
+        while parser.stream.skip_if('comma'):
             target = parser.parse_assign_target(name_only=True)
-            parser.stream.expect('assign')
-            value = parser.parse_expression()
 
-            if target.name == 'adapter':
+            if target.name == 'default':
+                pass
+
+            elif target.name == 'adapter':
+                parser.stream.expect('assign')
+                value = parser.parse_expression()
                 adapter_name = value.value
 
             else:
@@ -48,72 +55,67 @@ class MaterializationExtension(jinja2.ext.Extension):
         node.name = dbt.utils.get_materialization_macro_name(
             materialization_name, adapter_name)
 
-        node.args = []
-        node.defaults = []
         node.body = parser.parse_statements(('name:endmaterialization',),
                                             drop_needle=True)
 
         return node
 
 
-def create_statement_extension(node):
+class SQLStatementExtension(jinja2.ext.Extension):
+    tags = set(['statement'])
 
-    class SQLStatementExtension(jinja2.ext.Extension):
-        tags = set(['statement'])
+    def _execute_body(self, capture_query_result,
+                      statement_result_callback,
+                      execute, adapter, context, model, caller):
+        # we have to re-render the body to handle cases where jinja
+        # is passed in as an argument, i.e. where an incremental
+        # `sql_where` includes {{this}}
+        body = dbt.clients.jinja.get_rendered(
+            caller(),
+            context,
+            model)
 
-        def _execute_body(self, capture_query_result,
-                          statement_result_callback,
-                          execute, adapter, context, model, caller):
-            # we have to re-render the body to handle cases where jinja
-            # is passed in as an argument, i.e. where an incremental
-            # `sql_where` includes {{this}}
-            body = dbt.clients.jinja.get_rendered(
-                caller(),
-                context,
-                model)
+        if execute:
+            connection, cursor = adapter.add_query(body)
 
-            if execute:
-                connection, cursor = adapter.add_query(body)
+            if capture_query_result and statement_result_callback:
+                status = adapter.get_status(cursor)
 
-                if capture_query_result and statement_result_callback:
-                    status = adapter.get_status(cursor)
+                statement_result_callback(status)
 
-                    statement_result_callback(status)
+        return body
 
-            return body
+    def parse(self, parser):
+        lineno = next(parser.stream).lineno
 
-        def parse(self, parser):
-            lineno = next(parser.stream).lineno
+        capture_result = False
 
-            capture_result = False
+        token = parser.stream.next_if('name')
 
-            token = parser.stream.next_if('name')
+        if token is not None:
+            if token.value == 'capture_result':
+                capture_result = True
+            else:
+                # todo exception
+                pass
 
-            if token is not None:
-                if token.value == 'capture_result':
-                    capture_result = True
-                else:
-                    # todo exception
-                    pass
+        body = parser.parse_statements(
+            ['name:endstatement'],
+            drop_needle=True)
 
-            body = parser.parse_statements(
-                ['name:endstatement'],
-                drop_needle=True)
+        callblock = jinja2.nodes.CallBlock(
+            self.call_method(
+                '_execute_body',
+                [jinja2.nodes.Const(capture_result),
+                 jinja2.nodes.Name('statement_result_callback', 'load'),
+                 jinja2.nodes.Name('execute', 'load'),
+                 jinja2.nodes.Name('adapter', 'load'),
+                 jinja2.nodes.ContextReference(),
+                 jinja2.nodes.Name('model', 'load')]),
+            [], [], body).set_lineno(lineno)
 
-            callblock = jinja2.nodes.CallBlock(
-                self.call_method(
-                    '_execute_body',
-                    [jinja2.nodes.Const(capture_result),
-                     jinja2.nodes.Name('statement_result_callback', 'load'),
-                     jinja2.nodes.Name('execute', 'load'),
-                     jinja2.nodes.Name('adapter', 'load'),
-                     jinja2.nodes.ContextReference(),
-                     jinja2.nodes.Name('model', 'load')]),
-                [], [], body).set_lineno(lineno)
+        return callblock
 
-            return callblock
-
-    return SQLStatementExtension
 
 
 def create_macro_validation_extension(node):
@@ -196,7 +198,7 @@ def get_template(string, ctx, node=None, capture_macros=False,
             args['extensions'].append(create_macro_validation_extension(node))
 
         args['extensions'].append(MaterializationExtension)
-        args['extensions'].append(create_statement_extension(node))
+        args['extensions'].append(SQLStatementExtension)
 
         env = jinja2.sandbox.SandboxedEnvironment(**args)
 

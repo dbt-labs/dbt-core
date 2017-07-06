@@ -36,6 +36,10 @@ class DefaultAdapter(object):
         "create_table",
     ]
 
+    raw_functions = [
+        "get_status"
+    ]
+
     ###
     # ADAPTER-SPECIFIC FUNCTIONS -- each of these must be overridden in
     #                               every adapter
@@ -56,16 +60,6 @@ class DefaultAdapter(object):
     def date_function(cls):
         raise dbt.exceptions.NotImplementedException(
             '`date_function` is not implemented for this adapter!')
-
-    @classmethod
-    def dist_qualifier(cls):
-        raise dbt.exceptions.NotImplementedException(
-            '`dist_qualifier` is not implemented for this adapter!')
-
-    @classmethod
-    def sort_qualifier(cls):
-        raise dbt.exceptions.NotImplementedException(
-            '`sort_qualifier` is not implemented for this adapter!')
 
     @classmethod
     def get_status(cls, cursor):

@@ -1,11 +1,4 @@
-{% macro dbt__simple_create_table(schema, identifier, dist, sort, sql) -%}
-    create table "{{ schema }}"."{{ identifier }}"
-      {{ dist }} {{ sort }} as (
-        {{ sql }}
-    );
-{%- endmacro %}
-
-{% materialization table, adapter='base' %}
+{% materialization table, default %}
   {%- set identifier = model['name'] -%}
   {%- set tmp_identifier = identifier + '__dbt_tmp' -%}
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
@@ -27,22 +20,20 @@
   {% statement capture_result -%}
     {%- if non_destructive_mode -%}
       {%- if adapter.already_exists(schema, identifier) -%}
-        create temporary table {{ tmp_identifier }} {{ dist }} {{ sort }} as (
-          {{ sql }}
-        );
+        {{ create_table_as(True, tmp_identifier, sql) }}
 
         {% set dest_columns = adapter.get_columns_in_table(schema, identifier) %}
         {% set dest_cols_csv = dest_columns | map(attribute='quoted') | join(', ') %}
 
         insert into {{ schema }}.{{ identifier }} ({{ dest_cols_csv }}) (
           select {{ dest_cols_csv }}
-          from "{{ identifier }}__dbt_tmp"
+          from "{{ tmp_identifier }}"
         );
       {%- else -%}
-        {{ dbt__simple_create_table(schema, identifier, dist, sort, sql) }}
+        {{ create_table_as(False, identifier, sql) }}
       {%- endif -%}
     {%- else -%}
-      {{ dbt__simple_create_table(schema, tmp_identifier, dist, sort, sql) }}
+      {{ create_table_as(False, tmp_identifier, sql) }}
     {%- endif -%}
   {%- endstatement %}
 

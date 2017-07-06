@@ -70,7 +70,7 @@
 
 {% endmacro %}
 
-{% materialization archive, adapter='base' %}
+{% materialization archive, default %}
   {%- set config = model['config'] -%}
   {%- set source_schema = config.get('source_schema') -%}
   {%- set source_table = config.get('source_table') -%}

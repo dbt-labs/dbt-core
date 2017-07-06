@@ -1,6 +1,6 @@
 {% macro dbt__incremental_delete(schema, model) -%}
 
-  {%- set unique_key = model['config'].get('unique_key') -%}
+  {%- set unique_key = config.require('unique_key') -%}
   {%- set identifier = model['name'] -%}
 
   delete
@@ -12,13 +12,12 @@
 
 {%- endmacro %}
 
-{% materialization incremental, adapter='base'-%}
+{% materialization incremental, default -%}
+  {%- set sql_where = config.require('sql_where') -%}
+  {%- set unique_key = config.get('unique_key') -%}
 
   {%- set identifier = model['name'] -%}
   {%- set tmp_identifier = model['name'] + '__dbt_incremental_tmp' -%}
-
-  {%- set sql_where = model['config'].get('sql_where', 'null') -%}
-  {%- set unique_key = model['config'].get('unique_key', 'null') -%}
 
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
   {%- set full_refresh_mode = (flags.FULL_REFRESH == True) -%}
@@ -44,9 +43,7 @@
   -- build model
   {% if force_create or not adapter.already_exists(schema, identifier) -%}
     {%- statement capture_result -%}
-      create table "{{ schema }}"."{{ identifier }}" {{ dist }} {{ sort }} as (
-        {{ sql }}
-      );
+      {{ create_table_as(False, identifier, sql) }}
     {%- endstatement -%}
   {%- else -%}
     {%- statement -%}
@@ -68,7 +65,7 @@
        {% set dest_columns = adapter.get_columns_in_table(schema, identifier) %}
        {% set dest_cols_csv = dest_columns | map(attribute='quoted') | join(', ') %}
 
-       {% if model.get('config', {}).get('unique_key') is not none -%}
+       {% if unique_key is not none -%}
 
          {{ dbt__incremental_delete(schema, model) }}
 

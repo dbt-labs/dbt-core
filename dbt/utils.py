@@ -164,7 +164,7 @@ def find_by_name(flat_graph, target_name, target_package, subgraph,
 
 def get_materialization_macro_name(materialization_name, adapter_type=None):
     if adapter_type is None:
-        adapter_type = 'base'
+        adapter_type = 'default'
 
     return 'dbt__{}__{}'.format(materialization_name, adapter_type)
 
@@ -178,9 +178,9 @@ def get_materialization_macro(flat_graph, materialization_name,
         macro_name,
         None)
 
-    if adapter_type != 'base' and macro is None:
+    if adapter_type not in ('default', None) and macro is None:
         macro_name = get_materialization_macro_name(materialization_name,
-                                                    adapter_type='base')
+                                                    adapter_type='default')
         macro = find_macro_by_name(
             flat_graph,
             macro_name,

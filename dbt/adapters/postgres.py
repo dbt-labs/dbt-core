@@ -40,14 +40,6 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         return 'datenow()'
 
     @classmethod
-    def dist_qualifier(cls, dist):
-        return ''
-
-    @classmethod
-    def sort_qualifier(cls, sort_type, sort):
-        return ''
-
-    @classmethod
     def get_status(cls, cursor):
         return cursor.statusmessage
 
