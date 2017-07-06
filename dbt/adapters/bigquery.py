@@ -285,9 +285,9 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def warning_on_hooks(cls, hook_type):
-        dbt.ui.printer.print_timestamped_line("{} is not supported in "
-                "bigquery and will be ignored".format(hook_type),
-                dbt.ui.printer.COLOR_FG_YELLOW)
+        msg = "{} is not supported in bigquery and will be ignored"
+        dbt.ui.printer.print_timestamped_line(msg.format(hook_type),
+                                              dbt.ui.printer.COLOR_FG_YELLOW)
 
     @classmethod
     def add_query(cls, profile, sql, model_name=None, auto_begin=True):
