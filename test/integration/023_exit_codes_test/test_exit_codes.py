@@ -167,9 +167,12 @@ class TestExitCodesDepsFail(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test_deps(self):
-        _, success = self.run_dbt_and_check(['deps'])
-        # TODO : https://github.com/fishtown-analytics/dbt/issues/463
-        # self.assertFalse(success)
+        # this should fail
+        try:
+            _, success = self.run_dbt_and_check(['deps'])
+            self.assertTrue(False)
+        except RuntimeError as e:
+            pass
 
 class TestExitCodesSeed(DBTIntegrationTest):
     @property
