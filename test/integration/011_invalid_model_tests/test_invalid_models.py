@@ -3,6 +3,7 @@ from test.integration.base import DBTIntegrationTest
 
 from dbt.exceptions import ValidationException
 
+
 class TestInvalidDisabledModels(DBTIntegrationTest):
 
     def setUp(self):
@@ -27,6 +28,7 @@ class TestInvalidDisabledModels(DBTIntegrationTest):
             self.assertTrue(False)
         except RuntimeError as e:
             self.assertTrue("enabled" in str(e))
+
 
 class TestInvalidModelReference(DBTIntegrationTest):
 

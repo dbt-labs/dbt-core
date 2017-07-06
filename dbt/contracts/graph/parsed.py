@@ -1,4 +1,4 @@
-from voluptuous import Schema, Required, All, Any, Length, Optional
+from voluptuous import Schema, Required, All, Any, Length, ALLOW_EXTRA
 
 import dbt.exceptions
 
@@ -13,23 +13,13 @@ from dbt.contracts.graph.unparsed import unparsed_node_contract, \
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
-config_contract = {
+config_contract = Schema({
     Required('enabled'): bool,
-    Required('materialized'): Any('table', 'view', 'ephemeral', 'incremental'),
+    Required('materialized'): basestring,
     Required('post-hook'): list,
     Required('pre-hook'): list,
     Required('vars'): dict,
-
-    # incremental optional fields
-    Optional('sql_where'): basestring,
-    Optional('unique_key'): basestring,
-
-    # adapter optional fields
-    Optional('sort'): Any(basestring, list),
-    Optional('dist'): basestring,
-
-    Optional('sort_type'): Any('compound', 'interleaved'),
-}
+}, extra=ALLOW_EXTRA)
 
 parsed_node_contract = unparsed_node_contract.extend({
     # identifiers
@@ -45,7 +35,7 @@ parsed_node_contract = unparsed_node_contract.extend({
     },
 
     Required('empty'): bool,
-    Required('config'): dict,
+    Required('config'): config_contract,
     Required('tags'): All(set),
 })
 

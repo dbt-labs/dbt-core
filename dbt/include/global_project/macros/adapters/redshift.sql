@@ -38,4 +38,13 @@
   as (
     {{ sql }}
   );
-{% endmacro %}
+{%- endmacro %}
+
+
+{% macro redshift__create_archive_table(schema, identifier, columns) -%}
+  create table if not exists "{{ schema }}"."{{ identifier }}" (
+    {{ column_list_for_create_table(columns) }}
+  )
+  {{ dist('dbt_updated_at') }}
+  {{ sort('compound', ['scd_id']) }};
+{%- endmacro %}

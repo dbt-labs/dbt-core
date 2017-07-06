@@ -86,11 +86,9 @@
       column('dbt_updated_at', 'timestamp', None)
   ] -%}
 
-  {{ adapter.create_table(schema=target_schema,
-                          table=target_table,
-                          columns=dest_columns,
-                          sort='dbt_updated_at',
-                          dist='scd_id') }}
+  {% statement %}
+    {{ create_archive_table(target_schema, target_table, dest_columns) }}
+  {% endstatement %}
 
   {% set missing_columns = adapter.get_missing_columns(source_schema, source_table, target_schema, target_table) %}
   {% set dest_columns = adapter.get_columns_in_table(target_schema, target_table) + missing_columns %}

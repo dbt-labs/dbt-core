@@ -33,7 +33,6 @@ class DefaultAdapter(object):
         "truncate",
         "add_query",
         "expand_target_column_types",
-        "create_table",
     ]
 
     raw_functions = [
@@ -231,27 +230,6 @@ class DefaultAdapter(object):
     def get_drop_schema_sql(cls, schema):
         return ('drop schema if exists "{schema} cascade"'
                 .format(schema=schema))
-
-    @classmethod
-    def get_create_table_sql(cls, schema, table, columns, sort, dist):
-        fields = ['"{field}" {data_type}'.format(
-            field=column.name, data_type=column.data_type
-        ) for column in columns]
-        fields_csv = ",\n  ".join(fields)
-        dist = cls.dist_qualifier(dist)
-        sort = cls.sort_qualifier('compound', sort)
-        sql = """
-        create table if not exists "{schema}"."{table}" (
-        {fields}
-        )
-        {dist} {sort}
-        """.format(
-            schema=schema,
-            table=table,
-            fields=fields_csv,
-            sort=sort,
-            dist=dist).strip()
-        return sql
 
     ###
     # ODBC FUNCTIONS -- these should not need to change for every adapter,
@@ -566,13 +544,6 @@ class DefaultAdapter(object):
     def drop_schema(cls, profile, schema, model_name=None):
         logger.debug('Dropping schema "%s".', schema)
         sql = cls.get_drop_schema_sql(schema)
-        return cls.add_query(profile, sql, model_name)
-
-    @classmethod
-    def create_table(cls, profile, schema, table, columns, sort, dist,
-                     model_name=None):
-        logger.debug('Creating table "%s"."%s".', schema, table)
-        sql = cls.get_create_table_sql(schema, table, columns, sort, dist)
         return cls.add_query(profile, sql, model_name)
 
     @classmethod

@@ -30,3 +30,14 @@
     {{ sql }}
   );
 {% endmacro %}
+
+
+{% macro create_archive_table(schema, identifier, columns) -%}
+  {{ adapter_macro('create_archive_table', schema, identifier, columns) }}
+{%- endmacro %}
+
+{% macro default__create_archive_table(schema, identifier, columns) -%}
+  create table if not exists "{{ schema }}"."{{ identifier }}" (
+    {{ column_list_for_create_table(columns) }}
+  );
+{% endmacro %}
