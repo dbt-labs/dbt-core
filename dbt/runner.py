@@ -85,7 +85,9 @@ class RunManager(object):
             result = runner.safe_run(flat_graph, existing)
             runner.after_execute(result)
 
-        if result.errored:
+        if result.errored and runner.raise_on_first_error():
+            raise dbt.exceptions.RuntimeException(result.error)
+        elif result.errored:
             logger.info(result.error)
 
         return result
