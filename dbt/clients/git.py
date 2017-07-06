@@ -1,5 +1,6 @@
 from dbt.clients.system import run_cmd
 from dbt.logger import GLOBAL_LOGGER as logger
+import dbt.exceptions
 
 
 def clone(repo, cwd, dirname=None):
@@ -17,7 +18,7 @@ def list_tags(cwd):
     return tags
 
 
-def checkout(cwd, branch=None):
+def checkout(cwd, repo, branch=None):
     if branch is None:
         branch = 'master'
 
@@ -34,7 +35,13 @@ def checkout(cwd, branch=None):
     else:
         spec = 'origin/{}'.format(branch)
 
-    run_cmd(cwd, ['git', 'reset', '--hard', spec])
+    out, err = run_cmd(cwd, ['git', 'reset', '--hard', spec])
+    stderr = err.decode('utf-8').strip()
+
+    if stderr.startswith('fatal:'):
+        dbt.exceptions.bad_package_spec(repo, branch, stderr)
+    else:
+        return out, err
 
 
 def get_current_sha(cwd):

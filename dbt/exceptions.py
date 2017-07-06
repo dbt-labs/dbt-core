@@ -124,3 +124,9 @@ def missing_sql_where(model):
         model,
         "Model '{}' is materialized as 'incremental', but does not have a "
         "sql_where defined in its config.".format(model.get('unique_id')))
+
+
+def bad_package_spec(repo, spec, error_message):
+    raise RuntimeException(
+        "Error checking out spec='{}' for repo {}\n{}".format(
+            spec, repo, error_message))

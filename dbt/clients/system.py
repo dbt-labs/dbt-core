@@ -109,4 +109,9 @@ def run_cmd(cwd, cmd):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE)
 
-    return proc.communicate()
+    out, err = proc.communicate()
+
+    logger.debug('STDOUT: "{}"'.format(out))
+    logger.debug('STDERR: "{}"'.format(err))
+
+    return out, err
