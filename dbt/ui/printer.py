@@ -1,6 +1,7 @@
 
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.utils import get_materialization, NodeType
+from dbt.utils import get_materialization
+from dbt.node_types import NodeType
 import dbt.ui.colors
 
 import time

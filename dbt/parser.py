@@ -14,7 +14,8 @@ import dbt.contracts.graph.parsed
 import dbt.contracts.graph.unparsed
 import dbt.contracts.project
 
-from dbt.utils import NodeType, Var
+from dbt.utils import Var
+from dbt.node_types import NodeType, RunHookType
 from dbt.compat import basestring, to_string
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -380,7 +381,7 @@ def load_and_parse_run_hook_type(root_project, all_projects, hook_type):
 
 def load_and_parse_run_hooks(root_project, all_projects):
     hook_nodes = {}
-    for hook_type in dbt.utils.RunHookType.Both:
+    for hook_type in RunHookType.Both:
         project_hooks = load_and_parse_run_hook_type(root_project,
                                                      all_projects,
                                                      hook_type)

@@ -6,8 +6,7 @@
     );
 {%- endmacro %}
 
-{% macro dbt__create_table(schema, model, dist, sort, sql, flags, adapter) -%}
-
+{% materialization table %}
   {%- set identifier = model['name'] -%}
   {%- set non_destructive_mode = flags.NON_DESTRUCTIVE == True -%}
 
@@ -34,5 +33,4 @@
     {% set tmp_identifier = identifier + '__dbt_tmp' %}
     {{ dbt__simple_create_table(schema, tmp_identifier, dist, sort, sql) }}
   {%- endif %}
-
-{%- endmacro %}
+{% endmaterialization %}

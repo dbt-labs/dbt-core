@@ -1,7 +1,8 @@
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.exceptions import NotImplementedException
-from dbt.utils import RunHookType, NodeType, get_nodes_by_tags
+from dbt.utils import get_nodes_by_tags
+from dbt.node_types import NodeType, RunHookType
 
 import dbt.utils
 import dbt.tracking

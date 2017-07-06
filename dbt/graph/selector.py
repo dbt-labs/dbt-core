@@ -2,7 +2,8 @@
 import networkx as nx
 from dbt.logger import GLOBAL_LOGGER as logger
 
-from dbt.utils import NodeType, is_enabled, get_materialization
+from dbt.utils import is_enabled, get_materialization
+from dbt.node_types import NodeType
 
 SELECTOR_PARENTS = '+'
 SELECTOR_CHILDREN = '+'

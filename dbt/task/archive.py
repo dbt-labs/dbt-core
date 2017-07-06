@@ -1,7 +1,7 @@
 from dbt.runner import RunManager
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.node_runners import ArchiveRunner
-from dbt.utils import NodeType
+from dbt.node_types import NodeType
 
 from dbt.task.base_task import RunnableTask
 

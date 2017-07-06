@@ -2,7 +2,7 @@ from __future__ import print_function
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.runner import RunManager
-from dbt.utils import NodeType
+from dbt.node_types import NodeType
 from dbt.node_runners import ModelRunner
 
 import dbt.ui.printer
