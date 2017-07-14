@@ -75,7 +75,7 @@ def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirec
             _raise_git_cloning_error(repo, revision, exc)
 
     if remove_git_dir:
-        rmdir(os.path.join(dirname, '.git'))
+        rmdir(os.path.join(dirname, ".git"))
 
     return result
 
