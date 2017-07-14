@@ -12,6 +12,7 @@
   {%- endif -%}
 
   -- build model
-  {{ statement_result_callback(adapter.execute_model(model)) }}
+  {% set result = adapter.execute_model(model) %}
+  {{ store_result('main', status=result) }}
 
 {%- endmaterialization %}

@@ -115,7 +115,7 @@
                                         to_schema=target_schema,
                                         to_table=target_table) }}
 
-  {% statement capture_result -%}
+  {% statement main -%}
     update "{{ target_schema }}"."{{ identifier }}" set "valid_to" = "tmp"."valid_to"
     from "{{ tmp_identifier }}" as "tmp"
     where "tmp"."scd_id" = "{{ target_schema }}"."{{ identifier }}"."scd_id"

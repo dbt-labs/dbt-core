@@ -42,7 +42,7 @@
 
   -- build model
   {% if force_create or not adapter.already_exists(schema, identifier) -%}
-    {%- statement capture_result -%}
+    {%- statement main -%}
       {{ create_table_as(False, identifier, sql) }}
     {%- endstatement -%}
   {%- else -%}
@@ -61,7 +61,7 @@
                                            to_schema=schema,
                                            to_table=identifier) }}
 
-     {%- statement capture_result -%}
+     {%- statement main -%}
        {% set dest_columns = adapter.get_columns_in_table(schema, identifier) %}
        {% set dest_cols_csv = dest_columns | map(attribute='quoted') | join(', ') %}
 

@@ -1,6 +1,6 @@
+import json
 import voluptuous
 
-from dbt.utils import get_materialization, compiler_error
 from dbt.adapters.factory import get_adapter
 from dbt.compat import basestring
 
@@ -8,6 +8,7 @@ import dbt.clients.jinja
 import dbt.flags
 import dbt.schema
 import dbt.tracking
+import dbt.utils
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -98,14 +99,8 @@ def _add_tracking(context):
     return context
 
 
-class AttrDict(dict):
-    def __init__(self, *args, **kwargs):
-        super(AttrDict, self).__init__(*args, **kwargs)
-        self.__dict__ = self
-
-
 def _add_validation(context):
-    validation_utils = AttrDict({
+    validation_utils = dbt.utils.AttrDict({
         'any': voluptuous.Any,
         'all': voluptuous.All,
     })
@@ -115,9 +110,86 @@ def _add_validation(context):
         {'validation': validation_utils})
 
 
+def _store_result(sql_results):
+    def call(name, status, data):
+        logger.info('storing {},{} as {}'.format(status, data, name))
+        sql_results[name] = dbt.utils.AttrDict({
+            'status': status,
+            'data': data
+        })
+
+    return call
+
+
+def _load_result(sql_results):
+    def call(name):
+        return sql_results.get(name)
+
+    return call
+
+
+def _add_sql_handlers(context):
+    sql_results = {}
+    return dbt.utils.deep_merge(context, {
+        '_sql_results': sql_results,
+        'store_result': _store_result(sql_results),
+        'load_result': _load_result(sql_results),
+    })
+
+
 def log(msg):
     logger.debug(msg)
     return ''
+
+
+class Var(object):
+    UndefinedVarError = "Required var '{}' not found in config:\nVars "\
+                        "supplied to {} = {}"
+    NoneVarError = "Supplied var '{}' is undefined in config:\nVars supplied "\
+                   "to {} = {}"
+
+    def __init__(self, model, context):
+        self.model = model
+        self.context = context
+
+        if isinstance(model, dict) and model.get('unique_id'):
+            self.local_vars = model.get('config', {}).get('vars')
+            self.model_name = model.get('name')
+        else:
+            # still used for wrapping
+            self.model_name = model.nice_name
+            self.local_vars = model.config.get('vars', {})
+
+    def pretty_dict(self, data):
+        return json.dumps(data, sort_keys=True, indent=4)
+
+    def __call__(self, var_name, default=None):
+        pretty_vars = self.pretty_dict(self.local_vars)
+        if var_name not in self.local_vars and default is None:
+            dbt.utils.compiler_error(
+                self.model,
+                self.UndefinedVarError.format(
+                    var_name, self.model_name, pretty_vars
+                )
+            )
+        elif var_name in self.local_vars:
+            raw = self.local_vars[var_name]
+            if raw is None:
+                model_name = dbt.utils.get_model_name_or_none(self.model)
+                dbt.utils.compiler_error(
+                    self.model,
+                    self.NoneVarError.format(
+                        var_name, model_name, pretty_vars
+                    )
+                )
+
+            # if bool/int/float/etc are passed in, don't compile anything
+            if not isinstance(raw, basestring):
+                return raw
+
+            return dbt.clients.jinja.get_rendered(raw, self.context)
+        else:
+            return default
 
 
 def generate(model, project, flat_graph, provider=None):
@@ -150,7 +222,7 @@ def generate(model, project, flat_graph, provider=None):
         "adapter": db_wrapper,
         "column": dbt.schema.Column,
         "config": provider.Config(model),
-        "execute": True,
+        "execute": provider.execute,
         "flags": dbt.flags,
         "graph": flat_graph,
         "log": log,
@@ -167,12 +239,13 @@ def generate(model, project, flat_graph, provider=None):
             dbt.utils.model_immediate_name(model, dbt.flags.NON_DESTRUCTIVE),
             model.get('name')
         ),
-        "var": dbt.utils.Var(model, context=context),
+        "var": Var(model, context=context),
     })
 
     context = _add_tracking(context)
     context = _add_macros(context, model, flat_graph)
     context = _add_validation(context)
+    context = _add_sql_handlers(context)
 
     context['context'] = context
 

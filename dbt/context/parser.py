@@ -4,6 +4,9 @@ import dbt.exceptions
 import dbt.context.common
 
 
+execute = False
+
+
 def ref(model, project, profile, schema, flat_graph):
 
     def ref(*args):

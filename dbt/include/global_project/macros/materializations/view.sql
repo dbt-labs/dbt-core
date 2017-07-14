@@ -12,7 +12,7 @@
   {% if non_destructive_mode and existing_type == 'view' -%}
     -- noop
   {%- else -%}
-    {% statement capture_result %}
+    {% statement main %}
       {{ create_view_as(tmp_identifier, sql) }}
     {% endstatement %}
   {%- endif %}

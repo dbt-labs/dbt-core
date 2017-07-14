@@ -17,7 +17,7 @@
   {{ run_hooks(pre_hooks) }}
 
   -- build model
-  {% statement capture_result -%}
+  {% statement main -%}
     {%- if non_destructive_mode -%}
       {%- if adapter.already_exists(schema, identifier) -%}
         {{ create_table_as(True, tmp_identifier, sql) }}

@@ -333,19 +333,11 @@ class ModelRunner(CompileRunner):
                 model,
                 self.adapter.type())
 
-        # use a mutable type to store the result so it can be mutated
-        # via lexical scoping below.
-        # see also: https://www.farside.org.uk/201307/understanding_python_scope  # noqa
-        statement_result = [None]
-
-        def _statement_result_callback(result):
-            statement_result[0] = result
-
-        context['statement_result_callback'] = _statement_result_callback
-
         materialization_macro.get('generator')(context)()
 
-        return RunModelResult(model, status=statement_result[0])
+        result = context['load_result']('main')
+
+        return RunModelResult(model, status=result.status)
 
 
 class TestRunner(CompileRunner):

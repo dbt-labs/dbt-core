@@ -9,6 +9,9 @@ import dbt.context.common
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
+execute = True
+
+
 def ref(model, project, profile, schema, flat_graph):
     current_project = project.get('name')
 

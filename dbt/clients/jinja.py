@@ -1,12 +1,13 @@
-import dbt.compat
-import dbt.exceptions
-
 import jinja2
 import jinja2.sandbox
 import jinja2.nodes
 import jinja2.ext
 
+import dbt.compat
+import dbt.exceptions
+
 from dbt.node_types import NodeType
+from dbt.utils import AttrDict
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -64,8 +65,7 @@ class MaterializationExtension(jinja2.ext.Extension):
 class SQLStatementExtension(jinja2.ext.Extension):
     tags = set(['statement'])
 
-    def _execute_body(self, capture_query_result,
-                      statement_result_callback,
+    def _execute_body(self, store_result_as, store_result,
                       execute, adapter, context, model, caller):
         # we have to re-render the body to handle cases where jinja
         # is passed in as an argument, i.e. where an incremental
@@ -78,26 +78,33 @@ class SQLStatementExtension(jinja2.ext.Extension):
         if execute:
             connection, cursor = adapter.add_query(body)
 
-            if capture_query_result and statement_result_callback:
+            if store_result and store_result_as:
                 status = adapter.get_status(cursor)
+                data = []
 
-                statement_result_callback(status)
+                if cursor.description is not None:
+                    column_names = [col[0] for col in cursor.description]
+                    raw_results = cursor.fetchall()
+                    data = [dict(zip(column_names, row))
+                            for row in raw_results]
+
+                setattr(self.environment, store_result_as,
+                        AttrDict({'status': status,
+                                  'data': data}))
+
+                store_result(store_result_as, status=status, data=data)
 
         return body
 
     def parse(self, parser):
         lineno = next(parser.stream).lineno
 
-        capture_result = False
-
         token = parser.stream.next_if('name')
 
-        if token is not None:
-            if token.value == 'capture_result':
-                capture_result = True
-            else:
-                # todo exception
-                pass
+        store_result_as = None
+
+        if token:
+            store_result_as = token.value
 
         body = parser.parse_statements(
             ['name:endstatement'],
@@ -106,8 +113,8 @@ class SQLStatementExtension(jinja2.ext.Extension):
         callblock = jinja2.nodes.CallBlock(
             self.call_method(
                 '_execute_body',
-                [jinja2.nodes.Const(capture_result),
-                 jinja2.nodes.Name('statement_result_callback', 'load'),
+                [jinja2.nodes.Const(store_result_as),
+                 jinja2.nodes.Name('store_result', 'load'),
                  jinja2.nodes.Name('execute', 'load'),
                  jinja2.nodes.Name('adapter', 'load'),
                  jinja2.nodes.ContextReference(),
@@ -115,7 +122,6 @@ class SQLStatementExtension(jinja2.ext.Extension):
             [], [], body).set_lineno(lineno)
 
         return callblock
-
 
 
 def create_macro_validation_extension(node):

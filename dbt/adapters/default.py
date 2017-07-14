@@ -1,8 +1,7 @@
 import copy
+import itertools
 import multiprocessing
-import re
 import time
-import yaml
 
 from contextlib import contextmanager
 
