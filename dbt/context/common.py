@@ -1,4 +1,5 @@
 import json
+import os
 import voluptuous
 
 from dbt.adapters.factory import get_adapter
@@ -108,6 +109,16 @@ def _add_validation(context):
     return dbt.utils.deep_merge(
         context,
         {'validation': validation_utils})
+
+
+def _env_var(var, default=None):
+    if var in os.environ:
+        return os.environ[var]
+    elif default is not None:
+        return default
+    else:
+        msg = "Env var required but not provided: '{}'".format(var)
+        dbt.clients.jinja.undefined_error(msg)
 
 
 def _store_result(sql_results):
@@ -222,6 +233,7 @@ def generate(model, project, flat_graph, provider=None):
         "adapter": db_wrapper,
         "column": dbt.schema.Column,
         "config": provider.Config(model),
+        "env_var": _env_var,
         "execute": provider.execute,
         "flags": dbt.flags,
         "graph": flat_graph,
