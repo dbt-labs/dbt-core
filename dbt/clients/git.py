@@ -1,15 +1,22 @@
-from dbt.clients.system import run_cmd
+import os.path
+
+from dbt.clients.system import run_cmd, rmdir
 from dbt.logger import GLOBAL_LOGGER as logger
 import dbt.exceptions
 
 
-def clone(repo, cwd, dirname=None):
+def clone(repo, cwd, dirname=None, remove_git_dir=False):
     clone_cmd = ['git', 'clone', '--depth', '1', repo]
 
     if dirname is not None:
         clone_cmd.append(dirname)
 
-    return run_cmd(cwd, clone_cmd)
+    result = run_cmd(cwd, clone_cmd)
+
+    if remove_git_dir:
+        rmdir(os.path.join(dirname, '.git'))
+
+    return result
 
 
 def list_tags(cwd):

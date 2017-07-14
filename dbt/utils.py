@@ -149,7 +149,13 @@ def find_macro_by_name(flat_graph, target_name, target_package):
 def find_by_name(flat_graph, target_name, target_package, subgraph,
                  nodetype):
     for name, model in flat_graph.get(subgraph).items():
-        resource_type, package_name, node_name = name.split('.')
+        node_parts = name.split('.')
+        if len(node_parts) != 3:
+            node_type = model.get('resource_type', 'node')
+            msg = "{} names cannot contain '.' characters".format(node_type)
+            dbt.exceptions.raise_compiler_error(model, msg)
+
+        resource_type, package_name, node_name = node_parts
 
         if (resource_type == nodetype and
             ((target_name == node_name) and

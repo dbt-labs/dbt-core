@@ -2,8 +2,9 @@ import errno
 import fnmatch
 import os
 import os.path
-import sys
+import shutil
 import subprocess
+import sys
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -87,6 +88,14 @@ def make_file(path, contents='', overwrite=False):
         return True
 
     return False
+
+
+def rmdir(path):
+    """
+    Make a file at `path` assuming that the directory it resides in already
+    exists. The file is saved with contents `contents`
+    """
+    return shutil.rmtree(path)
 
 
 def open_dir_cmd():
