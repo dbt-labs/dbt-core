@@ -10,11 +10,12 @@ import jinja2.runtime
 import dbt.clients.jinja
 import dbt.clients.yaml_helper
 
+import dbt.context.parser
+
 import dbt.contracts.graph.parsed
 import dbt.contracts.graph.unparsed
 import dbt.contracts.project
 
-from dbt.utils import Var
 from dbt.node_types import NodeType, RunHookType
 from dbt.compat import basestring, to_string
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -24,45 +25,8 @@ def get_path(resource_type, package_name, resource_name):
     return "{}.{}.{}".format(resource_type, package_name, resource_name)
 
 
-def get_model_path(package_name, resource_name):
-    return get_path(NodeType.Model, package_name, resource_name)
-
-
 def get_test_path(package_name, resource_name):
     return get_path(NodeType.Test, package_name, resource_name)
-
-
-def get_macro_path(package_name, resource_name):
-    return get_path('macros', package_name, resource_name)
-
-
-def __config(model, cfg):
-
-    def config(*args, **kwargs):
-        if len(args) == 1 and len(kwargs) == 0:
-            opts = args[0]
-        elif len(args) == 0 and len(kwargs) > 0:
-            opts = kwargs
-        else:
-            dbt.utils.compiler_error(
-                model.get('name'),
-                "Invalid model config given inline in {}".format(model))
-
-        cfg.update_in_model_config(opts)
-
-    return config
-
-
-def __ref(model):
-
-    def ref(*args):
-        if len(args) == 1 or len(args) == 2:
-            model['refs'].append(args)
-
-        else:
-            dbt.exceptions.ref_invalid_args(model, args)
-
-    return ref
 
 
 def resolve_ref(flat_graph, target_model_name, target_model_package,
@@ -197,7 +161,8 @@ def parse_macro_file(macro_file_path,
                 'root_path': root_path,
                 'path': macro_file_path,
                 'raw_sql': macro_file_contents,
-                'parsed_macro': item
+                'generator': dbt.clients.jinja.macro_generator(
+                    template, key),
             })
             to_return[unique_id] = new_node
 
@@ -232,6 +197,7 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     node['empty'] = (len(node.get('raw_sql').strip()) == 0)
     node['fqn'] = fqn
     node['tags'] = tags
+    node['config_reference'] = config
 
     # Set this temporarily. Not the full config yet (as config() hasn't been
     # called from jinja yet). But the Var() call below needs info about project
@@ -240,13 +206,7 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     config_dict.update(config.config)
     node['config'] = config_dict
 
-    context = {}
-    context['ref'] = __ref(node)
-    context['config'] = __config(node, config)
-    context['target'] = property(lambda x: '', lambda x: x)
-    context['this'] = ''
-
-    context['var'] = Var(node, context)
+    context = dbt.context.parser.generate(node, package_project_config, {})
 
     dbt.clients.jinja.get_rendered(
         node.get('raw_sql'), context, node,
@@ -256,6 +216,8 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     config_dict = node.get('config', {})
     config_dict.update(config.config)
     node['config'] = config_dict
+
+    del node['config_reference']
 
     return node
 
@@ -621,7 +583,7 @@ def parse_archives_from_project(project):
                 'path': os.path.join('archive', *fake_path),
                 'package_name': project.get('name'),
                 'config': config,
-                'raw_sql': '-- noop'
+                'raw_sql': '{{config(materialized="archive")}} -- noop'
             })
 
     return archives

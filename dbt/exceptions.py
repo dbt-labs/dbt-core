@@ -33,8 +33,12 @@ class FailedToConnectException(Exception):
     pass
 
 
+from dbt.utils import get_materialization  # noqa
+
+
 def raise_compiler_error(node, msg):
     name = '<Unknown>'
+    node_type = 'model'
 
     if node is None:
         name = '<None>'
@@ -50,8 +54,8 @@ def raise_compiler_error(node, msg):
         name = node.nice_name
 
     raise CompilationException(
-        "! Compilation error while compiling model {}:\n! {}\n"
-        .format(name, msg))
+        "! Compilation error while compiling {} {}:\n! {}\n"
+        .format(node_type, name, msg))
 
 
 def ref_invalid_args(model, args):
@@ -119,6 +123,20 @@ def macro_not_found(model, target_macro_id):
         .format(model.get('unique_id'), target_macro_id))
 
 
+def missing_materialization(model, adapter_type):
+    materialization = get_materialization(model)
+
+    valid_types = "'default'"
+
+    if adapter_type != 'default':
+        valid_types = "'default' and '{}'".format(adapter_type)
+
+    raise_compiler_error(
+        model,
+        "No materialization '{}' was found for adapter {}! (searched types {})"
+        .format(materialization, adapter_type, valid_types))
+
+
 def missing_sql_where(model):
     raise_compiler_error(
         model,
@@ -130,3 +148,18 @@ def bad_package_spec(repo, spec, error_message):
     raise RuntimeException(
         "Error checking out spec='{}' for repo {}\n{}".format(
             spec, repo, error_message))
+
+
+def missing_config(model, name):
+    raise_compiler_error(
+        model,
+        "Model '{}' does not define a required config parameter '{}'."
+        .format(model.get('unique_id'), name))
+
+
+def invalid_materialization_argument(name, argument):
+    msg = "Received an unknown argument '{}'.".format(argument)
+
+    raise CompilationException(
+        "! Compilation error while compiling materialization {}:\n! {}\n"
+        .format(name, msg))

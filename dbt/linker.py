@@ -16,16 +16,12 @@ class Linker(object):
         if data is None:
             data = {}
         self.graph = nx.DiGraph(**data)
-        self.cte_map = defaultdict(set)
 
     def edges(self):
         return self.graph.edges()
 
     def nodes(self):
         return self.graph.nodes()
-
-    def run_type(self):
-        return self.graph.graph['dbt_run_type']
 
     def get_node(self, node):
         return self.graph.node[node]
@@ -40,25 +36,6 @@ class Linker(object):
             return " --> ".join([".".join(node) for node in cycles])
 
         return None
-
-    def as_topological_ordering(self, limit_to=None):
-        try:
-            return nx.topological_sort(self.graph, nbunch=limit_to)
-        except KeyError as e:
-            raise RuntimeError(
-                "Couldn't find model '{}' -- does it exist or is it "
-                "disabled?".format(e)
-            )
-
-        except nx.exception.NetworkXUnfeasible as e:
-            cycle = " --> ".join(
-                [".".join(node) for node in
-                 nx.algorithms.find_cycle(self.graph)[0]]
-            )
-            raise RuntimeError(
-                "Can't compile -- cycle exists in model graph\n"
-                "{}".format(cycle)
-            )
 
     def as_dependency_list(self, limit_to=None, ephemeral_only=False):
         """returns a list of list of nodes, eg. [[0,1], [2], [4,5,6]]. Each
@@ -98,9 +75,6 @@ class Linker(object):
             dependency_list.append(depth_nodes[depth])
 
         return dependency_list
-
-    def inject_cte(self, source, cte_model):
-        self.cte_map[source].add(cte_model)
 
     def get_dependent_nodes(self, node):
         return nx.descendants(self.graph, node)

@@ -133,16 +133,6 @@ class SnowflakeAdapter(PostgresAdapter):
         connection, cursor = cls.add_query(profile, sql, model_name)
 
     @classmethod
-    def execute_model(cls, profile, model):
-        connection = cls.get_connection(profile, model.get('name'))
-
-        if flags.STRICT_MODE:
-            validate_connection(connection)
-
-        return super(PostgresAdapter, cls).execute_model(
-            profile, model)
-
-    @classmethod
     def add_begin_query(cls, profile, name):
         return cls.add_query(profile, 'BEGIN', name, auto_begin=False,
                              select_schema=False)

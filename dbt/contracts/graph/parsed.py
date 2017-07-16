@@ -1,6 +1,4 @@
-from voluptuous import Schema, Required, All, Any, Length, Optional
-
-import jinja2.runtime
+from voluptuous import Schema, Required, All, Any, Length, ALLOW_EXTRA
 
 import dbt.exceptions
 
@@ -15,23 +13,13 @@ from dbt.contracts.graph.unparsed import unparsed_node_contract, \
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
-config_contract = {
+config_contract = Schema({
     Required('enabled'): bool,
-    Required('materialized'): Any('table', 'view', 'ephemeral', 'incremental'),
+    Required('materialized'): basestring,
     Required('post-hook'): list,
     Required('pre-hook'): list,
     Required('vars'): dict,
-
-    # incremental optional fields
-    Optional('sql_where'): basestring,
-    Optional('unique_key'): basestring,
-
-    # adapter optional fields
-    Optional('sort'): Any(basestring, list),
-    Optional('dist'): basestring,
-
-    Optional('sort_type'): Any('compound', 'interleaved'),
-}
+}, extra=ALLOW_EXTRA)
 
 parsed_node_contract = unparsed_node_contract.extend({
     # identifiers
@@ -67,8 +55,7 @@ parsed_macro_contract = unparsed_base_contract.extend({
     },
 
     # contents
-    Required('parsed_macro'): jinja2.runtime.Macro
-
+    Required('generator'): callable
 })
 
 parsed_macros_contract = Schema({

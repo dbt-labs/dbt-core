@@ -4,11 +4,13 @@ from dbt.exceptions import NotImplementedException
 from dbt.utils import get_nodes_by_tags
 from dbt.node_types import NodeType, RunHookType
 
+import dbt.context.runtime
 import dbt.utils
 import dbt.tracking
 import dbt.ui.printer
 import dbt.flags
 import dbt.schema
+import dbt.templates
 
 import dbt.clients.jinja
 import time
@@ -93,7 +95,7 @@ class BaseRunner(object):
 
             # for ephemeral nodes, we only want to compile, not run
             if not self.is_ephemeral():
-                result = self.run(compiled_node, existing)
+                result = self.run(compiled_node, existing, flat_graph)
 
         except catchable_errors as e:
             result.error = str(e).strip()
@@ -137,11 +139,11 @@ class BaseRunner(object):
     def before_execute(self):
         raise NotImplementedException()
 
-    def execute(self, compiled_node, existing):
+    def execute(self, compiled_node, existing, flat_graph):
         raise NotImplementedException()
 
-    def run(self, compiled_node, existing):
-        return self.execute(compiled_node, existing)
+    def run(self, compiled_node, existing, flat_graph):
+        return self.execute(compiled_node, existing, flat_graph)
 
     def after_execute(self, result):
         raise NotImplementedException()
@@ -180,7 +182,7 @@ class CompileRunner(BaseRunner):
     def after_execute(self, result):
         pass
 
-    def execute(self, compiled_node, existing):
+    def execute(self, compiled_node, existing, flat_graph):
         return RunModelResult(compiled_node)
 
     def compile(self, flat_graph):
@@ -318,11 +320,24 @@ class ModelRunner(CompileRunner):
         track_model_run(self.node_index, self.num_nodes, result)
         self.print_result_line(result)
 
-    def execute(self, model, existing):
-        materializer = self.adapter.get_materializer(model, existing)
-        status = materializer.materialize(self.profile)
+    def execute(self, model, existing, flat_graph):
+        context = dbt.context.runtime.generate(model, self.project, flat_graph)
 
-        return RunModelResult(model, status=status)
+        materialization_macro = dbt.utils.get_materialization_macro(
+            flat_graph,
+            dbt.utils.get_materialization(model),
+            self.adapter.type())
+
+        if materialization_macro is None:
+            dbt.exceptions.missing_materialization(
+                model,
+                self.adapter.type())
+
+        materialization_macro.get('generator')(context)()
+
+        result = context['load_result']('main')
+
+        return RunModelResult(model, status=result.status)
 
 
 class TestRunner(CompileRunner):
@@ -365,7 +380,7 @@ class TestRunner(CompileRunner):
     def before_execute(self):
         self.print_start_line()
 
-    def execute(self, test, existing):
+    def execute(self, test, existing, flat_graph):
         status = self.execute_test(test)
         return RunModelResult(test, status=status)
 
@@ -373,7 +388,7 @@ class TestRunner(CompileRunner):
         self.print_result_line(result)
 
 
-class ArchiveRunner(CompileRunner):
+class ArchiveRunner(ModelRunner):
 
     def raise_on_first_error(self):
         return False
@@ -386,78 +401,3 @@ class ArchiveRunner(CompileRunner):
     def print_result_line(self, result):
         dbt.ui.printer.print_archive_result_line(result, self.node_index,
                                                  self.num_nodes)
-
-    def print_start_line(self):
-        description = self.describe_node()
-        dbt.ui.printer.print_start_line(description, self.node_index,
-                                        self.num_nodes)
-
-    def before_execute(self):
-        self.print_start_line()
-
-    def after_execute(self, result):
-        self.print_result_line(result)
-
-    def execute(self, archive, existing):
-        status = self.execute_archive()
-        return RunModelResult(archive, status=status)
-
-    def execute_archive(self):
-        node = self.node
-        node_cfg = node.get('config', {})
-
-        context = self.node_context(self.adapter, self.project, self.node)
-
-        source_schema = node_cfg.get('source_schema')
-        source_table = node_cfg.get('source_table')
-
-        source_columns = self.adapter.get_columns_in_table(self.profile,
-                                                           source_schema,
-                                                           source_table)
-
-        if len(source_columns) == 0:
-            raise RuntimeError(
-                'Source table "{}"."{}" does not '
-                'exist'.format(source_schema, source_table))
-
-        dest_columns = source_columns + [
-            dbt.schema.Column("valid_from", "timestamp", None),
-            dbt.schema.Column("valid_to", "timestamp", None),
-            dbt.schema.Column("scd_id", "text", None),
-            dbt.schema.Column("dbt_updated_at", "timestamp", None)
-        ]
-
-        self.adapter.create_table(
-            self.profile,
-            schema=node_cfg.get('target_schema'),
-            table=node_cfg.get('target_table'),
-            columns=dest_columns,
-            sort='dbt_updated_at',
-            dist='scd_id',
-            model_name=node.get('name'))
-
-        # TODO move this to inject_runtime_config, generate archive SQL
-        # in wrap step. can't do this right now because we actually need
-        # to inspect status of the schema at runtime and archive requires
-        # a lot of information about the schema to generate queries.
-        template_ctx = context.copy()
-        template_ctx.update(node_cfg)
-
-        template = dbt.templates.SCDArchiveTemplate
-        select = dbt.clients.jinja.get_rendered(template, template_ctx)
-
-        insert_stmt = dbt.templates.ArchiveInsertTemplate().wrap(
-            schema=node_cfg.get('target_schema'),
-            table=node_cfg.get('target_table'),
-            query=select,
-            unique_key=node_cfg.get('unique_key'))
-
-        node['wrapped_sql'] = dbt.clients.jinja.get_rendered(insert_stmt,
-                                                             template_ctx)
-
-        result = self.adapter.execute_model(
-            profile=self.profile,
-            model=node)
-
-        self.adapter.commit_if_has_connection(self.profile, node.get('name'))
-        return result

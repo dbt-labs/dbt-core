@@ -78,11 +78,12 @@ class RunManager(object):
             return runner.on_skip()
 
         # no before/after printing for ephemeral mdoels
-        if runner.is_ephemeral():
-            result = runner.safe_run(flat_graph, existing)
-        else:
+        if not runner.is_ephemeral():
             runner.before_execute()
-            result = runner.safe_run(flat_graph, existing)
+
+        result = runner.safe_run(flat_graph, existing)
+
+        if not runner.is_ephemeral():
             runner.after_execute(result)
 
         if result.errored and runner.raise_on_first_error():
