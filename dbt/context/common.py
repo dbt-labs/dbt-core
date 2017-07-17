@@ -123,7 +123,6 @@ def _env_var(var, default=None):
 
 def _store_result(sql_results):
     def call(name, status, data):
-        logger.info('storing {},{} as {}'.format(status, data, name))
         sql_results[name] = dbt.utils.AttrDict({
             'status': status,
             'data': data
