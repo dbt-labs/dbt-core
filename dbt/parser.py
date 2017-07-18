@@ -419,10 +419,17 @@ def parse_schema_tests(tests, root_project, projects):
                     continue
 
                 for config in configs:
+                    package_name = test.get('package_name')
+                    split = test_type.split('.')
+
+                    if len(split) > 1:
+                        test_type = split[1]
+                        package_name = split[0]
+
                     to_add = parse_schema_test(
                         test, model_name, config, test_type,
                         root_project,
-                        projects.get(test.get('package_name')),
+                        projects.get(package_name),
                         all_projects=projects)
 
                     if to_add is not None:

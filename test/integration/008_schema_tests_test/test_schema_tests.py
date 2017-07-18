@@ -91,6 +91,9 @@ class TestCustomSchemaTests(DBTIntegrationTest):
     def project_config(self):
         return {
             "macro-paths": ["test/integration/008_schema_tests_test/macros"],
+            "repositories": [
+                'https://github.com/fishtown-analytics/dbt-utils'
+            ]
         }
 
     @property
@@ -106,6 +109,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test_schema_tests(self):
+        self.run_dbt(["deps"])
         self.run_dbt()
         test_results = self.run_schema_validations()
 

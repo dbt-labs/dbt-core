@@ -1,20 +1,22 @@
-
-
 table_copy:
-    constraints:
+  constraints:
 
-        # fail
-        not_null:
-            - email
+    # fail
+    not_null:
+      - email
 
-        # pass
-        unique:
-            - id
+    # pass
+    unique:
+      - id
 
-        # fails
-        every_value_is_blue:
-            - color
+    # fails
+    every_value_is_blue:
+      - color
 
-        # passes
-        rejected_values:
-            - { field: 'color', values: ['orange', 'purple'] }
+    # passes
+    rejected_values:
+      - { field: 'color', values: ['orange', 'purple'] }
+
+    # passes
+    dbt_utils.equality:
+      - "{{ ref('seed') }}"
