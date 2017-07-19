@@ -234,7 +234,11 @@ def generate(model, project, flat_graph, provider=None):
         "config": provider.Config(model),
         "env_var": _env_var,
         "execute": provider.execute,
-        "flags": dbt.flags,
+        "flags": dbt.utils.AttrDict({
+            'STRICT_MODE': dbt.flags.STRICT_MODE,
+            'NON_DESTRUCTIVE': dbt.flags.NON_DESTRUCTIVE,
+            'FULL_REFRESH': dbt.flags.FULL_REFRESH,
+        }),
         "graph": flat_graph,
         "log": log,
         "model": model,
@@ -254,9 +258,9 @@ def generate(model, project, flat_graph, provider=None):
     })
 
     context = _add_tracking(context)
-    context = _add_macros(context, model, flat_graph)
     context = _add_validation(context)
     context = _add_sql_handlers(context)
+    context = _add_macros(context, model, flat_graph)
 
     context['context'] = context
 

@@ -2,6 +2,8 @@ import os
 import hashlib
 import itertools
 
+import dbt.exceptions
+
 from dbt.include import GLOBAL_DBT_MODULES_PATH
 from dbt.compat import basestring
 from dbt.logger import GLOBAL_LOGGER as logger
