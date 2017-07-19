@@ -200,6 +200,7 @@ def get_template(string, ctx, node=None, capture_macros=False):
 
     except (jinja2.exceptions.TemplateSyntaxError,
             jinja2.exceptions.UndefinedError) as e:
+        e.translated = False
         dbt.exceptions.raise_compiler_error(node, str(e))
 
 
@@ -209,6 +210,7 @@ def render_template(template, ctx, node=None):
 
     except (jinja2.exceptions.TemplateSyntaxError,
             jinja2.exceptions.UndefinedError) as e:
+        e.translated = False
         dbt.exceptions.raise_compiler_error(node, str(e))
 
 
