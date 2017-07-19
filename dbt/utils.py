@@ -215,17 +215,21 @@ def deep_merge(*args):
 def _deep_merge(destination, source):
     if isinstance(source, dict):
         for key, value in source.items():
-            if isinstance(value, dict):
-                node = destination.setdefault(key, {})
-                deep_merge(node, value)
-            elif isinstance(value, tuple) or isinstance(value, list):
-                if key in destination:
-                    destination[key] = list(value) + list(destination[key])
-                else:
-                    destination[key] = value
-            else:
-                destination[key] = value
+            deep_merge_item(destination, key, value)
         return destination
+
+
+def deep_merge_item(destination, key, value):
+    if isinstance(value, dict):
+        node = destination.setdefault(key, {})
+        destination[key] = deep_merge(node, value)
+    elif isinstance(value, tuple) or isinstance(value, list):
+        if key in destination:
+            destination[key] = list(value) + list(destination[key])
+        else:
+            destination[key] = value
+    else:
+        destination[key] = value
 
 
 class AttrDict(dict):

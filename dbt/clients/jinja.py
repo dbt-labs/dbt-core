@@ -65,9 +65,7 @@ class MaterializationExtension(jinja2.ext.Extension):
 class SQLStatementExtension(jinja2.ext.Extension):
     tags = set(['statement'])
 
-    def _execute_body(self, store_result_as, store_result,
-                      execute, adapter, context, model, caller):
-
+    def try_render(self, model, caller, context):
         try:
             pre_rendered_body = caller()
         except BaseException as e:
@@ -76,29 +74,38 @@ class SQLStatementExtension(jinja2.ext.Extension):
         # we have to re-render the body to handle cases where jinja
         # is passed in as an argument, i.e. where an incremental
         # `sql_where` includes {{this}}
-        body = dbt.clients.jinja.get_rendered(
+        return dbt.clients.jinja.get_rendered(
             pre_rendered_body,
             context,
             model)
 
-        if execute:
-            connection, cursor = adapter.add_query(body)
+    def capture_result(self, store_result_as, store_result, adapter, cursor):
+        if store_result and store_result_as:
+            status = adapter.get_status(cursor)
+            data = []
 
-            if store_result and store_result_as:
-                status = adapter.get_status(cursor)
-                data = []
+            if cursor.description is not None:
+                column_names = [col[0] for col in cursor.description]
+                raw_results = cursor.fetchall()
+                data = [dict(zip(column_names, row))
+                        for row in raw_results]
 
-                if cursor.description is not None:
-                    column_names = [col[0] for col in cursor.description]
-                    raw_results = cursor.fetchall()
-                    data = [dict(zip(column_names, row))
-                            for row in raw_results]
+            setattr(self.environment, store_result_as,
+                    AttrDict({'status': status,
+                              'data': data}))
 
-                setattr(self.environment, store_result_as,
-                        AttrDict({'status': status,
-                                  'data': data}))
+            store_result(store_result_as, status=status, data=data)
 
-                store_result(store_result_as, status=status, data=data)
+    def _execute_body(self, store_result_as, store_result,
+                      execute, adapter, context, model, caller):
+        body = self.try_render(model, caller, context)
+
+        if not execute:
+            return body
+
+        connection, cursor = adapter.add_query(body)
+
+        self.capture_result(store_result_as, store_result, adapter, cursor)
 
         return body
 

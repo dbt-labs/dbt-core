@@ -173,7 +173,7 @@ class Var(object):
     def pretty_dict(self, data):
         return json.dumps(data, sort_keys=True, indent=4)
 
-    def validate_var_defined(self, var_name, default):
+    def assert_var_defined(self, var_name, default):
         if var_name not in self.local_vars and default is None:
             pretty_vars = self.pretty_dict(self.local_vars)
             dbt.utils.compiler_error(
@@ -183,7 +183,7 @@ class Var(object):
                 )
             )
 
-    def validate_var_not_none(self, var_name):
+    def assert_var_not_none(self, var_name):
         raw = self.local_vars[var_name]
         if raw is None:
             pretty_vars = self.pretty_dict(self.local_vars)
