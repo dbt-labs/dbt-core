@@ -145,7 +145,7 @@ def parse_macro_file(macro_file_path,
     }
 
     template = dbt.clients.jinja.get_template(
-        macro_file_contents, context, node=base_node, validate_macro=True)
+        macro_file_contents, context, node=base_node)
 
     for key, item in template.module.__dict__.items():
         if type(item) == jinja2.runtime.Macro:

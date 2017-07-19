@@ -173,33 +173,43 @@ class Var(object):
     def pretty_dict(self, data):
         return json.dumps(data, sort_keys=True, indent=4)
 
-    def __call__(self, var_name, default=None):
-        pretty_vars = self.pretty_dict(self.local_vars)
+    def validate_var_defined(self, var_name, default):
         if var_name not in self.local_vars and default is None:
+            pretty_vars = self.pretty_dict(self.local_vars)
             dbt.utils.compiler_error(
                 self.model,
                 self.UndefinedVarError.format(
                     var_name, self.model_name, pretty_vars
                 )
             )
-        elif var_name in self.local_vars:
-            raw = self.local_vars[var_name]
-            if raw is None:
-                model_name = dbt.utils.get_model_name_or_none(self.model)
-                dbt.utils.compiler_error(
-                    self.model,
-                    self.NoneVarError.format(
-                        var_name, model_name, pretty_vars
-                    )
+
+    def validate_var_not_none(self, var_name):
+        raw = self.local_vars[var_name]
+        if raw is None:
+            pretty_vars = self.pretty_dict(self.local_vars)
+            model_name = dbt.utils.get_model_name_or_none(self.model)
+            dbt.utils.compiler_error(
+                self.model,
+                self.NoneVarError.format(
+                    var_name, model_name, pretty_vars
                 )
+            )
 
-            # if bool/int/float/etc are passed in, don't compile anything
-            if not isinstance(raw, basestring):
-                return raw
+    def __call__(self, var_name, default=None):
+        self.assert_var_defined(var_name, default)
 
-            return dbt.clients.jinja.get_rendered(raw, self.context)
-        else:
+        if var_name not in self.local_vars:
             return default
+
+        self.assert_var_not_none(var_name)
+
+        raw = self.local_vars[var_name]
+
+        # if bool/int/float/etc are passed in, don't compile anything
+        if not isinstance(raw, basestring):
+            return raw
+
+        return dbt.clients.jinja.get_rendered(raw, self.context)
 
 
 def generate(model, project, flat_graph, provider=None):
