@@ -16,3 +16,15 @@
   {{ store_result('main', status=result) }}
 
 {%- endmaterialization %}
+
+{% materialization table, adapter='bigquery' -%}
+
+  {{ exceptions.materialization_not_available(model, 'bigquery') }}
+
+{% endmaterialization %}
+
+{% materialization incremental, adapter='bigquery' -%}
+
+  {{ exceptions.materialization_not_available(model, 'bigquery') }}
+
+{% endmaterialization %}

@@ -123,6 +123,15 @@ def macro_not_found(model, target_macro_id):
         .format(model.get('unique_id'), target_macro_id))
 
 
+def materialization_not_available(model, adapter_type):
+    materialization = get_materialization(model)
+
+    raise_compiler_error(
+        model,
+        "Materialization '{}' is not available for {}!"
+        .format(materialization, adapter_type))
+
+
 def missing_materialization(model, adapter_type):
     materialization = get_materialization(model)
 
