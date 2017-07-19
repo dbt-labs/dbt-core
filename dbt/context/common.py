@@ -87,12 +87,12 @@ def _add_macros(context, model, flat_graph):
 
 def _add_tracking(context):
     if dbt.tracking.active_user is not None:
-        context = dbt.utils.deep_merge(context, {
+        context = dbt.utils.merge(context, {
             "run_started_at": dbt.tracking.active_user.run_started_at,
             "invocation_id": dbt.tracking.active_user.invocation_id,
         })
     else:
-        context = dbt.utils.deep_merge(context, {
+        context = dbt.utils.merge(context, {
             "run_started_at": None,
             "invocation_id": None
         })
@@ -106,7 +106,7 @@ def _add_validation(context):
         'all': voluptuous.All,
     })
 
-    return dbt.utils.deep_merge(
+    return dbt.utils.merge(
         context,
         {'validation': validation_utils})
 
@@ -140,7 +140,7 @@ def _load_result(sql_results):
 
 def _add_sql_handlers(context):
     sql_results = {}
-    return dbt.utils.deep_merge(context, {
+    return dbt.utils.merge(context, {
         '_sql_results': sql_results,
         'store_result': _store_result(sql_results),
         'load_result': _load_result(sql_results),
@@ -228,7 +228,7 @@ def generate(model, project, flat_graph, provider=None):
 
     db_wrapper = DatabaseWrapper(model, adapter, profile)
 
-    context = dbt.utils.deep_merge(context, {
+    context = dbt.utils.merge(context, {
         "adapter": db_wrapper,
         "column": dbt.schema.Column,
         "config": provider.Config(model),

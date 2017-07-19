@@ -173,6 +173,25 @@ def split_path(path):
     return path.split(os.sep)
 
 
+def merge(*args):
+    if len(args) == 0:
+        return None
+
+    if len(args) == 1:
+        return args[0]
+
+    l = list(args)
+    last = l.pop(len(l)-1)
+
+    return _merge(merge(*l), last)
+
+
+def _merge(a, b):
+    to_return = a.copy()
+    to_return.update(b)
+    return to_return
+
+
 # http://stackoverflow.com/questions/20656135/python-deep-merge-dictionary-data
 def deep_merge(*args):
     """
