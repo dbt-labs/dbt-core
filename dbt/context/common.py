@@ -122,7 +122,7 @@ def _env_var(var, default=None):
 
 
 def _store_result(sql_results):
-    def call(name, status, data):
+    def call(name, status, data=[]):
         sql_results[name] = dbt.utils.AttrDict({
             'status': status,
             'data': data
