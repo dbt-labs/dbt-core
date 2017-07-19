@@ -11,30 +11,32 @@
 
 
 {% macro sort(sort_type, sort) %}
-  {{ sort_type }} sortkey(
-  {%- if sort is string -%}
-    {%- set sort = [sort] -%}
-  {%- endif -%}
-  {%- for item in sort -%}
-    "{{ item }}"
-    {%- if not loop.last -%},{%- endif -%}
-  {%- endfor -%}
+  {%- if sort_type is not none and sort is not none %}
+      {{ sort_type }} sortkey(
+      {%- if sort is string -%}
+        {%- set sort = [sort] -%}
+      {%- endif -%}
+      {%- for item in sort -%}
+        "{{ item }}"
+        {%- if not loop.last -%},{%- endif -%}
+      {%- endfor -%}
+  {%- endif %}
 {%- endmacro -%}
 
 
-{% macro redshift__create_table_as(temporary, identifier, sql, config) -%}
+{% macro redshift__create_table_as(temporary, identifier, sql) -%}
 
-  {%- set dist = config.get('dist') -%}
-  {%- set sort_type = config.get(
+  {%- set _dist = config.get('dist') -%}
+  {%- set _sort_type = config.get(
           'sort_type',
           validator=validation.any['compound', 'interleaved']) -%}
-  {%- set sort = config.get(
+  {%- set _sort = config.get(
           'sort',
           validator=validation.any[list, basestring]) -%}
 
   create {% if temporary -%}temporary{%- endif %} table "{{ schema }}"."{{ identifier }}"
-  {{ dist(dist) }}
-  {{ sort(sort_type, sort) }}
+  {{ dist(_dist) }}
+  {{ sort(_sort_type, _sort) }}
   as (
     {{ sql }}
   );
