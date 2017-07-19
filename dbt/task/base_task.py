@@ -15,5 +15,8 @@ class BaseTask(object):
 
 class RunnableTask(BaseTask):
     def interpret_results(self, results):
+        if results is None:
+            return False
+
         failures = [r for r in results if r.error or r.fail]
         return len(failures) == 0

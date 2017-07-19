@@ -46,6 +46,10 @@ def main(args=None):
         logger.info("ctrl-c")
         exit_code = ExitCodes.UnhandledError
 
+    # This can be thrown by eg. argparse
+    except SystemExit as e:
+        exit_code = e.code
+
     except BaseException as e:
         logger.info("Encountered an error:")
         logger.info(str(e))

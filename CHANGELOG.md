@@ -1,3 +1,29 @@
+## dbt 0.8.3 (July 14, 2017)
+
+### Overview
+
+- Add suppport for Google BigQuery
+- Significant exit codes
+- Load credentials from environment variables
+
+### Bugfixes
+
+- Fix errant warning for `dbt archive` commands ([#476](https://github.com/fishtown-analytics/dbt/pull/476))
+- Show error (instead of backtrace) for failed hook statements ([#478](https://github.com/fishtown-analytics/dbt/pull/478))
+- `dbt init` no longer leaves the repo in an invalid state ([#487](https://github.com/fishtown-analytics/dbt/pull/487))
+- Fix bug which ignored git tag specs for package repos ([#463](https://github.com/fishtown-analytics/dbt/issues/463))
+
+### Changes
+
+- Support BigQuery as a target ([#437](https://github.com/fishtown-analytics/dbt/issues/437)) ([#438](https://github.com/fishtown-analytics/dbt/issues/438))
+- Make dbt exit codes significant (0 = success, 1/2 = error) ([#297](https://github.com/fishtown-analytics/dbt/issues/297))
+- Add context function to pull in environment variables ([#450](https://github.com/fishtown-analytics/dbt/issues/450))
+
+### Documentation
+- Document target configuration for BigQuery [here](https://dbt.readme.io/v0.8/docs/supported-databases#section-bigquery)
+- Document dbt exit codes [here](https://dbt.readme.io/v0.8/reference#exit-codes)
+- Document environment variable usage [here](https://dbt.readme.io/v0.8/reference#env_var)
+
 ## dbt 0.8.2 (May 31, 2017)
 
 ### Overview

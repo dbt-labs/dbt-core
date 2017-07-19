@@ -67,6 +67,6 @@ def is_latest():
     return installed == latest
 
 
-__version__ = '0.8.2'
+__version__ = '0.8.3'
 installed = get_version()
 latest = get_latest_version()
