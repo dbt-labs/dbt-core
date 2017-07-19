@@ -79,16 +79,22 @@ class SQLStatementExtension(jinja2.ext.Extension):
             context,
             model)
 
+    def result_from_cursor(self, cursor):
+        data = []
+
+        if cursor.description is not None:
+            column_names = [col[0] for col in cursor.description]
+            raw_results = cursor.fetchall()
+            data = [dict(zip(column_names, row))
+                    for row in raw_results]
+
+        return data
+
     def capture_result(self, store_result_as, store_result, adapter, cursor):
         if store_result and store_result_as:
             status = adapter.get_status(cursor)
-            data = []
 
-            if cursor.description is not None:
-                column_names = [col[0] for col in cursor.description]
-                raw_results = cursor.fetchall()
-                data = [dict(zip(column_names, row))
-                        for row in raw_results]
+            data = self.result_from_cursor(cursor)
 
             setattr(self.environment, store_result_as,
                     AttrDict({'status': status,
