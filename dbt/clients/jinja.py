@@ -65,34 +65,53 @@ class MaterializationExtension(jinja2.ext.Extension):
 class SQLStatementExtension(jinja2.ext.Extension):
     tags = set(['statement'])
 
-    def _execute_body(self, store_result_as, store_result,
-                      execute, adapter, context, model, caller):
+    def try_render(self, model, caller, context):
+        try:
+            pre_rendered_body = caller()
+        except BaseException as e:
+            dbt.exceptions.raise_compiler_error(model, str(e))
+
         # we have to re-render the body to handle cases where jinja
         # is passed in as an argument, i.e. where an incremental
         # `sql_where` includes {{this}}
-        body = dbt.clients.jinja.get_rendered(
-            caller(),
+        return dbt.clients.jinja.get_rendered(
+            pre_rendered_body,
             context,
             model)
 
-        if execute:
-            connection, cursor = adapter.add_query(body)
+    def result_from_cursor(self, cursor):
+        data = []
 
-            if store_result and store_result_as:
-                status = adapter.get_status(cursor)
-                data = []
+        if cursor.description is not None:
+            column_names = [col[0] for col in cursor.description]
+            raw_results = cursor.fetchall()
+            data = [dict(zip(column_names, row))
+                    for row in raw_results]
 
-                if cursor.description is not None:
-                    column_names = [col[0] for col in cursor.description]
-                    raw_results = cursor.fetchall()
-                    data = [dict(zip(column_names, row))
-                            for row in raw_results]
+        return data
 
-                setattr(self.environment, store_result_as,
-                        AttrDict({'status': status,
-                                  'data': data}))
+    def capture_result(self, store_result_as, store_result, adapter, cursor):
+        if store_result and store_result_as:
+            status = adapter.get_status(cursor)
 
-                store_result(store_result_as, status=status, data=data)
+            data = self.result_from_cursor(cursor)
+
+            setattr(self.environment, store_result_as,
+                    AttrDict({'status': status,
+                              'data': data}))
+
+            store_result(store_result_as, status=status, data=data)
+
+    def _execute_body(self, store_result_as, store_result,
+                      execute, adapter, context, model, caller):
+        body = self.try_render(model, caller, context)
+
+        if not execute:
+            return body
+
+        connection, cursor = adapter.add_query(body)
+
+        self.capture_result(store_result_as, store_result, adapter, cursor)
 
         return body
 
@@ -122,33 +141,6 @@ class SQLStatementExtension(jinja2.ext.Extension):
             [], [], body).set_lineno(lineno)
 
         return callblock
-
-
-def create_macro_validation_extension(node):
-
-    class MacroContextCatcherExtension(jinja2.ext.Extension):
-        DisallowedFuncs = ('ref', 'var')
-
-        def onError(self, token):
-            error = "The context variable '{}' is not allowed in macros." \
-                    .format(token.value)
-            dbt.exceptions.raise_compiler_error(node, error)
-
-        def filter_stream(self, stream):
-            while not stream.eos:
-                token = next(stream)
-                held = [token]
-
-                if token.test('name') and token.value in self.DisallowedFuncs:
-                    next_token = next(stream)
-                    held.append(next_token)
-                    if next_token.test('lparen'):
-                        self.onError(token)
-
-                for token in held:
-                    yield token
-
-    return MacroContextCatcherExtension
 
 
 def create_macro_capture_env(node):
@@ -190,8 +182,7 @@ def create_macro_capture_env(node):
     return ParserMacroCapture
 
 
-def get_template(string, ctx, node=None, capture_macros=False,
-                 validate_macro=False, execute_statements=False):
+def get_template(string, ctx, node=None, capture_macros=False):
     try:
         args = {
             'extensions': []
@@ -199,9 +190,6 @@ def get_template(string, ctx, node=None, capture_macros=False,
 
         if capture_macros:
             args['undefined'] = create_macro_capture_env(node)
-
-        if validate_macro:
-            args['extensions'].append(create_macro_validation_extension(node))
 
         args['extensions'].append(MaterializationExtension)
         args['extensions'].append(SQLStatementExtension)
@@ -225,11 +213,9 @@ def render_template(template, ctx, node=None):
 
 
 def get_rendered(string, ctx, node=None,
-                 capture_macros=False,
-                 execute_statements=False):
+                 capture_macros=False):
     template = get_template(string, ctx, node,
-                            capture_macros=capture_macros,
-                            execute_statements=execute_statements)
+                            capture_macros=capture_macros)
 
     return render_template(template, ctx, node)
 

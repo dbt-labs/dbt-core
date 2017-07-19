@@ -10,7 +10,9 @@ import dbt.contracts.connection
 import dbt.clients.yaml_helper
 import dbt.clients.jinja
 import dbt.compat
-from dbt.logger import GLOBAL_LOGGER as logger
+import dbt.context.common
+
+from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 default_project_cfg = {
     'source-paths': ['models'],
@@ -142,18 +144,9 @@ class Project(object):
         ctx['name'] = self.cfg['target']
         return ctx
 
-    def get_env_var(self, var, default=None):
-        if var in os.environ:
-            return os.environ[var]
-        elif default is not None:
-            return default
-        else:
-            msg = "Env var required but not provided: '{}'".format(var)
-            dbt.clients.jinja.undefined_error(msg)
-
     def base_context(self):
         return {
-            'env_var': self.get_env_var
+            'env_var': dbt.context.common._env_var
         }
 
     def context(self):

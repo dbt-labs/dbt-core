@@ -87,12 +87,12 @@ def _add_macros(context, model, flat_graph):
 
 def _add_tracking(context):
     if dbt.tracking.active_user is not None:
-        context = dbt.utils.deep_merge(context, {
+        context = dbt.utils.merge(context, {
             "run_started_at": dbt.tracking.active_user.run_started_at,
             "invocation_id": dbt.tracking.active_user.invocation_id,
         })
     else:
-        context = dbt.utils.deep_merge(context, {
+        context = dbt.utils.merge(context, {
             "run_started_at": None,
             "invocation_id": None
         })
@@ -106,7 +106,7 @@ def _add_validation(context):
         'all': voluptuous.All,
     })
 
-    return dbt.utils.deep_merge(
+    return dbt.utils.merge(
         context,
         {'validation': validation_utils})
 
@@ -123,7 +123,6 @@ def _env_var(var, default=None):
 
 def _store_result(sql_results):
     def call(name, status, data):
-        logger.info('storing {},{} as {}'.format(status, data, name))
         sql_results[name] = dbt.utils.AttrDict({
             'status': status,
             'data': data
@@ -141,7 +140,7 @@ def _load_result(sql_results):
 
 def _add_sql_handlers(context):
     sql_results = {}
-    return dbt.utils.deep_merge(context, {
+    return dbt.utils.merge(context, {
         '_sql_results': sql_results,
         'store_result': _store_result(sql_results),
         'load_result': _load_result(sql_results),
@@ -174,33 +173,43 @@ class Var(object):
     def pretty_dict(self, data):
         return json.dumps(data, sort_keys=True, indent=4)
 
-    def __call__(self, var_name, default=None):
-        pretty_vars = self.pretty_dict(self.local_vars)
+    def assert_var_defined(self, var_name, default):
         if var_name not in self.local_vars and default is None:
+            pretty_vars = self.pretty_dict(self.local_vars)
             dbt.utils.compiler_error(
                 self.model,
                 self.UndefinedVarError.format(
                     var_name, self.model_name, pretty_vars
                 )
             )
-        elif var_name in self.local_vars:
-            raw = self.local_vars[var_name]
-            if raw is None:
-                model_name = dbt.utils.get_model_name_or_none(self.model)
-                dbt.utils.compiler_error(
-                    self.model,
-                    self.NoneVarError.format(
-                        var_name, model_name, pretty_vars
-                    )
+
+    def assert_var_not_none(self, var_name):
+        raw = self.local_vars[var_name]
+        if raw is None:
+            pretty_vars = self.pretty_dict(self.local_vars)
+            model_name = dbt.utils.get_model_name_or_none(self.model)
+            dbt.utils.compiler_error(
+                self.model,
+                self.NoneVarError.format(
+                    var_name, model_name, pretty_vars
                 )
+            )
 
-            # if bool/int/float/etc are passed in, don't compile anything
-            if not isinstance(raw, basestring):
-                return raw
+    def __call__(self, var_name, default=None):
+        self.assert_var_defined(var_name, default)
 
-            return dbt.clients.jinja.get_rendered(raw, self.context)
-        else:
+        if var_name not in self.local_vars:
             return default
+
+        self.assert_var_not_none(var_name)
+
+        raw = self.local_vars[var_name]
+
+        # if bool/int/float/etc are passed in, don't compile anything
+        if not isinstance(raw, basestring):
+            return raw
+
+        return dbt.clients.jinja.get_rendered(raw, self.context)
 
 
 def generate(model, project, flat_graph, provider=None):
@@ -229,13 +238,17 @@ def generate(model, project, flat_graph, provider=None):
 
     db_wrapper = DatabaseWrapper(model, adapter, profile)
 
-    context = dbt.utils.deep_merge(context, {
+    context = dbt.utils.merge(context, {
         "adapter": db_wrapper,
         "column": dbt.schema.Column,
         "config": provider.Config(model),
         "env_var": _env_var,
         "execute": provider.execute,
-        "flags": dbt.flags,
+        "flags": dbt.utils.AttrDict({
+            'STRICT_MODE': dbt.flags.STRICT_MODE,
+            'NON_DESTRUCTIVE': dbt.flags.NON_DESTRUCTIVE,
+            'FULL_REFRESH': dbt.flags.FULL_REFRESH,
+        }),
         "graph": flat_graph,
         "log": log,
         "model": model,
@@ -255,9 +268,9 @@ def generate(model, project, flat_graph, provider=None):
     })
 
     context = _add_tracking(context)
-    context = _add_macros(context, model, flat_graph)
     context = _add_validation(context)
     context = _add_sql_handlers(context)
+    context = _add_macros(context, model, flat_graph)
 
     context['context'] = context
 
