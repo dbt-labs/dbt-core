@@ -125,13 +125,6 @@ def create_macro_capture_env(node):
             return self
 
         def __call__(self, *args, **kwargs):
-            path = '{}.{}.{}'.format(NodeType.Macro,
-                                     self.package_name,
-                                     self.name)
-
-            if path not in self.node['depends_on']['macros']:
-                self.node['depends_on']['macros'].append(path)
-
             return True
 
     return ParserMacroCapture

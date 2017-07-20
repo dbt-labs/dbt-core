@@ -3,8 +3,8 @@
     {%- set sql = render(caller()) -%}
 
     {%- if name == 'main' -%}
-      {%- log('Writing runtime SQL for node "{}"'.format(model['unique_id'])) -%}
-      {%- write(sql) -%}
+      {{ log('Writing runtime SQL for node "{}"'.format(model['unique_id'])) }}
+      {{ write(sql) }}
     {%- endif -%}
 
     {%- set _, cursor = adapter.add_query(sql) -%}
