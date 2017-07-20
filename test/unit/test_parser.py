@@ -1116,7 +1116,7 @@ class ParserTest(unittest.TestCase):
                     'refs': [('model_one',)],
                     'depends_on': {
                         'nodes': [],
-                        'macros': ['macro.root.test_not_null']
+                        'macros': []
                     },
                     'config': self.model_config,
                     'path': get_os_path(
@@ -1135,7 +1135,7 @@ class ParserTest(unittest.TestCase):
                     'refs': [('model_one',)],
                     'depends_on': {
                         'nodes': [],
-                        'macros': ['macro.root.test_unique']
+                        'macros': []
                     },
                     'config': self.model_config,
                     'path': get_os_path('schema_test/unique_model_one_id.sql'),
@@ -1154,7 +1154,7 @@ class ParserTest(unittest.TestCase):
                     'refs': [('model_one',)],
                     'depends_on': {
                         'nodes': [],
-                        'macros': ['macro.root.test_accepted_values']
+                        'macros': []
                     },
                     'config': self.model_config,
                     'path': get_os_path(
@@ -1174,7 +1174,7 @@ class ParserTest(unittest.TestCase):
                     'refs': [('model_one',), ('model_two',)],
                     'depends_on': {
                         'nodes': [],
-                        'macros': ['macro.root.test_relationships']
+                        'macros': []
                     },
                     'config': self.model_config,
                     'path': get_os_path('schema_test/relationships_model_one_id__id__ref_model_two_.sql'), # noqa
@@ -1372,9 +1372,7 @@ another_model:
                     'refs': [],
                     'depends_on': {
                         'nodes': [],
-                        'macros': [
-                            'macro.package.simple'
-                        ]
+                        'macros': []
                     },
                     'config': self.model_config,
                     'tags': set(),
@@ -1413,9 +1411,7 @@ another_model:
                     'refs': [],
                     'depends_on': {
                         'nodes': [],
-                        'macros': [
-                            'macro.root.simple'
-                        ]
+                        'macros': []
                     },
                     'config': self.model_config,
                     'tags': set(),

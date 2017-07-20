@@ -118,7 +118,8 @@ def get_dbt_macro_name(name):
     return '{}{}'.format(MACRO_PREFIX, name)
 
 
-def get_materialization_macro_name(materialization_name, adapter_type=None, with_prefix=True):
+def get_materialization_macro_name(materialization_name, adapter_type=None,
+                                   with_prefix=True):
     if adapter_type is None:
         adapter_type = 'default'
 
