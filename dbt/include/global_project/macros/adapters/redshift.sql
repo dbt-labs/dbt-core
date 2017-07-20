@@ -11,8 +11,8 @@
 
 
 {% macro sort(sort_type, sort) %}
-  {%- if sort_type is not none and sort is not none %}
-      {{ sort_type }} sortkey(
+  {%- if sort is not none %}
+      {{ sort_type | default('compound', boolean=true) }} sortkey(
       {%- if sort is string -%}
         {%- set sort = [sort] -%}
       {%- endif -%}
@@ -20,6 +20,7 @@
         "{{ item }}"
         {%- if not loop.last -%},{%- endif -%}
       {%- endfor -%}
+      )
   {%- endif %}
 {%- endmacro -%}
 
