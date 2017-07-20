@@ -111,17 +111,31 @@ def find_by_name(flat_graph, target_name, target_package, subgraph,
     return None
 
 
-def get_materialization_macro_name(materialization_name, adapter_type=None):
+MACRO_PREFIX = 'dbt_macro__'
+
+
+def get_dbt_macro_name(name):
+    return '{}{}'.format(MACRO_PREFIX, name)
+
+
+def get_materialization_macro_name(materialization_name, adapter_type=None, with_prefix=True):
     if adapter_type is None:
         adapter_type = 'default'
 
-    return 'dbt__{}__{}'.format(materialization_name, adapter_type)
+    name = 'materialization_{}_{}'.format(materialization_name, adapter_type)
+
+    if with_prefix:
+        return get_dbt_macro_name(name)
+    else:
+        return name
 
 
 def get_materialization_macro(flat_graph, materialization_name,
                               adapter_type=None):
     macro_name = get_materialization_macro_name(materialization_name,
-                                                adapter_type)
+                                                adapter_type,
+                                                with_prefix=False)
+
     macro = find_macro_by_name(
         flat_graph,
         macro_name,
@@ -129,7 +143,8 @@ def get_materialization_macro(flat_graph, materialization_name,
 
     if adapter_type not in ('default', None) and macro is None:
         macro_name = get_materialization_macro_name(materialization_name,
-                                                    adapter_type='default')
+                                                    adapter_type='default',
+                                                    with_prefix=False)
         macro = find_macro_by_name(
             flat_graph,
             macro_name,

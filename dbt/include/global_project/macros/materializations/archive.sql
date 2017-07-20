@@ -86,36 +86,36 @@
       column('dbt_updated_at', 'timestamp', None)
   ] -%}
 
-  {% statement %}
+  {% call statement() %}
     {{ create_archive_table(target_schema, target_table, dest_columns) }}
-  {% endstatement %}
+  {% endcall %}
 
   {% set missing_columns = adapter.get_missing_columns(source_schema, source_table, target_schema, target_table) %}
   {% set dest_columns = adapter.get_columns_in_table(target_schema, target_table) + missing_columns %}
 
   {% for col in missing_columns %}
-    {% statement %}
+    {% call statement() %}
       alter table "{{ target_schema }}"."{{ target_table }}" add column "{{ col.name }}" {{ col.data_type }};
-    {% endstatement %}
+    {% endcall %}
   {% endfor %}
 
   {%- set identifier = model['name'] -%}
   {%- set tmp_identifier = model['name'] + '__dbt_archival_tmp' -%}
 
-  {% statement %}
+  {% call statement() %}
     create temporary table "{{ tmp_identifier }}" as (
       with dbt_archive_sbq as (
         {{ archive_select(source_schema, source_table, target_schema, target_table, unique_key, updated_at) }}
       )
       select * from dbt_archive_sbq
     );
-  {% endstatement %}
+  {% endcall %}
 
   {{ adapter.expand_target_column_types(temp_table=tmp_identifier,
                                         to_schema=target_schema,
                                         to_table=target_table) }}
 
-  {% statement main -%}
+  {% call statement('main') -%}
     update "{{ target_schema }}"."{{ identifier }}" set "valid_to" = "tmp"."valid_to"
     from "{{ tmp_identifier }}" as "tmp"
     where "tmp"."scd_id" = "{{ target_schema }}"."{{ identifier }}"."scd_id"
@@ -126,7 +126,7 @@
     )
     select {{ column_list(dest_columns) }} from "{{ tmp_identifier }}"
     where "change_type" = 'insert';
-  {% endstatement %}
+  {% endcall %}
 
   {{ adapter.commit() }}
 {% endmaterialization %}

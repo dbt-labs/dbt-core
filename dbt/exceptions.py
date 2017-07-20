@@ -13,6 +13,28 @@ class RuntimeException(RuntimeError, Exception):
     pass
 
 
+class MacroRuntimeException(RuntimeException):
+    def __init__(self, msg, model, macro):
+        self.stack = [macro]
+        self.model = model
+        self.msg = msg
+
+    def __str__(self):
+        to_return = self.msg
+
+        to_return += "\n    in macro {} ({})".format(
+            self.stack[0].get('name'), self.stack[0].get('path'))
+
+        for item in self.stack[1:]:
+            to_return += "\n    called by macro {} ({})".format(
+                item.get('name'), item.get('path'))
+
+        to_return += "\n    called by model {} ({})".format(
+            self.model.get('name'), self.model.get('path'))
+
+        return to_return
+
+
 class ValidationException(RuntimeException):
     pass
 

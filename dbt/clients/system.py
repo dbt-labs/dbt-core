@@ -6,6 +6,8 @@ import shutil
 import subprocess
 import sys
 
+import dbt.compat
+
 from dbt.logger import GLOBAL_LOGGER as logger
 
 
@@ -88,6 +90,13 @@ def make_file(path, contents='', overwrite=False):
         return True
 
     return False
+
+
+def write_file(path, contents=''):
+    make_directory(os.path.dirname(path))
+    dbt.compat.write_file(path, contents)
+
+    return True
 
 
 def rmdir(path):

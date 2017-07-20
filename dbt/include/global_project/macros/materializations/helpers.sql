@@ -1,8 +1,8 @@
 {% macro run_hooks(hooks) %}
   {% for hook in hooks %}
-    {% statement %}
+    {% call statement() %}
       {{ hook }};
-    {% endstatement %}
+    {% endcall %}
   {% endfor %}
 {% endmacro %}
 

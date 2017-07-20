@@ -35,7 +35,8 @@ class DefaultAdapter(object):
     ]
 
     raw_functions = [
-        "get_status"
+        "get_status",
+        "get_result_from_cursor"
     ]
 
     ###
@@ -88,6 +89,18 @@ class DefaultAdapter(object):
     ###
     # FUNCTIONS THAT SHOULD BE ABSTRACT
     ###
+    @classmethod
+    def get_result_from_cursor(cls, cursor):
+        data = []
+
+        if cursor.description is not None:
+            column_names = [col[0] for col in cursor.description]
+            raw_results = cursor.fetchall()
+            data = [dict(zip(column_names, row))
+                    for row in raw_results]
+
+        return data
+
     @classmethod
     def drop(cls, profile, relation, relation_type, model_name=None):
         if relation_type == 'view':

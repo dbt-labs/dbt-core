@@ -42,11 +42,11 @@
 
   -- build model
   {% if force_create or not adapter.already_exists(schema, identifier) -%}
-    {%- statement main -%}
+    {%- call statement('main') -%}
       {{ create_table_as(False, identifier, sql) }}
-    {%- endstatement -%}
+    {%- endcall -%}
   {%- else -%}
-    {%- statement -%}
+    {%- call statement() -%}
       create temporary table "{{ tmp_identifier }}" as (
         with dbt_incr_sbq as (
           {{ sql }}
@@ -55,13 +55,13 @@
         where ({{ sql_where }})
           or ({{ sql_where }}) is null
         );
-     {%- endstatement -%}
+     {%- endcall -%}
 
      {{ adapter.expand_target_column_types(temp_table=tmp_identifier,
                                            to_schema=schema,
                                            to_table=identifier) }}
 
-     {%- statement main -%}
+     {%- call statement('main') -%}
        {% set dest_columns = adapter.get_columns_in_table(schema, identifier) %}
        {% set dest_cols_csv = dest_columns | map(attribute='quoted') | join(', ') %}
 
@@ -76,7 +76,7 @@
          select {{ dest_cols_csv }}
          from "{{ identifier }}__dbt_incremental_tmp"
        );
-     {% endstatement %}
+     {% endcall %}
   {%- endif %}
 
   {{ run_hooks(post_hooks) }}

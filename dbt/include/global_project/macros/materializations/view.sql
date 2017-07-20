@@ -1,4 +1,4 @@
-{% materialization view, default -%}
+{%- materialization view, default -%}
 
   {%- set identifier = model['name'] -%}
   {%- set tmp_identifier = identifier + '__dbt_tmp' -%}
@@ -12,9 +12,9 @@
   {% if non_destructive_mode and existing_type == 'view' -%}
     -- noop
   {%- else -%}
-    {% statement main %}
+    {% call statement('main') -%}
       {{ create_view_as(tmp_identifier, sql) }}
-    {% endstatement %}
+    {%- endcall %}
   {%- endif %}
 
   {{ run_hooks(post_hooks) }}
@@ -32,4 +32,4 @@
 
   {{ adapter.commit() }}
 
-{%- endmaterialization %}
+{%- endmaterialization -%}

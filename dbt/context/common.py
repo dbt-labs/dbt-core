@@ -212,6 +212,19 @@ class Var(object):
         return dbt.clients.jinja.get_rendered(raw, self.context)
 
 
+def write(node, target_path, subdirectory):
+    def fn(payload):
+        dbt.writer.write_node(node, target_path, subdirectory, payload)
+    return fn
+
+
+def render(context, node):
+    def fn(string):
+        return dbt.clients.jinja.get_rendered(string, context, node)
+
+    return fn
+
+
 def generate(model, project, flat_graph, provider=None):
     """
     Not meant to be called directly. Call with either:
@@ -262,13 +275,18 @@ def generate(model, project, flat_graph, provider=None):
             model.get('name')
         ),
         "var": Var(model, context=context),
+        "write": write(model, project.get('target-path'), 'run'),
     })
 
     context = _add_tracking(context)
     context = _add_validation(context)
     context = _add_sql_handlers(context)
+
+    # we make a copy of the context for each of these ^^
+
     context = _add_macros(context, model, flat_graph)
 
+    context["render"] = render(context, model)
     context['context'] = context
 
     return context

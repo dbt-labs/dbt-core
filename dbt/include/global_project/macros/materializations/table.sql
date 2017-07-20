@@ -17,7 +17,7 @@
   {{ run_hooks(pre_hooks) }}
 
   -- build model
-  {% statement main -%}
+  {% call statement('main') -%}
     {%- if non_destructive_mode -%}
       {%- if adapter.already_exists(schema, identifier) -%}
         {{ create_table_as(True, tmp_identifier, sql) }}
@@ -35,7 +35,7 @@
     {%- else -%}
       {{ create_table_as(False, tmp_identifier, sql) }}
     {%- endif -%}
-  {%- endstatement %}
+  {%- endcall %}
 
   {{ run_hooks(post_hooks) }}
 

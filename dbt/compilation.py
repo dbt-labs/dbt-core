@@ -212,16 +212,6 @@ class Compiler(object):
         else:
             injected_node['wrapped_sql'] = None
 
-        if 'wrapped_sql' in injected_node:
-            build_path = os.path.join('build',
-                                      injected_node.get('package_name'),
-                                      injected_node.get('path'))
-
-            written_path = self.__write(build_path,
-                                        injected_node['wrapped_sql'])
-
-            injected_node['build_path'] = written_path
-
         return injected_node
 
     def write_graph_file(self, linker):

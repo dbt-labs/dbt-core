@@ -4,6 +4,7 @@ from dbt.exceptions import NotImplementedException
 from dbt.utils import get_nodes_by_tags
 from dbt.node_types import NodeType, RunHookType
 
+import dbt.clients.jinja
 import dbt.context.runtime
 import dbt.utils
 import dbt.tracking
@@ -11,8 +12,9 @@ import dbt.ui.printer
 import dbt.flags
 import dbt.schema
 import dbt.templates
+import dbt.writer
 
-import dbt.clients.jinja
+import os
 import time
 
 
@@ -194,6 +196,19 @@ class CompileRunner(BaseRunner):
         compiler = dbt.compilation.Compiler(project)
         node = compiler.compile_node(node, flat_graph)
         node = cls.inject_runtime_config(adapter, project, node)
+
+        if(node['injected_sql'] is not None and
+           not (dbt.utils.is_type(node, NodeType.Archive))):
+            logger.debug('Writing injected SQL for node "{}"'.format(
+                node['unique_id']))
+
+            written_path = dbt.writer.write_node(
+                node,
+                project.get('target-path'),
+                'compiled',
+                node['injected_sql'])
+
+            node['build_path'] = written_path
 
         return node
 
