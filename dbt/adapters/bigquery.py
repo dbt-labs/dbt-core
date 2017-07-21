@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 from contextlib import contextmanager
 
+import dbt.compat
 import dbt.exceptions
 import dbt.flags as flags
 import dbt.clients.gcloud
@@ -31,7 +32,7 @@ class BigQueryAdapter(PostgresAdapter):
         logger.debug(message.format(sql=sql))
         logger.debug(error)
         error_msg = "\n".join([error['message'] for error in error.errors])
-        raise dbt.exceptions.RuntimeException(error_msg)
+        raise dbt.exceptions.DatabaseException(error_msg)
 
     @classmethod
     @contextmanager
@@ -51,7 +52,7 @@ class BigQueryAdapter(PostgresAdapter):
         except Exception as e:
             logger.debug("Unhandled error while running:\n{}".format(sql))
             logger.debug(e)
-            raise dbt.exceptions.RuntimeException(e)
+            raise dbt.exceptions.RuntimeException(dbt.compat.to_string(e))
 
     @classmethod
     def type(cls):

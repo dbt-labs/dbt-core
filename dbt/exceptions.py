@@ -10,47 +10,81 @@ class InternalException(Exception):
 
 
 class RuntimeException(RuntimeError, Exception):
-    pass
-
-
-class JinjaEvaluationException(RuntimeException):
-    def __init__(self, msg, model, node):
+    def __init__(self, msg, node=None):
         self.stack = []
-        self.model = model
-        if node != model:
-            self.stack.append(node)
+        self.node = node
         self.msg = msg
 
-    def __str__(self, prefix="! "):
-        lines = self.msg.split("\n")
+    @property
+    def type(self):
+        return 'Runtime'
 
+    def node_to_string(self, node):
+        return "{} {} ({})".format(
+            node.get('resource_type'),
+            node.get('name'),
+            node.get('original_file_path'))
+
+    def process_stack(self):
+        lines = []
+        stack = self.stack + [self.node]
         first = True
 
-        lines.append("")
+        if len(stack) > 1:
+            lines.append("")
 
-        stack = self.stack + [self.model]
+            for item in stack:
+                msg = 'called by'
 
-        for item in stack:
-            msg = 'called by'
+                if first:
+                    msg = 'in'
+                    first = False
 
-            if first:
-                msg = 'in'
-                first = False
+                lines.append("> {} {}".format(
+                    msg,
+                    self.node_to_string(item)))
 
-            lines.append("{} {} {} ({})".format(
-                msg,
-                item.get('resource_type'),
-                item.get('name'),
-                item.get('path')))
+        return lines
 
-        return "\n".join([("! ") + line for line in lines])
+    def __str__(self, prefix="! "):
+        node_string = ""
+
+        if self.node is not None:
+            node_string = " in {}".format(self.node_to_string(self.node))
+
+        lines = ["{}{}".format(self.type + ' Error',
+                               node_string)] + \
+            self.msg.split("\n")
+
+        lines += self.process_stack()
+
+        return lines[0] + "\n" + "\n".join(
+            ["  " + line for line in lines[1:]])
 
 
-class ValidationException(RuntimeException):
-    pass
+class DatabaseException(RuntimeException):
+
+    def process_stack(self):
+        lines = []
+
+        if self.node is not None and self.node.get('build_path'):
+            lines.append(
+                "compiled SQL at {}".format(self.node.get('build_path')))
+
+        return lines + RuntimeException.process_stack(self)
+
+    @property
+    def type(self):
+        return 'Database'
 
 
 class CompilationException(RuntimeException):
+    @property
+    def type(self):
+        return 'Compilation'
+
+
+class ValidationException(RuntimeException):
     pass
 
 
@@ -58,41 +92,19 @@ class NotImplementedException(Exception):
     pass
 
 
-class ProgrammingException(Exception):
-    pass
-
-
-class FailedToConnectException(Exception):
+class FailedToConnectException(DatabaseException):
     pass
 
 
 from dbt.utils import get_materialization  # noqa
 
 
-def raise_compiler_error(node, msg):
-    name = '<Unknown>'
-    node_type = 'model'
-
-    if node is None:
-        name = '<None>'
-    elif isinstance(node, basestring):
-        name = node
-    elif isinstance(node, dict):
-        name = node.get('name')
-        node_type = node.get('resource_type')
-
-        if node_type == 'macro':
-            name = node.get('path')
-    else:
-        name = node.nice_name
-
-    raise CompilationException(
-        "! Compilation error while compiling {} {}:\n! {}\n"
-        .format(node_type, name, msg))
+def raise_compiler_error(msg, node=None):
+    raise CompilationException(msg, node)
 
 
-def raise_jinja_error(msg, model, node):
-    raise JinjaEvaluationException(msg, model, node)
+def raise_database_error(msg, node=None):
+    raise DatabaseException(msg, node)
 
 
 def ref_invalid_args(model, args):
@@ -131,11 +143,11 @@ def ref_target_not_found(model, target_model_name, target_model_package):
         target_package_string = "in package '{}' ".format(target_model_package)
 
     raise_compiler_error(
-        model,
         "Model '{}' depends on model '{}' {}which was not found."
         .format(model.get('unique_id'),
                 target_model_name,
-                target_package_string))
+                target_package_string),
+        model)
 
 
 def ref_disabled_dependency(model, target_model):
@@ -201,6 +213,11 @@ def missing_config(model, name):
         model,
         "Model '{}' does not define a required config parameter '{}'."
         .format(model.get('unique_id'), name))
+
+
+def missing_relation(relation_name, model=None):
+    raise_compiler_error(
+        "Relation {} not found!".format(relation_name))
 
 
 def invalid_materialization_argument(name, argument):

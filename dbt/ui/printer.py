@@ -205,29 +205,15 @@ def print_run_status_line(results):
 
 
 def print_run_result_error(result):
-    node = result.node
-    build_path = ''
+    logger.info("")
 
-    if node.get('build_path') is not None:
-        build_path = '({})'.format(node.get('build_path'))
-
-    if result.failed:
-        status = 'FAIL {}'.format(result.status)
-    else:
-        status = result.status
-
-    msg = "\n{status} evaluating {type} {package_name}.{node_name} {build_path}".format(
-        status=red(status),
-        type=node.get('resource_type'),
-        package_name=node.get('package_name'),
-        node_name=node.get('name'),
-        build_path=build_path
-    )
-    for line in msg.split("\n"):
-        logger.info(line)
-
+    first = True
     for line in result.error.split("\n"):
-        logger.info(line)
+        if first:
+            logger.info(yellow(line))
+            first = False
+        else:
+            logger.info(line)
 
 
 def print_end_of_run_summary(num_errors, early_exit=False):

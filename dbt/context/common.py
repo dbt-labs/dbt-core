@@ -214,7 +214,9 @@ class Var(object):
 
 def write(node, target_path, subdirectory):
     def fn(payload):
-        dbt.writer.write_node(node, target_path, subdirectory, payload)
+        node['build_path'] = dbt.writer.write_node(
+            node, target_path, subdirectory, payload)
+
     return fn
 
 
@@ -275,7 +277,6 @@ def generate(model, project, flat_graph, provider=None):
             model.get('name')
         ),
         "var": Var(model, context=context),
-        "write": write(model, project.get('target-path'), 'run'),
     })
 
     context = _add_tracking(context)
@@ -286,6 +287,7 @@ def generate(model, project, flat_graph, provider=None):
 
     context = _add_macros(context, model, flat_graph)
 
+    context["write"] = write(model, project.get('target-path'), 'run')
     context["render"] = render(context, model)
     context['context'] = context
 

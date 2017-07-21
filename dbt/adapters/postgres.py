@@ -3,6 +3,7 @@ import psycopg2
 from contextlib import contextmanager
 
 import dbt.adapters.default
+import dbt.compat
 import dbt.exceptions
 
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -23,13 +24,14 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
             logger.debug('Postgres error: {}'.format(str(e)))
 
             cls.rollback(connection)
-            raise dbt.exceptions.RuntimeException(e)
+            raise dbt.exceptions.DatabaseException(
+                dbt.compat.to_string(e).strip())
 
         except Exception as e:
             logger.debug("Error running SQL: %s", sql)
             logger.debug("Rolling back transaction.")
             cls.rollback(connection)
-            raise e
+            raise dbt.exceptions.RuntimeException(e)
 
     @classmethod
     def type(cls):

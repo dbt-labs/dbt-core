@@ -13,6 +13,7 @@ unparsed_base_contract = Schema({
     # filesystem
     Required('root_path'): basestring,
     Required('path'): basestring,
+    Required('original_file_path'): basestring,
     Required('raw_sql'): basestring,
 })
 

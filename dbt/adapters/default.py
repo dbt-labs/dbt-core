@@ -38,6 +38,7 @@ class DefaultAdapter(object):
         "get_status",
         "get_result_from_cursor",
         "quote",
+        "quote_schema_and_table",
     ]
 
     ###

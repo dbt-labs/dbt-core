@@ -2,7 +2,6 @@ import multiprocessing
 
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
-from dbt.compat import basestring
 
 
 drop_lock = multiprocessing.Lock()

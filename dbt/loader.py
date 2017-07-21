@@ -28,7 +28,7 @@ class GraphLoader(object):
     @classmethod
     def register(cls, loader, subgraph='nodes'):
         if subgraph not in ['nodes', 'macros']:
-            raise dbt.exceptions.ProgrammingException(
+            raise dbt.exceptions.InternalException(
                 'Invalid subgraph type {}, should be "nodes" or "macros"!'
                 .format(subgraph))
 

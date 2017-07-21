@@ -7,6 +7,7 @@ import snowflake.connector.errors
 
 from contextlib import contextmanager
 
+import dbt.compat
 import dbt.exceptions
 import dbt.flags as flags
 
@@ -26,26 +27,28 @@ class SnowflakeAdapter(PostgresAdapter):
         try:
             yield
         except snowflake.connector.errors.ProgrammingError as e:
-            logger.debug('Snowflake error: {}'.format(str(e)))
+            msg = dbt.compat.to_string(e)
 
-            if 'Empty SQL statement' in e.msg:
+            logger.debug('Snowflake error: {}'.format(msg))
+
+            if 'Empty SQL statement' in msg:
                 logger.debug("got empty sql statement, moving on")
-            elif 'This session does not have a current database' in e.msg:
+            elif 'This session does not have a current database' in msg:
                 cls.rollback(connection)
                 raise dbt.exceptions.FailedToConnectException(
                     ('{}\n\nThis error sometimes occurs when invalid '
                      'credentials are provided, or when your default role '
                      'does not have access to use the specified database. '
                      'Please double check your profile and try again.')
-                    .format(str(e)))
+                    .format(msg))
             else:
                 cls.rollback(connection)
-                raise dbt.exceptions.ProgrammingException(str(e))
+                raise dbt.exceptions.DatabaseException(msg)
         except Exception as e:
             logger.debug("Error running SQL: %s", sql)
             logger.debug("Rolling back transaction.")
             cls.rollback(connection)
-            raise e
+            raise dbt.exceptions.RuntimeException(e.msg)
 
     @classmethod
     def type(cls):

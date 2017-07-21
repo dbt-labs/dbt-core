@@ -74,6 +74,11 @@
   {%- set config = model['config'] -%}
   {%- set source_schema = config.get('source_schema') -%}
   {%- set source_table = config.get('source_table') -%}
+
+  {%- if not adapter.already_exists(source_schema, source_table) -%}
+    {{ exceptions.missing_relation(source_table) }}
+  {%- endif -%}
+
   {%- set source_columns = adapter.get_columns_in_table(source_schema, source_table) -%}
   {%- set target_schema = config.get('target_schema') -%}
   {%- set target_table = config.get('target_table') -%}
