@@ -73,7 +73,7 @@ def get_model_name_or_none(model):
     return name
 
 
-MACRO_PREFIX = 'dbt_macro__'
+MACRO_PREFIX = "dbt_macro__"
 DOCS_PREFIX = 'dbt_docs__'
 
 
@@ -89,10 +89,9 @@ def get_dbt_docs_name(name):
     return f'{DOCS_PREFIX}{name}'
 
 
-def get_materialization_macro_name(materialization_name, adapter_type=None,
-                                   with_prefix=True):
+def get_materialization_macro_name(materialization_name, adapter_type=None, with_prefix=True):
     if adapter_type is None:
-        adapter_type = 'default'
+        adapter_type = "default"
     name = f'materialization_{materialization_name}_{adapter_type}'
     return get_dbt_macro_name(name) if with_prefix else name
 

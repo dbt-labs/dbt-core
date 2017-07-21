@@ -692,7 +692,7 @@ def materialization_not_available(model, adapter_type):
     materialization = model.get_materialization()
 
     raise_compiler_error(
-        "Materialization '{}' is not available for {}!"
+        "Materialization '{}' is not available for {}!".format(materialization, adapter_type),
         .format(materialization, adapter_type),
         model)
 
@@ -702,11 +702,11 @@ def missing_materialization(model, adapter_type):
 
     valid_types = "'default'"
 
-    if adapter_type != 'default':
+    if adapter_type != "default":
         valid_types = "'default' and '{}'".format(adapter_type)
 
     raise_compiler_error(
-        "No materialization '{}' was found for adapter {}! (searched types {})"
+        "No materialization '{}' was found for adapter {}! (searched types {})".format(
         .format(materialization, adapter_type, valid_types),
         model)
 
@@ -723,7 +723,7 @@ def raise_cache_inconsistent(message):
 
 def missing_config(model, name):
     raise_compiler_error(
-        "Model '{}' does not define a required config parameter '{}'."
+        "Model '{}' does not define a required config parameter '{}'.".format(
             model.unique_id, name
         model)
 

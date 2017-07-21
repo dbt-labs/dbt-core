@@ -75,8 +75,7 @@ class MacroFuzzParser(jinja2.parser.Parser):
         node.name = get_dbt_macro_name(self.parse_assign_target(name_only=True).name)
 
         self.parse_signature(node)
-        node.body = self.parse_statements(('name:endmacro',),
-                                          drop_needle=True)
+        node.body = self.parse_statements(("name:endmacro",), drop_needle=True)
         return node
 
 
@@ -356,21 +355,20 @@ class MaterializationExtension(jinja2.ext.Extension):
 
     def parse(self, parser):
         node = jinja2.nodes.Macro(lineno=next(parser.stream).lineno)
-        materialization_name = \
-            parser.parse_assign_target(name_only=True).name
+        materialization_name = parser.parse_assign_target(name_only=True).name
 
-        adapter_name = 'default'
+        adapter_name = "default"
         node.args = []
         node.defaults = []
 
-        while parser.stream.skip_if('comma'):
+        while parser.stream.skip_if("comma"):
             target = parser.parse_assign_target(name_only=True)
 
-            if target.name == 'default':
+            if target.name == "default":
                 pass
 
-            elif target.name == 'adapter':
-                parser.stream.expect('assign')
+            elif target.name == "adapter":
+                parser.stream.expect("assign")
                 value = parser.parse_expression()
                 adapter_name = value.value
 
@@ -379,8 +377,7 @@ class MaterializationExtension(jinja2.ext.Extension):
 
         node.name = get_materialization_macro_name(materialization_name, adapter_name)
 
-        node.body = parser.parse_statements(('name:endmaterialization',),
-                                            drop_needle=True)
+        node.body = parser.parse_statements(("name:endmaterialization",), drop_needle=True)
 
         return node
 
