@@ -203,17 +203,22 @@ class DefaultAdapter(object):
         return columns
 
     @classmethod
+    def _table_columns_to_dict(cls, columns):
+        return {col.name: col for col in columns}
+
+    @classmethod
     def expand_target_column_types(cls, profile,
                                    temp_table,
                                    to_schema, to_table,
                                    model_name=None):
 
-        reference_columns = {col.name: col for col in
-                             cls.get_columns_in_table(
-                                 profile, None, temp_table, model_name)}
-        target_columns = {col.name: col for col in
-                          cls.get_columns_in_table(
-                              profile, to_schema, to_table, model_name)}
+        reference_columns = cls._table_columns_to_dict(
+            cls.get_columns_in_table(
+                profile, None, temp_table, model_name))
+
+        target_columns = cls._table_columns_to_dict(
+            cls.get_columns_in_table(
+                profile, to_schema, to_table, model_name))
 
         for column_name, reference_column in reference_columns.items():
             target_column = target_columns.get(column_name)
