@@ -135,7 +135,6 @@ def parse_macro_file(macro_file_path,
     context = {}
 
     base_node = {
-        'name': 'macro',
         'path': macro_file_path,
         'original_file_path': macro_file_path,
         'resource_type': NodeType.Macro,
@@ -145,8 +144,12 @@ def parse_macro_file(macro_file_path,
         }
     }
 
-    template = dbt.clients.jinja.get_template(
-        macro_file_contents, context, node=base_node)
+    try:
+        template = dbt.clients.jinja.get_template(
+            macro_file_contents, context, node=base_node)
+    except dbt.exceptions.CompilationException as e:
+        e.node = base_node
+        raise e
 
     for key, item in template.module.__dict__.items():
         if type(item) == jinja2.runtime.Macro:
@@ -288,14 +291,14 @@ def load_and_parse_sql(package_name, root_project, all_projects, root_dir,
         else:
             path = file_match.get('relative_path')
 
-        path = os.path.join(file_match.get('searched_path'), path)
+        original_file_path = os.path.join(file_match.get('searched_path'), path)
 
         result.append({
             'name': name,
             'root_path': root_dir,
             'resource_type': resource_type,
             'path': path,
-            'original_file_path': path,
+            'original_file_path': original_file_path,
             'package_name': package_name,
             'raw_sql': file_contents
         })

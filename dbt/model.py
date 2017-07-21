@@ -1,8 +1,10 @@
 import os.path
 
+import dbt.exceptions
+
 from dbt.compat import basestring
 
-from dbt.utils import split_path, deep_merge, DBTConfigKeys, compiler_error
+from dbt.utils import split_path, deep_merge, DBTConfigKeys
 
 
 class SourceConfig(object):
@@ -101,9 +103,8 @@ class SourceConfig(object):
         for hook in new_hooks:
             if not isinstance(hook, basestring):
                 name = ".".join(self.fqn)
-                compiler_error(None, "{} for model {} is not a string!".format(
-                    key, name
-                ))
+                dbt.exceptions.raise_compiler_error(
+                    "{} for model {} is not a string!".format(key, name))
 
             hooks.append(hook)
         return hooks

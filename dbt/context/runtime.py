@@ -1,10 +1,12 @@
+import json
+
 from dbt.adapters.factory import get_adapter
+from dbt.compat import basestring
 
 import dbt.clients.jinja
+import dbt.context.common
 import dbt.flags
 import dbt.utils
-
-import dbt.context.common
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 

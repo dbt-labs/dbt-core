@@ -1,4 +1,3 @@
-# import dbt.utils.compiler_error
 import networkx as nx
 from dbt.logger import GLOBAL_LOGGER as logger
 

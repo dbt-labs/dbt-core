@@ -29,9 +29,9 @@ class Config:
         elif len(args) == 0 and len(kwargs) > 0:
             opts = kwargs
         else:
-            dbt.utils.compiler_error(
-                self.model.get('name'),
-                "Invalid model config given inline in {}".format(self.model))
+            dbt.exceptions.raise_compiler_error(
+                "Invalid inline model config",
+                self.model)
 
         self.model['config_reference'].update_in_model_config(opts)
         return ''

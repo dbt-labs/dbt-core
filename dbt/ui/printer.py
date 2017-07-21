@@ -207,13 +207,26 @@ def print_run_status_line(results):
 def print_run_result_error(result):
     logger.info("")
 
-    first = True
-    for line in result.error.split("\n"):
-        if first:
-            logger.info(yellow(line))
-            first = False
-        else:
-            logger.info(line)
+    if result.failed:
+        logger.info(yellow("Failure in {} {} ({})").format(
+            result.node.get('resource_type'),
+            result.node.get('name'),
+            result.node.get('original_file_path')))
+        logger.info("  Got {} results, expected 0.".format(result.status))
+
+        if result.node.get('build_path') is not None:
+            logger.info("")
+            logger.info("  compiled SQL at {}".format(
+                result.node.get('build_path')))
+
+    else:
+        first = True
+        for line in result.error.split("\n"):
+            if first:
+                logger.info(yellow(line))
+                first = False
+            else:
+                logger.info(line)
 
 
 def print_end_of_run_summary(num_errors, early_exit=False):
@@ -224,7 +237,8 @@ def print_end_of_run_summary(num_errors, early_exit=False):
     else:
         message = green('Completed successfully')
 
-    logger.info('\n{}'.format(message))
+    logger.info('')
+    logger.info('{}'.format(message))
 
 
 def print_run_end_messages(results, early_exit=False):

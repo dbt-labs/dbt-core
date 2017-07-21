@@ -56,14 +56,6 @@ def get_model_name_or_none(model):
     return name
 
 
-def compiler_error(model, msg):
-    name = get_model_name_or_none(model)
-    raise RuntimeError(
-        "! Compilation error while compiling model {}:\n! {}\n"
-        .format(name, msg)
-    )
-
-
 def compiler_warning(model, msg):
     name = get_model_name_or_none(model)
     logger.info(

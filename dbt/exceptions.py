@@ -22,7 +22,7 @@ class RuntimeException(RuntimeError, Exception):
     def node_to_string(self, node):
         return "{} {} ({})".format(
             node.get('resource_type'),
-            node.get('name'),
+            node.get('name', 'unknown'),
             node.get('original_file_path'))
 
     def process_stack(self):
@@ -109,9 +109,8 @@ def raise_database_error(msg, node=None):
 
 def ref_invalid_args(model, args):
     raise_compiler_error(
-        model,
-        "ref() takes at most two arguments ({} given)".format(
-            len(args)))
+        "ref() takes at most two arguments ({} given)".format(len(args)),
+        model)
 
 
 def ref_bad_context(model, target_model_name, target_model_package):
@@ -132,8 +131,7 @@ To fix this, add the following hint to the top of the model "{model_name}":
         model_path=model['path'],
         ref_string=ref_string
     )
-    raise_compiler_error(
-        model, error_msg)
+    raise_compiler_error(error_msg, model)
 
 
 def ref_target_not_found(model, target_model_name, target_model_package):
@@ -152,17 +150,17 @@ def ref_target_not_found(model, target_model_name, target_model_package):
 
 def ref_disabled_dependency(model, target_model):
     raise_compiler_error(
-        model,
         "Model '{}' depends on model '{}' which is disabled in "
         "the project config".format(model.get('unique_id'),
-                                    target_model.get('unique_id')))
+                                    target_model.get('unique_id')),
+        model)
 
 
 def dependency_not_found(model, target_model_name):
     raise_compiler_error(
-        model,
         "'{}' depends on '{}' which is not in the graph!"
-        .format(model.get('unique_id'), target_model_name))
+        .format(model.get('unique_id'), target_model_name),
+        model)
 
 
 def macro_not_found(model, target_macro_id):
@@ -176,9 +174,9 @@ def materialization_not_available(model, adapter_type):
     materialization = get_materialization(model)
 
     raise_compiler_error(
-        model,
         "Materialization '{}' is not available for {}!"
-        .format(materialization, adapter_type))
+        .format(materialization, adapter_type),
+        model)
 
 
 def missing_materialization(model, adapter_type):
@@ -190,39 +188,31 @@ def missing_materialization(model, adapter_type):
         valid_types = "'default' and '{}'".format(adapter_type)
 
     raise_compiler_error(
-        model,
         "No materialization '{}' was found for adapter {}! (searched types {})"
-        .format(materialization, adapter_type, valid_types))
-
-
-def missing_sql_where(model):
-    raise_compiler_error(
-        model,
-        "Model '{}' is materialized as 'incremental', but does not have a "
-        "sql_where defined in its config.".format(model.get('unique_id')))
+        .format(materialization, adapter_type, valid_types),
+        model)
 
 
 def bad_package_spec(repo, spec, error_message):
-    raise RuntimeException(
+    raise InternalException(
         "Error checking out spec='{}' for repo {}\n{}".format(
             spec, repo, error_message))
 
 
 def missing_config(model, name):
     raise_compiler_error(
-        model,
         "Model '{}' does not define a required config parameter '{}'."
-        .format(model.get('unique_id'), name))
+        .format(model.get('unique_id'), name),
+        model)
 
 
 def missing_relation(relation_name, model=None):
     raise_compiler_error(
-        "Relation {} not found!".format(relation_name))
+        "Relation {} not found!".format(relation_name),
+        model)
 
 
 def invalid_materialization_argument(name, argument):
-    msg = "Received an unknown argument '{}'.".format(argument)
-
-    raise CompilationException(
-        "! Compilation error while compiling materialization {}:\n! {}\n"
-        .format(name, msg))
+    raise_compiler_error(
+        "materialization '{}' received unknown argument '{}'."
+        .format(name, argument))
