@@ -88,8 +88,6 @@ class RunManager(object):
 
         if result.errored and runner.raise_on_first_error():
             raise dbt.exceptions.RuntimeException(result.error)
-        elif result.errored:
-            logger.info(result.error)
 
         return result
 
@@ -161,6 +159,9 @@ class RunManager(object):
 
                 for conn_name in adapter.cancel_open_connections(profile):
                     dbt.ui.printer.print_cancel_line(conn_name, schema_name)
+
+                dbt.ui.printer.print_run_end_messages(node_results,
+                                                      early_exit=True)
 
                 pool.join()
                 raise

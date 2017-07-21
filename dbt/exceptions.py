@@ -13,26 +13,37 @@ class RuntimeException(RuntimeError, Exception):
     pass
 
 
-class MacroRuntimeException(RuntimeException):
-    def __init__(self, msg, model, macro):
-        self.stack = [macro]
+class JinjaEvaluationException(RuntimeException):
+    def __init__(self, msg, model, node):
+        self.stack = []
         self.model = model
+        if node != model:
+            self.stack.append(node)
         self.msg = msg
 
-    def __str__(self):
-        to_return = self.msg
+    def __str__(self, prefix="! "):
+        lines = self.msg.split("\n")
 
-        to_return += "\n    in macro {} ({})".format(
-            self.stack[0].get('name'), self.stack[0].get('path'))
+        first = True
 
-        for item in self.stack[1:]:
-            to_return += "\n    called by macro {} ({})".format(
-                item.get('name'), item.get('path'))
+        lines.append("")
 
-        to_return += "\n    called by model {} ({})".format(
-            self.model.get('name'), self.model.get('path'))
+        stack = self.stack + [self.model]
 
-        return to_return
+        for item in stack:
+            msg = 'called by'
+
+            if first:
+                msg = 'in'
+                first = False
+
+            lines.append("{} {} {} ({})".format(
+                msg,
+                item.get('resource_type'),
+                item.get('name'),
+                item.get('path')))
+
+        return "\n".join([("! ") + line for line in lines])
 
 
 class ValidationException(RuntimeException):
@@ -78,6 +89,10 @@ def raise_compiler_error(node, msg):
     raise CompilationException(
         "! Compilation error while compiling {} {}:\n! {}\n"
         .format(node_type, name, msg))
+
+
+def raise_jinja_error(msg, model, node):
+    raise JinjaEvaluationException(msg, model, node)
 
 
 def ref_invalid_args(model, args):

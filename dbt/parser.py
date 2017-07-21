@@ -286,6 +286,8 @@ def load_and_parse_sql(package_name, root_project, all_projects, root_dir,
         else:
             path = file_match.get('relative_path')
 
+        path = os.path.join(file_match.get('searched_path'), path)
+
         result.append({
             'name': name,
             'root_path': root_dir,
@@ -377,9 +379,12 @@ def load_and_parse_macros(package_name, root_project, all_projects, root_dir,
         file_contents = dbt.clients.system.load_file_contents(
             file_match.get('absolute_path'))
 
+        path = os.path.join(file_match.get('searched_path'),
+                            file_match.get('relative_path'))
+
         result.update(
             parse_macro_file(
-                file_match.get('relative_path'),
+                path,
                 file_contents,
                 root_dir,
                 package_name))

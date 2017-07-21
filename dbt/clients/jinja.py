@@ -49,12 +49,13 @@ def macro_generator(template, node):
 
             try:
                 return macro(*args, **kwargs)
-            except (jinja2.exceptions.TemplateRuntimeError) as e:
-                raise dbt.exceptions.MacroRuntimeException(
+            except (TypeError,
+                    jinja2.exceptions.TemplateRuntimeError) as e:
+                dbt.exceptions.raise_jinja_error(
                     str(e),
                     context.get('model'),
                     node)
-            except dbt.exceptions.MacroRuntimeException as e:
+            except dbt.exceptions.JinjaEvaluationException as e:
                 e.stack.append(node)
                 raise e
 
@@ -148,7 +149,7 @@ def get_template(string, ctx, node=None, capture_macros=False):
     except (jinja2.exceptions.TemplateSyntaxError,
             jinja2.exceptions.UndefinedError) as e:
         e.translated = False
-        dbt.exceptions.raise_compiler_error(node, str(e))
+        dbt.exceptions.raise_jinja_error(str(e), node, node)
 
 
 def render_template(template, ctx, node=None):
@@ -158,7 +159,7 @@ def render_template(template, ctx, node=None):
     except (jinja2.exceptions.TemplateSyntaxError,
             jinja2.exceptions.UndefinedError) as e:
         e.translated = False
-        dbt.exceptions.raise_compiler_error(node, str(e))
+        dbt.exceptions.raise_jinja_error(str(e), node, node)
 
 
 def get_rendered(string, ctx, node=None,

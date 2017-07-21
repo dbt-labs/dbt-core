@@ -100,7 +100,7 @@ class BaseRunner(object):
                 result = self.run(compiled_node, existing, flat_graph)
 
         except catchable_errors as e:
-            result.error = str(e).strip()
+            result.error = str(e)
             result.status = 'ERROR'
 
         except dbt.exceptions.InternalException as e:
@@ -299,10 +299,16 @@ class ModelRunner(CompileRunner):
         nodes = [r.node for r in results]
         stat_line = dbt.ui.printer.get_counts(nodes)
 
+        execution = ""
+
+        if execution_time is not None:
+            execution = " in {execution_time:0.2f}s".format(
+                execution_time=execution_time)
+
         dbt.ui.printer.print_timestamped_line("")
         dbt.ui.printer.print_timestamped_line(
-            "Finished running {stat_line} in {execution_time:0.2f}s."
-            .format(stat_line=stat_line, execution_time=execution_time))
+            "Finished running {stat_line}{execution}."
+            .format(stat_line=stat_line, execution=execution))
 
     @classmethod
     def after_run(cls, project, adapter, results, flat_graph, elapsed):
