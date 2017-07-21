@@ -36,7 +36,8 @@ class DefaultAdapter(object):
 
     raw_functions = [
         "get_status",
-        "get_result_from_cursor"
+        "get_result_from_cursor",
+        "quote",
     ]
 
     ###

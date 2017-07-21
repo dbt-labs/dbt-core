@@ -35,7 +35,13 @@
           'sort',
           validator=validation.any[list, basestring]) -%}
 
-  create {% if temporary -%}temporary{%- endif %} table "{{ schema }}"."{{ identifier }}"
+  {% if temporary %}
+    {% set relation = adapter.quote(identifier) %}
+  {% else %}
+    {% set relation = adapter.quote(schema) ~ '.' ~ adapter.quote(identifier) %}
+  {% endif %}
+
+  create {% if temporary -%}temporary{%- endif %} table {{ relation }}
   {{ dist(_dist) }}
   {{ sort(_sort_type, _sort) }}
   as (
