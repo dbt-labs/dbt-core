@@ -299,8 +299,14 @@ class BigQueryAdapter(PostgresAdapter):
         return False
 
     @classmethod
+    def quote(cls, identifier):
+        return '`{}`'.format(identifier)
+
+    @classmethod
     def quote_schema_and_table(cls, profile, schema, table):
         connection = cls.get_connection(profile)
         credentials = connection.get('credentials', {})
         project = credentials.get('project')
-        return '`{}`.`{}`.`{}`'.format(project, schema, table)
+        return '{}.{}.{}'.format(cls.quote(project),
+                                 cls.quote(schema),
+                                 cls.quote(table))
