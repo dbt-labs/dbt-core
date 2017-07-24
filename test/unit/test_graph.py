@@ -219,25 +219,6 @@ class GraphTest(unittest.TestCase):
             [('model.test_models_compile.model_one',
               'model.test_models_compile.model_two',)])
 
-    def test__model_incremental_without_sql_where_fails(self):
-        self.use_models({
-            'model_one': 'select * from events'
-        })
-
-        cfg = {
-            "models": {
-                "materialized": "table",
-                "test_models_compile": {
-                    "model_one": {"materialized": "incremental"},
-                }
-            }
-        }
-
-        compiler = self.get_compiler(self.get_project(cfg))
-
-        with self.assertRaises(dbt.exceptions.CompilationException):
-            compiler.compile()
-
     def test__model_incremental(self):
         self.use_models({
             'model_one': 'select * from events'
