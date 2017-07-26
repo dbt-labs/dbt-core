@@ -63,7 +63,7 @@ class RuntimeException(RuntimeError, Exception):
 
     @property
     def type(self):
-        return 'Runtime'
+        return "Runtime"
 
     def node_to_string(self, node):
         if node is None:
@@ -91,15 +91,13 @@ class RuntimeException(RuntimeError, Exception):
             lines.append("")
 
             for item in stack:
-                msg = 'called by'
+                msg = "called by"
 
                 if first:
-                    msg = 'in'
+                    msg = "in"
                     first = False
 
-                lines.append("> {} {}".format(
-                    msg,
-                    self.node_to_string(item)))
+                lines.append("> {} {}".format(msg, self.node_to_string(item)))
 
         return lines
 
@@ -119,8 +117,7 @@ class RuntimeException(RuntimeError, Exception):
 
         lines += self.process_stack()
 
-        return lines[0] + "\n" + "\n".join(
-            ["  " + line for line in lines[1:]])
+        return lines[0] + "\n" + "\n".join(["  " + line for line in lines[1:]])
 
     def data(self):
         result = Exception.data(self)
@@ -219,7 +216,7 @@ class DatabaseException(RuntimeException):
 
     @property
     def type(self):
-        return 'Database'
+        return "Database"
 
 
 class CompilationException(RuntimeException):
@@ -228,7 +225,7 @@ class CompilationException(RuntimeException):
 
     @property
     def type(self):
-        return 'Compilation'
+        return "Compilation"
 
 
 class RecursionException(RuntimeException):
@@ -669,7 +666,9 @@ def dependency_not_found(model, target_model_name):
     raise_compiler_error(
         "'{}' depends on '{}' which is not in the graph!".format(
             model.unique_id, target_model_name
-        model)
+        ),
+        model,
+    )
 
 
 def macro_not_found(model, target_macro_id):
@@ -700,8 +699,8 @@ def materialization_not_available(model, adapter_type):
 
     raise_compiler_error(
         "Materialization '{}' is not available for {}!".format(materialization, adapter_type),
-        .format(materialization, adapter_type),
-        model)
+        model,
+    )
 
 
 def missing_materialization(model, adapter_type):
@@ -714,8 +713,10 @@ def missing_materialization(model, adapter_type):
 
     raise_compiler_error(
         "No materialization '{}' was found for adapter {}! (searched types {})".format(
-        .format(materialization, adapter_type, valid_types),
-        model)
+            materialization, adapter_type, valid_types
+        ),
+        model,
+    )
 
 
 def bad_package_spec(repo, spec, error_message):
@@ -732,7 +733,9 @@ def missing_config(model, name):
     raise_compiler_error(
         "Model '{}' does not define a required config parameter '{}'.".format(
             model.unique_id, name
-        model)
+        ),
+        model,
+    )
 
 
 def missing_relation(relation, model=None):
@@ -758,7 +761,7 @@ def relation_wrong_type(relation, expected_type, model=None):
             "`--full-refresh` and dbt will drop it for you."
         ).format(relation=relation, current_type=relation.type, expected_type=expected_type),
         model,
-        model)
+    )
 
 
 def package_not_found(package_name):
@@ -776,8 +779,8 @@ def package_version_not_found(package_name, version_range, available_versions):
 
 def invalid_materialization_argument(name, argument):
     raise_compiler_error(
-        "materialization '{}' received unknown argument '{}'."
-        .format(name, argument))
+        "materialization '{}' received unknown argument '{}'.".format(name, argument)
+    )
 
 
 def system_error(operation_name):
