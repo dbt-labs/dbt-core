@@ -291,7 +291,9 @@ def load_and_parse_sql(package_name, root_project, all_projects, root_dir,
         else:
             path = file_match.get('relative_path')
 
-        original_file_path = os.path.join(file_match.get('searched_path'), path)
+        original_file_path = os.path.join(
+            file_match.get('searched_path'),
+            path)
 
         result.append({
             'name': name,

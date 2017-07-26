@@ -17,6 +17,7 @@ setup(
     package_data={
         'dbt': [
             'include/global_project/dbt_project.yml',
+            'include/global_project/macros/*.sql',
             'include/global_project/macros/**/*.sql',
         ]
     },
@@ -39,7 +40,7 @@ setup(
         'snowplow-tracker==0.7.2',
         'celery==3.1.23',
         'voluptuous==0.10.5',
-        'snowflake-connector-python==1.3.16',
+        'snowflake-connector-python>=1.4.0',
         'colorama==0.3.9',
         'google-cloud-bigquery==0.24.0',
     ]
