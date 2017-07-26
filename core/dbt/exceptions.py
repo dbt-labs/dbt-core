@@ -512,9 +512,7 @@ def invalid_bool_error(got_value, macro_name) -> NoReturn:
 
 
 def ref_invalid_args(model, args) -> NoReturn:
-    raise_compiler_error(
-        "ref() takes at most two arguments ({} given)".format(len(args)),
-        model)
+    raise_compiler_error("ref() takes at most two arguments ({} given)".format(len(args)), model)
 
 
 def ref_bad_context(model, args) -> NoReturn:
