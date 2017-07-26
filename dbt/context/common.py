@@ -275,8 +275,7 @@ def generate(model, project, flat_graph, provider=None):
             schema,
             dbt.utils.model_immediate_name(model, dbt.flags.NON_DESTRUCTIVE),
             model.get('name')
-        ),
-        "var": Var(model, context=context),
+        )
     })
 
     context = _add_tracking(context)
@@ -289,6 +288,7 @@ def generate(model, project, flat_graph, provider=None):
 
     context["write"] = write(model, project.get('target-path'), 'run')
     context["render"] = render(context, model)
+    context["var"] = Var(model, context=context)
     context['context'] = context
 
     return context
