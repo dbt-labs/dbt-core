@@ -1,11 +1,13 @@
 {% macro dist(dist) %}
-  {%- set dist = dist.strip().lower() -%}
-  {%- if dist is none -%}
+  {%- if dist is not none -%}
+      {%- set dist = dist.strip().lower() -%}
 
-  {%- elif dist in ['all', 'even'] -%}
-    diststyle {{ dist }}
-  {%- else -%}
-    diststyle key distkey ("{{ dist }}")
+      {%- if dist in ['all', 'even'] -%}
+        diststyle {{ dist }}
+      {%- else -%}
+        diststyle key distkey ("{{ dist }}")
+      {%- endif -%}
+
   {%- endif -%}
 {%- endmacro -%}
 
