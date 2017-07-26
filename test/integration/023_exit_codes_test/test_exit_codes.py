@@ -1,6 +1,9 @@
 from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest, FakeArgs
 
+import dbt.exceptions
+
+
 class TestExitCodes(DBTIntegrationTest):
 
     def setUp(self):
@@ -171,7 +174,7 @@ class TestExitCodesDepsFail(DBTIntegrationTest):
         try:
             _, success = self.run_dbt_and_check(['deps'])
             self.assertTrue(False)
-        except RuntimeError as e:
+        except dbt.exceptions.InternalException as e:
             pass
 
 class TestExitCodesSeed(DBTIntegrationTest):
