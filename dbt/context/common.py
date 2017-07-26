@@ -176,11 +176,11 @@ class Var(object):
     def assert_var_defined(self, var_name, default):
         if var_name not in self.local_vars and default is None:
             pretty_vars = self.pretty_dict(self.local_vars)
-            dbt.utils.compiler_error(
-                self.model,
+            dbt.exceptions.raise_compiler_error(
                 self.UndefinedVarError.format(
                     var_name, self.model_name, pretty_vars
-                )
+                ),
+                self.model
             )
 
     def assert_var_not_none(self, var_name):
@@ -188,11 +188,11 @@ class Var(object):
         if raw is None:
             pretty_vars = self.pretty_dict(self.local_vars)
             model_name = dbt.utils.get_model_name_or_none(self.model)
-            dbt.utils.compiler_error(
-                self.model,
+            dbt.exceptions.raise_compiler_error(
                 self.NoneVarError.format(
                     var_name, model_name, pretty_vars
-                )
+                ),
+                self.model
             )
 
     def __call__(self, var_name, default=None):
