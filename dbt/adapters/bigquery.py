@@ -32,7 +32,7 @@ class BigQueryAdapter(PostgresAdapter):
              'https://www.googleapis.com/auth/cloud-platform',
              'https://www.googleapis.com/auth/drive')
 
-    QUERY_TIMEOUT = 300 * 1000
+    QUERY_TIMEOUT = 300
 
     @classmethod
     def handle_error(cls, error, message, sql):
@@ -118,6 +118,9 @@ class BigQueryAdapter(PostgresAdapter):
         result = connection.copy()
         credentials = connection.get('credentials', {})
 
+        if 'timeout_seconds' in credentials:
+            cls.QUERY_TIMEOUT = credentials['timeout_seconds']
+
         try:
             handle = cls.get_bigquery_client(credentials)
 
@@ -188,7 +191,7 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def poll_until_job_completes(cls, job):
-        retry_count = cls.QUERY_TIMEOUT / 1000 # TODO
+        retry_count = cls.QUERY_TIMEOUT
         while retry_count > 0 and job.state != 'DONE':
             retry_count -= 1
             time.sleep(1)
@@ -264,7 +267,7 @@ class BigQueryAdapter(PostgresAdapter):
         client = conn.get('handle')
 
         query = client.run_sync_query(sql)
-        query.timeout_ms = cls.QUERY_TIMEOUT
+        query.timeout_ms = cls.QUERY_TIMEOUT * 1000
         query.use_legacy_sql = False
 
         debug_message = "Fetching data for query {}:\n{}"

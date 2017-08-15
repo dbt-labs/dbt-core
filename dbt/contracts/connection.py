@@ -41,6 +41,7 @@ bigquery_credentials_contract = Schema({
     Required('schema'): basestring,
     Optional('keyfile'): basestring,
     Optional('keyfile_json'): object,
+    Optional('timeout_seconds'): int,
 })
 
 credentials_mapping = {
