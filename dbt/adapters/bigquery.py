@@ -80,11 +80,6 @@ class BigQueryAdapter(PostgresAdapter):
         raise dbt.exceptions.NotImplementedException(
             '`get_status` is not implemented for this adapter!')
 
-
-    @classmethod
-    def get_bigquery_credentials(cls, config):
-        raise RuntimeError("not implemented")
-
     @classmethod
     def get_bigquery_credentials(cls, config):
         method = config.get('method')
