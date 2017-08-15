@@ -233,6 +233,7 @@ class BigQueryAdapter(PostgresAdapter):
         logger.debug(debug_message.format(model_name, sql))
 
         query.run()
+
         return cls.fetch_query_results(query)
 
     @classmethod
