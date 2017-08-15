@@ -23,6 +23,7 @@ class BigQueryAdapter(PostgresAdapter):
         "query_for_existing",
         "drop_view",
         "execute_model",
+        "drop",
     ]
 
     SCOPE = ('https://www.googleapis.com/auth/bigquery',
@@ -78,6 +79,11 @@ class BigQueryAdapter(PostgresAdapter):
     def get_status(cls, cursor):
         raise dbt.exceptions.NotImplementedException(
             '`get_status` is not implemented for this adapter!')
+
+
+    @classmethod
+    def get_bigquery_credentials(cls, config):
+        raise RuntimeError("not implemented")
 
     @classmethod
     def get_bigquery_credentials(cls, config):
@@ -227,7 +233,6 @@ class BigQueryAdapter(PostgresAdapter):
         logger.debug(debug_message.format(model_name, sql))
 
         query.run()
-
         return cls.fetch_query_results(query)
 
     @classmethod
