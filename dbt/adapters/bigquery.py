@@ -25,6 +25,10 @@ class BigQueryAdapter(PostgresAdapter):
         "execute_model",
     ]
 
+    SCOPE = ('https://www.googleapis.com/auth/bigquery',
+             'https://www.googleapis.com/auth/cloud-platform',
+             'https://www.googleapis.com/auth/drive')
+
     QUERY_TIMEOUT = 60 * 1000
 
     @classmethod
@@ -81,12 +85,12 @@ class BigQueryAdapter(PostgresAdapter):
         creds = google.oauth2.service_account.Credentials
 
         if method == 'oauth':
-            credentials, project_id = google.auth.default()
+            credentials, project_id = google.auth.default(scopes=cls.SCOPE)
             return credentials
 
         elif method == 'service-account':
             keyfile = config.get('keyfile')
-            return creds.from_service_account_file(keyfile)
+            return creds.from_service_account_file(keyfile, scopes=cls.SCOPE)
 
         elif method == 'service-account-json':
             details = config.get('keyfile_json')
@@ -141,7 +145,8 @@ class BigQueryAdapter(PostgresAdapter):
 
         relation_type_lookup = {
             'TABLE': 'table',
-            'VIEW': 'view'
+            'VIEW': 'view',
+            'EXTERNAL': 'external'
         }
 
         existing = [(table.name, relation_type_lookup.get(table.table_type))
@@ -161,13 +166,6 @@ class BigQueryAdapter(PostgresAdapter):
         raise dbt.exceptions.NotImplementedException(
             '`rename` is not implemented for this adapter!')
 
-    # Hack because of current API limitations. We should set a flag on the
-    # Table object indicating StandardSQL when it's implemented
-    # https://github.com/GoogleCloudPlatform/google-cloud-python/issues/3388
-    @classmethod
-    def format_sql_for_bigquery(cls, sql):
-        return "#standardSQL\n{}".format(sql)
-
     @classmethod
     def execute_model(cls, profile, model, model_name=None):
         connection = cls.get_connection(profile, model.get('name'))
@@ -176,7 +174,7 @@ class BigQueryAdapter(PostgresAdapter):
             validate_connection(connection)
 
         model_name = model.get('name')
-        model_sql = cls.format_sql_for_bigquery(model.get('injected_sql'))
+        model_sql = model.get('injected_sql')
 
         materialization = dbt.utils.get_materialization(model)
         allowed_materializations = ['view', 'ephemeral']
@@ -190,6 +188,7 @@ class BigQueryAdapter(PostgresAdapter):
 
         view = dataset.table(model_name)
         view.view_query = model_sql
+        view.view_use_legacy_sql = False
 
         logger.debug("Model SQL ({}):\n{}".format(model_name, model_sql))
 
@@ -220,12 +219,12 @@ class BigQueryAdapter(PostgresAdapter):
         conn = cls.get_connection(profile, model_name)
         client = conn.get('handle')
 
-        formatted_sql = cls.format_sql_for_bigquery(sql)
-        query = client.run_sync_query(formatted_sql)
+        query = client.run_sync_query(sql)
         query.timeout_ms = cls.QUERY_TIMEOUT
+        query.use_legacy_sql = False
 
         debug_message = "Fetching data for query {}:\n{}"
-        logger.debug(debug_message.format(model_name, formatted_sql))
+        logger.debug(debug_message.format(model_name, sql))
 
         query.run()
 
