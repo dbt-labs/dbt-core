@@ -78,8 +78,12 @@ class BaseRunner(object):
     def raise_on_first_error(self):
         return False
 
-    def is_ephemeral(self):
-        return dbt.utils.get_materialization(self.node) == 'ephemeral'
+    @classmethod
+    def is_ephemeral_model(cls, node):
+        materialized = dbt.utils.get_materialization(node)
+        resource_type = node.get('resource_type')
+
+        return materialized == 'ephemeral' and resource_type == NodeType.Model
 
     def safe_run(self, flat_graph, existing):
         catchable_errors = (dbt.exceptions.CompilationException,
@@ -95,7 +99,7 @@ class BaseRunner(object):
             result.node = compiled_node
 
             # for ephemeral nodes, we only want to compile, not run
-            if not self.is_ephemeral():
+            if not self.is_ephemeral_model(self.node):
                 result = self.run(compiled_node, existing, flat_graph)
 
         except catchable_errors as e:

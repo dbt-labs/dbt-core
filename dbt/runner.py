@@ -53,14 +53,14 @@ class RunManager(object):
         all_nodes = dbt.utils.flatten_nodes(node_dependency_list)
 
         num_nodes = len([
-            n for n in all_nodes if get_materialization(n) != 'ephemeral'
+            n for n in all_nodes if not Runner.is_ephemeral_model(n)
         ])
 
         node_runners = {}
         i = 0
         for node in all_nodes:
             uid = node.get('unique_id')
-            if get_materialization(node) == 'ephemeral':
+            if Runner.is_ephemeral_model(node):
                 runner = Runner(self.project, adapter, node, 0, 0)
             else:
                 i += 1
@@ -78,12 +78,12 @@ class RunManager(object):
             return runner.on_skip()
 
         # no before/after printing for ephemeral mdoels
-        if not runner.is_ephemeral():
+        if not runner.is_ephemeral_model(runner.node):
             runner.before_execute()
 
         result = runner.safe_run(flat_graph, existing)
 
-        if not runner.is_ephemeral():
+        if not runner.is_ephemeral_model(runner.node):
             runner.after_execute(result)
 
         if result.errored and runner.raise_on_first_error():
