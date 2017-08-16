@@ -29,14 +29,14 @@ class RedshiftAdapter(PostgresAdapter):
             connection = cls.get_connection(profile, model_name)
 
             if connection.get('transaction_open'):
-                cls.commit(connection)
+                cls.commit(profile, connection)
 
             cls.begin(profile, connection.get('name'))
 
             to_return = super(PostgresAdapter, cls).drop(
                 profile, relation, relation_type, model_name)
 
-            cls.commit(connection)
+            cls.commit(profile, connection)
             cls.begin(profile, connection.get('name'))
 
             return to_return

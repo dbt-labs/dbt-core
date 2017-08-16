@@ -34,7 +34,7 @@ class SnowflakeAdapter(PostgresAdapter):
             if 'Empty SQL statement' in msg:
                 logger.debug("got empty sql statement, moving on")
             elif 'This session does not have a current database' in msg:
-                cls.rollback(connection)
+                cls.release_connection(profile, connection_name)
                 raise dbt.exceptions.FailedToConnectException(
                     ('{}\n\nThis error sometimes occurs when invalid '
                      'credentials are provided, or when your default role '
@@ -42,12 +42,12 @@ class SnowflakeAdapter(PostgresAdapter):
                      'Please double check your profile and try again.')
                     .format(msg))
             else:
-                cls.rollback(connection)
+                cls.release_connection(profile, connection_name)
                 raise dbt.exceptions.DatabaseException(msg)
         except Exception as e:
             logger.debug("Error running SQL: %s", sql)
             logger.debug("Rolling back transaction.")
-            cls.rollback(connection)
+            cls.release_connection(profile, connection_name)
             raise dbt.exceptions.RuntimeException(e.msg)
 
     @classmethod

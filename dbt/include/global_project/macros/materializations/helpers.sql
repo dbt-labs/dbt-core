@@ -1,6 +1,6 @@
-{% macro run_hooks(hooks) %}
+{% macro run_hooks(hooks, auto_begin=True) %}
   {% for hook in hooks %}
-    {% call statement() %}
+    {% call statement(auto_begin=auto_begin) %}
       {{ hook }};
     {% endcall %}
   {% endfor %}

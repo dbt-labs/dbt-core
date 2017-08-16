@@ -14,6 +14,7 @@
     {%- endif %}
   {%- endif %}
 
+  {{ run_hooks(pre_transaction_hooks, auto_begin=False) }}
   {{ run_hooks(pre_hooks) }}
 
   -- build model
@@ -51,4 +52,6 @@
   {%- endif %}
 
   {{ adapter.commit() }}
+
+  {{ run_hooks(post_transaction_hooks, auto_begin=False) }}
 {% endmaterialization %}

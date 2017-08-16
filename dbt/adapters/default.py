@@ -397,6 +397,10 @@ class DefaultAdapter(object):
         return cls.add_query(profile, 'BEGIN', name, auto_begin=False)
 
     @classmethod
+    def add_commit_query(cls, profile, name):
+        return cls.add_query(profile, 'COMMIT', name, auto_begin=False)
+
+    @classmethod
     def begin(cls, profile, name='master'):
         global connections_in_use
         connection = cls.get_connection(profile, name)
@@ -428,10 +432,10 @@ class DefaultAdapter(object):
 
         connection = cls.get_connection(profile, name, False)
 
-        return cls.commit(connection)
+        return cls.commit(profile, connection)
 
     @classmethod
-    def commit(cls, connection):
+    def commit(cls, profile, connection):
         global connections_in_use
 
         if dbt.flags.STRICT_MODE:
@@ -445,7 +449,7 @@ class DefaultAdapter(object):
                 'it does not have one open!'.format(connection.get('name')))
 
         logger.debug('On {}: COMMIT'.format(connection.get('name')))
-        connection.get('handle').commit()
+        cls.add_commit_query(profile, connection.get('name'))
 
         connection['transaction_open'] = False
         connections_in_use[connection.get('name')] = connection

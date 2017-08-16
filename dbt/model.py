@@ -10,7 +10,7 @@ from dbt.utils import split_path, deep_merge, DBTConfigKeys
 class SourceConfig(object):
     ConfigKeys = DBTConfigKeys
 
-    AppendListFields = ['pre-hook', 'post-hook']
+    AppendListFields = ['pre-hook', 'post-hook', 'pre-transaction-hook', 'post-transaction-hook']
     ExtendDictFields = ['vars']
     ClobberFields = [
         'enabled',
@@ -83,7 +83,7 @@ class SourceConfig(object):
 
         # make sure we're not clobbering an array of hooks with a single hook
         # string
-        hook_fields = ['pre-hook', 'post-hook']
+        hook_fields = ['pre-hook', 'post-hook', 'pre-transaction-hook', 'post-transaction-hook']
         for hook_field in hook_fields:
             if hook_field in config:
                 config[hook_field] = self.__get_hooks(config, hook_field)

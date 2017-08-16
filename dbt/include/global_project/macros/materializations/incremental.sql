@@ -38,6 +38,7 @@
     {{ adapter.drop(identifier, existing_type) }}
   {%- endif %}
 
+  {{ run_hooks(pre_transaction_hooks, auto_begin=False) }}
   {{ run_hooks(pre_hooks) }}
 
   -- build model
@@ -80,7 +81,7 @@
   {%- endif %}
 
   {{ run_hooks(post_hooks) }}
-
   {{ adapter.commit() }}
+  {{ run_hooks(post_transaction_hooks, auto_begin=False) }}
 
 {%- endmaterialization %}

@@ -20,6 +20,8 @@ DBTConfigKeys = [
     'sort_type',
     'pre-hook',
     'post-hook',
+    'pre-transaction-hook',
+    'post-transaction-hook',
     'vars'
 ]
 

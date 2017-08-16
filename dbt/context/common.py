@@ -251,6 +251,9 @@ def generate(model, project, flat_graph, provider=None):
     pre_hooks = get_hooks(model, context, 'pre-hook')
     post_hooks = get_hooks(model, context, 'post-hook')
 
+    pre_transaction_hooks = get_hooks(model, context, 'pre-transaction-hook')
+    post_transaction_hooks = get_hooks(model, context, 'post-transaction-hook')
+
     db_wrapper = DatabaseWrapper(model, adapter, profile)
 
     context = dbt.utils.merge(context, {
@@ -266,6 +269,8 @@ def generate(model, project, flat_graph, provider=None):
         "model": model,
         "post_hooks": post_hooks,
         "pre_hooks": pre_hooks,
+        "pre_transaction_hooks": pre_transaction_hooks,
+        "post_transaction_hooks": post_transaction_hooks,
         "ref": provider.ref(model, project, profile, schema, flat_graph),
         "schema": schema,
         "sql": model.get('injected_sql'),

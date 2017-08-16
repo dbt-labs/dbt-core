@@ -23,14 +23,14 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         except psycopg2.DatabaseError as e:
             logger.debug('Postgres error: {}'.format(str(e)))
 
-            cls.rollback(connection)
+            cls.release_connection(profile, connection_name)
             raise dbt.exceptions.DatabaseException(
                 dbt.compat.to_string(e).strip())
 
         except Exception as e:
             logger.debug("Error running SQL: %s", sql)
             logger.debug("Rolling back transaction.")
-            cls.rollback(connection)
+            cls.release_connection(profile, connection_name)
             raise dbt.exceptions.RuntimeException(e)
 
     @classmethod
