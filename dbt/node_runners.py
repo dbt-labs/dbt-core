@@ -160,8 +160,9 @@ class BaseRunner(object):
         schema_name = self.get_schema(self.adapter, self.profile)
 
         node_name = self.node.get('name')
-        dbt.ui.printer.print_skip_line(self.node, schema_name, node_name,
-                                       self.node_index, self.num_nodes)
+        if not self.is_ephemeral_model(self.node):
+            dbt.ui.printer.print_skip_line(self.node, schema_name, node_name,
+                                           self.node_index, self.num_nodes)
 
         node_result = RunModelResult(self.node, skip=True)
         return node_result

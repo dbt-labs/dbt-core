@@ -130,7 +130,8 @@ class RunManager(object):
 
             try:
                 for result in pool.imap_unordered(self.call_runner, args_list):
-                    node_results.append(result)
+                    if not Runner.is_ephemeral_model(result.node):
+                        node_results.append(result)
 
                     node_id = result.node.get('unique_id')
                     flat_graph['nodes'][node_id] = result.node
