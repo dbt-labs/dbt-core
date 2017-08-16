@@ -221,6 +221,12 @@ def parse_node(node, node_path, root_project_config, package_project_config,
         node.get('raw_sql'), context, node,
         capture_macros=True)
 
+    # Clean up any open connections opened by adapter functions that hit the db
+    db_wrapper = context['adapter']
+    adapter = db_wrapper.adapter
+    profile = db_wrapper.profile
+    adapter.release_connection(profile, node.get('name'))
+
     # Overwrite node config
     config_dict = node.get('config', {})
     config_dict.update(config.config)
