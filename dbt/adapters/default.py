@@ -32,13 +32,13 @@ class DefaultAdapter(object):
         "truncate",
         "add_query",
         "expand_target_column_types",
+        "quote_schema_and_table",
     ]
 
     raw_functions = [
         "get_status",
         "get_result_from_cursor",
         "quote",
-        "quote_schema_and_table",
     ]
 
     ###
@@ -580,6 +580,6 @@ class DefaultAdapter(object):
         return '"{}"'.format(identifier)
 
     @classmethod
-    def quote_schema_and_table(cls, profile, schema, table):
+    def quote_schema_and_table(cls, profile, schema, table, model_name=None):
         return '{}.{}'.format(cls.quote(schema),
                               cls.quote(table))

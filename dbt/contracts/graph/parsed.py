@@ -18,8 +18,6 @@ config_contract = Schema({
     Required('materialized'): basestring,
     Required('post-hook'): list,
     Required('pre-hook'): list,
-    Required('post-transaction-hook'): list,
-    Required('pre-transaction-hook'): list,
     Required('vars'): dict,
 }, extra=ALLOW_EXTRA)
 

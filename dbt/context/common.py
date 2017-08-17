@@ -17,10 +17,16 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 def get_hooks(model, context, hook_key):
     hooks = model.get('config', {}).get(hook_key, [])
 
-    if isinstance(hooks, basestring):
+    if not isinstance(hooks, (list, tuple)):
         hooks = [hooks]
 
-    return hooks
+    wrapped_hooks = []
+    for hook in hooks:
+        if isinstance(hook, dict):
+            hook = json.dumps(hook)
+        wrapped_hooks.append(hook)
+
+    return wrapped_hooks
 
 
 class DatabaseWrapper(object):
@@ -227,6 +233,15 @@ def render(context, node):
     return fn
 
 
+def fromjson(node):
+    def fn(string, default=None):
+        try:
+            return json.loads(string)
+        except ValueError as e:
+            return default
+    return fn
+
+
 def generate(model, project, flat_graph, provider=None):
     """
     Not meant to be called directly. Call with either:
@@ -251,9 +266,6 @@ def generate(model, project, flat_graph, provider=None):
     pre_hooks = get_hooks(model, context, 'pre-hook')
     post_hooks = get_hooks(model, context, 'post-hook')
 
-    pre_transaction_hooks = get_hooks(model, context, 'pre-transaction-hook')
-    post_transaction_hooks = get_hooks(model, context, 'post-transaction-hook')
-
     db_wrapper = DatabaseWrapper(model, adapter, profile)
 
     context = dbt.utils.merge(context, {
@@ -269,12 +281,11 @@ def generate(model, project, flat_graph, provider=None):
         "model": model,
         "post_hooks": post_hooks,
         "pre_hooks": pre_hooks,
-        "pre_transaction_hooks": pre_transaction_hooks,
-        "post_transaction_hooks": post_transaction_hooks,
         "ref": provider.ref(model, project, profile, schema, flat_graph),
         "schema": schema,
         "sql": model.get('injected_sql'),
         "sql_now": adapter.date_function(),
+        "fromjson": fromjson(model),
         "target": target,
         "this": dbt.utils.This(
             schema,
