@@ -237,15 +237,16 @@ class BigQueryAdapter(PostgresAdapter):
         dataset = cls.get_dataset(profile, schema, model_name)
 
         if materialization == 'view':
-            res = cls.materialize_as_view(profile, dataset, model_name, model_sql)
+            res = cls.materialize_as_view(profile, dataset, model_name,
+                                          model_sql)
         elif materialization == 'table':
-            res = cls.materialize_as_table(profile, dataset, model_name, model_sql)
+            res = cls.materialize_as_table(profile, dataset, model_name,
+                                           model_sql)
         else:
             msg = "Invalid relation type: '{}'".format(materialization)
             raise dbt.exceptions.RuntimeException(msg, model)
 
         return res
-
 
     @classmethod
     def fetch_query_results(cls, query):
