@@ -477,8 +477,14 @@ def get_nice_schema_test_name(test_type, test_name, args):
 
     clean_flat_args = [re.sub('[^0-9a-zA-Z_]+', '_', arg) for arg in flat_args]
     unique = "__".join(clean_flat_args)
-    unique_hash = hashlib.md5(unique.encode('utf-8')).hexdigest()
-    return '{}_{}_{}'.format(test_type, test_name, unique_hash)
+    cutoff = 32
+
+    if len(unique) <= cutoff:
+        label = unique
+    else:
+        label = hashlib.md5(unique.encode('utf-8')).hexdigest()
+
+    return '{}_{}_{}'.format(test_type, test_name, label)
 
 
 def as_kwarg(key, value):
@@ -513,7 +519,6 @@ def parse_schema_test(test_base, model_name, test_config, test_type,
     })
 
     name = get_nice_schema_test_name(test_type, model_name, test_args)
-
     pseudo_path = dbt.utils.get_pseudo_test_path(name, test_base.get('path'),
                                                  'schema_test')
     to_return = {
