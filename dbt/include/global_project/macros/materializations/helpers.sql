@@ -19,3 +19,11 @@
     "{{ col.name }}" {{ col.data_type }} {%- if not loop.last %},{% endif %}
   {% endfor -%}
 {% endmacro %}
+
+
+{% macro drop_if_exists(existing, name) %}
+  {% set existing_type = existing.get(name) %}
+  {% if existing_type is not none %}
+    {{ adapter.drop(name, existing_type) }}
+  {% endif %}
+{% endmacro %}

@@ -5,6 +5,8 @@
   {%- set existing = adapter.query_for_existing(schema) -%}
   {%- set existing_type = existing.get(identifier) -%}
 
+  {{ drop_if_exists(existing, tmp_identifier) }}
+
   -- setup
   {% if non_destructive_mode -%}
     {% if existing_type == 'table' -%}
@@ -43,10 +45,7 @@
   {% if non_destructive_mode -%}
     -- noop
   {%- else -%}
-    {%- if existing_type is not none -%}
-      {{ adapter.drop(identifier, existing_type) }}
-    {%- endif %}
-
+    {{ drop_if_exists(existing, identifier) }}
     {{ adapter.rename(tmp_identifier, identifier) }}
   {%- endif %}
 
