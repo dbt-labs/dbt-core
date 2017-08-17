@@ -74,3 +74,13 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
         self.assertTablesEqual("seed","view")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
+
+
+    @attr(type='postgres')
+    def test_delete__dbt_tmp_relation(self):
+        # This creates a __dbt_tmp view - make sure it doesn't interfere with the dbt run
+        self.run_sql_file("test/integration/017_runtime_materialization_tests/create_view__dbt_tmp.sql")
+        self.run_dbt(['run', '--model', 'view'])
+
+        self.assertTableDoesNotExist('view__dbt_tmp')
+        self.assertTablesEqual("seed","view")
