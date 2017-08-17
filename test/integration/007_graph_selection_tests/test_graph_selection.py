@@ -23,6 +23,7 @@ class TestGraphSelection(DBTIntegrationTest):
         created_models = self.get_models_in_schema()
         self.assertFalse('users_rollup' in created_models)
         self.assertFalse('base_users' in created_models)
+        self.assertFalse('emails' in created_models)
 
     @attr(type='snowflake')
     def test__snowflake__specific_model(self):
@@ -36,6 +37,7 @@ class TestGraphSelection(DBTIntegrationTest):
         created_models = self.get_models_in_schema()
         self.assertFalse('users_rollup' in created_models)
         self.assertFalse('base_users' in created_models)
+        self.assertFalse('emails' in created_models)
 
 
     @attr(type='postgres')
@@ -50,6 +52,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertTablesEqual("summary_expected", "users_rollup")
         created_models = self.get_models_in_schema()
         self.assertFalse('base_users' in created_models)
+        self.assertFalse('emails' in created_models)
 
     @attr(type='snowflake')
     def test__snowflake__specific_model_and_children(self):
@@ -63,6 +66,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertTablesEqual("summary_expected", "users_rollup")
         created_models = self.get_models_in_schema()
         self.assertFalse('base_users' in created_models)
+        self.assertFalse('emails' in created_models)
 
 
     @attr(type='postgres')
@@ -77,6 +81,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertTablesEqual("summary_expected", "users_rollup")
         created_models = self.get_models_in_schema()
         self.assertFalse('base_users' in created_models)
+        self.assertFalse('emails' in created_models)
 
     @attr(type='snowflake')
     def test__snowflake__specific_model_and_parents(self):
@@ -90,6 +95,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertTablesEqual("summary_expected", "users_rollup")
         created_models = self.get_models_in_schema()
         self.assertFalse('base_users' in created_models)
+        self.assertFalse('emails' in created_models)
 
 
     @attr(type='postgres')
@@ -104,6 +110,7 @@ class TestGraphSelection(DBTIntegrationTest):
         created_models = self.get_models_in_schema()
         self.assertFalse('base_users' in created_models)
         self.assertFalse('users_rollup' in created_models)
+        self.assertFalse('emails' in created_models)
 
     @attr(type='snowflake')
     def test__snowflake__specific_model_with_exclusion(self):
@@ -117,3 +124,4 @@ class TestGraphSelection(DBTIntegrationTest):
         created_models = self.get_models_in_schema()
         self.assertFalse('base_users' in created_models)
         self.assertFalse('users_rollup' in created_models)
+        self.assertFalse('emails' in created_models)

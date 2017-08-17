@@ -1,4 +1,8 @@
 
+emails:
+    constraints:
+        unique:
+            - email
 
 users:
     constraints:
