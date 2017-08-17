@@ -1,6 +1,7 @@
 import copy
 import os
 import re
+import hashlib
 
 import dbt.flags
 import dbt.model
@@ -476,7 +477,8 @@ def get_nice_schema_test_name(test_type, test_name, args):
 
     clean_flat_args = [re.sub('[^0-9a-zA-Z_]+', '_', arg) for arg in flat_args]
     unique = "__".join(clean_flat_args)
-    return '{}_{}_{}'.format(test_type, test_name, unique)
+    unique_hash = hashlib.md5(unique.encode('utf-8')).hexdigest()
+    return '{}_{}_{}'.format(test_type, test_name, unique_hash)
 
 
 def as_kwarg(key, value):
