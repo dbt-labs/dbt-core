@@ -38,8 +38,10 @@
     {{ adapter.drop(identifier, existing_type) }}
   {%- endif %}
 
-  {{ run_hooks(pre_transaction_hooks, auto_begin=False) }}
-  {{ run_hooks(pre_hooks) }}
+  {{ run_hooks(pre_hooks, inside_transaction=False) }}
+
+  -- `BEGIN` happens here:
+  {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
   -- build model
   {% if force_create or not adapter.already_exists(schema, identifier) -%}
@@ -80,8 +82,11 @@
      {% endcall %}
   {%- endif %}
 
-  {{ run_hooks(post_hooks) }}
+  {{ run_hooks(post_hooks, inside_transaction=True) }}
+
+  -- `COMMIT` happens here
   {{ adapter.commit() }}
-  {{ run_hooks(post_transaction_hooks, auto_begin=False) }}
+
+  {{ run_hooks(post_hooks, inside_transaction=False) }}
 
 {%- endmaterialization %}

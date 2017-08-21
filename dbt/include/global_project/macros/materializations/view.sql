@@ -6,8 +6,10 @@
   {%- set existing = adapter.query_for_existing(schema) -%}
   {%- set existing_type = existing.get(identifier) -%}
 
-  {{ run_hooks(pre_hooks | rejectattr('transaction'), auto_begin=False) }}
-  {{ run_hooks(pre_hooks | selectattr('transaction')) }}
+  {{ run_hooks(pre_hooks, inside_transaction=False) }}
+
+  -- `BEGIN` happens here:
+  {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
   -- build model
   {% if non_destructive_mode and existing_type == 'view' -%}
@@ -18,7 +20,7 @@
     {%- endcall %}
   {%- endif %}
 
-  {{ run_hooks(post_hooks | selectattr('transaction')) }}
+  {{ run_hooks(post_hooks, inside_transaction=True) }}
 
   -- cleanup
   {% if non_destructive_mode and existing_type == 'view' -%}
@@ -31,8 +33,9 @@
     {{ adapter.rename(tmp_identifier, identifier) }}
   {%- endif %}
 
+  -- `COMMIT` happens here
   {{ adapter.commit() }}
 
-  {{ run_hooks(post_hooks | rejectattr('transaction'), auto_begin=False) }}
+  {{ run_hooks(post_hooks, inside_transaction=False) }}
 
 {%- endmaterialization -%}
