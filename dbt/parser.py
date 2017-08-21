@@ -1,6 +1,7 @@
 import copy
 import os
 import re
+import hashlib
 
 import dbt.flags
 import dbt.model
@@ -19,6 +20,7 @@ import dbt.contracts.project
 from dbt.node_types import NodeType, RunHookType
 from dbt.compat import basestring, to_string
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.utils import get_pseudo_test_path
 
 
 def get_path(resource_type, package_name, resource_name):
@@ -179,7 +181,7 @@ def parse_macro_file(macro_file_path,
 
 
 def parse_node(node, node_path, root_project_config, package_project_config,
-               all_projects, tags=None, fqn_extra=None):
+               all_projects, tags=None, fqn_extra=None, fqn=None):
     logger.debug("Parsing {}".format(node_path))
     node = copy.deepcopy(node)
 
@@ -197,7 +199,8 @@ def parse_node(node, node_path, root_project_config, package_project_config,
         }
     })
 
-    fqn = get_fqn(node.get('path'), package_project_config, fqn_extra)
+    if fqn is None:
+        fqn = get_fqn(node.get('path'), package_project_config, fqn_extra)
 
     config = dbt.model.SourceConfig(
         root_project_config, package_project_config, fqn)
@@ -476,7 +479,17 @@ def get_nice_schema_test_name(test_type, test_name, args):
 
     clean_flat_args = [re.sub('[^0-9a-zA-Z_]+', '_', arg) for arg in flat_args]
     unique = "__".join(clean_flat_args)
-    return '{}_{}_{}'.format(test_type, test_name, unique)
+
+    cutoff = 32
+    if len(unique) <= cutoff:
+        label = unique
+    else:
+        label = hashlib.md5(unique.encode('utf-8')).hexdigest()
+
+    filename = '{}_{}_{}'.format(test_type, test_name, label)
+    name = '{}_{}_{}'.format(test_type, test_name, unique)
+
+    return filename, name
 
 
 def as_kwarg(key, value):
@@ -510,28 +523,35 @@ def parse_schema_test(test_base, model_name, test_config, test_type,
         'kwargs': ", ".join(kwargs)
     })
 
-    name = get_nice_schema_test_name(test_type, model_name, test_args)
+    base_path = test_base.get('path')
+    hashed_name, full_name = get_nice_schema_test_name(test_type, model_name,
+                                                       test_args)
 
-    pseudo_path = dbt.utils.get_pseudo_test_path(name, test_base.get('path'),
-                                                 'schema_test')
+    hashed_path = get_pseudo_test_path(hashed_name, base_path, 'schema_test')
+    full_path = get_pseudo_test_path(full_name, base_path, 'schema_test')
+
+    # supply our own fqn which overrides the hashed version from the path
+    fqn_override = get_fqn(full_path, package_project_config)
+
     to_return = {
-        'name': name,
+        'name': full_name,
         'resource_type': test_base.get('resource_type'),
         'package_name': test_base.get('package_name'),
         'root_path': test_base.get('root_path'),
-        'path': pseudo_path,
+        'path': hashed_path,
         'original_file_path': test_base.get('original_file_path'),
         'raw_sql': raw_sql
     }
 
     return parse_node(to_return,
                       get_test_path(test_base.get('package_name'),
-                                    name),
+                                    full_name),
                       root_project_config,
                       package_project_config,
                       all_projects,
                       tags={'schema'},
-                      fqn_extra=None)
+                      fqn_extra=None,
+                      fqn=fqn_override)
 
 
 def load_and_parse_yml(package_name, root_project, all_projects, root_dir,

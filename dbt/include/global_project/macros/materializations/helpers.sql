@@ -45,3 +45,11 @@
 {% macro vacuum(tbl) %}
     {{ after_commit('vacuum ' ~ adapter.quote_schema_and_table(tbl.schema, tbl.name)) }}
 {% endmacro %}
+
+
+{% macro drop_if_exists(existing, name) %}
+  {% set existing_type = existing.get(name) %}
+  {% if existing_type is not none %}
+    {{ adapter.drop(name, existing_type) }}
+  {% endif %}
+{% endmacro %}
