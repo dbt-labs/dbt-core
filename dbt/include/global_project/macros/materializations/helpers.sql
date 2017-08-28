@@ -39,3 +39,11 @@
 {% macro after_commit(sql) %}
     {{ make_hook_config(sql, inside_transaction=False) }}
 {% endmacro %}
+
+
+{% macro drop_if_exists(existing, name) %}
+  {% set existing_type = existing.get(name) %}
+  {% if existing_type is not none %}
+    {{ adapter.drop(name, existing_type) }}
+  {% endif %}
+{% endmacro %}
