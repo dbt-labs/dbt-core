@@ -275,13 +275,26 @@ class ModelRunner(CompileRunner):
         nodes = flat_graph.get('nodes', {}).values()
         hooks = get_nodes_by_tags(nodes, {hook_type}, NodeType.Operation)
 
-        for hook in hooks:
-            compiled = cls.compile_node(adapter, project, hook, flat_graph)
+        # TODO : hook_blob is a ;-delimited list of statements. Make this a list
+        #        (in the parser) instead
+        for hook_blob in hooks:
+            compiled = cls.compile_node(adapter, project, hook_blob, flat_graph)
             model_name = compiled.get('name')
-            sql = compiled['wrapped_sql']
-            adapter.execute_one(profile, sql, model_name=model_name,
-                                auto_begin=True)
-            adapter.commit_if_has_connection(profile, model_name)
+            statements = compiled['wrapped_sql'].split(";")
+
+            # make sure there isn't an open transaction
+            conn = adapter.begin(profile, model_name)
+            adapter.commit(profile, conn)
+
+            for statement in statements:
+                hook = dbt.hooks.get_hook_dict(statement)
+                sql = hook.get('sql', '').strip()
+
+                if len(sql) == 0:
+                    continue
+
+                adapter.execute_one(profile, sql, model_name=model_name,
+                                    auto_begin=False)
 
     @classmethod
     def safe_run_hooks(cls, project, adapter, flat_graph, hook_type):

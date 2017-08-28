@@ -3,7 +3,7 @@ import os
 import voluptuous
 
 from dbt.adapters.factory import get_adapter
-from dbt.compat import basestring
+from dbt.compat import basestring, to_string
 
 import dbt.clients.jinja
 import dbt.flags
@@ -11,22 +11,9 @@ import dbt.schema
 import dbt.tracking
 import dbt.utils
 
+import dbt.hooks
+
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
-
-
-def get_hooks(model, context, hook_key):
-    hooks = model.get('config', {}).get(hook_key, [])
-
-    if not isinstance(hooks, (list, tuple)):
-        hooks = [hooks]
-
-    wrapped_hooks = []
-    for hook in hooks:
-        if isinstance(hook, dict):
-            hook = json.dumps(hook)
-        wrapped_hooks.append(hook)
-
-    return wrapped_hooks
 
 
 class DatabaseWrapper(object):
@@ -263,8 +250,8 @@ def generate(model, project, flat_graph, provider=None):
     context = {'env': target}
     schema = profile.get('schema', 'public')
 
-    pre_hooks = get_hooks(model, context, 'pre-hook')
-    post_hooks = get_hooks(model, context, 'post-hook')
+    pre_hooks = model.get('config', {}).get('pre-hook')
+    post_hooks = model.get('config', {}).get('post-hook')
 
     db_wrapper = DatabaseWrapper(model, adapter, profile)
 

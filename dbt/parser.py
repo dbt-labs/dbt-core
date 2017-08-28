@@ -5,6 +5,7 @@ import re
 import dbt.flags
 import dbt.model
 import dbt.utils
+import dbt.hooks
 
 import jinja2.runtime
 import dbt.clients.jinja
@@ -179,7 +180,7 @@ def parse_macro_file(macro_file_path,
 
 
 def parse_node(node, node_path, root_project_config, package_project_config,
-               all_projects, tags=None, fqn_extra=None):
+               all_projects, tags=None, fqn_extra=None, macros=None):
     logger.debug("Parsing {}".format(node_path))
     node = copy.deepcopy(node)
 
@@ -188,6 +189,9 @@ def parse_node(node, node_path, root_project_config, package_project_config,
 
     if fqn_extra is None:
         fqn_extra = []
+
+    if macros is None:
+        macros = {}
 
     node.update({
         'refs': [],
@@ -215,7 +219,8 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     config_dict.update(config.config)
     node['config'] = config_dict
 
-    context = dbt.context.parser.generate(node, package_project_config, {})
+    context = dbt.context.parser.generate(node, package_project_config,
+                                          {"macros": macros})
 
     dbt.clients.jinja.get_rendered(
         node.get('raw_sql'), context, node,
@@ -232,14 +237,20 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     config_dict.update(config.config)
     node['config'] = config_dict
 
+    for hook_type in dbt.hooks.ModelHookType.Both:
+        node['config'][hook_type] = dbt.hooks.get_hooks(node, hook_type)
+
     del node['config_reference']
 
     return node
 
 
-def parse_sql_nodes(nodes, root_project, projects, tags=None):
+def parse_sql_nodes(nodes, root_project, projects, tags=None, macros=None):
     if tags is None:
         tags = set()
+
+    if macros is None:
+        macros = {}
 
     to_return = {}
 
@@ -258,7 +269,8 @@ def parse_sql_nodes(nodes, root_project, projects, tags=None):
                                           root_project,
                                           projects.get(package_name),
                                           projects,
-                                          tags=tags)
+                                          tags=tags,
+                                          macros=macros)
 
     dbt.contracts.graph.parsed.validate_nodes(to_return)
 
@@ -266,11 +278,14 @@ def parse_sql_nodes(nodes, root_project, projects, tags=None):
 
 
 def load_and_parse_sql(package_name, root_project, all_projects, root_dir,
-                       relative_dirs, resource_type, tags=None):
+                       relative_dirs, resource_type, tags=None, macros=None):
     extension = "[!.#~]*.sql"
 
     if tags is None:
         tags = set()
+
+    if macros is None:
+        macros = {}
 
     if dbt.flags.STRICT_MODE:
         dbt.contracts.project.validate_list(all_projects)
@@ -311,7 +326,7 @@ def load_and_parse_sql(package_name, root_project, all_projects, root_dir,
             'raw_sql': file_contents
         })
 
-    return parse_sql_nodes(result, root_project, all_projects, tags)
+    return parse_sql_nodes(result, root_project, all_projects, tags, macros)
 
 
 def get_hooks_from_project(project_cfg, hook_type):
@@ -335,7 +350,8 @@ def get_hooks(all_projects, hook_type):
     return project_hooks
 
 
-def load_and_parse_run_hook_type(root_project, all_projects, hook_type):
+def load_and_parse_run_hook_type(root_project, all_projects, hook_type,
+                                 macros):
 
     if dbt.flags.STRICT_MODE:
         dbt.contracts.project.validate_list(all_projects)
@@ -361,13 +377,16 @@ def load_and_parse_run_hook_type(root_project, all_projects, hook_type):
     tags = {hook_type}
     return parse_sql_nodes(result, root_project, all_projects, tags=tags)
 
+def load_and_parse_run_hooks(root_project, all_projects, macros=None):
+    if macros is None:
+        macros = {}
 
-def load_and_parse_run_hooks(root_project, all_projects):
     hook_nodes = {}
     for hook_type in RunHookType.Both:
         project_hooks = load_and_parse_run_hook_type(root_project,
                                                      all_projects,
-                                                     hook_type)
+                                                     hook_type,
+                                                     macros=macros)
         hook_nodes.update(project_hooks)
 
     return hook_nodes

@@ -1,14 +1,8 @@
 {% macro run_hooks(hooks, inside_transaction=True) %}
-  {% for hook in hooks %}
-    {%- set hook_data = fromjson(render(hook), {}) -%}
-    {%- set hook_is_in_transaction = hook_data.get('transaction', True) -%};
-    {%- set hook_sql = hook_data.get('sql', hook) -%};
-
-    {%- if hook_is_in_transaction == inside_transaction -%}
-      {% call statement(auto_begin=inside_transaction) %}
-        {{ hook_sql }}
-      {% endcall %}
-    {%- endif -%}
+  {% for hook in hooks | selectattr('transaction', 'equalto', inside_transaction)  %}
+    {% call statement(auto_begin=inside_transaction) %}
+      {{ hook.get('sql') }}
+    {% endcall %}
   {% endfor %}
 {% endmacro %}
 
@@ -37,11 +31,11 @@
 {% endmacro %}
 
 
-{% macro after_commit(sql) %}
-    {{ make_hook_config(sql, inside_transaction=False) }}
+{% macro in_transaction(sql) %}
+    {{ make_hook_config(sql, inside_transaction=True) }}
 {% endmacro %}
 
 
-{% macro vacuum(tbl) %}
-    {{ after_commit('vacuum ' ~ adapter.quote_schema_and_table(tbl.schema, tbl.name)) }}
+{% macro after_commit(sql) %}
+    {{ make_hook_config(sql, inside_transaction=False) }}
 {% endmacro %}
