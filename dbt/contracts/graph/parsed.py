@@ -73,6 +73,10 @@ parsed_graph_contract = Schema({
 })
 
 
+def validate_hook(hook):
+    validate_with(hook_contract, hooks)
+
+
 def validate_nodes(parsed_nodes):
     validate_with(parsed_nodes_contract, parsed_nodes)
 

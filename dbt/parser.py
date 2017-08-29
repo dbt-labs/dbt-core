@@ -2,6 +2,7 @@ import copy
 import os
 import re
 import hashlib
+import collections
 
 import dbt.flags
 import dbt.model
@@ -342,13 +343,11 @@ def get_hooks_from_project(project_cfg, hook_type):
 
 
 def get_hooks(all_projects, hook_type):
-    project_hooks = {}
+    project_hooks = collections.defaultdict(list)
 
     for project_name, project in all_projects.items():
         hooks = get_hooks_from_project(project, hook_type)
-
-        if len(hooks) > 0:
-            project_hooks[project_name] = ";\n".join(hooks)
+        project_hooks[project_name].extend(hooks)
 
     return project_hooks
 
@@ -365,20 +364,24 @@ def load_and_parse_run_hook_type(root_project, all_projects, hook_type,
     for project_name, hooks in project_hooks.items():
         project = all_projects[project_name]
 
-        hook_path = dbt.utils.get_pseudo_hook_path(hook_type)
+        for i, hook in enumerate(hooks):
+            hook_name = '{}-{}-{}'.format(project_name, hook_type, i)
+            hook_path = dbt.utils.get_pseudo_hook_path(hook_name)
 
-        result.append({
-            'name': hook_type,
-            'root_path': "{}/dbt_project.yml".format(project_name),
-            'resource_type': NodeType.Operation,
-            'path': hook_path,
-            'original_file_path': hook_path,
-            'package_name': project_name,
-            'raw_sql': hooks
-        })
+            result.append({
+                'name': hook_name,
+                'root_path': "{}/dbt_project.yml".format(project_name),
+                'resource_type': NodeType.Operation,
+                'path': hook_path,
+                'original_file_path': hook_path,
+                'package_name': project_name,
+                'raw_sql': hook
+            })
 
     tags = {hook_type}
-    return parse_sql_nodes(result, root_project, all_projects, tags=tags)
+    return parse_sql_nodes(result, root_project, all_projects, tags=tags,
+                           macros=macros)
+
 
 def load_and_parse_run_hooks(root_project, all_projects, macros=None):
     if macros is None:

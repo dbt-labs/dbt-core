@@ -517,6 +517,12 @@ class DefaultAdapter(object):
             return connection, cursor
 
     @classmethod
+    def clear_transaction(cls, profile, conn_name='master'):
+        conn = cls.begin(profile, conn_name)
+        cls.commit(profile, conn)
+        return conn_name
+
+    @classmethod
     def execute_one(cls, profile, sql, model_name=None, auto_begin=False):
         cls.get_connection(profile, model_name)
 
