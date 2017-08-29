@@ -22,7 +22,7 @@ import dbt.contracts.project
 from dbt.node_types import NodeType, RunHookType
 from dbt.compat import basestring, to_string
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.utils import get_pseudo_test_path
+from dbt.utils import get_pseudo_test_path, coalesce
 
 
 def get_path(resource_type, package_name, resource_name):
@@ -187,14 +187,9 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     logger.debug("Parsing {}".format(node_path))
     node = copy.deepcopy(node)
 
-    if tags is None:
-        tags = set()
-
-    if fqn_extra is None:
-        fqn_extra = []
-
-    if macros is None:
-        macros = {}
+    tags = coalesce(tags, set())
+    fqn_extra = coalesce(tags, [])
+    macros = coalesce(macros, {})
 
     node.update({
         'refs': [],

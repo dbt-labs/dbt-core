@@ -43,6 +43,13 @@ class This(object):
         return self.schema_table(self.schema, self.table)
 
 
+def coalesce(*args):
+    for arg in args:
+        if arg is not None:
+            return arg
+    return None
+
+
 def get_model_name_or_none(model):
     if model is None:
         name = '<None>'

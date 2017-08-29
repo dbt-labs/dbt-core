@@ -1,7 +1,7 @@
 import networkx as nx
 from dbt.logger import GLOBAL_LOGGER as logger
 
-from dbt.utils import is_enabled, get_materialization
+from dbt.utils import is_enabled, get_materialization, coalesce
 from dbt.node_types import NodeType
 
 SELECTOR_PARENTS = '+'
@@ -41,13 +41,6 @@ def parse_spec(node_spec):
         "qualified_node_name": qualified_node_name,
         "raw": node_spec
     }
-
-
-def coalesce(*args):
-    for arg in args:
-        if arg is not None:
-            return arg
-    return None
 
 
 def get_package_names(graph):
