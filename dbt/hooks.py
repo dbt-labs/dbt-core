@@ -38,5 +38,3 @@ def get_hooks(model, hook_key):
 
     wrapped = [get_hook_dict(hook) for hook in hooks]
     return wrapped
-
-
