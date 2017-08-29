@@ -118,9 +118,6 @@ class BigQueryAdapter(PostgresAdapter):
         result = connection.copy()
         credentials = connection.get('credentials', {})
 
-        if 'timeout_seconds' in credentials:
-            cls.QUERY_TIMEOUT = credentials['timeout_seconds']
-
         try:
             handle = cls.get_bigquery_client(credentials)
 
@@ -173,6 +170,11 @@ class BigQueryAdapter(PostgresAdapter):
             '`rename` is not implemented for this adapter!')
 
     @classmethod
+    def get_timeout(cls, conn):
+        credentials = conn['credentials']
+        return credentials.get('timeout_seconds', cls.QUERY_TIMEOUT)
+
+    @classmethod
     def materialize_as_view(cls, profile, dataset, model_name, model_sql):
         view = dataset.table(model_name)
         view.view_query = model_sql
@@ -190,8 +192,9 @@ class BigQueryAdapter(PostgresAdapter):
         return "CREATE VIEW"
 
     @classmethod
-    def poll_until_job_completes(cls, job):
-        retry_count = cls.QUERY_TIMEOUT
+    def poll_until_job_completes(cls, job, timeout):
+        retry_count = timeout
+
         while retry_count > 0 and job.state != 'DONE':
             retry_count -= 1
             time.sleep(1)
@@ -219,7 +222,7 @@ class BigQueryAdapter(PostgresAdapter):
         logger.debug("Model SQL ({}):\n{}".format(model_name, model_sql))
 
         with cls.exception_handler(profile, model_sql, model_name, model_name):
-            cls.poll_until_job_completes(job)
+            cls.poll_until_job_completes(job, cls.get_timeout(conn))
 
         return "CREATE TABLE"
 
@@ -268,7 +271,7 @@ class BigQueryAdapter(PostgresAdapter):
         client = conn.get('handle')
 
         query = client.run_sync_query(sql)
-        query.timeout_ms = cls.QUERY_TIMEOUT * 1000
+        query.timeout_ms = cls.get_timeout(conn) * 1000
         query.use_legacy_sql = False
 
         debug_message = "Fetching data for query {}:\n{}"
