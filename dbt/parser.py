@@ -188,7 +188,7 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     node = copy.deepcopy(node)
 
     tags = coalesce(tags, set())
-    fqn_extra = coalesce(tags, [])
+    fqn_extra = coalesce(fqn_extra, [])
     macros = coalesce(macros, {})
 
     node.update({
