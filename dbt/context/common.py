@@ -269,7 +269,7 @@ def generate(model, project, flat_graph, provider=None):
         "model": model,
         "post_hooks": post_hooks,
         "pre_hooks": pre_hooks,
-        "ref": provider.ref(model, project, profile, schema, flat_graph),
+        "ref": provider.ref(model, project, profile, flat_graph),
         "schema": model.get('schema', schema),
         "schema_prefix": schema_prefix,
         "sql": model.get('injected_sql'),
