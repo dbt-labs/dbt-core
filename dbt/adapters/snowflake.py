@@ -124,9 +124,7 @@ class SnowflakeAdapter(PostgresAdapter):
         return dict(existing)
 
     @classmethod
-    def rename(cls, profile, from_name, to_name, model_name=None):
-        schema = cls.get_default_schema(profile)
-
+    def rename(cls, profile, schema, from_name, to_name, model_name=None):
         sql = (('alter table "{schema}"."{from_name}" '
                 'rename to "{schema}"."{to_name}"')
                .format(schema=schema,
@@ -174,15 +172,19 @@ class SnowflakeAdapter(PostgresAdapter):
 
     @classmethod
     def add_query(cls, profile, sql, model_name=None, auto_begin=True,
-                  select_schema=True):
+                  select_schema=True, schema=None):
         # snowflake only allows one query per api call.
         queries = sql.strip().split(";")
         cursor = None
 
-        if select_schema:
+        if select_schema and schema is None:
+            raise dbt.exceptions.InternalException("`add_query` was called "
+                    "with `select_schema`, but no `schema` was provided!")
+
+        elif select_schema:
             super(PostgresAdapter, cls).add_query(
                 profile,
-                'use schema "{}"'.format(cls.get_default_schema(profile)),
+                'use schema "{}"'.format(schema),
                 model_name,
                 auto_begin)
 

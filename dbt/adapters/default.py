@@ -109,42 +109,42 @@ class DefaultAdapter(object):
         return data
 
     @classmethod
-    def drop(cls, profile, relation, relation_type, model_name=None):
+    def drop(cls, profile, schema, relation, relation_type, model_name=None):
         if relation_type == 'view':
-            return cls.drop_view(profile, relation, model_name)
+            return cls.drop_view(profile, schema, relation, model_name)
         elif relation_type == 'table':
-            return cls.drop_table(profile, relation, model_name)
+            return cls.drop_table(profile, schema, relation, model_name)
         else:
             raise RuntimeError(
                 "Invalid relation_type '{}'"
                 .format(relation_type))
 
     @classmethod
-    def drop_view(cls, profile, view, model_name):
-        sql = ('drop view if exists {} cascade'
-               .format(cls._get_quoted_identifier(profile, view)))
+    def drop_view(cls, profile, schema, view, model_name):
+        relation = cls.quote_schema_and_table(profile, schema, view)
+        sql = 'drop view if exists {} cascade'.format(relation)
 
         connection, cursor = cls.add_query(profile, sql, model_name)
 
     @classmethod
-    def drop_table(cls, profile, table, model_name):
-        sql = ('drop table if exists {} cascade'
-               .format(cls._get_quoted_identifier(profile, table)))
+    def drop_table(cls, profile, schema, table, model_name):
+        relation = cls.quote_schema_and_table(profile, schema, table)
+        sql = 'drop table if exists {} cascade'.format(relation)
 
         connection, cursor = cls.add_query(profile, sql, model_name)
 
     @classmethod
-    def truncate(cls, profile, table, model_name=None):
-        sql = ('truncate table {}'
-               .format(cls._get_quoted_identifier(profile, table)))
+    def truncate(cls, profile, schema, table, model_name=None):
+        relation = cls.quote_schema_and_table(profile, schema, table)
+        sql = 'truncate table {}'.format(relation)
 
         connection, cursor = cls.add_query(profile, sql, model_name)
 
     @classmethod
-    def rename(cls, profile, from_name, to_name, model_name=None):
-        sql = ('alter table {} rename to {}'
-               .format(cls._get_quoted_identifier(profile, from_name),
-                       cls.quote(to_name)))
+    def rename(cls, profile, schema, from_name, to_name, model_name=None):
+        from_relation = cls.quote_schema_and_table(profile, schema, from_name)
+        to_relation = cls.quote(to_name)
+        sql = 'alter table {} rename to {}'.format(from_relation, to_relation)
 
         connection, cursor = cls.add_query(profile, sql, model_name)
 
@@ -580,11 +580,6 @@ class DefaultAdapter(object):
         Alias for `table_exists`.
         """
         return cls.table_exists(profile, schema, table, model_name)
-
-    @classmethod
-    def _get_quoted_identifier(cls, profile, identifier):
-        return cls.quote_schema_and_table(
-            profile, cls.get_default_schema(profile), identifier)
 
     @classmethod
     def quote(cls, identifier):

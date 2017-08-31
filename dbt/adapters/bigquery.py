@@ -158,14 +158,13 @@ class BigQueryAdapter(PostgresAdapter):
         return dict(existing)
 
     @classmethod
-    def drop(cls, profile, relation, relation_type, model_name=None):
-        schema = cls.get_default_schema(profile)
+    def drop(cls, profile, schema, relation, relation_type, model_name=None):
         dataset = cls.get_dataset(profile, schema, model_name)
         relation_object = dataset.table(relation)
         relation_object.delete()
 
     @classmethod
-    def rename(cls, profile, from_name, to_name, model_name=None):
+    def rename(cls, profile, schema, from_name, to_name, model_name=None):
         raise dbt.exceptions.NotImplementedException(
             '`rename` is not implemented for this adapter!')
 
@@ -234,10 +233,10 @@ class BigQueryAdapter(PostgresAdapter):
             validate_connection(connection)
 
         model_name = model.get('name')
+        model_schema = model.get('schema')
         model_sql = model.get('injected_sql')
 
-        schema = cls.get_default_schema(profile)
-        dataset = cls.get_dataset(profile, schema, model_name)
+        dataset = cls.get_dataset(profile, model_schema, model_name)
 
         if materialization == 'view':
             res = cls.materialize_as_view(profile, dataset, model_name,

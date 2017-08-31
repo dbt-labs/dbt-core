@@ -5,14 +5,14 @@
   {%- set existing = adapter.query_for_existing(schema) -%}
   {%- set existing_type = existing.get(identifier) -%}
 
-  {{ drop_if_exists(existing, tmp_identifier) }}
+  {{ drop_if_exists(existing, schema, tmp_identifier) }}
 
   -- setup
   {% if non_destructive_mode -%}
     {% if existing_type == 'table' -%}
-      {{ adapter.truncate(identifier) }}
+      {{ adapter.truncate(schema, identifier) }}
     {% elif existing_type == 'view' -%}
-      {{ adapter.drop(identifier, existing_type) }}
+      {{ adapter.drop(schema, identifier, existing_type) }}
     {%- endif %}
   {%- endif %}
 
@@ -48,8 +48,8 @@
   {% if non_destructive_mode -%}
     -- noop
   {%- else -%}
-    {{ drop_if_exists(existing, identifier) }}
-    {{ adapter.rename(tmp_identifier, identifier) }}
+    {{ drop_if_exists(existing, schema, identifier) }}
+    {{ adapter.rename(schema, tmp_identifier, identifier) }}
   {%- endif %}
 
   -- `COMMIT` happens here

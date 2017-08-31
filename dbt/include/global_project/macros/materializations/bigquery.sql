@@ -7,7 +7,7 @@
   {%- set existing_type = existing.get(identifier) -%}
 
   {%- if existing_type is not none -%}
-    {{ adapter.drop(identifier, existing_type) }}
+    {{ adapter.drop(schema, identifier, existing_type) }}
   {%- endif -%}
 
   -- build model
@@ -25,7 +25,7 @@
   {%- set existing_type = existing.get(identifier) -%}
 
   {%- if existing_type is not none -%}
-    {{ adapter.drop(identifier, existing_type) }}
+    {{ adapter.drop(schema, identifier, existing_type) }}
   {%- endif -%}
 
   -- build model

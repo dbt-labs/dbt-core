@@ -41,9 +41,9 @@
 {% endmacro %}
 
 
-{% macro drop_if_exists(existing, name) %}
+{% macro drop_if_exists(existing, schema, name) %}
   {% set existing_type = existing.get(name) %}
   {% if existing_type is not none %}
-    {{ adapter.drop(name, existing_type) }}
+    {{ adapter.drop(schema, name, existing_type) }}
   {% endif %}
 {% endmacro %}
