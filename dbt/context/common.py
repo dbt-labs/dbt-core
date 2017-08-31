@@ -249,6 +249,7 @@ def generate(model, project, flat_graph, provider=None):
 
     context = {'env': target}
     schema = profile.get('schema', 'public')
+    schema_prefix = profile.get('schema_prefix', "{}_".format(schema))
 
     pre_hooks = model.get('config', {}).get('pre-hook')
     post_hooks = model.get('config', {}).get('post-hook')
@@ -270,6 +271,7 @@ def generate(model, project, flat_graph, provider=None):
         "pre_hooks": pre_hooks,
         "ref": provider.ref(model, project, profile, schema, flat_graph),
         "schema": schema,
+        "schema_prefix": schema_prefix,
         "sql": model.get('injected_sql'),
         "sql_now": adapter.date_function(),
         "fromjson": fromjson(model),

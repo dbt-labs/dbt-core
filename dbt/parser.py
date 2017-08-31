@@ -231,6 +231,14 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     profile = db_wrapper.profile
     adapter.release_connection(profile, node.get('name'))
 
+    schema_override = config.config.get('schema')
+    if schema_override:
+        schema_prefix = context['schema_prefix']
+        schema = "{}{}".format(schema_prefix, schema_override)
+    else:
+        schema = context['schema']
+    node['schema'] = schema
+
     # Overwrite node config
     config_dict = node.get('config', {})
     config_dict.update(config.config)
