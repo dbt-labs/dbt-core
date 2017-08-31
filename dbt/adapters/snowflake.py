@@ -147,6 +147,17 @@ class SnowflakeAdapter(PostgresAdapter):
         return cls.add_query(profile, sql, model_name, select_schema=False)
 
     @classmethod
+    def get_existing_schemas(cls, profile, model_name=None):
+        sql = "select distinct SCHEMA_NAME from INFORMATION_SCHEMA.SCHEMATA"
+
+        connection, cursor = cls.add_query(profile, sql, model_name,
+                                           select_schema=False,
+                                           auto_begin=False)
+        results = cursor.fetchall()
+
+        return [row[0] for row in results]
+
+    @classmethod
     def check_schema_exists(cls, profile, schema, model_name=None):
         sql = """
         select count(*)

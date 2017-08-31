@@ -102,8 +102,8 @@ def print_skip_line(model, schema, relation, index, num_models):
     print_fancy_output_line(msg, yellow('SKIP'), index, num_models)
 
 
-def print_cancel_line(model, schema):
-    msg = 'CANCEL query {}.{}'.format(schema, model)
+def print_cancel_line(model):
+    msg = 'CANCEL query {}'.format(model)
     print_fancy_output_line(msg, red('CANCEL'), index=None, total=None)
 
 

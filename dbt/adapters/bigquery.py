@@ -314,12 +314,22 @@ class BigQueryAdapter(PostgresAdapter):
             dataset.delete()
 
     @classmethod
+    def get_existing_schemas(cls, profile, model_name=None):
+        conn = cls.get_connection(profile, model_name)
+
+        client = conn.get('handle')
+
+        with cls.exception_handler(profile, 'list dataset', model_name):
+            all_datasets = client.list_datasets()
+            return [ds.name for ds in all_datasets]
+
+    @classmethod
     def check_schema_exists(cls, profile, schema, model_name=None):
         conn = cls.get_connection(profile, model_name)
 
         client = conn.get('handle')
 
-        with cls.exception_handler(profile, 'create dataset', model_name):
+        with cls.exception_handler(profile, 'get dataset', model_name):
             all_datasets = client.list_datasets()
             return any([ds.name == schema for ds in all_datasets])
 

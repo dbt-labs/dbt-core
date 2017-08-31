@@ -79,11 +79,16 @@ class BaseRunner(object):
         return False
 
     @classmethod
-    def is_ephemeral_model(cls, node):
-        materialized = dbt.utils.get_materialization(node)
-        resource_type = node.get('resource_type')
+    def is_model(cls, node):
+        return node.get('resource_type') == NodeType.Model
 
-        return materialized == 'ephemeral' and resource_type == NodeType.Model
+    @classmethod
+    def is_ephemeral(cls, node):
+        return dbt.utils.get_materialization(node) == 'ephemeral'
+
+    @classmethod
+    def is_ephemeral_model(cls, node):
+        return cls.is_model(node) and cls.is_ephemeral(node)
 
     def safe_run(self, flat_graph, existing):
         catchable_errors = (dbt.exceptions.CompilationException,
@@ -140,10 +145,6 @@ class BaseRunner(object):
         result.execution_time = time.time() - started
         return result
 
-    @classmethod
-    def get_schema(cls, adapter, profile):
-        return adapter.get_default_schema(profile)
-
     def before_execute(self):
         raise NotImplementedException()
 
@@ -157,9 +158,9 @@ class BaseRunner(object):
         raise NotImplementedException()
 
     def on_skip(self):
-        schema_name = self.get_schema(self.adapter, self.profile)
-
+        schema_name = self.node.get('schema')
         node_name = self.node.get('name')
+
         if not self.is_ephemeral_model(self.node):
             dbt.ui.printer.print_skip_line(self.node, schema_name, node_name,
                                            self.node_index, self.num_nodes)
@@ -169,6 +170,15 @@ class BaseRunner(object):
 
     def do_skip(self):
         self.skip = True
+
+    @classmethod
+    def get_model_schemas(cls, flat_graph):
+        schemas = set()
+        for node in flat_graph['nodes'].values():
+            if cls.is_model(node) and not cls.is_ephemeral(node):
+                schemas.add(node['schema'])
+
+        return schemas
 
     @classmethod
     def before_run(self, project, adapter, flat_graph):
@@ -260,20 +270,6 @@ class ModelRunner(CompileRunner):
         return False
 
     @classmethod
-    def try_create_schema(cls, project, adapter):
-        profile = project.run_environment()
-        schema_name = cls.get_schema(adapter, profile)
-
-        schema_exists = adapter.check_schema_exists(profile, schema_name)
-
-        if schema_exists:
-            logger.debug('schema {} already exists -- '
-                         'not creating'.format(schema_name))
-            return
-
-        adapter.create_schema(profile, schema_name)
-
-    @classmethod
     def run_hooks(cls, project, adapter, flat_graph, hook_type):
         profile = project.run_environment()
 
@@ -317,8 +313,17 @@ class ModelRunner(CompileRunner):
             raise
 
     @classmethod
+    def create_schemas(cls, project, adapter, flat_graph):
+        profile = project.run_environment()
+        required_schemas = cls.get_model_schemas(flat_graph)
+        existing_schemas = set(adapter.get_existing_schemas(profile))
+
+        for schema in (required_schemas - existing_schemas):
+            adapter.create_schema(profile, schema)
+
+    @classmethod
     def before_run(cls, project, adapter, flat_graph):
-        cls.try_create_schema(project, adapter)
+        cls.create_schemas(project, adapter, flat_graph)
         cls.safe_run_hooks(project, adapter, flat_graph, RunHookType.Start)
 
     @classmethod
@@ -344,7 +349,7 @@ class ModelRunner(CompileRunner):
 
     def describe_node(self):
         materialization = dbt.utils.get_materialization(self.node)
-        schema_name = self.get_schema(self.adapter, self.profile)
+        schema_name = self.node.get('schema')
         node_name = self.node.get('name')
 
         return "{} model {}.{}".format(materialization, schema_name, node_name)
@@ -355,7 +360,7 @@ class ModelRunner(CompileRunner):
                                         self.num_nodes)
 
     def print_result_line(self, result):
-        schema_name = self.get_schema(self.adapter, self.profile)
+        schema_name = self.node.get('schema')
         dbt.ui.printer.print_model_result_line(result,
                                                schema_name,
                                                self.node_index,
@@ -398,7 +403,7 @@ class TestRunner(CompileRunner):
         return "test {}".format(node_name)
 
     def print_result_line(self, result):
-        schema_name = self.get_schema(self.adapter, self.profile)
+        schema_name = self.node.get('schema')
         dbt.ui.printer.print_test_result_line(result,
                                               schema_name,
                                               self.node_index,

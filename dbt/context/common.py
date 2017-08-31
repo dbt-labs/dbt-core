@@ -270,14 +270,14 @@ def generate(model, project, flat_graph, provider=None):
         "post_hooks": post_hooks,
         "pre_hooks": pre_hooks,
         "ref": provider.ref(model, project, profile, schema, flat_graph),
-        "schema": schema,
+        "schema": model.get('schema', schema),
         "schema_prefix": schema_prefix,
         "sql": model.get('injected_sql'),
         "sql_now": adapter.date_function(),
         "fromjson": fromjson(model),
         "target": target,
         "this": dbt.utils.This(
-            schema,
+            model.get('schema', schema),
             dbt.utils.model_immediate_name(model, dbt.flags.NON_DESTRUCTIVE),
             model.get('name')
         )
