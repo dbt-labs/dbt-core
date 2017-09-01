@@ -9,7 +9,6 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.adapters.factory import get_adapter
 import dbt.exceptions
 
-# Jesus lol todo
 
 class Seeder:
     def __init__(self, project):

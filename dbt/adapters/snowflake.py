@@ -178,8 +178,9 @@ class SnowflakeAdapter(PostgresAdapter):
         cursor = None
 
         if select_schema and schema is None:
-            raise dbt.exceptions.InternalException("`add_query` was called "
-                    "with `select_schema`, but no `schema` was provided!")
+            msg = ("`add_query` was called with `select_schema`, but no "
+                   "`schema` was provided!")
+            raise dbt.exceptions.InternalException(msg)
 
         elif select_schema:
             super(PostgresAdapter, cls).add_query(

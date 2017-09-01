@@ -4,8 +4,6 @@ import time
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
 
-from dbt.utils import get_materialization
-
 import dbt.clients.jinja
 import dbt.compilation
 import dbt.exceptions
@@ -98,7 +96,6 @@ class RunManager(object):
             if unique_id in node_runners:
                 runners.append(node_runners[unique_id])
         return runners
-
 
     def get_existing(self, adapter, profile, schemas):
         existing = {}

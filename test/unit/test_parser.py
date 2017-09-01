@@ -32,6 +32,7 @@ class ParserTest(unittest.TestCase):
                 'test': {
                     'type': 'postgres',
                     'host': 'localhost',
+                    'schema': 'analytics',
                 }
             }
         }
@@ -45,6 +46,7 @@ class ParserTest(unittest.TestCase):
                 'test': {
                     'type': 'postgres',
                     'host': 'localhost',
+                    'schema': 'analytics',
                 }
             }
         }
@@ -85,6 +87,7 @@ class ParserTest(unittest.TestCase):
             {
                 'model.root.model_one': {
                     'name': 'model_one',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.model_one',
                     'fqn': ['root', 'model_one'],
@@ -142,6 +145,7 @@ class ParserTest(unittest.TestCase):
             {
                 'model.root.model_one': {
                     'name': 'model_one',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.model_one',
                     'fqn': ['root', 'nested', 'path', 'model_one'],
@@ -182,6 +186,7 @@ class ParserTest(unittest.TestCase):
             {
                 'model.root.model_one': {
                     'name': 'model_one',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.model_one',
                     'fqn': ['root', 'model_one'],
@@ -231,6 +236,7 @@ class ParserTest(unittest.TestCase):
             {
                 'model.root.base': {
                     'name': 'base',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.base',
                     'fqn': ['root', 'base'],
@@ -251,6 +257,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.root.events_tx': {
                     'name': 'events_tx',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.events_tx',
                     'fqn': ['root', 'events_tx'],
@@ -328,6 +335,7 @@ class ParserTest(unittest.TestCase):
             {
                 'model.root.events': {
                     'name': 'events',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.events',
                     'fqn': ['root', 'events'],
@@ -348,6 +356,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.root.sessions': {
                     'name': 'sessions',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.sessions',
                     'fqn': ['root', 'sessions'],
@@ -368,6 +377,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.root.events_tx': {
                     'name': 'events_tx',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.events_tx',
                     'fqn': ['root', 'events_tx'],
@@ -388,6 +398,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.root.sessions_tx': {
                     'name': 'sessions_tx',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.sessions_tx',
                     'fqn': ['root', 'sessions_tx'],
@@ -408,6 +419,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.root.multi': {
                     'name': 'multi',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.multi',
                     'fqn': ['root', 'multi'],
@@ -487,6 +499,7 @@ class ParserTest(unittest.TestCase):
             {
                 'model.snowplow.events': {
                     'name': 'events',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.snowplow.events',
                     'fqn': ['snowplow', 'events'],
@@ -507,6 +520,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.snowplow.sessions': {
                     'name': 'sessions',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.snowplow.sessions',
                     'fqn': ['snowplow', 'sessions'],
@@ -527,6 +541,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.snowplow.events_tx': {
                     'name': 'events_tx',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.snowplow.events_tx',
                     'fqn': ['snowplow', 'events_tx'],
@@ -547,6 +562,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.snowplow.sessions_tx': {
                     'name': 'sessions_tx',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.snowplow.sessions_tx',
                     'fqn': ['snowplow', 'sessions_tx'],
@@ -567,6 +583,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.root.multi': {
                     'name': 'multi',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.multi',
                     'fqn': ['root', 'multi'],
@@ -595,6 +612,7 @@ class ParserTest(unittest.TestCase):
             'nodes': {
                 'model.snowplow.events': {
                     'name': 'events',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.snowplow.events',
                     'fqn': ['snowplow', 'events'],
@@ -614,6 +632,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.root.events': {
                     'name': 'events',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.events',
                     'fqn': ['root', 'events'],
@@ -633,6 +652,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.root.dep': {
                     'name': 'dep',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.dep',
                     'fqn': ['root', 'dep'],
@@ -660,6 +680,7 @@ class ParserTest(unittest.TestCase):
                 'nodes': {
                     'model.snowplow.events': {
                         'name': 'events',
+                        'schema': 'analytics',
                         'resource_type': 'model',
                         'unique_id': 'model.snowplow.events',
                         'fqn': ['snowplow', 'events'],
@@ -679,6 +700,7 @@ class ParserTest(unittest.TestCase):
                     },
                     'model.root.events': {
                         'name': 'events',
+                        'schema': 'analytics',
                         'resource_type': 'model',
                         'unique_id': 'model.root.events',
                         'fqn': ['root', 'events'],
@@ -698,6 +720,7 @@ class ParserTest(unittest.TestCase):
                     },
                     'model.root.dep': {
                         'name': 'dep',
+                        'schema': 'analytics',
                         'resource_type': 'model',
                         'unique_id': 'model.root.dep',
                         'fqn': ['root', 'dep'],
@@ -744,6 +767,7 @@ class ParserTest(unittest.TestCase):
             {
                 'model.root.model_one': {
                     'name': 'model_one',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.model_one',
                     'fqn': ['root', 'model_one'],
@@ -825,6 +849,7 @@ class ParserTest(unittest.TestCase):
             {
                 'model.root.table': {
                     'name': 'table',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.table',
                     'fqn': ['root', 'table'],
@@ -845,6 +870,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.root.ephemeral': {
                     'name': 'ephemeral',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.ephemeral',
                     'fqn': ['root', 'ephemeral'],
@@ -865,6 +891,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.root.view': {
                     'name': 'view',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.view',
                     'fqn': ['root', 'view'],
@@ -1013,6 +1040,7 @@ class ParserTest(unittest.TestCase):
             {
                 'model.root.table': {
                     'name': 'table',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.table',
                     'fqn': ['root', 'table'],
@@ -1033,6 +1061,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.root.ephemeral': {
                     'name': 'ephemeral',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.ephemeral',
                     'fqn': ['root', 'ephemeral'],
@@ -1053,6 +1082,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.root.view': {
                     'name': 'view',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.view',
                     'fqn': ['root', 'view'],
@@ -1073,6 +1103,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.snowplow.disabled': {
                     'name': 'disabled',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.snowplow.disabled',
                     'fqn': ['snowplow', 'disabled'],
@@ -1093,6 +1124,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.snowplow.package': {
                     'name': 'package',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.snowplow.package',
                     'fqn': ['snowplow', 'views', 'package'],
@@ -1113,6 +1145,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.snowplow.multi_sort': {
                     'name': 'multi_sort',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.snowplow.multi_sort',
                     'fqn': ['snowplow', 'views', 'multi_sort'],
@@ -1164,6 +1197,7 @@ class ParserTest(unittest.TestCase):
             {
                 'test.root.not_null_model_one_id': {
                     'name': 'not_null_model_one_id',
+                    'schema': 'analytics',
                     'resource_type': 'test',
                     'unique_id': 'test.root.not_null_model_one_id',
                     'fqn': ['root', 'schema_test', 'not_null_model_one_id'],
@@ -1184,6 +1218,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'test.root.unique_model_one_id': {
                     'name': 'unique_model_one_id',
+                    'schema': 'analytics',
                     'resource_type': 'test',
                     'unique_id': 'test.root.unique_model_one_id',
                     'fqn': ['root', 'schema_test', 'unique_model_one_id'],
@@ -1203,6 +1238,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'test.root.accepted_values_model_one_id__a__b': {
                     'name': 'accepted_values_model_one_id__a__b',
+                    'schema': 'analytics',
                     'resource_type': 'test',
                     'unique_id': 'test.root.accepted_values_model_one_id__a__b', # noqa
                     'fqn': ['root', 'schema_test',
@@ -1224,6 +1260,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'test.root.relationships_model_one_id__id__ref_model_two_': {
                     'name': 'relationships_model_one_id__id__ref_model_two_',
+                    'schema': 'analytics',
                     'resource_type': 'test',
                     'unique_id': 'test.root.relationships_model_one_id__id__ref_model_two_', # noqa
                     'fqn': ['root', 'schema_test',
@@ -1315,6 +1352,7 @@ another_model:
             {
                 'test.root.no_events': {
                     'name': 'no_events',
+                    'schema': 'analytics',
                     'resource_type': 'test',
                     'unique_id': 'test.root.no_events',
                     'fqn': ['root', 'no_events'],
@@ -1429,6 +1467,7 @@ another_model:
             {
                 'model.root.model_one': {
                     'name': 'model_one',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.model_one',
                     'fqn': ['root', 'model_one'],
@@ -1470,6 +1509,7 @@ another_model:
             {
                 'model.root.model_one': {
                     'name': 'model_one',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.model_one',
                     'fqn': ['root', 'model_one'],
