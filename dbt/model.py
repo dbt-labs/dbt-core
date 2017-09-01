@@ -13,6 +13,7 @@ class SourceConfig(object):
     AppendListFields = ['pre-hook', 'post-hook']
     ExtendDictFields = ['vars']
     ClobberFields = [
+        'schema',
         'enabled',
         'materialized',
         'dist',

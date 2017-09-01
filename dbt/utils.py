@@ -11,6 +11,7 @@ from dbt.node_types import NodeType
 
 
 DBTConfigKeys = [
+    'schema',
     'enabled',
     'materialized',
     'dist',
