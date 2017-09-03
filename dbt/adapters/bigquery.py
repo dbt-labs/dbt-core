@@ -151,7 +151,6 @@ class BigQueryAdapter(PostgresAdapter):
             dataset = cls.get_dataset(profile, schema, model_name)
             all_tables.extend(dataset.list_tables())
 
-
         relation_type_lookup = {
             'TABLE': 'table',
             'VIEW': 'view',
