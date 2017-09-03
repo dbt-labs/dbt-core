@@ -120,18 +120,19 @@ class DefaultAdapter(object):
                 .format(relation_type))
 
     @classmethod
-    def drop_view(cls, profile, schema, view, model_name):
-        relation = cls.quote_schema_and_table(profile, schema, view)
-        sql = 'drop view if exists {} cascade'.format(relation)
+    def drop_relation(cls, profile, schema, rel_name, rel_type, model_name):
+        relation = cls.quote_schema_and_table(profile, schema, rel_name)
+        sql = 'drop {} if exists {} cascade'.format(rel_type, relation)
 
         connection, cursor = cls.add_query(profile, sql, model_name)
 
     @classmethod
-    def drop_table(cls, profile, schema, table, model_name):
-        relation = cls.quote_schema_and_table(profile, schema, table)
-        sql = 'drop table if exists {} cascade'.format(relation)
+    def drop_view(cls, profile, schema, view, model_name):
+        cls.drop_relation(profile, schema, view, 'view', model_name)
 
-        connection, cursor = cls.add_query(profile, sql, model_name)
+    @classmethod
+    def drop_table(cls, profile, schema, table, model_name):
+        cls.drop_relation(profile, schema, view, 'table', model_name)
 
     @classmethod
     def truncate(cls, profile, schema, table, model_name=None):

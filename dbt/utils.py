@@ -31,7 +31,6 @@ class ExitCodes(object):
     UnhandledError = 2
 
 
-# TODO : make ref work like this.... ok.
 class This(object):
     def __init__(self, schema, table, name):
         self.schema = schema
