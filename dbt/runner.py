@@ -110,7 +110,10 @@ class RunManager(object):
         dbt.ui.printer.print_timestamped_line("")
 
         schemas = list(Runner.get_model_schemas(flat_graph))
-        existing = adapter.query_for_existing(profile, schemas)
+        if len(schemas) > 0:
+            existing = adapter.query_for_existing(profile, schemas)
+        else:
+            existing = {}
         node_runners = self.get_runners(Runner, adapter, node_dependency_list)
 
         pool = ThreadPool(num_threads)
