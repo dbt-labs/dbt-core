@@ -103,12 +103,17 @@ class SnowflakeAdapter(PostgresAdapter):
         return result
 
     @classmethod
-    def query_for_existing(cls, profile, schema, model_name=None):
+    def query_for_existing(cls, profile, schemas, model_name=None):
+        if not isinstance(schemas, (list, tuple)):
+            schemas = [schemas]
+
+        schema_list = ",".join(["'{}'".format(schema) for schema in schemas])
+
         sql = """
         select TABLE_NAME as name, TABLE_TYPE as type
         from INFORMATION_SCHEMA.TABLES
-        where TABLE_SCHEMA = '{schema}'
-        """.format(schema=schema).strip()  # noqa
+        where TABLE_SCHEMA in ({schema_list})
+        """.format(schema_list=schema_list).strip()  # noqa
 
         _, cursor = cls.add_query(profile, sql, model_name, auto_begin=False)
         results = cursor.fetchall()
@@ -172,20 +177,15 @@ class SnowflakeAdapter(PostgresAdapter):
 
     @classmethod
     def add_query(cls, profile, sql, model_name=None, auto_begin=True,
-                  select_schema=True, schema=None):
+                  select_schema=True):
         # snowflake only allows one query per api call.
         queries = sql.strip().split(";")
         cursor = None
 
-        if select_schema and schema is None:
-            msg = ("`add_query` was called with `select_schema`, but no "
-                   "`schema` was provided!")
-            raise dbt.exceptions.InternalException(msg)
-
-        elif select_schema:
+        if select_schema:
             super(PostgresAdapter, cls).add_query(
                 profile,
-                'use schema "{}"'.format(schema),
+                'use schema "{}"'.format(cls.get_default_schema(profile)),
                 model_name,
                 auto_begin)
 

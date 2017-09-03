@@ -74,7 +74,7 @@ class DefaultAdapter(object):
             '`alter_column_type` is not implemented for this adapter!')
 
     @classmethod
-    def query_for_existing(cls, profile, schema, model_name=None):
+    def query_for_existing(cls, profile, schemas, model_name=None):
         raise dbt.exceptions.NotImplementedException(
             '`query_for_existing` is not implemented for this adapter!')
 

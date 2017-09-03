@@ -142,9 +142,15 @@ class BigQueryAdapter(PostgresAdapter):
         return result
 
     @classmethod
-    def query_for_existing(cls, profile, schema, model_name=None):
-        dataset = cls.get_dataset(profile, schema, model_name)
-        tables = dataset.list_tables()
+    def query_for_existing(cls, profile, schemas, model_name=None):
+        if not isinstance(schemas, (list, tuple)):
+            schemas = [schemas]
+
+        all_tables = []
+        for schema in schemas:
+            dataset = cls.get_dataset(profile, schema, model_name)
+            all_tables.extend(dataset.list_tables())
+
 
         relation_type_lookup = {
             'TABLE': 'table',
@@ -153,7 +159,7 @@ class BigQueryAdapter(PostgresAdapter):
         }
 
         existing = [(table.name, relation_type_lookup.get(table.table_type))
-                    for table in tables]
+                    for table in all_tables]
 
         return dict(existing)
 

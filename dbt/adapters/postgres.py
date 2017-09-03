@@ -107,14 +107,19 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         return connection, cursor
 
     @classmethod
-    def query_for_existing(cls, profile, schema, model_name=None):
+    def query_for_existing(cls, profile, schemas, model_name=None):
+        if not isinstance(schemas, (list, tuple)):
+            schemas = [schemas]
+
+        schema_list = ",".join(["'{}'".format(schema) for schema in schemas])
+
         sql = """
         select tablename as name, 'table' as type from pg_tables
-        where schemaname = '{schema}'
+        where schemaname in ({schema_list})
         union all
         select viewname as name, 'view' as type from pg_views
-        where schemaname = '{schema}'
-        """.format(schema=schema).strip()  # noqa
+        where schemaname in ({schema_list})
+        """.format(schema_list=schema_list).strip()  # noqa
 
         connection, cursor = cls.add_query(profile, sql, model_name,
                                            auto_begin=False)

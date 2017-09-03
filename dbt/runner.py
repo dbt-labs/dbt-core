@@ -97,14 +97,6 @@ class RunManager(object):
                 runners.append(node_runners[unique_id])
         return runners
 
-    def get_existing(self, adapter, profile, schemas):
-        existing = {}
-        for schema in schemas:
-            new_existing = adapter.query_for_existing(profile, schema)
-            existing.update(new_existing)
-
-        return existing
-
     def execute_nodes(self, linker, Runner, flat_graph, node_dependency_list):
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
@@ -117,8 +109,8 @@ class RunManager(object):
         dbt.ui.printer.print_timestamped_line(concurrency_line)
         dbt.ui.printer.print_timestamped_line("")
 
-        schemas = Runner.get_model_schemas(flat_graph)
-        existing = self.get_existing(adapter, profile, schemas)
+        schemas = list(Runner.get_model_schemas(flat_graph))
+        existing = adapter.query_for_existing(profile, schemas)
         node_runners = self.get_runners(Runner, adapter, node_dependency_list)
 
         pool = ThreadPool(num_threads)
