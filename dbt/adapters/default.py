@@ -132,7 +132,7 @@ class DefaultAdapter(object):
 
     @classmethod
     def drop_table(cls, profile, schema, table, model_name):
-        cls.drop_relation(profile, schema, view, 'table', model_name)
+        cls.drop_relation(profile, schema, table, 'table', model_name)
 
     @classmethod
     def truncate(cls, profile, schema, table, model_name=None):
