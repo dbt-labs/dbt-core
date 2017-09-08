@@ -20,6 +20,12 @@
   );
 {% endmacro %}
 
+{% macro bigquery__create_table_as(temporary, identifier, sql) -%}
+    {{ log('it is working') }}
+    
+    {{ adapter.execute_model({"name": identifier, "injected_sql": sql}, 'table') }}
+{% endmacro %}
+
 
 {% macro create_view_as(identifier, sql) -%}
   {{ adapter_macro('create_view_as', identifier, sql) }}
