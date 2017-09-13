@@ -22,7 +22,6 @@ postgres_credentials_contract = Schema({
     Required('pass'): basestring,
     Required('port'): All(int, Range(min=0, max=65535)),
     Required('schema'): basestring,
-    Optional('schema_prefix'): basestring,
 })
 
 snowflake_credentials_contract = Schema({
@@ -31,7 +30,6 @@ snowflake_credentials_contract = Schema({
     Required('password'): basestring,
     Required('database'): basestring,
     Required('schema'): basestring,
-    Optional('schema_prefix'): basestring,
     Required('warehouse'): basestring,
     Optional('role'): basestring,
 })
@@ -41,7 +39,6 @@ bigquery_credentials_contract = Schema({
     Required('method'): Any(*bigquery_auth_methods),
     Required('project'): basestring,
     Required('schema'): basestring,
-    Optional('schema_prefix'): basestring,
     Optional('keyfile'): basestring,
     Optional('keyfile_json'): object,
     Optional('timeout_seconds'): int,

@@ -58,6 +58,8 @@ class DatabaseWrapper(object):
 
 
 def _add_macros(context, model, flat_graph):
+    macros_to_add = {'global': [], 'local': []}
+
     for unique_id, macro in flat_graph.get('macros', {}).items():
         package_name = macro.get('package_name')
 
@@ -71,8 +73,14 @@ def _add_macros(context, model, flat_graph):
         context.get(package_name, {}) \
                .update(macro_map)
 
-        if(package_name == model.get('package_name') or
-           package_name == dbt.include.GLOBAL_PROJECT_NAME):
+        if package_name == model.get('package_name'):
+            macros_to_add['local'].append(macro_map)
+        elif package_name == dbt.include.GLOBAL_PROJECT_NAME:
+            macros_to_add['global'].append(macro_map)
+
+    # Load global macros before local macros -- local takes precedence
+    for precedence in ['global', 'local']:
+        for macro_map in macros_to_add[precedence]:
             context.update(macro_map)
 
     return context
@@ -249,7 +257,6 @@ def generate(model, project, flat_graph, provider=None):
 
     context = {'env': target}
     schema = profile.get('schema', 'public')
-    schema_prefix = profile.get('schema_prefix', "{}_".format(schema))
 
     pre_hooks = model.get('config', {}).get('pre-hook')
     post_hooks = model.get('config', {}).get('post-hook')
@@ -271,7 +278,6 @@ def generate(model, project, flat_graph, provider=None):
         "pre_hooks": pre_hooks,
         "ref": provider.ref(model, project, profile, flat_graph),
         "schema": model.get('schema', schema),
-        "schema_prefix": schema_prefix,
         "sql": model.get('injected_sql'),
         "sql_now": adapter.date_function(),
         "fromjson": fromjson(model),
