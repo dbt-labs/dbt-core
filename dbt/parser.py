@@ -431,7 +431,7 @@ def load_and_parse_macros(package_name, root_project, all_projects, root_dir,
     return result
 
 
-def parse_schema_tests(tests, root_project, projects):
+def parse_schema_tests(tests, root_project, projects, macros):
     to_return = {}
 
     for test in tests:
@@ -476,7 +476,8 @@ def parse_schema_tests(tests, root_project, projects):
                         test, model_name, config, test_type,
                         root_project,
                         projects.get(package_name),
-                        all_projects=projects)
+                        all_projects=projects,
+                        macros=macros)
 
                     if to_add is not None:
                         to_return[to_add.get('unique_id')] = to_add
@@ -529,7 +530,7 @@ def as_kwarg(key, value):
 
 def parse_schema_test(test_base, model_name, test_config, test_type,
                       root_project_config, package_project_config,
-                      all_projects):
+                      all_projects, macros):
 
     if isinstance(test_config, (basestring, int, float, bool)):
         test_args = {'arg': test_config}
@@ -573,11 +574,12 @@ def parse_schema_test(test_base, model_name, test_config, test_type,
                       all_projects,
                       tags={'schema'},
                       fqn_extra=None,
-                      fqn=fqn_override)
+                      fqn=fqn_override,
+                      macros=macros)
 
 
 def load_and_parse_yml(package_name, root_project, all_projects, root_dir,
-                       relative_dirs):
+                       relative_dirs, macros):
     extension = "[!.#~]*.yml"
 
     if dbt.flags.STRICT_MODE:
@@ -610,10 +612,10 @@ def load_and_parse_yml(package_name, root_project, all_projects, root_dir,
             'raw_yml': file_contents
         })
 
-    return parse_schema_tests(result, root_project, all_projects)
+    return parse_schema_tests(result, root_project, all_projects, macros)
 
 
-def parse_archives_from_projects(root_project, all_projects):
+def parse_archives_from_projects(root_project, all_projects, macros):
     archives = []
     to_return = {}
 
@@ -630,7 +632,8 @@ def parse_archives_from_projects(root_project, all_projects):
             node_path,
             root_project,
             all_projects.get(archive.get('package_name')),
-            all_projects)
+            all_projects,
+            macros=macros)
 
     return to_return
 

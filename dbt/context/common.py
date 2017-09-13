@@ -79,9 +79,9 @@ def _add_macros(context, model, flat_graph):
             macros_to_add['global'].append(macro_map)
 
     # Load global macros before local macros -- local takes precedence
-    for precedence in ['global', 'local']:
-        for macro_map in macros_to_add[precedence]:
-            context.update(macro_map)
+    unprefixed_macros = macros_to_add['global'] + macros_to_add['local']
+    for macro_map in unprefixed_macros:
+        context.update(macro_map)
 
     return context
 

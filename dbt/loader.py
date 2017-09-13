@@ -110,7 +110,8 @@ class SchemaTestLoader(ResourceLoader):
             root_project=root_project,
             all_projects=all_projects,
             root_dir=project.get('project-root'),
-            relative_dirs=project.get('source-paths', []))
+            relative_dirs=project.get('source-paths', []),
+            macros=macros)
 
 
 class DataTestLoader(ResourceLoader):
@@ -135,7 +136,8 @@ class ArchiveLoader(ResourceLoader):
     def load_project(cls, root_project, all_projects, project, project_name,
                      macros):
         return dbt.parser.parse_archives_from_projects(root_project,
-                                                       all_projects)
+                                                       all_projects,
+                                                       macros)
 
 
 class RunHookLoader(ResourceLoader):
