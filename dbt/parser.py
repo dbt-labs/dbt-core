@@ -232,9 +232,10 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     adapter.release_connection(profile, node.get('name'))
 
     # Special macro defined in the global project
-    f_get_schema = context['generate_schema_name']
+    default_schema = context.get('schema')
     schema_override = config.config.get('schema')
-    node['schema'] = f_get_schema(schema_override)
+    get_schema = context.get('generate_schema_name', lambda x: default_schema)
+    node['schema'] = get_schema(schema_override)
 
     # Overwrite node config
     config_dict = node.get('config', {})
@@ -353,7 +354,7 @@ def get_hooks(all_projects, hook_type):
 
 
 def load_and_parse_run_hook_type(root_project, all_projects, hook_type,
-                                 macros):
+                                 macros=None):
 
     if dbt.flags.STRICT_MODE:
         dbt.contracts.project.validate_list(all_projects)
@@ -431,7 +432,7 @@ def load_and_parse_macros(package_name, root_project, all_projects, root_dir,
     return result
 
 
-def parse_schema_tests(tests, root_project, projects, macros):
+def parse_schema_tests(tests, root_project, projects, macros=None):
     to_return = {}
 
     for test in tests:
@@ -530,7 +531,7 @@ def as_kwarg(key, value):
 
 def parse_schema_test(test_base, model_name, test_config, test_type,
                       root_project_config, package_project_config,
-                      all_projects, macros):
+                      all_projects, macros=None):
 
     if isinstance(test_config, (basestring, int, float, bool)):
         test_args = {'arg': test_config}
@@ -579,7 +580,7 @@ def parse_schema_test(test_base, model_name, test_config, test_type,
 
 
 def load_and_parse_yml(package_name, root_project, all_projects, root_dir,
-                       relative_dirs, macros):
+                       relative_dirs, macros=None):
     extension = "[!.#~]*.yml"
 
     if dbt.flags.STRICT_MODE:
@@ -615,7 +616,7 @@ def load_and_parse_yml(package_name, root_project, all_projects, root_dir,
     return parse_schema_tests(result, root_project, all_projects, macros)
 
 
-def parse_archives_from_projects(root_project, all_projects, macros):
+def parse_archives_from_projects(root_project, all_projects, macros=None):
     archives = []
     to_return = {}
 
