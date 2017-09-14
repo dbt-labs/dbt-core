@@ -5,7 +5,7 @@ from dbt.task.test import TestTask
 from dbt.project import read_project
 
 
-class TestSimpleBigQueryView(DBTIntegrationTest):
+class TestSimpleBigQueryRun(DBTIntegrationTest):
 
     def setUp(self):
         pass
@@ -17,6 +17,12 @@ class TestSimpleBigQueryView(DBTIntegrationTest):
     @property
     def models(self):
         return "test/integration/022_bigquery_test/models"
+
+    @property
+    def project_config(self):
+        return {
+            'macro-paths': ['test/integration/022_bigquery_test/macros'],
+        }
 
     def run_schema_validations(self):
         project = read_project('dbt_project.yml')

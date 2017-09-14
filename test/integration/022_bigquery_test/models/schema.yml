@@ -8,3 +8,14 @@ view:
         unique:
             - id
             - dupe    # fails
+
+        was_materialized:
+            - {name: view, type: view}
+
+table_model:
+    constraints:
+        not_null:
+            - id
+
+        was_materialized:
+            - {name: table_model, type: table}
