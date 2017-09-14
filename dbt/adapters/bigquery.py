@@ -143,9 +143,14 @@ class BigQueryAdapter(PostgresAdapter):
         return result
 
     @classmethod
-    def query_for_existing(cls, profile, schema, model_name=None):
-        dataset = cls.get_dataset(profile, schema, model_name)
-        tables = dataset.list_tables()
+    def query_for_existing(cls, profile, schemas, model_name=None):
+        if not isinstance(schemas, (list, tuple)):
+            schemas = [schemas]
+
+        all_tables = []
+        for schema in schemas:
+            dataset = cls.get_dataset(profile, schema, model_name)
+            all_tables.extend(dataset.list_tables())
 
         relation_type_lookup = {
             'TABLE': 'table',
@@ -154,19 +159,18 @@ class BigQueryAdapter(PostgresAdapter):
         }
 
         existing = [(table.name, relation_type_lookup.get(table.table_type))
-                    for table in tables]
+                    for table in all_tables]
 
         return dict(existing)
 
     @classmethod
-    def drop(cls, profile, relation, relation_type, model_name=None):
-        schema = cls.get_default_schema(profile)
+    def drop(cls, profile, schema, relation, relation_type, model_name=None):
         dataset = cls.get_dataset(profile, schema, model_name)
         relation_object = dataset.table(relation)
         relation_object.delete()
 
     @classmethod
-    def rename(cls, profile, from_name, to_name, model_name=None):
+    def rename(cls, profile, schema, from_name, to_name, model_name=None):
         raise dbt.exceptions.NotImplementedException(
             '`rename` is not implemented for this adapter!')
 
@@ -235,10 +239,10 @@ class BigQueryAdapter(PostgresAdapter):
             validate_connection(connection)
 
         model_name = model.get('name')
+        model_schema = model.get('schema')
         model_sql = model.get('injected_sql')
 
-        schema = cls.get_default_schema(profile)
-        dataset = cls.get_dataset(profile, schema, model_name)
+        dataset = cls.get_dataset(profile, model_schema, model_name)
 
         if materialization == 'view':
             res = cls.materialize_as_view(profile, dataset, model_name,
@@ -324,12 +328,22 @@ class BigQueryAdapter(PostgresAdapter):
             dataset.delete()
 
     @classmethod
+    def get_existing_schemas(cls, profile, model_name=None):
+        conn = cls.get_connection(profile, model_name)
+
+        client = conn.get('handle')
+
+        with cls.exception_handler(profile, 'list dataset', model_name):
+            all_datasets = client.list_datasets()
+            return [ds.name for ds in all_datasets]
+
+    @classmethod
     def check_schema_exists(cls, profile, schema, model_name=None):
         conn = cls.get_connection(profile, model_name)
 
         client = conn.get('handle')
 
-        with cls.exception_handler(profile, 'create dataset', model_name):
+        with cls.exception_handler(profile, 'get dataset', model_name):
             all_datasets = client.list_datasets()
             return any([ds.name == schema for ds in all_datasets])
 

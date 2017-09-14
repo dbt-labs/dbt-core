@@ -4,8 +4,6 @@ import time
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
 
-from dbt.utils import get_materialization
-
 import dbt.clients.jinja
 import dbt.compilation
 import dbt.exceptions
@@ -102,7 +100,6 @@ class RunManager(object):
     def execute_nodes(self, linker, Runner, flat_graph, node_dependency_list):
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
-        schema_name = adapter.get_default_schema(profile)
 
         num_threads = self.threads
         target_name = self.project.get_target().get('name')
@@ -112,7 +109,11 @@ class RunManager(object):
         dbt.ui.printer.print_timestamped_line(concurrency_line)
         dbt.ui.printer.print_timestamped_line("")
 
-        existing = adapter.query_for_existing(profile, schema_name)
+        schemas = list(Runner.get_model_schemas(flat_graph))
+        if len(schemas) > 0:
+            existing = adapter.query_for_existing(profile, schemas)
+        else:
+            existing = {}
         node_runners = self.get_runners(Runner, adapter, node_dependency_list)
 
         pool = ThreadPool(num_threads)
@@ -159,7 +160,7 @@ class RunManager(object):
                     raise
 
                 for conn_name in adapter.cancel_open_connections(profile):
-                    dbt.ui.printer.print_cancel_line(conn_name, schema_name)
+                    dbt.ui.printer.print_cancel_line(conn_name)
 
                 dbt.ui.printer.print_run_end_messages(node_results,
                                                       early_exit=True)

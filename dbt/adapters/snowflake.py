@@ -103,12 +103,17 @@ class SnowflakeAdapter(PostgresAdapter):
         return result
 
     @classmethod
-    def query_for_existing(cls, profile, schema, model_name=None):
+    def query_for_existing(cls, profile, schemas, model_name=None):
+        if not isinstance(schemas, (list, tuple)):
+            schemas = [schemas]
+
+        schema_list = ",".join(["'{}'".format(schema) for schema in schemas])
+
         sql = """
         select TABLE_NAME as name, TABLE_TYPE as type
         from INFORMATION_SCHEMA.TABLES
-        where TABLE_SCHEMA = '{schema}'
-        """.format(schema=schema).strip()  # noqa
+        where TABLE_SCHEMA in ({schema_list})
+        """.format(schema_list=schema_list).strip()  # noqa
 
         _, cursor = cls.add_query(profile, sql, model_name, auto_begin=False)
         results = cursor.fetchall()
@@ -124,9 +129,7 @@ class SnowflakeAdapter(PostgresAdapter):
         return dict(existing)
 
     @classmethod
-    def rename(cls, profile, from_name, to_name, model_name=None):
-        schema = cls.get_default_schema(profile)
-
+    def rename(cls, profile, schema, from_name, to_name, model_name=None):
         sql = (('alter table "{schema}"."{from_name}" '
                 'rename to "{schema}"."{to_name}"')
                .format(schema=schema,
@@ -145,6 +148,17 @@ class SnowflakeAdapter(PostgresAdapter):
         logger.debug('Creating schema "%s".', schema)
         sql = cls.get_create_schema_sql(schema)
         return cls.add_query(profile, sql, model_name, select_schema=False)
+
+    @classmethod
+    def get_existing_schemas(cls, profile, model_name=None):
+        sql = "select distinct SCHEMA_NAME from INFORMATION_SCHEMA.SCHEMATA"
+
+        connection, cursor = cls.add_query(profile, sql, model_name,
+                                           select_schema=False,
+                                           auto_begin=False)
+        results = cursor.fetchall()
+
+        return [row[0] for row in results]
 
     @classmethod
     def check_schema_exists(cls, profile, schema, model_name=None):

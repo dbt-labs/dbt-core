@@ -317,7 +317,8 @@ class DBTIntegrationTest(unittest.TestCase):
                 print(e)
                 raise e
 
-    def get_table_columns(self, table):
+    def get_table_columns(self, table, schema=None):
+        schema = self.unique_schema() if schema is None else schema
         sql = """
                 select column_name, data_type, character_maximum_length
                 from information_schema.columns
@@ -325,11 +326,12 @@ class DBTIntegrationTest(unittest.TestCase):
                 and table_schema = '{}'
                 order by column_name asc"""
 
-        result = self.run_sql(sql.format(table, self.unique_schema()), fetch='all')
+        result = self.run_sql(sql.format(table, schema), fetch='all')
 
         return result
 
-    def get_models_in_schema(self):
+    def get_models_in_schema(self, schema=None):
+        schema = self.unique_schema() if schema is None else schema
         sql = """
                 select table_name,
                         case when table_type = 'BASE TABLE' then 'table'
@@ -341,30 +343,33 @@ class DBTIntegrationTest(unittest.TestCase):
                 order by table_name
                 """
 
-        result = self.run_sql(sql.format(self.unique_schema()), fetch='all')
+        result = self.run_sql(sql.format(schema), fetch='all')
 
         return {model_name: materialization for (model_name, materialization) in result}
 
-    def assertTablesEqual(self, table_a, table_b):
-        self.assertTableColumnsEqual(table_a, table_b)
-        self.assertTableRowCountsEqual(table_a, table_b)
+    def assertTablesEqual(self, table_a, table_b, table_a_schema=None, table_b_schema=None):
+        table_a_schema = self.unique_schema() if table_a_schema is None else table_a_schema
+        table_b_schema = self.unique_schema() if table_b_schema is None else table_b_schema
 
-        columns = self.get_table_columns(table_a)
+        self.assertTableColumnsEqual(table_a, table_b, table_a_schema, table_b_schema)
+        self.assertTableRowCountsEqual(table_a, table_b, table_a_schema, table_b_schema)
+
+        columns = self.get_table_columns(table_a, table_a_schema)
         columns_csv = ", ".join(['"{}"'.format(record[0])
                                  for record in columns])
-
         table_sql = "SELECT {} FROM {}"
 
         sql = """
             SELECT COUNT(*) FROM (
-                (SELECT {columns} FROM "{schema}"."{table_a}" EXCEPT
-                 SELECT {columns} FROM "{schema}"."{table_b}")
+                (SELECT {columns} FROM "{table_a_schema}"."{table_a}" EXCEPT
+                 SELECT {columns} FROM "{table_b_schema}"."{table_b}")
                  UNION ALL
-                (SELECT {columns} FROM "{schema}"."{table_b}" EXCEPT
-                 SELECT {columns} FROM "{schema}"."{table_a}")
+                (SELECT {columns} FROM "{table_b_schema}"."{table_b}" EXCEPT
+                 SELECT {columns} FROM "{table_a_schema}"."{table_a}")
             ) AS a""".format(
                 columns=columns_csv,
-                schema=self.unique_schema(),
+                table_a_schema=table_a_schema,
+                table_b_schema=table_b_schema,
                 table_a=table_a,
                 table_b=table_b
             )
@@ -377,9 +382,12 @@ class DBTIntegrationTest(unittest.TestCase):
             sql
         )
 
-    def assertTableRowCountsEqual(self, table_a, table_b):
-        table_a_result = self.run_sql('SELECT COUNT(*) FROM "{}"."{}"'.format(self.unique_schema(), table_a), fetch='one')
-        table_b_result = self.run_sql('SELECT COUNT(*) FROM "{}"."{}"'.format(self.unique_schema(), table_b), fetch='one')
+    def assertTableRowCountsEqual(self, table_a, table_b, table_a_schema=None, table_b_schema=None):
+        table_a_schema = self.unique_schema() if table_a_schema is None else table_a_schema
+        table_b_schema = self.unique_schema() if table_b_schema is None else table_b_schema
+
+        table_a_result = self.run_sql('SELECT COUNT(*) FROM "{}"."{}"'.format(table_a_schema, table_a), fetch='one')
+        table_b_result = self.run_sql('SELECT COUNT(*) FROM "{}"."{}"'.format(table_b_schema, table_b), fetch='one')
 
         self.assertEquals(
             table_a_result[0],
@@ -392,25 +400,28 @@ class DBTIntegrationTest(unittest.TestCase):
             )
         )
 
-    def assertTableDoesNotExist(self, table):
-        columns = self.get_table_columns(table)
+    def assertTableDoesNotExist(self, table, schema=None):
+        columns = self.get_table_columns(table, schema)
 
         self.assertEquals(
             len(columns),
             0
         )
 
-    def assertTableDoesExist(self, table):
-        columns = self.get_table_columns(table)
+    def assertTableDoesExist(self, table, schema=None):
+        columns = self.get_table_columns(table, schema)
 
         self.assertGreater(
             len(columns),
             0
         )
 
-    def assertTableColumnsEqual(self, table_a, table_b):
-        table_a_result = self.get_table_columns(table_a)
-        table_b_result = self.get_table_columns(table_b)
+    def assertTableColumnsEqual(self, table_a, table_b, table_a_schema=None, table_b_schema=None):
+        table_a_schema = self.unique_schema() if table_a_schema is None else table_a_schema
+        table_b_schema = self.unique_schema() if table_b_schema is None else table_b_schema
+
+        table_a_result = self.get_table_columns(table_a, table_a_schema)
+        table_b_result = self.get_table_columns(table_b, table_b_schema)
 
         self.assertEquals(
             table_a_result,

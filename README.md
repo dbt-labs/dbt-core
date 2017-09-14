@@ -2,6 +2,12 @@
 
 dbt (data build tool) helps analysts write reliable, modular code using a workflow that closely mirrors software development.
 
+A dbt project primarily consists of "models". These models are SQL `select` statements that filter, aggregate, and otherwise transform data to facilitate analytics. Analysts use dbt to [aggregate pageviews into sessions](https://github.com/fishtown-analytics/snowplow), calculate [ad spend ROI](https://github.com/fishtown-analytics/facebook-ads), or report on [email campaign performance](https://github.com/fishtown-analytics/mailchimp).
+
+These models frequently build on top of one another. Fortunately, dbt makes it easy to [manage relationships](https://dbt.readme.io/reference#ref) between models, [test](https://dbt.readme.io/docs/testing) your assumptions, and [visualize](https://graph.sinterdata.com/) your projects.
+
+Still reading? Check out the [docs](https://dbt.readme.io/docs/overview) for more information.
+
 ![dbt dag](/etc/dag.png?raw=true)
 
 ---
@@ -14,7 +20,7 @@ dbt (data build tool) helps analysts write reliable, modular code using a workfl
 
 ---
 ### The dbt ecosystem
-- Visualize your dbt graph [here](https://app.sinterdata.com/)
+- Visualize your dbt graph [here](https://graph.sinterdata.com/)
 - Run your dbt projects on a schedule [here](http://sinterdata.com/)
 
 ---

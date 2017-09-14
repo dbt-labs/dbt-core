@@ -49,6 +49,7 @@ class CompilerTest(unittest.TestCase):
             'nodes': {
                 'model.root.view': {
                     'name': 'view',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.view',
                     'fqn': ['root_project', 'view'],
@@ -79,6 +80,7 @@ class CompilerTest(unittest.TestCase):
                 },
                 'model.root.ephemeral': {
                     'name': 'ephemeral',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.ephemeral',
                     'fqn': ['root_project', 'ephemeral'],
@@ -129,6 +131,7 @@ class CompilerTest(unittest.TestCase):
             'nodes': {
                 'model.root.view': {
                     'name': 'view',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.view',
                     'fqn': ['root_project', 'view'],
@@ -155,6 +158,7 @@ class CompilerTest(unittest.TestCase):
                 },
                 'model.root.view_no_cte': {
                     'name': 'view_no_cte',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.view_no_cte',
                     'fqn': ['root_project', 'view_no_cte'],
@@ -217,6 +221,7 @@ class CompilerTest(unittest.TestCase):
             'nodes': {
                 'model.root.view': {
                     'name': 'view',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.view',
                     'fqn': ['root_project', 'view'],
@@ -245,6 +250,7 @@ class CompilerTest(unittest.TestCase):
                 },
                 'model.root.ephemeral': {
                     'name': 'ephemeral',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.ephemeral',
                     'fqn': ['root_project', 'ephemeral'],
@@ -301,6 +307,7 @@ class CompilerTest(unittest.TestCase):
             'nodes': {
                 'model.root.view': {
                     'name': 'view',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.view',
                     'fqn': ['root_project', 'view'],
@@ -329,6 +336,7 @@ class CompilerTest(unittest.TestCase):
                 },
                 'model.root.ephemeral': {
                     'name': 'ephemeral',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.ephemeral',
                     'fqn': ['root_project', 'ephemeral'],
@@ -355,6 +363,7 @@ class CompilerTest(unittest.TestCase):
                 },
                 'model.root.ephemeral_level_two': {
                     'name': 'ephemeral_level_two',
+                    'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.ephemeral_level_two',
                     'fqn': ['root_project', 'ephemeral_level_two'],

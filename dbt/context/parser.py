@@ -7,7 +7,7 @@ import dbt.context.common
 execute = False
 
 
-def ref(model, project, profile, schema, flat_graph):
+def ref(model, project, profile, flat_graph):
 
     def ref(*args):
         if len(args) == 1 or len(args) == 2:

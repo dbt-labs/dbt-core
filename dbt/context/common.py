@@ -58,6 +58,8 @@ class DatabaseWrapper(object):
 
 
 def _add_macros(context, model, flat_graph):
+    macros_to_add = {'global': [], 'local': []}
+
     for unique_id, macro in flat_graph.get('macros', {}).items():
         package_name = macro.get('package_name')
 
@@ -71,9 +73,15 @@ def _add_macros(context, model, flat_graph):
         context.get(package_name, {}) \
                .update(macro_map)
 
-        if(package_name == model.get('package_name') or
-           package_name == dbt.include.GLOBAL_PROJECT_NAME):
-            context.update(macro_map)
+        if package_name == model.get('package_name'):
+            macros_to_add['local'].append(macro_map)
+        elif package_name == dbt.include.GLOBAL_PROJECT_NAME:
+            macros_to_add['global'].append(macro_map)
+
+    # Load global macros before local macros -- local takes precedence
+    unprefixed_macros = macros_to_add['global'] + macros_to_add['local']
+    for macro_map in unprefixed_macros:
+        context.update(macro_map)
 
     return context
 
@@ -268,14 +276,14 @@ def generate(model, project, flat_graph, provider=None):
         "model": model,
         "post_hooks": post_hooks,
         "pre_hooks": pre_hooks,
-        "ref": provider.ref(model, project, profile, schema, flat_graph),
-        "schema": schema,
+        "ref": provider.ref(model, project, profile, flat_graph),
+        "schema": model.get('schema', schema),
         "sql": model.get('injected_sql'),
         "sql_now": adapter.date_function(),
         "fromjson": fromjson(model),
         "target": target,
         "this": dbt.utils.This(
-            schema,
+            model.get('schema', schema),
             dbt.utils.model_immediate_name(model, dbt.flags.NON_DESTRUCTIVE),
             model.get('name')
         )

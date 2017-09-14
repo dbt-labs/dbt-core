@@ -7,7 +7,7 @@
   {%- set existing_type = existing.get(identifier) -%}
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
-  {{ drop_if_exists(existing, tmp_identifier) }}
+  {{ drop_if_exists(existing, schema, tmp_identifier) }}
 
   -- `BEGIN` happens here:
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
@@ -27,8 +27,8 @@
   {% if non_destructive_mode and existing_type == 'view' -%}
     -- noop
   {%- else -%}
-    {{ drop_if_exists(existing, identifier) }}
-    {{ adapter.rename(tmp_identifier, identifier) }}
+    {{ drop_if_exists(existing, schema, identifier) }}
+    {{ adapter.rename(schema, tmp_identifier, identifier) }}
   {%- endif %}
 
   -- `COMMIT` happens here

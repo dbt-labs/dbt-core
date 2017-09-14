@@ -14,7 +14,7 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 execute = True
 
 
-def ref(model, project, profile, schema, flat_graph):
+def ref(model, project, profile, flat_graph):
     current_project = project.get('name')
 
     def do_ref(*args):
@@ -54,6 +54,7 @@ def ref(model, project, profile, schema, flat_graph):
         else:
             adapter = get_adapter(profile)
             table = target_model.get('name')
+            schema = target_model.get('schema')
 
             return adapter.quote_schema_and_table(profile, schema, table)
 
