@@ -410,7 +410,7 @@ class TestRunner(CompileRunner):
                                         self.num_nodes)
 
     def execute_test(self, test):
-        rows = self.adapter.execute_and_fetch(
+        res, rows = self.adapter.execute_and_fetch(
             self.profile,
             test.get('wrapped_sql'),
             test.get('name'),
@@ -421,7 +421,7 @@ class TestRunner(CompileRunner):
             num_cols = len(rows[0])
             raise RuntimeError(
                 "Bad test {name}: Returned {rows} rows and {cols} cols"
-                .format(name=test.name, rows=num_rows, cols=num_cols))
+                .format(name=test.get('name'), rows=num_rows, cols=num_cols))
 
         return rows[0][0]
 

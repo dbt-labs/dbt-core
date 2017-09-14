@@ -26,7 +26,7 @@ class BigQueryAdapter(PostgresAdapter):
         "query_for_existing",
         "execute_model",
         "drop",
-        "execute_and_fetch",
+        "execute",
     ]
 
     SCOPE = ('https://www.googleapis.com/auth/bigquery',
@@ -212,8 +212,6 @@ class BigQueryAdapter(PostgresAdapter):
         conn = cls.get_connection(profile, model_name)
         client = conn.get('handle')
 
-        print("RUNNING TABLE: ", dataset, model_name)
-
         table = dataset.table(model_name)
         job_id = 'dbt-create-{}-{}'.format(model_name, uuid.uuid4())
         job = client.run_async_query(job_id, model_sql)
@@ -269,7 +267,7 @@ class BigQueryAdapter(PostgresAdapter):
         return all_rows
 
     @classmethod
-    def execute_and_fetch(cls, profile, sql, model_name=None, **kwargs):
+    def execute(cls, profile, sql, model_name=None, fetch=False, **kwargs):
         conn = cls.get_connection(profile, model_name)
         client = conn.get('handle')
 
@@ -282,7 +280,16 @@ class BigQueryAdapter(PostgresAdapter):
 
         query.run()
 
-        return cls.fetch_query_results(query)
+        res = None
+        if fetch:
+            res = cls.fetch_query_results(query)
+
+        status = 'ERROR' if query.errors else 'OK'
+        return status, res
+
+    @classmethod
+    def execute_and_fetch(cls, profile, sql, model_name, auto_begin=None):
+        return cls.execute(profile, sql, model_name, fetch=True)
 
     @classmethod
     def add_begin_query(cls, profile, name):
