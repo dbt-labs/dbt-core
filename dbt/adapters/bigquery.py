@@ -27,6 +27,7 @@ class BigQueryAdapter(PostgresAdapter):
         "execute_model",
         "drop",
         "execute",
+        "quote_schema_and_table"
     ]
 
     SCOPE = ('https://www.googleapis.com/auth/bigquery',
@@ -378,7 +379,7 @@ class BigQueryAdapter(PostgresAdapter):
         return '`{}`'.format(identifier)
 
     @classmethod
-    def quote_schema_and_table(cls, profile, schema, table):
+    def quote_schema_and_table(cls, profile, schema, table, model_name=None):
         connection = cls.get_connection(profile)
         credentials = connection.get('credentials', {})
         project = credentials.get('project')
