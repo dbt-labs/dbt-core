@@ -98,7 +98,7 @@ def find_by_name(flat_graph, target_name, target_package, subgraph,
         if len(node_parts) != 3:
             node_type = model.get('resource_type', 'node')
             msg = "{} names cannot contain '.' characters".format(node_type)
-            dbt.exceptions.raise_compiler_error(model, msg)
+            dbt.exceptions.raise_compiler_error(msg, model)
 
         resource_type, package_name, node_name = node_parts
 
