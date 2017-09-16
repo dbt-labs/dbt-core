@@ -225,6 +225,8 @@ class BigQueryAdapter(PostgresAdapter):
         job.write_disposition = 'WRITE_TRUNCATE'
         job.begin()
 
+        cls.release_connection(profile, model_name)
+
         logger.debug("Model SQL ({}):\n{}".format(model_name, model_sql))
 
         with cls.exception_handler(profile, model_sql, model_name, model_name):
@@ -234,10 +236,11 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def execute_model(cls, profile, model, materialization, model_name=None):
-        connection = cls.get_connection(profile, model.get('name'))
 
         if flags.STRICT_MODE:
+            connection = cls.get_connection(profile, model.get('name'))
             validate_connection(connection)
+            cls.release_connection(profile, model.get('name'))
 
         model_name = model.get('name')
         model_schema = model.get('schema')
