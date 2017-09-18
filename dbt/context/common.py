@@ -150,10 +150,9 @@ def _add_sql_handlers(context):
 
 def log(msg, info=False):
     if info:
-        logger.info(" ↳ " + msg)
+        logger.info(msg)
     else:
         logger.debug(msg)
-
     return ''
 
 
