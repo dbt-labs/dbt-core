@@ -285,11 +285,7 @@ def generate(model, project, flat_graph, provider=None):
         "sql_now": adapter.date_function(),
         "fromjson": fromjson(model),
         "target": target,
-        "this": dbt.utils.This(
-            model.get('schema', schema),
-            dbt.utils.model_immediate_name(model, dbt.flags.NON_DESTRUCTIVE),
-            model.get('name')
-        )
+        "this": dbt.utils.Relation(adapter, model)
     })
 
     context = _add_tracking(context)

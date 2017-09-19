@@ -50,13 +50,9 @@ def ref(model, project, profile, flat_graph):
 
         if dbt.utils.get_materialization(target_model) == 'ephemeral':
             model['extra_ctes'][target_model_id] = None
-            return '__dbt__CTE__{}'.format(target_model.get('name'))
-        else:
-            adapter = get_adapter(profile)
-            table = target_model.get('name')
-            schema = target_model.get('schema')
 
-            return adapter.quote_schema_and_table(profile, schema, table)
+        adapter = get_adapter(profile)
+        return dbt.utils.Relation(adapter, target_model)
 
     return do_ref
 

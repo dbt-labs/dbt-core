@@ -3,6 +3,7 @@ import hashlib
 import itertools
 
 import dbt.exceptions
+import dbt.flags
 
 from dbt.include import GLOBAL_DBT_MODULES_PATH
 from dbt.compat import basestring
@@ -31,17 +32,28 @@ class ExitCodes(object):
     UnhandledError = 2
 
 
-class This(object):
-    def __init__(self, schema, table, name):
-        self.schema = schema
-        self.table = table
-        self.name = table if name is None else name
+class Relation(object):
+    def __init__(self, adapter, node):
+        self._adapter = adapter
 
-    def schema_table(self, schema, table):
-        return '"{}"."{}"'.format(schema, table)
+        # This is the name of the relation within a transaction
+        table = model_immediate_name(node, dbt.flags.NON_DESTRUCTIVE)
+
+        self.node = node
+        self.schema = node.get('schema')
+        self.name = node.get('name')
+        self.table = table
+
+        self.materialized = get_materialization(node)
+        self.sql = node.get('injected_sql')
 
     def __repr__(self):
-        return self.schema_table(self.schema, self.table)
+        if self.materialized == 'ephemeral':
+            return '__dbt__CTE__{}'.format(self.name)
+        else:
+            return self._adapter.quote_schema_and_table(profile=None,
+                                                       schema=self.schema,
+                                                       table=self.table)
 
 
 def coalesce(*args):
