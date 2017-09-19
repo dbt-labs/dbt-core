@@ -288,7 +288,7 @@ class BigQueryAdapter(PostgresAdapter):
 
         query.run()
 
-        res = None
+        res = []
         if fetch:
             res = cls.fetch_query_results(query)
 

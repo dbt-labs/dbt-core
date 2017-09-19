@@ -552,7 +552,7 @@ class DefaultAdapter(object):
         else:
             _, cursor = cls.execute_one(profile, sql, model_name, auto_begin)
             status = cls.get_status(cursor)
-            return status, None
+            return status, []
 
     @classmethod
     def execute_all(cls, profile, sqls, model_name=None):
