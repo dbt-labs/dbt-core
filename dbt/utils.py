@@ -33,27 +33,31 @@ class ExitCodes(object):
 
 
 class Relation(object):
-    def __init__(self, adapter, node):
+    def __init__(self, adapter, node, use_temp=False):
         self._adapter = adapter
-
-        # This is the name of the relation within a transaction
-        table = model_immediate_name(node, dbt.flags.NON_DESTRUCTIVE)
 
         self.node = node
         self.schema = node.get('schema')
         self.name = node.get('name')
-        self.table = table
+
+        if use_temp:
+            self.table = self._get_table_name(node)
+        else:
+            self.table = self.name
 
         self.materialized = get_materialization(node)
         self.sql = node.get('injected_sql')
+
+    def _get_table_name(self, node):
+        return model_immediate_name(node, dbt.flags.NON_DESTRUCTIVE)
 
     def __repr__(self):
         if self.materialized == 'ephemeral':
             return '__dbt__CTE__{}'.format(self.name)
         else:
             return self._adapter.quote_schema_and_table(profile=None,
-                                                       schema=self.schema,
-                                                       table=self.table)
+                                                        schema=self.schema,
+                                                        table=self.table)
 
 
 def coalesce(*args):
