@@ -1,27 +1,18 @@
 
 {% macro test_relationships(model, field, to, from) %}
 
-with parent as (
 
-    select
-        {{ field }} as id
-
-    from {{ to }}
-
-),
-
-child as (
+select count(*)
+from (
 
     select
         {{ from }} as id
 
     from {{ model }}
+    where {{ from }} is not null
+      and {{ from }} not in (select {{ field }}
+                             from {{ to }})
 
-)
-
-select count(*)
-from child
-where id is not null
-  and id not in (select id from parent)
+) validation_errors
 
 {% endmacro %}
