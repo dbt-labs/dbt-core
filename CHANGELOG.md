@@ -1,3 +1,14 @@
+## dbt 0.9.0 (unreleased)
+
+### Improvements
+
+- Replace schema test CTEs with subqueries to speed them up for Postgres ([#536](https://github.com/fishtown-analytics/dbt/pull/536))
+
+### New Contributors
+
+- @ronnyli
+  - https://github.com/fishtown-analytics/dbt/pull/536
+
 ## dbt 0.9.0 Alpha 2 (September 20, 2017)
 
 ### Overview
