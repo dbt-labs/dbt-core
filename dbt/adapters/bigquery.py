@@ -26,6 +26,8 @@ class BigQueryAdapter(PostgresAdapter):
         "query_for_existing",
         "execute_model",
         "drop",
+        "execute",
+        "quote_schema_and_table"
     ]
 
     SCOPE = ('https://www.googleapis.com/auth/bigquery',
@@ -223,6 +225,8 @@ class BigQueryAdapter(PostgresAdapter):
         job.write_disposition = 'WRITE_TRUNCATE'
         job.begin()
 
+        cls.release_connection(profile, model_name)
+
         logger.debug("Model SQL ({}):\n{}".format(model_name, model_sql))
 
         with cls.exception_handler(profile, model_sql, model_name, model_name):
@@ -232,10 +236,11 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def execute_model(cls, profile, model, materialization, model_name=None):
-        connection = cls.get_connection(profile, model.get('name'))
 
         if flags.STRICT_MODE:
+            connection = cls.get_connection(profile, model.get('name'))
             validate_connection(connection)
+            cls.release_connection(profile, model.get('name'))
 
         model_name = model.get('name')
         model_schema = model.get('schema')
@@ -267,10 +272,10 @@ class BigQueryAdapter(PostgresAdapter):
             if token is None:
                 break
             rows, total_count, token = query.fetch_data(page_token=token)
-        return rows
+        return all_rows
 
     @classmethod
-    def execute_and_fetch(cls, profile, sql, model_name=None, **kwargs):
+    def execute(cls, profile, sql, model_name=None, fetch=False, **kwargs):
         conn = cls.get_connection(profile, model_name)
         client = conn.get('handle')
 
@@ -283,7 +288,16 @@ class BigQueryAdapter(PostgresAdapter):
 
         query.run()
 
-        return cls.fetch_query_results(query)
+        res = []
+        if fetch:
+            res = cls.fetch_query_results(query)
+
+        status = 'ERROR' if query.errors else 'OK'
+        return status, res
+
+    @classmethod
+    def execute_and_fetch(cls, profile, sql, model_name, auto_begin=None):
+        return cls.execute(profile, sql, model_name, fetch=True)
 
     @classmethod
     def add_begin_query(cls, profile, name):
@@ -368,7 +382,7 @@ class BigQueryAdapter(PostgresAdapter):
         return '`{}`'.format(identifier)
 
     @classmethod
-    def quote_schema_and_table(cls, profile, schema, table):
+    def quote_schema_and_table(cls, profile, schema, table, model_name=None):
         connection = cls.get_connection(profile)
         credentials = connection.get('credentials', {})
         project = credentials.get('project')

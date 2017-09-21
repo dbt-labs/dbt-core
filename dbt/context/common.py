@@ -148,8 +148,11 @@ def _add_sql_handlers(context):
     })
 
 
-def log(msg):
-    logger.debug(msg)
+def log(msg, info=False):
+    if info:
+        logger.info(msg)
+    else:
+        logger.debug(msg)
     return ''
 
 
@@ -282,11 +285,7 @@ def generate(model, project, flat_graph, provider=None):
         "sql_now": adapter.date_function(),
         "fromjson": fromjson(model),
         "target": target,
-        "this": dbt.utils.This(
-            model.get('schema', schema),
-            dbt.utils.model_immediate_name(model, dbt.flags.NON_DESTRUCTIVE),
-            model.get('name')
-        )
+        "this": dbt.utils.Relation(adapter, model, use_temp=True)
     })
 
     context = _add_tracking(context)

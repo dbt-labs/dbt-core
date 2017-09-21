@@ -3,6 +3,7 @@ import hashlib
 import itertools
 
 import dbt.exceptions
+import dbt.flags
 
 from dbt.include import GLOBAL_DBT_MODULES_PATH
 from dbt.compat import basestring
@@ -31,17 +32,32 @@ class ExitCodes(object):
     UnhandledError = 2
 
 
-class This(object):
-    def __init__(self, schema, table, name):
-        self.schema = schema
-        self.table = table
-        self.name = table if name is None else name
+class Relation(object):
+    def __init__(self, adapter, node, use_temp=False):
+        self._adapter = adapter
 
-    def schema_table(self, schema, table):
-        return '"{}"."{}"'.format(schema, table)
+        self.node = node
+        self.schema = node.get('schema')
+        self.name = node.get('name')
+
+        if use_temp:
+            self.table = self._get_table_name(node)
+        else:
+            self.table = self.name
+
+        self.materialized = get_materialization(node)
+        self.sql = node.get('injected_sql')
+
+    def _get_table_name(self, node):
+        return model_immediate_name(node, dbt.flags.NON_DESTRUCTIVE)
 
     def __repr__(self):
-        return self.schema_table(self.schema, self.table)
+        if self.materialized == 'ephemeral':
+            return '__dbt__CTE__{}'.format(self.name)
+        else:
+            return self._adapter.quote_schema_and_table(profile=None,
+                                                        schema=self.schema,
+                                                        table=self.table)
 
 
 def coalesce(*args):
@@ -98,7 +114,7 @@ def find_by_name(flat_graph, target_name, target_package, subgraph,
         if len(node_parts) != 3:
             node_type = model.get('resource_type', 'node')
             msg = "{} names cannot contain '.' characters".format(node_type)
-            dbt.exceptions.raise_compiler_error(model, msg)
+            dbt.exceptions.raise_compiler_error(msg, model)
 
         resource_type, package_name, node_name = node_parts
 

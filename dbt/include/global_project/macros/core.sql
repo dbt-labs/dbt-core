@@ -7,10 +7,10 @@
       {{ write(sql) }}
     {%- endif -%}
 
-    {%- set _, cursor = adapter.add_query(sql, auto_begin=auto_begin) -%}
+    {%- set status, res = adapter.execute(sql, auto_begin=auto_begin, fetch=fetch_result) -%}
     {%- if name is not none -%}
-      {%- set result = [] if not fetch_result else adapter.get_result_from_cursor(cursor) -%}
-      {{ store_result(name, status=adapter.get_status(cursor), data=result) }}
+      {{ store_result(name, status=status, data=res) }}
     {%- endif -%}
+
   {%- endif -%}
 {%- endmacro %}

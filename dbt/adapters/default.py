@@ -33,6 +33,7 @@ class DefaultAdapter(object):
         "add_query",
         "expand_target_column_types",
         "quote_schema_and_table",
+        "execute"
     ]
 
     raw_functions = [
@@ -539,7 +540,19 @@ class DefaultAdapter(object):
                           auto_begin=False):
         _, cursor = cls.execute_one(profile, sql, model_name, auto_begin)
 
-        return cursor.fetchall()
+        status = cls.get_status(cursor)
+        rows = cursor.fetchall()
+        return status, rows
+
+    @classmethod
+    def execute(cls, profile, sql, model_name=None, auto_begin=False,
+                fetch=False):
+        if fetch:
+            return cls.execute_and_fetch(profile, sql, model_name, auto_begin)
+        else:
+            _, cursor = cls.execute_one(profile, sql, model_name, auto_begin)
+            status = cls.get_status(cursor)
+            return status, []
 
     @classmethod
     def execute_all(cls, profile, sqls, model_name=None):

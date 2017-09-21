@@ -20,7 +20,6 @@
   );
 {% endmacro %}
 
-
 {% macro create_view_as(identifier, sql) -%}
   {{ adapter_macro('create_view_as', identifier, sql) }}
 {%- endmacro %}

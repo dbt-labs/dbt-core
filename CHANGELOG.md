@@ -1,3 +1,19 @@
+## dbt 0.9.0 Alpha 2 (September 20, 2017)
+
+### Overview
+
+- Custom model schemas
+- BigQuery updates
+- `ref` improvements
+
+### Bugfixes
+- Parity for `statement` interface on BigQuery ([#526](https://github.com/fishtown-analytics/dbt/pull/526))
+
+### Changes
+- Override which schema models are materialized in ([#522](https://github.com/fishtown-analytics/dbt/pull/522)) ([docs](https://dbt.readme.io/v0.9/docs/using-custom-schemas))
+- Make `{{ ref(...) }}` return the same type of object as `{{ this }} `([#530](https://github.com/fishtown-analytics/dbt/pull/530))
+
+
 ## dbt 0.9.0 Alpha 1 (August 29, 2017)
 
 ### Overview

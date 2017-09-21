@@ -52,6 +52,51 @@ config:
 #     target: [target-name]
 #
 #
+# BigQuery
+# -------------------
+#   [profile-name]:
+#     target: [target-name]
+#
+#     outputs:
+#       # 1. Use oauth flow
+#       [target-name-1]:
+#         type: bigquery
+#         method: oauth
+#         project: [GCP project id]
+#         schema: [dbt schema]
+#         threads: [between 1 and 8]
+#
+#       # 2. use a service account keyfile
+#       [target-name-2]:
+#         type: bigquery
+#         method: service-account
+#         project: [GCP project id]
+#         schema: [dbt schema]
+#         threads: [between 1 and 8]
+#         keyfile: [/path/to/bigquery/keyfile.json]
+#
+#       # 3. Use the contents of the service account keyfile (advanced)
+#       [target-name-3]:
+#         type: bigquery
+#         method: service-account-json
+#         project: [GCP project id]
+#         schema: [dbt schema]
+#         threads: [between 1 and 8]
+#
+#         # These fields come from the service account json keyfile
+#         keyfile_json:
+#           type: xxx
+#           project_id: xxx
+#           private_key_id: xxx
+#           private_key: xxx
+#           client_email: xxx
+#           client_id: xxx
+#           auth_uri: xxx
+#           token_uri: xxx
+#           auth_provider_x509_cert_url: xxx
+#           client_x509_cert_url: xxx
+#
+#
 # Commonly, it's helpful to define multiple targets for a profile. For example,
 # these targets might be `dev` and `prod`. Whereas the `dev` target points to
 # a development schema (eg. dbt_dev), the `prod` schema should point to the
@@ -92,6 +137,13 @@ evil-corp:
             database: db
             warehouse: warehouse
             schema: analytics     # use the prod schema instead
+
+        bigquery:
+            type: bigquery
+            method: oauth
+            project: evil-corp
+            schema: analytics
+            threads: 1
 
     target: dev                   # default target is dev unless changed at run time
 
