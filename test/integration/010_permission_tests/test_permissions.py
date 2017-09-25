@@ -28,14 +28,17 @@ class TestPermissions(DBTIntegrationTest):
         failed = False
         self.run_sql('drop schema if exists "{}" cascade'.format(self.unique_schema()))
         try:
-            self.run_dbt(['run', '--target', 'noaccess'])
+            self.run_dbt(['run', '--target', 'noaccess'], expect_pass=False)
         except RuntimeError:
             failed = True
 
         self.assertTrue(failed)
 
+        self.run_sql_file("test/integration/010_permission_tests/seed.sql")
+
         # now it should work!
-        self.run_sql('create schema "{}"'.format(self.unique_schema()))
-        self.run_sql('grant usage on schema "{}" to noaccess'.format(self.unique_schema()))
+        self.run_sql('grant create on database dbt to noaccess'.format(self.unique_schema()))
+        self.run_sql('grant usage, create on schema "{}" to noaccess'.format(self.unique_schema()))
+        self.run_sql('grant select on all tables in schema "{}" to noaccess'.format(self.unique_schema()))
 
         self.run_dbt(['run', '--target', 'noaccess'])

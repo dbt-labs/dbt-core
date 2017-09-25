@@ -62,7 +62,7 @@ class TestInvalidMacros(DBTIntegrationTest):
     def test_invalid_macro(self):
 
         try:
-            self.run_dbt(["run"])
+            self.run_dbt(["run"], expect_pass=False)
             self.assertTrue(False,
                             'compiling bad macro should raise a runtime error')
 

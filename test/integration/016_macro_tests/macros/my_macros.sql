@@ -10,4 +10,6 @@
 
 {% macro with_ref() %}
 
+    {{ ref('table') }}
+
 {% endmacro %}
