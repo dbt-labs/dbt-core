@@ -218,7 +218,7 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     config_dict.update(config.config)
     node['config'] = config_dict
 
-    context = dbt.context.parser.generate(node, package_project_config,
+    context = dbt.context.parser.generate(node, root_project_config,
                                           {"macros": macros})
 
     dbt.clients.jinja.get_rendered(
