@@ -14,3 +14,17 @@
 
   {%- endif -%}
 {%- endmacro %}
+
+{% macro constant_statement(name=None, status=None, res=None) -%}
+  {%- set sql = render(caller()) -%}
+
+  {%- if name == 'main' -%}
+    {{ log('Writing runtime SQL for node "{}"'.format(model['unique_id'])) }}
+    {{ write(sql) }}
+  {%- endif -%}
+
+  {%- if name is not none -%}
+    {{ store_result(name, status=status, data=res) }}
+  {%- endif -%}
+
+{%- endmacro %}

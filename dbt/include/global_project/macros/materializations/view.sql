@@ -6,6 +6,8 @@
   {%- set existing = adapter.query_for_existing(schema) -%}
   {%- set existing_type = existing.get(identifier) -%}
 
+  {%- set has_transactional_hooks = (hooks | selectattr('transaction', 'equalto', True) | list | length) > 0 %}
+
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
   {{ drop_if_exists(existing, schema, tmp_identifier) }}
 
@@ -14,7 +16,10 @@
 
   -- build model
   {% if non_destructive_mode and existing_type == 'view' -%}
-    -- noop
+    {% call constant_statement('main', status="PASS", res=[]) -%}
+      -- Not running : non-destructive mode
+      {{ sql }}
+    {%- endcall %}
   {%- else -%}
     {% call statement('main') -%}
       {{ create_view_as(tmp_identifier, sql) }}
@@ -31,8 +36,13 @@
     {{ adapter.rename(schema, tmp_identifier, identifier) }}
   {%- endif %}
 
-  -- `COMMIT` happens here
-  {{ adapter.commit() }}
+  {#
+      -- Don't commit in non-destructive mode _unless_ there are in-transaction hooks
+      -- TODO : Figure out some other way of doing this that isn't as fragile
+  #}
+  {% if has_transactional_hooks or not non_destructive_mode %}
+      {{ adapter.commit() }}
+  {% endif %}
 
   {{ run_hooks(post_hooks, inside_transaction=False) }}
 
