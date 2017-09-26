@@ -17,7 +17,13 @@
 
   -- build model
   {% if should_ignore -%}
-    {% call constant_statement('main', status="PASS", res=[]) -%}
+    {#
+      -- Materializations need to a statement with name='main'.
+      -- We could issue a no-op query here (like `select 1`), but that's wasteful. Instead:
+      --   1) write the sql contents out to the compiled dirs
+      --   2) return a status and result to the caller
+    #}
+    {% call noop_statement('main', status="PASS", res=[]) -%}
       -- Not running : non-destructive mode
       {{ sql }}
     {%- endcall %}

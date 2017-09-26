@@ -15,7 +15,7 @@
   {%- endif -%}
 {%- endmacro %}
 
-{% macro constant_statement(name=None, status=None, res=None) -%}
+{% macro noop_statement(name=None, status=None, res=None) -%}
   {%- set sql = render(caller()) -%}
 
   {%- if name == 'main' -%}
