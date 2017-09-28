@@ -80,6 +80,10 @@ class Project(object):
 
         if self.profile_to_load in self.profiles:
             self.cfg.update(self.profiles[self.profile_to_load])
+
+            # overwrite target with compiled values
+            target = self.cfg['target']
+            self.cfg['outputs'][target].update(self.run_environment())
         else:
             raise DbtProjectError(
                 "Could not find profile named '{}'"
