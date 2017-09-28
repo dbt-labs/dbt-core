@@ -120,8 +120,7 @@ class Project(object):
             is_str = isinstance(value, dbt.compat.basestring)
 
             if is_str:
-                node = "config key: '{}'".format(key)
-                compiled_val = dbt.clients.jinja.get_rendered(value, ctx, node)
+                compiled_val = dbt.clients.jinja.get_rendered(value, ctx)
             else:
                 compiled_val = value
 
