@@ -214,6 +214,8 @@ def invoke_dbt(parsed):
         targets = proj.cfg.get('outputs', {}).keys()
         if parsed.target in targets:
             proj.cfg['target'] = parsed.target
+            # make sure we update the target if this is overriden on the cli
+            proj.compile_and_update_target()
         else:
             logger.info("Encountered an error while reading the project:")
             logger.info("  ERROR Specified target {} is not a valid option "
