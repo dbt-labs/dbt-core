@@ -64,8 +64,8 @@ def coalesce(*args):
 
 
 def get_profile_from_project(project):
-    target_name = project.get('target', {})
-    profile = project.get('outputs', {}).get(target_name, {})
+    target_name = project.get("target", {})
+    profile = project.get("outputs", {}).get(target_name, {})
     return profile
 
 
