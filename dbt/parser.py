@@ -218,6 +218,11 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     config_dict.update(config.config)
     node['config'] = config_dict
 
+    # Set this temporarily so get_rendered() below has access to a schema
+    profile = dbt.utils.get_profile_from_project(root_project_config)
+    default_schema = profile.get('schema', 'public')
+    node['schema'] = default_schema
+
     context = dbt.context.parser.generate(node, root_project_config,
                                           {"macros": macros})
 
@@ -232,7 +237,6 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     adapter.release_connection(profile, node.get('name'))
 
     # Special macro defined in the global project
-    default_schema = context.get('schema')
     schema_override = config.config.get('schema')
     get_schema = context.get('generate_schema_name', lambda x: default_schema)
     node['schema'] = get_schema(schema_override)

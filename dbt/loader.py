@@ -130,11 +130,16 @@ class DataTestLoader(ResourceLoader):
             macros=macros)
 
 
+# ArchiveLoader and RunHookLoader operate on configs, so we just need to run
+# them both once, not for each project
 class ArchiveLoader(ResourceLoader):
 
     @classmethod
-    def load_project(cls, root_project, all_projects, project, project_name,
-                     macros):
+    def load_all(cls, root_project, all_projects, macros=None):
+        return cls.load_project(root_project, all_projects, macros)
+
+    @classmethod
+    def load_project(cls, root_project, all_projects, macros):
         return dbt.parser.parse_archives_from_projects(root_project,
                                                        all_projects,
                                                        macros)
@@ -143,8 +148,11 @@ class ArchiveLoader(ResourceLoader):
 class RunHookLoader(ResourceLoader):
 
     @classmethod
-    def load_project(cls, root_project, all_projects, project, project_name,
-                     macros):
+    def load_all(cls, root_project, all_projects, macros=None):
+        return cls.load_project(root_project, all_projects, macros)
+
+    @classmethod
+    def load_project(cls, root_project, all_projects, macros):
         return dbt.parser.load_and_parse_run_hooks(root_project, all_projects,
                                                    macros)
 
