@@ -53,7 +53,7 @@ class Relation(object):
 
     def final_name(self):
         if self.materialized == 'ephemeral':
-            msg = "final_name() was called on an ephemeral_model"
+            msg = "final_name() was called on an ephemeral model"
             dbt.exceptions.raise_compiler_error(msg, self.node)
         else:
             return self._adapter.quote_schema_and_table(profile=None,
