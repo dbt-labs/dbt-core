@@ -20,6 +20,9 @@ class RuntimeException(RuntimeError, Exception):
         return 'Runtime'
 
     def node_to_string(self, node):
+        if node is None:
+            return "<Unknown>"
+
         return "{} {} ({})".format(
             node.get('resource_type'),
             node.get('name', 'unknown'),

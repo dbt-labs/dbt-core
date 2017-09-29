@@ -51,6 +51,15 @@ class Relation(object):
     def _get_table_name(self, node):
         return model_immediate_name(node, dbt.flags.NON_DESTRUCTIVE)
 
+    def final_name(self):
+        if self.materialized == 'ephemeral':
+            msg = "rendered_name() called on an ephemeral_model"
+            dbt.exceptions.raise_compiler_error(msg, self.node)
+        else:
+            return self._adapter.quote_schema_and_table(profile=None,
+                                                        schema=self.schema,
+                                                        table=self.name)
+
     def __repr__(self):
         if self.materialized == 'ephemeral':
             return '__dbt__CTE__{}'.format(self.name)
