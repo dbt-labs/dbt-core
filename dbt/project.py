@@ -80,6 +80,8 @@ class Project(object):
 
         if self.profile_to_load in self.profiles:
             self.cfg.update(self.profiles[self.profile_to_load])
+            self.compile_and_update_target()
+
         else:
             raise DbtProjectError(
                 "Could not find profile named '{}'"
@@ -120,14 +122,17 @@ class Project(object):
             is_str = isinstance(value, dbt.compat.basestring)
 
             if is_str:
-                node = "config key: '{}'".format(key)
-                compiled_val = dbt.clients.jinja.get_rendered(value, ctx, node)
+                compiled_val = dbt.clients.jinja.get_rendered(value, ctx)
             else:
                 compiled_val = value
 
             compiled[key] = compiled_val
 
         return compiled
+
+    def compile_and_update_target(self):
+        target = self.cfg['target']
+        self.cfg['outputs'][target].update(self.run_environment())
 
     def run_environment(self):
         target_name = self.cfg['target']
