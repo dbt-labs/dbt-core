@@ -1,3 +1,8 @@
+## dbt 0.9.0 Alpha 4 (October 3, 2017)
+
+### Bugfixes
+ - Fix for federated queries on BigQuery with Service Account json credentials ([#547](https://github.com/fishtown-analytics/dbt/pull/547))
+
 ## dbt 0.9.0 Alpha 3 (October 3, 2017)
 
 ### Overview
