@@ -99,7 +99,7 @@ class BigQueryAdapter(PostgresAdapter):
 
         elif method == 'service-account-json':
             details = config.get('keyfile_json')
-            return creds.from_service_account_info(details)
+            return creds.from_service_account_info(details, scopes=cls.SCOPE)
 
         error = ('Invalid `method` in profile: "{}"'.format(method))
         raise dbt.exceptions.FailedToConnectException(error)
