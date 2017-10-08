@@ -34,7 +34,7 @@ from dbt.include.starter_project import PACKAGE_PATH as starter_project_director
 
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
 
-DOCS_URL = 'https://docs.getdbt.com/docs/configure-your-profile'
+DOCS_URL = "https://docs.getdbt.com/docs/configure-your-profile"
 SLACK_URL = 'https://community.getdbt.com/'
 
 # This file is not needed for the starter project but exists for finding the resource path
