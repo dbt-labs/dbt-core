@@ -4,9 +4,9 @@ dbt (data build tool) helps analysts write reliable, modular code using a workfl
 
 A dbt project primarily consists of "models". These models are SQL `select` statements that filter, aggregate, and otherwise transform data to facilitate analytics. Analysts use dbt to [aggregate pageviews into sessions](https://github.com/fishtown-analytics/snowplow), calculate [ad spend ROI](https://github.com/fishtown-analytics/facebook-ads), or report on [email campaign performance](https://github.com/fishtown-analytics/mailchimp).
 
-These models frequently build on top of one another. Fortunately, dbt makes it easy to [manage relationships](https://dbt.readme.io/reference#ref) between models, [test](https://dbt.readme.io/docs/testing) your assumptions, and [visualize](https://graph.sinterdata.com/) your projects.
+These models frequently build on top of one another. Fortunately, dbt makes it easy to [manage relationships](https://docs.getdbt.com/reference#ref) between models, [test](https://docs.getdbt.com/docs/testing) your assumptions, and [visualize](https://graph.sinterdata.com/) your projects.
 
-Still reading? Check out the [docs](https://dbt.readme.io/docs/overview) for more information.
+Still reading? Check out the [docs](https://docs.getdbt.com/docs/overview) for more information.
 
 ![dbt dag](/etc/dag.png?raw=true)
 
@@ -25,7 +25,7 @@ Still reading? Check out the [docs](https://dbt.readme.io/docs/overview) for mor
 
 ---
 
-[![Code Climate](https://codeclimate.com/github/fishtown-analytics/dbt/badges/gpa.svg)](https://codeclimate.com/github/fishtown-analytics/dbt) [![Slack](https://ac-slackin.herokuapp.com/badge.svg)](https://ac-slackin.herokuapp.com)
+[![Code Climate](https://codeclimate.com/github/fishtown-analytics/dbt/badges/gpa.svg)](https://codeclimate.com/github/fishtown-analytics/dbt) [![Slack](https://slack.getdbt.com/badge.svg)](https://slack.getdbt.com)
 
 ### Testing
 
@@ -43,7 +43,7 @@ Everyone interacting in the dbt project's codebases, issue trackers, chat rooms,
 
 
 [PyPA Code of Conduct]: https://www.pypa.io/en/latest/code-of-conduct/
-[slack-url]: http://ac-slackin.herokuapp.com/
-[Installation]: https://dbt.readme.io/docs/installation
-[What is dbt]: https://dbt.readme.io/docs/overview
-[dbt viewpoint]: https://dbt.readme.io/docs/viewpoint
+[slack-url]: http://slack.getdbt.com/
+[Installation]: https://docs.getdbt.com/docs/installation
+[What is dbt]: https://docs.getdbt.com/docs/overview
+[dbt viewpoint]: https://docs.getdbt.com/docs/viewpoint
