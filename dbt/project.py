@@ -224,7 +224,11 @@ def read_profiles(profiles_dir=None):
 
     raw_profiles = dbt.config.read_profile(profiles_dir)
 
-    profiles = {k: v for (k, v) in raw_profiles.items() if k != 'config'}
+    if raw_profiles is None:
+        profiles = {}
+    else:
+        profiles = {k: v for (k, v) in raw_profiles.items() if k != 'config'}
+
     return profiles
 
 

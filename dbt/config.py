@@ -31,7 +31,10 @@ def read_profile(profiles_dir):
 
 def read_config(profiles_dir):
     profile = read_profile(profiles_dir)
-    return profile.get('config', {})
+    if profile is None:
+        return {}
+    else:
+        return profile.get('config', {})
 
 
 def send_anonymous_usage_stats(config):
