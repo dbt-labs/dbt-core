@@ -37,7 +37,7 @@
 - Parity for `statement` interface on BigQuery ([#526](https://github.com/fishtown-analytics/dbt/pull/526))
 
 ### Changes
-- Override which schema models are materialized in ([#522](https://github.com/fishtown-analytics/dbt/pull/522)) ([docs](https://dbt.readme.io/v0.9/docs/using-custom-schemas))
+- Override which schema models are materialized in ([#522](https://github.com/fishtown-analytics/dbt/pull/522)) ([docs](https://docs.getdbt.com/v0.9/docs/using-custom-schemas))
 - Make `{{ ref(...) }}` return the same type of object as `{{ this }} `([#530](https://github.com/fishtown-analytics/dbt/pull/530))
 
 
@@ -48,10 +48,10 @@
 - More powerful macros
 - BigQuery improvements
 - Bugfixes
-- Documentation (0.9.0 docs can be found [here](https://dbt.readme.io/v0.9/))
+- Documentation (0.9.0 docs can be found [here](https://docs.getdbt.com/v0.9/))
 
 ### Breaking Changes
-dbt 0.9.0 Alpha 1 introduces a number of new features intended to help dbt-ers write flexible, reusable code. The majority of these changes involve the `macro` and `materialization` Jinja blocks. As this is an alpha release, there may exist bugs or incompatibilites, particularly surrounding these two blocks. A list of known breaking changes is provided below. If you find new bugs, or have questions about dbt 0.9.0, please don't hesitate to reach out in [slack](http://ac-slackin.herokuapp.com/) or [open a new issue](https://github.com/fishtown-analytics/dbt/issues/new?milestone=0.9.0+alpha-1).
+dbt 0.9.0 Alpha 1 introduces a number of new features intended to help dbt-ers write flexible, reusable code. The majority of these changes involve the `macro` and `materialization` Jinja blocks. As this is an alpha release, there may exist bugs or incompatibilites, particularly surrounding these two blocks. A list of known breaking changes is provided below. If you find new bugs, or have questions about dbt 0.9.0, please don't hesitate to reach out in [slack](http://slack.getdbt.com/) or [open a new issue](https://github.com/fishtown-analytics/dbt/issues/new?milestone=0.9.0+alpha-1).
 
 ##### 1. Adapter functions must be namespaced to the `adapter` context variable
 This will manifest as a compilation error that looks like:
@@ -60,7 +60,7 @@ Compilation Error in model {your_model} (models/path/to/your_model.sql)
   'already_exists' is undefined
 ```
 
-To fix this error, use `adapter.already_exists` instead of just `already_exists`, or similar for other [adapter functions](https://dbt.readme.io/reference#adapter).
+To fix this error, use `adapter.already_exists` instead of just `already_exists`, or similar for other [adapter functions](https://docs.getdbt.com/reference#adapter).
 
 ### Bugfixes
 - Handle lingering `__dbt_tmp` relations ([#511](https://github.com/fishtown-analytics/dbt/pull/511))
@@ -74,9 +74,9 @@ To fix this error, use `adapter.already_exists` instead of just `already_exists`
 - Support querying external data sources in BigQuery ([#507](https://github.com/fishtown-analytics/dbt/pull/507))
 
 ### Documentation
-- Document how to [create a package](https://dbt.readme.io/v0.8/docs/building-packages)
-- Document how to [make a materialization](https://dbt.readme.io/v0.8/docs/creating-new-materializations)
-- Document how to [make custom schema tests](https://dbt.readme.io/v0.8/docs/custom-schema-tests)
+- Document how to [create a package](https://docs.getdbt.com/v0.8/docs/building-packages)
+- Document how to [make a materialization](https://docs.getdbt.com/v0.8/docs/creating-new-materializations)
+- Document how to [make custom schema tests](https://docs.getdbt.com/v0.8/docs/custom-schema-tests)
 
 ## dbt 0.8.3 (July 14, 2017)
 
@@ -100,9 +100,9 @@ To fix this error, use `adapter.already_exists` instead of just `already_exists`
 - Add context function to pull in environment variables ([#450](https://github.com/fishtown-analytics/dbt/issues/450))
 
 ### Documentation
-- Document target configuration for BigQuery [here](https://dbt.readme.io/v0.8/docs/supported-databases#section-bigquery)
-- Document dbt exit codes [here](https://dbt.readme.io/v0.8/reference#exit-codes)
-- Document environment variable usage [here](https://dbt.readme.io/v0.8/reference#env_var)
+- Document target configuration for BigQuery [here](https://docs.getdbt.com/v0.8/docs/supported-databases#section-bigquery)
+- Document dbt exit codes [here](https://docs.getdbt.com/v0.8/reference#exit-codes)
+- Document environment variable usage [here](https://docs.getdbt.com/v0.8/reference#env_var)
 
 ## dbt 0.8.2 (May 31, 2017)
 
@@ -138,7 +138,7 @@ To fix this error, use `adapter.already_exists` instead of just `already_exists`
 ### Overview
 - Bugfixes
 - Reintroduce `compile` command
-- Moved docs to [readme.io](https://dbt.readme.io/)
+- Moved docs to [readme.io](https://docs.getdbt.com/)
 
 
 ### Bugfixes
@@ -441,7 +441,7 @@ With the dbt 0.5.4 release, dbt now features a robust integration test suite. Th
 
 You can check out the DBT roadmap [here](https://github.com/fishtown-analytics/dbt/milestones). In the next few weeks, we'll be working on [bugfixes](https://github.com/fishtown-analytics/dbt/milestone/11), [minor features](https://github.com/fishtown-analytics/dbt/milestone/15), [improved macro support](https://github.com/fishtown-analytics/dbt/milestone/14), and  [expanded control over runtime materialization configs](https://github.com/fishtown-analytics/dbt/milestone/9).
 
-As always, feel free to reach out to us on [Slack](http://ac-slackin.herokuapp.com/) with any questions or comments!
+As always, feel free to reach out to us on [Slack](http://slack.getdbt.com/) with any questions or comments!
 
 ---
 
@@ -493,7 +493,7 @@ As `dbt` has grown, we found this implementation to be a little unwieldy and har
 
 The additions of automated testing and a more comprehensive manual testing process will go a long way to ensuring the future stability of dbt. We're going to get started on these tasks soon, and you can follow our progress here: https://github.com/fishtown-analytics/dbt/milestone/16 .
 
-As always, feel free to [reach out to us on Slack](http://ac-slackin.herokuapp.com/) with any questions or concerns:
+As always, feel free to [reach out to us on Slack](http://slack.getdbt.com/) with any questions or concerns:
 
 
 
@@ -630,7 +630,7 @@ pip install --upgrade dbt
 
 ### And another thing
 
-- Join us on [slack](http://ac-slackin.herokuapp.com/) with questions or comments
+- Join us on [slack](http://slack.getdbt.com/) with questions or comments
 
 Made with ♥️ by 🐟🏙  📈
 
