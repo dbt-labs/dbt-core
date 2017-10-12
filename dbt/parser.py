@@ -545,9 +545,16 @@ def parse_schema_test(test_base, model_name, test_config, test_type,
     # sort the dict so the keys are rendered deterministically (for tests)
     kwargs = [as_kwarg(key, test_args[key]) for key in sorted(test_args)]
 
+    macro_name = "test_{}".format(test_type)
+
+    if package_project_config.get('name') != \
+       root_project_config.get('name'):
+        macro_name = "{}.{}".format(package_project_config.get('name'),
+                                    macro_name)
+
     raw_sql = "{{{{ {macro}(model=ref('{model}'), {kwargs}) }}}}".format(**{
         'model': model_name,
-        'macro': "test_{}".format(test_type),
+        'macro': macro_name,
         'kwargs': ", ".join(kwargs)
     })
 
