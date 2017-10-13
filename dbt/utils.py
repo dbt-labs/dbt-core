@@ -33,9 +33,7 @@ class ExitCodes(object):
 
 
 class Relation(object):
-    def __init__(self, adapter, node, use_temp=False):
-        self._adapter = adapter
-
+    def __init__(self, profile, adapter, node, use_temp=False):
         self.node = node
         self.schema = node.get('schema')
         self.name = node.get('name')
@@ -48,6 +46,21 @@ class Relation(object):
         self.materialized = get_materialization(node)
         self.sql = node.get('injected_sql')
 
+        self.do_quote = self._get_quote_function(profile, adapter)
+
+    def _get_quote_function(self, profile, adapter):
+
+        # make a closure so we don't need to store the profile
+        # on the `Relation` object. That shouldn't be accessible in user-land
+        def quote(schema, table):
+            return adapter.quote_schema_and_table(
+                        profile=profile,
+                        schema=schema,
+                        table=table
+                    )
+
+        return quote
+
     def _get_table_name(self, node):
         return model_immediate_name(node, dbt.flags.NON_DESTRUCTIVE)
 
@@ -56,17 +69,13 @@ class Relation(object):
             msg = "final_name() was called on an ephemeral model"
             dbt.exceptions.raise_compiler_error(msg, self.node)
         else:
-            return self._adapter.quote_schema_and_table(profile=None,
-                                                        schema=self.schema,
-                                                        table=self.name)
+            return self.do_quote(self.schema, self.name)
 
     def __repr__(self):
         if self.materialized == 'ephemeral':
             return '__dbt__CTE__{}'.format(self.name)
         else:
-            return self._adapter.quote_schema_and_table(profile=None,
-                                                        schema=self.schema,
-                                                        table=self.table)
+            return self.do_quote(self.schema, self.table)
 
 
 def coalesce(*args):

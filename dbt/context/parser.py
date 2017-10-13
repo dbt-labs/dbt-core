@@ -19,7 +19,7 @@ def ref(model, project, profile, flat_graph):
             dbt.exceptions.ref_invalid_args(model, args)
 
         adapter = get_adapter(profile)
-        return dbt.utils.Relation(adapter, model)
+        return dbt.utils.Relation(profile, adapter, model)
 
     return ref
 
