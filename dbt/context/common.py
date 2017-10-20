@@ -242,6 +242,10 @@ def fromjson(node):
     return fn
 
 
+def _return(value):
+    raise dbt.exceptions.MacroReturn(value)
+
+
 def generate(model, project, flat_graph, provider=None):
     """
     Not meant to be called directly. Call with either:
@@ -282,6 +286,7 @@ def generate(model, project, flat_graph, provider=None):
         "post_hooks": post_hooks,
         "pre_hooks": pre_hooks,
         "ref": provider.ref(model, project, profile, flat_graph),
+        "return": _return,
         "schema": model.get('schema', schema),
         "sql": model.get('injected_sql'),
         "sql_now": adapter.date_function(),

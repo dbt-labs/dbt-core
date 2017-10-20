@@ -5,6 +5,15 @@ class Exception(BaseException):
     pass
 
 
+class MacroReturn(BaseException):
+    """
+    Hack of all hacks
+    """
+
+    def __init__(self, value):
+        self.value = value
+
+
 class InternalException(Exception):
     pass
 
