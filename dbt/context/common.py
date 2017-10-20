@@ -128,6 +128,7 @@ def _store_result(sql_results):
             'status': status,
             'data': data
         })
+        return ''
 
     return call
 
@@ -220,6 +221,7 @@ def write(node, target_path, subdirectory):
     def fn(payload):
         node['build_path'] = dbt.writer.write_node(
             node, target_path, subdirectory, payload)
+        return ''
 
     return fn
 

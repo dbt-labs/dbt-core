@@ -31,7 +31,7 @@ setup(
         'scripts/dbt',
     ],
     install_requires=[
-        'Jinja2>=2.8',
+        'Jinja2>=2.9',
         'PyYAML>=3.11',
         'psycopg2==2.7.1',
         'sqlparse==0.2.3',
