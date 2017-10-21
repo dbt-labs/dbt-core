@@ -20,28 +20,28 @@ class TestDuplicateModelEnabled(DBTIntegrationTest):
     @property
     def profile_config(self):
         return {
-            'test': {
-                'outputs': {
-                    'dev': {
-                        'type': 'postgres',
-                        'threads': 1,
-                        'host': 'database',
-                        'port': 5432,
-                        'user': "root",
-                        'pass': "password",
-                        'dbname': 'dbt',
-                        'schema': self.unique_schema()
+            "test": {
+                "outputs": {
+                    "dev": {
+                        "type": "postgres",
+                        "threads": 1,
+                        "host": "database",
+                        "port": 5432,
+                        "user": "root",
+                        "pass": "password",
+                        "dbname": "dbt",
+                        "schema": self.unique_schema()
                     },
                 },
-                'target': 'dev'
+                "target": "dev"
             }
         }
 
-    @attr(type='postgres')
+    @attr(type="postgres")
     def test_duplicate_model_enabled(self):
-        message = 'Found models with the same name:.*'
+        message = "Found models with the same name:.*"
         with self.assertRaisesRegexp(CompilationException, message):
-            self.run_dbt(['run'])
+            self.run_dbt(["run"])
 
 
 class TestDuplicateModelDisabled(DBTIntegrationTest):
@@ -60,31 +60,31 @@ class TestDuplicateModelDisabled(DBTIntegrationTest):
     @property
     def profile_config(self):
         return {
-            'test': {
-                'outputs': {
-                    'dev': {
-                        'type': 'postgres',
-                        'threads': 1,
-                        'host': 'database',
-                        'port': 5432,
-                        'user': "root",
-                        'pass': "password",
-                        'dbname': 'dbt',
-                        'schema': self.unique_schema()
+            "test": {
+                "outputs": {
+                    "dev": {
+                        "type": "postgres",
+                        "threads": 1,
+                        "host": "database",
+                        "port": 5432,
+                        "user": "root",
+                        "pass": "password",
+                        "dbname": "dbt",
+                        "schema": self.unique_schema()
                     },
                 },
-                'target': 'dev'
+                "target": "dev"
             }
         }
 
-    @attr(type='postgres')
+    @attr(type="postgres")
     def test_duplicate_model_disabled(self):
         try:
-            self.run_dbt(['run'])
+            self.run_dbt(["run"])
         except CompilationException:
             self.fail(
-                'Compilation Exception raised on disabled model')
-        query = 'select value from {schema}.model' \
+                "Compilation Exception raised on disabled model")
+        query = "select value from {schema}.model" \
                 .format(schema=self.unique_schema())
-        result = self.run_sql(query, fetch='one')[0]
+        result = self.run_sql(query, fetch="one")[0]
         assert result == 1

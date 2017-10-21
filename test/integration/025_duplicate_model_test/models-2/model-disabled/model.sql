@@ -1,7 +1,7 @@
 {{
     config(
         enabled=False,
-        materialized='table',
+        materialized="table",
     )
 }}
 
