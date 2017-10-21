@@ -273,6 +273,18 @@ def parse_sql_nodes(nodes, root_project, projects, tags=None, macros=None):
                              package_name,
                              node.get('name'))
 
+        node_parsed = parse_node(node,
+                                 node_path,
+                                 root_project,
+                                 projects.get(package_name),
+                                 projects,
+                                 tags=tags,
+                                 macros=macros)
+
+        # Ignore disabled nodes
+        if not node_parsed['config']['enabled']:
+            continue
+
         existing_node = to_return.get(node_path)
         if existing_node is not None:
             raise dbt.exceptions.CompilationException(
@@ -280,13 +292,7 @@ def parse_sql_nodes(nodes, root_project, projects, tags=None, macros=None):
                     existing_node.get('original_file_path'),
                     node.get('original_file_path')))
 
-        to_return[node_path] = parse_node(node,
-                                          node_path,
-                                          root_project,
-                                          projects.get(package_name),
-                                          projects,
-                                          tags=tags,
-                                          macros=macros)
+        to_return[node_path] = node_parsed
 
     dbt.contracts.graph.parsed.validate_nodes(to_return)
 
