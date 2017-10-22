@@ -1101,48 +1101,6 @@ class ParserTest(unittest.TestCase):
                     'raw_sql': self.find_input_by_name(
                         models, 'view').get('raw_sql')
                 },
-                'model.snowplow.disabled': {
-                    'name': 'disabled',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.snowplow.disabled',
-                    'fqn': ['snowplow', 'disabled'],
-                    'empty': False,
-                    'package_name': 'snowplow',
-                    'refs': [],
-                    'depends_on': {
-                        'nodes': [],
-                        'macros': []
-                    },
-                    'path': 'disabled.sql',
-                    'original_file_path': 'disabled.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'config': disabled_config,
-                    'tags': set(),
-                    'raw_sql': self.find_input_by_name(
-                        models, 'disabled').get('raw_sql')
-                },
-                'model.snowplow.package': {
-                    'name': 'package',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.snowplow.package',
-                    'fqn': ['snowplow', 'views', 'package'],
-                    'empty': False,
-                    'package_name': 'snowplow',
-                    'refs': [],
-                    'depends_on': {
-                        'nodes': [],
-                        'macros': []
-                    },
-                    'path': get_os_path('views/package.sql'),
-                    'original_file_path': get_os_path('views/package.sql'),
-                    'root_path': get_os_path('/usr/src/app'),
-                    'config': sort_config,
-                    'tags': set(),
-                    'raw_sql': self.find_input_by_name(
-                        models, 'package').get('raw_sql')
-                },
                 'model.snowplow.multi_sort': {
                     'name': 'multi_sort',
                     'schema': 'analytics',
