@@ -22,7 +22,7 @@
 
 
 {% macro make_hook_config(sql, inside_transaction) %}
-    {{ {"sql": sql, "transaction": inside_transaction} | tojson }}
+    {{ tojson({"sql": sql, "transaction": inside_transaction}) }}
 {% endmacro %}
 
 

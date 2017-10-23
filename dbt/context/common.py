@@ -233,13 +233,18 @@ def render(context, node):
     return fn
 
 
-def fromjson(node):
-    def fn(string, default=None):
-        try:
-            return json.loads(string)
-        except ValueError as e:
-            return default
-    return fn
+def fromjson(string, default=None):
+    try:
+        return json.loads(string)
+    except ValueError as e:
+        return default
+
+
+def tojson(value, default=None):
+    try:
+        return json.dumps(value)
+    except ValueError as e:
+        return default
 
 
 def _return(value):
@@ -290,7 +295,8 @@ def generate(model, project, flat_graph, provider=None):
         "schema": model.get('schema', schema),
         "sql": model.get('injected_sql'),
         "sql_now": adapter.date_function(),
-        "fromjson": fromjson(model),
+        "fromjson": fromjson,
+        "tojson": tojson,
         "target": target,
         "this": dbt.utils.Relation(profile, adapter, model, use_temp=True)
     })
