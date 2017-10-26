@@ -1,5 +1,16 @@
 ## dbt 0.9.0 (October 25, 2017)
 
+### Installation
+
+Full installation instructions for macOS, Windows, and Linux can be found [here](https://docs.getdbt.com/v0.9/docs/installation). If you use Windows or Linux, installation works the same as with previous versions of dbt. If you use macOS and Homebrew to install dbt, note that installation instructions have changed:
+
+#### macOS Installation Instructions
+```bash
+brew update
+brew tap fishtown-analytics/dbt
+brew install dbt
+```
+
 ### Overview
 
 - More powerful macros and materializations
