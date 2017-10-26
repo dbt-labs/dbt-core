@@ -1,3 +1,47 @@
+## dbt 0.9.0 (October 25, 2017)
+
+### Overview
+
+- More powerful macros and materializations
+- Custom model schemas
+- BigQuery improvements
+- Bugfixes
+- Documentation (0.9.0 docs can be found [here](https://docs.getdbt.com/v0.9/))
+
+
+### Breaking Changes
+- `adapter` functions must be namespaced to the `adapter` context variable. To fix this error, use `adapter.already_exists` instead of just `already_exists`, or similar for other [adapter functions](https://docs.getdbt.com/reference#adapter).
+
+
+### Bugfixes
+- Handle lingering `__dbt_tmp` relations ([#511](https://github.com/fishtown-analytics/dbt/pull/511))
+- Run tests defined in an ephemeral directory ([#509](https://github.com/fishtown-analytics/dbt/pull/509))
+
+
+### Changes
+- use `adapter`, `ref`, and `var` inside of macros ([#466](https://github.com/fishtown-analytics/dbt/pull/466/files))
+- Build custom tests and materializations in dbt packages ([#466](https://github.com/fishtown-analytics/dbt/pull/466/files))
+- Support pre- and post- hooks that run outside of a transaction ([#510](https://github.com/fishtown-analytics/dbt/pull/510))
+- Support table materializations for BigQuery ([#507](https://github.com/fishtown-analytics/dbt/pull/507))
+- Support querying external data sources in BigQuery ([#507](https://github.com/fishtown-analytics/dbt/pull/507))
+- Override which schema models are materialized in ([#522](https://github.com/fishtown-analytics/dbt/pull/522)) ([docs](https://docs.getdbt.com/v0.9/docs/using-custom-schemas))
+- Make `{{ ref(...) }}` return the same type of object as `{{ this }} `([#530](https://github.com/fishtown-analytics/dbt/pull/530))
+- Replace schema test CTEs with subqueries to speed them up for Postgres ([#536](https://github.com/fishtown-analytics/dbt/pull/536)) ([@ronnyli](https://github.com/ronnyli))
+ - Bump Snowflake dependency, remove pyasn1 ([#570](https://github.com/fishtown-analytics/dbt/pull/570))
+
+
+### Documentation
+- Document how to [create a package](https://docs.getdbt.com/v0.9/docs/building-packages)
+- Document how to [make a materialization](https://docs.getdbt.com/v0.9/docs/creating-new-materializations)
+- Document how to [make custom schema tests](https://docs.getdbt.com/v0.9/docs/custom-schema-tests)
+- Document how to [use hooks to vacuum](https://docs.getdbt.com/v0.9/docs/using-hooks#section-using-hooks-to-vacuum)
+- Document [all context variables](https://docs.getdbt.com/v0.9/reference)
+
+
+### New Contributors
+- [@ronnyli](https://github.com/ronnyli) ([#536](https://github.com/fishtown-analytics/dbt/pull/536))
+
+
 ## dbt 0.9.0 Alpha 5 (October 24, 2017)
 
 ### Overview
