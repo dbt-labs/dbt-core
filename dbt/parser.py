@@ -285,6 +285,7 @@ def parse_sql_nodes(nodes, root_project, projects, tags=None, macros=None):
         if not node_parsed['config']['enabled']:
             continue
 
+        # Check for duplicate model names
         existing_node = to_return.get(node_path)
         if existing_node is not None:
             raise dbt.exceptions.CompilationException(

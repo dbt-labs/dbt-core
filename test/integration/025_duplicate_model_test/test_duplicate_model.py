@@ -88,3 +88,68 @@ class TestDuplicateModelDisabled(DBTIntegrationTest):
                 .format(schema=self.unique_schema())
         result = self.run_sql(query, fetch="one")[0]
         assert result == 1
+
+
+class TestDuplicateModelEnabledAcrossPackages(DBTIntegrationTest):
+
+    def setUp(self):
+        DBTIntegrationTest.setUp(self)
+
+    @property
+    def schema(self):
+        return "duplicate_model_025"
+
+    @property
+    def models(self):
+        return "test/integration/025_duplicate_model_test/models-3"
+
+    @property
+    def project_config(self):
+        return {
+            "repositories": [
+                'https://github.com/fishtown-analytics/dbt-integration-project@master'
+            ]
+        }
+
+    @attr(type="postgres")
+    def test_duplicate_model_enabled_across_packages(self):
+        self.run_dbt(["deps"])
+        message = "Found models with the same name:.*"
+        with self.assertRaisesRegexp(CompilationException, message):
+            self.run_dbt(["run"])
+
+
+class TestDuplicateModelDisabledAcrossPackages(DBTIntegrationTest):
+
+    def setUp(self):
+        DBTIntegrationTest.setUp(self)
+        self.run_sql_file("test/integration/025_duplicate_model_test/seed.sql")
+
+    @property
+    def schema(self):
+        return "duplicate_model_025"
+
+    @property
+    def models(self):
+        return "test/integration/025_duplicate_model_test/models-4"
+
+    @property
+    def project_config(self):
+        return {
+            "repositories": [
+                'https://github.com/fishtown-analytics/dbt-integration-project@master'
+            ]
+        }
+
+    @attr(type="postgres")
+    def test_duplicate_model_disabled_across_packages(self):
+        self.run_dbt(["deps"])
+        try:
+            self.run_dbt(["run"])
+        except CompilationException:
+            self.fail(
+                "Compilation Exception raised on disabled model")
+        query = "select 1 from {schema}.table" \
+                .format(schema=self.unique_schema())
+        result = self.run_sql(query, fetch="one")[0]
+        assert result == 1

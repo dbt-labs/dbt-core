@@ -73,6 +73,30 @@ class MacroLoader(ResourceLoader):
 class ModelLoader(ResourceLoader):
 
     @classmethod
+    def load_all(cls, root_project, all_projects, macros=None):
+        to_return = {}
+
+        for project_name, project in all_projects.items():
+            project_loaded = cls.load_project(root_project,
+                                              all_projects,
+                                              project, project_name,
+                                              macros)
+
+            to_return.update(project_loaded)
+
+        # Check for duplicate model names
+        names_models = {}
+        for model, attribs in to_return.items():
+            name = attribs['name']
+            existing_name = names_models.get(name)
+            if existing_name is not None:
+                raise dbt.exceptions.CompilationException(
+                    'Found models with the same name: \n- %s\n- %s' % (
+                        model, existing_name))
+            names_models[name] = model
+        return to_return
+
+    @classmethod
     def load_project(cls, root_project, all_projects, project, project_name,
                      macros):
         return dbt.parser.load_and_parse_sql(
