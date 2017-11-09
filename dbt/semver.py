@@ -287,7 +287,7 @@ class UnboundedVersionSpecifier(VersionSpecifier):
         return False
 
 
-def reduce_versions(*args):
+def reduce_versions(*args, name=None):
     version_specifiers = []
 
     for version in args:
@@ -322,9 +322,8 @@ def reduce_versions(*args):
         for version_specifier in version_specifiers:
             to_return = to_return.reduce(version_specifier.to_range())
     except VersionsNotCompatibleException as e:
-        raise VersionsNotCompatibleException(
-            'Could not find a satisfactory version from options: {}'
-            .format(str(args)))
+        versions = [VersionSpecifier(arg).to_version_string() for arg in args]
+        dbt.exceptions.incompatible_versions(name, versions)
 
     return to_return
 
@@ -385,7 +384,8 @@ def resolve_dependency_tree(version_index, unmet_dependencies, restrictions):
     for dependency_name, version in unmet_dependencies.items():
         print('resolving path {}'.format(dependency_name))
         dependency_restrictions = reduce_versions(
-            *restrictions.copy().get(dependency_name))
+            *restrictions.copy().get(dependency_name),
+            name=dependency_name)
 
         possible_matches = find_possible_versions(
             dependency_restrictions,
@@ -405,7 +405,8 @@ def resolve_dependency_tree(version_index, unmet_dependencies, restrictions):
                 new_restrictions = restrictions.copy()
                 new_restrictions[dependency_name] = reduce_versions(
                     dependency_restrictions,
-                    possible_match
+                    possible_match,
+                    name=dependency_name
                 ).to_version_string_pair()
 
                 recursive_version_info = version_index.get(dependency_name, {}).get(possible_match)

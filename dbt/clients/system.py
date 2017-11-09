@@ -5,6 +5,8 @@ import os.path
 import shutil
 import subprocess
 import sys
+import tarfile
+import requests
 
 import dbt.compat
 
@@ -100,10 +102,6 @@ def write_file(path, contents=''):
 
 
 def rmdir(path):
-    """
-    Make a file at `path` assuming that the directory it resides in already
-    exists. The file is saved with contents `contents`
-    """
     return shutil.rmtree(path)
 
 
@@ -133,3 +131,29 @@ def run_cmd(cwd, cmd):
     logger.debug('STDERR: "{}"'.format(err))
 
     return out, err
+
+
+def download(url, path):
+    response = requests.get(url)
+
+    with open(path, 'wb') as handle:
+        for block in response.iter_content(1024*64):
+            handle.write(block)
+
+def rename(from_path, to_path, force=False):
+    if os.path.exists(to_path) and force:
+        rmdir(to_path)
+
+    os.rename(from_path, to_path)
+
+
+def untar_package(tar_path, dest_dir, rename_to=None):
+    tar_dir_name = None
+    with tarfile.open(tar_path, 'r') as tarball:
+        tarball.extractall(dest_dir)
+        tar_dir_name = os.path.commonprefix(tarball.getnames())
+
+    if rename_to:
+        downloaded_path = os.path.join(dest_dir, tar_dir_name)
+        desired_path = os.path.join(dest_dir, rename_to)
+        dbt.clients.system.rename(downloaded_path, desired_path, force=True)

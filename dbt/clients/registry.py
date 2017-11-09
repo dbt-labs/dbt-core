@@ -1,7 +1,7 @@
 import requests
 
 
-DEFAULT_REGISTRY_BASE_URL = 'http://127.0.0.1:4567/'
+DEFAULT_REGISTRY_BASE_URL = 'http://127.0.0.1:35729/'
 
 
 def _get_url(url, registry_base_url=None):

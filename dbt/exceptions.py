@@ -92,6 +92,10 @@ class ParsingException(Exception):
     pass
 
 
+class DependencyException(Exception):
+    pass
+
+
 class VersionsNotCompatibleException(ParsingException):
     def __init__(self, msg=None):
         self.msg = msg
@@ -114,6 +118,10 @@ def raise_compiler_error(msg, node=None):
 
 def raise_database_error(msg, node=None):
     raise DatabaseException(msg, node)
+
+
+def raise_dependency_error(msg):
+    raise DependencyException(msg)
 
 
 def ref_invalid_args(model, args):
@@ -219,6 +227,30 @@ def missing_relation(relation_name, model=None):
     raise_compiler_error(
         "Relation {} not found!".format(relation_name),
         model)
+
+
+def package_not_found(package_name):
+    raise_dependency_error(
+        "Package {} was not found in the package index".format(package_name))
+
+
+def package_version_not_found(package_name, version_range, available_versions):
+    base_msg = ('Could not find a matching version for package {}\n'
+                '  Requested range: {}\n'
+                '  Available versions: {}')
+
+    raise_dependency_error(base_msg.format(package_name,
+                                           version_range,
+                                           available_versions))
+
+
+def incompatible_versions(package_name, versions):
+    version_list = ", ".join(versions)
+
+    raise VersionsNotCompatibleException(
+        'Could not find a satisfactory version of {}:\n'
+        'Specified versions: [{}]'
+        .format(package_name, version_list))
 
 
 def invalid_materialization_argument(name, argument):

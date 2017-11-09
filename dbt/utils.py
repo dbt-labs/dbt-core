@@ -190,8 +190,14 @@ def dependency_projects(project):
                 continue
 
             try:
+                dbt_project_yml_path = os.path.join(full_obj, 'dbt_project.yml')
+                if not os.path.exists(dbt_project_yml_path):
+                    msg = "dbt_project.yml file not found, excluding: {}"
+                    logger.debug(msg.format(full_obj))
+                    continue
+
                 yield dbt.project.read_project(
-                    os.path.join(full_obj, 'dbt_project.yml'),
+                    dbt_project_yml_path,
                     project.profiles_dir,
                     profile_to_load=project.profile_to_load,
                     args=project.args)

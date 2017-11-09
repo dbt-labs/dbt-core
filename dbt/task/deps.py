@@ -18,7 +18,7 @@ from dbt.task.base_task import BaseTask
 class PackageListing(AttrDict):
 
     @classmethod
-    def _convert_version_strings(cls, version_strings):
+    def convert_version_strings(cls, version_strings):
         if not isinstance(version_strings, list):
             version_strings = [version_strings]
 
@@ -61,7 +61,7 @@ class PackageListing(AttrDict):
                     (package, version_strings) = package.popitem()
                     to_return.incorporate(
                         package,
-                        cls._convert_version_strings(version_strings))
+                        cls.convert_version_strings(version_strings))
 
         return to_return
 
@@ -181,7 +181,11 @@ class DepsTask(BaseTask):
                     raise e
 
     def run(self):
-        listing = PackageListing.create(self.project['packages'])
+        listing = PackageListing.create(self.project.get('packages', []))
+        visited_listing = self.get_required_listing(listing)
+        self.fetch_required_packages(visited_listing)
+
+    def get_required_listing(self, listing):
         visited_listing = PackageListing.create([])
         index = dbt.clients.registry.index()
 
@@ -189,10 +193,10 @@ class DepsTask(BaseTask):
             (package, version_specifiers) = listing.popitem()
 
             if package not in index:
-                raise Exception('unknown package {}'.format(package))
+                dbt.exceptions.package_not_found(package)
 
-            version_range = dbt.semver.reduce_versions(
-                *version_specifiers)
+            version_range = dbt.semver.reduce_versions(*version_specifiers,
+                                                       name=package)
 
             available_versions = dbt.clients.registry.get_available_versions(
                 package)
@@ -206,37 +210,28 @@ class DepsTask(BaseTask):
                 available_versions)
 
             if target_version is None:
-                logger.error(
-                    'Could not find a matching version for package {}!'
-                    .format(package))
-                logger.error(
-                    '  Requested range: {}'.format(version_range))
-                logger.error(
-                    '  Available versions: {}'.format(
-                        ', '.join(available_versions)))
-                raise Exception('bad')
+                dbt.exceptions.package_version_not_found(
+                    package, version_range, available_versions)
 
-            visited_listing.incorporate(
-                package,
-                [VersionSpecifier.from_version_string(target_version)])
+            version_spec = VersionSpecifier.from_version_string(target_version)
+            visited_listing.incorporate(package, [version_spec])
 
             target_version_metadata = dbt.clients.registry.package_version(
                 package, target_version)
 
             dependencies = target_version_metadata.get('dependencies', {})
 
-            for package, versions in dependencies.items():
-                listing.incorporate(
-                    package,
-                    [VersionSpecifier.from_version_string(version)
-                     for version in versions])
+            for dep_package, dep_versions in dependencies.items():
+                versions = PackageListing.convert_version_strings(dep_versions)
+                listing.incorporate(dep_package, versions)
 
+        return visited_listing
+
+    def fetch_required_packages(self, visited_listing):
         for package, version_specifiers in visited_listing.items():
             version_string = version_specifiers[0].to_version_string(True)
             version_info = dbt.clients.registry.package_version(
                 package, version_string)
-
-            import requests
 
             tar_path = os.path.realpath('{}/downloads/{}.{}.tar.gz'.format(
                 self.project['modules-path'],
@@ -249,15 +244,11 @@ class DepsTask(BaseTask):
             dbt.clients.system.make_directory(
                 os.path.dirname(tar_path))
 
-            response = requests.get(version_info.get('downloads').get('tarball'))
+            download_url = version_info.get('downloads').get('tarball')
+            dbt.clients.system.download(download_url, tar_path)
 
-            with open(tar_path, 'wb') as handle:
-                for block in response.iter_content(1024*64):
-                    handle.write(block)
-
-            import tarfile
-
-            with tarfile.open(tar_path, 'r') as tarball:
-                tarball.extractall(self.project['modules-path'])
+            deps_path = self.project['modules-path']
+            package_name = version_info['name']
+            dbt.clients.system.untar_package(tar_path, deps_path, package_name)
 
             logger.info(" -> Success.")
