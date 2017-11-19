@@ -21,12 +21,13 @@ def _parse_hook_to_dict(hook_string):
     return hook_dict
 
 
-def get_hook_dict(hook):
+def get_hook_dict(hook, index):
     if isinstance(hook, dict):
         hook_dict = hook
     else:
         hook_dict = _parse_hook_to_dict(to_string(hook))
 
+    hook_dict['index'] = index
     return hook_dict
 
 
@@ -36,5 +37,5 @@ def get_hooks(model, hook_key):
     if not isinstance(hooks, (list, tuple)):
         hooks = [hooks]
 
-    wrapped = [get_hook_dict(hook) for hook in hooks]
+    wrapped = [get_hook_dict(hook, i) for i, hook in enumerate(hooks)]
     return wrapped
