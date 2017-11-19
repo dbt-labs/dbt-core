@@ -39,13 +39,13 @@ class TestPrePostRunHooks(DBTIntegrationTest):
             # Also check that the table does not exist below.
             "on-run-start": [
                 "{{ custom_run_hook('start', target, run_started_at, invocation_id) }}",
-                "create table {schema}.start_hook_order_test ( id int )",
-                "drop table {schema}.start_hook_order_test",
-            ]
+                "create table {{ target.schema }}.start_hook_order_test ( id int )",
+                "drop table {{ target.schema }}.start_hook_order_test",
+            ],
             "on-run-end": [
                 "{{ custom_run_hook('end', target, run_started_at, invocation_id) }}",
-                "create table {schema}.end_hook_order_test ( id int )",
-                "drop table {schema}.end_hook_order_test",
+                "create table {{ target.schema }}.end_hook_order_test ( id int )",
+                "drop table {{ target.schema }}.end_hook_order_test",
             ]
         }
 
