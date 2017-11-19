@@ -456,7 +456,7 @@ def parse_schema_tests(tests, root_project, projects, macros=None):
                             " '{}' in file {}\n")
         for model_name, test_spec in test_yml.items():
             if test_spec is None or test_spec.get('constraints') is None:
-                test_path = test['original_file_path']
+                test_path = test.get('original_file_path', '<unknown>')
                 logger.warn(no_tests_warning.format(model_name, test_path))
                 continue
 
