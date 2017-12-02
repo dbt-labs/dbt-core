@@ -489,14 +489,20 @@ def parse_schema_tests(tests, root_project, projects, macros=None):
 
                 for config in configs:
                     package_name = test.get('package_name')
+                    test_namespace = None
                     split = test_type.split('.')
 
                     if len(split) > 1:
                         test_type = split[1]
                         package_name = split[0]
+                        test_namespace = package_name
 
                     to_add = parse_schema_test(
-                        test, model_name, config, test_type,
+                        test,
+                        model_name,
+                        config,
+                        test_namespace,
+                        test_type,
                         root_project,
                         projects.get(package_name),
                         all_projects=projects,
@@ -551,8 +557,8 @@ def as_kwarg(key, value):
     return "{key}={value}".format(key=key, value=formatted_value)
 
 
-def parse_schema_test(test_base, model_name, test_config, test_type,
-                      root_project_config, package_project_config,
+def parse_schema_test(test_base, model_name, test_config, test_namespace,
+                      test_type, root_project_config, package_project_config,
                       all_projects, macros=None):
 
     if isinstance(test_config, (basestring, int, float, bool)):
@@ -563,12 +569,10 @@ def parse_schema_test(test_base, model_name, test_config, test_type,
     # sort the dict so the keys are rendered deterministically (for tests)
     kwargs = [as_kwarg(key, test_args[key]) for key in sorted(test_args)]
 
-    macro_name = "test_{}".format(test_type)
-
-    if package_project_config.get('name') != \
-       root_project_config.get('name'):
-        macro_name = "{}.{}".format(package_project_config.get('name'),
-                                    macro_name)
+    if test_namespace is None:
+        macro_name = "test_{}".format(test_type)
+    else:
+        macro_name = "{}.test_{}".format(test_namespace, test_type)
 
     raw_sql = "{{{{ {macro}(model=ref('{model}'), {kwargs}) }}}}".format(**{
         'model': model_name,
