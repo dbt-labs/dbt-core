@@ -394,7 +394,8 @@ def load_and_parse_run_hook_type(root_project, all_projects, hook_type,
                 'path': hook_path,
                 'original_file_path': hook_path,
                 'package_name': project_name,
-                'raw_sql': hook
+                'raw_sql': hook,
+                'index': i
             })
 
     tags = {hook_type}

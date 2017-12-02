@@ -291,11 +291,13 @@ class ModelRunner(CompileRunner):
             model_name = compiled.get('name')
             statement = compiled['wrapped_sql']
 
-            hook_dict = dbt.hooks.get_hook_dict(statement)
+            hook_index = hook.get('index', len(hooks))
+            hook_dict = dbt.hooks.get_hook_dict(statement, index=hook_index)
             compiled_hooks.append(hook_dict)
 
-        for hook in compiled_hooks:
+        ordered_hooks = sorted(compiled_hooks, key=lambda h: h.get('index', 0))
 
+        for hook in ordered_hooks:
             if dbt.flags.STRICT_MODE:
                 dbt.contracts.graph.parsed.validate_hook(hook)
 
