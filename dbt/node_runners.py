@@ -189,7 +189,7 @@ class BaseRunner(object):
         pass
 
     @classmethod
-    def after_run(self, project, adapter, results, flat_graph, elapsed):
+    def after_run(self, project, adapter, results, flat_graph):
         pass
 
     @classmethod
