@@ -22,7 +22,8 @@ DBTConfigKeys = [
     'sort_type',
     'pre-hook',
     'post-hook',
-    'vars'
+    'vars',
+    'bind',
 ]
 
 
