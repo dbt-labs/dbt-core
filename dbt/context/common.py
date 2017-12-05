@@ -1,5 +1,6 @@
 import json
 import os
+import pytz
 import voluptuous
 
 from dbt.adapters.factory import get_adapter
@@ -288,6 +289,9 @@ def generate(model, project, flat_graph, provider=None):
         "graph": flat_graph,
         "log": log,
         "model": model,
+        "modules": {
+            "pytz": pytz,
+        },
         "post_hooks": post_hooks,
         "pre_hooks": pre_hooks,
         "ref": provider.ref(model, project, profile, flat_graph),

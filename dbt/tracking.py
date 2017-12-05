@@ -4,6 +4,7 @@ from snowplow_tracker import Subject, Tracker, Emitter, logger as sp_logger
 from snowplow_tracker import SelfDescribingJson, disable_contracts
 from datetime import datetime
 
+import pytz
 import platform
 import uuid
 import yaml
@@ -44,7 +45,7 @@ class User(object):
 
         self.id = None
         self.invocation_id = str(uuid.uuid4())
-        self.run_started_at = datetime.now()
+        self.run_started_at = datetime.now(tz=pytz.utc)
 
     def state(self):
         return "do not track" if self.do_not_track else "tracking"

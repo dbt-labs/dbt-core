@@ -53,10 +53,3 @@ table_failure_summary:
 
         relationships:
             - { from: favorite_color, to: ref('table_copy'), field: favorite_color }
-
-
-# this will fail if run, but we've disabled this model
-disabled:
-    constraints:
-        unique:
-            - not_unique

@@ -4,6 +4,7 @@ import re
 import hashlib
 import collections
 
+import dbt.exceptions
 import dbt.flags
 import dbt.model
 import dbt.utils
@@ -272,14 +273,27 @@ def parse_sql_nodes(nodes, root_project, projects, tags=None, macros=None):
                              package_name,
                              node.get('name'))
 
-        # TODO if this is set, raise a compiler error
-        to_return[node_path] = parse_node(node,
-                                          node_path,
-                                          root_project,
-                                          projects.get(package_name),
-                                          projects,
-                                          tags=tags,
-                                          macros=macros)
+        node_parsed = parse_node(node,
+                                 node_path,
+                                 root_project,
+                                 projects.get(package_name),
+                                 projects,
+                                 tags=tags,
+                                 macros=macros)
+
+        # Ignore disabled nodes
+        if not node_parsed['config']['enabled']:
+            continue
+
+        # Check for duplicate model names
+        existing_node = to_return.get(node_path)
+        if existing_node is not None:
+            raise dbt.exceptions.CompilationException(
+                'Found models with the same name:\n- %s\n- %s' % (
+                    existing_node.get('original_file_path'),
+                    node.get('original_file_path')))
+
+        to_return[node_path] = node_parsed
 
     dbt.contracts.graph.parsed.validate_nodes(to_return)
 
@@ -380,7 +394,8 @@ def load_and_parse_run_hook_type(root_project, all_projects, hook_type,
                 'path': hook_path,
                 'original_file_path': hook_path,
                 'package_name': project_name,
-                'raw_sql': hook
+                'raw_sql': hook,
+                'index': i
             })
 
     tags = {hook_type}
@@ -452,8 +467,12 @@ def parse_schema_tests(tests, root_project, projects, macros=None):
         if test_yml is None:
             continue
 
+        no_tests_warning = ("* WARNING: No constraints found for model"
+                            " '{}' in file {}\n")
         for model_name, test_spec in test_yml.items():
             if test_spec is None or test_spec.get('constraints') is None:
+                test_path = test.get('original_file_path', '<unknown>')
+                logger.warn(no_tests_warning.format(model_name, test_path))
                 continue
 
             for test_type, configs in test_spec.get('constraints', {}).items():
@@ -471,14 +490,20 @@ def parse_schema_tests(tests, root_project, projects, macros=None):
 
                 for config in configs:
                     package_name = test.get('package_name')
+                    test_namespace = None
                     split = test_type.split('.')
 
                     if len(split) > 1:
                         test_type = split[1]
                         package_name = split[0]
+                        test_namespace = package_name
 
                     to_add = parse_schema_test(
-                        test, model_name, config, test_type,
+                        test,
+                        model_name,
+                        config,
+                        test_namespace,
+                        test_type,
                         root_project,
                         projects.get(package_name),
                         all_projects=projects,
@@ -533,8 +558,8 @@ def as_kwarg(key, value):
     return "{key}={value}".format(key=key, value=formatted_value)
 
 
-def parse_schema_test(test_base, model_name, test_config, test_type,
-                      root_project_config, package_project_config,
+def parse_schema_test(test_base, model_name, test_config, test_namespace,
+                      test_type, root_project_config, package_project_config,
                       all_projects, macros=None):
 
     if isinstance(test_config, (basestring, int, float, bool)):
@@ -545,12 +570,10 @@ def parse_schema_test(test_base, model_name, test_config, test_type,
     # sort the dict so the keys are rendered deterministically (for tests)
     kwargs = [as_kwarg(key, test_args[key]) for key in sorted(test_args)]
 
-    macro_name = "test_{}".format(test_type)
-
-    if package_project_config.get('name') != \
-       root_project_config.get('name'):
-        macro_name = "{}.{}".format(package_project_config.get('name'),
-                                    macro_name)
+    if test_namespace is None:
+        macro_name = "test_{}".format(test_type)
+    else:
+        macro_name = "{}.test_{}".format(test_namespace, test_type)
 
     raw_sql = "{{{{ {macro}(model=ref('{model}'), {kwargs}) }}}}".format(**{
         'model': model_name,
