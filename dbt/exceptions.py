@@ -147,7 +147,8 @@ To fix this, add the following hint to the top of the model "{model_name}":
     raise_compiler_error(error_msg, model)
 
 
-def ref_target_not_found(model, target_model_name, target_model_package, warn=False):
+def ref_target_not_found(model, target_model_name, target_model_package,
+                         warn=False):
     target_package_string = ''
 
     if target_model_package is not None:
