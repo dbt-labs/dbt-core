@@ -91,11 +91,16 @@ def process_refs(flat_graph, current_project):
                 current_project,
                 node.get('package_name'))
 
+            node_is_test = (node.get('resource_type') == NodeType.Test)
             if target_model is None:
                 dbt.exceptions.ref_target_not_found(
                     node,
                     target_model_name,
-                    target_model_package)
+                    target_model_package,
+                    warn=node_is_test)
+
+                if node_is_test:
+                    continue
 
             if (dbt.utils.is_enabled(node) and not
                     dbt.utils.is_enabled(target_model)):
