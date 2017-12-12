@@ -27,7 +27,12 @@ class RedshiftAdapter(PostgresAdapter):
 
         sql = """
             with bound_views as (
-                select table_schema, column_name, data_type, character_maximum_length
+                select
+                    table_schema,
+                    column_name,
+                    data_type,
+                    character_maximum_length
+
                 from information_schema.columns
                 where table_name = '{table_name}'
             ),
@@ -41,6 +46,7 @@ class RedshiftAdapter(PostgresAdapter):
                         when col_type like 'character%' then REGEXP_SUBSTR(col_type, '[0-9]+')::int
                         else null
                     end as character_maximum_length
+
                 from pg_get_late_binding_view_cols()
                 cols(view_schema name, view_name name, col_name name, col_type varchar, col_num int)
                 where view_name = '{table_name}'
@@ -49,7 +55,7 @@ class RedshiftAdapter(PostgresAdapter):
             unioned as (
                 select * from bound_views
                 union all
-                select * from unbound_views;
+                select * from unbound_views
             )
 
             select column_name, data_type, character_maximum_length
