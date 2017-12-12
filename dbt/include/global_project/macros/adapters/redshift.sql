@@ -54,7 +54,7 @@
 
 {% macro redshift__create_view_as(identifier, sql) -%}
 
-  {% set bind_qualifier = 'with no schema binding' if config.get('bind', False) else '' %}
+  {% set bind_qualifier = '' if config.get('bind', True) else 'with no schema binding' %}
 
   create view "{{ schema }}"."{{ identifier }}" as (
     {{ sql }}
