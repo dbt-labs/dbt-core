@@ -23,7 +23,8 @@ class RedshiftAdapter(PostgresAdapter):
         if schema_name is None:
             table_schema_filter = '1=1'
         else:
-            table_schema_filter = "table_schema = '{schema_name}'".format(schema_name=schema_name)
+            table_schema_filter = "table_schema = '{schema_name}'".format(
+                    schema_name=schema_name)
 
         sql = """
             with bound_views as (
@@ -43,12 +44,14 @@ class RedshiftAdapter(PostgresAdapter):
                     col_name,
                     col_type,
                     case
-                        when col_type like 'character%' then REGEXP_SUBSTR(col_type, '[0-9]+')::int
+                        when col_type like 'character%'
+                          then REGEXP_SUBSTR(col_type, '[0-9]+')::int
                         else null
                     end as character_maximum_length
 
                 from pg_get_late_binding_view_cols()
-                cols(view_schema name, view_name name, col_name name, col_type varchar, col_num int)
+                cols(view_schema name, view_name name, col_name name,
+                     col_type varchar, col_num int)
                 where view_name = '{table_name}'
             ),
 
@@ -61,7 +64,8 @@ class RedshiftAdapter(PostgresAdapter):
             select column_name, data_type, character_maximum_length
             from unioned
             where {table_schema_filter}
-        """.format(table_name=table_name, table_schema_filter=table_schema_filter).strip()
+        """.format(table_name=table_name,
+                   table_schema_filter=table_schema_filter).strip()
         return sql
 
     @classmethod
