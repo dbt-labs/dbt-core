@@ -9,6 +9,10 @@
   {%- endif -%}
 {%- endmacro %}
 
+{% macro create_schema(schema_name) %}
+  create schema if not exists "{{ schema_name }}";
+{% endmacro %}
+
 
 {% macro create_table_as(temporary, identifier, sql) -%}
   {{ adapter_macro('create_table_as', temporary, identifier, sql) }}
