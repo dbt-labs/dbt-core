@@ -147,7 +147,11 @@ class SnowflakeAdapter(PostgresAdapter):
     def create_schema(cls, profile, schema, model_name=None):
         logger.debug('Creating schema "%s".', schema)
         sql = cls.get_create_schema_sql(schema)
-        return cls.add_query(profile, sql, model_name, select_schema=False)
+        res = cls.add_query(profile, sql, model_name, select_schema=False)
+
+        cls.commit_if_has_connection(profile, model_name)
+
+        return res
 
     @classmethod
     def get_existing_schemas(cls, profile, model_name=None):
