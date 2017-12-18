@@ -20,7 +20,7 @@ postgres_credentials_contract = Schema({
     Required('host'): basestring,
     Required('user'): basestring,
     Required('pass'): basestring,
-    Required('port'): All(int, Range(min=0, max=65535)),
+    Required('port'): Any(All(int, Range(min=0, max=65535)), basestring),
     Required('schema'): basestring,
 })
 
