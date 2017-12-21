@@ -3,6 +3,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 
 from dbt.utils import is_enabled, get_materialization, coalesce
 from dbt.node_types import NodeType
+import dbt.exceptions
 
 SELECTOR_PARENTS = '+'
 SELECTOR_CHILDREN = '+'
@@ -164,7 +165,8 @@ def select_nodes(graph, raw_include_specs, raw_exclude_specs):
 
 
 class NodeSelector(object):
-    def __init__(self, linker, flat_graph):
+    def __init__(self, project, linker, flat_graph):
+        self.project = project
         self.linker = linker
         self.flat_graph = flat_graph
 
@@ -261,3 +263,26 @@ class FlatNodeSelector(NodeSelector):
     def as_node_list(self, selected_nodes):
         return super(FlatNodeSelector, self).as_node_list(selected_nodes,
                                                           ephemeral_only=True)
+
+class OperationSelector(NodeSelector):
+    def select(self, query):
+        package = query.get('package')
+        operation_name = query.get('operation')
+
+        flat_graph = self.flat_graph
+
+        macros = flat_graph['macros']
+        for macro in macros.values():
+            macro_name = macro['name']
+            macro_package = macro['package_name']
+
+            if macro['resource_type'] == NodeType.Operation and \
+               macro_name == operation_name and \
+               macro_package == package:
+                return [[macro]]
+
+        error = "Operation '{}' not found in package {}"
+        dbt.exceptions.raise_compiler_error(error.format(operation, package))
+
+    def as_node_list(self, selected_nodes):
+        return selected_nodes

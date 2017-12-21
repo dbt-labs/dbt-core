@@ -51,7 +51,7 @@ parsed_nodes_contract = Schema({
 
 parsed_macro_contract = unparsed_base_contract.extend({
     # identifiers
-    Required('resource_type'): Any(NodeType.Macro),
+    Required('resource_type'): Any(NodeType.Macro, NodeType.Operation),
     Required('unique_id'): All(basestring, Length(min=1, max=255)),
     Required('tags'): All(set),
 

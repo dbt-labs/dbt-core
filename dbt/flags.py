@@ -1,3 +1,4 @@
 STRICT_MODE = False
 NON_DESTRUCTIVE = False
 FULL_REFRESH = False
+VARS = {}

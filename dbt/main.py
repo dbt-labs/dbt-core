@@ -233,6 +233,7 @@ def invoke_dbt(parsed):
 
     flags.NON_DESTRUCTIVE = getattr(proj.args, 'non_destructive', False)
     flags.FULL_REFRESH = getattr(proj.args, 'full_refresh', False)
+    flags.VARS = dbt.utils.parse_cli_vars(getattr(proj.args, 'vars', []))
 
     logger.debug("running dbt with arguments %s", parsed)
 
@@ -293,6 +294,14 @@ def parse_args(args):
         default=None,
         type=str,
         help='Which target to load for the given profile'
+    )
+
+    base_subparser.add_argument(
+        '--vars',
+        type=str,
+        nargs='+',
+        default=[],
+        help="""Supply variables required by models or macros"""
     )
 
     sub = subs.add_parser('init', parents=[base_subparser])
@@ -374,6 +383,16 @@ def parse_args(args):
             If specified, DBT will drop incremental models and
             fully-recalculate the incremental table from the model definition.
             """)
+
+        # TODO
+        operation_subs = sub.add_subparsers()
+        operation_sub = operation_subs.add_parser('operation', parents=[base_subparser])
+
+        operation_sub.add_argument(
+            'operation_name',
+            type=str,
+            help="""idk"""
+        )
 
     sub = subs.add_parser('seed', parents=[base_subparser])
     sub.add_argument(

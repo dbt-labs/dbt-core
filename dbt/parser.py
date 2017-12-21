@@ -142,7 +142,6 @@ def parse_macro_file(macro_file_path,
     base_node = {
         'path': macro_file_path,
         'original_file_path': macro_file_path,
-        'resource_type': NodeType.Macro,
         'package_name': package_name,
         'depends_on': {
             'macros': [],
@@ -157,7 +156,8 @@ def parse_macro_file(macro_file_path,
         raise e
 
     for key, item in template.module.__dict__.items():
-        if type(item) == jinja2.runtime.Macro:
+
+        if type(item) == jinja2.runtime.Macro and dbt.utils.prefix_looks_like_macro(key):
             name = key.replace(dbt.utils.MACRO_PREFIX, '')
 
             unique_id = get_path(NodeType.Macro,
@@ -166,6 +166,31 @@ def parse_macro_file(macro_file_path,
 
             new_node = base_node.copy()
             new_node.update({
+                'resource_type': NodeType.Macro,
+                'name': name,
+                'unique_id': unique_id,
+                'tags': tags,
+                'root_path': root_path,
+                'path': macro_file_path,
+                'original_file_path': macro_file_path,
+                'raw_sql': macro_file_contents,
+            })
+
+            new_node['generator'] = dbt.clients.jinja.macro_generator(
+                template, new_node)
+
+            to_return[unique_id] = new_node
+
+        elif type(item) == jinja2.runtime.Macro and dbt.utils.prefix_looks_like_operation(key):
+            name = key.replace(dbt.utils.OPERATION_PREFIX, '')
+
+            unique_id = get_path(NodeType.Operation,
+                                 package_name,
+                                 name)
+
+            new_node = base_node.copy()
+            new_node.update({
+                'resource_type': NodeType.Operation,
                 'name': name,
                 'unique_id': unique_id,
                 'tags': tags,

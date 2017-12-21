@@ -11,6 +11,8 @@ import dbt.flags
 import dbt.schema
 import dbt.tracking
 import dbt.utils
+import jinja2
+from dbt.node_types import NodeType
 
 import dbt.hooks
 
@@ -62,6 +64,10 @@ def _add_macros(context, model, flat_graph):
     macros_to_add = {'global': [], 'local': []}
 
     for unique_id, macro in flat_graph.get('macros', {}).items():
+        # Exclude operations
+        if macro['resource_type'] != NodeType.Macro:
+            continue
+
         package_name = macro.get('package_name')
 
         macro_map = {
@@ -158,6 +164,7 @@ def log(msg, info=False):
     return ''
 
 
+Undefined = jinja2.Undefined()
 class Var(object):
     UndefinedVarError = "Required var '{}' not found in config:\nVars "\
                         "supplied to {} = {}"
@@ -168,19 +175,23 @@ class Var(object):
         self.model = model
         self.context = context
 
+        self.local_vars = {}
+
         if isinstance(model, dict) and model.get('unique_id'):
-            self.local_vars = model.get('config', {}).get('vars')
+            self.local_vars.update(model.get('config', {}).get('vars', {}))
             self.model_name = model.get('name')
         else:
             # still used for wrapping
             self.model_name = model.nice_name
-            self.local_vars = model.config.get('vars', {})
+            self.local_vars.update(model.config.get('vars', {}))
+
+        self.local_vars.update(dbt.flags.VARS)
 
     def pretty_dict(self, data):
         return json.dumps(data, sort_keys=True, indent=4)
 
     def assert_var_defined(self, var_name, default):
-        if var_name not in self.local_vars and default is None:
+        if var_name not in self.local_vars and default is Undefined:
             pretty_vars = self.pretty_dict(self.local_vars)
             dbt.exceptions.raise_compiler_error(
                 self.UndefinedVarError.format(
@@ -201,7 +212,7 @@ class Var(object):
                 self.model
             )
 
-    def __call__(self, var_name, default=None):
+    def __call__(self, var_name, default=Undefined):
         self.assert_var_defined(var_name, default)
 
         if var_name not in self.local_vars:

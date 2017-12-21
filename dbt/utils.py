@@ -152,6 +152,7 @@ def find_by_name(flat_graph, target_name, target_package, subgraph,
 
 
 MACRO_PREFIX = 'dbt_macro__'
+OPERATION_PREFIX = 'dbt_operation__'
 
 
 def get_dbt_macro_name(name):
@@ -169,6 +170,17 @@ def get_materialization_macro_name(materialization_name, adapter_type=None,
         return get_dbt_macro_name(name)
     else:
         return name
+
+
+def get_operation_macro_name(operation_name):
+    return '{}{}'.format(OPERATION_PREFIX, operation_name)
+
+
+def prefix_looks_like_macro(name):
+    return name.startswith(MACRO_PREFIX)
+
+def prefix_looks_like_operation(name):
+    return name.startswith(OPERATION_PREFIX)
 
 
 def get_materialization_macro(flat_graph, materialization_name,
@@ -359,3 +371,14 @@ def get_hashed_contents(model):
 
 def flatten_nodes(dep_list):
     return list(itertools.chain.from_iterable(dep_list))
+
+
+def parse_cli_vars(var_list):
+    vars_split = [var.split(":", 1) for var in var_list]
+
+    for var in vars_split:
+        if len(var) != 2:
+            msg = "Invalid var '{}' -- expected key:value".format("".join(var))
+            raise dbt.exceptions.raise_compiler_error(msg)
+
+    return {k.strip() : v.strip() for (k,v) in vars_split}

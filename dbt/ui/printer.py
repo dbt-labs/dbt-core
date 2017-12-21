@@ -163,6 +163,21 @@ def print_model_result_line(result, schema_name, index, total):
         result.execution_time)
 
 
+def print_operation_result_line(result, index, total):
+    model = result.node
+
+    info, status = get_printable_result(result, 'running', 'running')
+
+    print_fancy_output_line(
+        "{info} running operation {operation}".format(
+            info=info,
+            operation=model.get('name')),
+        status,
+        index,
+        total,
+        result.execution_time)
+
+
 def print_archive_result_line(result, index, total):
     model = result.node
 

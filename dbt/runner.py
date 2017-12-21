@@ -13,6 +13,7 @@ import dbt.model
 import dbt.ui.printer
 
 import dbt.graph.selector
+from dbt.node_runners import OperationRunner
 
 from multiprocessing.dummy import Pool as ThreadPool
 
@@ -137,7 +138,8 @@ class RunManager(object):
                     node_id = result.node.get('unique_id')
                     flat_graph['nodes'][node_id] = result.node
 
-                    if result.errored:
+                    # TODO : is this too restrictive?
+                    if result.errored and Runner.is_model(result.node):
                         for dep_node_id in self.get_dependent(linker, node_id):
                             runner = node_runners.get(dep_node_id)
                             if runner:
@@ -182,7 +184,7 @@ class RunManager(object):
     def run_from_graph(self, Selector, Runner, query):
         flat_graph, linker = self.compile(self.project)
 
-        selector = Selector(linker, flat_graph)
+        selector = Selector(self.project, linker, flat_graph)
         selected_nodes = selector.select(query)
         dep_list = selector.as_node_list(selected_nodes)
 
@@ -222,4 +224,8 @@ class RunManager(object):
 
     def run_flat(self, query, Runner):
         Selector = dbt.graph.selector.FlatNodeSelector
+        return self.run_from_graph(Selector, Runner, query)
+
+    def run_operation(self, query, Runner):
+        Selector = dbt.graph.selector.OperationSelector
         return self.run_from_graph(Selector, Runner, query)

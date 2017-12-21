@@ -463,3 +463,31 @@ class ArchiveRunner(ModelRunner):
     def print_result_line(self, result):
         dbt.ui.printer.print_archive_result_line(result, self.node_index,
                                                  self.num_nodes)
+
+
+class OperationRunner(ModelRunner):
+    def execute(self, operation, existing, flat_graph):
+        operation_name = operation['name']
+        arg_map = {}
+
+        context = dbt.context.runtime.generate(operation, self.project, flat_graph)
+
+        macro = operation['generator'](context)
+        sql_res = macro(**arg_map)
+        sql = dbt.compat.to_string(sql_res).strip()
+        print(sql)
+        if len(sql) > 0:
+            _, cursor = self.adapter.execute_one(self.profile, sql, model_name=operation_name)
+            status = self.adapter.get_status(cursor)
+        else:
+            status = 'OK'
+
+        return RunModelResult(operation, status=status)
+
+    def describe_node(self):
+        return self.node.get('name')
+
+    def print_result_line(self, result):
+        dbt.ui.printer.print_operation_result_line(result,
+                                                   self.node_index,
+                                                   self.num_nodes)
