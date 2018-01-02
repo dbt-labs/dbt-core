@@ -203,11 +203,13 @@ class RunManager(object):
             logger.info("")
 
         try:
-            Runner.before_run(self.project, adapter, flat_graph)
+            Runner.before_hooks(self.project, adapter, flat_graph)
             started = time.time()
+            Runner.before_run(self.project, adapter, flat_graph)
             res = self.execute_nodes(linker, Runner, flat_graph, dep_list)
+            Runner.after_run(self.project, adapter, res, flat_graph)
             elapsed = time.time() - started
-            Runner.after_run(self.project, adapter, res, flat_graph, elapsed)
+            Runner.after_hooks(self.project, adapter, res, flat_graph, elapsed)
 
         finally:
             adapter.cleanup_connections()
