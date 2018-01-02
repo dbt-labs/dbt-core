@@ -1,4 +1,5 @@
 {% macro adapter_macro(name) -%}
+  {% set original_name = name %}
   {% if '.' in name %}
     {% set package_name, name = name.split(".", 1) %}
   {% else %}
@@ -10,7 +11,10 @@
   {% elif package_name in context %}
     {% set package_context = context[package_name] %}
   {% else %}
-    {{ exceptions.raise_compiler_error("Bad context for adapter macro: " ~ package_name) }}
+    {% set error_msg %}
+        In adapter_macro: could not find package '{{package_name}}', called with '{{original_name}}'
+    {% endset %}
+    {{ exceptions.raise_compiler_error(error_msg | trim) }}
   {% endif %}
 
   {%- set separator = '__' -%}
