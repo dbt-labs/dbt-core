@@ -92,17 +92,13 @@ def process_refs(flat_graph, current_project):
                 node.get('package_name'))
 
             if target_model is None:
-                dbt.exceptions.ref_target_not_found(
-                    node,
-                    target_model_name,
-                    target_model_package)
-
-            if (dbt.utils.is_enabled(node) and not
-                    dbt.utils.is_enabled(target_model)):
-                if dbt.utils.is_type(node, NodeType.Model):
-                    dbt.exceptions.ref_disabled_dependency(node, target_model)
-                else:
-                    node.get('config', {})['enabled'] = False
+                # This may raise. Even if it doesn't, we don't want to add
+                # this node to the graph b/c there is no destination node
+                node.get('config', {})['enabled'] = False
+                dbt.utils.invalid_ref_fail_unless_test(node,
+                                                       target_model_name,
+                                                       target_model_package)
+                continue
 
             target_model_id = target_model.get('unique_id')
 
