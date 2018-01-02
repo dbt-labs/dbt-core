@@ -174,8 +174,7 @@ class DefaultAdapter(object):
                 if col_name in missing_columns]
 
     @classmethod
-    def get_columns_in_table(cls, profile, schema_name, table_name,
-                             model_name=None):
+    def _get_columns_in_table_sql(cls, schema_name, table_name):
         sql = """
         select column_name, data_type, character_maximum_length
         from information_schema.columns
@@ -186,6 +185,13 @@ class DefaultAdapter(object):
             sql += (" AND table_schema = '{schema_name}'"
                     .format(schema_name=schema_name))
 
+        return sql
+
+    @classmethod
+    def get_columns_in_table(cls, profile, schema_name, table_name,
+                             model_name=None):
+
+        sql = cls._get_columns_in_table_sql(schema_name, table_name)
         connection, cursor = cls.add_query(
             profile, sql, model_name)
 
