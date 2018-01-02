@@ -3,8 +3,8 @@
 This release fixes bugs and adds supports for late binding views on Redshift.
 
 ### Changes
-- Support late binding views on Redshift ([#614](https://github.com/fishtown-analytics/dbt/pull/614))
-- Make `run_started_at` timezone-aware ([#553](https://github.com/fishtown-analytics/dbt/pull/553)) (Contributed by [@mturzanska](https://github.com/mturzanska))
+- Support late binding views on Redshift ([#614](https://github.com/fishtown-analytics/dbt/pull/614)) ([docs](https://docs.getdbt.com/docs/warehouse-specific-configurations#section-late-binding-views))
+- Make `run_started_at` timezone-aware ([#553](https://github.com/fishtown-analytics/dbt/pull/553)) (Contributed by [@mturzanska](https://github.com/mturzanska)) ([docs](https://docs.getdbt.com/v0.9/reference#run_started_at))
 
 ### Bugfixes
 
