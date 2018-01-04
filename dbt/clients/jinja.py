@@ -15,6 +15,10 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
 class MacroFuzzParser(jinja2.parser.Parser):
+    def __init__(self, node, *args, **kwargs):
+        jinja2.parser.Parser.__init__(self, *args, **kwargs)
+        self._node = node
+
     def parse_macro(self):
         node = jinja2.nodes.Macro(lineno=next(self.stream).lineno)
 
@@ -25,15 +29,29 @@ class MacroFuzzParser(jinja2.parser.Parser):
             self.parse_assign_target(name_only=True).name)
 
         self.parse_signature(node)
+
+        docstring = self.stream.next_if('string')
+
+        # create a dictionary on the base node to store docstrings.
+        # this has to be deleted before the nodes are handed off from
+        # the parser.
+        #  - @cmcarthur
+        if docstring is not None:
+            self._node['_docstrings'][node.name] = docstring.value
+
         node.body = self.parse_statements(('name:endmacro',),
                                           drop_needle=True)
         return node
 
 
 class MacroFuzzEnvironment(jinja2.sandbox.SandboxedEnvironment):
+    def __init__(self, node, *args, **kwargs):
+        jinja2.sandbox.SandboxedEnvironment.__init__(self, *args, **kwargs)
+        self._node = node
+
     def _parse(self, source, name, filename):
         return MacroFuzzParser(
-            self, source, name,
+            self._node, self, source, name,
             jinja2._compat.encode_filename(filename)
         ).parse()
 
@@ -143,7 +161,7 @@ def get_template(string, ctx, node=None, capture_macros=False):
 
         args['extensions'].append(MaterializationExtension)
 
-        env = MacroFuzzEnvironment(**args)
+        env = MacroFuzzEnvironment(node, **args)
 
         return env.from_string(dbt.compat.to_string(string), globals=ctx)
 

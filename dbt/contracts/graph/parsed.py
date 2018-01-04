@@ -61,7 +61,8 @@ parsed_macro_contract = unparsed_base_contract.extend({
     },
 
     # contents
-    Required('generator'): callable
+    Required('generator'): callable,
+    Required('docstring'): Any(basestring, None),
 })
 
 parsed_macros_contract = Schema({
