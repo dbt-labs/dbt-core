@@ -194,6 +194,9 @@ class VersionSpecifier(dbt.utils.AttrDict):
 
         return VersionSpecifier(match.groupdict())
 
+    def __str__(self):
+        return self.to_version_string()
+
     def to_range(self):
         range_start = UnboundedVersionSpecifier()
         range_end = UnboundedVersionSpecifier()
