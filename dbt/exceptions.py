@@ -225,3 +225,7 @@ def invalid_materialization_argument(name, argument):
     raise_compiler_error(
         "materialization '{}' received unknown argument '{}'."
         .format(name, argument))
+
+
+class RegistryException(Exception):
+    pass
