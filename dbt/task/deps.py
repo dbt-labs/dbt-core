@@ -1,17 +1,13 @@
 import os
-import errno
-import re
-from collections import namedtuple
-import requests
 import tarfile
 import shutil
 import hashlib
+import requests
 import six
 
-import dbt.clients.git as git
+import dbt.clients.git
 import dbt.clients.system
 import dbt.clients.registry as registry
-import dbt.project as project
 from dbt.clients.yaml_helper import load_yaml_text
 
 from dbt.compat import basestring
@@ -23,11 +19,15 @@ from dbt.task.base_task import BaseTask
 
 
 class Package(object):
+    def __init__(self, name):
+        self.name = name
+
     def __str__(self):
-        if not hasattr(self, 'version'):
+        version = getattr(self, 'version', None)
+        if not version:
             return self.name
-        version_str = self.version[0] \
-            if len(self.version) == 1 else '<multiple versions>'
+        version_str = version[0] \
+            if len(version) == 1 else '<multiple versions>'
         return '{}@{}'.format(self.name, version_str)
 
     @classmethod
@@ -47,9 +47,6 @@ class Package(object):
     def fetch_metadata(self, project):
         raise NotImplementedError()
 
-    def copy(self):
-        raise NotImplementedError()
-
     def check_against_registry_index(self, index):
         pass
 
@@ -60,9 +57,9 @@ class Package(object):
 
 class RegistryPackage(Package):
     def __init__(self, package, version):
-        self.name = package
+        super(RegistryPackage, self).__init__(package)
         self.package = package
-        self.version = version
+        self._version = self._sanitize_version(version)
 
     @classmethod
     def _sanitize_version(cls, version):
@@ -96,13 +93,10 @@ class RegistryPackage(Package):
         # right now.
         target = dbt.semver.resolve_to_specific_version(range_, available)
         if not target:
-            logger.error(
-                'Could not find a matching version for package {}!'
-                .format(self.package))
-            logger.error(
-                '  Requested range: {}'.format(range_))
-            logger.error(
-                '  Available versions: {}'.format(', '.join(available)))
+            logger.error('Could not find a matching version for package %s!',
+                         self.package)
+            logger.error('  Requested range: %s', range_)
+            logger.error('  Available versions: %s', ', '.join(available))
             raise Exception('bad')
         return RegistryPackage(self.package, target)
 
@@ -145,9 +139,9 @@ class RegistryPackage(Package):
 
 class GitPackage(Package):
     def __init__(self, git, version):
-        self.name = git
+        super(GitPackage, self).__init__(git)
         self.git = git
-        self.version = version
+        self._version = self._sanitize_version(version)
 
     @classmethod
     def _sanitize_version(cls, version):
@@ -162,16 +156,15 @@ class GitPackage(Package):
         self._version = self._sanitize_version(version)
 
     def incorporate(self, other):
-        return GitPackage(self.package, self.version + other.version)
+        return GitPackage(self.git, self.version + other.version)
 
     def resolve_version(self):
         requested = set(self.version)
         if len(requested) != 1:
             logger.error(
-                'Could not resolve to a single version for Git repo {}!'
-                .format(self.git))
-            logger.error(
-                '  Requested versions: {}'.format(requested))
+                'Could not resolve to a single version for Git repo %s!',
+                self.git)
+            logger.error('  Requested versions: %s', requested)
             raise Exception('bad')
         return GitPackage(self.git, requested.pop())
 
@@ -180,8 +173,8 @@ class GitPackage(Package):
             # error
             raise Exception('bad')
         modules_path = project['modules-path']
-        dest_dirname = self.unique_directory_name("git")
-        dir_ = git.clone_and_checkout(
+        dest_dirname = self.unique_directory_name('git')
+        dir_ = dbt.clients.git.clone_and_checkout(
             self.git, modules_path, branch=self.version[0],
             dirname=dest_dirname)
         return os.path.join(modules_path, dir_)
@@ -197,10 +190,10 @@ class GitPackage(Package):
 
 class LocalPackage(Package):
     def __init__(self, local):
-        self.name = local
+        super(LocalPackage, self).__init__(local)
         self.local = local
 
-    def incorporate(self, other):
+    def incorporate(self, _):
         return LocalPackage(self.local)
 
     def resolve_version(self):
@@ -253,120 +246,7 @@ class PackageListing(AttrDict):
         return to_return
 
 
-def folder_from_git_remote(remote_spec):
-    start = remote_spec.rfind('/') + 1
-    end = len(remote_spec) - (4 if remote_spec.endswith('.git') else 0)
-    return remote_spec[start:end]
-
-
 class DepsTask(BaseTask):
-    def __pull_repo(self, repo, branch=None):
-        modules_path = self.project['modules-path']
-
-        out, err = dbt.clients.git.clone(repo, modules_path)
-
-        exists = re.match("fatal: destination path '(.+)' already exists",
-                          err.decode('utf-8'))
-
-        folder = None
-        start_sha = None
-
-        if exists:
-            folder = exists.group(1)
-            logger.info('Updating existing dependency {}.'.format(folder))
-        else:
-            matches = re.match("Cloning into '(.+)'", err.decode('utf-8'))
-            folder = matches.group(1)
-            logger.info('Pulling new dependency {}.'.format(folder))
-
-        dependency_path = os.path.join(modules_path, folder)
-        start_sha = dbt.clients.git.get_current_sha(dependency_path)
-        dbt.clients.git.checkout(dependency_path, repo, branch)
-        end_sha = dbt.clients.git.get_current_sha(dependency_path)
-
-        if exists:
-            if start_sha == end_sha:
-                logger.info('  Already at {}, nothing to do.'.format(
-                    start_sha[:7]))
-            else:
-                logger.info('  Updated checkout from {} to {}.'.format(
-                    start_sha[:7], end_sha[:7]))
-        else:
-            logger.info('  Checked out at {}.'.format(end_sha[:7]))
-
-        return folder
-
-    def __split_at_branch(self, repo_spec):
-        parts = repo_spec.split("@")
-        error = RuntimeError(
-            "Invalid dep specified: '{}' -- not a repo we can clone".format(
-                repo_spec
-            )
-        )
-
-        repo = None
-        if repo_spec.startswith("git@"):
-            if len(parts) == 1:
-                raise error
-            if len(parts) == 2:
-                repo, branch = repo_spec, None
-            elif len(parts) == 3:
-                repo, branch = "@".join(parts[:2]), parts[2]
-        else:
-            if len(parts) == 1:
-                repo, branch = parts[0], None
-            elif len(parts) == 2:
-                repo, branch = parts
-
-        if repo is None:
-            raise error
-
-        return repo, branch
-
-    def __pull_deps_recursive(self, repos, processed_repos=None, i=0):
-        if processed_repos is None:
-            processed_repos = set()
-        for repo_string in repos:
-            repo, branch = self.__split_at_branch(repo_string)
-            repo_folder = folder_from_git_remote(repo)
-
-            try:
-                if repo_folder in processed_repos:
-                    logger.info(
-                        "skipping already processed dependency {}"
-                        .format(repo_folder)
-                    )
-                else:
-                    dep_folder = self.__pull_repo(repo, branch)
-                    dep_project = project.read_project(
-                        os.path.join(self.project['modules-path'],
-                                     dep_folder,
-                                     'dbt_project.yml'),
-                        self.project.profiles_dir,
-                        profile_to_load=self.project.profile_to_load
-                    )
-                    processed_repos.add(dep_folder)
-                    self.__pull_deps_recursive(
-                        dep_project['repositories'], processed_repos, i+1
-                    )
-            except IOError as e:
-                if e.errno == errno.ENOENT:
-                    error_string = basestring(e)
-
-                    if 'dbt_project.yml' in error_string:
-                        error_string = ("'{}' is not a valid dbt project - "
-                                        "dbt_project.yml not found"
-                                        .format(repo))
-
-                    elif 'git' in error_string:
-                        error_string = ("Git CLI is a dependency of dbt, but "
-                                        "it is not installed!")
-
-                    raise dbt.exceptions.RuntimeException(error_string)
-
-                else:
-                    raise e
-
     def run(self):
         if not self.project.get('packages'):
             return
@@ -374,8 +254,8 @@ class DepsTask(BaseTask):
         visited_listing = PackageListing.create([])
         index = registry.index()
 
-        while len(listing) > 0:
-            (name, package) = listing.popitem()
+        while listing:
+            _, package = listing.popitem()
 
             package.check_against_registry_index(index)
 
@@ -389,6 +269,6 @@ class DepsTask(BaseTask):
             for _, package in sub_listing.items():
                 listing.incorporate(package)
 
-        for name, package in visited_listing.items():
+        for _, package in visited_listing.items():
             logger.info('Pulling %s', package)
             package.download(self.project)
