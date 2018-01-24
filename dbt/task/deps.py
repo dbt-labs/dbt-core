@@ -250,6 +250,7 @@ class DepsTask(BaseTask):
     def run(self):
         if not self.project.get('packages'):
             return
+        os.makedirs(self.project['modules-path'])
         listing = PackageListing.create(self.project['packages'])
         visited_listing = PackageListing.create([])
         index = registry.index()
