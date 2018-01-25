@@ -2,6 +2,7 @@ from functools import wraps
 import six
 import requests
 from dbt.exceptions import RegistryException
+from dbt.utils import memoized
 
 
 DEFAULT_REGISTRY_BASE_URL = 'http://127.0.0.1:4567/'
@@ -35,6 +36,8 @@ def _get(path, registry_base_url=None):
 
 def index(registry_base_url=None):
     return _get('api/v1/index.json', registry_base_url)
+
+index_cached = memoized(index)
 
 
 def packages(registry_base_url=None):

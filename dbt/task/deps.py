@@ -47,9 +47,6 @@ class Package(object):
     def fetch_metadata(self, project):
         raise NotImplementedError()
 
-    def check_against_registry_index(self, index):
-        pass
-
     def unique_directory_name(self, prefix):
         local_digest = hashlib.md5(six.b(self.name)).hexdigest()
         return "{}--{}".format(prefix, local_digest)
@@ -84,7 +81,13 @@ class RegistryPackage(Package):
     def incorporate(self, other):
         return RegistryPackage(self.package, self.version + other.version)
 
+    def _check_in_index(self):
+        index = registry.index_cached()
+        if self.package not in index:
+            raise Exception('unknown package {}'.format(self.package))
+
     def resolve_version(self):
+        self._check_in_index()
         range_ = dbt.semver.reduce_versions(*self.version)
         available = registry.get_available_versions(self.package)
         # for now, pick a version and then recurse. later on,
@@ -99,10 +102,6 @@ class RegistryPackage(Package):
             logger.error('  Available versions: %s', ', '.join(available))
             raise Exception('bad')
         return RegistryPackage(self.package, target)
-
-    def check_against_registry_index(self, index):
-        if self.package not in index:
-            raise Exception('unknown package {}'.format(self.package))
 
     def fetch_metadata(self, project):
         if len(self.version) != 1:
@@ -251,12 +250,9 @@ class DepsTask(BaseTask):
         dbt.clients.system.make_directory(self.project['modules-path'])
         listing = PackageListing.create(self.project['packages'])
         visited_listing = PackageListing.create([])
-        index = registry.index()
 
         while listing:
             _, package = listing.popitem()
-
-            package.check_against_registry_index(index)
 
             target_package = package.resolve_version()
             visited_listing.incorporate(target_package)
