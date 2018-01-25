@@ -123,9 +123,7 @@ class RegistryPackage(Package):
             project['modules-path'],
             self.package,
             version_string))
-
-        dbt.clients.system.make_directory(
-            os.path.dirname(tar_path))
+        dbt.clients.system.make_directory(os.path.dirname(tar_path))
 
         response = requests.get(version_info.get('downloads').get('tarball'))
 
@@ -250,7 +248,7 @@ class DepsTask(BaseTask):
     def run(self):
         if not self.project.get('packages'):
             return
-        os.makedirs(self.project['modules-path'])
+        dbt.clients.system.make_directory(self.project['modules-path'])
         listing = PackageListing.create(self.project['packages'])
         visited_listing = PackageListing.create([])
         index = registry.index()
