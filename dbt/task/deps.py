@@ -1,8 +1,6 @@
 import os
-import tarfile
 import shutil
 import hashlib
-import requests
 import six
 
 import dbt.clients.git
