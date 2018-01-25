@@ -84,7 +84,7 @@ class RegistryPackage(Package):
     def _check_in_index(self):
         index = registry.index_cached()
         if self.package not in index:
-            raise Exception('unknown package {}'.format(self.package))
+            dbt.exceptions.package_not_found(self.package)
 
     def resolve_version(self):
         self._check_in_index()
@@ -96,11 +96,8 @@ class RegistryPackage(Package):
         # right now.
         target = dbt.semver.resolve_to_specific_version(range_, available)
         if not target:
-            logger.error('Could not find a matching version for package %s!',
-                         self.package)
-            logger.error('  Requested range: %s', range_)
-            logger.error('  Available versions: %s', ', '.join(available))
-            raise Exception('bad')
+            dbt.exceptions.package_version_not_found(
+                self.package, range_, available)
         return RegistryPackage(self.package, target)
 
     def fetch_metadata(self, project):
@@ -124,14 +121,11 @@ class RegistryPackage(Package):
             version_string))
         dbt.clients.system.make_directory(os.path.dirname(tar_path))
 
-        response = requests.get(version_info.get('downloads').get('tarball'))
-
-        with open(tar_path, 'wb') as handle:
-            for block in response.iter_content(1024*64):
-                handle.write(block)
-
-        with tarfile.open(tar_path, 'r') as tarball:
-            tarball.extractall(project['modules-path'])
+        download_url = version_info.get('downloads').get('tarball')
+        dbt.clients.system.download(download_url, tar_path)
+        deps_path = project['modules-path']
+        package_name = version_info['name']
+        dbt.clients.system.untar_package(tar_path, deps_path, package_name)
 
 
 class GitPackage(Package):
@@ -254,7 +248,12 @@ class DepsTask(BaseTask):
         while listing:
             _, package = listing.popitem()
 
-            target_package = package.resolve_version()
+            try:
+                target_package = package.resolve_version()
+            except dbt.exceptions.VersionsNotCompatibleException as e:
+                new_msg = ('Version error for package {}: {}'
+                           .format(package.name, e))
+                six.raise_from(dbt.exceptions.DependencyException(new_msg), e)
             visited_listing.incorporate(target_package)
 
             target_metadata = target_package.fetch_metadata(self.project)

@@ -273,6 +273,9 @@ class UnboundedVersionSpecifier(VersionSpecifier):
     def __init__(self, *args, **kwargs):
         super(dbt.utils.AttrDict, self).__init__(*args, **kwargs)
 
+    def __str__(self):
+        return "*"
+
     @property
     def is_unbounded(self):
         return True
@@ -327,7 +330,7 @@ def reduce_versions(*args):
     except VersionsNotCompatibleException as e:
         raise VersionsNotCompatibleException(
             'Could not find a satisfactory version from options: {}'
-            .format(str(args)))
+            .format([str(a) for a in args]))
 
     return to_return
 
