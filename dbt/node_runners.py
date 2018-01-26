@@ -181,11 +181,19 @@ class BaseRunner(object):
         return schemas
 
     @classmethod
+    def before_hooks(self, project, adapter, flat_graph):
+        pass
+
+    @classmethod
     def before_run(self, project, adapter, flat_graph):
         pass
 
     @classmethod
-    def after_run(self, project, adapter, results, flat_graph, elapsed):
+    def after_run(self, project, adapter, results, flat_graph):
+        pass
+
+    @classmethod
+    def after_hooks(self, project, adapter, results, flat_graph, elapsed):
         pass
 
 
@@ -291,11 +299,13 @@ class ModelRunner(CompileRunner):
             model_name = compiled.get('name')
             statement = compiled['wrapped_sql']
 
-            hook_dict = dbt.hooks.get_hook_dict(statement)
+            hook_index = hook.get('index', len(hooks))
+            hook_dict = dbt.hooks.get_hook_dict(statement, index=hook_index)
             compiled_hooks.append(hook_dict)
 
-        for hook in compiled_hooks:
+        ordered_hooks = sorted(compiled_hooks, key=lambda h: h.get('index', 0))
 
+        for hook in ordered_hooks:
             if dbt.flags.STRICT_MODE:
                 dbt.contracts.graph.parsed.validate_hook(hook)
 
@@ -316,6 +326,13 @@ class ModelRunner(CompileRunner):
     def create_schemas(cls, project, adapter, flat_graph):
         profile = project.run_environment()
         required_schemas = cls.get_model_schemas(flat_graph)
+
+        # Snowflake needs to issue a "use {schema}" query, where schema
+        # is the one defined in the profile. Create this schema if it
+        # does not exist, otherwise subsequent queries will fail. Generally,
+        # dbt expects that this schema will exist anyway.
+        required_schemas.add(adapter.get_default_schema(profile))
+
         existing_schemas = set(adapter.get_existing_schemas(profile))
 
         for schema in (required_schemas - existing_schemas):
@@ -343,8 +360,11 @@ class ModelRunner(CompileRunner):
             .format(stat_line=stat_line, execution=execution))
 
     @classmethod
-    def after_run(cls, project, adapter, results, flat_graph, elapsed):
+    def after_run(cls, project, adapter, results, flat_graph):
         cls.safe_run_hooks(project, adapter, flat_graph, RunHookType.End)
+
+    @classmethod
+    def after_hooks(cls, project, adapter, results, flat_graph, elapsed):
         cls.print_results_line(results, elapsed)
 
     def describe_node(self):

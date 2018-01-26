@@ -1,3 +1,21 @@
+## dbt 0.9.1 (January 2, 2018)
+
+This release fixes bugs and adds supports for late binding views on Redshift.
+
+### Changes
+- Support late binding views on Redshift ([#614](https://github.com/fishtown-analytics/dbt/pull/614)) ([docs](https://docs.getdbt.com/docs/warehouse-specific-configurations#section-late-binding-views))
+- Make `run_started_at` timezone-aware ([#553](https://github.com/fishtown-analytics/dbt/pull/553)) (Contributed by [@mturzanska](https://github.com/mturzanska)) ([docs](https://docs.getdbt.com/v0.9/reference#run_started_at))
+
+### Bugfixes
+
+- Include hook run time in reported model run time ([#607](https://github.com/fishtown-analytics/dbt/pull/607))
+- Add warning for missing test constraints ([#600](https://github.com/fishtown-analytics/dbt/pull/600))
+- Fix for schema tests used or defined in packages ([#599](https://github.com/fishtown-analytics/dbt/pull/599))
+- Run hooks in defined order ([#601](https://github.com/fishtown-analytics/dbt/pull/601))
+- Skip tests that depend on nonexistent models ([#617](https://github.com/fishtown-analytics/dbt/pull/617))
+- Fix for `adapter_macro` called within a package ([#630](https://github.com/fishtown-analytics/dbt/pull/630))
+
+
 ## dbt 0.9.0 (October 25, 2017)
 
 This release focuses on improvements to macros, materializations, and package management. Check out [the blog post](https://blog.fishtownanalytics.com/whats-new-in-dbt-0-9-0-dd36f3572ac6) to learn more about what's possible in this new version of dbt.

@@ -3,6 +3,7 @@ import pyodbc
 import dbt.exceptions
 
 from dbt.adapters.sql_server import SqlServerAdapter
+
 from dbt.logger import GLOBAL_LOGGER as logger
 
 

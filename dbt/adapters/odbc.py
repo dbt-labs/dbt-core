@@ -1,7 +1,9 @@
 import pyodbc
 
-import dbt.adapters.default
 import dbt.exceptions
+
+from dbt.adapters.default import DefaultAdapter, \
+    connections_available, connections_in_use
 
 from dbt.contracts.connection import validate_connection
 from dbt.logger import GLOBAL_LOGGER as logger

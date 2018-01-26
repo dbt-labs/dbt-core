@@ -1,5 +1,7 @@
 argparse>=1.2.1
+freezegun==0.3.9
 Jinja2>=2.8
+pytz==2017.2
 PyYAML>=3.11
 psycopg2==2.7.1
 sqlparse==0.2.3
@@ -8,7 +10,7 @@ csvkit==0.9.1
 snowplow-tracker==0.7.2
 celery==3.1.23
 voluptuous==0.10.5
-snowflake-connector-python==1.4.9
+snowflake-connector-python>=1.4.9
 colorama==0.3.9
 google-cloud-bigquery==0.26.0
 pyodbc==4.0.19

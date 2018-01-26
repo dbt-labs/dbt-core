@@ -1,5 +1,6 @@
 import json
 import os
+import pytz
 import voluptuous
 
 from dbt.adapters.factory import get_adapter
@@ -7,11 +8,12 @@ from dbt.compat import basestring, to_string
 
 import dbt.clients.jinja
 import dbt.flags
+import dbt.hooks
 import dbt.schema
+import dbt.sql
 import dbt.tracking
 import dbt.utils
 
-import dbt.hooks
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -286,8 +288,12 @@ def generate(model, project, flat_graph, provider=None):
         "execute": provider.execute,
         "flags": dbt.flags,
         "graph": flat_graph,
+        "hoist_ctes": dbt.sql.hoist_ctes,
         "log": log,
         "model": model,
+        "modules": {
+            "pytz": pytz,
+        },
         "post_hooks": post_hooks,
         "pre_hooks": pre_hooks,
         "ref": provider.ref(model, project, profile, flat_graph),

@@ -15,6 +15,7 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 hook_contract = Schema({
     Required('sql'): basestring,
     Required('transaction'): bool,
+    Required('index'): int,
 })
 
 config_contract = Schema({

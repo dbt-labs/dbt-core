@@ -127,7 +127,7 @@ class DBTIntegrationTest(unittest.TestCase):
             'test': {
                 'outputs': {
                     'default2': {
-                        'type': 'azure_dw',
+                        'type': 'sql_server',
                         'threads': 4,
                         'host': os.getenv('SQL_SERVER_TEST_HOST'),
                         'port': int(os.getenv('SQL_SERVER_TEST_PORT')),
@@ -138,7 +138,7 @@ class DBTIntegrationTest(unittest.TestCase):
                         'schema': self.unique_schema()
                     },
                     'noaccess': {
-                        'type': 'azure_dw',
+                        'type': 'sql_server',
                         'threads': 4,
                         'host': os.getenv('SQL_SERVER_TEST_HOST'),
                         'port': int(os.getenv('SQL_SERVER_TEST_PORT')),
@@ -251,6 +251,7 @@ class DBTIntegrationTest(unittest.TestCase):
         self.handle = connection.get('handle')
         self.adapter_type = profile.get('type')
         self.profile = profile
+        self.adapter = adapter
 
         schema_name = self.unique_schema()
         adapter.drop_schema(profile, schema_name, '__test')
@@ -364,24 +365,36 @@ class DBTIntegrationTest(unittest.TestCase):
 
         return to_return
 
-    def run_sql(self, query, fetch='None'):
+    def run_sql(self, query, fetch=None):
         if query.strip() == "":
             return
 
-        with self.handle.cursor() as cursor:
-            try:
-                sql = self.transform_sql(query)
-                cursor.execute(sql)
-                # self.handle.commit()
-                if fetch == 'one':
-                    return cursor.fetchone()
-                elif fetch == 'all':
-                    return cursor.fetchall()
-                else:
-                    return
-            except BaseException as e:
-                self.handle.rollback()
-                raise e
+        connection = self.adapter.get_connection(self.profile, '__test')
+
+        try:
+            sql = self.transform_sql(query)
+            result = None
+
+            if fetch == 'one':
+                _, result = self.adapter.execute_and_fetch(
+                    self.profile, sql, '__test', auto_begin=True)
+                result = result[0]
+
+            elif fetch == 'all':
+                _, result = self.adapter.execute_and_fetch(
+                    self.profile, sql, '__test', auto_begin=True)
+
+            else:
+                self.adapter.execute_one(
+                    self.profile, sql, '__test', auto_begin=True)
+
+            self.adapter.commit(self.profile, connection)
+
+            return result
+
+        except BaseException as e:
+            self.adapter.rollback(connection)
+            raise e
 
     def get_table_columns(self, table, schema=None):
         schema = self.unique_schema() if schema is None else schema
