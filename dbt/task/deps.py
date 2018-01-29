@@ -19,6 +19,7 @@ from dbt.task.base_task import BaseTask
 class Package(object):
     def __init__(self, name):
         self.name = name
+        self._cached_metadata = None
 
     def __str__(self):
         version = getattr(self, 'version', None)
@@ -33,8 +34,9 @@ class Package(object):
         if version is None:
             return []
         if not isinstance(version, (list, basestring)):
-            # error
-            raise Exception('bad')
+            dbt.exceptions.raise_dependency_error(
+                'version must be list or string, got {}'
+                .format(type(version)))
         if not isinstance(version, list):
             version = [version]
         return version
@@ -42,13 +44,21 @@ class Package(object):
     def resolve_version(self):
         raise NotImplementedError()
 
-    def fetch_metadata(self, project):
+    def _fetch_metadata(self, project):
         raise NotImplementedError()
 
-    def unique_directory_name(self, prefix):
-        local_digest = hashlib.md5(six.b(self.name)).hexdigest()[:8]
-        basename = os.path.basename(self.name)
-        return "{}--{}--{}".format(prefix, basename, local_digest)
+    def fetch_metadata(self, project):
+        if not self._cached_metadata:
+            self._cached_metadata = self._fetch_metadata(project)
+        return self._cached_metadata
+
+    def get_project_name(self, project):
+        metadata = self.fetch_metadata(project)
+        return metadata["name"]
+
+    def get_installation_path(self, project):
+        dest_dirname = self.get_project_name(project)
+        return os.path.join(project['modules-path'], dest_dirname)
 
 
 class RegistryPackage(Package):
@@ -65,8 +75,8 @@ class RegistryPackage(Package):
         # VersionSpecifier.from_version_string will return None in case of
         # failure, so we need to iterate again to check if any failed.
         if any(not isinstance(v, VersionSpecifier) for v in version):
-            # error
-            raise Exception('bad')
+            dbt.exceptions.raise_dependency_error(
+                'Malformed version specifier found.')
         return version or [UnboundedVersionSpecifier()]
 
     @property
@@ -99,20 +109,20 @@ class RegistryPackage(Package):
                 self.package, range_, available)
         return RegistryPackage(self.package, target)
 
-    def fetch_metadata(self, project):
+    def _check_version_pinned(self):
         if len(self.version) != 1:
-            # error
-            raise Exception('bad')
+            dbt.exceptions.raise_dependency_error(
+                'Cannot fetch metadata until the version is pinned.')
+
+    def _fetch_metadata(self, project):
+        self._check_version_pinned()
         version_string = self.version[0].to_version_string(skip_matcher=True)
         return registry.package_version(self.package, version_string)
 
-    def download(self, project):
-        if len(self.version) != 1:
-            # error
-            raise Exception('bad')
-
+    def install(self, project):
+        self._check_version_pinned()
         version_string = self.version[0].to_version_string(skip_matcher=True)
-        version_info = registry.package_version(self.package, version_string)
+        metadata = self.fetch_metadata(project)
 
         tar_path = os.path.realpath('{}/downloads/{}.{}.tar.gz'.format(
             project['modules-path'],
@@ -120,10 +130,10 @@ class RegistryPackage(Package):
             version_string))
         dbt.clients.system.make_directory(os.path.dirname(tar_path))
 
-        download_url = version_info.get('downloads').get('tarball')
+        download_url = metadata.get('downloads').get('tarball')
         dbt.clients.system.download(download_url, tar_path)
         deps_path = project['modules-path']
-        package_name = version_info['name']
+        package_name = self.get_project_name(project)
         dbt.clients.system.untar_package(tar_path, deps_path, package_name)
 
 
@@ -131,6 +141,7 @@ class GitPackage(Package):
     def __init__(self, git, version):
         super(GitPackage, self).__init__(git)
         self.git = git
+        self._checkout_name = hashlib.md5(six.b(git)).hexdigest()
         self._version = self._sanitize_version(version)
 
     @classmethod
@@ -159,23 +170,28 @@ class GitPackage(Package):
         return GitPackage(self.git, requested.pop())
 
     def _checkout(self, project):
+        """Performs a shallow clone of the repository into the
+        dbt_modules/downloads directory. This function can be called
+        repeatedly. If the project has already been checked out at this
+        version, it will be a no-op. Returns the path to the checked out
+        directory."""
         if len(self.version) != 1:
-            # error
-            raise Exception('bad')
-        modules_path = project['modules-path']
-        dest_dirname = self.unique_directory_name('git')
+            dbt.exceptions.raise_dependency_error(
+                'Cannot checkout repository until the version is pinned.')
+        checkout_cwd = os.path.join(project['modules-path'], 'downloads')
         dir_ = dbt.clients.git.clone_and_checkout(
-            self.git, modules_path, branch=self.version[0],
-            dirname=dest_dirname)
-        return os.path.join(modules_path, dir_)
+            self.git, checkout_cwd, branch=self.version[0],
+            dirname=self._checkout_name)
+        return os.path.join(checkout_cwd, dir_)
 
-    def fetch_metadata(self, project):
+    def _fetch_metadata(self, project):
         path = self._checkout(project)
         with open(os.path.join(path, 'dbt_project.yml')) as f:
             return load_yaml_text(f.read())
 
-    def download(self, project):
-        self._checkout(project)
+    def install(self, project):
+        shutil.move(self._checkout(project),
+                    self.get_installation_path(project))
 
 
 class LocalPackage(Package):
@@ -189,13 +205,12 @@ class LocalPackage(Package):
     def resolve_version(self):
         return LocalPackage(self.local)
 
-    def fetch_metadata(self, project):
+    def _fetch_metadata(self, project):
         with open(os.path.join(self.local, 'dbt_project.yml')) as f:
             return load_yaml_text(f.read())
 
-    def download(self, project):
-        dest_dirname = self.unique_directory_name("local")
-        dest_path = os.path.join(project['modules-path'], dest_dirname)
+    def install(self, project):
+        dest_path = self.get_installation_path(project)
         if os.path.exists(dest_path):
             shutil.rmtree(dest_path)
         shutil.copytree(self.local, dest_path)
@@ -208,8 +223,8 @@ def parse_package(dict_):
         return GitPackage(dict_['git'], dict_.get('version'))
     if dict_.get('local'):
         return LocalPackage(dict_['local'])
-    # error
-    raise Exception('bad')
+    dbt.exceptions.raise_dependency_error(
+        'Malformed package definition. Must contain package, git, or local.')
 
 
 class PackageListing(AttrDict):
@@ -225,14 +240,12 @@ class PackageListing(AttrDict):
     @classmethod
     def create(cls, parsed_yaml):
         to_return = cls({})
-
         if not isinstance(parsed_yaml, list):
-            # error
-            raise Exception('bad')
-
+            dbt.exceptions.raise_dependency_error(
+                'Package definitions must be a list, got: {}'
+                .format(type(parsed_yaml)))
         for package in parsed_yaml:
             to_return.incorporate(package)
-
         return to_return
 
 
@@ -240,7 +253,8 @@ class DepsTask(BaseTask):
     def run(self):
         if not self.project.get('packages'):
             return
-        dbt.clients.system.make_directory(self.project['modules-path'])
+        dbt.clients.system.make_directory(
+            os.path.join(self.project['modules-path'], 'downloads'))
         listing = PackageListing.create(self.project['packages'])
         visited_listing = PackageListing.create([])
 
@@ -264,4 +278,4 @@ class DepsTask(BaseTask):
 
         for _, package in visited_listing.items():
             logger.info('Pulling %s', package)
-            package.download(self.project)
+            package.install(self.project)
