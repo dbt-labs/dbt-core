@@ -46,8 +46,9 @@ class Package(object):
         raise NotImplementedError()
 
     def unique_directory_name(self, prefix):
-        local_digest = hashlib.md5(six.b(self.name)).hexdigest()
-        return "{}--{}".format(prefix, local_digest)
+        local_digest = hashlib.md5(six.b(self.name)).hexdigest()[:8]
+        basename = os.path.basename(self.name)
+        return "{}--{}--{}".format(prefix, basename, local_digest)
 
 
 class RegistryPackage(Package):
