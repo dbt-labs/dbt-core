@@ -190,8 +190,10 @@ class GitPackage(Package):
             return load_yaml_text(f.read())
 
     def install(self, project):
-        shutil.move(self._checkout(project),
-                    self.get_installation_path(project))
+        dest_path = self.get_installation_path(project)
+        if os.path.exists(dest_path):
+            shutil.rmtree(dest_path)
+        shutil.move(self._checkout(project), dest_path)
 
 
 class LocalPackage(Package):
@@ -250,6 +252,17 @@ class PackageListing(AttrDict):
 
 
 class DepsTask(BaseTask):
+    def _check_for_duplicate_project_names(self, visited_listing):
+        seen = set()
+        for _, package in visited_listing.items():
+            project_name = package.get_project_name(self.project)
+            if project_name in seen:
+                dbt.exceptions.raise_dependency_error(
+                    'Found duplicate project {}. This occurs when a dependency'
+                    ' has the same project name as some other dependency.'
+                    .format(project_name))
+            seen.add(project_name)
+
     def run(self):
         if not self.project.get('packages'):
             return
@@ -275,6 +288,8 @@ class DepsTask(BaseTask):
                 target_metadata.get('packages', []))
             for _, package in sub_listing.items():
                 listing.incorporate(package)
+
+        self._check_for_duplicate_project_names(visited_listing)
 
         for _, package in visited_listing.items():
             logger.info('Pulling %s', package)
