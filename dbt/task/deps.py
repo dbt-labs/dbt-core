@@ -1,6 +1,7 @@
 import os
 import shutil
 import hashlib
+import tempfile
 import six
 
 import dbt.deprecations
@@ -15,6 +16,8 @@ from dbt.semver import VersionSpecifier, UnboundedVersionSpecifier
 from dbt.utils import AttrDict
 
 from dbt.task.base_task import BaseTask
+
+DOWNLOADS_PATH = os.path.join(tempfile.gettempdir(), "dbt-downloads")
 
 
 class Package(object):
@@ -133,10 +136,8 @@ class RegistryPackage(Package):
         version_string = self.version[0].to_version_string(skip_matcher=True)
         metadata = self.fetch_metadata(project)
 
-        tar_path = os.path.realpath('{}/downloads/{}.{}.tar.gz'.format(
-            project['modules-path'],
-            self.package,
-            version_string))
+        tar_name = '{}.{}.tar.gz'.format(self.package, version_string)
+        tar_path = os.path.realpath(os.path.join(DOWNLOADS_PATH, tar_name))
         dbt.clients.system.make_directory(os.path.dirname(tar_path))
 
         download_url = metadata.get('downloads').get('tarball')
@@ -179,19 +180,17 @@ class GitPackage(Package):
         self.version = requested.pop()
 
     def _checkout(self, project):
-        """Performs a shallow clone of the repository into the
-        dbt_modules/downloads directory. This function can be called
-        repeatedly. If the project has already been checked out at this
-        version, it will be a no-op. Returns the path to the checked out
-        directory."""
+        """Performs a shallow clone of the repository into the downloads
+        directory. This function can be called repeatedly. If the project has
+        already been checked out at this version, it will be a no-op. Returns
+        the path to the checked out directory."""
         if len(self.version) != 1:
             dbt.exceptions.raise_dependency_error(
                 'Cannot checkout repository until the version is pinned.')
-        checkout_cwd = os.path.join(project['modules-path'], 'downloads')
         dir_ = dbt.clients.git.clone_and_checkout(
-            self.git, checkout_cwd, branch=self.version[0],
+            self.git, DOWNLOADS_PATH, branch=self.version[0],
             dirname=self._checkout_name)
-        return os.path.join(checkout_cwd, dir_)
+        return os.path.join(DOWNLOADS_PATH, dir_)
 
     def _fetch_metadata(self, project):
         path = self._checkout(project)
@@ -317,8 +316,8 @@ class DepsTask(BaseTask):
             seen.add(project_name)
 
     def run(self):
-        dbt.clients.system.make_directory(
-            os.path.join(self.project['modules-path'], 'downloads'))
+        dbt.clients.system.make_directory(self.project['modules-path'])
+        dbt.clients.system.make_directory(DOWNLOADS_PATH)
 
         packages = _read_packages(self.project)
         if not packages:
