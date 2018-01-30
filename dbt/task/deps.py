@@ -41,8 +41,16 @@ class Package(object):
             version = [version]
         return version
 
+    def _resolve_version(self):
+        pass
+
     def resolve_version(self):
-        raise NotImplementedError()
+        try:
+            self._resolve_version()
+        except dbt.exceptions.VersionsNotCompatibleException as e:
+            new_msg = ('Version error for package {}: {}'
+                       .format(self.name, e))
+            six.raise_from(dbt.exceptions.DependencyException(new_msg), e)
 
     def _fetch_metadata(self, project):
         raise NotImplementedError()
@@ -95,7 +103,7 @@ class RegistryPackage(Package):
         if self.package not in index:
             dbt.exceptions.package_not_found(self.package)
 
-    def resolve_version(self):
+    def _resolve_version(self):
         self._check_in_index()
         range_ = dbt.semver.reduce_versions(*self.version)
         available = registry.get_available_versions(self.package)
@@ -107,7 +115,7 @@ class RegistryPackage(Package):
         if not target:
             dbt.exceptions.package_version_not_found(
                 self.package, range_, available)
-        return RegistryPackage(self.package, target)
+        self.version = target
 
     def _check_version_pinned(self):
         if len(self.version) != 1:
@@ -159,7 +167,7 @@ class GitPackage(Package):
     def incorporate(self, other):
         return GitPackage(self.git, self.version + other.version)
 
-    def resolve_version(self):
+    def _resolve_version(self):
         requested = set(self.version)
         if len(requested) != 1:
             logger.error(
@@ -167,7 +175,7 @@ class GitPackage(Package):
                 self.git)
             logger.error('  Requested versions: %s', requested)
             raise Exception('bad')
-        return GitPackage(self.git, requested.pop())
+        self.version = requested.pop()
 
     def _checkout(self, project):
         """Performs a shallow clone of the repository into the
@@ -202,9 +210,6 @@ class LocalPackage(Package):
         self.local = local
 
     def incorporate(self, _):
-        return LocalPackage(self.local)
-
-    def resolve_version(self):
         return LocalPackage(self.local)
 
     def _fetch_metadata(self, project):
@@ -250,6 +255,11 @@ class PackageListing(AttrDict):
             to_return.incorporate(package)
         return to_return
 
+    def create_and_incorporate(self, parsed_yaml):
+        listing = self.create(parsed_yaml)
+        for _, package in listing.items():
+            self.incorporate(package)
+
 
 class DepsTask(BaseTask):
     def _check_for_duplicate_project_names(self, visited_listing):
@@ -268,29 +278,21 @@ class DepsTask(BaseTask):
             return
         dbt.clients.system.make_directory(
             os.path.join(self.project['modules-path'], 'downloads'))
-        listing = PackageListing.create(self.project['packages'])
-        visited_listing = PackageListing.create([])
 
-        while listing:
-            _, package = listing.popitem()
+        pending_deps = PackageListing.create(self.project['packages'])
+        final_deps = PackageListing.create([])
+        while pending_deps:
+            sub_deps = PackageListing.create([])
+            for name, package in pending_deps.items():
+                final_deps.incorporate(package)
+                final_deps[name].resolve_version()
+                target_metadata = final_deps[name].fetch_metadata(self.project)
+                sub_deps.create_and_incorporate(
+                    target_metadata.get('packages', []))
+            pending_deps = sub_deps
 
-            try:
-                target_package = package.resolve_version()
-            except dbt.exceptions.VersionsNotCompatibleException as e:
-                new_msg = ('Version error for package {}: {}'
-                           .format(package.name, e))
-                six.raise_from(dbt.exceptions.DependencyException(new_msg), e)
-            visited_listing.incorporate(target_package)
+        self._check_for_duplicate_project_names(final_deps)
 
-            target_metadata = target_package.fetch_metadata(self.project)
-
-            sub_listing = PackageListing.create(
-                target_metadata.get('packages', []))
-            for _, package in sub_listing.items():
-                listing.incorporate(package)
-
-        self._check_for_duplicate_project_names(visited_listing)
-
-        for _, package in visited_listing.items():
+        for _, package in final_deps.items():
             logger.info('Pulling %s', package)
             package.install(self.project)
