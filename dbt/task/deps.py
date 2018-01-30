@@ -262,9 +262,9 @@ class PackageListing(AttrDict):
 
 
 class DepsTask(BaseTask):
-    def _check_for_duplicate_project_names(self, visited_listing):
+    def _check_for_duplicate_project_names(self, final_deps):
         seen = set()
-        for _, package in visited_listing.items():
+        for _, package in final_deps.items():
             project_name = package.get_project_name(self.project)
             if project_name in seen:
                 dbt.exceptions.raise_dependency_error(
