@@ -3,6 +3,7 @@ import shutil
 import hashlib
 import six
 
+import dbt.deprecations
 import dbt.clients.git
 import dbt.clients.system
 import dbt.clients.registry as registry
@@ -223,7 +224,7 @@ class LocalPackage(Package):
         shutil.copytree(self.local, dest_path)
 
 
-def parse_package(dict_):
+def _parse_package(dict_):
     if dict_.get('package'):
         return RegistryPackage(dict_['package'], dict_.get('version'))
     if dict_.get('git'):
@@ -238,7 +239,7 @@ class PackageListing(AttrDict):
 
     def incorporate(self, package):
         if not isinstance(package, Package):
-            package = parse_package(package)
+            package = _parse_package(package)
         if package.name not in self:
             self[package.name] = package
         else:
@@ -255,10 +256,52 @@ class PackageListing(AttrDict):
             to_return.incorporate(package)
         return to_return
 
-    def create_and_incorporate(self, parsed_yaml):
+    def incorporate_from_yaml(self, parsed_yaml):
         listing = self.create(parsed_yaml)
         for _, package in listing.items():
             self.incorporate(package)
+
+
+def _split_at_branch(repo_spec):
+    parts = repo_spec.split('@')
+    error = RuntimeError(
+        "Invalid dep specified: '{}' -- not a repo we can clone".format(
+            repo_spec
+        )
+    )
+    repo = None
+    if repo_spec.startswith('git@'):
+        if len(parts) == 1:
+            raise error
+        if len(parts) == 2:
+            repo, branch = repo_spec, None
+        elif len(parts) == 3:
+            repo, branch = '@'.join(parts[:2]), parts[2]
+    else:
+        if len(parts) == 1:
+            repo, branch = parts[0], None
+        elif len(parts) == 2:
+            repo, branch = parts
+    if repo is None:
+        raise error
+    return repo, branch
+
+
+def _convert_repo(repo_spec):
+    repo, branch = _split_at_branch(repo_spec)
+    return {
+        'git': repo,
+        'version': branch,
+    }
+
+
+def _read_packages(project_yaml):
+    packages = project_yaml.get('packages', [])
+    repos = project_yaml.get('repositories', [])
+    if repos:
+        dbt.deprecations.warn('repositories')
+        packages += [_convert_repo(r) for r in repos]
+    return packages
 
 
 class DepsTask(BaseTask):
@@ -274,12 +317,14 @@ class DepsTask(BaseTask):
             seen.add(project_name)
 
     def run(self):
-        if not self.project.get('packages'):
-            return
         dbt.clients.system.make_directory(
             os.path.join(self.project['modules-path'], 'downloads'))
 
-        pending_deps = PackageListing.create(self.project['packages'])
+        packages = _read_packages(self.project)
+        if not packages:
+            return
+
+        pending_deps = PackageListing.create(packages)
         final_deps = PackageListing.create([])
         while pending_deps:
             sub_deps = PackageListing.create([])
@@ -287,8 +332,7 @@ class DepsTask(BaseTask):
                 final_deps.incorporate(package)
                 final_deps[name].resolve_version()
                 target_metadata = final_deps[name].fetch_metadata(self.project)
-                sub_deps.create_and_incorporate(
-                    target_metadata.get('packages', []))
+                sub_deps.incorporate_from_yaml(_read_packages(target_metadata))
             pending_deps = sub_deps
 
         self._check_for_duplicate_project_names(final_deps)

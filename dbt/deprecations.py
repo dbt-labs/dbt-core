@@ -11,14 +11,12 @@ class DBTDeprecation(object):
             logger.info("* Deprecation Warning: {}\n".format(desc))
             active_deprecations.add(self.name)
 
-# Leaving this as an example. Make sure to add new ones to deprecations_list
-#       - Connor
-#
-# class DBTRunTargetDeprecation(DBTDeprecation):
-#     name = 'run-target'
-#     description = """profiles.yml configuration option 'run-target' is
-#     deprecated. Please use 'target' instead. The 'run-target' option will be
-#     removed (in favor of 'target') in DBT version 0.7.0"""
+
+class DBTRepositoriesDeprecation(DBTDeprecation):
+    name = "repositories"
+    description = """dbt_project.yml configuration option 'repositories' is
+    deprecated. Please use 'packages' instead. The 'repositories' option will
+    be removed in a later version of DBT."""
 
 
 def warn(name, *args, **kwargs):
@@ -37,6 +35,7 @@ def warn(name, *args, **kwargs):
 active_deprecations = set()
 
 deprecations_list = [
+    DBTRepositoriesDeprecation(),
 ]
 
 deprecations = {d.name: d for d in deprecations_list}
