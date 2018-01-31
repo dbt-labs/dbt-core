@@ -37,6 +37,7 @@ def _get(path, registry_base_url=None):
 def index(registry_base_url=None):
     return _get('api/v1/index.json', registry_base_url)
 
+
 index_cached = memoized(index)
 
 

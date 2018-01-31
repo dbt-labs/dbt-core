@@ -31,7 +31,7 @@ def get_latest_version():
     try:
         f = urlopen(REMOTE_VERSION_FILE)
         contents = f.read()
-    except:
+    except Exception:
         contents = ''
     if hasattr(contents, 'decode'):
         contents = contents.decode('utf-8')

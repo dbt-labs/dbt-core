@@ -57,9 +57,9 @@ class VersionRange(dbt.utils.AttrDict):
     def _try_combine_lower_bound_with_exact(self, lower, exact):
         comparison = lower.compare(exact)
 
-        if(comparison < 0 or
-           (comparison == 0 and
-            lower.matcher == Matchers.GREATER_THAN_OR_EQUAL)):
+        if (comparison < 0 or
+            (comparison == 0 and
+             lower.matcher == Matchers.GREATER_THAN_OR_EQUAL)):
             return exact
 
         raise VersionsNotCompatibleException()
@@ -87,9 +87,9 @@ class VersionRange(dbt.utils.AttrDict):
     def _try_combine_upper_bound_with_exact(self, upper, exact):
         comparison = upper.compare(exact)
 
-        if(comparison > 0 or
-           (comparison == 0 and
-            upper.matcher == Matchers.LESS_THAN_OR_EQUAL)):
+        if (comparison > 0 or
+            (comparison == 0 and
+             upper.matcher == Matchers.LESS_THAN_OR_EQUAL)):
             return exact
 
         raise VersionsNotCompatibleException()
@@ -227,24 +227,27 @@ class VersionSpecifier(dbt.utils.AttrDict):
             if comparison != 0:
                 return comparison
 
-        if((self.matcher == Matchers.GREATER_THAN_OR_EQUAL and
-            other.matcher == Matchers.LESS_THAN_OR_EQUAL) or
-           (self.matcher == Matchers.LESS_THAN_OR_EQUAL and
-            other.matcher == Matchers.GREATER_THAN_OR_EQUAL)):
+        equal = ((self.matcher == Matchers.GREATER_THAN_OR_EQUAL and
+                  other.matcher == Matchers.LESS_THAN_OR_EQUAL) or
+                 (self.matcher == Matchers.LESS_THAN_OR_EQUAL and
+                  other.matcher == Matchers.GREATER_THAN_OR_EQUAL))
+        if equal:
             return 0
 
-        if((self.matcher == Matchers.LESS_THAN and
-            other.matcher == Matchers.LESS_THAN_OR_EQUAL) or
-           (other.matcher == Matchers.GREATER_THAN and
-            self.matcher == Matchers.GREATER_THAN_OR_EQUAL) or
-           (self.is_upper_bound and other.is_lower_bound)):
+        lt = ((self.matcher == Matchers.LESS_THAN and
+               other.matcher == Matchers.LESS_THAN_OR_EQUAL) or
+              (other.matcher == Matchers.GREATER_THAN and
+               self.matcher == Matchers.GREATER_THAN_OR_EQUAL) or
+              (self.is_upper_bound and other.is_lower_bound))
+        if lt:
             return -1
 
-        if((other.matcher == Matchers.LESS_THAN and
-            self.matcher == Matchers.LESS_THAN_OR_EQUAL) or
-           (self.matcher == Matchers.GREATER_THAN and
-            other.matcher == Matchers.GREATER_THAN_OR_EQUAL) or
-           (self.is_lower_bound and other.is_upper_bound)):
+        gt = ((other.matcher == Matchers.LESS_THAN and
+               self.matcher == Matchers.LESS_THAN_OR_EQUAL) or
+              (self.matcher == Matchers.GREATER_THAN and
+               other.matcher == Matchers.GREATER_THAN_OR_EQUAL) or
+              (self.is_lower_bound and other.is_upper_bound))
+        if gt:
             return 1
 
         return 0
@@ -380,7 +383,8 @@ def resolve_to_specific_version(requested_range, available_versions):
 def resolve_dependency_tree(version_index, unmet_dependencies, restrictions):
     for name, restriction in restrictions.items():
         if not versions_compatible(*restriction):
-            raise VersionsNotCompatibleException('not compatible {}'.format(restriction))
+            raise VersionsNotCompatibleException(
+                'not compatible {}'.format(restriction))
 
     if not unmet_dependencies:
         return {}, {}
@@ -398,7 +402,8 @@ def resolve_dependency_tree(version_index, unmet_dependencies, restrictions):
             version_index[dependency_name].keys())
 
         for possible_match in possible_matches:
-            print('reset with {} at {}'.format(dependency_name, possible_match))
+            print('reset with {} at {}'
+                  .format(dependency_name, possible_match))
 
             tree = {}
             install = {}
@@ -414,7 +419,8 @@ def resolve_dependency_tree(version_index, unmet_dependencies, restrictions):
                     possible_match
                 ).to_version_string_pair()
 
-                recursive_version_info = version_index.get(dependency_name, {}).get(possible_match)
+                ver = version_index.get(dependency_name, {})
+                recursive_version_info = ver.get(possible_match)
                 new_unmet_dependencies = dbt.utils.deep_merge(
                     recursive_version_info.copy())
 
@@ -433,12 +439,14 @@ def resolve_dependency_tree(version_index, unmet_dependencies, restrictions):
 
                 for name, restriction in new_restrictions.items():
                     if not versions_compatible(*restriction):
-                        raise VersionsNotCompatibleException('not compatible {}'.format(new_restrictions))
+                        raise VersionsNotCompatibleException(
+                            'not compatible {}'.format(new_restrictions))
 
                 else:
                     match_found = True
 
-                    print('going down the stack with {}'.format(new_unmet_dependencies))
+                    print('going down the stack with {}'
+                          .format(new_unmet_dependencies))
                     print('and {}'.format(install))
                     subtree, subinstall = resolve_dependency_tree(
                         version_index,
@@ -471,18 +479,20 @@ def resolve_dependency_tree(version_index, unmet_dependencies, restrictions):
                     break
 
                 if not match_found:
-                    raise VersionsNotCompatibleException('No match found -- exhausted this part of the '
-                                                         'tree.')
+                    raise VersionsNotCompatibleException(
+                        'No match found -- exhausted this part of the tree.')
 
             except VersionsNotCompatibleException as e:
                 print(e)
-                print('When attempting {} at {}'.format(dependency_name, possible_match))
+                print('When attempting {} at {}'
+                      .format(dependency_name, possible_match))
 
     return to_return_tree.copy(), to_return_install.copy()
 
 
 def resolve_dependency_set(version_index, dependencies):
-    tree, install = resolve_dependency_tree(version_index, dependencies, dependencies)
+    tree, install = resolve_dependency_tree(
+        version_index, dependencies, dependencies)
 
     return {
         'install': install,
