@@ -191,9 +191,9 @@ class VersionSpecifier(dbt.utils.AttrDict):
     def from_version_string(cls, version_string):
         match = _VERSION_REGEX.match(version_string)
 
-        if match is None:
-            # error?
-            return None
+        if not match:
+            raise dbt.exceptions.SemverException(
+                'Could not parse version "{}"'.format(version_string))
 
         return VersionSpecifier(match.groupdict())
 
@@ -485,7 +485,7 @@ def resolve_dependency_tree(version_index, unmet_dependencies, restrictions):
                         'No match found -- exhausted this part of the tree.')
 
             except VersionsNotCompatibleException as e:
-                logger.debug('%s -- When attempting %s at %s'
+                logger.debug('%s -- When attempting %s at %s',
                              e, dependency_name, possible_match)
 
     return to_return_tree.copy(), to_return_install.copy()

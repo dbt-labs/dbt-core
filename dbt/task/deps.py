@@ -84,11 +84,6 @@ class RegistryPackage(Package):
         version = [v if isinstance(v, VersionSpecifier)
                    else VersionSpecifier.from_version_string(v)
                    for v in cls.version_to_list(version)]
-        # VersionSpecifier.from_version_string will return None in case of
-        # failure, so we need to iterate again to check if any failed.
-        if any(not isinstance(v, VersionSpecifier) for v in version):
-            dbt.exceptions.raise_dependency_error(
-                'Malformed version specifier found.')
         return version or [UnboundedVersionSpecifier()]
 
     @property
@@ -172,11 +167,9 @@ class GitPackage(Package):
     def _resolve_version(self):
         requested = set(self.version)
         if len(requested) != 1:
-            logger.error(
-                'Could not resolve to a single version for Git repo %s!',
-                self.git)
-            logger.error('  Requested versions: %s', requested)
-            raise Exception('bad')
+            dbt.exceptions.raise_dependency_error(
+                'git dependencies should contain exactly one version. '
+                '{} contains: {}'.format(self.git, requested))
         self.version = requested.pop()
 
     def _checkout(self, project):
@@ -224,6 +217,13 @@ class LocalPackage(Package):
 
 
 def _parse_package(dict_):
+    only_1_keys = ['package', 'git', 'local']
+    specified = [k for k in only_1_keys if dict_.get(k)]
+    if len(specified) > 1:
+        dbt.exceptions.raise_dependency_error(
+            'Packages should not contain more than one of {}; '
+            'yours has {} of them - {}'
+            .format(only_1_keys, len(specified), specified))
     if dict_.get('package'):
         return RegistryPackage(dict_['package'], dict_.get('version'))
     if dict_.get('git'):
@@ -321,6 +321,7 @@ class DepsTask(BaseTask):
 
         packages = _read_packages(self.project)
         if not packages:
+            logger.info('Warning: No packages found in dbt_project.yml')
             return
 
         pending_deps = PackageListing.create(packages)
