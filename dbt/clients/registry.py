@@ -42,8 +42,7 @@ index_cached = memoized(index)
 
 
 def packages(registry_base_url=None):
-    return requests.get(r'https://tinyurl.com/ydg3z87m').json()
-    # return _get('api/v1/packages.json', registry_base_url)
+    return _get('api/v1/packages.json', registry_base_url)
 
 
 def package(name, registry_base_url=None):
