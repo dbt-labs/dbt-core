@@ -187,6 +187,7 @@ def get_materialization_macro(flat_graph, materialization_name,
         macro_name = get_materialization_macro_name(materialization_name,
                                                     adapter_type='default',
                                                     with_prefix=False)
+
         macro = find_macro_by_name(
             flat_graph,
             macro_name,

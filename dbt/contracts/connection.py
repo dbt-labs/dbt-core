@@ -5,7 +5,15 @@ from dbt.contracts.common import validate_with
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
-adapter_types = ['postgres', 'redshift', 'snowflake', 'bigquery']
+adapter_types = [
+    'postgres',
+    'redshift',
+    'snowflake',
+    'bigquery',
+    'sql_server',
+    'azure_dw'
+]
+
 connection_contract = Schema({
     Required('type'): Any(*adapter_types),
     Required('name'): Any(None, basestring),
@@ -22,6 +30,16 @@ postgres_credentials_contract = Schema({
     Required('pass'): basestring,
     Required('port'): Any(All(int, Range(min=0, max=65535)), basestring),
     Required('schema'): basestring,
+})
+
+sql_server_credentials_contract = Schema({
+    Required('database'): basestring,
+    Required('host'): basestring,
+    Required('user'): basestring,
+    Required('password'): basestring,
+    Required('port'): All(int, Range(min=0, max=65535)),
+    Required('schema'): basestring,
+    Required('driver'): basestring,
 })
 
 snowflake_credentials_contract = Schema({
@@ -49,6 +67,8 @@ credentials_mapping = {
     'redshift': postgres_credentials_contract,
     'snowflake': snowflake_credentials_contract,
     'bigquery': bigquery_credentials_contract,
+    'sql_server': sql_server_credentials_contract,
+    'azure_dw': sql_server_credentials_contract,
 }
 
 

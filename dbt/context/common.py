@@ -8,11 +8,12 @@ from dbt.compat import basestring, to_string
 
 import dbt.clients.jinja
 import dbt.flags
+import dbt.hooks
 import dbt.schema
+import dbt.sql
 import dbt.tracking
 import dbt.utils
 
-import dbt.hooks
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -287,6 +288,7 @@ def generate(model, project, flat_graph, provider=None):
         "execute": provider.execute,
         "flags": dbt.flags,
         "graph": flat_graph,
+        "hoist_ctes": dbt.sql.hoist_ctes,
         "log": log,
         "model": model,
         "modules": {

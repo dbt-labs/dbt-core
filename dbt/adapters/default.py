@@ -461,7 +461,6 @@ class DefaultAdapter(object):
                 'Tried to commit transaction on connection "{}", but '
                 'it does not have one open!'.format(connection.get('name')))
 
-        logger.debug('On {}: COMMIT'.format(connection.get('name')))
         cls.add_commit_query(profile, connection.get('name'))
 
         connection['transaction_open'] = False

@@ -45,5 +45,6 @@ setup(
         'snowflake-connector-python>=1.4.9',
         'colorama==0.3.9',
         'google-cloud-bigquery==0.26.0',
+        'pyodbc==4.0.19',
     ]
 )

@@ -5,4 +5,4 @@
 }}
 
 -- this is a unicode character: å
-select * from "{{ target.schema }}"."seed"
+select * from {{ target.schema }}.seed

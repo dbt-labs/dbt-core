@@ -80,6 +80,10 @@ class BigQueryAdapter(PostgresAdapter):
         pass
 
     @classmethod
+    def close(cls, connection):
+        return connection
+
+    @classmethod
     def get_status(cls, cursor):
         raise dbt.exceptions.NotImplementedException(
             '`get_status` is not implemented for this adapter!')

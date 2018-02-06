@@ -14,6 +14,10 @@ dependencies:
   pre:
     - pip install --upgrade pip setuptools || true
     - pip install --upgrade tox tox-pyenv
+    - sudo sh -c 'curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add -'
+    - sudo sh -c 'curl https://packages.microsoft.com/config/ubuntu/14.04/prod.list > /etc/apt/sources.list.d/mssql-release.list'
+    - sudo apt-get update
+    - sudo ACCEPT_EULA=Y apt-get install -y msodbcsql unixodbc
   override:
     - pyenv local 2.7.12 3.6.0
 

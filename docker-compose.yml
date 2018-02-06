@@ -1,7 +1,15 @@
 version: '2'
 services:
 
-  database:
+  sqlserver:
+    image: microsoft/mssql-server-linux
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "Password123"
+    ports:
+      - "1433:1433"
+
+  postgres:
     image: postgres
     environment:
       POSTGRES_USER: "root"
@@ -21,4 +29,5 @@ services:
       - .:/usr/src/app
     working_dir: /usr/src/app
     depends_on:
-      - database
+      - postgres
+      - sqlserver
