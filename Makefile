@@ -22,4 +22,3 @@ test-new:
 	@echo "Changed test files:"
 	@echo "${changed_tests}"
 	@docker-compose run test /usr/src/app/test/runner.sh ${changed_tests}
-
