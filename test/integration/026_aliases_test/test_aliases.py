@@ -1,20 +1,19 @@
-from freezegun import freeze_time
 from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 
 
-class TestTimezones(DBTIntegrationTest):
+class TestAliases(DBTIntegrationTest):
 
     def setUp(self):
         DBTIntegrationTest.setUp(self)
 
     @property
     def schema(self):
-        return "timezones_025"
+        return "aliases_026"
 
     @property
     def models(self):
-        return "test/integration/025_timezones_test/models"
+        return "test/integration/026_aliases_test/models"
 
     @property
     def profile_config(self):
@@ -37,19 +36,25 @@ class TestTimezones(DBTIntegrationTest):
         }
 
     @property
-    def query(self):
+    def query_foo_alias(self):
         return """
             select
-              run_started_at_est,
-              run_started_at_utc
-            from {schema}.timezones
+                tablename
+            from {schema}.foo
         """.format(schema=self.unique_schema())
 
-    @freeze_time("2017-01-01 03:00:00", tz_offset=0)
+    @property
+    def query_ref_foo_alias(self):
+        return """
+            select
+                tablename
+            from {schema}.ref_foo_alias
+        """.format(schema=self.unique_schema())
+
     @attr(type='postgres')
-    def test_run_started_at(self):
+    def test__alias_model_name(self):
         self.run_dbt(['run'])
-        result = self.run_sql(self.query, fetch='all')[0]
-        est, utc = result
-        self.assertEqual(utc, '2017-01-01 03:00:00+00:00')
-        self.assertEqual(est, '2016-12-31 22:00:00-05:00')
+        result = self.run_sql(self.query_foo_alias, fetch='all')[0][0]
+        self.assertEqual(result, 'foo')
+        result = self.run_sql(self.query_ref_foo_alias, fetch='all')[0][0]
+        self.assertEqual(result, 'ref_foo_alias')

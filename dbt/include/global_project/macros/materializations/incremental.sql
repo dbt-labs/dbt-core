@@ -1,7 +1,7 @@
 {% macro dbt__incremental_delete(schema, model) -%}
 
   {%- set unique_key = config.require('unique_key') -%}
-  {%- set identifier = model['name'] -%}
+  {%- set identifier = model['alias'] -%}
 
   delete
   from "{{ schema }}"."{{ identifier }}"
@@ -16,8 +16,8 @@
   {%- set sql_where = config.require('sql_where') -%}
   {%- set unique_key = config.get('unique_key') -%}
 
-  {%- set identifier = model['name'] -%}
-  {%- set tmp_identifier = model['name'] + '__dbt_incremental_tmp' -%}
+  {%- set identifier = model['alias'] -%}
+  {%- set tmp_identifier = identifier + '__dbt_incremental_tmp' -%}
 
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
   {%- set full_refresh_mode = (flags.FULL_REFRESH == True) -%}

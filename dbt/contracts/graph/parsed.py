@@ -31,6 +31,7 @@ parsed_node_contract = unparsed_node_contract.extend({
     Required('unique_id'): All(basestring, Length(min=1, max=255)),
     Required('fqn'): All(list, [All(basestring)]),
     Required('schema'): basestring,
+    Required('alias'): basestring,
 
     Required('refs'): [All(tuple)],
 
