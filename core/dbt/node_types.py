@@ -9,7 +9,7 @@ class NodeType(StrEnum):
     Test = 'test'
     Snapshot = 'snapshot'
     Operation = 'operation'
-    Seed = 'seed'
+    Seed = "seed"
     # TODO: rm?
     RPCCall = 'rpc'
     SqlOperation = 'sql'

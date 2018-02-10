@@ -796,7 +796,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         :return: The name of the type in the database
         """
         raise NotImplementedException(
-            '`convert_boolean_type` is not implemented for this adapter!')
+            "`convert_boolean_type` is not implemented for this adapter!"
+        )
 
     @abc.abstractclassmethod
     def convert_datetime_type(cls, agate_table: agate.Table, col_idx: int) -> str:
@@ -808,7 +809,8 @@ class BaseAdapter(metaclass=AdapterMeta):
         :return: The name of the type in the database
         """
         raise NotImplementedException(
-            '`convert_datetime_type` is not implemented for this adapter!')
+            "`convert_datetime_type` is not implemented for this adapter!"
+        )
 
     @abc.abstractclassmethod
     def convert_date_type(cls, agate_table: agate.Table, col_idx: int) -> str:

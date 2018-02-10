@@ -673,15 +673,15 @@ def _build_seed_subparser(subparsers, base_subparser):
         ''',
     )
     seed_sub.add_argument(
-        '--full-refresh',
-        action='store_true',
+        "--full-refresh",
+        action="store_true",
         help='''
         Drop existing seed tables and recreate them
         ''',
     )
     seed_sub.add_argument(
-        '--show',
-        action='store_true',
+        "--show",
+        action="store_true",
         help='''
         Show a sample of the loaded data in the terminal
         '''
