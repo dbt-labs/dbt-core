@@ -22,7 +22,6 @@
             Partiton start date is after the end date ({{ start_date }}, {{ end_date }})
         {%- endset %}
 
-        {# TODO : Can I use `model` here? #}
         {{ exceptions.raise_compiler_error(msg, model) }}
     {% endif %}
 
