@@ -295,6 +295,16 @@ def parse_args(args):
         help='Which target to load for the given profile'
     )
 
+    base_subparser.add_argument(
+        '--vars',
+        type=str,
+        default='{}',
+        help="""
+            Supply variables to the project. This argument overrides
+            variables defined in your dbt_project.yml file. This argument
+            should be a YAML string, eg. '{my_variable: my_value}'"""
+    )
+
     sub = subs.add_parser('init', parents=[base_subparser])
     sub.add_argument('project_name', type=str, help='Name of the new project')
     sub.set_defaults(cls=init_task.InitTask, which='init')

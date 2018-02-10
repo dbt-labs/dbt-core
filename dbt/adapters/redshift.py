@@ -45,7 +45,7 @@ class RedshiftAdapter(PostgresAdapter):
                     col_type,
                     case
                         when col_type like 'character%'
-                          then REGEXP_SUBSTR(col_type, '[0-9]+')::int
+                        then nullif(REGEXP_SUBSTR(col_type, '[0-9]+'), '')::int
                         else null
                     end as character_maximum_length
 
