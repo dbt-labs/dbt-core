@@ -1,7 +1,10 @@
 import re
+import logging
 
 from dbt.exceptions import VersionsNotCompatibleException
 import dbt.utils
+
+logger = logging.getLogger(__name__)
 
 _MATCHERS = "(?P<matcher>\>=|\>|\<|\<=|=)?"
 _NUM_NO_LEADING_ZEROS = "(0|[1-9][0-9]*)"
@@ -188,9 +191,9 @@ class VersionSpecifier(dbt.utils.AttrDict):
     def from_version_string(cls, version_string):
         match = _VERSION_REGEX.match(version_string)
 
-        if match is None:
-            # error?
-            return None
+        if not match:
+            raise dbt.exceptions.SemverException(
+                'Could not parse version "{}"'.format(version_string))
 
         return VersionSpecifier(match.groupdict())
 
@@ -393,7 +396,7 @@ def resolve_dependency_tree(version_index, unmet_dependencies, restrictions):
     to_return_install = {}
 
     for dependency_name, version in unmet_dependencies.items():
-        print('resolving path {}'.format(dependency_name))
+        logger.debug('resolving path %s', dependency_name)
         dependency_restrictions = reduce_versions(
             *restrictions.copy().get(dependency_name))
 
@@ -402,8 +405,8 @@ def resolve_dependency_tree(version_index, unmet_dependencies, restrictions):
             version_index[dependency_name].keys())
 
         for possible_match in possible_matches:
-            print('reset with {} at {}'
-                  .format(dependency_name, possible_match))
+            logger.debug('reset with %s at %s',
+                         dependency_name, possible_match)
 
             tree = {}
             install = {}
@@ -424,8 +427,8 @@ def resolve_dependency_tree(version_index, unmet_dependencies, restrictions):
                 new_unmet_dependencies = dbt.utils.deep_merge(
                     recursive_version_info.copy())
 
-                print('new unmet dependencies')
-                print(new_unmet_dependencies)
+                logger.debug('new unmet dependencies %s',
+                             new_unmet_dependencies)
 
                 new_restrictions = dbt.utils.deep_merge(
                     new_restrictions.copy(),
@@ -445,9 +448,8 @@ def resolve_dependency_tree(version_index, unmet_dependencies, restrictions):
                 else:
                     match_found = True
 
-                    print('going down the stack with {}'
-                          .format(new_unmet_dependencies))
-                    print('and {}'.format(install))
+                    logger.debug('going down the stack with %s and %s',
+                                 new_unmet_dependencies, install)
                     subtree, subinstall = resolve_dependency_tree(
                         version_index,
                         new_unmet_dependencies,
@@ -466,7 +468,7 @@ def resolve_dependency_tree(version_index, unmet_dependencies, restrictions):
                         subinstall,
                         {dependency_name: possible_match})
 
-                    print('then {}'.format(install))
+                    logger.debug('then %s', install)
 
                     to_return_tree = dbt.utils.deep_merge(
                         to_return_tree,
@@ -483,9 +485,8 @@ def resolve_dependency_tree(version_index, unmet_dependencies, restrictions):
                         'No match found -- exhausted this part of the tree.')
 
             except VersionsNotCompatibleException as e:
-                print(e)
-                print('When attempting {} at {}'
-                      .format(dependency_name, possible_match))
+                logger.debug('%s -- When attempting %s at %s',
+                             e, dependency_name, possible_match)
 
     return to_return_tree.copy(), to_return_install.copy()
 

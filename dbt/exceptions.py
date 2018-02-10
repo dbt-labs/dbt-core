@@ -109,9 +109,12 @@ class DependencyException(Exception):
     pass
 
 
-class VersionsNotCompatibleException(ParsingException):
+class SemverException(Exception):
     def __init__(self, msg=None):
         self.msg = msg
+
+class VersionsNotCompatibleException(SemverException):
+    pass
 
 
 class NotImplementedException(Exception):

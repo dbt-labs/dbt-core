@@ -30,7 +30,7 @@ def checkout(cwd, repo, branch=None):
     if branch is None:
         branch = 'master'
 
-    logger.info('  Checking out branch {}.'.format(branch))
+    logger.debug('  Checking out branch {}.'.format(branch))
 
     run_cmd(cwd, ['git', 'remote', 'set-branches', 'origin', branch])
     run_cmd(cwd, ['git', 'fetch', '--tags', '--depth', '1', 'origin', branch])
@@ -71,21 +71,21 @@ def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
     start_sha = None
     if exists:
         directory = exists.group(1)
-        logger.info('Updating existing dependency %s.', directory)
+        logger.debug('Updating existing dependency %s.', directory)
     else:
         matches = re.match("Cloning into '(.+)'", err.decode('utf-8'))
         directory = matches.group(1)
-        logger.info('Pulling new dependency %s.', directory)
+        logger.debug('Pulling new dependency %s.', directory)
     full_path = os.path.join(cwd, directory)
     start_sha = get_current_sha(full_path)
     checkout(full_path, repo, branch)
     end_sha = get_current_sha(full_path)
     if exists:
         if start_sha == end_sha:
-            logger.info('  Already at %s, nothing to do.', start_sha[:7])
+            logger.debug('  Already at %s, nothing to do.', start_sha[:7])
         else:
-            logger.info('  Updated checkout from %s to %s.',
+            logger.debug('  Updated checkout from %s to %s.',
                         start_sha[:7], end_sha[:7])
     else:
-        logger.info('  Checked out at %s.', end_sha[:7])
+        logger.debug('  Checked out at %s.', end_sha[:7])
     return directory
