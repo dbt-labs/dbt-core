@@ -361,9 +361,10 @@ def find_possible_versions(requested_range, available_versions):
         if(versions_compatible(version,
                                requested_range.start,
                                requested_range.end)):
-            possible_versions.append(version_string)
+            possible_versions.append(version)
 
-    return possible_versions[::-1]
+    sorted_versions = sorted(possible_versions, reverse=True)
+    return [v.to_version_string(skip_matcher=True) for v in sorted_versions]
 
 
 def resolve_to_specific_version(requested_range, available_versions):
