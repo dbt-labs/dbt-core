@@ -85,7 +85,7 @@ def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
             logger.debug('  Already at %s, nothing to do.', start_sha[:7])
         else:
             logger.debug('  Updated checkout from %s to %s.',
-                        start_sha[:7], end_sha[:7])
+                         start_sha[:7], end_sha[:7])
     else:
         logger.debug('  Checked out at %s.', end_sha[:7])
     return directory

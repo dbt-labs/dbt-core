@@ -113,6 +113,7 @@ class SemverException(Exception):
     def __init__(self, msg=None):
         self.msg = msg
 
+
 class VersionsNotCompatibleException(SemverException):
     pass
 

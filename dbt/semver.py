@@ -255,6 +255,18 @@ class VersionSpecifier(dbt.utils.AttrDict):
 
         return 0
 
+    def __lt__(self, other):
+        return self.compare(other) == -1
+
+    def __gt__(self, other):
+        return self.compare(other) == 1
+
+    def __eq___(self, other):
+        return self.compare(other) == 0
+
+    def __cmp___(self, other):
+        return self.compare(other)
+
     @property
     def is_unbounded(self):
         return False
