@@ -202,7 +202,7 @@ class GitPackage(Package):
     def install(self, project):
         dest_path = self.get_installation_path(project)
         if os.path.exists(dest_path):
-            shutil.rmtree(dest_path)
+            dbt.clients.system.rmdir(dest_path)
         shutil.move(self._checkout(project), dest_path)
 
 
@@ -224,7 +224,7 @@ class LocalPackage(Package):
     def install(self, project):
         dest_path = self.get_installation_path(project)
         if os.path.exists(dest_path):
-            shutil.rmtree(dest_path)
+            dbt.clients.system.rmdir(dest_path)
         shutil.copytree(self.local, dest_path)
 
 
