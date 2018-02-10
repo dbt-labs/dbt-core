@@ -3,9 +3,12 @@ import six
 import requests
 from dbt.exceptions import RegistryException
 from dbt.utils import memoized
+import os
 
-
-DEFAULT_REGISTRY_BASE_URL = 'http://127.0.0.1:4567/'
+if os.getenv('DBT_PACKAGE_HUB_URL'):
+    DEFAULT_REGISTRY_BASE_URL = os.getenv('DBT_PACKAGE_HUB_URL')
+else:
+    DEFAULT_REGISTRY_BASE_URL = 'https://hub.getdbt.com/'
 
 
 def _get_url(url, registry_base_url=None):
@@ -42,8 +45,7 @@ index_cached = memoized(index)
 
 
 def packages(registry_base_url=None):
-    return requests.get(r'https://tinyurl.com/ydg3z87m').json()
-    # return _get('api/v1/packages.json', registry_base_url)
+    return _get('api/v1/packages.json', registry_base_url)
 
 
 def package(name, registry_base_url=None):
