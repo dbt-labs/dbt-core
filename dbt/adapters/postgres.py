@@ -204,7 +204,7 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         col_sqls = []
         for idx, col_name in enumerate(agate_table.column_names):
             type_ = cls.convert_agate_type(agate_table, idx)
-            col_sqls.append('{} {}'.format(cls.quote(col_name), type_))
+            col_sqls.append('{} {}'.format(col_name, type_))
         sql = 'create table "{}"."{}" ({})'.format(schema, table_name,
                                                    ", ".join(col_sqls))
         return cls.add_query(profile, sql)
@@ -222,7 +222,7 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
     def load_csv_rows(cls, profile, schema, table_name, agate_table):
         bindings = []
         placeholders = []
-        cols_sql = ", ".join(cls.quote(c) for c in agate_table.column_names)
+        cols_sql = ", ".join(c for c in agate_table.column_names)
 
         for row in agate_table.rows:
             bindings += row

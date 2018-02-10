@@ -432,3 +432,7 @@ class DBTIntegrationTest(unittest.TestCase):
             table_a_result,
             table_b_result
         )
+
+    def assertEquals(self, *args, **kwargs):
+        # assertEquals is deprecated. This makes the warnings less chatty
+        self.assertEqual(*args, **kwargs)
