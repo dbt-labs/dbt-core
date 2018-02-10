@@ -6,18 +6,18 @@ import dbt.utils
 
 logger = logging.getLogger(__name__)
 
-_MATCHERS = "(?P<matcher>\>=|\>|\<|\<=|=)?"
-_NUM_NO_LEADING_ZEROS = "(0|[1-9][0-9]*)"
-_ALPHA = "[0-9A-Za-z-]*"
-_ALPHA_NO_LEADING_ZEROS = "(0|[1-9A-Za-z-][0-9A-Za-z-]*)"
+_MATCHERS = r"(?P<matcher>\>=|\>|\<|\<=|=)?"
+_NUM_NO_LEADING_ZEROS = r"(0|[1-9][0-9]*)"
+_ALPHA = r"[0-9A-Za-z-]*"
+_ALPHA_NO_LEADING_ZEROS = r"(0|[1-9A-Za-z-][0-9A-Za-z-]*)"
 
-_BASE_VERSION_REGEX = """
+_BASE_VERSION_REGEX = r"""
 (?P<major>{num_no_leading_zeros})\.
 (?P<minor>{num_no_leading_zeros})\.
 (?P<patch>{num_no_leading_zeros})
 """.format(num_no_leading_zeros=_NUM_NO_LEADING_ZEROS)
 
-_VERSION_EXTRA_REGEX = """
+_VERSION_EXTRA_REGEX = r"""
 (\-
   (?P<prerelease>
     {alpha_no_leading_zeros}(\.{alpha_no_leading_zeros})*))?
@@ -28,7 +28,7 @@ _VERSION_EXTRA_REGEX = """
     alpha_no_leading_zeros=_ALPHA_NO_LEADING_ZEROS,
     alpha=_ALPHA)
 
-_VERSION_REGEX = re.compile("""
+_VERSION_REGEX = re.compile(r"""
 ^
 {matchers}
 {base_version_regex}

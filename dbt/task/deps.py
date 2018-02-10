@@ -56,6 +56,9 @@ class Package(object):
                        .format(self.name, e))
             six.raise_from(dbt.exceptions.DependencyException(new_msg), e)
 
+    def version_name(self):
+        raise NotImplementedError()
+
     def _fetch_metadata(self, project):
         raise NotImplementedError()
 
@@ -94,6 +97,11 @@ class RegistryPackage(Package):
     def version(self, version):
         self._version = self._sanitize_version(version)
 
+    def version_name(self):
+        self._check_version_pinned()
+        version_string = self.version[0].to_version_string(skip_matcher=True)
+        return version_string
+
     def incorporate(self, other):
         return RegistryPackage(self.package, self.version + other.version)
 
@@ -122,13 +130,11 @@ class RegistryPackage(Package):
                 'Cannot fetch metadata until the version is pinned.')
 
     def _fetch_metadata(self, project):
-        self._check_version_pinned()
-        version_string = self.version[0].to_version_string(skip_matcher=True)
+        version_string = self.version_name()
         return registry.package_version(self.package, version_string)
 
     def install(self, project):
-        self._check_version_pinned()
-        version_string = self.version[0].to_version_string(skip_matcher=True)
+        version_string = self.version_name()
         metadata = self.fetch_metadata(project)
 
         tar_name = '{}.{}.tar.gz'.format(self.package, version_string)
@@ -160,6 +166,9 @@ class GitPackage(Package):
     @version.setter
     def version(self, version):
         self._version = self._sanitize_version(version)
+
+    def version_name(self):
+        return self._version[0]
 
     def incorporate(self, other):
         return GitPackage(self.git, self.version + other.version)
@@ -204,6 +213,9 @@ class LocalPackage(Package):
 
     def incorporate(self, _):
         return LocalPackage(self.local)
+
+    def version_name(self):
+        return '<local @ {}>'.format(self.local)
 
     def _fetch_metadata(self, project):
         with open(os.path.join(self.local, 'dbt_project.yml')) as f:
@@ -338,5 +350,6 @@ class DepsTask(BaseTask):
         self._check_for_duplicate_project_names(final_deps)
 
         for _, package in final_deps.items():
-            logger.info('Pulling %s', package)
+            logger.info('Installing %s', package)
             package.install(self.project)
+            logger.info('  Installed at version %s\n', package.version_name())
