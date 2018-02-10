@@ -22,7 +22,8 @@ unparsed_node_contract = unparsed_base_contract.extend({
     Required('resource_type'): Any(NodeType.Model,
                                    NodeType.Test,
                                    NodeType.Analysis,
-                                   NodeType.Operation)
+                                   NodeType.Operation,
+                                   NodeType.Seed)
 })
 
 unparsed_nodes_contract = Schema([unparsed_node_contract])

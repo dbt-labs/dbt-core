@@ -38,12 +38,12 @@ setup(
         'psycopg2==2.7.1',
         'sqlparse==0.2.3',
         'networkx==1.11',
-        'csvkit==0.9.1',
         'snowplow-tracker==0.7.2',
         'celery==3.1.23',
         'voluptuous==0.10.5',
         'snowflake-connector-python>=1.4.9',
         'colorama==0.3.9',
         'google-cloud-bigquery==0.26.0',
+        'agate>=1.6,<2',
     ]
 )

@@ -94,3 +94,14 @@ class RedshiftAdapter(PostgresAdapter):
 
         finally:
             drop_lock.release()
+
+    @classmethod
+    def convert_text_type(cls, agate_table, col_idx):
+        column = agate_table.columns[col_idx]
+        lens = (len(d.encode("utf-8")) for d in column.values_without_nulls())
+        max_len = max(lens) if lens else 64
+        return "varchar({})".format(max_len)
+
+    @classmethod
+    def convert_time_type(cls, agate_table, col_idx):
+        return "varchar(24)"
