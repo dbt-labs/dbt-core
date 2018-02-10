@@ -42,7 +42,7 @@ def not_latest():
     return """Your version of dbt is out of date! You can find instructions
     for upgrading here:
 
-    https://dbt.readme.io/docs/installation
+    https://docs.getdbt.com/docs/installation
     """
 
 
@@ -67,6 +67,6 @@ def is_latest():
     return installed == latest
 
 
-__version__ = '0.9.0a2'
+__version__ = '0.9.1'
 installed = get_version()
 latest = get_latest_version()

@@ -92,6 +92,10 @@
   ] -%}
 
   {% call statement() %}
+    {{ create_schema(target_schema) }}
+  {% endcall %}
+
+  {% call statement() %}
     {{ create_archive_table(target_schema, target_table, dest_columns) }}
   {% endcall %}
 

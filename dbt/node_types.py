@@ -7,6 +7,7 @@ class NodeType(object):
     Archive = 'archive'
     Macro = 'macro'
     Operation = 'operation'
+    Seed = 'seed'
 
     @classmethod
     def executable(cls):
@@ -15,7 +16,8 @@ class NodeType(object):
             cls.Test,
             cls.Archive,
             cls.Analysis,
-            cls.Operation
+            cls.Operation,
+            cls.Seed,
         ]
 
 

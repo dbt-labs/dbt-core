@@ -3,6 +3,8 @@ import dbt.exceptions
 
 import dbt.context.common
 
+from dbt.adapters.factory import get_adapter
+
 
 execute = False
 
@@ -15,6 +17,9 @@ def ref(model, project, profile, flat_graph):
 
         else:
             dbt.exceptions.ref_invalid_args(model, args)
+
+        adapter = get_adapter(profile)
+        return dbt.utils.Relation(profile, adapter, model)
 
     return ref
 

@@ -147,7 +147,11 @@ class SnowflakeAdapter(PostgresAdapter):
     def create_schema(cls, profile, schema, model_name=None):
         logger.debug('Creating schema "%s".', schema)
         sql = cls.get_create_schema_sql(schema)
-        return cls.add_query(profile, sql, model_name, select_schema=False)
+        res = cls.add_query(profile, sql, model_name, select_schema=False)
+
+        cls.commit_if_has_connection(profile, model_name)
+
+        return res
 
     @classmethod
     def get_existing_schemas(cls, profile, model_name=None):
@@ -177,7 +181,7 @@ class SnowflakeAdapter(PostgresAdapter):
 
     @classmethod
     def add_query(cls, profile, sql, model_name=None, auto_begin=True,
-                  select_schema=True):
+                  select_schema=True, bindings=None):
         # snowflake only allows one query per api call.
         queries = sql.strip().split(";")
         cursor = None
@@ -188,6 +192,11 @@ class SnowflakeAdapter(PostgresAdapter):
                 'use schema "{}"'.format(cls.get_default_schema(profile)),
                 model_name,
                 auto_begin)
+
+        if bindings:
+            # The snowflake connector is more strict than, eg., psycopg2 -
+            # which allows any iterable thing to be passed as a binding.
+            bindings = tuple(bindings)
 
         for individual_query in queries:
             # hack -- after the last ';', remove comments and don't run
@@ -201,7 +210,8 @@ class SnowflakeAdapter(PostgresAdapter):
                 continue
 
             connection, cursor = super(PostgresAdapter, cls).add_query(
-                profile, individual_query, model_name, auto_begin)
+                profile, individual_query, model_name, auto_begin,
+                bindings=bindings)
 
         return connection, cursor
 

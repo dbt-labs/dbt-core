@@ -89,10 +89,14 @@ class TestCustomSchemaTests(DBTIntegrationTest):
 
     @property
     def project_config(self):
+        # dbt-utils containts a schema test (equality)
+        # dbt-integration-project contains a schema.yml file
+        # both should work!
         return {
             "macro-paths": ["test/integration/008_schema_tests_test/macros"],
             "repositories": [
-                'https://github.com/fishtown-analytics/dbt-utils'
+                'https://github.com/fishtown-analytics/dbt-utils',
+                'https://github.com/fishtown-analytics/dbt-integration-project'
             ]
         }
 
@@ -113,5 +117,8 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         self.run_dbt()
         test_results = self.run_schema_validations()
 
+        expected_failures = ['unique', 'every_value_is_blue']
+
         for result in test_results:
-            print(result.node, result.errored, result.skipped, result.status)
+            if result.errored:
+                self.assertTrue(result.node['name'] in expected_failures)

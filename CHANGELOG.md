@@ -1,8 +1,94 @@
-## dbt 0.9.0 Alpha 3 (September 26, 2017)
+## dbt 0.9.1 (January 2, 2018)
+
+This release fixes bugs and adds supports for late binding views on Redshift.
+
+### Changes
+- Support late binding views on Redshift ([#614](https://github.com/fishtown-analytics/dbt/pull/614)) ([docs](https://docs.getdbt.com/docs/warehouse-specific-configurations#section-late-binding-views))
+- Make `run_started_at` timezone-aware ([#553](https://github.com/fishtown-analytics/dbt/pull/553)) (Contributed by [@mturzanska](https://github.com/mturzanska)) ([docs](https://docs.getdbt.com/v0.9/reference#run_started_at))
+
+### Bugfixes
+
+- Include hook run time in reported model run time ([#607](https://github.com/fishtown-analytics/dbt/pull/607))
+- Add warning for missing test constraints ([#600](https://github.com/fishtown-analytics/dbt/pull/600))
+- Fix for schema tests used or defined in packages ([#599](https://github.com/fishtown-analytics/dbt/pull/599))
+- Run hooks in defined order ([#601](https://github.com/fishtown-analytics/dbt/pull/601))
+- Skip tests that depend on nonexistent models ([#617](https://github.com/fishtown-analytics/dbt/pull/617))
+- Fix for `adapter_macro` called within a package ([#630](https://github.com/fishtown-analytics/dbt/pull/630))
+
+
+## dbt 0.9.0 (October 25, 2017)
+
+This release focuses on improvements to macros, materializations, and package management. Check out [the blog post](https://blog.fishtownanalytics.com/whats-new-in-dbt-0-9-0-dd36f3572ac6) to learn more about what's possible in this new version of dbt.
+
+### Installation
+
+Full installation instructions for macOS, Windows, and Linux can be found [here](https://docs.getdbt.com/v0.9/docs/installation). If you use Windows or Linux, installation works the same as with previous versions of dbt. If you use macOS and Homebrew to install dbt, note that installation instructions have changed:
+
+#### macOS Installation Instructions
+```bash
+brew update
+brew tap fishtown-analytics/dbt
+brew install dbt
+```
+
+### Overview
+
+- More powerful macros and materializations
+- Custom model schemas
+- BigQuery improvements
+- Bugfixes
+- Documentation (0.9.0 docs can be found [here](https://docs.getdbt.com/v0.9/))
+
+
+### Breaking Changes
+- `adapter` functions must be namespaced to the `adapter` context variable. To fix this error, use `adapter.already_exists` instead of just `already_exists`, or similar for other [adapter functions](https://docs.getdbt.com/reference#adapter).
+
+
+### Bugfixes
+- Handle lingering `__dbt_tmp` relations ([#511](https://github.com/fishtown-analytics/dbt/pull/511))
+- Run tests defined in an ephemeral directory ([#509](https://github.com/fishtown-analytics/dbt/pull/509))
+
+
+### Changes
+- use `adapter`, `ref`, and `var` inside of macros ([#466](https://github.com/fishtown-analytics/dbt/pull/466/files))
+- Build custom tests and materializations in dbt packages ([#466](https://github.com/fishtown-analytics/dbt/pull/466/files))
+- Support pre- and post- hooks that run outside of a transaction ([#510](https://github.com/fishtown-analytics/dbt/pull/510))
+- Support table materializations for BigQuery ([#507](https://github.com/fishtown-analytics/dbt/pull/507))
+- Support querying external data sources in BigQuery ([#507](https://github.com/fishtown-analytics/dbt/pull/507))
+- Override which schema models are materialized in ([#522](https://github.com/fishtown-analytics/dbt/pull/522)) ([docs](https://docs.getdbt.com/v0.9/docs/using-custom-schemas))
+- Make `{{ ref(...) }}` return the same type of object as `{{ this }} `([#530](https://github.com/fishtown-analytics/dbt/pull/530))
+- Replace schema test CTEs with subqueries to speed them up for Postgres ([#536](https://github.com/fishtown-analytics/dbt/pull/536)) ([@ronnyli](https://github.com/ronnyli))
+ - Bump Snowflake dependency, remove pyasn1 ([#570](https://github.com/fishtown-analytics/dbt/pull/570))
+
+
+### Documentation
+- Document how to [create a package](https://docs.getdbt.com/v0.9/docs/building-packages)
+- Document how to [make a materialization](https://docs.getdbt.com/v0.9/docs/creating-new-materializations)
+- Document how to [make custom schema tests](https://docs.getdbt.com/v0.9/docs/custom-schema-tests)
+- Document how to [use hooks to vacuum](https://docs.getdbt.com/v0.9/docs/using-hooks#section-using-hooks-to-vacuum)
+- Document [all context variables](https://docs.getdbt.com/v0.9/reference)
+
+
+### New Contributors
+- [@ronnyli](https://github.com/ronnyli) ([#536](https://github.com/fishtown-analytics/dbt/pull/536))
+
+
+## dbt 0.9.0 Alpha 5 (October 24, 2017)
+
+### Overview
+ - Bump Snowflake dependency, remove pyasn1 ([#570](https://github.com/fishtown-analytics/dbt/pull/570))
+
+## dbt 0.9.0 Alpha 4 (October 3, 2017)
+
+### Bugfixes
+ - Fix for federated queries on BigQuery with Service Account json credentials ([#547](https://github.com/fishtown-analytics/dbt/pull/547))
+
+## dbt 0.9.0 Alpha 3 (October 3, 2017)
 
 ### Overview
  - Bugfixes
  - Faster schema tests on Postgres
+ - Fix for broken environment variables
 
 ### Improvements
 
@@ -12,6 +98,7 @@
 - Fix broken integration tests ([#539](https://github.com/fishtown-analytics/dbt/pull/539))
 - Fix for `--non-destructive` on views ([#539](https://github.com/fishtown-analytics/dbt/pull/539))
 - Fix for package models materialized in the wrong schema ([#538](https://github.com/fishtown-analytics/dbt/pull/538))
+- Fix for broken environment variables ([#543](https://github.com/fishtown-analytics/dbt/pull/543))
 
 ### New Contributors
 
@@ -30,7 +117,7 @@
 - Parity for `statement` interface on BigQuery ([#526](https://github.com/fishtown-analytics/dbt/pull/526))
 
 ### Changes
-- Override which schema models are materialized in ([#522](https://github.com/fishtown-analytics/dbt/pull/522)) ([docs](https://dbt.readme.io/v0.9/docs/using-custom-schemas))
+- Override which schema models are materialized in ([#522](https://github.com/fishtown-analytics/dbt/pull/522)) ([docs](https://docs.getdbt.com/v0.9/docs/using-custom-schemas))
 - Make `{{ ref(...) }}` return the same type of object as `{{ this }} `([#530](https://github.com/fishtown-analytics/dbt/pull/530))
 
 
@@ -41,10 +128,10 @@
 - More powerful macros
 - BigQuery improvements
 - Bugfixes
-- Documentation (0.9.0 docs can be found [here](https://dbt.readme.io/v0.9/))
+- Documentation (0.9.0 docs can be found [here](https://docs.getdbt.com/v0.9/))
 
 ### Breaking Changes
-dbt 0.9.0 Alpha 1 introduces a number of new features intended to help dbt-ers write flexible, reusable code. The majority of these changes involve the `macro` and `materialization` Jinja blocks. As this is an alpha release, there may exist bugs or incompatibilites, particularly surrounding these two blocks. A list of known breaking changes is provided below. If you find new bugs, or have questions about dbt 0.9.0, please don't hesitate to reach out in [slack](http://ac-slackin.herokuapp.com/) or [open a new issue](https://github.com/fishtown-analytics/dbt/issues/new?milestone=0.9.0+alpha-1).
+dbt 0.9.0 Alpha 1 introduces a number of new features intended to help dbt-ers write flexible, reusable code. The majority of these changes involve the `macro` and `materialization` Jinja blocks. As this is an alpha release, there may exist bugs or incompatibilites, particularly surrounding these two blocks. A list of known breaking changes is provided below. If you find new bugs, or have questions about dbt 0.9.0, please don't hesitate to reach out in [slack](http://slack.getdbt.com/) or [open a new issue](https://github.com/fishtown-analytics/dbt/issues/new?milestone=0.9.0+alpha-1).
 
 ##### 1. Adapter functions must be namespaced to the `adapter` context variable
 This will manifest as a compilation error that looks like:
@@ -53,7 +140,7 @@ Compilation Error in model {your_model} (models/path/to/your_model.sql)
   'already_exists' is undefined
 ```
 
-To fix this error, use `adapter.already_exists` instead of just `already_exists`, or similar for other [adapter functions](https://dbt.readme.io/reference#adapter).
+To fix this error, use `adapter.already_exists` instead of just `already_exists`, or similar for other [adapter functions](https://docs.getdbt.com/reference#adapter).
 
 ### Bugfixes
 - Handle lingering `__dbt_tmp` relations ([#511](https://github.com/fishtown-analytics/dbt/pull/511))
@@ -67,9 +154,9 @@ To fix this error, use `adapter.already_exists` instead of just `already_exists`
 - Support querying external data sources in BigQuery ([#507](https://github.com/fishtown-analytics/dbt/pull/507))
 
 ### Documentation
-- Document how to [create a package](https://dbt.readme.io/v0.8/docs/building-packages)
-- Document how to [make a materialization](https://dbt.readme.io/v0.8/docs/creating-new-materializations)
-- Document how to [make custom schema tests](https://dbt.readme.io/v0.8/docs/custom-schema-tests)
+- Document how to [create a package](https://docs.getdbt.com/v0.8/docs/building-packages)
+- Document how to [make a materialization](https://docs.getdbt.com/v0.8/docs/creating-new-materializations)
+- Document how to [make custom schema tests](https://docs.getdbt.com/v0.8/docs/custom-schema-tests)
 
 ## dbt 0.8.3 (July 14, 2017)
 
@@ -93,9 +180,9 @@ To fix this error, use `adapter.already_exists` instead of just `already_exists`
 - Add context function to pull in environment variables ([#450](https://github.com/fishtown-analytics/dbt/issues/450))
 
 ### Documentation
-- Document target configuration for BigQuery [here](https://dbt.readme.io/v0.8/docs/supported-databases#section-bigquery)
-- Document dbt exit codes [here](https://dbt.readme.io/v0.8/reference#exit-codes)
-- Document environment variable usage [here](https://dbt.readme.io/v0.8/reference#env_var)
+- Document target configuration for BigQuery [here](https://docs.getdbt.com/v0.8/docs/supported-databases#section-bigquery)
+- Document dbt exit codes [here](https://docs.getdbt.com/v0.8/reference#exit-codes)
+- Document environment variable usage [here](https://docs.getdbt.com/v0.8/reference#env_var)
 
 ## dbt 0.8.2 (May 31, 2017)
 
@@ -131,7 +218,7 @@ To fix this error, use `adapter.already_exists` instead of just `already_exists`
 ### Overview
 - Bugfixes
 - Reintroduce `compile` command
-- Moved docs to [readme.io](https://dbt.readme.io/)
+- Moved docs to [readme.io](https://docs.getdbt.com/)
 
 
 ### Bugfixes
@@ -434,7 +521,7 @@ With the dbt 0.5.4 release, dbt now features a robust integration test suite. Th
 
 You can check out the DBT roadmap [here](https://github.com/fishtown-analytics/dbt/milestones). In the next few weeks, we'll be working on [bugfixes](https://github.com/fishtown-analytics/dbt/milestone/11), [minor features](https://github.com/fishtown-analytics/dbt/milestone/15), [improved macro support](https://github.com/fishtown-analytics/dbt/milestone/14), and  [expanded control over runtime materialization configs](https://github.com/fishtown-analytics/dbt/milestone/9).
 
-As always, feel free to reach out to us on [Slack](http://ac-slackin.herokuapp.com/) with any questions or comments!
+As always, feel free to reach out to us on [Slack](http://slack.getdbt.com/) with any questions or comments!
 
 ---
 
@@ -486,7 +573,7 @@ As `dbt` has grown, we found this implementation to be a little unwieldy and har
 
 The additions of automated testing and a more comprehensive manual testing process will go a long way to ensuring the future stability of dbt. We're going to get started on these tasks soon, and you can follow our progress here: https://github.com/fishtown-analytics/dbt/milestone/16 .
 
-As always, feel free to [reach out to us on Slack](http://ac-slackin.herokuapp.com/) with any questions or concerns:
+As always, feel free to [reach out to us on Slack](http://slack.getdbt.com/) with any questions or concerns:
 
 
 
@@ -623,7 +710,7 @@ pip install --upgrade dbt
 
 ### And another thing
 
-- Join us on [slack](http://ac-slackin.herokuapp.com/) with questions or comments
+- Join us on [slack](http://slack.getdbt.com/) with questions or comments
 
 Made with ♥️ by 🐟🏙  📈
 

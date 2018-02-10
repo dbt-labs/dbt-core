@@ -3,7 +3,7 @@
 # that dbt needs in order to build your models. This file is _required_
 #
 # For more information, consult:
-# https://dbt.readme.io/reference#configuration
+# https://docs.getdbt.com/reference#configuration
 
 
 #
@@ -197,7 +197,7 @@ repositories:
 # value changes for a given user record (identified by the `id` field), dbt
 # will record a new record in `users_archived` table which reflects the
 # changed state of that row. For more information on this command, consult
-# the dbt documentation: https://dbt.readme.io/reference#archive
+# the dbt documentation: https://docs.getdbt.com/reference#archive
 archive:
   - source_schema: public
     target_schema: public

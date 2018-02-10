@@ -1,4 +1,5 @@
 from voluptuous import Schema, Required, All, Any, Length, ALLOW_EXTRA
+from voluptuous import Optional
 
 import dbt.exceptions
 
@@ -15,6 +16,7 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 hook_contract = Schema({
     Required('sql'): basestring,
     Required('transaction'): bool,
+    Required('index'): int,
 })
 
 config_contract = Schema({
@@ -42,6 +44,9 @@ parsed_node_contract = unparsed_node_contract.extend({
     Required('empty'): bool,
     Required('config'): config_contract,
     Required('tags'): All(set),
+
+    # For csv files
+    Optional('agate_table'): object,
 })
 
 parsed_nodes_contract = Schema({

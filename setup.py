@@ -4,7 +4,7 @@ from distutils.core import setup
 
 
 package_name = "dbt"
-package_version = "0.9.0a2"
+package_version = "0.9.1"
 
 setup(
     name=package_name,
@@ -31,18 +31,19 @@ setup(
         'scripts/dbt',
     ],
     install_requires=[
+        'freezegun==0.3.9',
         'Jinja2>=2.8',
+        'pytz==2017.2',
         'PyYAML>=3.11',
         'psycopg2==2.7.1',
         'sqlparse==0.2.3',
         'networkx==1.11',
-        'csvkit==0.9.1',
         'snowplow-tracker==0.7.2',
         'celery==3.1.23',
         'voluptuous==0.10.5',
-        'snowflake-connector-python>=1.3.16',
+        'snowflake-connector-python>=1.4.9',
         'colorama==0.3.9',
         'google-cloud-bigquery==0.26.0',
-        'pyasn1==0.2.3',
+        'agate>=1.6,<2',
     ]
 )

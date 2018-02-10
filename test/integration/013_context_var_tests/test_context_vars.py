@@ -10,6 +10,9 @@ class TestContextVars(DBTIntegrationTest):
         DBTIntegrationTest.setUp(self)
         os.environ["DBT_TEST_013_ENV_VAR"] = "1"
 
+        os.environ["DBT_TEST_013_USER"] = "root"
+        os.environ["DBT_TEST_013_PASS"] = "password"
+
         self.fields = [
             'this',
             'this.name',
@@ -42,13 +45,15 @@ class TestContextVars(DBTIntegrationTest):
         return {
             'test': {
                 'outputs': {
+                    # don't use env_var's here so the integration tests can run
+                    # seed sql statements and the like. default target is used
                     'dev': {
                         'type': 'postgres',
                         'threads': 1,
                         'host': 'database',
                         'port': 5432,
-                        'user': 'root',
-                        'pass': 'password',
+                        'user': "root",
+                        'pass': "password",
                         'dbname': 'dbt',
                         'schema': self.unique_schema()
                     },
@@ -57,8 +62,9 @@ class TestContextVars(DBTIntegrationTest):
                         'threads': 1,
                         'host': 'database',
                         'port': 5432,
-                        'user': 'root',
-                        'pass': 'password',
+                        # root/password
+                        'user': "{{ env_var('DBT_TEST_013_USER') }}",
+                        'pass': "{{ env_var('DBT_TEST_013_PASS') }}",
                         'dbname': 'dbt',
                         'schema': self.unique_schema()
                     }

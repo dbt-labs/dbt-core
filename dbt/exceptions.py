@@ -1,8 +1,18 @@
 from dbt.compat import basestring
+from dbt.logger import GLOBAL_LOGGER as logger
 
 
 class Exception(BaseException):
     pass
+
+
+class MacroReturn(BaseException):
+    """
+    Hack of all hacks
+    """
+
+    def __init__(self, value):
+        self.value = value
 
 
 class InternalException(Exception):
@@ -20,6 +30,9 @@ class RuntimeException(RuntimeError, Exception):
         return 'Runtime'
 
     def node_to_string(self, node):
+        if node is None:
+            return "<Unknown>"
+
         return "{} {} ({})".format(
             node.get('resource_type'),
             node.get('name', 'unknown'),
@@ -151,18 +164,22 @@ To fix this, add the following hint to the top of the model "{model_name}":
     raise_compiler_error(error_msg, model)
 
 
-def ref_target_not_found(model, target_model_name, target_model_package):
+def get_target_not_found_msg(model, target_model_name, target_model_package):
     target_package_string = ''
 
     if target_model_package is not None:
         target_package_string = "in package '{}' ".format(target_model_package)
 
-    raise_compiler_error(
-        "Model '{}' depends on model '{}' {}which was not found."
-        .format(model.get('unique_id'),
-                target_model_name,
-                target_package_string),
-        model)
+    return ("Model '{}' depends on model '{}' {}which was not found or is"
+            " disabled".format(model.get('unique_id'),
+                               target_model_name,
+                               target_package_string))
+
+
+def ref_target_not_found(model, target_model_name, target_model_package):
+    msg = get_target_not_found_msg(model, target_model_name,
+                                   target_model_package)
+    raise_compiler_error(msg, model)
 
 
 def ref_disabled_dependency(model, target_model):

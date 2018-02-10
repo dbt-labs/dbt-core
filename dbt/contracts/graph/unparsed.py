@@ -1,4 +1,4 @@
-from voluptuous import Schema, Required, All, Any, Length
+from voluptuous import Schema, Required, All, Any, Length, Optional
 
 from dbt.compat import basestring
 from dbt.contracts.common import validate_with
@@ -15,13 +15,15 @@ unparsed_base_contract = Schema({
     Required('path'): basestring,
     Required('original_file_path'): basestring,
     Required('raw_sql'): basestring,
+    Optional('index'): int,
 })
 
 unparsed_node_contract = unparsed_base_contract.extend({
     Required('resource_type'): Any(NodeType.Model,
                                    NodeType.Test,
                                    NodeType.Analysis,
-                                   NodeType.Operation)
+                                   NodeType.Operation,
+                                   NodeType.Seed)
 })
 
 unparsed_nodes_contract = Schema([unparsed_node_contract])

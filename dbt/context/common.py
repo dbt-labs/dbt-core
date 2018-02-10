@@ -1,5 +1,6 @@
 import json
 import os
+import pytz
 import voluptuous
 
 from dbt.adapters.factory import get_adapter
@@ -128,6 +129,7 @@ def _store_result(sql_results):
             'status': status,
             'data': data
         })
+        return ''
 
     return call
 
@@ -220,6 +222,7 @@ def write(node, target_path, subdirectory):
     def fn(payload):
         node['build_path'] = dbt.writer.write_node(
             node, target_path, subdirectory, payload)
+        return ''
 
     return fn
 
@@ -231,13 +234,22 @@ def render(context, node):
     return fn
 
 
-def fromjson(node):
-    def fn(string, default=None):
-        try:
-            return json.loads(string)
-        except ValueError as e:
-            return default
-    return fn
+def fromjson(string, default=None):
+    try:
+        return json.loads(string)
+    except ValueError as e:
+        return default
+
+
+def tojson(value, default=None):
+    try:
+        return json.dumps(value)
+    except ValueError as e:
+        return default
+
+
+def _return(value):
+    raise dbt.exceptions.MacroReturn(value)
 
 
 def generate(model, project, flat_graph, provider=None):
@@ -277,15 +289,20 @@ def generate(model, project, flat_graph, provider=None):
         "graph": flat_graph,
         "log": log,
         "model": model,
+        "modules": {
+            "pytz": pytz,
+        },
         "post_hooks": post_hooks,
         "pre_hooks": pre_hooks,
         "ref": provider.ref(model, project, profile, flat_graph),
+        "return": _return,
         "schema": model.get('schema', schema),
         "sql": model.get('injected_sql'),
         "sql_now": adapter.date_function(),
-        "fromjson": fromjson(model),
+        "fromjson": fromjson,
+        "tojson": tojson,
         "target": target,
-        "this": dbt.utils.Relation(adapter, model, use_temp=True)
+        "this": dbt.utils.Relation(profile, adapter, model, use_temp=True)
     })
 
     context = _add_tracking(context)

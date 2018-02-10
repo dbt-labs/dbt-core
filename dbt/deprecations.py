@@ -19,6 +19,13 @@ class DBTRepositoriesDeprecation(DBTDeprecation):
     be removed in a later version of DBT."""
 
 
+class SeedDropExistingDeprecation(DBTDeprecation):
+    name = 'drop-existing'
+    description = """The --drop-existing argument has been deprecated. Please
+  use --full-refresh instead. The --drop-existing option will be removed in a
+  future version of dbt."""
+
+
 def warn(name, *args, **kwargs):
     if name not in deprecations:
         # this should (hopefully) never happen
@@ -36,6 +43,7 @@ active_deprecations = set()
 
 deprecations_list = [
     DBTRepositoriesDeprecation(),
+    SeedDropExistingDeprecation()
 ]
 
 deprecations = {d.name: d for d in deprecations_list}

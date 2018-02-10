@@ -190,35 +190,6 @@ class GraphTest(unittest.TestCase):
                                .get('materialized')
             self.assertEquals(actual, expected)
 
-    def test__model_enabled(self):
-        self.use_models({
-            'model_one': 'select * from events',
-            'model_two': "select * from {{ref('model_one')}}",
-        })
-
-        cfg = {
-            "models": {
-                "materialized": "table",
-                "test_models_compile": {
-                    "model_one": {"enabled": True},
-                    "model_two": {"enabled": False},
-                }
-            }
-        }
-
-        compiler = self.get_compiler(self.get_project(cfg))
-        graph, linker = compiler.compile()
-
-        six.assertCountEqual(
-            self, linker.nodes(),
-            ['model.test_models_compile.model_one',
-             'model.test_models_compile.model_two'])
-
-        six.assertCountEqual(
-            self, linker.edges(),
-            [('model.test_models_compile.model_one',
-              'model.test_models_compile.model_two',)])
-
     def test__model_incremental(self):
         self.use_models({
             'model_one': 'select * from events'

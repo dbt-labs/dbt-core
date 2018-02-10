@@ -49,6 +49,8 @@ def macro_generator(template, node):
 
             try:
                 return macro(*args, **kwargs)
+            except dbt.exceptions.MacroReturn as e:
+                return e.value
             except (TypeError,
                     jinja2.exceptions.TemplateRuntimeError) as e:
                 dbt.exceptions.raise_compiler_error(

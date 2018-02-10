@@ -11,6 +11,7 @@ from dbt.include import GLOBAL_DBT_MODULES_PATH
 from dbt.compat import basestring
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
+from dbt.clients import yaml_helper
 
 
 DBTConfigKeys = [
@@ -24,7 +25,8 @@ DBTConfigKeys = [
     'sort_type',
     'pre-hook',
     'post-hook',
-    'vars'
+    'vars',
+    'bind',
 ]
 
 
@@ -35,9 +37,7 @@ class ExitCodes(object):
 
 
 class Relation(object):
-    def __init__(self, adapter, node, use_temp=False):
-        self._adapter = adapter
-
+    def __init__(self, profile, adapter, node, use_temp=False):
         self.node = node
         self.schema = node.get('schema')
         self.name = node.get('name')
@@ -50,16 +50,36 @@ class Relation(object):
         self.materialized = get_materialization(node)
         self.sql = node.get('injected_sql')
 
+        self.do_quote = self._get_quote_function(profile, adapter)
+
+    def _get_quote_function(self, profile, adapter):
+
+        # make a closure so we don't need to store the profile
+        # on the `Relation` object. That shouldn't be accessible in user-land
+        def quote(schema, table):
+            return adapter.quote_schema_and_table(
+                        profile=profile,
+                        schema=schema,
+                        table=table
+                    )
+
+        return quote
+
     def _get_table_name(self, node):
         return model_immediate_name(node, dbt.flags.NON_DESTRUCTIVE)
+
+    def final_name(self):
+        if self.materialized == 'ephemeral':
+            msg = "final_name() was called on an ephemeral model"
+            dbt.exceptions.raise_compiler_error(msg, self.node)
+        else:
+            return self.do_quote(self.schema, self.name)
 
     def __repr__(self):
         if self.materialized == 'ephemeral':
             return '__dbt__CTE__{}'.format(self.name)
         else:
-            return self._adapter.quote_schema_and_table(profile=None,
-                                                        schema=self.schema,
-                                                        table=self.table)
+            return self.do_quote(self.schema, self.table)
 
 
 def coalesce(*args):
@@ -67,6 +87,12 @@ def coalesce(*args):
         if arg is not None:
             return arg
     return None
+
+
+def get_profile_from_project(project):
+    target_name = project.get('target', {})
+    profile = project.get('outputs', {}).get(target_name, {})
+    return profile
 
 
 def get_model_name_or_none(model):
@@ -367,3 +393,48 @@ class memoized(object):
     def __get__(self, obj, objtype):
         '''Support instance methods.'''
         return functools.partial(self.__call__, obj)
+
+
+def max_digits(values):
+    """Given a series of decimal.Decimal values, find the maximum
+    number of digits (on both sides of the decimal point) used by the
+    values."""
+    max_ = 0
+    for value in values:
+        if value is None:
+            continue
+        sign, digits, exponent = value.normalize().as_tuple()
+        max_ = max(len(digits), max_)
+    return max_
+
+
+def invalid_ref_fail_unless_test(node, target_model_name,
+                                 target_model_package):
+    if node.get('resource_type') == NodeType.Test:
+        warning = dbt.exceptions.get_target_not_found_msg(
+                    node,
+                    target_model_name,
+                    target_model_package)
+        logger.debug("WARNING: {}".format(warning))
+    else:
+        dbt.exceptions.ref_target_not_found(
+            node,
+            target_model_name,
+            target_model_package)
+
+
+def parse_cli_vars(var_string):
+    try:
+        cli_vars = yaml_helper.load_yaml_text(var_string)
+        var_type = type(cli_vars)
+        if var_type == dict:
+            return cli_vars
+        else:
+            type_name = var_type.__name__
+            dbt.exceptions.raise_compiler_error(
+                "The --vars argument must be a YAML dictionary, but was "
+                "of type '{}'".format(type_name))
+    except dbt.exceptions.ValidationException as e:
+        logger.error(
+                "The YAML provided in the --vars argument is not valid.\n")
+        raise
