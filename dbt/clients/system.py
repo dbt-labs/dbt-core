@@ -108,8 +108,10 @@ def _windows_rmdir_readonly(func, path, exc):
     logger.debug("DEBUG** Window OnError func: {}".format(func))
     logger.debug("DEBUG** Window OnError errno: {}".format(exception_val.errno))
     logger.debug("DEBUG** Window OnError errno expected: {}".format(errno.EACCES))
-    if func in (os.rmdir, os.remove) and exception_val.errno == errno.EACCES:
+    if exception_val.errno == errno.EACCES:
+        logger.debug("DEBUG** Window OnError changing permissions")
         os.chmod(path, stat.S_IWUSR)
+        logger.debug("DEBUG** Window OnError calling {} again".format(func))
         func(path)
     else:
         raise
