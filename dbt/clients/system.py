@@ -103,10 +103,13 @@ def write_file(path, contents=''):
 
 
 def _windows_rmdir_readonly(func, path, exc):
-    # via https://stackoverflow.com/questions/1213706/what-user-do-python-scripts-run-as-in-windows # noqa
     exception_val = exc[1]
+    logger.debug("DEBUG** Window OnError exception: {}".format(exception_val))
+    logger.debug("DEBUG** Window OnError func: {}".format(func))
+    logger.debug("DEBUG** Window OnError errno: {}".format(exception_val.errno))
+    logger.debug("DEBUG** Window OnError errno expected: {}".format(errno.EACCES))
     if func in (os.rmdir, os.remove) and exception_val.errno == errno.EACCES:
-        os.chmod(path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)  # 0777
+        os.chmod(path, stat.S_IWUSR)
         func(path)
     else:
         raise
@@ -118,6 +121,7 @@ def rmdir(path):
     different permissions on Windows. Otherwise, removing directories (eg.
     cloned via git) can cause rmtree to throw a PermissionError exception
     """
+    logger.debug("DEBUG** Window rmdir sys.platform: {}".format(sys.platform))
     if sys.platform == 'win32':
         onerror = _windows_rmdir_readonly
     else:
