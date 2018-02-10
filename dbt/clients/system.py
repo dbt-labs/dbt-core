@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tarfile
 import requests
+import stat
 
 import dbt.compat
 
@@ -101,12 +102,28 @@ def write_file(path, contents=''):
     return True
 
 
+def _windows_rmdir_readonly(func, path, exc):
+    # via https://stackoverflow.com/questions/1213706/what-user-do-python-scripts-run-as-in-windows # noqa
+    exception_val = exc[1]
+    if func in (os.rmdir, os.remove) and exception_val.errno == errno.EACCES:
+        os.chmod(path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)  # 0777
+        func(path)
+    else:
+        raise
+
+
 def rmdir(path):
     """
-    Make a file at `path` assuming that the directory it resides in already
-    exists. The file is saved with contents `contents`
+    Recursively deletes a directory. Includes an error handler to retry with
+    different permissions on Windows. Otherwise, removing directories (eg.
+    cloned via git) can cause rmtree to throw a PermissionError exception
     """
-    return shutil.rmtree(path)
+    if sys.platform == 'win32':
+        onerror = _windows_rmdir_readonly
+    else:
+        onerror = None
+
+    return shutil.rmtree(path, onerror=onerror)
 
 
 def open_dir_cmd():
