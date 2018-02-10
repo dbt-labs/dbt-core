@@ -2,8 +2,7 @@
 {{
     config(
         materialized='table',
-        partition_date='2018-01-01,2018-01-03',
-        partition_date_format='%Y-%m-%d',
+        partitions=['20180101', '20180102', '20180103'],
         verbose=True
     )
 }}
