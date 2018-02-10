@@ -26,7 +26,7 @@ class RunManager(object):
         profile = self.project.run_environment()
 
         # TODO validate the number of threads
-        if self.args.threads is None:
+        if not getattr(self.args, "threads", None):
             self.threads = profile.get('threads', 1)
         else:
             self.threads = self.args.threads

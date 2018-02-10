@@ -181,6 +181,20 @@ class RunHookLoader(ResourceLoader):
                                                    macros)
 
 
+class SeedLoader(ResourceLoader):
+
+    @classmethod
+    def load_project(cls, root_project, all_projects, project, project_name,
+                     macros):
+        return dbt.parser.load_and_parse_seeds(
+            package_name=project_name,
+            root_project=root_project,
+            all_projects=all_projects,
+            root_dir=project.get('project-root'),
+            relative_dirs=project.get('data-paths', []),
+            resource_type=NodeType.Seed)
+
+
 # node loaders
 GraphLoader.register(ModelLoader, 'nodes')
 GraphLoader.register(AnalysisLoader, 'nodes')
@@ -188,3 +202,4 @@ GraphLoader.register(SchemaTestLoader, 'nodes')
 GraphLoader.register(DataTestLoader, 'nodes')
 GraphLoader.register(RunHookLoader, 'nodes')
 GraphLoader.register(ArchiveLoader, 'nodes')
+GraphLoader.register(SeedLoader, 'nodes')

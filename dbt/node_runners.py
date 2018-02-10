@@ -213,14 +213,14 @@ class CompileRunner(BaseRunner):
         return RunModelResult(compiled_node)
 
     def compile(self, flat_graph):
-        return self.compile_node(self.adapter, self.project, self.node,
-                                 flat_graph)
+        return self._compile_node(self.adapter, self.project, self.node,
+                                  flat_graph)
 
     @classmethod
-    def compile_node(cls, adapter, project, node, flat_graph):
+    def _compile_node(cls, adapter, project, node, flat_graph):
         compiler = dbt.compilation.Compiler(project)
         node = compiler.compile_node(node, flat_graph)
-        node = cls.inject_runtime_config(adapter, project, node)
+        node = cls._inject_runtime_config(adapter, project, node)
 
         if(node['injected_sql'] is not None and
            not (dbt.utils.is_type(node, NodeType.Archive))):
@@ -238,15 +238,15 @@ class CompileRunner(BaseRunner):
         return node
 
     @classmethod
-    def inject_runtime_config(cls, adapter, project, node):
+    def _inject_runtime_config(cls, adapter, project, node):
         wrapped_sql = node.get('wrapped_sql')
-        context = cls.node_context(adapter, project, node)
+        context = cls._node_context(adapter, project, node)
         sql = dbt.clients.jinja.get_rendered(wrapped_sql, context)
         node['wrapped_sql'] = sql
         return node
 
     @classmethod
-    def node_context(cls, adapter, project, node):
+    def _node_context(cls, adapter, project, node):
         profile = project.run_environment()
 
         def call_get_columns_in_table(schema_name, table_name):
@@ -270,6 +270,14 @@ class CompileRunner(BaseRunner):
             "get_missing_columns": call_get_missing_columns,
             "already_exists": call_table_exists,
         }
+
+    @classmethod
+    def create_schemas(cls, project, adapter, flat_graph):
+        profile = project.run_environment()
+        required_schemas = cls.get_model_schemas(flat_graph)
+        existing_schemas = set(adapter.get_existing_schemas(profile))
+        for schema in (required_schemas - existing_schemas):
+            adapter.create_schema(profile, schema)
 
 
 class ModelRunner(CompileRunner):
@@ -295,7 +303,7 @@ class ModelRunner(CompileRunner):
 
         compiled_hooks = []
         for hook in hooks:
-            compiled = cls.compile_node(adapter, project, hook, flat_graph)
+            compiled = cls._compile_node(adapter, project, hook, flat_graph)
             model_name = compiled.get('name')
             statement = compiled['wrapped_sql']
 
@@ -474,3 +482,43 @@ class ArchiveRunner(ModelRunner):
     def print_result_line(self, result):
         dbt.ui.printer.print_archive_result_line(result, self.node_index,
                                                  self.num_nodes)
+
+
+class SeedRunner(ModelRunner):
+
+    def describe_node(self):
+        schema_name = self.node.get('schema')
+        return "seed file {}.{}".format(schema_name, self.node["name"])
+
+    @classmethod
+    def before_run(cls, project, adapter, flat_graph):
+        cls.create_schemas(project, adapter, flat_graph)
+
+    def before_execute(self):
+        description = self.describe_node()
+        dbt.ui.printer.print_start_line(description, self.node_index,
+                                        self.num_nodes)
+
+    def execute(self, compiled_node, existing_, flat_graph):
+        schema = compiled_node["schema"]
+        table_name = compiled_node["name"]
+        table = compiled_node["agate_table"]
+        self.adapter.handle_csv_table(self.profile, schema, table_name, table,
+                                      full_refresh=dbt.flags.FULL_REFRESH)
+
+        if dbt.flags.FULL_REFRESH:
+            status = 'CREATE {}'.format(len(table.rows))
+        else:
+            status = 'INSERT {}'.format(len(table.rows))
+
+        return RunModelResult(compiled_node, status=status)
+
+    def compile(self, flat_graph):
+        return self.node
+
+    def print_result_line(self, result):
+        schema_name = self.node.get('schema')
+        dbt.ui.printer.print_seed_result_line(result,
+                                              schema_name,
+                                              self.node_index,
+                                              self.num_nodes)

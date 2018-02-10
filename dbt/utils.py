@@ -363,6 +363,19 @@ def flatten_nodes(dep_list):
     return list(itertools.chain.from_iterable(dep_list))
 
 
+def max_digits(values):
+    """Given a series of decimal.Decimal values, find the maximum
+    number of digits (on both sides of the decimal point) used by the
+    values."""
+    max_ = 0
+    for value in values:
+        if value is None:
+            continue
+        sign, digits, exponent = value.normalize().as_tuple()
+        max_ = max(len(digits), max_)
+    return max_
+
+
 def invalid_ref_fail_unless_test(node, target_model_name,
                                  target_model_package):
     if node.get('resource_type') == NodeType.Test:

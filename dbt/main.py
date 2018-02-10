@@ -22,6 +22,7 @@ import dbt.tracking
 import dbt.config as config
 import dbt.ui.printer
 import dbt.compat
+import dbt.deprecations
 
 from dbt.utils import ExitCodes
 
@@ -232,7 +233,15 @@ def invoke_dbt(parsed):
             return None
 
     flags.NON_DESTRUCTIVE = getattr(proj.args, 'non_destructive', False)
-    flags.FULL_REFRESH = getattr(proj.args, 'full_refresh', False)
+
+    arg_drop_existing = getattr(proj.args, 'drop_existing', False)
+    arg_full_refresh = getattr(proj.args, 'full_refresh', False)
+
+    if arg_drop_existing:
+        dbt.deprecations.warn('drop-existing')
+        flags.FULL_REFRESH = True
+    elif arg_full_refresh:
+        flags.FULL_REFRESH = True
 
     logger.debug("running dbt with arguments %s", parsed)
 
@@ -385,13 +394,23 @@ def parse_args(args):
             fully-recalculate the incremental table from the model definition.
             """)
 
-    sub = subs.add_parser('seed', parents=[base_subparser])
-    sub.add_argument(
+    seed_sub = subs.add_parser('seed', parents=[base_subparser])
+    seed_sub.add_argument(
         '--drop-existing',
         action='store_true',
-        help="Drop existing seed tables and recreate them"
+        help='(DEPRECATED) Use --full-refresh instead.'
     )
-    sub.set_defaults(cls=seed_task.SeedTask, which='seed')
+    seed_sub.add_argument(
+        '--full-refresh',
+        action='store_true',
+        help='Drop existing seed tables and recreate them'
+    )
+    seed_sub.add_argument(
+        '--show',
+        action='store_true',
+        help='Show a sample of the loaded data in the terminal'
+    )
+    seed_sub.set_defaults(cls=seed_task.SeedTask, which='seed')
 
     sub = subs.add_parser('test', parents=[base_subparser])
     sub.add_argument(
