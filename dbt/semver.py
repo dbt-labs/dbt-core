@@ -227,8 +227,10 @@ class VersionSpecifier(dbt.utils.AttrDict):
         for key in ['major', 'minor', 'patch']:
             comparison = int(self[key]) - int(other[key])
 
-            if comparison != 0:
-                return comparison
+            if comparison > 0:
+                return 1
+            elif comparison < 0:
+                return -1
 
         equal = ((self.matcher == Matchers.GREATER_THAN_OR_EQUAL and
                   other.matcher == Matchers.LESS_THAN_OR_EQUAL) or
