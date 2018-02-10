@@ -280,9 +280,9 @@ def _build_base_subparser():
     )
 
     base_subparser.add_argument(
-        '--vars',
+        "--vars",
         type=str,
-        default='{}',
+        default="{}",
         help="""
         Supply variables to the project. This argument overrides variables
         defined in your dbt_project.yml file. This argument should be a YAML
