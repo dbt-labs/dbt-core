@@ -104,7 +104,7 @@ class RuntimeException(RuntimeError, Exception):
         if self.node is not None:
             node_string = " in {}".format(self.node_to_string(self.node))
 
-        if hasattr(self.msg, 'split'):
+        if hasattr(self.msg, "split"):
             split_msg = self.msg.split("\n")
         else:
             split_msg = str(self.msg).split("\n")
