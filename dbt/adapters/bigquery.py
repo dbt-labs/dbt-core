@@ -240,7 +240,7 @@ class BigQueryAdapter(PostgresAdapter):
         if flags.STRICT_MODE:
             connection = cls.get_connection(profile, model.get('name'))
             validate_connection(connection)
-            cls.release_connection(profile, model.get('name'))
+            cls.release_connection(profile, model.get('alias'))
 
         model_name = model.get('name')
         model_schema = model.get('schema')

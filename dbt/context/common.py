@@ -45,7 +45,7 @@ class DatabaseWrapper(object):
     def wrap_with_profile_and_model_name(self, fn):
         def wrapped(*args, **kwargs):
             args = (self.profile,) + args
-            kwargs['model_name'] = self.model.get('alias')
+            kwargs['model_name'] = self.model.get('name')
             return getattr(self.adapter, fn)(*args, **kwargs)
 
         return wrapped
@@ -55,7 +55,7 @@ class DatabaseWrapper(object):
 
     def commit(self):
         return self.adapter.commit_if_has_connection(
-            self.profile, self.model.get('alias'))
+            self.profile, self.model.get('name'))
 
 
 def _add_macros(context, model, flat_graph):
