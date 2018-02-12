@@ -17,7 +17,6 @@ import google.cloud.exceptions
 import google.cloud.bigquery
 
 import time
-import uuid
 
 
 class BigQueryAdapter(PostgresAdapter):
@@ -27,7 +26,8 @@ class BigQueryAdapter(PostgresAdapter):
         "execute_model",
         "drop",
         "execute",
-        "quote_schema_and_table"
+        "quote_schema_and_table",
+        "make_date_partitioned_table"
     ]
 
     SCOPE = ('https://www.googleapis.com/auth/bigquery',
@@ -150,27 +150,33 @@ class BigQueryAdapter(PostgresAdapter):
         if not isinstance(schemas, (list, tuple)):
             schemas = [schemas]
 
+        conn = cls.get_connection(profile, model_name)
+        client = conn.get('handle')
+
         all_tables = []
         for schema in schemas:
             dataset = cls.get_dataset(profile, schema, model_name)
-            all_tables.extend(dataset.list_tables())
+            all_tables.extend(client.list_tables(dataset))
 
-        relation_type_lookup = {
+        relation_types = {
             'TABLE': 'table',
             'VIEW': 'view',
             'EXTERNAL': 'external'
         }
 
-        existing = [(table.name, relation_type_lookup.get(table.table_type))
+        existing = [(table.table_id, relation_types.get(table.table_type))
                     for table in all_tables]
 
         return dict(existing)
 
     @classmethod
     def drop(cls, profile, schema, relation, relation_type, model_name=None):
+        conn = cls.get_connection(profile, model_name)
+        client = conn.get('handle')
+
         dataset = cls.get_dataset(profile, schema, model_name)
         relation_object = dataset.table(relation)
-        relation_object.delete()
+        client.delete_table(relation_object)
 
     @classmethod
     def rename(cls, profile, schema, from_name, to_name, model_name=None):
@@ -183,19 +189,22 @@ class BigQueryAdapter(PostgresAdapter):
         return credentials.get('timeout_seconds', cls.QUERY_TIMEOUT)
 
     @classmethod
-    def materialize_as_view(cls, profile, dataset, model_name, model_sql):
-        view = dataset.table(model_name)
+    def materialize_as_view(cls, profile, dataset, model):
+        model_name = model.get('name')
+        model_sql = model.get('injected_sql')
+
+        conn = cls.get_connection(profile, model_name)
+        client = conn.get('handle')
+
+        view_ref = dataset.table(model_name)
+        view = google.cloud.bigquery.Table(view_ref)
         view.view_query = model_sql
         view.view_use_legacy_sql = False
 
         logger.debug("Model SQL ({}):\n{}".format(model_name, model_sql))
 
         with cls.exception_handler(profile, model_sql, model_name, model_name):
-            view.create()
-
-        if view.created is None:
-            msg = "Error creating view {}".format(model_name)
-            raise dbt.exceptions.RuntimeException(msg)
+            client.create_table(view)
 
         return "CREATE VIEW"
 
@@ -215,47 +224,66 @@ class BigQueryAdapter(PostgresAdapter):
             raise job.exception()
 
     @classmethod
-    def materialize_as_table(cls, profile, dataset, model_name, model_sql):
+    def make_date_partitioned_table(cls, profile, dataset_name, identifier,
+                                    model_name=None):
         conn = cls.get_connection(profile, model_name)
         client = conn.get('handle')
 
-        table = dataset.table(model_name)
-        job_id = 'dbt-create-{}-{}'.format(model_name, uuid.uuid4())
-        job = client.run_async_query(job_id, model_sql)
-        job.use_legacy_sql = False
-        job.destination = table
-        job.write_disposition = 'WRITE_TRUNCATE'
-        job.begin()
+        dataset = cls.get_dataset(profile, dataset_name, identifier)
+        table_ref = dataset.table(identifier)
+        table = google.cloud.bigquery.Table(table_ref)
+        table.partitioning_type = 'DAY'
 
-        cls.release_connection(profile, model_name)
+        return client.create_table(table)
 
-        logger.debug("Model SQL ({}):\n{}".format(model_name, model_sql))
+    @classmethod
+    def materialize_as_table(cls, profile, dataset, model, model_sql,
+                             decorator=None):
+        model_name = model.get('name')
 
+        conn = cls.get_connection(profile, model_name)
+        client = conn.get('handle')
+
+        if decorator is None:
+            table_name = model_name
+        else:
+            table_name = "{}${}".format(model_name, decorator)
+
+        table_ref = dataset.table(table_name)
+        job_config = google.cloud.bigquery.QueryJobConfig()
+        job_config.destination = table_ref
+        job_config.write_disposition = 'WRITE_TRUNCATE'
+
+        logger.debug("Model SQL ({}):\n{}".format(table_name, model_sql))
+        query_job = client.query(model_sql, job_config=job_config)
+
+        # this waits for the job to complete
         with cls.exception_handler(profile, model_sql, model_name, model_name):
-            cls.poll_until_job_completes(job, cls.get_timeout(conn))
+            query_job.result(timeout=cls.get_timeout(conn))
 
         return "CREATE TABLE"
 
     @classmethod
-    def execute_model(cls, profile, model, materialization, model_name=None):
+    def execute_model(cls, profile, model, materialization, sql_override=None,
+                      decorator=None, model_name=None):
+
+        if sql_override is None:
+            sql_override = model.get('injected_sql')
 
         if flags.STRICT_MODE:
             connection = cls.get_connection(profile, model.get('name'))
             validate_connection(connection)
-            cls.release_connection(profile, model.get('name'))
 
         model_name = model.get('name')
         model_schema = model.get('schema')
-        model_sql = model.get('injected_sql')
 
         dataset = cls.get_dataset(profile, model_schema, model_name)
 
         if materialization == 'view':
-            res = cls.materialize_as_view(profile, dataset, model_name,
-                                          model_sql)
+            res = cls.materialize_as_view(profile, dataset, model)
         elif materialization == 'table':
-            res = cls.materialize_as_table(profile, dataset, model_name,
-                                           model_sql)
+            res = cls.materialize_as_table(profile, dataset, model,
+                                           sql_override, decorator)
         else:
             msg = "Invalid relation type: '{}'".format(materialization)
             raise dbt.exceptions.RuntimeException(msg, model)
@@ -263,38 +291,27 @@ class BigQueryAdapter(PostgresAdapter):
         return res
 
     @classmethod
-    def fetch_query_results(cls, query):
-        all_rows = []
-
-        rows = query.rows
-        token = query.page_token
-
-        while True:
-            all_rows.extend(rows)
-            if token is None:
-                break
-            rows, total_count, token = query.fetch_data(page_token=token)
-        return all_rows
-
-    @classmethod
     def execute(cls, profile, sql, model_name=None, fetch=False, **kwargs):
         conn = cls.get_connection(profile, model_name)
         client = conn.get('handle')
 
-        query = client.run_sync_query(sql)
-        query.timeout_ms = cls.get_timeout(conn) * 1000
-        query.use_legacy_sql = False
-
         debug_message = "Fetching data for query {}:\n{}"
         logger.debug(debug_message.format(model_name, sql))
 
-        query.run()
+        job_config = google.cloud.bigquery.QueryJobConfig()
+        job_config.use_legacy_sql = False
+        query_job = client.query(sql, job_config)
+
+        # this blocks until the query has completed
+        with cls.exception_handler(profile, 'create dataset', model_name):
+            iterator = query_job.result()
 
         res = []
         if fetch:
-            res = cls.fetch_query_results(query)
+            res = list(iterator)
 
-        status = 'ERROR' if query.errors else 'OK'
+        # If we get here, the query succeeded
+        status = 'OK'
         return status, res
 
     @classmethod
@@ -310,15 +327,20 @@ class BigQueryAdapter(PostgresAdapter):
     def create_schema(cls, profile, schema, model_name=None):
         logger.debug('Creating schema "%s".', schema)
 
-        dataset = cls.get_dataset(profile, schema, model_name)
+        conn = cls.get_connection(profile, model_name)
+        client = conn.get('handle')
 
+        dataset = cls.get_dataset(profile, schema, model_name)
         with cls.exception_handler(profile, 'create dataset', model_name):
-            dataset.create()
+            client.create_dataset(dataset)
 
     @classmethod
-    def drop_tables_in_schema(cls, dataset):
-        for table in dataset.list_tables():
-            table.delete()
+    def drop_tables_in_schema(cls, profile, dataset):
+        conn = cls.get_connection(profile)
+        client = conn.get('handle')
+
+        for table in client.list_tables(dataset):
+            client.delete_table(table.reference)
 
     @classmethod
     def drop_schema(cls, profile, schema, model_name=None):
@@ -327,21 +349,22 @@ class BigQueryAdapter(PostgresAdapter):
         if not cls.check_schema_exists(profile, schema, model_name):
             return
 
-        dataset = cls.get_dataset(profile, schema, model_name)
+        conn = cls.get_connection(profile)
+        client = conn.get('handle')
 
+        dataset = cls.get_dataset(profile, schema, model_name)
         with cls.exception_handler(profile, 'drop dataset', model_name):
-            cls.drop_tables_in_schema(dataset)
-            dataset.delete()
+            cls.drop_tables_in_schema(profile, dataset)
+            client.delete_dataset(dataset)
 
     @classmethod
     def get_existing_schemas(cls, profile, model_name=None):
         conn = cls.get_connection(profile, model_name)
-
         client = conn.get('handle')
 
         with cls.exception_handler(profile, 'list dataset', model_name):
             all_datasets = client.list_datasets()
-            return [ds.name for ds in all_datasets]
+            return [ds.dataset_id for ds in all_datasets]
 
     @classmethod
     def get_columns_in_table(cls, profile, schema_name, table_name,
@@ -352,20 +375,19 @@ class BigQueryAdapter(PostgresAdapter):
     @classmethod
     def check_schema_exists(cls, profile, schema, model_name=None):
         conn = cls.get_connection(profile, model_name)
-
         client = conn.get('handle')
 
         with cls.exception_handler(profile, 'get dataset', model_name):
             all_datasets = client.list_datasets()
-            return any([ds.name == schema for ds in all_datasets])
+            return any([ds.dataset_id == schema for ds in all_datasets])
 
     @classmethod
     def get_dataset(cls, profile, dataset_name, model_name=None):
         conn = cls.get_connection(profile, model_name)
-
         client = conn.get('handle')
-        dataset = client.dataset(dataset_name)
-        return dataset
+
+        dataset_ref = client.dataset(dataset_name)
+        return google.cloud.bigquery.Dataset(dataset_ref)
 
     @classmethod
     def warning_on_hooks(cls, hook_type):

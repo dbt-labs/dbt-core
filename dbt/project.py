@@ -87,6 +87,12 @@ class Project(object):
                 "Could not find profile named '{}'"
                 .format(self.profile_to_load), self)
 
+        if self.cfg.get('models') is None:
+            self.cfg['models'] = {}
+
+        if self.cfg['models'].get('vars') is None:
+            self.cfg['models']['vars'] = {}
+
         global_vars = dbt.utils.parse_cli_vars(getattr(args, 'vars', '{}'))
         if 'vars' not in self.cfg['models']:
             self.cfg['models']['vars'] = {}
