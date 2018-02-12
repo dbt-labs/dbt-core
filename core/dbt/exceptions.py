@@ -109,8 +109,7 @@ class RuntimeException(RuntimeError, Exception):
         else:
             split_msg = str(self.msg).split("\n")
 
-        lines = ["{}{}".format(self.type + ' Error',
-                               node_string)] + split_msg
+        lines = ["{}{}".format(self.type + " Error", node_string)] + split_msg
 
         lines += self.process_stack()
 
