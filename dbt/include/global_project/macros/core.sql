@@ -4,8 +4,9 @@
 
     {%- if name == 'main' -%}
       {{ log('Writing runtime SQL for node "{}"'.format(model['unique_id'])) }}
-      {{ write(sql) }}
     {%- endif -%}
+
+    {{ write(sql) }}
 
     {%- set status, res = adapter.execute(sql, auto_begin=auto_begin, fetch=fetch_result) -%}
     {%- if name is not none -%}
@@ -20,8 +21,10 @@
 
   {%- if name == 'main' -%}
     {{ log('Writing runtime SQL for node "{}"'.format(model['unique_id'])) }}
-    {{ write(sql) }}
   {%- endif -%}
+
+
+  {{ write(sql) }}
 
   {%- if name is not none -%}
     {{ store_result(name, status=status, data=res) }}

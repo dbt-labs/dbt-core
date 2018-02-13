@@ -204,7 +204,18 @@ class CompileRunner(BaseRunner):
         return True
 
     def before_execute(self):
-        pass
+        node = self.node
+        node_path = node.get('path')
+        project = self.project
+        full_path = os.path.join(
+            project.get('target-path'),
+            'compiled',
+            node.get('package_name'),
+            node_path
+        )
+        # Overwite existing file contents with empty string
+        dbt.clients.system.make_directory(os.path.dirname(full_path))
+        dbt.clients.system.make_file(full_path, contents='', overwrite=True)
 
     def after_execute(self, result):
         pass
@@ -388,6 +399,30 @@ class ModelRunner(CompileRunner):
 
     def before_execute(self):
         self.print_start_line()
+        node = self.node
+        node_path = node.get('path')
+        project = self.project
+        full_path = os.path.join(
+            project.get('target-path'),
+            'compiled',
+            node.get('package_name'),
+            node_path
+        )
+        # Overwite existing file contents with empty string
+        dbt.clients.system.make_directory(os.path.dirname(full_path))
+        dbt.clients.system.make_file(full_path, contents='', overwrite=True)
+        node = self.node
+        node_path = node.get('path')
+        project = self.project
+        full_path = os.path.join(
+            project.get('target-path'),
+            'run',
+            node.get('package_name'),
+            node_path
+        )
+        # Overwite existing file contents with empty string
+        dbt.clients.system.make_directory(os.path.dirname(full_path))
+        dbt.clients.system.make_file(full_path, contents='', overwrite=True)
 
     def after_execute(self, result):
         track_model_run(self.node_index, self.num_nodes, result)
