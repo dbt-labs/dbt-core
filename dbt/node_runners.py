@@ -223,9 +223,38 @@ class CompileRunner(BaseRunner):
     def execute(self, compiled_node, existing, flat_graph):
         return RunModelResult(compiled_node)
 
+    @classmethod
+    def before_run(cls, project, adapter, flat_graph):
+        cls.compile_hooks(project, adapter, flat_graph, RunHookType.Start)
+
+    @classmethod
+    def after_run(cls, project, adapter, results, flat_graph):
+        cls.compile_hooks(project, adapter, flat_graph, RunHookType.End)
+
     def compile(self, flat_graph):
         return self.compile_node(self.adapter, self.project, self.node,
                                  flat_graph)
+
+    @classmethod
+    def compile_hooks(cls, project, adapter, flat_graph, hook_type):
+        nodes = flat_graph.get('nodes', {}).values()
+        hooks = get_nodes_by_tags(nodes, {hook_type}, NodeType.Operation)
+        compiled_hooks = []
+
+        ordered_hooks = sorted(hooks, key=lambda h: h.get('index', len(hooks)))
+
+        for hook in ordered_hooks:
+            compiled = cls.compile_node(adapter, project, hook, flat_graph)
+            model_name = compiled.get('name')
+            statement = compiled['wrapped_sql']
+
+            logger.debug('Ronny sez: {}'.format(statement))
+
+            hook_index = hook.get('index', len(hooks))
+            hook_dict = dbt.hooks.get_hook_dict(statement, index=hook_index)
+            compiled_hooks.append(hook_dict)
+
+        return compiled_hooks
 
     @classmethod
     def compile_node(cls, adapter, project, node, flat_graph):
@@ -292,9 +321,6 @@ class ModelRunner(CompileRunner):
     def run_hooks(cls, project, adapter, flat_graph, hook_type):
         profile = project.run_environment()
 
-        nodes = flat_graph.get('nodes', {}).values()
-        hooks = get_nodes_by_tags(nodes, {hook_type}, NodeType.Operation)
-
         # This will clear out an open transaction if there is one.
         # on-run-* hooks should run outside of a transaction. This happens b/c
         # psycopg2 automatically begins a transaction when a connection is
@@ -304,15 +330,7 @@ class ModelRunner(CompileRunner):
         # transaction is only created if dbt initiates it.
         conn_name = adapter.clear_transaction(profile)
 
-        compiled_hooks = []
-        for hook in hooks:
-            compiled = cls.compile_node(adapter, project, hook, flat_graph)
-            model_name = compiled.get('name')
-            statement = compiled['wrapped_sql']
-
-            hook_index = hook.get('index', len(hooks))
-            hook_dict = dbt.hooks.get_hook_dict(statement, index=hook_index)
-            compiled_hooks.append(hook_dict)
+        compiled_hooks = cls.compile_hooks(project, adapter, flat_graph, hook_type)
 
         ordered_hooks = sorted(compiled_hooks, key=lambda h: h.get('index', 0))
 
