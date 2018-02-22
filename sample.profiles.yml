@@ -65,6 +65,7 @@ config:
 #         project: [GCP project id]
 #         schema: [dbt schema]
 #         threads: [between 1 and 8]
+#         timeout_seconds: 300
 #
 #       # 2. use a service account keyfile
 #       [target-name-2]:

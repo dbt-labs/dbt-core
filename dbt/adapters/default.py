@@ -94,6 +94,22 @@ class DefaultAdapter(object):
         raise dbt.exceptions.NotImplementedException(
             '`cancel_connection` is not implemented for this adapter!')
 
+    @classmethod
+    def create_csv_table(cls, profile, schema, table_name, agate_table):
+        raise dbt.exceptions.NotImplementedException(
+            '`create_csv_table` is not implemented for this adapter!')
+
+    @classmethod
+    def reset_csv_table(cls, profile, schema, table_name, agate_table,
+                        full_refresh=False):
+        raise dbt.exceptions.NotImplementedException(
+            '`reset_csv_table` is not implemented for this adapter!')
+
+    @classmethod
+    def load_csv_rows(cls, profile, schema, table_name, agate_table):
+        raise dbt.exceptions.NotImplementedException(
+            '`load_csv_rows` is not implemented for this adapter!')
+
     ###
     # FUNCTIONS THAT SHOULD BE ABSTRACT
     ###
@@ -507,7 +523,8 @@ class DefaultAdapter(object):
         return connection
 
     @classmethod
-    def add_query(cls, profile, sql, model_name=None, auto_begin=True):
+    def add_query(cls, profile, sql, model_name=None, auto_begin=True,
+                  bindings=None):
         connection = cls.get_connection(profile, model_name)
         connection_name = connection.get('name')
 
@@ -522,7 +539,7 @@ class DefaultAdapter(object):
             pre = time.time()
 
             cursor = connection.get('handle').cursor()
-            cursor.execute(sql)
+            cursor.execute(sql, bindings)
 
             logger.debug("SQL status: %s in %0.2f seconds",
                          cls.get_status(cursor), (time.time() - pre))
@@ -603,9 +620,71 @@ class DefaultAdapter(object):
 
     @classmethod
     def quote(cls, identifier):
-        return '"{}"'.format(identifier)
+        return '"{}"'.format(identifier.replace('"', '""'))
 
     @classmethod
     def quote_schema_and_table(cls, profile, schema, table, model_name=None):
         return '{}.{}'.format(cls.quote(schema),
                               cls.quote(table))
+
+    @classmethod
+    def handle_csv_table(cls, profile, schema, table_name, agate_table,
+                         full_refresh=False):
+        existing = cls.query_for_existing(profile, schema)
+        existing_type = existing.get(table_name)
+        if existing_type and existing_type != "table":
+            raise dbt.exceptions.RuntimeException(
+                "Cannot seed to '{}', it is a view".format(table_name))
+        if existing_type:
+            cls.reset_csv_table(profile, schema, table_name, agate_table,
+                                full_refresh=full_refresh)
+        else:
+            cls.create_csv_table(profile, schema, table_name, agate_table)
+        cls.load_csv_rows(profile, schema, table_name, agate_table)
+        cls.commit_if_has_connection(profile, None)
+
+    @classmethod
+    def convert_text_type(cls, agate_table, col_idx):
+        raise dbt.exceptions.NotImplementedException(
+            '`convert_text_type` is not implemented for this adapter!')
+
+    @classmethod
+    def convert_number_type(cls, agate_table, col_idx):
+        raise dbt.exceptions.NotImplementedException(
+            '`convert_number_type` is not implemented for this adapter!')
+
+    @classmethod
+    def convert_boolean_type(cls, agate_table, col_idx):
+        raise dbt.exceptions.NotImplementedException(
+            '`convert_boolean_type` is not implemented for this adapter!')
+
+    @classmethod
+    def convert_datetime_type(cls, agate_table, col_idx):
+        raise dbt.exceptions.NotImplementedException(
+            '`convert_datetime_type` is not implemented for this adapter!')
+
+    @classmethod
+    def convert_date_type(cls, agate_table, col_idx):
+        raise dbt.exceptions.NotImplementedException(
+            '`convert_date_type` is not implemented for this adapter!')
+
+    @classmethod
+    def convert_time_type(cls, agate_table, col_idx):
+        raise dbt.exceptions.NotImplementedException(
+            '`convert_time_type` is not implemented for this adapter!')
+
+    @classmethod
+    def convert_agate_type(cls, agate_table, col_idx):
+        import agate
+        agate_type = agate_table.column_types[col_idx]
+        conversions = [
+            (agate.Text, cls.convert_text_type),
+            (agate.Number, cls.convert_number_type),
+            (agate.Boolean, cls.convert_boolean_type),
+            (agate.DateTime, cls.convert_datetime_type),
+            (agate.Date, cls.convert_date_type),
+            (agate.TimeDelta, cls.convert_time_type),
+        ]
+        for agate_cls, func in conversions:
+            if isinstance(agate_type, agate_cls):
+                return func(agate_table, col_idx)

@@ -34,17 +34,10 @@ def print_compile_stats(stats):
         NodeType.Analysis: 'analyses',
         NodeType.Macro: 'macros',
         NodeType.Operation: 'operations',
+        NodeType.Seed: 'seed files',
     }
 
-    results = {
-        NodeType.Model: 0,
-        NodeType.Test: 0,
-        NodeType.Archive: 0,
-        NodeType.Analysis: 0,
-        NodeType.Macro: 0,
-        NodeType.Operation: 0,
-    }
-
+    results = {k: 0 for k in names.keys()}
     results.update(stats)
 
     stat_line = ", ".join(
