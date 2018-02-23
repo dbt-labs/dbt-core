@@ -251,7 +251,7 @@ class CompileRunner(BaseRunner):
             hook_index = hook.get('index', len(hooks))
             hook_dict = dbt.hooks.get_hook_dict(statement, index=hook_index)
             
-            logger.debug('Ronny sez: {}'.format(hook_dict['sql']))
+            logger.debug('Ronny sez: {}'.format(hook_dict.get('sql', '')))
             
             compiled_hooks.append(hook_dict)
 
