@@ -340,6 +340,7 @@ class ModelRunner(CompileRunner):
                 dbt.contracts.graph.parsed.validate_hook(hook)
 
             sql = hook.get('sql', '')
+            logger.debug('This has to log something right: "{}"'.format(sql))
             adapter.execute_one(profile, sql, model_name=conn_name,
                                 auto_begin=False)
             adapter.release_connection(profile, conn_name)
