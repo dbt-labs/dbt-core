@@ -248,10 +248,11 @@ class CompileRunner(BaseRunner):
             model_name = compiled.get('name')
             statement = compiled['wrapped_sql']
 
-            logger.debug('Ronny sez: {}'.format(statement))
-
             hook_index = hook.get('index', len(hooks))
             hook_dict = dbt.hooks.get_hook_dict(statement, index=hook_index)
+            
+            logger.debug('Ronny sez: {}'.format(hook_dict['sql']))
+            
             compiled_hooks.append(hook_dict)
 
         return compiled_hooks
