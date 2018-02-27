@@ -443,20 +443,20 @@ class TestRunner(CompileRunner):
                                         self.num_nodes)
 
     def execute_test(self, test):
-        res, rows = self.adapter.execute_and_fetch(
+        res, table = self.adapter.execute_and_fetch(
             self.profile,
             test.get('wrapped_sql'),
             test.get('name'),
             auto_begin=True)
 
-        num_rows = len(rows)
+        num_rows = len(table.rows)
         if num_rows > 1:
-            num_cols = len(rows[0])
+            num_cols = len(table.columns)
             raise RuntimeError(
                 "Bad test {name}: Returned {rows} rows and {cols} cols"
                 .format(name=test.get('name'), rows=num_rows, cols=num_cols))
 
-        return rows[0][0]
+        return table[0][0]
 
     def before_execute(self):
         self.print_start_line()

@@ -17,6 +17,7 @@ import google.cloud.exceptions
 import google.cloud.bigquery
 
 import time
+import agate
 
 
 class BigQueryAdapter(PostgresAdapter):
@@ -316,7 +317,14 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def execute_and_fetch(cls, profile, sql, model_name, auto_begin=None):
-        return cls.execute(profile, sql, model_name, fetch=True)
+        status, res = cls.execute(profile, sql, model_name, fetch=True)
+        table = cls.get_table_from_response(res)
+        return res, table
+
+    @classmethod
+    def get_table_from_response(cls, resp):
+        rows = [dict(row.items()) for row in resp]
+        return dbt.clients.agate_helper.table_from_data(rows)
 
     @classmethod
     def add_begin_query(cls, profile, name):
@@ -427,7 +435,6 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def convert_number_type(cls, agate_table, col_idx):
-        import agate
         decimals = agate_table.aggregate(agate.MaxPrecision(col_idx))
         return "float64" if decimals else "int64"
 

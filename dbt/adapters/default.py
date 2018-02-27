@@ -2,11 +2,13 @@ import copy
 import itertools
 import multiprocessing
 import time
+import agate
 
 from contextlib import contextmanager
 
 import dbt.exceptions
 import dbt.flags
+import dbt.clients.agate_helper
 
 from dbt.contracts.connection import validate_connection
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -123,7 +125,7 @@ class DefaultAdapter(object):
             data = [dict(zip(column_names, row))
                     for row in raw_results]
 
-        return data
+        return dbt.clients.agate_helper.table_from_data(data)
 
     @classmethod
     def drop(cls, profile, schema, relation, relation_type, model_name=None):
@@ -564,8 +566,8 @@ class DefaultAdapter(object):
         _, cursor = cls.execute_one(profile, sql, model_name, auto_begin)
 
         status = cls.get_status(cursor)
-        rows = cursor.fetchall()
-        return status, rows
+        df = cls.get_result_from_cursor(cursor)
+        return status, df
 
     @classmethod
     def execute(cls, profile, sql, model_name=None, auto_begin=False,
@@ -575,7 +577,7 @@ class DefaultAdapter(object):
         else:
             _, cursor = cls.execute_one(profile, sql, model_name, auto_begin)
             status = cls.get_status(cursor)
-            return status, []
+            return status, dbt.clients.agate_helper.empty_table()
 
     @classmethod
     def execute_all(cls, profile, sqls, model_name=None):
@@ -675,7 +677,6 @@ class DefaultAdapter(object):
 
     @classmethod
     def convert_agate_type(cls, agate_table, col_idx):
-        import agate
         agate_type = agate_table.column_types[col_idx]
         conversions = [
             (agate.Text, cls.convert_text_type),
