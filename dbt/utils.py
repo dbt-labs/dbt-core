@@ -1,6 +1,8 @@
 import os
 import hashlib
 import itertools
+import collections
+import functools
 
 import dbt.exceptions
 import dbt.flags
@@ -240,10 +242,10 @@ def merge(*args):
     if len(args) == 1:
         return args[0]
 
-    l = list(args)
-    last = l.pop(len(l)-1)
+    lst = list(args)
+    last = lst.pop(len(lst)-1)
 
-    return _merge(merge(*l), last)
+    return _merge(merge(*lst), last)
 
 
 def _merge(a, b):
@@ -264,10 +266,10 @@ def deep_merge(*args):
     if len(args) == 1:
         return args[0]
 
-    l = list(args)
-    last = l.pop(len(l)-1)
+    lst = list(args)
+    last = lst.pop(len(lst)-1)
 
-    return _deep_merge(deep_merge(*l), last)
+    return _deep_merge(deep_merge(*lst), last)
 
 
 def _deep_merge(destination, source):
@@ -361,6 +363,36 @@ def get_hashed_contents(model):
 
 def flatten_nodes(dep_list):
     return list(itertools.chain.from_iterable(dep_list))
+
+
+class memoized(object):
+    '''Decorator. Caches a function's return value each time it is called. If
+    called later with the same arguments, the cached value is returned (not
+    reevaluated).
+
+    Taken from https://wiki.python.org/moin/PythonDecoratorLibrary#Memoize'''
+    def __init__(self, func):
+        self.func = func
+        self.cache = {}
+
+    def __call__(self, *args):
+        if not isinstance(args, collections.Hashable):
+            # uncacheable. a list, for instance.
+            # better to not cache than blow up.
+            return self.func(*args)
+        if args in self.cache:
+            return self.cache[args]
+        value = self.func(*args)
+        self.cache[args] = value
+        return value
+
+    def __repr__(self):
+        '''Return the function's docstring.'''
+        return self.func.__doc__
+
+    def __get__(self, obj, objtype):
+        '''Support instance methods.'''
+        return functools.partial(self.__call__, obj)
 
 
 def max_digits(values):

@@ -105,6 +105,23 @@ class ValidationException(RuntimeException):
     pass
 
 
+class ParsingException(Exception):
+    pass
+
+
+class DependencyException(Exception):
+    pass
+
+
+class SemverException(Exception):
+    def __init__(self, msg=None):
+        self.msg = msg
+
+
+class VersionsNotCompatibleException(SemverException):
+    pass
+
+
 class NotImplementedException(Exception):
     pass
 
@@ -122,6 +139,10 @@ def raise_compiler_error(msg, node=None):
 
 def raise_database_error(msg, node=None):
     raise DatabaseException(msg, node)
+
+
+def raise_dependency_error(msg):
+    raise DependencyException(msg)
 
 
 def ref_invalid_args(model, args):
@@ -233,7 +254,33 @@ def missing_relation(relation_name, model=None):
         model)
 
 
+def package_not_found(package_name):
+    raise_dependency_error(
+        "Package {} was not found in the package index".format(package_name))
+
+
+def package_version_not_found(package_name, version_range, available_versions):
+    base_msg = ('Could not find a matching version for package {}\n'
+                '  Requested range: {}\n'
+                '  Available versions: {}')
+    raise_dependency_error(base_msg.format(package_name,
+                                           version_range,
+                                           available_versions))
+
+
 def invalid_materialization_argument(name, argument):
     raise_compiler_error(
         "materialization '{}' received unknown argument '{}'."
         .format(name, argument))
+
+
+def system_error(operation_name):
+    raise_compiler_error(
+        "dbt encountered an error when attempting to {}. "
+        "If this error persists, please create an issue at: \n\n"
+        "https://github.com/fishtown-analytics/dbt"
+        .format(operation_name))
+
+
+class RegistryException(Exception):
+    pass

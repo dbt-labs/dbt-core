@@ -373,6 +373,12 @@ class BigQueryAdapter(PostgresAdapter):
             '`get_columns_in_table` is not implemented for this adapter!')
 
     @classmethod
+    def get_columns_in_table(cls, profile, schema_name, table_name,
+                             model_name=None):
+        raise dbt.exceptions.NotImplementedException(
+            '`get_columns_in_table` is not implemented for this adapter!')
+
+    @classmethod
     def check_schema_exists(cls, profile, schema, model_name=None):
         conn = cls.get_connection(profile, model_name)
         client = conn.get('handle')
