@@ -566,8 +566,8 @@ class DefaultAdapter(object):
         _, cursor = cls.execute_one(profile, sql, model_name, auto_begin)
 
         status = cls.get_status(cursor)
-        df = cls.get_result_from_cursor(cursor)
-        return status, df
+        table  = cls.get_result_from_cursor(cursor)
+        return status, table
 
     @classmethod
     def execute(cls, profile, sql, model_name=None, auto_begin=False,
