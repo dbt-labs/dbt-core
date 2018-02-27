@@ -5,14 +5,6 @@ import sys
 
 import colorama
 
-# disable logs from other modules, excepting CRITICAL logs
-logging.getLogger('botocore').setLevel(logging.CRITICAL)
-logging.getLogger('contracts').setLevel(logging.CRITICAL)
-logging.getLogger('requests').setLevel(logging.CRITICAL)
-logging.getLogger('urllib3').setLevel(logging.CRITICAL)
-logging.getLogger('google').setLevel(logging.CRITICAL)
-logging.getLogger('snowflake.connector').setLevel(logging.CRITICAL)
-logging.getLogger('parsedatetime').setLevel(logging.CRITICAL)
 
 # Colorama needs some help on windows because we're using logger.info
 # intead of print(). If the Windows env doesn't have a TERM var set,
@@ -36,9 +28,14 @@ stdout_handler = logging.StreamHandler(colorama_stdout)
 stdout_handler.setFormatter(logging.Formatter('%(message)s'))
 stdout_handler.setLevel(logging.INFO)
 
-logger = logging.getLogger()
+logger = logging.getLogger('dbt')
 logger.addHandler(stdout_handler)
 logger.setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.CRITICAL)
+
+# Redirect warnings through our logging setup
+# They will be logged to a file below
+logging.captureWarnings(True)
 
 initialized = False
 
@@ -89,6 +86,11 @@ def initialize_logger(debug_mode=False, path=None):
         logdir_handler.setLevel(logging.DEBUG)
 
         logger.addHandler(logdir_handler)
+
+        # Log Python warnings to file
+        warning_logger = logging.getLogger('py.warnings')
+        warning_logger.addHandler(logdir_handler)
+        warning_logger.setLevel(logging.DEBUG)
 
     initialized = True
 
