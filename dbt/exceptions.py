@@ -65,9 +65,13 @@ class RuntimeException(RuntimeError, Exception):
         if self.node is not None:
             node_string = " in {}".format(self.node_to_string(self.node))
 
+        if hasattr(self.msg, 'split'):
+            split_msg = self.msg.split("\n")
+        else:
+            split_msg = basestring(self.msg).split("\n")
+
         lines = ["{}{}".format(self.type + ' Error',
-                               node_string)] + \
-            self.msg.split("\n")
+                               node_string)] + split_msg
 
         lines += self.process_stack()
 

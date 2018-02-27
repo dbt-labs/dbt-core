@@ -6,9 +6,6 @@ import dbt.exceptions
 
 class TestExitCodes(DBTIntegrationTest):
 
-    def setUp(self):
-        pass
-
     @property
     def schema(self):
         return "exit_codes_test_023"

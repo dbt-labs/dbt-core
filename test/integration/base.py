@@ -173,6 +173,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
         # it's important to use a different connection handle here so
         # we don't look into an incomplete transaction
+        adapter.cleanup_connections()
         connection = adapter.acquire_connection(profile, '__test')
         self.handle = connection.get('handle')
         self.adapter_type = profile.get('type')
