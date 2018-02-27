@@ -348,8 +348,8 @@ class ModelRunner(CompileRunner):
 
     @classmethod
     def before_run(cls, project, adapter, flat_graph):
-        cls.create_schemas(project, adapter, flat_graph)
         cls.safe_run_hooks(project, adapter, flat_graph, RunHookType.Start)
+        cls.create_schemas(project, adapter, flat_graph)
 
     @classmethod
     def print_results_line(cls, results, execution_time):
