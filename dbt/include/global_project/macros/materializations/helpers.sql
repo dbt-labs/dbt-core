@@ -1,5 +1,10 @@
 {% macro run_hooks(hooks, inside_transaction=True) %}
   {% for hook in hooks | selectattr('transaction', 'equalto', inside_transaction)  %}
+    {% if not inside_transaction and loop.first %}
+      {% call statement(auto_begin=inside_transaction) %}
+        commit;
+      {% endcall %}
+    {% endif %}
     {% call statement(auto_begin=inside_transaction) %}
       {{ hook.get('sql') }}
     {% endcall %}
@@ -22,7 +27,7 @@
 
 
 {% macro make_hook_config(sql, inside_transaction) %}
-    {{ {"sql": sql, "transaction": inside_transaction} | tojson }}
+    {{ tojson({"sql": sql, "transaction": inside_transaction}) }}
 {% endmacro %}
 
 

@@ -1,8 +1,18 @@
 from dbt.compat import basestring
+from dbt.logger import GLOBAL_LOGGER as logger
 
 
 class Exception(BaseException):
     pass
+
+
+class MacroReturn(BaseException):
+    """
+    Hack of all hacks
+    """
+
+    def __init__(self, value):
+        self.value = value
 
 
 class InternalException(Exception):
@@ -20,6 +30,9 @@ class RuntimeException(RuntimeError, Exception):
         return 'Runtime'
 
     def node_to_string(self, node):
+        if node is None:
+            return "<Unknown>"
+
         return "{} {} ({})".format(
             node.get('resource_type'),
             node.get('name', 'unknown'),
@@ -92,9 +105,17 @@ class ParsingException(Exception):
     pass
 
 
-class VersionsNotCompatibleException(ParsingException):
+class DependencyException(Exception):
+    pass
+
+
+class SemverException(Exception):
     def __init__(self, msg=None):
         self.msg = msg
+
+
+class VersionsNotCompatibleException(SemverException):
+    pass
 
 
 class NotImplementedException(Exception):
@@ -114,6 +135,10 @@ def raise_compiler_error(msg, node=None):
 
 def raise_database_error(msg, node=None):
     raise DatabaseException(msg, node)
+
+
+def raise_dependency_error(msg):
+    raise DependencyException(msg)
 
 
 def ref_invalid_args(model, args):
@@ -143,18 +168,22 @@ To fix this, add the following hint to the top of the model "{model_name}":
     raise_compiler_error(error_msg, model)
 
 
-def ref_target_not_found(model, target_model_name, target_model_package):
+def get_target_not_found_msg(model, target_model_name, target_model_package):
     target_package_string = ''
 
     if target_model_package is not None:
         target_package_string = "in package '{}' ".format(target_model_package)
 
-    raise_compiler_error(
-        "Model '{}' depends on model '{}' {}which was not found."
-        .format(model.get('unique_id'),
-                target_model_name,
-                target_package_string),
-        model)
+    return ("Model '{}' depends on model '{}' {}which was not found or is"
+            " disabled".format(model.get('unique_id'),
+                               target_model_name,
+                               target_package_string))
+
+
+def ref_target_not_found(model, target_model_name, target_model_package):
+    msg = get_target_not_found_msg(model, target_model_name,
+                                   target_model_package)
+    raise_compiler_error(msg, model)
 
 
 def ref_disabled_dependency(model, target_model):
@@ -221,7 +250,25 @@ def missing_relation(relation_name, model=None):
         model)
 
 
+def package_not_found(package_name):
+    raise_dependency_error(
+        "Package {} was not found in the package index".format(package_name))
+
+
+def package_version_not_found(package_name, version_range, available_versions):
+    base_msg = ('Could not find a matching version for package {}\n'
+                '  Requested range: {}\n'
+                '  Available versions: {}')
+    raise_dependency_error(base_msg.format(package_name,
+                                           version_range,
+                                           available_versions))
+
+
 def invalid_materialization_argument(name, argument):
     raise_compiler_error(
         "materialization '{}' received unknown argument '{}'."
         .format(name, argument))
+
+
+class RegistryException(Exception):
+    pass

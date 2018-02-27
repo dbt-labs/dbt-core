@@ -73,6 +73,30 @@ class MacroLoader(ResourceLoader):
 class ModelLoader(ResourceLoader):
 
     @classmethod
+    def load_all(cls, root_project, all_projects, macros=None):
+        to_return = {}
+
+        for project_name, project in all_projects.items():
+            project_loaded = cls.load_project(root_project,
+                                              all_projects,
+                                              project, project_name,
+                                              macros)
+
+            to_return.update(project_loaded)
+
+        # Check for duplicate model names
+        names_models = {}
+        for model, attribs in to_return.items():
+            name = attribs['name']
+            existing_name = names_models.get(name)
+            if existing_name is not None:
+                raise dbt.exceptions.CompilationException(
+                    'Found models with the same name: \n- %s\n- %s' % (
+                        model, existing_name))
+            names_models[name] = model
+        return to_return
+
+    @classmethod
     def load_project(cls, root_project, all_projects, project, project_name,
                      macros):
         return dbt.parser.load_and_parse_sql(
@@ -130,11 +154,16 @@ class DataTestLoader(ResourceLoader):
             macros=macros)
 
 
+# ArchiveLoader and RunHookLoader operate on configs, so we just need to run
+# them both once, not for each project
 class ArchiveLoader(ResourceLoader):
 
     @classmethod
-    def load_project(cls, root_project, all_projects, project, project_name,
-                     macros):
+    def load_all(cls, root_project, all_projects, macros=None):
+        return cls.load_project(root_project, all_projects, macros)
+
+    @classmethod
+    def load_project(cls, root_project, all_projects, macros):
         return dbt.parser.parse_archives_from_projects(root_project,
                                                        all_projects,
                                                        macros)
@@ -143,10 +172,27 @@ class ArchiveLoader(ResourceLoader):
 class RunHookLoader(ResourceLoader):
 
     @classmethod
-    def load_project(cls, root_project, all_projects, project, project_name,
-                     macros):
+    def load_all(cls, root_project, all_projects, macros=None):
+        return cls.load_project(root_project, all_projects, macros)
+
+    @classmethod
+    def load_project(cls, root_project, all_projects, macros):
         return dbt.parser.load_and_parse_run_hooks(root_project, all_projects,
                                                    macros)
+
+
+class SeedLoader(ResourceLoader):
+
+    @classmethod
+    def load_project(cls, root_project, all_projects, project, project_name,
+                     macros):
+        return dbt.parser.load_and_parse_seeds(
+            package_name=project_name,
+            root_project=root_project,
+            all_projects=all_projects,
+            root_dir=project.get('project-root'),
+            relative_dirs=project.get('data-paths', []),
+            resource_type=NodeType.Seed)
 
 
 # node loaders
@@ -156,3 +202,4 @@ GraphLoader.register(SchemaTestLoader, 'nodes')
 GraphLoader.register(DataTestLoader, 'nodes')
 GraphLoader.register(RunHookLoader, 'nodes')
 GraphLoader.register(ArchiveLoader, 'nodes')
+GraphLoader.register(SeedLoader, 'nodes')

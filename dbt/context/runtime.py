@@ -52,7 +52,7 @@ def ref(model, project, profile, flat_graph):
             model['extra_ctes'][target_model_id] = None
 
         adapter = get_adapter(profile)
-        return dbt.utils.Relation(adapter, target_model)
+        return dbt.utils.Relation(profile, adapter, target_model)
 
     return do_ref
 

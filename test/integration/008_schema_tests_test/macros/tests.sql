@@ -19,7 +19,7 @@
     from {{ model }}
     where {{ field }} in (
         {% for value in values %}
-            {{ value }} {% if not loop.last %} , {% endif %}
+            '{{ value }}' {% if not loop.last %} , {% endif %}
         {% endfor %}
     )
 

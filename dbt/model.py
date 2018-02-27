@@ -20,7 +20,8 @@ class SourceConfig(object):
         'sort',
         'sql_where',
         'unique_key',
-        'sort_type'
+        'sort_type',
+        'bind'
     ]
 
     def __init__(self, active_project, own_project, fqn):

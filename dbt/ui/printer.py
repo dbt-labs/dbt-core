@@ -178,6 +178,22 @@ def print_archive_result_line(result, index, total):
         result.execution_time)
 
 
+def print_seed_result_line(result, schema_name, index, total):
+    model = result.node
+
+    info, status = get_printable_result(result, 'loaded', 'loading')
+
+    print_fancy_output_line(
+        "{info} seed file {schema}.{relation}".format(
+            info=info,
+            schema=schema_name,
+            relation=model.get('name')),
+        status,
+        index,
+        total,
+        result.execution_time)
+
+
 def interpret_run_result(result):
     if result.errored or result.failed:
         return 'error'

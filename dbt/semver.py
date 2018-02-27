@@ -1,20 +1,23 @@
 import re
+import logging
 
 from dbt.exceptions import VersionsNotCompatibleException
 import dbt.utils
 
-_MATCHERS = "(?P<matcher>\>=|\>|\<|\<=|=)?"
-_NUM_NO_LEADING_ZEROS = "(0|[1-9][0-9]*)"
-_ALPHA = "[0-9A-Za-z-]*"
-_ALPHA_NO_LEADING_ZEROS = "(0|[1-9A-Za-z-][0-9A-Za-z-]*)"
+logger = logging.getLogger(__name__)
 
-_BASE_VERSION_REGEX = """
+_MATCHERS = r"(?P<matcher>\>=|\>|\<|\<=|=)?"
+_NUM_NO_LEADING_ZEROS = r"(0|[1-9][0-9]*)"
+_ALPHA = r"[0-9A-Za-z-]*"
+_ALPHA_NO_LEADING_ZEROS = r"(0|[1-9A-Za-z-][0-9A-Za-z-]*)"
+
+_BASE_VERSION_REGEX = r"""
 (?P<major>{num_no_leading_zeros})\.
 (?P<minor>{num_no_leading_zeros})\.
 (?P<patch>{num_no_leading_zeros})
 """.format(num_no_leading_zeros=_NUM_NO_LEADING_ZEROS)
 
-_VERSION_EXTRA_REGEX = """
+_VERSION_EXTRA_REGEX = r"""
 (\-
   (?P<prerelease>
     {alpha_no_leading_zeros}(\.{alpha_no_leading_zeros})*))?
@@ -25,7 +28,7 @@ _VERSION_EXTRA_REGEX = """
     alpha_no_leading_zeros=_ALPHA_NO_LEADING_ZEROS,
     alpha=_ALPHA)
 
-_VERSION_REGEX = re.compile("""
+_VERSION_REGEX = re.compile(r"""
 ^
 {matchers}
 {base_version_regex}
@@ -57,9 +60,9 @@ class VersionRange(dbt.utils.AttrDict):
     def _try_combine_lower_bound_with_exact(self, lower, exact):
         comparison = lower.compare(exact)
 
-        if(comparison < 0 or
-           (comparison == 0 and
-            lower.matcher == Matchers.GREATER_THAN_OR_EQUAL)):
+        if (comparison < 0 or
+            (comparison == 0 and
+             lower.matcher == Matchers.GREATER_THAN_OR_EQUAL)):
             return exact
 
         raise VersionsNotCompatibleException()
@@ -87,9 +90,9 @@ class VersionRange(dbt.utils.AttrDict):
     def _try_combine_upper_bound_with_exact(self, upper, exact):
         comparison = upper.compare(exact)
 
-        if(comparison > 0 or
-           (comparison == 0 and
-            upper.matcher == Matchers.LESS_THAN_OR_EQUAL)):
+        if (comparison > 0 or
+            (comparison == 0 and
+             upper.matcher == Matchers.LESS_THAN_OR_EQUAL)):
             return exact
 
         raise VersionsNotCompatibleException()
@@ -188,11 +191,14 @@ class VersionSpecifier(dbt.utils.AttrDict):
     def from_version_string(cls, version_string):
         match = _VERSION_REGEX.match(version_string)
 
-        if match is None:
-            # error?
-            return None
+        if not match:
+            raise dbt.exceptions.SemverException(
+                'Could not parse version "{}"'.format(version_string))
 
         return VersionSpecifier(match.groupdict())
+
+    def __str__(self):
+        return self.to_version_string()
 
     def to_range(self):
         range_start = UnboundedVersionSpecifier()
@@ -221,30 +227,47 @@ class VersionSpecifier(dbt.utils.AttrDict):
         for key in ['major', 'minor', 'patch']:
             comparison = int(self[key]) - int(other[key])
 
-            if comparison != 0:
-                return comparison
+            if comparison > 0:
+                return 1
+            elif comparison < 0:
+                return -1
 
-        if((self.matcher == Matchers.GREATER_THAN_OR_EQUAL and
-            other.matcher == Matchers.LESS_THAN_OR_EQUAL) or
-           (self.matcher == Matchers.LESS_THAN_OR_EQUAL and
-            other.matcher == Matchers.GREATER_THAN_OR_EQUAL)):
+        equal = ((self.matcher == Matchers.GREATER_THAN_OR_EQUAL and
+                  other.matcher == Matchers.LESS_THAN_OR_EQUAL) or
+                 (self.matcher == Matchers.LESS_THAN_OR_EQUAL and
+                  other.matcher == Matchers.GREATER_THAN_OR_EQUAL))
+        if equal:
             return 0
 
-        if((self.matcher == Matchers.LESS_THAN and
-            other.matcher == Matchers.LESS_THAN_OR_EQUAL) or
-           (other.matcher == Matchers.GREATER_THAN and
-            self.matcher == Matchers.GREATER_THAN_OR_EQUAL) or
-           (self.is_upper_bound and other.is_lower_bound)):
+        lt = ((self.matcher == Matchers.LESS_THAN and
+               other.matcher == Matchers.LESS_THAN_OR_EQUAL) or
+              (other.matcher == Matchers.GREATER_THAN and
+               self.matcher == Matchers.GREATER_THAN_OR_EQUAL) or
+              (self.is_upper_bound and other.is_lower_bound))
+        if lt:
             return -1
 
-        if((other.matcher == Matchers.LESS_THAN and
-            self.matcher == Matchers.LESS_THAN_OR_EQUAL) or
-           (self.matcher == Matchers.GREATER_THAN and
-            other.matcher == Matchers.GREATER_THAN_OR_EQUAL) or
-           (self.is_lower_bound and other.is_upper_bound)):
+        gt = ((other.matcher == Matchers.LESS_THAN and
+               self.matcher == Matchers.LESS_THAN_OR_EQUAL) or
+              (self.matcher == Matchers.GREATER_THAN and
+               other.matcher == Matchers.GREATER_THAN_OR_EQUAL) or
+              (self.is_lower_bound and other.is_upper_bound))
+        if gt:
             return 1
 
         return 0
+
+    def __lt__(self, other):
+        return self.compare(other) == -1
+
+    def __gt__(self, other):
+        return self.compare(other) == 1
+
+    def __eq___(self, other):
+        return self.compare(other) == 0
+
+    def __cmp___(self, other):
+        return self.compare(other)
 
     @property
     def is_unbounded(self):
@@ -269,6 +292,9 @@ class UnboundedVersionSpecifier(VersionSpecifier):
 
     def __init__(self, *args, **kwargs):
         super(dbt.utils.AttrDict, self).__init__(*args, **kwargs)
+
+    def __str__(self):
+        return "*"
 
     @property
     def is_unbounded(self):
@@ -324,7 +350,7 @@ def reduce_versions(*args):
     except VersionsNotCompatibleException as e:
         raise VersionsNotCompatibleException(
             'Could not find a satisfactory version from options: {}'
-            .format(str(args)))
+            .format([str(a) for a in args]))
 
     return to_return
 
@@ -349,9 +375,10 @@ def find_possible_versions(requested_range, available_versions):
         if(versions_compatible(version,
                                requested_range.start,
                                requested_range.end)):
-            possible_versions.append(version_string)
+            possible_versions.append(version)
 
-    return possible_versions[::-1]
+    sorted_versions = sorted(possible_versions, reverse=True)
+    return [v.to_version_string(skip_matcher=True) for v in sorted_versions]
 
 
 def resolve_to_specific_version(requested_range, available_versions):
@@ -374,7 +401,8 @@ def resolve_to_specific_version(requested_range, available_versions):
 def resolve_dependency_tree(version_index, unmet_dependencies, restrictions):
     for name, restriction in restrictions.items():
         if not versions_compatible(*restriction):
-            raise VersionsNotCompatibleException('not compatible {}'.format(restriction))
+            raise VersionsNotCompatibleException(
+                'not compatible {}'.format(restriction))
 
     if not unmet_dependencies:
         return {}, {}
@@ -383,7 +411,7 @@ def resolve_dependency_tree(version_index, unmet_dependencies, restrictions):
     to_return_install = {}
 
     for dependency_name, version in unmet_dependencies.items():
-        print('resolving path {}'.format(dependency_name))
+        logger.debug('resolving path %s', dependency_name)
         dependency_restrictions = reduce_versions(
             *restrictions.copy().get(dependency_name))
 
@@ -392,7 +420,8 @@ def resolve_dependency_tree(version_index, unmet_dependencies, restrictions):
             version_index[dependency_name].keys())
 
         for possible_match in possible_matches:
-            print('reset with {} at {}'.format(dependency_name, possible_match))
+            logger.debug('reset with %s at %s',
+                         dependency_name, possible_match)
 
             tree = {}
             install = {}
@@ -408,12 +437,13 @@ def resolve_dependency_tree(version_index, unmet_dependencies, restrictions):
                     possible_match
                 ).to_version_string_pair()
 
-                recursive_version_info = version_index.get(dependency_name, {}).get(possible_match)
+                ver = version_index.get(dependency_name, {})
+                recursive_version_info = ver.get(possible_match)
                 new_unmet_dependencies = dbt.utils.deep_merge(
                     recursive_version_info.copy())
 
-                print('new unmet dependencies')
-                print(new_unmet_dependencies)
+                logger.debug('new unmet dependencies %s',
+                             new_unmet_dependencies)
 
                 new_restrictions = dbt.utils.deep_merge(
                     new_restrictions.copy(),
@@ -427,13 +457,14 @@ def resolve_dependency_tree(version_index, unmet_dependencies, restrictions):
 
                 for name, restriction in new_restrictions.items():
                     if not versions_compatible(*restriction):
-                        raise VersionsNotCompatibleException('not compatible {}'.format(new_restrictions))
+                        raise VersionsNotCompatibleException(
+                            'not compatible {}'.format(new_restrictions))
 
                 else:
                     match_found = True
 
-                    print('going down the stack with {}'.format(new_unmet_dependencies))
-                    print('and {}'.format(install))
+                    logger.debug('going down the stack with %s and %s',
+                                 new_unmet_dependencies, install)
                     subtree, subinstall = resolve_dependency_tree(
                         version_index,
                         new_unmet_dependencies,
@@ -452,7 +483,7 @@ def resolve_dependency_tree(version_index, unmet_dependencies, restrictions):
                         subinstall,
                         {dependency_name: possible_match})
 
-                    print('then {}'.format(install))
+                    logger.debug('then %s', install)
 
                     to_return_tree = dbt.utils.deep_merge(
                         to_return_tree,
@@ -465,18 +496,19 @@ def resolve_dependency_tree(version_index, unmet_dependencies, restrictions):
                     break
 
                 if not match_found:
-                    raise VersionsNotCompatibleException('No match found -- exhausted this part of the '
-                                                         'tree.')
+                    raise VersionsNotCompatibleException(
+                        'No match found -- exhausted this part of the tree.')
 
             except VersionsNotCompatibleException as e:
-                print(e)
-                print('When attempting {} at {}'.format(dependency_name, possible_match))
+                logger.debug('%s -- When attempting %s at %s',
+                             e, dependency_name, possible_match)
 
     return to_return_tree.copy(), to_return_install.copy()
 
 
 def resolve_dependency_set(version_index, dependencies):
-    tree, install = resolve_dependency_tree(version_index, dependencies, dependencies)
+    tree, install = resolve_dependency_tree(
+        version_index, dependencies, dependencies)
 
     return {
         'install': install,

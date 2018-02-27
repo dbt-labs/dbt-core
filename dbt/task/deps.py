@@ -1,11 +1,14 @@
 import os
-import errno
-import re
+import shutil
+import hashlib
+import tempfile
+import six
 
+import dbt.deprecations
 import dbt.clients.git
 import dbt.clients.system
-import dbt.clients.registry
-import dbt.project as project
+import dbt.clients.registry as registry
+from dbt.clients.yaml_helper import load_yaml_text
 
 from dbt.compat import basestring
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -14,250 +17,339 @@ from dbt.utils import AttrDict
 
 from dbt.task.base_task import BaseTask
 
+DOWNLOADS_PATH = os.path.join(tempfile.gettempdir(), "dbt-downloads")
+
+
+class Package(object):
+    def __init__(self, name):
+        self.name = name
+        self._cached_metadata = None
+
+    def __str__(self):
+        version = getattr(self, 'version', None)
+        if not version:
+            return self.name
+        version_str = version[0] \
+            if len(version) == 1 else '<multiple versions>'
+        return '{}@{}'.format(self.name, version_str)
+
+    @classmethod
+    def version_to_list(cls, version):
+        if version is None:
+            return []
+        if not isinstance(version, (list, basestring)):
+            dbt.exceptions.raise_dependency_error(
+                'version must be list or string, got {}'
+                .format(type(version)))
+        if not isinstance(version, list):
+            version = [version]
+        return version
+
+    def _resolve_version(self):
+        pass
+
+    def resolve_version(self):
+        try:
+            self._resolve_version()
+        except dbt.exceptions.VersionsNotCompatibleException as e:
+            new_msg = ('Version error for package {}: {}'
+                       .format(self.name, e))
+            six.raise_from(dbt.exceptions.DependencyException(new_msg), e)
+
+    def version_name(self):
+        raise NotImplementedError()
+
+    def _fetch_metadata(self, project):
+        raise NotImplementedError()
+
+    def fetch_metadata(self, project):
+        if not self._cached_metadata:
+            self._cached_metadata = self._fetch_metadata(project)
+        return self._cached_metadata
+
+    def get_project_name(self, project):
+        metadata = self.fetch_metadata(project)
+        return metadata["name"]
+
+    def get_installation_path(self, project):
+        dest_dirname = self.get_project_name(project)
+        return os.path.join(project['modules-path'], dest_dirname)
+
+
+class RegistryPackage(Package):
+    def __init__(self, package, version):
+        super(RegistryPackage, self).__init__(package)
+        self.package = package
+        self._version = self._sanitize_version(version)
+
+    @classmethod
+    def _sanitize_version(cls, version):
+        version = [v if isinstance(v, VersionSpecifier)
+                   else VersionSpecifier.from_version_string(v)
+                   for v in cls.version_to_list(version)]
+        return version or [UnboundedVersionSpecifier()]
+
+    @property
+    def version(self):
+        return self._version
+
+    @version.setter
+    def version(self, version):
+        self._version = self._sanitize_version(version)
+
+    def version_name(self):
+        self._check_version_pinned()
+        version_string = self.version[0].to_version_string(skip_matcher=True)
+        return version_string
+
+    def incorporate(self, other):
+        return RegistryPackage(self.package, self.version + other.version)
+
+    def _check_in_index(self):
+        index = registry.index_cached()
+        if self.package not in index:
+            dbt.exceptions.package_not_found(self.package)
+
+    def _resolve_version(self):
+        self._check_in_index()
+        range_ = dbt.semver.reduce_versions(*self.version)
+        available = registry.get_available_versions(self.package)
+        # for now, pick a version and then recurse. later on,
+        # we'll probably want to traverse multiple options
+        # so we can match packages. not going to make a difference
+        # right now.
+        target = dbt.semver.resolve_to_specific_version(range_, available)
+        if not target:
+            dbt.exceptions.package_version_not_found(
+                self.package, range_, available)
+        self.version = target
+
+    def _check_version_pinned(self):
+        if len(self.version) != 1:
+            dbt.exceptions.raise_dependency_error(
+                'Cannot fetch metadata until the version is pinned.')
+
+    def _fetch_metadata(self, project):
+        version_string = self.version_name()
+        return registry.package_version(self.package, version_string)
+
+    def install(self, project):
+        version_string = self.version_name()
+        metadata = self.fetch_metadata(project)
+
+        tar_name = '{}.{}.tar.gz'.format(self.package, version_string)
+        tar_path = os.path.realpath(os.path.join(DOWNLOADS_PATH, tar_name))
+        dbt.clients.system.make_directory(os.path.dirname(tar_path))
+
+        download_url = metadata.get('downloads').get('tarball')
+        dbt.clients.system.download(download_url, tar_path)
+        deps_path = project['modules-path']
+        package_name = self.get_project_name(project)
+        dbt.clients.system.untar_package(tar_path, deps_path, package_name)
+
+
+class GitPackage(Package):
+    def __init__(self, git, version):
+        super(GitPackage, self).__init__(git)
+        self.git = git
+        self._checkout_name = hashlib.md5(six.b(git)).hexdigest()
+        self._version = self._sanitize_version(version)
+
+    @classmethod
+    def _sanitize_version(cls, version):
+        return cls.version_to_list(version) or ['master']
+
+    @property
+    def version(self):
+        return self._version
+
+    @version.setter
+    def version(self, version):
+        self._version = self._sanitize_version(version)
+
+    def version_name(self):
+        return self._version[0]
+
+    def incorporate(self, other):
+        return GitPackage(self.git, self.version + other.version)
+
+    def _resolve_version(self):
+        requested = set(self.version)
+        if len(requested) != 1:
+            dbt.exceptions.raise_dependency_error(
+                'git dependencies should contain exactly one version. '
+                '{} contains: {}'.format(self.git, requested))
+        self.version = requested.pop()
+
+    def _checkout(self, project):
+        """Performs a shallow clone of the repository into the downloads
+        directory. This function can be called repeatedly. If the project has
+        already been checked out at this version, it will be a no-op. Returns
+        the path to the checked out directory."""
+        if len(self.version) != 1:
+            dbt.exceptions.raise_dependency_error(
+                'Cannot checkout repository until the version is pinned.')
+        dir_ = dbt.clients.git.clone_and_checkout(
+            self.git, DOWNLOADS_PATH, branch=self.version[0],
+            dirname=self._checkout_name)
+        return os.path.join(DOWNLOADS_PATH, dir_)
+
+    def _fetch_metadata(self, project):
+        path = self._checkout(project)
+        with open(os.path.join(path, 'dbt_project.yml')) as f:
+            return load_yaml_text(f.read())
+
+    def install(self, project):
+        dest_path = self.get_installation_path(project)
+        if os.path.exists(dest_path):
+            dbt.clients.system.rmdir(dest_path)
+        shutil.move(self._checkout(project), dest_path)
+
+
+class LocalPackage(Package):
+    def __init__(self, local):
+        super(LocalPackage, self).__init__(local)
+        self.local = local
+
+    def incorporate(self, _):
+        return LocalPackage(self.local)
+
+    def version_name(self):
+        return '<local @ {}>'.format(self.local)
+
+    def _fetch_metadata(self, project):
+        with open(os.path.join(self.local, 'dbt_project.yml')) as f:
+            return load_yaml_text(f.read())
+
+    def install(self, project):
+        dest_path = self.get_installation_path(project)
+        if os.path.exists(dest_path):
+            dbt.clients.system.rmdir(dest_path)
+        shutil.copytree(self.local, dest_path)
+
+
+def _parse_package(dict_):
+    only_1_keys = ['package', 'git', 'local']
+    specified = [k for k in only_1_keys if dict_.get(k)]
+    if len(specified) > 1:
+        dbt.exceptions.raise_dependency_error(
+            'Packages should not contain more than one of {}; '
+            'yours has {} of them - {}'
+            .format(only_1_keys, len(specified), specified))
+    if dict_.get('package'):
+        return RegistryPackage(dict_['package'], dict_.get('version'))
+    if dict_.get('git'):
+        return GitPackage(dict_['git'], dict_.get('version'))
+    if dict_.get('local'):
+        return LocalPackage(dict_['local'])
+    dbt.exceptions.raise_dependency_error(
+        'Malformed package definition. Must contain package, git, or local.')
+
 
 class PackageListing(AttrDict):
 
-    @classmethod
-    def _convert_version_strings(cls, version_strings):
-        if not isinstance(version_strings, list):
-            version_strings = [version_strings]
-
-        return [
-            VersionSpecifier.from_version_string(version_string)
-            for version_string in version_strings
-        ]
-
-    def incorporate(self, package, version_specifiers=None):
-        if version_specifiers is None:
-            version_specifiers = [UnboundedVersionSpecifier()]
-        elif not isinstance(version_specifiers, list):
-            # error
-            raise Exception('bad')
+    def incorporate(self, package):
+        if not isinstance(package, Package):
+            package = _parse_package(package)
+        if package.name not in self:
+            self[package.name] = package
         else:
-            for version_specifier in version_specifiers:
-                if not isinstance(version_specifier, VersionSpecifier):
-                    # error
-                    raise Exception('bad')
-
-        if package not in self:
-            self[package] = version_specifiers
-
-        else:
-            self[package] = self[package] + version_specifiers
+            self[package.name] = self[package.name].incorporate(package)
 
     @classmethod
     def create(cls, parsed_yaml):
         to_return = cls({})
-
         if not isinstance(parsed_yaml, list):
-            # error
-            raise Exception('bad')
-
-        if isinstance(parsed_yaml, list):
-            for package in parsed_yaml:
-                if isinstance(package, basestring):
-                    to_return.incorporate(package)
-                elif isinstance(package, dict):
-                    (package, version_strings) = package.popitem()
-                    to_return.incorporate(
-                        package,
-                        cls._convert_version_strings(version_strings))
-
+            dbt.exceptions.raise_dependency_error(
+                'Package definitions must be a list, got: {}'
+                .format(type(parsed_yaml)))
+        for package in parsed_yaml:
+            to_return.incorporate(package)
         return to_return
 
+    def incorporate_from_yaml(self, parsed_yaml):
+        listing = self.create(parsed_yaml)
+        for _, package in listing.items():
+            self.incorporate(package)
 
-def folder_from_git_remote(remote_spec):
-    start = remote_spec.rfind('/') + 1
-    end = len(remote_spec) - (4 if remote_spec.endswith('.git') else 0)
-    return remote_spec[start:end]
+
+def _split_at_branch(repo_spec):
+    parts = repo_spec.split('@')
+    error = RuntimeError(
+        "Invalid dep specified: '{}' -- not a repo we can clone".format(
+            repo_spec
+        )
+    )
+    repo = None
+    if repo_spec.startswith('git@'):
+        if len(parts) == 1:
+            raise error
+        if len(parts) == 2:
+            repo, branch = repo_spec, None
+        elif len(parts) == 3:
+            repo, branch = '@'.join(parts[:2]), parts[2]
+    else:
+        if len(parts) == 1:
+            repo, branch = parts[0], None
+        elif len(parts) == 2:
+            repo, branch = parts
+    if repo is None:
+        raise error
+    return repo, branch
+
+
+def _convert_repo(repo_spec):
+    repo, branch = _split_at_branch(repo_spec)
+    return {
+        'git': repo,
+        'version': branch,
+    }
+
+
+def _read_packages(project_yaml):
+    packages = project_yaml.get('packages', [])
+    repos = project_yaml.get('repositories', [])
+    if repos:
+        dbt.deprecations.warn('repositories')
+        packages += [_convert_repo(r) for r in repos]
+    return packages
 
 
 class DepsTask(BaseTask):
-    def __pull_repo(self, repo, branch=None):
-        modules_path = self.project['modules-path']
-
-        out, err = dbt.clients.git.clone(repo, modules_path)
-
-        exists = re.match("fatal: destination path '(.+)' already exists",
-                          err.decode('utf-8'))
-
-        folder = None
-        start_sha = None
-
-        if exists:
-            folder = exists.group(1)
-            logger.info('Updating existing dependency {}.'.format(folder))
-        else:
-            matches = re.match("Cloning into '(.+)'", err.decode('utf-8'))
-            folder = matches.group(1)
-            logger.info('Pulling new dependency {}.'.format(folder))
-
-        dependency_path = os.path.join(modules_path, folder)
-        start_sha = dbt.clients.git.get_current_sha(dependency_path)
-        dbt.clients.git.checkout(dependency_path, repo, branch)
-        end_sha = dbt.clients.git.get_current_sha(dependency_path)
-
-        if exists:
-            if start_sha == end_sha:
-                logger.info('  Already at {}, nothing to do.'.format(
-                    start_sha[:7]))
-            else:
-                logger.info('  Updated checkout from {} to {}.'.format(
-                    start_sha[:7], end_sha[:7]))
-        else:
-            logger.info('  Checked out at {}.'.format(end_sha[:7]))
-
-        return folder
-
-    def __split_at_branch(self, repo_spec):
-        parts = repo_spec.split("@")
-        error = RuntimeError(
-            "Invalid dep specified: '{}' -- not a repo we can clone".format(
-                repo_spec
-            )
-        )
-
-        repo = None
-        if repo_spec.startswith("git@"):
-            if len(parts) == 1:
-                raise error
-            if len(parts) == 2:
-                repo, branch = repo_spec, None
-            elif len(parts) == 3:
-                repo, branch = "@".join(parts[:2]), parts[2]
-        else:
-            if len(parts) == 1:
-                repo, branch = parts[0], None
-            elif len(parts) == 2:
-                repo, branch = parts
-
-        if repo is None:
-            raise error
-
-        return repo, branch
-
-    def __pull_deps_recursive(self, repos, processed_repos=None, i=0):
-        if processed_repos is None:
-            processed_repos = set()
-        for repo_string in repos:
-            repo, branch = self.__split_at_branch(repo_string)
-            repo_folder = folder_from_git_remote(repo)
-
-            try:
-                if repo_folder in processed_repos:
-                    logger.info(
-                        "skipping already processed dependency {}"
-                        .format(repo_folder)
-                    )
-                else:
-                    dep_folder = self.__pull_repo(repo, branch)
-                    dep_project = project.read_project(
-                        os.path.join(self.project['modules-path'],
-                                     dep_folder,
-                                     'dbt_project.yml'),
-                        self.project.profiles_dir,
-                        profile_to_load=self.project.profile_to_load
-                    )
-                    processed_repos.add(dep_folder)
-                    self.__pull_deps_recursive(
-                        dep_project['repositories'], processed_repos, i+1
-                    )
-            except IOError as e:
-                if e.errno == errno.ENOENT:
-                    error_string = basestring(e)
-
-                    if 'dbt_project.yml' in error_string:
-                        error_string = ("'{}' is not a valid dbt project - "
-                                        "dbt_project.yml not found"
-                                        .format(repo))
-
-                    elif 'git' in error_string:
-                        error_string = ("Git CLI is a dependency of dbt, but "
-                                        "it is not installed!")
-
-                    raise dbt.exceptions.RuntimeException(error_string)
-
-                else:
-                    raise e
+    def _check_for_duplicate_project_names(self, final_deps):
+        seen = set()
+        for _, package in final_deps.items():
+            project_name = package.get_project_name(self.project)
+            if project_name in seen:
+                dbt.exceptions.raise_dependency_error(
+                    'Found duplicate project {}. This occurs when a dependency'
+                    ' has the same project name as some other dependency.'
+                    .format(project_name))
+            seen.add(project_name)
 
     def run(self):
-        listing = PackageListing.create(self.project['packages'])
-        visited_listing = PackageListing.create([])
-        index = dbt.clients.registry.index()
+        dbt.clients.system.make_directory(self.project['modules-path'])
+        dbt.clients.system.make_directory(DOWNLOADS_PATH)
 
-        while len(listing) > 0:
-            (package, version_specifiers) = listing.popitem()
+        packages = _read_packages(self.project)
+        if not packages:
+            logger.info('Warning: No packages found in dbt_project.yml')
+            return
 
-            if package not in index:
-                raise Exception('unknown package {}'.format(package))
+        pending_deps = PackageListing.create(packages)
+        final_deps = PackageListing.create([])
+        while pending_deps:
+            sub_deps = PackageListing.create([])
+            for name, package in pending_deps.items():
+                final_deps.incorporate(package)
+                final_deps[name].resolve_version()
+                target_metadata = final_deps[name].fetch_metadata(self.project)
+                sub_deps.incorporate_from_yaml(_read_packages(target_metadata))
+            pending_deps = sub_deps
 
-            version_range = dbt.semver.reduce_versions(
-                *version_specifiers)
+        self._check_for_duplicate_project_names(final_deps)
 
-            available_versions = dbt.clients.registry.get_available_versions(
-                package)
-
-            # for now, pick a version and then recurse. later on,
-            # we'll probably want to traverse multiple options
-            # so we can match packages. not going to make a difference
-            # right now.
-            target_version = dbt.semver.resolve_to_specific_version(
-                version_range,
-                available_versions)
-
-            if target_version is None:
-                logger.error(
-                    'Could not find a matching version for package {}!'
-                    .format(package))
-                logger.error(
-                    '  Requested range: {}'.format(version_range))
-                logger.error(
-                    '  Available versions: {}'.format(
-                        ', '.join(available_versions)))
-                raise Exception('bad')
-
-            visited_listing.incorporate(
-                package,
-                [VersionSpecifier.from_version_string(target_version)])
-
-            target_version_metadata = dbt.clients.registry.package_version(
-                package, target_version)
-
-            dependencies = target_version_metadata.get('dependencies', {})
-
-            for package, versions in dependencies.items():
-                listing.incorporate(
-                    package,
-                    [VersionSpecifier.from_version_string(version)
-                     for version in versions])
-
-        for package, version_specifiers in visited_listing.items():
-            version_string = version_specifiers[0].to_version_string(True)
-            version_info = dbt.clients.registry.package_version(
-                package, version_string)
-
-            import requests
-
-            tar_path = os.path.realpath('{}/downloads/{}.{}.tar.gz'.format(
-                self.project['modules-path'],
-                package,
-                version_string))
-
-            logger.info("Pulling {}@{} from hub.getdbt.com...".format(
-                package, version_string))
-
-            dbt.clients.system.make_directory(
-                os.path.dirname(tar_path))
-
-            response = requests.get(version_info.get('downloads').get('tarball'))
-
-            with open(tar_path, 'wb') as handle:
-                for block in response.iter_content(1024*64):
-                    handle.write(block)
-
-            import tarfile
-
-            with tarfile.open(tar_path, 'r') as tarball:
-                tarball.extractall(self.project['modules-path'])
-
-            logger.info(" -> Success.")
+        for _, package in final_deps.items():
+            logger.info('Installing %s', package)
+            package.install(self.project)
+            logger.info('  Installed at version %s\n', package.version_name())

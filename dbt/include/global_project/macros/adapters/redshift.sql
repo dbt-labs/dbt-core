@@ -52,6 +52,16 @@
 {%- endmacro %}
 
 
+{% macro redshift__create_view_as(identifier, sql) -%}
+
+  {% set bind_qualifier = '' if config.get('bind', default=True) else 'with no schema binding' %}
+
+  create view "{{ schema }}"."{{ identifier }}" as (
+    {{ sql }}
+  ) {{ bind_qualifier }};
+{% endmacro %}
+
+
 {% macro redshift__create_archive_table(schema, identifier, columns) -%}
   create table if not exists "{{ schema }}"."{{ identifier }}" (
     {{ column_list_for_create_table(columns) }}

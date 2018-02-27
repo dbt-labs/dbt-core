@@ -95,8 +95,21 @@ class TestPrePostModelHooks(DBTIntegrationTest):
             'macro-paths': ['test/integration/014_hook_tests/macros'],
             'models': {
                 'test': {
-                    'pre-hook': MODEL_PRE_HOOK,
-                    'post-hook': MODEL_POST_HOOK,
+                    'pre-hook': [
+                        # inside transaction (runs second)
+                        MODEL_PRE_HOOK,
+
+                        # outside transaction (runs first)
+                        {"sql": "vacuum {{ this.schema }}.on_model_hook", "transaction": False},
+                    ],
+
+                    'post-hook':[
+                        # outside transaction (runs second)
+                        {"sql": "vacuum {{ this.schema }}.on_model_hook", "transaction": False},
+
+                        # inside transaction (runs first)
+                        MODEL_POST_HOOK,
+                    ]
                 }
             }
         }

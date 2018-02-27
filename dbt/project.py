@@ -80,10 +80,18 @@ class Project(object):
 
         if self.profile_to_load in self.profiles:
             self.cfg.update(self.profiles[self.profile_to_load])
+            self.compile_and_update_target()
+
         else:
             raise DbtProjectError(
                 "Could not find profile named '{}'"
                 .format(self.profile_to_load), self)
+
+        global_vars = dbt.utils.parse_cli_vars(getattr(args, 'vars', '{}'))
+        if 'vars' not in self.cfg['models']:
+            self.cfg['models']['vars'] = {}
+
+        self.cfg['models']['vars'].update(global_vars)
 
     def __str__(self):
         return pprint.pformat({'project': self.cfg, 'profiles': self.profiles})
@@ -120,14 +128,17 @@ class Project(object):
             is_str = isinstance(value, dbt.compat.basestring)
 
             if is_str:
-                node = "config key: '{}'".format(key)
-                compiled_val = dbt.clients.jinja.get_rendered(value, ctx, node)
+                compiled_val = dbt.clients.jinja.get_rendered(value, ctx)
             else:
                 compiled_val = value
 
             compiled[key] = compiled_val
 
         return compiled
+
+    def compile_and_update_target(self):
+        target = self.cfg['target']
+        self.cfg['outputs'][target].update(self.run_environment())
 
     def run_environment(self):
         target_name = self.cfg['target']
@@ -219,7 +230,11 @@ def read_profiles(profiles_dir=None):
 
     raw_profiles = dbt.config.read_profile(profiles_dir)
 
-    profiles = {k: v for (k, v) in raw_profiles.items() if k != 'config'}
+    if raw_profiles is None:
+        profiles = {}
+    else:
+        profiles = {k: v for (k, v) in raw_profiles.items() if k != 'config'}
+
     return profiles
 
 

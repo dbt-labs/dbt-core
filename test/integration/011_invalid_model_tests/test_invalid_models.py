@@ -53,4 +53,4 @@ class TestInvalidModelReference(DBTIntegrationTest):
             # should throw
             self.assertTrue(False)
         except RuntimeError as e:
-            self.assertTrue("which is disabled" in str(e))
+            self.assertTrue("which was not found" in str(e))

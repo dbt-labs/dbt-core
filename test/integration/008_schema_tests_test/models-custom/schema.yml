@@ -11,12 +11,12 @@ table_copy:
 
     # fails
     every_value_is_blue:
-      - color
+      - favorite_color
 
     # passes
     rejected_values:
-      - { field: 'color', values: ['orange', 'purple'] }
+      - { field: 'favorite_color', values: ['orange', 'purple'] }
 
     # passes
     dbt_utils.equality:
-      - "{{ ref('seed') }}"
+      - ref('table_copy')
