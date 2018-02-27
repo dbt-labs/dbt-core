@@ -59,6 +59,9 @@ class Package(object):
     def version_name(self):
         raise NotImplementedError()
 
+    def nice_version_name(self):
+        raise NotImplementedError()
+
     def _fetch_metadata(self, project):
         raise NotImplementedError()
 
@@ -101,6 +104,9 @@ class RegistryPackage(Package):
         self._check_version_pinned()
         version_string = self.version[0].to_version_string(skip_matcher=True)
         return version_string
+
+    def nice_version_name(self):
+        return "version {}".format(self.version_name())
 
     def incorporate(self, other):
         return RegistryPackage(self.package, self.version + other.version)
@@ -170,6 +176,9 @@ class GitPackage(Package):
     def version_name(self):
         return self._version[0]
 
+    def nice_version_name(self):
+        return "revision {}".format(self.version_name())
+
     def incorporate(self, other):
         return GitPackage(self.git, self.version + other.version)
 
@@ -217,6 +226,9 @@ class LocalPackage(Package):
     def version_name(self):
         return '<local @ {}>'.format(self.local)
 
+    def nice_version_name(self):
+        return self.version_name()
+
     def _fetch_metadata(self, project):
         with open(os.path.join(self.local, 'dbt_project.yml')) as f:
             return load_yaml_text(f.read())
@@ -239,7 +251,11 @@ def _parse_package(dict_):
     if dict_.get('package'):
         return RegistryPackage(dict_['package'], dict_.get('version'))
     if dict_.get('git'):
-        return GitPackage(dict_['git'], dict_.get('version'))
+        if dict_.get('version'):
+            msg = ("Keyword 'version' specified for git package {}.\nDid "
+                   "you mean 'revision'?".format(dict_.get('git')))
+            dbt.exceptions.raise_dependency_error(msg)
+        return GitPackage(dict_['git'], dict_.get('revision'))
     if dict_.get('local'):
         return LocalPackage(dict_['local'])
     dbt.exceptions.raise_dependency_error(
@@ -352,4 +368,4 @@ class DepsTask(BaseTask):
         for _, package in final_deps.items():
             logger.info('Installing %s', package)
             package.install(self.project)
-            logger.info('  Installed at version %s\n', package.version_name())
+            logger.info('  Installed from %s\n', package.nice_version_name())
