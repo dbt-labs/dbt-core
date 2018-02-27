@@ -10,6 +10,7 @@ import requests
 import stat
 
 import dbt.compat
+import dbt.exceptions
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -95,6 +96,20 @@ def make_file(path, contents='', overwrite=False):
     return False
 
 
+def make_symlink(source, link_path):
+    """
+    Create a symlink at `link_path` referring to `source`.
+    """
+    if not supports_symlinks():
+        dbt.exceptions.system_error('create a symbolic link')
+
+    return os.symlink(source, link_path)
+
+
+def supports_symlinks():
+    return getattr(os, "symlink", None) is not None
+
+
 def write_file(path, contents=''):
     make_directory(os.path.dirname(path))
     dbt.compat.write_file(path, contents)
@@ -124,6 +139,18 @@ def rmdir(path):
         onerror = None
 
     return shutil.rmtree(path, onerror=onerror)
+
+
+def remove_file(path):
+    return os.remove(path)
+
+
+def path_exists(path):
+    return os.path.lexists(path)
+
+
+def path_is_symlink(path):
+    return os.path.islink(path)
 
 
 def open_dir_cmd():

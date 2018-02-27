@@ -274,5 +274,13 @@ def invalid_materialization_argument(name, argument):
         .format(name, argument))
 
 
+def system_error(operation_name):
+    raise_compiler_error(
+        "dbt encountered an error when attempting to {}. "
+        "If this error persists, please create an issue at: \n\n"
+        "https://github.com/fishtown-analytics/dbt"
+        .format(operation_name))
+
+
 class RegistryException(Exception):
     pass

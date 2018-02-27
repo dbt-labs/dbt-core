@@ -235,9 +235,23 @@ class LocalPackage(Package):
 
     def install(self, project):
         dest_path = self.get_installation_path(project)
-        if os.path.exists(dest_path):
-            dbt.clients.system.rmdir(dest_path)
-        shutil.copytree(self.local, dest_path)
+
+        can_create_symlink = dbt.clients.system.supports_symlinks()
+
+        if dbt.clients.system.path_exists(dest_path):
+            if not dbt.clients.system.path_is_symlink(dest_path):
+                dbt.clients.system.rmdir(dest_path)
+            else:
+                dbt.clients.system.remove_file(dest_path)
+
+        if can_create_symlink:
+            logger.debug('  Creating symlink to local dependency.')
+            dbt.clients.system.make_symlink(self.local, dest_path)
+
+        else:
+            logger.debug('  Symlinks are not available on this '
+                         'OS, copying dependency.')
+            shutil.copytree(self.local, dest_path)
 
 
 def _parse_package(dict_):
@@ -354,6 +368,7 @@ class DepsTask(BaseTask):
 
         pending_deps = PackageListing.create(packages)
         final_deps = PackageListing.create([])
+
         while pending_deps:
             sub_deps = PackageListing.create([])
             for name, package in pending_deps.items():
