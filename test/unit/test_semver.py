@@ -4,7 +4,7 @@ import itertools
 from dbt.exceptions import VersionsNotCompatibleException
 from dbt.semver import VersionSpecifier, UnboundedVersionSpecifier, \
     VersionRange, reduce_versions, versions_compatible, \
-    resolve_to_specific_version, resolve_dependency_set
+    resolve_to_specific_version
 
 
 def create_range(start_version_string, end_version_string):
