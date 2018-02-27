@@ -318,7 +318,7 @@ def _convert_repo(repo_spec):
     repo, branch = _split_at_branch(repo_spec)
     return {
         'git': repo,
-        'version': branch,
+        'revision': branch,
     }
 
 
