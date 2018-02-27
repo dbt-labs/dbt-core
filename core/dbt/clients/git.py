@@ -129,7 +129,7 @@ def remove_remote(cwd):
     return run_cmd(cwd, ["git", "remote", "rm", "origin"], env={"LC_ALL": "C"})
 
 
-def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
+def clone_and_checkout(
     repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirectory=None
 ):
     exists = None
@@ -153,7 +153,7 @@ def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
         directory = exists.group(1)
         fire_event(GitProgressUpdatingExistingDependency(dir=directory))
     else:
-        matches = re.match("Cloning into '(.+)'", err.decode('utf-8'))
+        matches = re.match("Cloning into '(.+)'", err.decode("utf-8"))
         if matches is None:
             raise RuntimeException(
                 f'Error cloning {repo} - never saw "Cloning into ..." from git'

@@ -754,17 +754,16 @@ def relation_wrong_type(relation, expected_type, model=None):
 
 
 def package_not_found(package_name):
-    raise_dependency_error(
-        "Package {} was not found in the package index".format(package_name))
+    raise_dependency_error("Package {} was not found in the package index".format(package_name))
 
 
 def package_version_not_found(package_name, version_range, available_versions):
-    base_msg = ('Could not find a matching version for package {}\n'
-                '  Requested range: {}\n'
-                '  Available versions: {}')
-    raise_dependency_error(base_msg.format(package_name,
-                                           version_range,
-                                           available_versions))
+    base_msg = (
+        "Could not find a matching version for package {}\n"
+        "  Requested range: {}\n"
+        "  Available versions: {}"
+    )
+    raise_dependency_error(base_msg.format(package_name, version_range, available_versions))
 
 
 def invalid_materialization_argument(name, argument):
@@ -778,7 +777,7 @@ def system_error(operation_name):
         "dbt encountered an error when attempting to {}. "
         "If this error persists, please create an issue at: \n\n"
         "https://github.com/dbt-labs/dbt-core"
-        .format(operation_name))
+    )
 
 
 class ConnectionException(Exception):

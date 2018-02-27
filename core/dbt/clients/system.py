@@ -134,7 +134,7 @@ def make_symlink(source: str, link_path: str) -> None:
     Create a symlink at `link_path` referring to `source`.
     """
     if not supports_symlinks():
-        dbt.exceptions.system_error('create a symbolic link')
+        dbt.exceptions.system_error("create a symbolic link")
 
     os.symlink(source, link_path)
 
@@ -211,7 +211,7 @@ def rmdir(path: str) -> None:
     cloned via git) can cause rmtree to throw a PermissionError exception
     """
     path = convert_path(path)
-    if sys.platform == 'win32':
+    if sys.platform == "win32":
         onerror = _windows_rmdir_readonly
     else:
         onerror = None
@@ -456,7 +456,7 @@ def download(
     path = convert_path(path)
     connection_timeout = timeout or float(os.getenv('DBT_HTTP_TIMEOUT', 10))
     response = requests.get(url, timeout=connection_timeout)
-    with open(path, 'wb') as handle:
+    with open(path, "wb") as handle:
         for block in response.iter_content(1024 * 64):
             handle.write(block)
 

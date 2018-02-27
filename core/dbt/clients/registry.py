@@ -6,17 +6,17 @@ from dbt.utils import memoized, _connection_exception_retry as connection_except
 from dbt import deprecations
 import os
 
-if os.getenv('DBT_PACKAGE_HUB_URL'):
-    DEFAULT_REGISTRY_BASE_URL = os.getenv('DBT_PACKAGE_HUB_URL')
+if os.getenv("DBT_PACKAGE_HUB_URL"):
+    DEFAULT_REGISTRY_BASE_URL = os.getenv("DBT_PACKAGE_HUB_URL")
 else:
-    DEFAULT_REGISTRY_BASE_URL = 'https://hub.getdbt.com/'
+    DEFAULT_REGISTRY_BASE_URL = "https://hub.getdbt.com/"
 
 
 def _get_url(url, registry_base_url=None):
     if registry_base_url is None:
         registry_base_url = DEFAULT_REGISTRY_BASE_URL
 
-    return '{}{}'.format(registry_base_url, url)
+    return "{}{}".format(registry_base_url, url)
 
 
 def _get_with_retries(path, registry_base_url=None):
@@ -85,4 +85,4 @@ def package_version(name, version, registry_base_url=None):
 
 def get_available_versions(name):
     response = package(name)
-    return list(response['versions'])
+    return list(response["versions"])
