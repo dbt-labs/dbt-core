@@ -6,6 +6,7 @@ import dbt.compat
 import dbt.exceptions
 import dbt.flags as flags
 import dbt.clients.gcloud
+import dbt.clients.agate_helper
 
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.contracts.connection import validate_connection
