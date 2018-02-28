@@ -448,6 +448,36 @@ def load_and_parse_macros(package_name, root_project, all_projects, root_dir,
     return result
 
 
+def get_parsed_schema_test(test_node, test_type, model_name, config,
+                           root_project, projects, macros):
+
+    package_name = test_node.get('package_name')
+    test_namespace = None
+    original_test_type = test_type
+    split = test_type.split('.')
+
+    if len(split) > 1:
+        test_type = split[1]
+        package_name = split[0]
+        test_namespace = package_name
+
+    source_package = projects.get(package_name)
+    if source_package is None:
+        desc = '"{}" test on model "{}"'.format(original_test_type, model_name)
+        dbt.exceptions.raise_dep_not_found(test_node, desc, test_namespace)
+
+    return parse_schema_test(
+        test_node,
+        model_name,
+        config,
+        test_namespace,
+        test_type,
+        root_project,
+        source_package,
+        all_projects=projects,
+        macros=macros)
+
+
 def parse_schema_tests(tests, root_project, projects, macros=None):
     to_return = {}
 
@@ -486,25 +516,9 @@ def parse_schema_tests(tests, root_project, projects, macros=None):
                     continue
 
                 for config in configs:
-                    package_name = test.get('package_name')
-                    test_namespace = None
-                    split = test_type.split('.')
-
-                    if len(split) > 1:
-                        test_type = split[1]
-                        package_name = split[0]
-                        test_namespace = package_name
-
-                    to_add = parse_schema_test(
-                        test,
-                        model_name,
-                        config,
-                        test_namespace,
-                        test_type,
-                        root_project,
-                        projects.get(package_name),
-                        all_projects=projects,
-                        macros=macros)
+                    to_add = get_parsed_schema_test(
+                                test, test_type, model_name, config,
+                                root_project, projects, macros)
 
                     if to_add is not None:
                         to_return[to_add.get('unique_id')] = to_add
