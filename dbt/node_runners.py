@@ -79,8 +79,8 @@ class BaseRunner(object):
         return False
 
     @classmethod
-    def is_model(cls, node):
-        return node.get('resource_type') == NodeType.Model
+    def is_refable(cls, node):
+        return node.get('resource_type') in [NodeType.Model, NodeType.Seed]
 
     @classmethod
     def is_ephemeral(cls, node):
@@ -88,7 +88,7 @@ class BaseRunner(object):
 
     @classmethod
     def is_ephemeral_model(cls, node):
-        return cls.is_model(node) and cls.is_ephemeral(node)
+        return cls.is_refable(node) and cls.is_ephemeral(node)
 
     def safe_run(self, flat_graph, existing):
         catchable_errors = (dbt.exceptions.CompilationException,
@@ -175,7 +175,7 @@ class BaseRunner(object):
     def get_model_schemas(cls, flat_graph):
         schemas = set()
         for node in flat_graph['nodes'].values():
-            if cls.is_model(node) and not cls.is_ephemeral(node):
+            if cls.is_refable(node) and not cls.is_ephemeral(node):
                 schemas.add(node['schema'])
 
         return schemas
