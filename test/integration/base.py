@@ -173,6 +173,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
         # it's important to use a different connection handle here so
         # we don't look into an incomplete transaction
+        adapter.cleanup_connections()
         connection = adapter.acquire_connection(profile, '__test')
         self.handle = connection.get('handle')
         self.adapter_type = profile.get('type')
@@ -186,19 +187,20 @@ class DBTIntegrationTest(unittest.TestCase):
             self.run_sql('DROP SCHEMA IF EXISTS "{}" CASCADE'.format(self.unique_schema()))
             self.run_sql('CREATE SCHEMA "{}"'.format(self.unique_schema()))
 
-    def use_default_project(self):
+    def use_default_project(self, overrides=None):
         # create a dbt_project.yml
         base_project_config = {
             'name': 'test',
             'version': '1.0',
             'test-paths': [],
             'source-paths': [self.models],
-            'profile': 'test'
+            'profile': 'test',
         }
 
         project_config = {}
         project_config.update(base_project_config)
         project_config.update(self.project_config)
+        project_config.update(overrides or {})
 
         with open("dbt_project.yml", 'w') as f:
             yaml.safe_dump(project_config, f, default_flow_style=True)
@@ -431,3 +433,7 @@ class DBTIntegrationTest(unittest.TestCase):
             table_a_result,
             table_b_result
         )
+
+    def assertEquals(self, *args, **kwargs):
+        # assertEquals is deprecated. This makes the warnings less chatty
+        self.assertEqual(*args, **kwargs)

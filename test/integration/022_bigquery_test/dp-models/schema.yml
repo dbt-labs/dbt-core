@@ -1,0 +1,18 @@
+
+# check that this exists
+partitioned_simple:
+    constraints:
+        unique:
+            - id
+        not_null:
+            - id
+
+confirmation:
+    constraints:
+        accepted_values:
+            - {field: cast(day_1 as string), values:[1] }
+            - {field: cast(day_2 as string), values:[1] }
+            - {field: cast(day_3 as string), values:[1] }
+            - {field: cast(count_days as string), values:[3] }
+
+

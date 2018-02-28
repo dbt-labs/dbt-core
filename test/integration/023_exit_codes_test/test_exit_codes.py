@@ -6,9 +6,6 @@ import dbt.exceptions
 
 class TestExitCodes(DBTIntegrationTest):
 
-    def setUp(self):
-        pass
-
     @property
     def schema(self):
         return "exit_codes_test_023"
@@ -214,5 +211,8 @@ class TestExitCodesSeedFail(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test_seed(self):
-        _, success = self.run_dbt_and_check(['seed'])
-        self.assertFalse(success)
+        try:
+            _, success = self.run_dbt_and_check(['seed'])
+            self.assertTrue(False)
+        except dbt.exceptions.CompilationException as e:
+            pass

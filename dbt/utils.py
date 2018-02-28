@@ -9,6 +9,7 @@ from dbt.include import GLOBAL_DBT_MODULES_PATH
 from dbt.compat import basestring
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
+from dbt.clients import yaml_helper
 
 
 DBTConfigKeys = [
@@ -370,6 +371,19 @@ def flatten_nodes(dep_list):
     return list(itertools.chain.from_iterable(dep_list))
 
 
+def max_digits(values):
+    """Given a series of decimal.Decimal values, find the maximum
+    number of digits (on both sides of the decimal point) used by the
+    values."""
+    max_ = 0
+    for value in values:
+        if value is None:
+            continue
+        sign, digits, exponent = value.normalize().as_tuple()
+        max_ = max(len(digits), max_)
+    return max_
+
+
 def invalid_ref_fail_unless_test(node, target_model_name,
                                  target_model_package):
     if node.get('resource_type') == NodeType.Test:
@@ -383,3 +397,20 @@ def invalid_ref_fail_unless_test(node, target_model_name,
             node,
             target_model_name,
             target_model_package)
+
+
+def parse_cli_vars(var_string):
+    try:
+        cli_vars = yaml_helper.load_yaml_text(var_string)
+        var_type = type(cli_vars)
+        if var_type == dict:
+            return cli_vars
+        else:
+            type_name = var_type.__name__
+            dbt.exceptions.raise_compiler_error(
+                "The --vars argument must be a YAML dictionary, but was "
+                "of type '{}'".format(type_name))
+    except dbt.exceptions.ValidationException as e:
+        logger.error(
+                "The YAML provided in the --vars argument is not valid.\n")
+        raise

@@ -3,6 +3,7 @@ import os
 import re
 import hashlib
 import collections
+import agate
 
 import dbt.exceptions
 import dbt.flags
@@ -203,7 +204,7 @@ def parse_node(node, node_path, root_project_config, package_project_config,
         root_project_config, package_project_config, fqn)
 
     node['unique_id'] = node_path
-    node['empty'] = (len(node.get('raw_sql').strip()) == 0)
+    node['empty'] = ('raw_sql' in node and len(node['raw_sql'].strip()) == 0)
     node['fqn'] = fqn
     node['tags'] = tags
     node['config_reference'] = config
@@ -468,7 +469,7 @@ def parse_schema_tests(tests, root_project, projects, macros=None):
         for model_name, test_spec in test_yml.items():
             if test_spec is None or test_spec.get('constraints') is None:
                 test_path = test.get('original_file_path', '<unknown>')
-                logger.warn(no_tests_warning.format(model_name, test_path))
+                logger.warning(no_tests_warning.format(model_name, test_path))
                 continue
 
             for test_type, configs in test_spec.get('constraints', {}).items():
@@ -697,3 +698,54 @@ def parse_archives_from_project(project):
             })
 
     return archives
+
+
+def parse_seed_file(file_match, root_dir, package_name):
+    abspath = file_match['absolute_path']
+    logger.debug("Parsing {}".format(abspath))
+    to_return = {}
+    table_name = os.path.basename(abspath)[:-4]
+    node = {
+        'unique_id': get_path(NodeType.Seed, package_name, table_name),
+        'path': file_match['relative_path'],
+        'name': table_name,
+        'root_path': root_dir,
+        'resource_type': NodeType.Seed,
+        # Give this raw_sql so it conforms to the node spec,
+        # use dummy text so it doesn't look like an empty node
+        'raw_sql': '-- csv --',
+        'package_name': package_name,
+        'depends_on': {'nodes': []},
+        'original_file_path': os.path.join(file_match.get('searched_path'),
+                                           file_match.get('relative_path')),
+    }
+    try:
+        table = agate.Table.from_csv(abspath)
+    except ValueError as e:
+        dbt.exceptions.raise_compiler_error(str(e), node)
+    table.original_abspath = abspath
+    node['agate_table'] = table
+    return node
+
+
+def load_and_parse_seeds(package_name, root_project, all_projects, root_dir,
+                         relative_dirs, resource_type, tags=None, macros=None):
+    extension = "[!.#~]*.csv"
+    if dbt.flags.STRICT_MODE:
+        dbt.contracts.project.validate_list(all_projects)
+    file_matches = dbt.clients.system.find_matching(
+        root_dir,
+        relative_dirs,
+        extension)
+    result = {}
+    for file_match in file_matches:
+        node = parse_seed_file(file_match, root_dir, package_name)
+        node_path = node['unique_id']
+        parsed = parse_node(node, node_path, root_project,
+                            all_projects.get(package_name),
+                            all_projects, tags=tags, macros=macros)
+        # parsed['empty'] = False
+        result[node_path] = parsed
+
+    dbt.contracts.graph.parsed.validate_nodes(result)
+    return result

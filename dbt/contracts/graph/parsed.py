@@ -44,6 +44,9 @@ parsed_node_contract = unparsed_node_contract.extend({
     Required('empty'): bool,
     Required('config'): config_contract,
     Required('tags'): All(set),
+
+    # For csv files
+    Optional('agate_table'): object,
 })
 
 parsed_nodes_contract = Schema({
