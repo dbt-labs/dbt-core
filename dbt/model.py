@@ -136,7 +136,7 @@ class SourceConfig(object):
             config[k] = {}
 
         if self.node_type == NodeType.Seed:
-            model_configs = project.get('data')
+            model_configs = project.get('seeds')
         else:
             model_configs = project.get('models')
 

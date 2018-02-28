@@ -201,7 +201,10 @@ def parse_node(node, node_path, root_project_config, package_project_config,
         fqn = get_fqn(node.get('path'), package_project_config, fqn_extra)
 
     config = dbt.model.SourceConfig(
-        root_project_config, package_project_config, fqn, node['resource_type'])
+        root_project_config,
+        package_project_config,
+        fqn,
+        node['resource_type'])
 
     node['unique_id'] = node_path
     node['empty'] = ('raw_sql' in node and len(node['raw_sql'].strip()) == 0)
