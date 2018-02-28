@@ -453,6 +453,7 @@ def get_parsed_schema_test(test_node, test_type, model_name, config,
 
     package_name = test_node.get('package_name')
     test_namespace = None
+    original_test_type = test_type
     split = test_type.split('.')
 
     if len(split) > 1:
@@ -462,10 +463,8 @@ def get_parsed_schema_test(test_node, test_type, model_name, config,
 
     source_package = projects.get(package_name)
     if source_package is None:
-        dbt.exceptions.raise_compiler_error(
-                'Error while parsing "{}" test on model "{}".\nThe required '
-                'package "{}" was not found. Is the package installed?'.format(
-                    test_type, model_name, test_namespace), node=test_node)
+        desc = '"{}" test on model "{}"'.format(original_test_type, model_name)
+        dbt.exceptions.raise_dep_not_found(test_node, desc, test_namespace)
 
     return parse_schema_test(
         test_node,
