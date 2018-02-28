@@ -181,7 +181,7 @@ class SnowflakeAdapter(PostgresAdapter):
 
     @classmethod
     def add_query(cls, profile, sql, model_name=None, auto_begin=True,
-                  select_schema=True, bindings=None):
+                  select_schema=True, bindings=None, abridge_sql_log=False):
         # snowflake only allows one query per api call.
         queries = sql.strip().split(";")
         cursor = None
@@ -211,7 +211,7 @@ class SnowflakeAdapter(PostgresAdapter):
 
             connection, cursor = super(PostgresAdapter, cls).add_query(
                 profile, individual_query, model_name, auto_begin,
-                bindings=bindings)
+                bindings=bindings, abridge_sql_log=abridge_sql_log)
 
         return connection, cursor
 

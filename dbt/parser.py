@@ -39,7 +39,7 @@ def resolve_ref(flat_graph, target_model_name, target_model_package,
                 current_project, node_package):
 
     if target_model_package is not None:
-        return dbt.utils.find_model_by_name(
+        return dbt.utils.find_refable_by_name(
             flat_graph,
             target_model_name,
             target_model_package)
@@ -47,7 +47,7 @@ def resolve_ref(flat_graph, target_model_name, target_model_package,
     target_model = None
 
     # first pass: look for models in the current_project
-    target_model = dbt.utils.find_model_by_name(
+    target_model = dbt.utils.find_refable_by_name(
         flat_graph,
         target_model_name,
         current_project)
@@ -56,7 +56,7 @@ def resolve_ref(flat_graph, target_model_name, target_model_package,
         return target_model
 
     # second pass: look for models in the node's package
-    target_model = dbt.utils.find_model_by_name(
+    target_model = dbt.utils.find_refable_by_name(
         flat_graph,
         target_model_name,
         node_package)
@@ -67,7 +67,7 @@ def resolve_ref(flat_graph, target_model_name, target_model_package,
     # final pass: look for models in any package
     # todo: exclude the packages we have already searched. overriding
     # a package model in another package doesn't necessarily work atm
-    return dbt.utils.find_model_by_name(
+    return dbt.utils.find_refable_by_name(
         flat_graph,
         target_model_name,
         None)
@@ -201,7 +201,10 @@ def parse_node(node, node_path, root_project_config, package_project_config,
         fqn = get_fqn(node.get('path'), package_project_config, fqn_extra)
 
     config = dbt.model.SourceConfig(
-        root_project_config, package_project_config, fqn)
+        root_project_config,
+        package_project_config,
+        fqn,
+        node['resource_type'])
 
     node['unique_id'] = node_path
     node['empty'] = ('raw_sql' in node and len(node['raw_sql'].strip()) == 0)
@@ -448,6 +451,36 @@ def load_and_parse_macros(package_name, root_project, all_projects, root_dir,
     return result
 
 
+def get_parsed_schema_test(test_node, test_type, model_name, config,
+                           root_project, projects, macros):
+
+    package_name = test_node.get('package_name')
+    test_namespace = None
+    original_test_type = test_type
+    split = test_type.split('.')
+
+    if len(split) > 1:
+        test_type = split[1]
+        package_name = split[0]
+        test_namespace = package_name
+
+    source_package = projects.get(package_name)
+    if source_package is None:
+        desc = '"{}" test on model "{}"'.format(original_test_type, model_name)
+        dbt.exceptions.raise_dep_not_found(test_node, desc, test_namespace)
+
+    return parse_schema_test(
+        test_node,
+        model_name,
+        config,
+        test_namespace,
+        test_type,
+        root_project,
+        source_package,
+        all_projects=projects,
+        macros=macros)
+
+
 def parse_schema_tests(tests, root_project, projects, macros=None):
     to_return = {}
 
@@ -486,25 +519,9 @@ def parse_schema_tests(tests, root_project, projects, macros=None):
                     continue
 
                 for config in configs:
-                    package_name = test.get('package_name')
-                    test_namespace = None
-                    split = test_type.split('.')
-
-                    if len(split) > 1:
-                        test_type = split[1]
-                        package_name = split[0]
-                        test_namespace = package_name
-
-                    to_add = parse_schema_test(
-                        test,
-                        model_name,
-                        config,
-                        test_namespace,
-                        test_type,
-                        root_project,
-                        projects.get(package_name),
-                        all_projects=projects,
-                        macros=macros)
+                    to_add = get_parsed_schema_test(
+                                test, test_type, model_name, config,
+                                root_project, projects, macros)
 
                     if to_add is not None:
                         to_return[to_add.get('unique_id')] = to_add

@@ -5,8 +5,12 @@ import os.path
 import shutil
 import subprocess
 import sys
+import tarfile
+import requests
+import stat
 
 import dbt.compat
+import dbt.exceptions
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -92,6 +96,20 @@ def make_file(path, contents='', overwrite=False):
     return False
 
 
+def make_symlink(source, link_path):
+    """
+    Create a symlink at `link_path` referring to `source`.
+    """
+    if not supports_symlinks():
+        dbt.exceptions.system_error('create a symbolic link')
+
+    return os.symlink(source, link_path)
+
+
+def supports_symlinks():
+    return getattr(os, "symlink", None) is not None
+
+
 def write_file(path, contents=''):
     make_directory(os.path.dirname(path))
     dbt.compat.write_file(path, contents)
@@ -99,12 +117,40 @@ def write_file(path, contents=''):
     return True
 
 
+def _windows_rmdir_readonly(func, path, exc):
+    exception_val = exc[1]
+    if exception_val.errno == errno.EACCES:
+        os.chmod(path, stat.S_IWUSR)
+        func(path)
+    else:
+        raise
+
+
 def rmdir(path):
     """
-    Make a file at `path` assuming that the directory it resides in already
-    exists. The file is saved with contents `contents`
+    Recursively deletes a directory. Includes an error handler to retry with
+    different permissions on Windows. Otherwise, removing directories (eg.
+    cloned via git) can cause rmtree to throw a PermissionError exception
     """
-    return shutil.rmtree(path)
+    logger.debug("DEBUG** Window rmdir sys.platform: {}".format(sys.platform))
+    if sys.platform == 'win32':
+        onerror = _windows_rmdir_readonly
+    else:
+        onerror = None
+
+    return shutil.rmtree(path, onerror=onerror)
+
+
+def remove_file(path):
+    return os.remove(path)
+
+
+def path_exists(path):
+    return os.path.lexists(path)
+
+
+def path_is_symlink(path):
+    return os.path.islink(path)
 
 
 def open_dir_cmd():
@@ -133,3 +179,27 @@ def run_cmd(cwd, cmd):
     logger.debug('STDERR: "{}"'.format(err))
 
     return out, err
+
+
+def download(url, path):
+    response = requests.get(url)
+    with open(path, 'wb') as handle:
+        for block in response.iter_content(1024*64):
+            handle.write(block)
+
+
+def rename(from_path, to_path, force=False):
+    if os.path.exists(to_path) and force:
+        rmdir(to_path)
+    os.rename(from_path, to_path)
+
+
+def untar_package(tar_path, dest_dir, rename_to=None):
+    tar_dir_name = None
+    with tarfile.open(tar_path, 'r') as tarball:
+        tarball.extractall(dest_dir)
+        tar_dir_name = os.path.commonprefix(tarball.getnames())
+    if rename_to:
+        downloaded_path = os.path.join(dest_dir, tar_dir_name)
+        desired_path = os.path.join(dest_dir, rename_to)
+        dbt.clients.system.rename(downloaded_path, desired_path, force=True)

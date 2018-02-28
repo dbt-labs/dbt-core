@@ -235,4 +235,4 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
                        cols_sql,
                        ",\n".join(placeholders)))
 
-        cls.add_query(profile, sql, bindings=bindings)
+        cls.add_query(profile, sql, bindings=bindings, abridge_sql_log=True)

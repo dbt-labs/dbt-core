@@ -22,9 +22,9 @@
   {%- set default_name = 'default' + separator + name -%}
 
   {%- if package_context.get(search_name) is not none -%}
-    {{ package_context[search_name](*varargs, **kwargs) }}
+    {{ return(package_context[search_name](*varargs, **kwargs)) }}
   {%- else -%}
-    {{ package_context[default_name](*varargs, **kwargs) }}
+    {{ return(package_context[default_name](*varargs, **kwargs)) }}
   {%- endif -%}
 {%- endmacro %}
 

@@ -5,6 +5,7 @@ import dbt.exceptions
 from dbt.compat import basestring
 
 from dbt.utils import split_path, deep_merge, DBTConfigKeys
+from dbt.node_types import NodeType
 
 
 class SourceConfig(object):
@@ -24,11 +25,12 @@ class SourceConfig(object):
         'bind'
     ]
 
-    def __init__(self, active_project, own_project, fqn):
+    def __init__(self, active_project, own_project, fqn, node_type):
         self._config = None
         self.active_project = active_project
         self.own_project = own_project
         self.fqn = fqn
+        self.node_type = node_type
 
         # the config options defined within the model
         self.in_model_config = {}
@@ -133,7 +135,10 @@ class SourceConfig(object):
         for k in SourceConfig.ExtendDictFields:
             config[k] = {}
 
-        model_configs = project.get('models')
+        if self.node_type == NodeType.Seed:
+            model_configs = project.get('seeds')
+        else:
+            model_configs = project.get('models')
 
         if model_configs is None:
             return config
