@@ -524,7 +524,7 @@ class DefaultAdapter(object):
 
     @classmethod
     def add_query(cls, profile, sql, model_name=None, auto_begin=True,
-                  bindings=None):
+                  bindings=None, abridge_sql_log=False):
         connection = cls.get_connection(profile, model_name)
         connection_name = connection.get('name')
 
@@ -535,7 +535,10 @@ class DefaultAdapter(object):
                      .format(cls.type(), connection_name))
 
         with cls.exception_handler(profile, sql, model_name, connection_name):
-            logger.debug('On %s: %s', connection_name, sql)
+            if abridge_sql_log:
+                logger.debug('On %s: %s....', connection_name, sql[0:512])
+            else:
+                logger.debug('On %s: %s', connection_name, sql)
             pre = time.time()
 
             cursor = connection.get('handle').cursor()

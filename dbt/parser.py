@@ -39,7 +39,7 @@ def resolve_ref(flat_graph, target_model_name, target_model_package,
                 current_project, node_package):
 
     if target_model_package is not None:
-        return dbt.utils.find_model_by_name(
+        return dbt.utils.find_refable_by_name(
             flat_graph,
             target_model_name,
             target_model_package)
@@ -47,7 +47,7 @@ def resolve_ref(flat_graph, target_model_name, target_model_package,
     target_model = None
 
     # first pass: look for models in the current_project
-    target_model = dbt.utils.find_model_by_name(
+    target_model = dbt.utils.find_refable_by_name(
         flat_graph,
         target_model_name,
         current_project)
@@ -56,7 +56,7 @@ def resolve_ref(flat_graph, target_model_name, target_model_package,
         return target_model
 
     # second pass: look for models in the node's package
-    target_model = dbt.utils.find_model_by_name(
+    target_model = dbt.utils.find_refable_by_name(
         flat_graph,
         target_model_name,
         node_package)
@@ -67,7 +67,7 @@ def resolve_ref(flat_graph, target_model_name, target_model_package,
     # final pass: look for models in any package
     # todo: exclude the packages we have already searched. overriding
     # a package model in another package doesn't necessarily work atm
-    return dbt.utils.find_model_by_name(
+    return dbt.utils.find_refable_by_name(
         flat_graph,
         target_model_name,
         None)
@@ -201,7 +201,10 @@ def parse_node(node, node_path, root_project_config, package_project_config,
         fqn = get_fqn(node.get('path'), package_project_config, fqn_extra)
 
     config = dbt.model.SourceConfig(
-        root_project_config, package_project_config, fqn)
+        root_project_config,
+        package_project_config,
+        fqn,
+        node['resource_type'])
 
     node['unique_id'] = node_path
     node['empty'] = ('raw_sql' in node and len(node['raw_sql'].strip()) == 0)

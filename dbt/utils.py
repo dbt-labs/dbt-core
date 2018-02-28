@@ -125,14 +125,14 @@ def model_immediate_name(model, non_destructive):
         return "{}__dbt_tmp".format(model_name)
 
 
-def find_model_by_name(flat_graph, target_name, target_package):
+def find_refable_by_name(flat_graph, target_name, target_package):
     return find_by_name(flat_graph, target_name, target_package,
-                        'nodes', NodeType.Model)
+                        'nodes', [NodeType.Model, NodeType.Seed])
 
 
 def find_macro_by_name(flat_graph, target_name, target_package):
     return find_by_name(flat_graph, target_name, target_package,
-                        'macros', NodeType.Macro)
+                        'macros', [NodeType.Macro])
 
 
 def find_by_name(flat_graph, target_name, target_package, subgraph,
@@ -146,7 +146,7 @@ def find_by_name(flat_graph, target_name, target_package, subgraph,
 
         resource_type, package_name, node_name = node_parts
 
-        if (resource_type == nodetype and
+        if (resource_type in nodetype and
             ((target_name == node_name) and
              (target_package is None or
               target_package == package_name))):

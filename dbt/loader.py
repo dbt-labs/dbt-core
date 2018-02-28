@@ -192,7 +192,8 @@ class SeedLoader(ResourceLoader):
             all_projects=all_projects,
             root_dir=project.get('project-root'),
             relative_dirs=project.get('data-paths', []),
-            resource_type=NodeType.Seed)
+            resource_type=NodeType.Seed,
+            macros=macros)
 
 
 # node loaders

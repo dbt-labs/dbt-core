@@ -403,7 +403,7 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def add_query(cls, profile, sql, model_name=None, auto_begin=True,
-                  bindings=None):
+                  bindings=None, abridge_sql_log=False):
         if model_name in ['on-run-start', 'on-run-end']:
             cls.warning_on_hooks(model_name)
         else:
