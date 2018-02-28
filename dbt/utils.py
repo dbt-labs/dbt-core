@@ -39,6 +39,7 @@ class Relation(object):
         self.node = node
         self.schema = node.get('schema')
         self.name = node.get('name')
+
         # set alias, defaults to name
         self.alias = get_alias(node)
         self.node['alias'] = get_alias(node)
@@ -47,6 +48,7 @@ class Relation(object):
             self.table = self._get_table_name(node)
         else:
             self.table = self.alias
+
 
         self.materialized = get_materialization(node)
         self.sql = node.get('injected_sql')
