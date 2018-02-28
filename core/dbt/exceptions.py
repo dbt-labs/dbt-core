@@ -784,8 +784,10 @@ class ConnectionException(Exception):
 def raise_dep_not_found(node, node_description, required_pkg):
     raise_compiler_error(
         'Error while parsing {}.\nThe required package "{}" was not found. '
-        'Is the package installed?\nHint: You may need to run '
-        '`dbt deps`.'.format(node_description, required_pkg), node=node)
+        "Is the package installed?\nHint: You may need to run "
+        "`dbt deps`.".format(node_description, required_pkg),
+        node=node,
+    )
 
 
 def multiple_matching_relations(kwargs, matches):
