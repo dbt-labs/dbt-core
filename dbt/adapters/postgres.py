@@ -6,6 +6,7 @@ import dbt.adapters.default
 import dbt.compat
 import dbt.exceptions
 from dbt.utils import max_digits
+import agate
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -173,7 +174,6 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
 
     @classmethod
     def convert_number_type(cls, agate_table, col_idx):
-        import agate
         column = agate_table.columns[col_idx]
         precision = max_digits(column.values_without_nulls())
         # agate uses the term Precision but in this context, it is really the

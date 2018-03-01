@@ -7,6 +7,7 @@ from dbt.adapters.factory import get_adapter
 from dbt.compat import basestring, to_string
 
 import dbt.clients.jinja
+import dbt.clients.agate_helper
 import dbt.flags
 import dbt.schema
 import dbt.tracking
@@ -130,10 +131,14 @@ def _env_var(var, default=None):
 
 
 def _store_result(sql_results):
-    def call(name, status, data=[]):
+    def call(name, status, agate_table=None):
+        if agate_table is None:
+            agate_table = dbt.clients.agate_helper.empty_table()
+
         sql_results[name] = dbt.utils.AttrDict({
             'status': status,
-            'data': data
+            'data': dbt.clients.agate_helper.as_matrix(agate_table),
+            'table': agate_table
         })
         return ''
 

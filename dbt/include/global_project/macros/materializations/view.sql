@@ -23,7 +23,7 @@
       --   1) write the sql contents out to the compiled dirs
       --   2) return a status and result to the caller
     #}
-    {% call noop_statement('main', status="PASS", res=[]) -%}
+    {% call noop_statement('main', status="PASS", res=None) -%}
       -- Not running : non-destructive mode
       {{ sql }}
     {%- endcall %}
