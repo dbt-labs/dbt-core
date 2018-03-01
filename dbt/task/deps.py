@@ -211,7 +211,10 @@ class GitPackage(Package):
     def install(self, project):
         dest_path = self.get_installation_path(project)
         if os.path.exists(dest_path):
-            dbt.clients.system.rmdir(dest_path)
+            if dbt.clients.system.path_is_symlink(dest_path):
+                dbt.clients.system.remove_file(dest_path)
+            else:
+                dbt.clients.system.rmdir(dest_path)
         shutil.move(self._checkout(project), dest_path)
 
 

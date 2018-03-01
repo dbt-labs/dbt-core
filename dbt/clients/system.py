@@ -189,8 +189,14 @@ def download(url, path):
 
 
 def rename(from_path, to_path, force=False):
+    is_symlink = path_is_symlink(to_path)
+
     if os.path.exists(to_path) and force:
-        rmdir(to_path)
+        if is_symlink:
+            remove_file(to_path)
+        else:
+            rmdir(to_path)
+
     os.rename(from_path, to_path)
 
 
