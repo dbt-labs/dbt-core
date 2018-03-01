@@ -1,7 +1,4 @@
 {% macro statement(name=None, fetch_result=False, auto_begin=True) -%}
-  {% set status = None %}
-  {% set res = None %}
-
   {%- if execute: -%}
     {%- set sql = render(caller()) -%}
 
