@@ -450,7 +450,7 @@ class TestRunner(CompileRunner):
             auto_begin=True)
 
         num_rows = len(table.rows)
-        if num_rows != 1:
+        if num_rows > 1:
             num_cols = len(table.columns)
             raise RuntimeError(
                 "Bad test {name}: Returned {rows} rows and {cols} cols"

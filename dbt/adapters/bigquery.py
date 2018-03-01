@@ -320,7 +320,7 @@ class BigQueryAdapter(PostgresAdapter):
     def execute_and_fetch(cls, profile, sql, model_name, auto_begin=None):
         status, res = cls.execute(profile, sql, model_name, fetch=True)
         table = cls.get_table_from_response(res)
-        return res, table
+        return status, table
 
     @classmethod
     def get_table_from_response(cls, resp):
