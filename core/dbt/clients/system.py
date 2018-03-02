@@ -195,10 +195,7 @@ def resolve_path_from_base(path_to_resolve: str, base_path: str) -> str:
     If path_to_resolve is an absolute path or a user path (~), just
     resolve it to an absolute path and return.
     """
-    return os.path.abspath(
-        os.path.join(
-            base_path,
-            os.path.expanduser(path_to_resolve)))
+    return os.path.abspath(os.path.join(base_path, os.path.expanduser(path_to_resolve)))
 
 
 def rmdir(path: str) -> None:
