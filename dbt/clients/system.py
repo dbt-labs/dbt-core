@@ -126,6 +126,20 @@ def _windows_rmdir_readonly(func, path, exc):
         raise
 
 
+def resolve_path_from_base(path_to_resolve, base_path):
+    """
+    If path-to_resolve is a relative path, create an absolute path
+    with base_path as the base.
+
+    If path_to_resolve is an absolute path or a user path (~), just
+    resolve it to an absolute path and return.
+    """
+    return os.path.abspath(
+        os.path.join(
+            base_path,
+            os.path.expanduser(path_to_resolve)))
+
+
 def rmdir(path):
     """
     Recursively deletes a directory. Includes an error handler to retry with

@@ -233,10 +233,18 @@ class LocalPackage(Package):
         return self.version_name()
 
     def _fetch_metadata(self, project):
-        with open(os.path.join(self.local, 'dbt_project.yml')) as f:
+        project_file_path = dbt.clients.system.resolve_path_from_base(
+            self.local,
+            project['project-root'])
+
+        with open(os.path.join(project_file_path, 'dbt_project.yml')) as f:
             return load_yaml_text(f.read())
 
     def install(self, project):
+        src_path = dbt.clients.system.resolve_path_from_base(
+            self.local,
+            project['project-root'])
+
         dest_path = self.get_installation_path(project)
 
         can_create_symlink = dbt.clients.system.supports_symlinks()
@@ -249,12 +257,12 @@ class LocalPackage(Package):
 
         if can_create_symlink:
             logger.debug('  Creating symlink to local dependency.')
-            dbt.clients.system.make_symlink(self.local, dest_path)
+            dbt.clients.system.make_symlink(src_path, dest_path)
 
         else:
             logger.debug('  Symlinks are not available on this '
                          'OS, copying dependency.')
-            shutil.copytree(self.local, dest_path)
+            shutil.copytree(src_path, dest_path)
 
 
 def _parse_package(dict_):
