@@ -27,5 +27,6 @@ def as_matrix(table):
 
     return [r.values() for r in table.rows.values()]
 
+
 def from_csv(abspath):
     return agate.Table.from_csv(abspath, column_types=DEFAULT_TYPE_TESTER)
