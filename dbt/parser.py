@@ -3,7 +3,6 @@ import os
 import re
 import hashlib
 import collections
-import agate
 
 import dbt.exceptions
 import dbt.flags
@@ -14,6 +13,7 @@ import dbt.hooks
 import jinja2.runtime
 import dbt.clients.jinja
 import dbt.clients.yaml_helper
+import dbt.clients.agate_helper
 
 import dbt.context.parser
 
@@ -737,7 +737,7 @@ def parse_seed_file(file_match, root_dir, package_name):
                                            file_match.get('relative_path')),
     }
     try:
-        table = agate.Table.from_csv(abspath)
+        table = dbt.clients.agate_helper.from_csv(abspath)
     except ValueError as e:
         dbt.exceptions.raise_compiler_error(str(e), node)
     table.original_abspath = abspath
