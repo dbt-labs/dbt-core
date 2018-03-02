@@ -49,15 +49,19 @@
       {{ create_table_as(False, identifier, sql) }}
     {%- endcall -%}
   {%- else -%}
-    {%- call statement() -%}
-      create temporary table "{{ tmp_identifier }}" as (
-        with dbt_incr_sbq as (
-          {{ sql }}
-        )
-        select * from dbt_incr_sbq
-        where ({{ sql_where }})
-          or ({{ sql_where }}) is null
-        );
+     {%- call statement() -%}
+
+       {% set tmp_table_sql -%}
+         with dbt_incr_sbq as (
+           {{ sql }}
+         )
+         select * from dbt_incr_sbq
+         where ({{ sql_where }})
+           or ({{ sql_where }}) is null
+       {%- endset %}
+
+       {{ dbt.create_table_as(temporary=True, identifier=tmp_identifier, sql=tmp_table_sql) }}
+
      {%- endcall -%}
 
      {{ adapter.expand_target_column_types(temp_table=tmp_identifier,
