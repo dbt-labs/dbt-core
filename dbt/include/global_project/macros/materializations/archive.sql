@@ -112,12 +112,17 @@
   {%- set tmp_identifier = model['name'] + '__dbt_archival_tmp' -%}
 
   {% call statement() %}
-    create temporary table "{{ tmp_identifier }}" as (
+    {% set tmp_table_sql -%}
+
       with dbt_archive_sbq as (
         {{ archive_select(source_schema, source_table, target_schema, target_table, unique_key, updated_at) }}
       )
       select * from dbt_archive_sbq
-    );
+
+    {%- endset %}
+
+    {{ dbt.create_table_as(temporary=True, identifier=tmp_identifier, sql=tmp_table_sql) }}
+
   {% endcall %}
 
   {{ adapter.expand_target_column_types(temp_table=tmp_identifier,

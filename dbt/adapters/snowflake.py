@@ -179,19 +179,13 @@ class SnowflakeAdapter(PostgresAdapter):
 
         return results[0] > 0
 
+    # TODO remove select_schema
     @classmethod
     def add_query(cls, profile, sql, model_name=None, auto_begin=True,
                   select_schema=True, bindings=None, abridge_sql_log=False):
         # snowflake only allows one query per api call.
         queries = sql.strip().split(";")
         cursor = None
-
-        if select_schema:
-            super(PostgresAdapter, cls).add_query(
-                profile,
-                'use schema "{}"'.format(cls.get_default_schema(profile)),
-                model_name,
-                auto_begin)
 
         if bindings:
             # The snowflake connector is more strict than, eg., psycopg2 -
