@@ -26,7 +26,7 @@ default_project_cfg = {
     'target': 'default',
     'models': {},
     'profile': None,
-    'repositories': [],
+    'packages': [],
     'modules-path': 'dbt_modules'
 }
 

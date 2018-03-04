@@ -377,7 +377,7 @@ class DepsTask(BaseTask):
 
         packages = _read_packages(self.project)
         if not packages:
-            logger.info('Warning: No packages found in dbt_project.yml')
+            logger.info('Warning: No packages were found in packages.yml')
             return
 
         pending_deps = PackageListing.create(packages)

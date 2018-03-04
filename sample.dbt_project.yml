@@ -141,7 +141,6 @@ models:
                 dist: "user_id"
 
     # This is the configuration for the "quickbooks" open source package
-    # which is included in the `repositories` section below.
     # These configs override those defined within the quickbooks package
     quickbooks:
         base:
@@ -170,20 +169,7 @@ on-run-end:
 # Package configurations
 #
 
-# repositories: Optional. Contains a list of packages (git repositories) that
-# should be downloaded and included in this project. When a package is
-# included, its models are added to the dbt model graph and executed with
-# `dbt run`. These configs can be specified above (as with quickbooks).
-#
-# Each repository should be a git-cloneable url. Branches and Tags can be
-# specified by adding @branch-or-version to the end of the url, ex:
-#
-# - https://github.com/fishtown-analytics/quickbooks
-# - https://github.com/fishtown-analytics/quickbooks@v0.1.0
-# - https://github.com/fishtown-analytics/quickbooks@master
-
-repositories:
-  - https://github.com/fishtown-analytics/quickbooks
+# More info here: https://docs.getdbt.com/docs/package-management
 
 
 
