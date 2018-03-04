@@ -14,9 +14,16 @@ class DBTDeprecation(object):
 
 class DBTRepositoriesDeprecation(DBTDeprecation):
     name = "repositories"
-    description = """dbt_project.yml configuration option 'repositories' is
-    deprecated. Please use 'packages' instead. The 'repositories' option will
-    be removed in a later version of DBT."""
+    description = """The dbt_project.yml configuration option 'repositories' is
+  deprecated. Please place dependencies in the `packages.yml` file instead.
+  The 'repositories' option will be removed in a future version of dbt.
+
+  For more information, see: https://docs.getdbt.com/docs/package-management
+
+  # Example packages.yml contents:
+
+{recommendation}
+  """
 
 
 class SeedDropExistingDeprecation(DBTDeprecation):

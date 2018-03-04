@@ -198,6 +198,15 @@ def get_materialization_macro(flat_graph, materialization_name,
     return macro
 
 
+def load_project_with_profile(source_project, project_dir):
+    project_filepath = os.path.join(project_dir, 'dbt_project.yml')
+    return dbt.project.read_project(
+        project_filepath,
+        source_project.profiles_dir,
+        profile_to_load=source_project.profile_to_load,
+        args=source_project.args)
+
+
 def dependency_projects(project):
     import dbt.project
     module_paths = [
@@ -218,11 +227,7 @@ def dependency_projects(project):
                 continue
 
             try:
-                yield dbt.project.read_project(
-                    os.path.join(full_obj, 'dbt_project.yml'),
-                    project.profiles_dir,
-                    profile_to_load=project.profile_to_load,
-                    args=project.args)
+                yield load_project_with_profile(project, full_obj)
             except dbt.project.DbtProjectError as e:
                 logger.info(
                     "Error reading dependency project at {}".format(
