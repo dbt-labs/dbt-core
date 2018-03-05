@@ -11,6 +11,7 @@ import dbt.clients.yaml_helper
 import dbt.clients.jinja
 import dbt.compat
 import dbt.context.common
+import dbt.clients.system
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -25,7 +26,7 @@ default_project_cfg = {
     'target': 'default',
     'models': {},
     'profile': None,
-    'repositories': [],
+    'packages': [],
     'modules-path': 'dbt_modules'
 }
 
@@ -244,16 +245,37 @@ def read_profiles(profiles_dir=None):
     return profiles
 
 
-def read_project(filename, profiles_dir=None, validate=True,
+def read_packages(project_dir):
+
+    package_filepath = dbt.clients.system.resolve_path_from_base(
+            'packages.yml', project_dir)
+
+    if dbt.clients.system.path_exists(package_filepath):
+        package_file_contents = dbt.clients.system.load_file_contents(
+                package_filepath)
+        package_cfg = dbt.clients.yaml_helper.load_yaml_text(
+                package_file_contents)
+    else:
+        package_cfg = {}
+
+    return package_cfg.get('packages', [])
+
+
+def read_project(project_filepath, profiles_dir=None, validate=True,
                  profile_to_load=None, args=None):
     if profiles_dir is None:
         profiles_dir = default_profiles_dir
 
-    project_file_contents = dbt.clients.system.load_file_contents(filename)
+    project_dir = os.path.dirname(os.path.abspath(project_filepath))
+    project_file_contents = dbt.clients.system.load_file_contents(
+            project_filepath)
 
     project_cfg = dbt.clients.yaml_helper.load_yaml_text(project_file_contents)
-    project_cfg['project-root'] = os.path.dirname(
-        os.path.abspath(filename))
+    package_cfg = read_packages(project_dir)
+
+    project_cfg['project-root'] = project_dir
+    project_cfg['packages'] = package_cfg
+
     profiles = read_profiles(profiles_dir)
     proj = Project(project_cfg,
                    profiles,
