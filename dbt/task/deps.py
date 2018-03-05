@@ -3,12 +3,13 @@ import shutil
 import hashlib
 import tempfile
 import six
+import yaml
 
+import dbt.project
 import dbt.deprecations
 import dbt.clients.git
 import dbt.clients.system
 import dbt.clients.registry as registry
-from dbt.clients.yaml_helper import load_yaml_text
 
 from dbt.compat import basestring
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -205,8 +206,7 @@ class GitPackage(Package):
 
     def _fetch_metadata(self, project):
         path = self._checkout(project)
-        with open(os.path.join(path, 'dbt_project.yml')) as f:
-            return load_yaml_text(f.read())
+        return dbt.utils.load_project_with_profile(project, path)
 
     def install(self, project):
         dest_path = self.get_installation_path(project)
@@ -237,8 +237,7 @@ class LocalPackage(Package):
             self.local,
             project['project-root'])
 
-        with open(os.path.join(project_file_path, 'dbt_project.yml')) as f:
-            return load_yaml_text(f.read())
+        return dbt.utils.load_project_with_profile(project, project_file_path)
 
     def install(self, project):
         src_path = dbt.clients.system.resolve_path_from_base(
@@ -351,8 +350,12 @@ def _read_packages(project_yaml):
     packages = project_yaml.get('packages', [])
     repos = project_yaml.get('repositories', [])
     if repos:
-        dbt.deprecations.warn('repositories')
-        packages += [_convert_repo(r) for r in repos]
+        bad_packages = [_convert_repo(r) for r in repos]
+        packages += bad_packages
+
+        fixed_packages = {"packages": bad_packages}
+        recommendation = yaml.dump(fixed_packages, default_flow_style=False)
+        dbt.deprecations.warn('repositories', recommendation=recommendation)
     return packages
 
 
@@ -374,7 +377,7 @@ class DepsTask(BaseTask):
 
         packages = _read_packages(self.project)
         if not packages:
-            logger.info('Warning: No packages found in dbt_project.yml')
+            logger.info('Warning: No packages were found in packages.yml')
             return
 
         pending_deps = PackageListing.create(packages)
