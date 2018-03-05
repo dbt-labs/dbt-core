@@ -17,18 +17,15 @@ import dbt.clients.system
 disable_contracts()
 sp_logger.setLevel(100)
 
-COLLECTOR_URL = "events.fivetran.com/snowplow/forgiving_ain"
+COLLECTOR_URL = "fishtownanalytics.sinter-collect.com"
 COLLECTOR_PROTOCOL = "https"
 
 COOKIE_PATH = os.path.join(os.path.expanduser('~'), '.dbt/.user.yml')
 
-BASE_URL = 'https://raw.githubusercontent.com/fishtown-analytics/'\
-           'dbt/master/events/schemas/com.fishtownanalytics/'
-
-INVOCATION_SPEC = BASE_URL + "invocation_event.json"
-PLATFORM_SPEC = BASE_URL + "platform_context.json"
-RUN_MODEL_SPEC = BASE_URL + "run_model_context.json"
-INVOCATION_ENV_SPEC = BASE_URL + "invocation_env_context.json"
+INVOCATION_SPEC = 'iglu:com.dbt/invocation/jsonschema/1-0-0'
+PLATFORM_SPEC = 'iglu:com.dbt/platform/jsonschema/1-0-0'
+RUN_MODEL_SPEC = 'iglu:com.dbt/run_model/jsonschema/1-0-0'
+INVOCATION_ENV_SPEC = 'iglu:com.dbt/invocation_env/jsonschema/1-0-0'
 
 DBT_INVOCATION_ENV = 'DBT_INVOCATION_ENV'
 
@@ -85,12 +82,6 @@ class User(object):
         return user
 
 
-def get_options(args):
-    exclude = ['cls', 'target', 'profile']
-    options = {k: v for (k, v) in args.__dict__.items() if k not in exclude}
-    return json.dumps(options)
-
-
 def get_run_type(args):
     return 'regular'
 
@@ -102,7 +93,7 @@ def get_invocation_context(user, project, args):
       "invocation_id": user.invocation_id,
 
       "command": args.which,
-      "options": get_options(args),
+      "options": None,
       "version": dbt_version.installed,
 
       "run_type": get_run_type(args),
