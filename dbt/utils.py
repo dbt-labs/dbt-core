@@ -409,7 +409,7 @@ def max_digits(values):
         if value is None:
             continue
         sign, digits, exponent = value.normalize().as_tuple()
-        max_ = max(len(digits), max_)
+        max_ = max(len(digits), -exponent+1, max_)
     return max_
 
 

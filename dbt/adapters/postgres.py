@@ -179,8 +179,10 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         # agate uses the term Precision but in this context, it is really the
         # scale - ie. the number of decimal places
         scale = agate_table.aggregate(agate.MaxPrecision(col_idx))
+
         if not scale:
             return "integer"
+
         return "numeric({}, {})".format(precision, scale)
 
     @classmethod

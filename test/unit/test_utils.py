@@ -1,5 +1,7 @@
 import unittest
 
+from decimal import Decimal
+
 import dbt.utils
 
 
@@ -41,3 +43,13 @@ class TestMerge(unittest.TestCase):
                 case['expected'], actual,
                 'failed on {} (actual {}, expected {})'.format(
                     case['description'], actual, case['expected']))
+
+
+class TestMaxDigits(unittest.TestCase):
+
+    def test__simple_cases(self):
+        self.assertEquals(max_digits([Decimal('0.003')]), 4)
+        self.assertEquals(max_digits([Decimal('1.003')]), 4)
+        self.assertEquals(max_digits([Decimal('1003')]), 4)
+        self.assertEquals(max_digits([Decimal('10003')]), 5)
+        self.assertEquals(max_digits([Decimal('0.00003')]), 6)
