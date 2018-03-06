@@ -15,7 +15,7 @@ This release improves dbt's package management, makes seeding csv files work acr
   - Deprecated package listing in `dbt_project.yml` in favor of `packages.yml` ([#681](https://github.com/fishtown-analytics/dbt/pull/681))
   - Support stating local file paths as dependencies ([#542](https://github.com/fishtown-analytics/dbt/pull/542))
 - Support date partitioning in BigQuery ([#641](https://github.com/fishtown-analytics/dbt/pull/641)) ([docs](https://docs.getdbt.com/docs/creating-date-partitioned-tables))
-- Move schema creation to _after_ `on-run-start` hokos ([#652](https://github.com/fishtown-analytics/dbt/pull/652))
+- Move schema creation to _after_ `on-run-start` hooks ([#652](https://github.com/fishtown-analytics/dbt/pull/652))
 - Replace `csvkit` dependency with `agate` ([#598](https://github.com/fishtown-analytics/dbt/issues/598))
 - Switch snowplow endpoint to pipe directly to Fishtown Analytics ([#682](https://github.com/fishtown-analytics/dbt/pull/682))
 
