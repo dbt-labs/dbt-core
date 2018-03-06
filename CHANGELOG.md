@@ -1,3 +1,31 @@
+## dbt 0.9.2 (Unreleased)
+
+This release improves dbt's package management, makes seeding csv files work across all adapters, and adds date partitioning support for BigQuery.
+
+### Changes
+- Support for variables defined on the CLI with `--vars` ([#640](https://github.com/fishtown-analytics/dbt/pull/640)) ([docs](https://docs.getdbt.com/docs/using-variables))
+- Improvements to `dbt seed` ([docs](https://docs.getdbt.com/v0.9/reference#seed))
+  - Support seeding csv files on all adapters ([#618](https://github.com/fishtown-analytics/dbt/pull/618))
+  - Make seed csv's `ref()`-able in models ([#668](https://github.com/fishtown-analytics/dbt/pull/668))
+  - Support seed file configuration (custom schemas, enabled / disabled) in the `dbt_project.yml` file ([#561](https://github.com/fishtown-analytics/dbt/issues/561))
+  - Support `--full-refresh` instead of `--drop-existing` (deprecated) for seed files ([#515](https://github.com/fishtown-analytics/dbt/issues/515))
+  - Add `--show` argument to `dbt seed` to display a sample of data in the CLI ([#74](https://github.com/fishtown-analytics/dbt/issues/74))
+- Improvements to package management ([docs](https://docs.getdbt.com/docs/package-management))
+  - Deprecated `repositories:` config option in favor of `packages:` ([#542](https://github.com/fishtown-analytics/dbt/pull/542))
+  - Deprecated package listing in `dbt_project.yml` in favor of `packages.yml` ([#681](https://github.com/fishtown-analytics/dbt/pull/681))
+  - Support stating local file paths as dependencies ([#542](https://github.com/fishtown-analytics/dbt/pull/542))
+- Support date partitioning in BigQuery ([#641](https://github.com/fishtown-analytics/dbt/pull/641)) ([docs](https://docs.getdbt.com/docs/creating-date-partitioned-tables))
+- Move schema creation to _after_ `on-run-start` hooks ([#652](https://github.com/fishtown-analytics/dbt/pull/652))
+- Replace `csvkit` dependency with `agate` ([#598](https://github.com/fishtown-analytics/dbt/issues/598))
+- Switch snowplow endpoint to pipe directly to Fishtown Analytics ([#682](https://github.com/fishtown-analytics/dbt/pull/682))
+
+### Bugfixes
+- Throw a compilation exception if a required test macro is not present in the context ([#655](https://github.com/fishtown-analytics/dbt/issues/655))
+- Make the `adapter_macro` use the `return()` function ([#635](https://github.com/fishtown-analytics/dbt/issues/635))
+- Fix bug for introspective query on late binding views (redshift) ([#647](https://github.com/fishtown-analytics/dbt/pull/647))
+- Disable any non-dbt log output on the CLI ([#663](https://github.com/fishtown-analytics/dbt/pull/663))
+
+
 ## dbt 0.9.1 (January 2, 2018)
 
 This release fixes bugs and adds supports for late binding views on Redshift.
