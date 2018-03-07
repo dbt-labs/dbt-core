@@ -2,6 +2,13 @@
 
 This release improves dbt's package management, makes seeding csv files work across all adapters, and adds date partitioning support for BigQuery.
 
+### Upgrading Instructions:
+ - Check out full installation and upgrading instructions [here](https://docs.getdbt.com/docs/installation)
+ - Transition the `repositories:` section of your `dbt_project.yml` file to a `packages.yml` file as described [here](https://docs.getdbt.com/docs/package-management)
+ - You may need to clear out your `dbt_modules` directory if you use packages like [dbt-utils](https://github.com/fishtown-analytics/dbt-utils). Depending how your project is configured, you can do this by running `dbt clean`.
+ - We're using a new CSV parsing library, `agate`, so be sure to check that all of your seed tables are parsed as you would expect!
+
+
 ### Changes
 - Support for variables defined on the CLI with `--vars` ([#640](https://github.com/fishtown-analytics/dbt/pull/640)) ([docs](https://docs.getdbt.com/docs/using-variables))
 - Improvements to `dbt seed` ([docs](https://docs.getdbt.com/v0.9/reference#seed))
