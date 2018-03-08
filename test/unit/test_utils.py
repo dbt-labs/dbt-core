@@ -1,7 +1,5 @@
 import unittest
 
-from decimal import Decimal
-
 import dbt.utils
 
 
