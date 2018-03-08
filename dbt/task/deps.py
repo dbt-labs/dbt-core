@@ -5,6 +5,7 @@ import tempfile
 import six
 import yaml
 
+import dbt.utils
 import dbt.project
 import dbt.deprecations
 import dbt.clients.git
@@ -385,10 +386,14 @@ class DepsTask(BaseTask):
 
     def track_package_install(self, package_name, source_type, version):
         version = 'local' if source_type == 'local' else version
+
+        h_package_name = dbt.utils.md5(package_name)
+        h_version = dbt.utils.md5(version)
+
         dbt.tracking.track_package_install({
-            "name": package_name,
+            "name": h_package_name,
             "source": source_type,
-            "version": version
+            "version": h_version
         })
 
     def run(self):
