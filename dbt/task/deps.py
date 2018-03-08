@@ -425,6 +425,6 @@ class DepsTask(BaseTask):
             logger.info('  Installed from %s\n', package.nice_version_name())
 
             self.track_package_install(
-                package_name=package.get_project_name(package),
+                package_name=package.name,
                 source_type=package.source_type(),
                 version=package.version_name())
