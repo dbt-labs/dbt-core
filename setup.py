@@ -42,6 +42,7 @@ setup(
         'celery==3.1.23',
         'voluptuous==0.10.5',
         'snowflake-connector-python>=1.4.9',
+        'pycryptodome>=3.4.0,<3.5.0',  # bug in 3.5.0 -- remove when fixed
         'colorama==0.3.9',
         'google-cloud-bigquery==0.29.0',
         'agate>=1.6,<2',
