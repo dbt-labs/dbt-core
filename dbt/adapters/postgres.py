@@ -5,7 +5,6 @@ from contextlib import contextmanager
 import dbt.adapters.default
 import dbt.compat
 import dbt.exceptions
-from dbt.utils import max_digits
 import agate
 
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -174,14 +173,8 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
 
     @classmethod
     def convert_number_type(cls, agate_table, col_idx):
-        column = agate_table.columns[col_idx]
-        precision = max_digits(column.values_without_nulls())
-        # agate uses the term Precision but in this context, it is really the
-        # scale - ie. the number of decimal places
-        scale = agate_table.aggregate(agate.MaxPrecision(col_idx))
-        if not scale:
-            return "integer"
-        return "numeric({}, {})".format(precision, scale)
+        decimals = agate_table.aggregate(agate.MaxPrecision(col_idx))
+        return "numeric" if decimals else "integer"
 
     @classmethod
     def convert_boolean_type(cls, agate_table, col_idx):
