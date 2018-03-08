@@ -26,6 +26,7 @@ INVOCATION_SPEC = 'iglu:com.dbt/invocation/jsonschema/1-0-0'
 PLATFORM_SPEC = 'iglu:com.dbt/platform/jsonschema/1-0-0'
 RUN_MODEL_SPEC = 'iglu:com.dbt/run_model/jsonschema/1-0-0'
 INVOCATION_ENV_SPEC = 'iglu:com.dbt/invocation_env/jsonschema/1-0-0'
+PACKAGE_INSTALL_SPEC = 'iglu:com.dbt/package_install/jsonschema/1-0-0'
 
 DBT_INVOCATION_ENV = 'DBT_INVOCATION_ENV'
 
@@ -200,6 +201,18 @@ def track_model_run(options):
         category="dbt",
         action='run_model',
         label=active_user.invocation_id,
+        context=context
+    )
+
+
+def track_package_install(options):
+    context = [SelfDescribingJson(PACKAGE_INSTALL_SPEC, options)]
+    track(
+        active_user,
+        category="dbt",
+        action='package',
+        label=active_user.invocation_id,
+        property_='install',
         context=context
     )
 
