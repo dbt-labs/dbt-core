@@ -1,6 +1,6 @@
-## dbt 0.9.2 (Unreleased)
+## dbt 0.10.0 (March 8, 2018)
 
-This release improves dbt's package management, makes seeding csv files work across all adapters, and adds date partitioning support for BigQuery.
+This release overhauls dbt's package management functionality, makes seeding csv files work across all adapters, and adds date partitioning support for BigQuery.
 
 ### Upgrading Instructions:
  - Check out full installation and upgrading instructions [here](https://docs.getdbt.com/docs/installation)
@@ -11,7 +11,7 @@ This release improves dbt's package management, makes seeding csv files work acr
 
 ### Changes
 - Support for variables defined on the CLI with `--vars` ([#640](https://github.com/fishtown-analytics/dbt/pull/640)) ([docs](https://docs.getdbt.com/docs/using-variables))
-- Improvements to `dbt seed` ([docs](https://docs.getdbt.com/v0.9/reference#seed))
+- Improvements to `dbt seed` ([docs](https://docs.getdbt.com/v0.10/reference#seed))
   - Support seeding csv files on all adapters ([#618](https://github.com/fishtown-analytics/dbt/pull/618))
   - Make seed csv's `ref()`-able in models ([#668](https://github.com/fishtown-analytics/dbt/pull/668))
   - Support seed file configuration (custom schemas, enabled / disabled) in the `dbt_project.yml` file ([#561](https://github.com/fishtown-analytics/dbt/issues/561))
