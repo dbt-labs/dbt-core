@@ -265,7 +265,7 @@ def get_pseudo_hook_path(hook_name):
 
 
 def md5(string):
-    return hashlib.md5(string.encode('utf-8')).hexdigest()
+    return hashlib.md5(string.encode("utf-8")).hexdigest()
 
 
 def get_hash(model):
