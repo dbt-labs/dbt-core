@@ -57,6 +57,9 @@ class Package(object):
                        .format(self.name, e))
             six.raise_from(dbt.exceptions.DependencyException(new_msg), e)
 
+    def source_type(self):
+        raise NotImplementedError()
+
     def version_name(self):
         raise NotImplementedError()
 
@@ -92,6 +95,9 @@ class RegistryPackage(Package):
                    else VersionSpecifier.from_version_string(v)
                    for v in cls.version_to_list(version)]
         return version or [UnboundedVersionSpecifier()]
+
+    def source_type(self):
+        return 'hub'
 
     @property
     def version(self):
@@ -166,6 +172,9 @@ class GitPackage(Package):
     def _sanitize_version(cls, version):
         return cls.version_to_list(version) or ['master']
 
+    def source_type(self):
+        return 'git'
+
     @property
     def version(self):
         return self._version
@@ -225,6 +234,9 @@ class LocalPackage(Package):
 
     def incorporate(self, _):
         return LocalPackage(self.local)
+
+    def source_type(self):
+        return 'local'
 
     def version_name(self):
         return '<local @ {}>'.format(self.local)
@@ -398,3 +410,11 @@ class DepsTask(BaseTask):
             logger.info('Installing %s', package)
             package.install(self.project)
             logger.info('  Installed from %s\n', package.nice_version_name())
+
+            package_info = {
+                "name": package.get_project_name(package),
+                "source": package.source_type(),
+                "version": package.version_name()
+            }
+
+            dbt.tracking.track_package_install(package_info)
