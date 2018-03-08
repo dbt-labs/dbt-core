@@ -383,6 +383,14 @@ class DepsTask(BaseTask):
                     .format(project_name))
             seen.add(project_name)
 
+    def track_package_install(self, package_name, source_type, version):
+        version = 'local' if source_type == 'local' else version
+        dbt.tracking.track_package_install({
+            "name": package_name,
+            "source": source_type,
+            "version": version
+        })
+
     def run(self):
         dbt.clients.system.make_directory(self.project['modules-path'])
         dbt.clients.system.make_directory(DOWNLOADS_PATH)
@@ -411,10 +419,7 @@ class DepsTask(BaseTask):
             package.install(self.project)
             logger.info('  Installed from %s\n', package.nice_version_name())
 
-            package_info = {
-                "name": package.get_project_name(package),
-                "source": package.source_type(),
-                "version": package.version_name()
-            }
-
-            dbt.tracking.track_package_install(package_info)
+            self.track_package_install(
+                package_name=package.get_project_name(package),
+                source_type=package.source_type(),
+                version=package.version_name())
