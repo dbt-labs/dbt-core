@@ -357,6 +357,7 @@ def get_nodes_by_tags(nodes, match_tags, resource_type):
             matched_nodes.append(node)
     return matched_nodes
 
+
 def md5(string):
     return hashlib.md5(string.encode('utf-8')).hexdigest()
 
