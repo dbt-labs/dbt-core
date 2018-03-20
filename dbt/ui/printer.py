@@ -5,12 +5,15 @@ from dbt.node_types import NodeType
 import dbt.ui.colors
 
 import time
+import rollbar
+import os
 
 USE_COLORS = False
 
 COLOR_FG_RED = dbt.ui.colors.COLORS['red']
 COLOR_FG_GREEN = dbt.ui.colors.COLORS['green']
 COLOR_FG_YELLOW = dbt.ui.colors.COLORS['yellow']
+COLOR_FG_CYAN = dbt.ui.colors.COLORS['cyan']
 COLOR_RESET_ALL = dbt.ui.colors.COLORS['reset_all']
 
 
@@ -40,6 +43,10 @@ def yellow(text):
 
 def red(text):
     return color(text, COLOR_FG_RED)
+
+
+def cyan(text):
+    return color(text, COLOR_FG_CYAN)
 
 
 def print_timestamped_line(msg, use_color=None):
@@ -222,18 +229,35 @@ def print_run_status_line(results):
 
 def print_run_result_error(result):
     logger.info("")
-
     if result.failed:
-        logger.info(yellow("Failure in {} {} ({})").format(
+        error_path = "Failure in {} {} ({})".format(
             result.node.get('resource_type'),
             result.node.get('name'),
-            result.node.get('original_file_path')))
-        logger.info("  Got {} results, expected 0.".format(result.status))
+            result.node.get('original_file_path'))
+
+        error_result = "  Got {} results, expected 0.".format(result.status)
 
         if result.node.get('build_path') is not None:
+            ROOT = os.path.abspath(__file__ + '/../../../../../../../')
+            sql_file = ROOT + '/dbt/' + result.node.get('build_path')
+            f = open(sql_file, "r")
+            sql_text = f.read()
+            f.close()
+
+        rollbar_token = os.environ.get('ROLLBAR_ACCESS_TOKEN')
+        rollbar_env = os.environ.get('ENV_NAME')
+
+        if rollbar_token and rollbar_env:
+            rollbar.init(rollbar_token, rollbar_env)
+            rollbar_sql = ("Compiled SQL: \n\n{}\n".format(sql_text))
+            error_msg = error_path + "\n" + error_result + "\n\n" + rollbar_sql
+            rollbar.report_message(message=error_msg)
+        else:
+            logger_sql = ("Compiled SQL: " + cyan("\n\n{}\n".format(sql_text)))
+            logger.info(yellow(error_path))
+            logger.info(error_result)
             logger.info("")
-            logger.info("  compiled SQL at {}".format(
-                result.node.get('build_path')))
+            logger.info(logger_sql)
 
     else:
         first = True
