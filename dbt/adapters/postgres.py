@@ -16,6 +16,8 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
     @contextmanager
     def exception_handler(cls, profile, sql, model_name=None,
                           connection_name=None):
+        connection = cls.get_connection(profile, connection_name)
+
         try:
             yield
 
