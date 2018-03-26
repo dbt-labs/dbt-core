@@ -16,15 +16,19 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
     @contextmanager
     def exception_handler(cls, profile, sql, model_name=None,
                           connection_name=None):
-        connection = cls.get_connection(profile, connection_name)
-
         try:
             yield
 
         except psycopg2.DatabaseError as e:
             logger.debug('Postgres error: {}'.format(str(e)))
 
-            cls.release_connection(profile, connection_name)
+            try:
+                # attempt to release the connection
+                cls.release_connection(profile, connection_name)
+            except psycopg2.Error:
+                logger.debug("Failed to release connection!")
+                pass
+
             raise dbt.exceptions.DatabaseException(
                 dbt.compat.to_string(e).strip())
 
