@@ -2,10 +2,11 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
 class Column(object):
-    def __init__(self, column, dtype, char_size):
+    def __init__(self, column, dtype, char_size, numeric_size):
         self.column = column
         self.dtype = dtype
         self.char_size = char_size
+        self.numeric_size = numeric_size
 
     @property
     def name(self):
@@ -17,13 +18,19 @@ class Column(object):
 
     @property
     def data_type(self):
+        print("ASKING FOR DATA TYPE. IT IS '{}'".format(self.dtype))
         if self.is_string():
             return Column.string_type(self.string_size())
+        elif self.is_numeric():
+            return Column.numeric_type(self.dtype, self.numeric_size)
         else:
             return self.dtype
 
     def is_string(self):
         return self.dtype.lower() in ['text', 'character varying']
+
+    def is_numeric(self):
+        return self.dtype.lower() in ['numeric', 'number']
 
     def string_size(self):
         if not self.is_string():
@@ -46,6 +53,12 @@ class Column(object):
     @classmethod
     def string_type(cls, size):
         return "character varying({})".format(size)
+
+    @classmethod
+    def numeric_type(cls, dtype, size):
+        # This could be decimal(...), numeric(...), number(...)
+        # Just use whatever was fed in here -- don't try to get too clever
+        return "{}({})".format(dtype, size)
 
     def __repr__(self):
         return "<Column {} ({})>".format(self.name, self.data_type)

@@ -29,10 +29,12 @@ class RedshiftAdapter(PostgresAdapter):
         sql = """
             with bound_views as (
                 select
+                    ordinal_position,
                     table_schema,
                     column_name,
                     data_type,
-                    character_maximum_length
+                    character_maximum_length,
+                    numeric_precision || ',' || numeric_scale as numeric_size
 
                 from information_schema.columns
                 where table_name = '{table_name}'
@@ -40,18 +42,28 @@ class RedshiftAdapter(PostgresAdapter):
 
             unbound_views as (
                 select
+                    ordinal_position,
                     view_schema,
                     col_name,
-                    col_type,
+                    case
+                        when col_type ilike 'character varying%' then 'character varying'
+                        when col_type ilike 'numeric%' then 'numeric'
+                        else col_type
+                    end as col_type,
                     case
                         when col_type like 'character%'
                         then nullif(REGEXP_SUBSTR(col_type, '[0-9]+'), '')::int
                         else null
-                    end as character_maximum_length
+                    end as character_maximum_length,
+                    case
+                        when col_type like 'numeric%'
+                        then nullif(REGEXP_SUBSTR(col_type, '[0-9,]+'), '')
+                        else null
+                    end as numeric_size
 
                 from pg_get_late_binding_view_cols()
                 cols(view_schema name, view_name name, col_name name,
-                     col_type varchar, col_num int)
+                     col_type varchar, ordinal_position int)
                 where view_name = '{table_name}'
             ),
 
@@ -61,9 +73,15 @@ class RedshiftAdapter(PostgresAdapter):
                 select * from unbound_views
             )
 
-            select column_name, data_type, character_maximum_length
+            select
+                column_name,
+                data_type,
+                character_maximum_length,
+                numeric_size
+
             from unioned
             where {table_schema_filter}
+            order by ordinal_position
         """.format(table_name=table_name,
                    table_schema_filter=table_schema_filter).strip()
         return sql

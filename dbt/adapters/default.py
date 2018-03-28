@@ -193,15 +193,23 @@ class DefaultAdapter(object):
 
     @classmethod
     def _get_columns_in_table_sql(cls, schema_name, table_name):
+
+        schema_filter = '1=1'
+        if schema_name is not None:
+            schema_filter = "table_schema = '{}'".format(schema_name)
+
         sql = """
-        select column_name, data_type, character_maximum_length
+        select
+            column_name,
+            data_type,
+            character_maximum_length,
+            numeric_precision || ',' || numeric_scale as numeric_size
+
         from information_schema.columns
         where table_name = '{table_name}'
-        """.format(table_name=table_name).strip()
-
-        if schema_name is not None:
-            sql += (" AND table_schema = '{schema_name}'"
-                    .format(schema_name=schema_name))
+          and {schema_filter}
+        order by ordinal_position
+        """.format(table_name=table_name, schema_filter=schema_filter).strip()
 
         return sql
 
@@ -217,8 +225,8 @@ class DefaultAdapter(object):
         columns = []
 
         for row in data:
-            name, data_type, char_size = row
-            column = Column(name, data_type, char_size)
+            name, data_type, char_size, numeric_size = row
+            column = Column(name, data_type, char_size, numeric_size)
             columns.append(column)
 
         return columns
