@@ -38,6 +38,7 @@ class CompilerTest(unittest.TestCase):
             'post-hook': [],
             'pre-hook': [],
             'vars': {},
+            'column_types': {},
         }
 
     def test__prepend_ctes__already_has_cte(self):

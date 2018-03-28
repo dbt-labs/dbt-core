@@ -121,3 +121,37 @@ class TestSimpleSeedDisabled(DBTIntegrationTest):
         self.assertTableDoesExist('seed_enabled')
         self.assertTableDoesNotExist('seed_disabled')
 
+
+class TestSimpleSeedColumnOverride(DBTIntegrationTest):
+
+    @property
+    def schema(self):
+        return "simple_seed_005"
+
+    @property
+    def models(self):
+        return "test/integration/005_simple_seed_test/models"
+
+    @property
+    def project_config(self):
+        return {
+            "data-paths": ['test/integration/005_simple_seed_test/data-config'],
+            "macro-paths": ['test/integration/005_simple_seed_test/macros'],
+            "seeds": {
+                "test": {
+                    "enabled": False,
+                    "seed_enabled": {
+                        "enabled": True,
+                        "column_types": {
+                            "id": "text",
+                            "birthday": "date",
+                        }
+                    },
+                }
+            }
+        }
+
+    @attr(type='postgres')
+    def test_simple_seed_with_column_override(self):
+        self.run_dbt(["seed"])
+        self.run_dbt(["test"])

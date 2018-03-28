@@ -25,6 +25,7 @@ config_contract = Schema({
     Required('post-hook'): [hook_contract],
     Required('pre-hook'): [hook_contract],
     Required('vars'): dict,
+    Required('column_types'): dict,
 }, extra=ALLOW_EXTRA)
 
 parsed_node_contract = unparsed_node_contract.extend({
