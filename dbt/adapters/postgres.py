@@ -193,7 +193,8 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         return "time"
 
     @classmethod
-    def create_csv_table(cls, profile, schema, table_name, agate_table, column_override):
+    def create_csv_table(cls, profile, schema, table_name, agate_table,
+                         column_override):
         col_sqls = []
         for idx, col_name in enumerate(agate_table.column_names):
             inferred_type = cls.convert_agate_type(agate_table, idx)
@@ -208,7 +209,8 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
                         column_override, full_refresh=False):
         if full_refresh:
             cls.drop_table(profile, schema, table_name, None)
-            cls.create_csv_table(profile, schema, table_name, agate_table, column_override)
+            cls.create_csv_table(profile, schema, table_name, agate_table,
+                                 column_override)
         else:
             cls.truncate(profile, schema, table_name)
 
