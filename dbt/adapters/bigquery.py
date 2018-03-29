@@ -11,6 +11,7 @@ import dbt.clients.agate_helper
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.contracts.connection import validate_connection
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.schema import BigQueryColumn
 
 import google.auth
 import google.oauth2
@@ -29,7 +30,8 @@ class BigQueryAdapter(PostgresAdapter):
         "drop",
         "execute",
         "quote_schema_and_table",
-        "make_date_partitioned_table"
+        "make_date_partitioned_table",
+        "get_columns_in_table"
     ]
 
     SCOPE = ('https://www.googleapis.com/auth/bigquery',
@@ -378,14 +380,23 @@ class BigQueryAdapter(PostgresAdapter):
     @classmethod
     def get_columns_in_table(cls, profile, schema_name, table_name,
                              model_name=None):
-        raise dbt.exceptions.NotImplementedException(
-            '`get_columns_in_table` is not implemented for this adapter!')
 
-    @classmethod
-    def get_columns_in_table(cls, profile, schema_name, table_name,
-                             model_name=None):
-        raise dbt.exceptions.NotImplementedException(
-            '`get_columns_in_table` is not implemented for this adapter!')
+        conn = cls.get_connection(profile, model_name)
+        client = conn.get('handle')
+
+        dataset_ref = client.dataset(schema_name)
+        table_ref = dataset_ref.table(table_name)
+        table = client.get_table(table_ref)
+
+        columns = []
+        for col in table.schema:
+            name = col.name
+            data_type = col.field_type
+
+            column = BigQueryColumn(col.name, col.field_type, col.fields)
+            columns.append(column)
+
+        return columns
 
     @classmethod
     def check_schema_exists(cls, profile, schema, model_name=None):

@@ -2,7 +2,7 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
 class Column(object):
-    def __init__(self, column, dtype, char_size, numeric_size):
+    def __init__(self, column, dtype, char_size=None, numeric_size=None):
         self.column = column
         self.dtype = dtype
         self.char_size = char_size
@@ -18,7 +18,6 @@ class Column(object):
 
     @property
     def data_type(self):
-        print("ASKING FOR DATA TYPE. IT IS '{}'".format(self.dtype))
         if self.is_string():
             return Column.string_type(self.string_size())
         elif self.is_numeric():
@@ -62,3 +61,59 @@ class Column(object):
 
     def __repr__(self):
         return "<Column {} ({})>".format(self.name, self.data_type)
+
+
+class BigQueryColumn(Column):
+    def __init__(self, column, dtype, fields):
+        super(BigQueryColumn, self).__init__(column, dtype)
+
+        self.fields = self.wrap_subfields(fields)
+
+    @classmethod
+    def wrap_subfields(cls, fields):
+        return [BigQueryColumn.create(field) for field in fields]
+
+    @classmethod
+    def create(cls, field):
+        return BigQueryColumn(field.name, field.field_type, field.fields)
+
+    @classmethod
+    def _flatten_recursive(cls, col, prefix=None):
+        if prefix is None:
+            prefix = []
+
+        if len(col.fields) == 0:
+            prefixed_name = ".".join(prefix + [col.column])
+            new_col = BigQueryColumn(prefixed_name, col.dtype, col.fields)
+            return [new_col]
+
+        new_fields = []
+        for field in col.fields:
+            new_prefix = prefix + [col.column]
+            new_fields.extend(cls._flatten_recursive(field, new_prefix))
+
+        return new_fields
+
+    def flatten(self):
+        return self._flatten_recursive(self)
+
+    @property
+    def quoted(self):
+        return '`{}`'.format(self.column)
+
+    @property
+    def data_type(self):
+        return self.dtype
+
+    def is_string(self):
+        return self.dtype.lower() == 'string'
+
+    def is_numeric(self):
+        return False
+
+    def can_expand_to(self, other_column):
+        """returns True if both columns are strings"""
+        return self.is_string() and other_column.is_string()
+
+    def __repr__(self):
+        return "<BigQueryColumn {} ({})>".format(self.name, self.data_type)
