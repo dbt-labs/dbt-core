@@ -184,8 +184,8 @@ class DBTIntegrationTest(unittest.TestCase):
             adapter.drop_schema(profile, schema_name, '__test')
             adapter.create_schema(profile, schema_name, '__test')
         else:
-            self.run_sql('DROP SCHEMA IF EXISTS "{}" CASCADE'.format(self.unique_schema()))
-            self.run_sql('CREATE SCHEMA "{}"'.format(self.unique_schema()))
+            self.run_sql('DROP SCHEMA IF EXISTS {} CASCADE'.format(self.unique_schema()))
+            self.run_sql('CREATE SCHEMA {}'.format(self.unique_schema()))
 
     def use_default_project(self, overrides=None):
         # create a dbt_project.yml
@@ -232,8 +232,8 @@ class DBTIntegrationTest(unittest.TestCase):
             adapter.drop_schema(profile, self.unique_schema(), '__test')
             adapter.create_schema(profile, self.unique_schema(), '__test')
         else:
-            self.run_sql('DROP SCHEMA IF EXISTS "{}" CASCADE'.format(self.unique_schema()))
-            self.run_sql('CREATE SCHEMA "{}"'.format(self.unique_schema()))
+            self.run_sql('DROP SCHEMA IF EXISTS {} CASCADE'.format(self.unique_schema()))
+            self.run_sql('CREATE SCHEMA {}'.format(self.unique_schema()))
 
     def tearDown(self):
         os.remove(DBT_PROFILES)
@@ -250,7 +250,7 @@ class DBTIntegrationTest(unittest.TestCase):
             adapter = get_adapter(self.profile)
             adapter.drop_schema(self.profile, self.unique_schema(), '__test')
         else:
-            self.run_sql('DROP SCHEMA IF EXISTS "{}" CASCADE'.format(self.unique_schema()))
+            self.run_sql('DROP SCHEMA IF EXISTS {} CASCADE'.format(self.unique_schema()))
             self.handle.close()
 
 
@@ -328,8 +328,8 @@ class DBTIntegrationTest(unittest.TestCase):
         sql = """
                 select column_name, data_type, character_maximum_length
                 from information_schema.columns
-                where table_name = '{}'
-                and table_schema = '{}'
+                where table_name ilike '{}'
+                and table_schema ilike '{}'
                 order by column_name asc"""
 
         result = self.run_sql(sql.format(table, schema), fetch='all')
@@ -345,7 +345,7 @@ class DBTIntegrationTest(unittest.TestCase):
                              else table_type
                         end as materialization
                 from information_schema.tables
-                where table_schema = '{}'
+                where table_schema ilike '{}'
                 order by table_name
                 """
 
@@ -353,25 +353,21 @@ class DBTIntegrationTest(unittest.TestCase):
 
         return {model_name: materialization for (model_name, materialization) in result}
 
-    def assertTablesEqual(self, table_a, table_b, table_a_schema=None, table_b_schema=None):
-        table_a_schema = self.unique_schema() if table_a_schema is None else table_a_schema
-        table_b_schema = self.unique_schema() if table_b_schema is None else table_b_schema
-
-        self.assertTableColumnsEqual(table_a, table_b, table_a_schema, table_b_schema)
-        self.assertTableRowCountsEqual(table_a, table_b, table_a_schema, table_b_schema)
-
+    def _assertTablesEqualSql(self, table_a_schema, table_a, table_b_schema, table_b):
         columns = self.get_table_columns(table_a, table_a_schema)
-        columns_csv = ", ".join(['"{}"'.format(record[0])
-                                 for record in columns])
-        table_sql = "SELECT {} FROM {}"
+
+        if self.adapter_type == 'snowflake':
+            columns_csv = ", ".join(['"{}"'.format(record[0]) for record in columns])
+        else:
+            columns_csv = ", ".join(['{}'.format(record[0]) for record in columns])
 
         sql = """
             SELECT COUNT(*) FROM (
-                (SELECT {columns} FROM "{table_a_schema}"."{table_a}" EXCEPT
-                 SELECT {columns} FROM "{table_b_schema}"."{table_b}")
+                (SELECT {columns} FROM {table_a_schema}.{table_a} EXCEPT
+                 SELECT {columns} FROM {table_b_schema}.{table_b})
                  UNION ALL
-                (SELECT {columns} FROM "{table_b_schema}"."{table_b}" EXCEPT
-                 SELECT {columns} FROM "{table_a_schema}"."{table_a}")
+                (SELECT {columns} FROM {table_b_schema}.{table_b} EXCEPT
+                 SELECT {columns} FROM {table_a_schema}.{table_a})
             ) AS a""".format(
                 columns=columns_csv,
                 table_a_schema=table_a_schema,
@@ -380,6 +376,17 @@ class DBTIntegrationTest(unittest.TestCase):
                 table_b=table_b
             )
 
+        return sql
+
+    def assertTablesEqual(self, table_a, table_b, table_a_schema=None, table_b_schema=None):
+        table_a_schema = self.unique_schema() if table_a_schema is None else table_a_schema
+        table_b_schema = self.unique_schema() if table_b_schema is None else table_b_schema
+
+        self.assertTableColumnsEqual(table_a, table_b, table_a_schema, table_b_schema)
+        self.assertTableRowCountsEqual(table_a, table_b, table_a_schema, table_b_schema)
+
+
+        sql = self._assertTablesEqualSql(table_a_schema, table_a, table_b_schema, table_b)
         result = self.run_sql(sql, fetch='one')
 
         self.assertEquals(
@@ -392,8 +399,8 @@ class DBTIntegrationTest(unittest.TestCase):
         table_a_schema = self.unique_schema() if table_a_schema is None else table_a_schema
         table_b_schema = self.unique_schema() if table_b_schema is None else table_b_schema
 
-        table_a_result = self.run_sql('SELECT COUNT(*) FROM "{}"."{}"'.format(table_a_schema, table_a), fetch='one')
-        table_b_result = self.run_sql('SELECT COUNT(*) FROM "{}"."{}"'.format(table_b_schema, table_b), fetch='one')
+        table_a_result = self.run_sql('SELECT COUNT(*) FROM {}.{}'.format(table_a_schema, table_a), fetch='one')
+        table_b_result = self.run_sql('SELECT COUNT(*) FROM {}.{}'.format(table_b_schema, table_b), fetch='one')
 
         self.assertEquals(
             table_a_result[0],

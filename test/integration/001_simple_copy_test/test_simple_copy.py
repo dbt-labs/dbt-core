@@ -27,7 +27,7 @@ class TestSimpleCopy(DBTIntegrationTest):
         self.run_dbt(["seed"])
         self.run_dbt()
 
-        self.assertTablesEqual("seed","view")
+        self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
 
@@ -35,7 +35,7 @@ class TestSimpleCopy(DBTIntegrationTest):
         self.run_dbt(["seed"])
         self.run_dbt()
 
-        self.assertTablesEqual("seed","view")
+        self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
 
@@ -60,7 +60,7 @@ class TestSimpleCopy(DBTIntegrationTest):
         self.run_dbt(["seed"])
         self.run_dbt()
 
-        self.assertTablesEqual("seed","view")
+        self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
 
@@ -68,6 +68,6 @@ class TestSimpleCopy(DBTIntegrationTest):
         self.run_dbt(["seed"])
         self.run_dbt()
 
-        self.assertTablesEqual("seed","view")
+        self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")

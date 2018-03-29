@@ -29,7 +29,7 @@
 {%- endmacro %}
 
 {% macro create_schema(schema_name) %}
-  create schema if not exists "{{ schema_name }}";
+  create schema if not exists {{ schema_name }};
 {% endmacro %}
 
 
@@ -38,7 +38,7 @@
 {%- endmacro %}
 
 {% macro default__create_table_as(temporary, identifier, sql) -%}
-  create {% if temporary: -%}temporary{%- endif %} table "{{ schema }}"."{{ identifier }}" as (
+  create {% if temporary: -%}temporary{%- endif %} table {{ schema }}.{{ identifier }} as (
     {{ sql }}
   );
 {% endmacro %}
@@ -48,7 +48,7 @@
 {%- endmacro %}
 
 {% macro default__create_view_as(identifier, sql) -%}
-  create view "{{ schema }}"."{{ identifier }}" as (
+  create view {{ schema }}.{{ identifier }} as (
     {{ sql }}
   );
 {% endmacro %}
@@ -59,7 +59,17 @@
 {%- endmacro %}
 
 {% macro default__create_archive_table(schema, identifier, columns) -%}
-  create table if not exists "{{ schema }}"."{{ identifier }}" (
+  create table if not exists {{ schema }}.{{ identifier }} (
     {{ column_list_for_create_table(columns) }}
   );
 {% endmacro %}
+
+
+{% macro get_existing_relation_type(existing, identifier) -%}
+  {{ return(adapter_macro('get_existing_relation_type', existing, identifier)) }}
+{%- endmacro %}
+
+{% macro default__get_existing_relation_type(existing, identifier) -%}
+  {%- set existing_type = existing.get(identifier) -%}
+  {{ return(existing_type) }}
+{%- endmacro %}

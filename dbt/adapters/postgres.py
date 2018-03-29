@@ -97,10 +97,10 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         }
 
         sql = """
-        alter table "{schema}"."{table}" add column "{tmp_column}" {dtype};
-        update "{schema}"."{table}" set "{tmp_column}" = "{old_column}";
-        alter table "{schema}"."{table}" drop column "{old_column}" cascade;
-        alter table "{schema}"."{table}" rename column "{tmp_column}" to "{old_column}";
+        alter table {schema}.{table} add column "{tmp_column}" {dtype};
+        update {schema}.{table} set "{tmp_column}" = "{old_column}";
+        alter table {schema}.{table} drop column "{old_column}" cascade;
+        alter table {schema}.{table} rename column "{tmp_column}" to "{old_column}";
         """.format(**opts).strip()  # noqa
 
         connection, cursor = cls.add_query(profile, sql, model_name)
@@ -198,8 +198,9 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         for idx, col_name in enumerate(agate_table.column_names):
             type_ = cls.convert_agate_type(agate_table, idx)
             col_sqls.append('{} {}'.format(col_name, type_))
-        sql = 'create table "{}"."{}" ({})'.format(schema, table_name,
-                                                   ", ".join(col_sqls))
+
+        relation = cls.render_relation(profile, schema, table_name)
+        sql = 'create table {} ({})'.format(relation, ", ".join(col_sqls))
         return cls.add_query(profile, sql)
 
     @classmethod
@@ -222,9 +223,8 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
             placeholders.append("({})".format(
                 ", ".join("%s" for _ in agate_table.column_names)))
 
-        sql = ('insert into {}.{} ({}) values {}'
-               .format(cls.quote(schema),
-                       cls.quote(table_name),
+        sql = ('insert into {} ({}) values {}'
+               .format(cls.render_relation(profile, schema, table_name),
                        cols_sql,
                        ",\n".join(placeholders)))
 

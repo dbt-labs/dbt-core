@@ -6,7 +6,7 @@ create view {schema}.dependent_view as (
 
     select count(*) from {schema}.materialized
     union all
-    select count(*) from {schema}.view
+    select count(*) from {schema}.view_model
     union all
     select count(*) from {schema}.incremental
 

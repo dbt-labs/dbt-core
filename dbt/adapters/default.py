@@ -1,5 +1,4 @@
 import copy
-import itertools
 import multiprocessing
 import time
 import agate
@@ -140,7 +139,7 @@ class DefaultAdapter(object):
 
     @classmethod
     def drop_relation(cls, profile, schema, rel_name, rel_type, model_name):
-        relation = cls.quote_schema_and_table(profile, schema, rel_name)
+        relation = cls.render_relation(profile, schema, rel_name)
         sql = 'drop {} if exists {} cascade'.format(rel_type, relation)
 
         connection, cursor = cls.add_query(profile, sql, model_name)
@@ -155,16 +154,15 @@ class DefaultAdapter(object):
 
     @classmethod
     def truncate(cls, profile, schema, table, model_name=None):
-        relation = cls.quote_schema_and_table(profile, schema, table)
+        relation = cls.render_relation(profile, schema, table)
         sql = 'truncate table {}'.format(relation)
 
         connection, cursor = cls.add_query(profile, sql, model_name)
 
     @classmethod
     def rename(cls, profile, schema, from_name, to_name, model_name=None):
-        from_relation = cls.quote_schema_and_table(profile, schema, from_name)
-        to_relation = cls.quote(to_name)
-        sql = 'alter table {} rename to {}'.format(from_relation, to_relation)
+        from_relation = cls.render_relation(profile, schema, from_name)
+        sql = 'alter table {} rename to {}'.format(from_relation, to_name)
 
         connection, cursor = cls.add_query(profile, sql, model_name)
 
@@ -196,11 +194,11 @@ class DefaultAdapter(object):
         sql = """
         select column_name, data_type, character_maximum_length
         from information_schema.columns
-        where table_name = '{table_name}'
+        where table_name ilike '{table_name}'
         """.format(table_name=table_name).strip()
 
         if schema_name is not None:
-            sql += (" AND table_schema = '{schema_name}'"
+            sql += (" AND table_schema ilike '{schema_name}'"
                     .format(schema_name=schema_name))
 
         return sql
@@ -261,12 +259,12 @@ class DefaultAdapter(object):
     ###
     @classmethod
     def get_create_schema_sql(cls, schema):
-        return ('create schema if not exists "{schema}"'
+        return ('create schema if not exists {schema}'
                 .format(schema=schema))
 
     @classmethod
     def get_drop_schema_sql(cls, schema):
-        return ('drop schema if exists "{schema} cascade"'
+        return ('drop schema if exists {schema} cascade'
                 .format(schema=schema))
 
     ###
@@ -611,10 +609,14 @@ class DefaultAdapter(object):
         return cls.add_query(profile, sql, model_name)
 
     @classmethod
-    def table_exists(cls, profile, schema, table, model_name=None):
+    def table_existing_type(cls, profile, schema, table, model_name=None):
         tables = cls.query_for_existing(profile, schema, model_name)
-        exists = tables.get(table) is not None
-        return exists
+        return tables.get(table)
+
+    @classmethod
+    def table_exists(cls, profile, schema, table, model_name=None):
+        rel_type = cls.table_existing_type(profile, schema, table, model_name)
+        return rel_type is not None
 
     @classmethod
     def already_exists(cls, profile, schema, table, model_name=None):
@@ -633,10 +635,15 @@ class DefaultAdapter(object):
                               cls.quote(table))
 
     @classmethod
+    def render_relation(cls, profile, schema, name):
+        return '{}.{}'.format(schema, name)
+
+    @classmethod
     def handle_csv_table(cls, profile, schema, table_name, agate_table,
                          full_refresh=False):
         existing = cls.query_for_existing(profile, schema)
-        existing_type = existing.get(table_name)
+        upcased_existing = {k.upper(): v for k, v in existing.items()}
+        existing_type = upcased_existing.get(table_name.upper())
         if existing_type and existing_type != "table":
             raise dbt.exceptions.RuntimeException(
                 "Cannot seed to '{}', it is a view".format(table_name))

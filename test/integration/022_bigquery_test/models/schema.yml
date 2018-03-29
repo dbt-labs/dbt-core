@@ -1,5 +1,5 @@
 
-view:
+view_model:
     constraints:
         not_null:
             - id
@@ -10,7 +10,7 @@ view:
             - dupe    # fails
 
         was_materialized:
-            - {name: view, type: view}
+            - {name: view_model, type: view}
 
 table_model:
     constraints:

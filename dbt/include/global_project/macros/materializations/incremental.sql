@@ -4,10 +4,10 @@
   {%- set identifier = model['name'] -%}
 
   delete
-  from "{{ schema }}"."{{ identifier }}"
+  from {{ schema }}.{{ identifier }}
   where ({{ unique_key }}) in (
     select ({{ unique_key }})
-    from "{{ identifier }}__dbt_incremental_tmp"
+    from {{ identifier }}__dbt_incremental_tmp
   );
 
 {%- endmacro %}
@@ -22,7 +22,7 @@
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
   {%- set full_refresh_mode = (flags.FULL_REFRESH == True) -%}
   {%- set existing = adapter.query_for_existing(schema) -%}
-  {%- set existing_type = existing.get(identifier) -%}
+  {%- set existing_type = get_existing_relation_type(existing, identifier) -%}
 
   {%- set exists_as_table = (existing_type == 'table') -%}
   {%- set should_truncate = (non_destructive_mode and full_refresh_mode and exists_as_table) -%}
@@ -44,7 +44,8 @@
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
   -- build model
-  {% if force_create or not adapter.already_exists(schema, identifier) -%}
+  {# TODO : Can we use `exists_as_table` here? Or did we need adapter.already_exists() #}
+  {% if force_create or not exists_as_table -%}
     {%- call statement('main') -%}
       {{ create_table_as(False, identifier, sql) }}
     {%- endcall -%}
@@ -78,10 +79,10 @@
 
        {%- endif %}
 
-       insert into "{{ schema }}"."{{ identifier }}" ({{ dest_cols_csv }})
+       insert into {{ schema }}.{{ identifier }} ({{ dest_cols_csv }})
        (
          select {{ dest_cols_csv }}
-         from "{{ identifier }}__dbt_incremental_tmp"
+         from {{ identifier }}__dbt_incremental_tmp
        );
      {% endcall %}
   {%- endif %}

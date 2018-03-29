@@ -4,4 +4,4 @@
   )
 }}
 
-select a_field_that_does_not_exist from "{{ this.schema }}"."seed"
+select a_field_that_does_not_exist from {{ this.schema }}.seed

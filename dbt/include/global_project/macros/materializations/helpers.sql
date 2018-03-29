@@ -47,7 +47,7 @@
 
 
 {% macro drop_if_exists(existing, schema, name) %}
-  {% set existing_type = existing.get(name) %}
+  {% set existing_type = get_existing_relation_type(existing, name) %}
   {% if existing_type is not none %}
     {{ adapter.drop(schema, name, existing_type) }}
   {% endif %}

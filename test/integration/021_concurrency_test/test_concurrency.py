@@ -23,7 +23,7 @@ class TestConcurrency(DBTIntegrationTest):
 
         self.run_dbt(expect_pass=False)
 
-        self.assertTablesEqual("seed", "view")
+        self.assertTablesEqual("seed", "view_model")
         self.assertTablesEqual("seed", "dep")
         self.assertTablesEqual("seed", "table_a")
         self.assertTablesEqual("seed", "table_b")
@@ -34,7 +34,7 @@ class TestConcurrency(DBTIntegrationTest):
 
         self.run_dbt(expect_pass=False)
 
-        self.assertTablesEqual("seed", "view")
+        self.assertTablesEqual("seed", "view_model")
         self.assertTablesEqual("seed", "dep")
         self.assertTablesEqual("seed", "table_a")
         self.assertTablesEqual("seed", "table_b")
@@ -49,7 +49,7 @@ class TestConcurrency(DBTIntegrationTest):
 
         self.run_dbt(expect_pass=False)
 
-        self.assertTablesEqual("seed", "view")
+        self.assertTablesEqual("seed", "view_model")
         self.assertTablesEqual("seed", "dep")
         self.assertTablesEqual("seed", "table_a")
         self.assertTablesEqual("seed", "table_b")
@@ -58,7 +58,7 @@ class TestConcurrency(DBTIntegrationTest):
 
         self.run_dbt(expect_pass=False)
 
-        self.assertTablesEqual("seed", "view")
+        self.assertTablesEqual("seed", "view_model")
         self.assertTablesEqual("seed", "dep")
         self.assertTablesEqual("seed", "table_a")
         self.assertTablesEqual("seed", "table_b")

@@ -3,7 +3,7 @@
   {%- set tmp_identifier = identifier + '__dbt_tmp' -%}
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
   {%- set existing = adapter.query_for_existing(schema) -%}
-  {%- set existing_type = existing.get(identifier) -%}
+  {%- set existing_type = get_existing_relation_type(existing, identifier) -%}
 
   {{ drop_if_exists(existing, schema, tmp_identifier) }}
 
@@ -32,7 +32,7 @@
 
         insert into {{ schema }}.{{ identifier }} ({{ dest_cols_csv }}) (
           select {{ dest_cols_csv }}
-          from "{{ tmp_identifier }}"
+          from {{ tmp_identifier }}
         );
       {%- else -%}
         {{ create_table_as(False, identifier, sql) }}

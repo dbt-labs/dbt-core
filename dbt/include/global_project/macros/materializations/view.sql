@@ -4,7 +4,7 @@
   {%- set tmp_identifier = identifier + '__dbt_tmp' -%}
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
   {%- set existing = adapter.query_for_existing(schema) -%}
-  {%- set existing_type = existing.get(identifier) -%}
+  {%- set existing_type = get_existing_relation_type(existing, identifier) -%}
 
   {%- set has_transactional_hooks = (hooks | selectattr('transaction', 'equalto', True) | list | length) > 0 %}
   {%- set should_ignore = non_destructive_mode and existing_type == 'view' %}

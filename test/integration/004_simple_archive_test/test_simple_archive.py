@@ -58,11 +58,11 @@ class TestSimpleArchive(DBTIntegrationTest):
 
         self.run_dbt(["archive"])
 
-        self.assertTablesEqual("archive_expected","archive_actual")
+        self.assertTablesEqual("ARCHIVE_EXPECTED","ARCHIVE_ACTUAL")
 
         self.run_sql_file("test/integration/004_simple_archive_test/invalidate_snowflake.sql")
         self.run_sql_file("test/integration/004_simple_archive_test/update.sql")
 
         self.run_dbt(["archive"])
 
-        self.assertTablesEqual("archive_expected","archive_actual")
+        self.assertTablesEqual("ARCHIVE_EXPECTED","ARCHIVE_ACTUAL")

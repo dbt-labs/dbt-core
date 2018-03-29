@@ -5,7 +5,7 @@
       {%- if dist in ['all', 'even'] -%}
         diststyle {{ dist }}
       {%- else -%}
-        diststyle key distkey ("{{ dist }}")
+        diststyle key distkey ({{ dist }})
       {%- endif -%}
 
   {%- endif -%}
@@ -19,7 +19,7 @@
         {%- set sort = [sort] -%}
       {%- endif -%}
       {%- for item in sort -%}
-        "{{ item }}"
+        {{ item }}
         {%- if not loop.last -%},{%- endif -%}
       {%- endfor -%}
       )
@@ -38,9 +38,9 @@
           validator=validation.any[list, basestring]) -%}
 
   {% if temporary %}
-    {% set relation = adapter.quote(identifier) %}
+    {% set relation = identifier %}
   {% else %}
-    {% set relation = adapter.quote(schema) ~ '.' ~ adapter.quote(identifier) %}
+    {% set relation = schema ~ '.' ~ identifier %}
   {% endif %}
 
   create {% if temporary -%}temporary{%- endif %} table {{ relation }}
@@ -56,14 +56,14 @@
 
   {% set bind_qualifier = '' if config.get('bind', default=True) else 'with no schema binding' %}
 
-  create view "{{ schema }}"."{{ identifier }}" as (
+  create view {{ schema }}.{{ identifier }} as (
     {{ sql }}
   ) {{ bind_qualifier }};
 {% endmacro %}
 
 
 {% macro redshift__create_archive_table(schema, identifier, columns) -%}
-  create table if not exists "{{ schema }}"."{{ identifier }}" (
+  create table if not exists {{ schema }}.{{ identifier }} (
     {{ column_list_for_create_table(columns) }}
   )
   {{ dist('dbt_updated_at') }}

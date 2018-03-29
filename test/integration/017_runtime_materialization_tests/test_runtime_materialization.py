@@ -21,7 +21,7 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
         # initial full-refresh should have no effect
         self.run_dbt(['run', '--full-refresh'])
 
-        self.assertTablesEqual("seed","view")
+        self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
 
@@ -34,7 +34,7 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
 
         self.run_dbt(['run', '--full-refresh'])
 
-        self.assertTablesEqual("seed","view")
+        self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
 
@@ -42,7 +42,7 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
     def test_non_destructive(self):
         self.run_dbt(['run', '--non-destructive'])
 
-        self.assertTablesEqual("seed","view")
+        self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
         self.assertTableDoesNotExist('dependent_view')
@@ -52,7 +52,7 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
         self.run_dbt(['run', '--non-destructive'])
 
         self.assertTableDoesExist('dependent_view')
-        self.assertTablesEqual("seed","view")
+        self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
 
@@ -60,7 +60,7 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
     def test_full_refresh_and_non_destructive(self):
         self.run_dbt(['run', '--full-refresh', '--non-destructive'])
 
-        self.assertTablesEqual("seed","view")
+        self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
         self.assertTableDoesNotExist('dependent_view')
@@ -71,7 +71,7 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
         self.run_dbt(['run', '--full-refresh', '--non-destructive'])
 
         self.assertTableDoesExist('dependent_view')
-        self.assertTablesEqual("seed","view")
+        self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
 
@@ -80,7 +80,7 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
     def test_delete__dbt_tmp_relation(self):
         # This creates a __dbt_tmp view - make sure it doesn't interfere with the dbt run
         self.run_sql_file("test/integration/017_runtime_materialization_tests/create_view__dbt_tmp.sql")
-        self.run_dbt(['run', '--model', 'view'])
+        self.run_dbt(['run', '--model', 'view_model'])
 
-        self.assertTableDoesNotExist('view__dbt_tmp')
-        self.assertTablesEqual("seed","view")
+        self.assertTableDoesNotExist('view__model_dbt_tmp')
+        self.assertTablesEqual("seed","view_model")

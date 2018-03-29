@@ -3,7 +3,7 @@
   {%- set identifier = model['name'] -%}
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
   {%- set existing = adapter.query_for_existing(schema) -%}
-  {%- set existing_type = existing.get(identifier) -%}
+  {%- set existing_type = get_existing_relation_type(existing, identifier) -%}
 
   {%- if existing_type is not none -%}
     {%- if existing_type == 'table' and not flags.FULL_REFRESH -%}
@@ -58,7 +58,7 @@
   {%- set identifier = model['name'] -%}
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
   {%- set existing = adapter.query_for_existing(schema) -%}
-  {%- set existing_type = existing.get(identifier) -%}
+  {%- set existing_type = get_existing_relation_type(existing, identifier) -%}
   {%- set verbose = config.get('verbose', False) -%}
   {%- set partitions = config.get('partitions') -%}
 

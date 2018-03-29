@@ -148,7 +148,7 @@ class TestSimpleReference(DBTIntegrationTest):
         self.assertTablesEqual("seed","materialized_copy")
 
         created_models = self.get_models_in_schema()
-        self.assertTrue('materialized_copy' in created_models)
+        self.assertTrue('MATERIALIZED_COPY' in created_models)
 
     @attr(type='snowflake')
     def test__snowflake__simple_reference_with_models_and_children(self):
@@ -178,10 +178,10 @@ class TestSimpleReference(DBTIntegrationTest):
         # make sure this wasn't errantly materialized
         self.assertFalse('ephemeral_copy' in created_models)
 
-        self.assertTrue('materialized_copy' in created_models)
-        self.assertTrue('materialized_summary' in created_models)
-        self.assertEqual(created_models['materialized_copy'], 'table')
-        self.assertEqual(created_models['materialized_summary'], 'table')
+        self.assertTrue('MATERIALIZED_COPY' in created_models)
+        self.assertTrue('MATERIALIZED_SUMMARY' in created_models)
+        self.assertEqual(created_models['MATERIALIZED_COPY'], 'table')
+        self.assertEqual(created_models['MATERIALIZED_SUMMARY'], 'table')
 
-        self.assertTrue('ephemeral_summary' in created_models)
-        self.assertEqual(created_models['ephemeral_summary'], 'table')
+        self.assertTrue('EPHEMERAL_SUMMARY' in created_models)
+        self.assertEqual(created_models['EPHEMERAL_SUMMARY'], 'table')

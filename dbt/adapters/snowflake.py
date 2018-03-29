@@ -103,16 +103,24 @@ class SnowflakeAdapter(PostgresAdapter):
         return result
 
     @classmethod
+    def table_existing_type(cls, profile, schema, table, model_name=None):
+        # this is a case-insensitive lookup
+        relations = cls.query_for_existing(profile, schema, model_name)
+        upcased_relations = {k.upper(): v for (k, v) in relations.items()}
+        return upcased_relations.get(table.upper())
+
+    @classmethod
     def query_for_existing(cls, profile, schemas, model_name=None):
         if not isinstance(schemas, (list, tuple)):
             schemas = [schemas]
 
-        schema_list = ",".join(["'{}'".format(schema) for schema in schemas])
+        schemas = ["upper('{}')".format(schema) for schema in schemas]
+        schema_list = ",".join(schemas)
 
         sql = """
-        select TABLE_NAME as name, TABLE_TYPE as type
-        from INFORMATION_SCHEMA.TABLES
-        where TABLE_SCHEMA in ({schema_list})
+        select table_name as name, table_type as type
+        from information_schema.tables
+        where upper(table_schema) in ({schema_list})
         """.format(schema_list=schema_list).strip()  # noqa
 
         _, cursor = cls.add_query(profile, sql, model_name, auto_begin=False)
@@ -130,8 +138,8 @@ class SnowflakeAdapter(PostgresAdapter):
 
     @classmethod
     def rename(cls, profile, schema, from_name, to_name, model_name=None):
-        sql = (('alter table "{schema}"."{from_name}" '
-                'rename to "{schema}"."{to_name}"')
+        sql = (('alter table {schema}.{from_name} '
+                'rename to {schema}.{to_name}')
                .format(schema=schema,
                        from_name=from_name,
                        to_name=to_name))
@@ -155,7 +163,7 @@ class SnowflakeAdapter(PostgresAdapter):
 
     @classmethod
     def get_existing_schemas(cls, profile, model_name=None):
-        sql = "select distinct SCHEMA_NAME from INFORMATION_SCHEMA.SCHEMATA"
+        sql = "select distinct schema_name from information_schema.schemata"
 
         connection, cursor = cls.add_query(profile, sql, model_name,
                                            select_schema=False,
@@ -168,8 +176,8 @@ class SnowflakeAdapter(PostgresAdapter):
     def check_schema_exists(cls, profile, schema, model_name=None):
         sql = """
         select count(*)
-        from INFORMATION_SCHEMA.SCHEMATA
-        where SCHEMA_NAME = '{schema}'
+        from information_schema.schemata
+        where upper(schema_name) = upper('{schema}')
         """.format(schema=schema).strip()  # noqa
 
         connection, cursor = cls.add_query(profile, sql, model_name,

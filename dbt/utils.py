@@ -57,11 +57,7 @@ class Relation(object):
         # make a closure so we don't need to store the profile
         # on the `Relation` object. That shouldn't be accessible in user-land
         def quote(schema, table):
-            return adapter.quote_schema_and_table(
-                        profile=profile,
-                        schema=schema,
-                        table=table
-                    )
+            return adapter.render_relation(profile, schema, table)
 
         return quote
 

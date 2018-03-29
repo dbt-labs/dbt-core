@@ -429,12 +429,16 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def quote_schema_and_table(cls, profile, schema, table, model_name=None):
+        return cls.render_relation(profile,
+                                   cls.quote(schema),
+                                   cls.quote(table))
+
+    @classmethod
+    def render_relation(cls, profile, schema, table):
         connection = cls.get_connection(profile)
         credentials = connection.get('credentials', {})
         project = credentials.get('project')
-        return '{}.{}.{}'.format(cls.quote(project),
-                                 cls.quote(schema),
-                                 cls.quote(table))
+        return '{}.{}.{}'.format(cls.quote(project), schema, table)
 
     @classmethod
     def convert_text_type(cls, agate_table, col_idx):

@@ -4,4 +4,4 @@
   )
 }}
 
-select * from "{{ this.schema }}"."seed"
+select * from {{ this.schema }}.seed
