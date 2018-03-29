@@ -10,6 +10,6 @@
 
 {% macro with_ref() %}
 
-    {{ ref('table') }}
+    {{ ref('table_model') }}
 
 {% endmacro %}
