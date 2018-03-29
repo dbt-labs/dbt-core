@@ -223,7 +223,7 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     profile = dbt.utils.get_profile_from_project(root_project_config)
     default_schema = profile.get('schema', 'public')
     node['schema'] = default_schema
-
+    node['alias'] = dbt.utils.get_alias(node)
     context = dbt.context.parser.generate(node, root_project_config,
                                           {"macros": macros})
 

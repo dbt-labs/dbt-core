@@ -139,7 +139,7 @@ def print_test_result_line(result, schema_name, index, total):
         raise RuntimeError("unexpected status: {}".format(result.status))
 
     print_fancy_output_line(
-        "{info} {name}".format(info=info, name=model.get('name')),
+        "{info} {name}".format(info=info, name=model.get('alias')),
         color(info),
         index,
         total,
@@ -156,7 +156,7 @@ def print_model_result_line(result, schema_name, index, total):
             info=info,
             model_type=get_materialization(model),
             schema=schema_name,
-            relation=model.get('name')),
+            relation=model.get('alias')),
         status,
         index,
         total,

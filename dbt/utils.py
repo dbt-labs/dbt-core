@@ -15,6 +15,7 @@ from dbt.clients import yaml_helper
 
 
 DBTConfigKeys = [
+    'alias',
     'schema',
     'enabled',
     'materialized',
@@ -42,10 +43,15 @@ class Relation(object):
         self.schema = node.get('schema')
         self.name = node.get('name')
 
+        # set alias, defaults to name
+        self.alias = get_alias(node)
+        self.node['alias'] = get_alias(node)
+
         if use_temp:
             self.table = self._get_table_name(node)
         else:
-            self.table = self.name
+            self.table = self.alias
+
 
         self.materialized = get_materialization(node)
         self.sql = node.get('injected_sql')
@@ -73,11 +79,11 @@ class Relation(object):
             msg = "final_name() was called on an ephemeral model"
             dbt.exceptions.raise_compiler_error(msg, self.node)
         else:
-            return self.do_quote(self.schema, self.name)
+            return self.do_quote(self.schema, self.alias)
 
     def __repr__(self):
         if self.materialized == 'ephemeral':
-            return '__dbt__CTE__{}'.format(self.name)
+            return '__dbt__CTE__{}'.format(self.alias)
         else:
             return self.do_quote(self.schema, self.table)
 
@@ -102,7 +108,7 @@ def get_model_name_or_none(model):
     elif isinstance(model, basestring):
         name = model
     elif isinstance(model, dict):
-        name = model.get('name')
+        name = get_alias(model)
     else:
         name = model.nice_name
     return name
@@ -118,7 +124,7 @@ def compiler_warning(model, msg):
 
 def model_immediate_name(model, non_destructive):
     "The name of the model table/view within the transaction"
-    model_name = model.get('name')
+    model_name = get_alias(model)
     if non_destructive or get_materialization(model) == 'incremental':
         return model_name
     else:
@@ -326,6 +332,8 @@ def is_blocking_dependency(node):
 def get_materialization(node):
     return node.get('config', {}).get('materialized')
 
+def get_alias(node):
+    return node.get('config', {}).get('alias', node.get('name'))
 
 def is_enabled(node):
     return node.get('config', {}).get('enabled') is True

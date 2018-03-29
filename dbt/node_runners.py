@@ -378,8 +378,7 @@ class ModelRunner(CompileRunner):
     def describe_node(self):
         materialization = dbt.utils.get_materialization(self.node)
         schema_name = self.node.get('schema')
-        node_name = self.node.get('name')
-
+        node_name = dbt.utils.get_alias(self.node)
         return "{} model {}.{}".format(materialization, schema_name, node_name)
 
     def print_start_line(self):
