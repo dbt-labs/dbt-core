@@ -74,16 +74,13 @@ def handle_and_check(args):
     # this needs to happen after args are parsed so we can determine the
     # correct profiles.yml file
     profile_config = config.read_config(parsed.profiles_dir)
-    if not config.send_anonymous_usage_stats(profile_config):
-        dbt.tracking.do_not_track()
-    else:
-        dbt.tracking.initialize_tracking()
+    dbt.tracking.do_not_track()
 
     if dbt.config.colorize_output(profile_config):
         dbt.ui.printer.use_colors()
 
     task, res = run_from_args(parsed)
-    dbt.tracking.flush()
+    #dbt.tracking.flush()
 
     success = task.interpret_results(res)
 
