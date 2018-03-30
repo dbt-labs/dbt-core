@@ -198,7 +198,7 @@ class DefaultAdapter(object):
         if schema_name is not None:
             schema_filter = "table_schema = '{}'".format(schema_name)
 
-        db_prefix = '' if database is None else '{}.'format(database)
+        db_prefix = '' if database is None else '{}.'.format(database)
 
         sql = """
         select

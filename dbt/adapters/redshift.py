@@ -49,7 +49,8 @@ class RedshiftAdapter(PostgresAdapter):
                     view_schema,
                     col_name,
                     case
-                        when col_type ilike 'character varying%' then 'character varying'
+                        when col_type ilike 'character varying%' then
+                            'character varying'
                         when col_type ilike 'numeric%' then 'numeric'
                         else col_type
                     end as col_type,
