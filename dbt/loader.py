@@ -3,6 +3,65 @@ import dbt.parser
 
 from dbt.node_types import NodeType
 
+from dbt.utils import DBTConfigKeys
+
+from dbt.logger import initialize_logger, GLOBAL_LOGGER as logger
+
+def get_model_config_pqn( config_models, pqn = None ,model_config_pqns = None):
+    if pqn is None:
+        pqn = []
+    # could also write `pqn = pqn or []`
+    if model_config_pqns is None:
+        model_config_pqns = []
+    # why can't I have model_config_pqns = [] here?
+    for k,v in config_models.items():
+        # If the next level is a dictionary
+        if isinstance(v,dict):
+            # If the key is a config key, add the list of keys to the model_config_pqns list
+            # base case - when you get to a model config key
+            if k in DBTConfigKeys: 
+                if pqn not in model_config_pqns and pqn:
+                    model_config_pqns.append(pqn)
+            # Else, keep iterating
+            # recursive case
+            else:
+                get_model_config_pqn( v, pqn + [k], model_config_pqns)
+        # If you've reached the end of the path, add the path
+        # base case - when you reach the end of the dictionary
+        else:
+            if pqn not in model_config_pqns and pqn:
+                model_config_pqns.append(pqn)
+
+    return model_config_pqns
+
+def is_pqn_in_fqn(pqn, fqn):
+    for item in pqn:
+        # there's a better word than "item" here...
+        # check that the current directory exists in the fqn
+        if item in fqn:
+            # if it does, then update the fqn to that it now only contains item after that item
+            fqn = fqn[fqn.index(item)+1:]
+        else:
+            # if it doesn't then return false and exit the loop
+            return False
+            break
+    # if the loop doesn't get broken, turn True
+    return True
+
+def is_pqn_in_at_least_one_fqn(pqn, model_fqns): 
+    for fqn in model_fqns:
+        if is_pqn_in_fqn(pqn, fqn):
+            return True
+            break
+    return False
+
+def check_config_pqns(model_config_pqns, model_fqns):
+    for pqn in model_config_pqns:
+        if is_pqn_in_at_least_one_fqn(pqn, model_fqns):
+            pass
+        else:
+            logger.info("Your config " + str(pqn) + " doesn't point to a model")
+
 
 class GraphLoader(object):
 
@@ -23,7 +82,19 @@ class GraphLoader(object):
                     loader.load_all(root_project, all_projects, macros))
 
             to_return[subgraph] = subgraph_nodes
-
+        
+        fqns = []
+        for unique_id, node in to_return['nodes'].items():
+            fqns.append(node['fqn'])
+        
+        pqns = []
+        for project_name, project in all_projects.items():
+          pqns.extend(get_model_config_pqn(project['models']))
+        
+        check_config_pqns(pqns, fqns)
+        
+        # Do we want to exit compilation if there is a bad config?
+        
         to_return['macros'] = macros
         return to_return
 
