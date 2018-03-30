@@ -18,7 +18,10 @@ class RedshiftAdapter(PostgresAdapter):
         return 'getdate()'
 
     @classmethod
-    def _get_columns_in_table_sql(cls, schema_name, table_name):
+    def _get_columns_in_table_sql(cls, schema_name, table_name, database):
+        # Redshift doesn't support cross-database queries,
+        # so we can ignore the `database` argument
+
         # TODO : how do we make this a macro?
         if schema_name is None:
             table_schema_filter = '1=1'

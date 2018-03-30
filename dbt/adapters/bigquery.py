@@ -379,7 +379,10 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def get_columns_in_table(cls, profile, schema_name, table_name,
-                             model_name=None):
+                             database=None, model_name=None):
+
+        # BigQuery does not have databases -- the database parameter is here
+        # for consistency with the base implementation
 
         conn = cls.get_connection(profile, model_name)
         client = conn.get('handle')

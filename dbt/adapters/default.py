@@ -192,11 +192,13 @@ class DefaultAdapter(object):
                 if col_name in missing_columns]
 
     @classmethod
-    def _get_columns_in_table_sql(cls, schema_name, table_name):
+    def _get_columns_in_table_sql(cls, schema_name, table_name, database):
 
         schema_filter = '1=1'
         if schema_name is not None:
             schema_filter = "table_schema = '{}'".format(schema_name)
+
+        db_prefix = '' if database is None else '{}.'format(database)
 
         sql = """
         select
@@ -205,19 +207,21 @@ class DefaultAdapter(object):
             character_maximum_length,
             numeric_precision || ',' || numeric_scale as numeric_size
 
-        from information_schema.columns
+        from {db_prefix}information_schema.columns
         where table_name = '{table_name}'
           and {schema_filter}
         order by ordinal_position
-        """.format(table_name=table_name, schema_filter=schema_filter).strip()
+        """.format(db_prefix=db_prefix,
+                   table_name=table_name,
+                   schema_filter=schema_filter).strip()
 
         return sql
 
     @classmethod
     def get_columns_in_table(cls, profile, schema_name, table_name,
-                             model_name=None):
+                             database=None, model_name=None):
 
-        sql = cls._get_columns_in_table_sql(schema_name, table_name)
+        sql = cls._get_columns_in_table_sql(schema_name, table_name, database)
         connection, cursor = cls.add_query(
             profile, sql, model_name)
 
