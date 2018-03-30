@@ -181,10 +181,10 @@ class DefaultAdapter(object):
         missing from to_table"""
         from_columns = {col.name: col for col in
                         cls.get_columns_in_table(
-                            profile, from_schema, from_table, model_name)}
+                            profile, from_schema, from_table, model_name=model_name)}
         to_columns = {col.name: col for col in
                       cls.get_columns_in_table(
-                          profile, to_schema, to_table, model_name)}
+                          profile, to_schema, to_table, model_name=model_name)}
 
         missing_columns = set(from_columns.keys()) - set(to_columns.keys())
 
@@ -247,11 +247,11 @@ class DefaultAdapter(object):
 
         reference_columns = cls._table_columns_to_dict(
             cls.get_columns_in_table(
-                profile, None, temp_table, model_name))
+                profile, None, temp_table, model_name=model_name))
 
         target_columns = cls._table_columns_to_dict(
             cls.get_columns_in_table(
-                profile, to_schema, to_table, model_name))
+                profile, to_schema, to_table, model_name=model_name))
 
         for column_name, reference_column in reference_columns.items():
             target_column = target_columns.get(column_name)

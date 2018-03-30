@@ -251,7 +251,7 @@ class CompileRunner(BaseRunner):
 
         def call_get_columns_in_table(schema_name, table_name):
             return adapter.get_columns_in_table(
-                profile, schema_name, table_name, node.get('name'))
+                profile, schema_name, table_name, model_name=node.get('name'))
 
         def call_get_missing_columns(from_schema, from_table,
                                      to_schema, to_table):
