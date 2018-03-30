@@ -188,7 +188,6 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     tags = coalesce(tags, set())
     fqn_extra = coalesce(fqn_extra, [])
     macros = coalesce(macros, {})
-
     node.update({
         'refs': [],
         'depends_on': {
