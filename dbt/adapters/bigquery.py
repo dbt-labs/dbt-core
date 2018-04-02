@@ -14,6 +14,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.schema import BigQueryColumn
 
 import google.auth
+import google.api_core
 import google.oauth2
 import google.cloud.exceptions
 import google.cloud.bigquery
@@ -387,12 +388,17 @@ class BigQueryAdapter(PostgresAdapter):
         conn = cls.get_connection(profile, model_name)
         client = conn.get('handle')
 
-        dataset_ref = client.dataset(schema_name)
-        table_ref = dataset_ref.table(table_name)
-        table = client.get_table(table_ref)
+        try:
+            dataset_ref = client.dataset(schema_name)
+            table_ref = dataset_ref.table(table_name)
+            table = client.get_table(table_ref)
+            table_schema = table.schema
+        except (ValueError, google.api_core.exceptions.NotFound) as e:
+            logger.debug("get_columns_in_table error: {}".format(e))
+            table_schema = []
 
         columns = []
-        for col in table.schema:
+        for col in table_schema:
             name = col.name
             data_type = col.field_type
 

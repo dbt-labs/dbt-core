@@ -5,7 +5,7 @@
 
 select
     {% for col in cols %}
-        col.name
+        {{ col.name }}
         {% if not loop.last %}, {% endif %}
     {% endfor %}
 
