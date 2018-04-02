@@ -181,10 +181,12 @@ class DefaultAdapter(object):
         missing from to_table"""
         from_columns = {col.name: col for col in
                         cls.get_columns_in_table(
-                            profile, from_schema, from_table, model_name=model_name)}
+                            profile, from_schema, from_table,
+                            model_name=model_name)}
         to_columns = {col.name: col for col in
                       cls.get_columns_in_table(
-                          profile, to_schema, to_table, model_name=model_name)}
+                          profile, to_schema, to_table,
+                          model_name=model_name)}
 
         missing_columns = set(from_columns.keys()) - set(to_columns.keys())
 
