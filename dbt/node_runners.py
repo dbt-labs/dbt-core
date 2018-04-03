@@ -14,7 +14,6 @@ import dbt.schema
 import dbt.templates
 import dbt.writer
 
-import os
 import time
 
 
@@ -291,7 +290,6 @@ class ModelRunner(CompileRunner):
 
         nodes = flat_graph.get('nodes', {}).values()
         hooks = get_nodes_by_tags(nodes, {hook_type}, NodeType.Operation)
-        adapter.clear_transaction(profile)
 
         compiled_hooks = []
         for hook in hooks:
@@ -316,14 +314,14 @@ class ModelRunner(CompileRunner):
         ordered_hooks = sorted(compiled_hooks, key=lambda h: h.get('index', 0))
 
         for hook in ordered_hooks:
-            model_name = compiled.get('name')
+            model_name = hook.get('name')
 
             if dbt.flags.STRICT_MODE:
                 dbt.contracts.graph.parsed.validate_hook(hook)
 
             sql = hook.get('sql', '')
 
-            if len(sql) > 0:
+            if len(sql.strip()) > 0:
                 adapter.execute_one(profile, sql, model_name=model_name,
                                     auto_begin=False)
 
