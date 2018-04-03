@@ -410,6 +410,9 @@ class DefaultAdapter(object):
                     logger.debug("Connection '{}' was properly closed."
                                  .format(name))
 
+            for conn in connections_in_use.values() + connections_available:
+                cls.close(conn)
+
             # garbage collect, but don't close them in case someone
             # still has a handle
             connections_in_use = {}
@@ -514,13 +517,9 @@ class DefaultAdapter(object):
 
         connection = cls.reload(connection)
 
-        if connection.get('state') == 'closed':
-            return connection
-
         connection.get('handle').close()
 
         connection['state'] = 'closed'
-        connections_in_use[connection.get('name')] = connection
 
         return connection
 
