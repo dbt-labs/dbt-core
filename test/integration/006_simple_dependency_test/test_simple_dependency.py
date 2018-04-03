@@ -28,8 +28,8 @@ class TestSimpleDependency(DBTIntegrationTest):
         self.run_dbt(["deps"])
         self.run_dbt(["run"])
 
-        self.assertTablesEqual("seed","table")
-        self.assertTablesEqual("seed","view")
+        self.assertTablesEqual("seed","table_model")
+        self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed","incremental")
 
         self.assertTablesEqual("seed_summary","view_summary")
@@ -39,24 +39,24 @@ class TestSimpleDependency(DBTIntegrationTest):
         self.run_dbt(["deps"])
         self.run_dbt(["run"])
 
-        self.assertTablesEqual("seed","table")
-        self.assertTablesEqual("seed","view")
+        self.assertTablesEqual("seed","table_model")
+        self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed","incremental")
 
     @attr(type='postgres')
     def test_simple_dependency_with_models(self):
         self.run_dbt(["deps"])
-        self.run_dbt(["run", '--models', 'view+'])
+        self.run_dbt(["run", '--models', 'view_model+'])
 
-        self.assertTablesEqual("seed","view")
+        self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed_summary","view_summary")
 
         created_models = self.get_models_in_schema()
 
-        self.assertFalse('table' in created_models)
+        self.assertFalse('table_model' in created_models)
         self.assertFalse('incremental' in created_models)
 
-        self.assertEqual(created_models['view'], 'view')
+        self.assertEqual(created_models['view_model'], 'view')
         self.assertEqual(created_models['view_summary'], 'view')
 
 class TestSimpleDependencyBranch(DBTIntegrationTest):
@@ -85,14 +85,14 @@ class TestSimpleDependencyBranch(DBTIntegrationTest):
         self.run_dbt(["deps"])
         self.run_dbt(["run"])
 
-        self.assertTablesEqual("seed","table")
-        self.assertTablesEqual("seed","view")
+        self.assertTablesEqual("seed","table_model")
+        self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed","incremental")
 
         created_models = self.get_models_in_schema()
 
-        self.assertEqual(created_models['table'], 'table')
-        self.assertEqual(created_models['view'], 'view')
+        self.assertEqual(created_models['table_model'], 'table')
+        self.assertEqual(created_models['view_model'], 'view')
         self.assertEqual(created_models['view_summary'], 'view')
         self.assertEqual(created_models['incremental'], 'table')
 

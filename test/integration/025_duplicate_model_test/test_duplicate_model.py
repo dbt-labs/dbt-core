@@ -149,7 +149,7 @@ class TestDuplicateModelDisabledAcrossPackages(DBTIntegrationTest):
         except CompilationException:
             self.fail(
                 "Compilation Exception raised on disabled model")
-        query = "select 1 from {schema}.table" \
+        query = "select 1 from {schema}.table_model" \
                 .format(schema=self.unique_schema())
         result = self.run_sql(query, fetch="one")[0]
         assert result == 1
