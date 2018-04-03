@@ -414,8 +414,7 @@ class DefaultAdapter(object):
             for conn in conns_in_use + connections_available:
                 cls.close(conn)
 
-            # garbage collect, but don't close them in case someone
-            # still has a handle
+            # garbage collect these connections
             connections_in_use = {}
             connections_available = []
 
