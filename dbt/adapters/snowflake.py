@@ -2,7 +2,6 @@ from __future__ import absolute_import
 
 import re
 
-import agate
 import snowflake.connector
 import snowflake.connector.errors
 
