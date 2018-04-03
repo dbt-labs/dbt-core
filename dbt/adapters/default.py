@@ -410,7 +410,8 @@ class DefaultAdapter(object):
                     logger.debug("Connection '{}' was properly closed."
                                  .format(name))
 
-            for conn in connections_in_use.values() + connections_available:
+            conns_in_use = list(connections_in_use.values())
+            for conn in conns_in_use + connections_available:
                 cls.close(conn)
 
             # garbage collect, but don't close them in case someone
@@ -515,10 +516,7 @@ class DefaultAdapter(object):
         if dbt.flags.STRICT_MODE:
             validate_connection(connection)
 
-        connection = cls.reload(connection)
-
         connection.get('handle').close()
-
         connection['state'] = 'closed'
 
         return connection
