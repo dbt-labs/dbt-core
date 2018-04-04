@@ -427,6 +427,20 @@ class DefaultAdapter(object):
                                   connection.get('name'))
 
     @classmethod
+    def _clear_all_connections(cls):
+        "Internal method, clears all open connections. For integration tests"
+        global connections_in_use, connections_available
+
+        try:
+            lock.acquire()
+
+            connections_in_use = {}
+            connections_available = []
+
+        finally:
+            lock.release()
+
+    @classmethod
     def add_begin_query(cls, profile, name):
         return cls.add_query(profile, 'BEGIN', name, auto_begin=False)
 

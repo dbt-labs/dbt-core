@@ -171,6 +171,8 @@ class DBTIntegrationTest(unittest.TestCase):
 
         adapter = get_adapter(profile)
 
+        adapter._clear_all_connections()
+
         # it's important to use a different connection handle here so
         # we don't look into an incomplete transaction
         adapter.cleanup_connections()
