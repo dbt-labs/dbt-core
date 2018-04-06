@@ -17,7 +17,7 @@ class TestBigqueryAdapterFunctions(DBTIntegrationTest):
         return self.bigquery_profile()
 
     @attr(type='bigquery')
-    def test__bigquery_date_partitioning(self):
+    def test__bigquery_adapter_functions(self):
         self.use_profile('bigquery')
         self.use_default_project()
         self.run_dbt()

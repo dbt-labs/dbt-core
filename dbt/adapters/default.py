@@ -8,11 +8,11 @@ from contextlib import contextmanager
 
 import dbt.exceptions
 import dbt.flags
+import dbt.schema
 import dbt.clients.agate_helper
 
 from dbt.contracts.connection import validate_connection
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.schema import Column
 
 
 lock = multiprocessing.Lock()
@@ -43,6 +43,8 @@ class DefaultAdapter(object):
         "get_result_from_cursor",
         "quote",
     ]
+
+    Column = dbt.schema.Column
 
     ###
     # ADAPTER-SPECIFIC FUNCTIONS -- each of these must be overridden in
@@ -232,7 +234,7 @@ class DefaultAdapter(object):
 
         for row in data:
             name, data_type, char_size, numeric_size = row
-            column = Column(name, data_type, char_size, numeric_size)
+            column = cls.Column(name, data_type, char_size, numeric_size)
             columns.append(column)
 
         return columns
@@ -260,7 +262,8 @@ class DefaultAdapter(object):
 
             if target_column is not None and \
                target_column.can_expand_to(reference_column):
-                new_type = Column.string_type(reference_column.string_size())
+                col_string_size = reference_column.string_size()
+                new_type = cls.Column.string_type(col_string_size)
                 logger.debug("Changing col type from %s to %s in table %s.%s",
                              target_column.data_type,
                              new_type,

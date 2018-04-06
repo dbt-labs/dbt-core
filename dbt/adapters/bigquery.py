@@ -4,6 +4,7 @@ from contextlib import contextmanager
 
 import dbt.compat
 import dbt.exceptions
+import dbt.schema
 import dbt.flags as flags
 import dbt.clients.gcloud
 import dbt.clients.agate_helper
@@ -11,10 +12,8 @@ import dbt.clients.agate_helper
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.contracts.connection import validate_connection
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.schema import BigQueryColumn
 
 import google.auth
-import google.api_core
 import google.oauth2
 import google.cloud.exceptions
 import google.cloud.bigquery
@@ -40,6 +39,8 @@ class BigQueryAdapter(PostgresAdapter):
              'https://www.googleapis.com/auth/drive')
 
     QUERY_TIMEOUT = 300
+
+    Column = dbt.schema.BigQueryColumn
 
     @classmethod
     def handle_error(cls, error, message, sql):
@@ -393,7 +394,7 @@ class BigQueryAdapter(PostgresAdapter):
             table_ref = dataset_ref.table(table_name)
             table = client.get_table(table_ref)
             table_schema = table.schema
-        except (ValueError, google.api_core.exceptions.NotFound) as e:
+        except (ValueError, google.cloud.exceptions.NotFound) as e:
             logger.debug("get_columns_in_table error: {}".format(e))
             table_schema = []
 
@@ -402,7 +403,7 @@ class BigQueryAdapter(PostgresAdapter):
             name = col.name
             data_type = col.field_type
 
-            column = BigQueryColumn(col.name, col.field_type, col.fields)
+            column = cls.Column(col.name, col.field_type, col.fields, col.mode)
             columns.append(column)
 
         return columns
