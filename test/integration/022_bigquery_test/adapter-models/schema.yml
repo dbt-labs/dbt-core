@@ -1,0 +1,21 @@
+
+
+test_get_columns_in_table:
+    constraints:
+        not_null:
+            - field_1
+            - field_2
+            - field_3
+            - nested_field
+            - repeated_column
+
+
+test_flattened_get_columns_in_table:
+    constraints:
+        not_null:
+            - field_1
+            - field_2
+            - field_3
+            - field_4
+            - field_5
+            - repeated_column

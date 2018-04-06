@@ -31,7 +31,6 @@ setup(
         'scripts/dbt',
     ],
     install_requires=[
-        'freezegun==0.3.9',
         'Jinja2>=2.8',
         'pytz==2017.2',
         'PyYAML>=3.11',
