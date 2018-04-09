@@ -62,7 +62,9 @@
 
   -- build model
   {% if partitions %}
-    {{ make_date_partitioned_table(model, target_relation, partitions, exists_not_as_table, verbose) }}
+    {# Create the dp-table if 1. it does not exist or 2. it existed, but we just dropped it #}
+    {%- set should_create = (old_relation is none or exists_not_as_table) -%}
+    {{ make_date_partitioned_table(model, target_relation, partitions, should_create, verbose) }}
   {% else %}
     {% call statement('main') -%}
       {{ create_table_as(False, target_relation, sql) }}
