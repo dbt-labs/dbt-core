@@ -4,6 +4,11 @@ from collections import defaultdict
 import dbt.utils
 
 
+GRAPH_SERIALIZE_BLACKLIST = [
+    'agate_table'
+]
+
+
 def from_file(graph_file):
     linker = Linker()
     linker.read_graph(graph_file)
@@ -97,7 +102,20 @@ class Linker(object):
         self.graph.add_node(node, data)
 
     def write_graph(self, outfile):
-        nx.write_gpickle(self.graph, outfile)
+        out_graph = self.remove_blacklisted_attributes_from_nodes(self.graph)
+        nx.write_gpickle(out_graph, outfile)
 
     def read_graph(self, infile):
         self.graph = nx.read_gpickle(infile)
+
+    @classmethod
+    def remove_blacklisted_attributes_from_nodes(cls, graph):
+        graph = graph.copy()
+        for node_name, node in graph.node.items():
+            slim_node = node.copy()
+            for key in GRAPH_SERIALIZE_BLACKLIST:
+                if key in slim_node:
+                    del slim_node[key]
+
+            graph.node[node_name] = slim_node
+        return graph
