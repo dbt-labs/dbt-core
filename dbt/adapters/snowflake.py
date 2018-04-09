@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 import re
+from io import StringIO
 
 import snowflake.connector
 import snowflake.connector.errors
@@ -140,14 +141,13 @@ class SnowflakeAdapter(PostgresAdapter):
 
     @classmethod
     def add_begin_query(cls, profile, name):
-        return cls.add_query(profile, 'BEGIN', name, auto_begin=False,
-                             select_schema=False)
+        return cls.add_query(profile, 'BEGIN', name, auto_begin=False)
 
     @classmethod
     def create_schema(cls, profile, schema, model_name=None):
         logger.debug('Creating schema "%s".', schema)
         sql = cls.get_create_schema_sql(schema)
-        res = cls.add_query(profile, sql, model_name, select_schema=False)
+        res = cls.add_query(profile, sql, model_name)
 
         cls.commit_if_has_connection(profile, model_name)
 
@@ -158,7 +158,6 @@ class SnowflakeAdapter(PostgresAdapter):
         sql = "select distinct SCHEMA_NAME from INFORMATION_SCHEMA.SCHEMATA"
 
         connection, cursor = cls.add_query(profile, sql, model_name,
-                                           select_schema=False,
                                            auto_begin=False)
         results = cursor.fetchall()
 
@@ -173,24 +172,33 @@ class SnowflakeAdapter(PostgresAdapter):
         """.format(schema=schema).strip()  # noqa
 
         connection, cursor = cls.add_query(profile, sql, model_name,
-                                           select_schema=False,
                                            auto_begin=False)
         results = cursor.fetchone()
 
         return results[0] > 0
 
-    # TODO remove select_schema
+    @classmethod
+    def _split_queries(cls, sql):
+        "Splits sql statements at semicolons into discrete queries"
+
+        sql_s = dbt.compat.to_string(sql)
+        sql_buf = StringIO(sql_s)
+        split_query = snowflake.connector.util_text.split_statements(sql_buf)
+        return [part[0] for part in split_query]
+
     @classmethod
     def add_query(cls, profile, sql, model_name=None, auto_begin=True,
-                  select_schema=True, bindings=None, abridge_sql_log=False):
-        # snowflake only allows one query per api call.
-        queries = sql.strip().split(";")
+                  bindings=None, abridge_sql_log=False):
+
+        connection = None
         cursor = None
 
         if bindings:
             # The snowflake connector is more strict than, eg., psycopg2 -
             # which allows any iterable thing to be passed as a binding.
             bindings = tuple(bindings)
+
+        queries = cls._split_queries(sql)
 
         for individual_query in queries:
             # hack -- after the last ';', remove comments and don't run
@@ -206,6 +214,13 @@ class SnowflakeAdapter(PostgresAdapter):
             connection, cursor = super(PostgresAdapter, cls).add_query(
                 profile, individual_query, model_name, auto_begin,
                 bindings=bindings, abridge_sql_log=abridge_sql_log)
+
+        if cursor is None:
+            raise dbt.exceptions.RuntimeException(
+                    "Tried to run an empty query on model '{}'. If you are "
+                    "conditionally running\nsql, eg. in a model hook, make "
+                    "sure your `else` clause contains valid sql!\n\n"
+                    "Provided SQL:\n{}".format(model_name, sql))
 
         return connection, cursor
 
