@@ -127,6 +127,8 @@ class DefaultRelation(APIObject):
 
                 if path_part is None:
                     continue
+                elif k == 'identifier':
+                    path_part = self.table
 
                 parts.append(
                     self.quote_if(
@@ -156,7 +158,8 @@ class DefaultRelation(APIObject):
         return cls.create(
             database=profile.get('dbname'),
             schema=node.get('schema'),
-            identifier=table_name or node.get('name'),
+            identifier=node.get('name'),
+            table_name=table_name,
             **kwargs)
 
     @classmethod
@@ -205,7 +208,7 @@ class DefaultRelation(APIObject):
     # Here for compatibility with old Relation interface
     @property
     def table(self):
-        return self._table_name
+        return self.table_name
 
     @property
     def is_table(self):

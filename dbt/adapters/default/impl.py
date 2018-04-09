@@ -695,7 +695,7 @@ class DefaultAdapter(object):
     @classmethod
     def already_exists(cls, profile, schema, table, model_name=None):
         # TODO add deprecation warning
-        relation = cls.get_relation(schema=schema, identifier=table)
+        relation = cls.get_relation(profile, schema=schema, identifier=table)
         return relation is not None
 
     @classmethod
