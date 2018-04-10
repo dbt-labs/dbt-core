@@ -155,6 +155,15 @@ class BigQueryAdapter(PostgresAdapter):
         return result
 
     @classmethod
+    def close(cls, connection):
+        if dbt.flags.STRICT_MODE:
+            validate_connection(connection)
+
+        connection['state'] = 'closed'
+
+        return connection
+
+    @classmethod
     def query_for_existing(cls, profile, schemas, model_name=None):
         if not isinstance(schemas, (list, tuple)):
             schemas = [schemas]
