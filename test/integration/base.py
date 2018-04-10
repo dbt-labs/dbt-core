@@ -247,7 +247,6 @@ class DBTIntegrationTest(unittest.TestCase):
             os.rename("dbt_modules", "dbt_modules-{}".format(time.time()))
 
         adapter = get_adapter(self.profile)
-        adapter.cleanup_connections()
 
         if self.adapter_type == 'bigquery':
             adapter.drop_schema(self.profile, self.unique_schema(), '__test')
@@ -259,6 +258,8 @@ class DBTIntegrationTest(unittest.TestCase):
         # hack for BQ -- TODO
         if hasattr(self.handle, 'close'):
             self.handle.close()
+
+        adapter.cleanup_connections()
 
     @property
     def project_config(self):

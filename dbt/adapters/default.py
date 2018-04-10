@@ -414,7 +414,7 @@ class DefaultAdapter(object):
 
     @classmethod
     def cleanup_connections(cls):
-        global connections_in_use, connections_available
+        global connections_in_use, connections_available, lock
 
         try:
             lock.acquire()
