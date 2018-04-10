@@ -41,6 +41,7 @@ setup(
         'celery==3.1.23',
         'voluptuous==0.10.5',
         'snowflake-connector-python>=1.4.9',
+        'requests>=2.18.0',
         'colorama==0.3.9',
         'google-cloud-bigquery==0.29.0',
         'agate>=1.6,<2',
