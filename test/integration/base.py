@@ -171,8 +171,6 @@ class DBTIntegrationTest(unittest.TestCase):
 
         adapter = get_adapter(profile)
 
-        adapter._clear_all_connections()
-
         # it's important to use a different connection handle here so
         # we don't look into an incomplete transaction
         adapter.cleanup_connections()
@@ -248,13 +246,15 @@ class DBTIntegrationTest(unittest.TestCase):
         except:
             os.rename("dbt_modules", "dbt_modules-{}".format(time.time()))
 
+        adapter = get_adapter(self.profile)
+        adapter.cleanup_connections()
+
         if self.adapter_type == 'bigquery':
-            adapter = get_adapter(self.profile)
             adapter.drop_schema(self.profile, self.unique_schema(), '__test')
         else:
-            self.run_sql('DROP SCHEMA IF EXISTS "{}" CASCADE'.format(self.unique_schema()))
+            self.run_sql('DROP SCHEMA IF EXISTS "{}" CASCADE'
+                         .format(self.unique_schema()))
             self.handle.close()
-
 
         # hack for BQ -- TODO
         if hasattr(self.handle, 'close'):
