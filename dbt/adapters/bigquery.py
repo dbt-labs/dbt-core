@@ -4,6 +4,7 @@ from contextlib import contextmanager
 
 import dbt.compat
 import dbt.exceptions
+import dbt.schema
 import dbt.flags as flags
 import dbt.clients.gcloud
 import dbt.clients.agate_helper
@@ -29,7 +30,11 @@ class BigQueryAdapter(PostgresAdapter):
         "drop",
         "execute",
         "quote_schema_and_table",
-        "make_date_partitioned_table"
+        "make_date_partitioned_table",
+        "already_exists",
+        "expand_target_column_types",
+
+        "get_columns_in_table"
     ]
 
     SCOPE = ('https://www.googleapis.com/auth/bigquery',
@@ -37,6 +42,8 @@ class BigQueryAdapter(PostgresAdapter):
              'https://www.googleapis.com/auth/drive')
 
     QUERY_TIMEOUT = 300
+
+    Column = dbt.schema.BigQueryColumn
 
     @classmethod
     def handle_error(cls, error, message, sql):
@@ -181,6 +188,12 @@ class BigQueryAdapter(PostgresAdapter):
         return dict(existing)
 
     @classmethod
+    def table_exists(cls, profile, schema, table, model_name=None):
+        tables = cls.query_for_existing(profile, schema, model_name)
+        exists = tables.get(table) is not None
+        return exists
+
+    @classmethod
     def drop(cls, profile, schema, relation, relation_type, model_name=None):
         conn = cls.get_connection(profile, model_name)
         client = conn.get('handle')
@@ -323,7 +336,7 @@ class BigQueryAdapter(PostgresAdapter):
 
         # If we get here, the query succeeded
         status = 'OK'
-        return status, res
+        return status, cls.get_table_from_response(res)
 
     @classmethod
     def execute_and_fetch(cls, profile, sql, model_name, auto_begin=None):
@@ -386,15 +399,32 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def get_columns_in_table(cls, profile, schema_name, table_name,
-                             model_name=None):
-        raise dbt.exceptions.NotImplementedException(
-            '`get_columns_in_table` is not implemented for this adapter!')
+                             database=None, model_name=None):
 
-    @classmethod
-    def get_columns_in_table(cls, profile, schema_name, table_name,
-                             model_name=None):
-        raise dbt.exceptions.NotImplementedException(
-            '`get_columns_in_table` is not implemented for this adapter!')
+        # BigQuery does not have databases -- the database parameter is here
+        # for consistency with the base implementation
+
+        conn = cls.get_connection(profile, model_name)
+        client = conn.get('handle')
+
+        try:
+            dataset_ref = client.dataset(schema_name)
+            table_ref = dataset_ref.table(table_name)
+            table = client.get_table(table_ref)
+            table_schema = table.schema
+        except (ValueError, google.cloud.exceptions.NotFound) as e:
+            logger.debug("get_columns_in_table error: {}".format(e))
+            table_schema = []
+
+        columns = []
+        for col in table_schema:
+            name = col.name
+            data_type = col.field_type
+
+            column = cls.Column(col.name, col.field_type, col.fields, col.mode)
+            columns.append(column)
+
+        return columns
 
     @classmethod
     def check_schema_exists(cls, profile, schema, model_name=None):
@@ -492,3 +522,9 @@ class BigQueryAdapter(PostgresAdapter):
                                          client=client, skip_leading_rows=1)
         with cls.exception_handler(profile, "LOAD TABLE"):
             cls.poll_until_job_completes(job, cls.get_timeout(conn))
+
+    @classmethod
+    def expand_target_column_types(cls, profile, temp_table, to_schema,
+                                   to_table, model_name=None):
+        # This is a no-op on BigQuery
+        pass

@@ -8,11 +8,11 @@ from contextlib import contextmanager
 
 import dbt.exceptions
 import dbt.flags
+import dbt.schema
 import dbt.clients.agate_helper
 
 from dbt.contracts.connection import validate_connection
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.schema import Column
 
 
 lock = multiprocessing.Lock()
@@ -43,6 +43,8 @@ class DefaultAdapter(object):
         "get_result_from_cursor",
         "quote",
     ]
+
+    Column = dbt.schema.Column
 
     ###
     # ADAPTER-SPECIFIC FUNCTIONS -- each of these must be overridden in
@@ -181,10 +183,12 @@ class DefaultAdapter(object):
         missing from to_table"""
         from_columns = {col.name: col for col in
                         cls.get_columns_in_table(
-                            profile, from_schema, from_table, model_name)}
+                            profile, from_schema, from_table,
+                            model_name=model_name)}
         to_columns = {col.name: col for col in
                       cls.get_columns_in_table(
-                          profile, to_schema, to_table, model_name)}
+                          profile, to_schema, to_table,
+                          model_name=model_name)}
 
         missing_columns = set(from_columns.keys()) - set(to_columns.keys())
 
@@ -192,24 +196,36 @@ class DefaultAdapter(object):
                 if col_name in missing_columns]
 
     @classmethod
-    def _get_columns_in_table_sql(cls, schema_name, table_name):
-        sql = """
-        select column_name, data_type, character_maximum_length
-        from information_schema.columns
-        where table_name = '{table_name}'
-        """.format(table_name=table_name).strip()
+    def _get_columns_in_table_sql(cls, schema_name, table_name, database):
 
+        schema_filter = '1=1'
         if schema_name is not None:
-            sql += (" AND table_schema = '{schema_name}'"
-                    .format(schema_name=schema_name))
+            schema_filter = "table_schema = '{}'".format(schema_name)
+
+        db_prefix = '' if database is None else '{}.'.format(database)
+
+        sql = """
+        select
+            column_name,
+            data_type,
+            character_maximum_length,
+            numeric_precision || ',' || numeric_scale as numeric_size
+
+        from {db_prefix}information_schema.columns
+        where table_name = '{table_name}'
+          and {schema_filter}
+        order by ordinal_position
+        """.format(db_prefix=db_prefix,
+                   table_name=table_name,
+                   schema_filter=schema_filter).strip()
 
         return sql
 
     @classmethod
     def get_columns_in_table(cls, profile, schema_name, table_name,
-                             model_name=None):
+                             database=None, model_name=None):
 
-        sql = cls._get_columns_in_table_sql(schema_name, table_name)
+        sql = cls._get_columns_in_table_sql(schema_name, table_name, database)
         connection, cursor = cls.add_query(
             profile, sql, model_name)
 
@@ -217,8 +233,8 @@ class DefaultAdapter(object):
         columns = []
 
         for row in data:
-            name, data_type, char_size = row
-            column = Column(name, data_type, char_size)
+            name, data_type, char_size, numeric_size = row
+            column = cls.Column(name, data_type, char_size, numeric_size)
             columns.append(column)
 
         return columns
@@ -235,18 +251,19 @@ class DefaultAdapter(object):
 
         reference_columns = cls._table_columns_to_dict(
             cls.get_columns_in_table(
-                profile, None, temp_table, model_name))
+                profile, None, temp_table, model_name=model_name))
 
         target_columns = cls._table_columns_to_dict(
             cls.get_columns_in_table(
-                profile, to_schema, to_table, model_name))
+                profile, to_schema, to_table, model_name=model_name))
 
         for column_name, reference_column in reference_columns.items():
             target_column = target_columns.get(column_name)
 
             if target_column is not None and \
                target_column.can_expand_to(reference_column):
-                new_type = Column.string_type(reference_column.string_size())
+                col_string_size = reference_column.string_size()
+                new_type = cls.Column.string_type(col_string_size)
                 logger.debug("Changing col type from %s to %s in table %s.%s",
                              target_column.data_type,
                              new_type,

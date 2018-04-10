@@ -7,6 +7,7 @@ import dbt.compat
 import dbt.exceptions
 import agate
 
+from dbt.utils import chunks
 from dbt.logger import GLOBAL_LOGGER as logger
 
 
@@ -24,7 +25,13 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         except psycopg2.DatabaseError as e:
             logger.debug('Postgres error: {}'.format(str(e)))
 
-            cls.release_connection(profile, connection_name)
+            try:
+                # attempt to release the connection
+                cls.release_connection(profile, connection_name)
+            except psycopg2.Error:
+                logger.debug("Failed to release connection!")
+                pass
+
             raise dbt.exceptions.DatabaseException(
                 dbt.compat.to_string(e).strip())
 
@@ -174,7 +181,7 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
     @classmethod
     def convert_number_type(cls, agate_table, col_idx):
         decimals = agate_table.aggregate(agate.MaxPrecision(col_idx))
-        return "numeric" if decimals else "integer"
+        return "float8" if decimals else "integer"
 
     @classmethod
     def convert_boolean_type(cls, agate_table, col_idx):
@@ -213,19 +220,23 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
 
     @classmethod
     def load_csv_rows(cls, profile, schema, table_name, agate_table):
-        bindings = []
-        placeholders = []
         cols_sql = ", ".join(c for c in agate_table.column_names)
 
-        for row in agate_table.rows:
-            bindings += row
-            placeholders.append("({})".format(
-                ", ".join("%s" for _ in agate_table.column_names)))
+        for chunk in chunks(agate_table.rows, 10000):
+            bindings = []
+            placeholders = []
 
-        sql = ('insert into {}.{} ({}) values {}'
-               .format(cls.quote(schema),
-                       cls.quote(table_name),
-                       cols_sql,
-                       ",\n".join(placeholders)))
+            for row in chunk:
+                bindings += row
+                placeholders.append("({})".format(
+                    ", ".join("%s" for _ in agate_table.column_names)))
 
-        cls.add_query(profile, sql, bindings=bindings, abridge_sql_log=True)
+                sql = ('insert into {}.{} ({}) values {}'
+                       .format(cls.quote(schema),
+                               cls.quote(table_name),
+                               cols_sql,
+                               ",\n".join(placeholders)))
+
+            cls.add_query(profile, sql,
+                          bindings=bindings,
+                          abridge_sql_log=True)
