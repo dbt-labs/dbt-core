@@ -18,4 +18,7 @@ test-integration:
 	@time docker-compose run test tox -e integration-postgres-py27,integration-postgres-py36,integration-snowflake-py27,integration-snowflake-py36,integration-bigquery-py27,integration-bigquery-py36
 
 test-new:
-	@time docker-compose run test tox -e integration-bigquery-py27,integration-bigquery-py36
+	@echo "Test run starting..."
+	@echo "Changed test files:"
+	@echo "${changed_tests}"
+	@docker-compose run test /usr/src/app/test/runner.sh ${changed_tests}
