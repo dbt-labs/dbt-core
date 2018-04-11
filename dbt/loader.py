@@ -84,16 +84,6 @@ class ModelLoader(ResourceLoader):
 
             to_return.update(project_loaded)
 
-        # Check for duplicate model names
-        names_models = {}
-        for model, attribs in to_return.items():
-            name = attribs['name']
-            existing_name = names_models.get(name)
-            if existing_name is not None:
-                raise dbt.exceptions.CompilationException(
-                    'Found models with the same name: \n- %s\n- %s' % (
-                        model, existing_name))
-            names_models[name] = model
         return to_return
 
     @classmethod

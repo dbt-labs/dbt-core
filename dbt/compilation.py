@@ -261,6 +261,23 @@ class Compiler(object):
 
         return all_projects
 
+    def _check_resource_uniqueness(cls, flat_graph):
+        nodes = flat_graph['nodes']
+        names_resources = {}
+
+        for resource, attribs in nodes.items():
+            if attribs.get('resource_type') not in NodeType.refable():
+                continue
+
+            name = attribs['name']
+            existing_name = names_resources.get(name)
+            if existing_name is not None:
+                raise dbt.exceptions.CompilationException(
+                    'Found two resources with the same name: \n- %s\n- %s' % (
+                        resource, existing_name))
+
+            names_resources[name] = resource
+
     def compile(self):
         linker = Linker()
 
@@ -269,6 +286,8 @@ class Compiler(object):
 
         flat_graph = dbt.loader.GraphLoader.load_all(
             root_project, all_projects)
+
+        self._check_resource_uniqueness(flat_graph)
 
         flat_graph = dbt.parser.process_refs(flat_graph,
                                              root_project.get('name'))
