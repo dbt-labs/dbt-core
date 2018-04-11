@@ -15,6 +15,7 @@ class TestSimpleBigQueryRun(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            'data-paths': ['test/integration/022_bigquery_test/data'],
             'macro-paths': ['test/integration/022_bigquery_test/macros'],
         }
 
@@ -26,6 +27,7 @@ class TestSimpleBigQueryRun(DBTIntegrationTest):
     def test__bigquery_simple_run(self):
         self.use_profile('bigquery')
         self.use_default_project()
+        self.run_dbt(['seed'])
         self.run_dbt()
 
         # The 'dupe' model should fail, but all others should pass
