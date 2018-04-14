@@ -39,7 +39,7 @@ class TestDuplicateModelEnabled(DBTIntegrationTest):
 
     @attr(type="postgres")
     def test_duplicate_model_enabled(self):
-        message = "Found models with the same name:.*"
+        message = "Found two resources with the same name:.*"
         with self.assertRaisesRegexp(CompilationException, message):
             self.run_dbt(["run"])
 
@@ -114,7 +114,7 @@ class TestDuplicateModelEnabledAcrossPackages(DBTIntegrationTest):
     @attr(type="postgres")
     def test_duplicate_model_enabled_across_packages(self):
         self.run_dbt(["deps"])
-        message = "Found models with the same name:.*"
+        message = "Found two resources with the same name:.*"
         with self.assertRaisesRegexp(CompilationException, message):
             self.run_dbt(["run"])
 
