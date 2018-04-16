@@ -272,9 +272,8 @@ class Compiler(object):
             name = attribs['name']
             existing_name = names_resources.get(name)
             if existing_name is not None:
-                raise dbt.exceptions.CompilationException(
-                    'Found two resources with the same name: \n- %s\n- %s' % (
-                        resource, existing_name))
+                dbt.exceptions.raise_duplicate_resource_name(resource,
+                                                             existing_name)
 
             names_resources[name] = resource
 

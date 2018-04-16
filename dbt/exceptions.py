@@ -291,3 +291,9 @@ def raise_dep_not_found(node, node_description, required_pkg):
         'Error while parsing {}.\nThe required package "{}" was not found. '
         'Is the package installed?\nHint: You may need to run '
         '`dbt deps`.'.format(node_description, required_pkg), node=node)
+
+
+def raise_duplicate_resource_name(resource_1_name, resource_2_name):
+    raise_compiler_error(
+        'Found two resources with the same name: \n- {}\n- {}'.format(
+            resource_1_name, resource_2_name))
