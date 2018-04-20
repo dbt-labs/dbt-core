@@ -79,7 +79,7 @@ class BaseRunner(object):
 
     @classmethod
     def is_refable(cls, node):
-        return node.get('resource_type') in [NodeType.Model, NodeType.Seed]
+        return node.get('resource_type') in NodeType.refable()
 
     @classmethod
     def is_ephemeral(cls, node):

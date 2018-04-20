@@ -39,9 +39,12 @@ class TestDuplicateModelEnabled(DBTIntegrationTest):
 
     @attr(type="postgres")
     def test_duplicate_model_enabled(self):
-        message = "Found models with the same name:.*"
-        with self.assertRaisesRegexp(CompilationException, message):
+        message = "dbt found two resources with the name"
+        try:
             self.run_dbt(["run"])
+            self.assertTrue(False, "dbt did not throw for duplicate models")
+        except CompilationException as e:
+            self.assertTrue(message in str(e), "dbt did not throw the correct error message")
 
 
 class TestDuplicateModelDisabled(DBTIntegrationTest):
@@ -114,9 +117,12 @@ class TestDuplicateModelEnabledAcrossPackages(DBTIntegrationTest):
     @attr(type="postgres")
     def test_duplicate_model_enabled_across_packages(self):
         self.run_dbt(["deps"])
-        message = "Found models with the same name:.*"
-        with self.assertRaisesRegexp(CompilationException, message):
+        message = "dbt found two resources with the name"
+        try:
             self.run_dbt(["run"])
+            self.assertTrue(False, "dbt did not throw for duplicate models")
+        except CompilationException as e:
+            self.assertTrue(message in str(e), "dbt did not throw the correct error message")
 
 
 class TestDuplicateModelDisabledAcrossPackages(DBTIntegrationTest):
