@@ -1,5 +1,4 @@
 
-
 seed_enabled:
     constraints:
         column_type:

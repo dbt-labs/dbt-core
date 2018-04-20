@@ -1,0 +1,87 @@
+from nose.plugins.attrib import attr
+from test.integration.base import DBTIntegrationTest
+
+class TestSimpleSeedColumnOverride(DBTIntegrationTest):
+
+    @property
+    def schema(self):
+        return "simple_seed_005"
+
+    @property
+    def project_config(self):
+        return {
+            "data-paths": ['test/integration/005_simple_seed_test/data-config'],
+            "macro-paths": ['test/integration/005_simple_seed_test/macros'],
+            "seeds": {
+                "test": {
+                    "enabled": False,
+                    "seed_enabled": {
+                        "enabled": True,
+                        "column_types": self.seed_types()
+                    },
+                }
+            }
+        }
+
+class TestSimpleSeedColumnOverridePostgres(TestSimpleSeedColumnOverride):
+    @property
+    def models(self):
+        return "test/integration/005_simple_seed_test/models-pg"
+
+    @property
+    def profile_config(self):
+        return self.postgres_profile()
+
+    def seed_types(self):
+        return {
+            "id": "text",
+            "birthday": "date",
+        }
+
+    @attr(type='postgres')
+    def test_simple_seed_with_column_override_snowflake(self):
+        self.run_dbt(["seed"])
+        self.run_dbt(["test"])
+
+
+class TestSimpleSeedColumnOverrideSnowflake(TestSimpleSeedColumnOverride):
+    @property
+    def models(self):
+        return "test/integration/005_simple_seed_test/models-snowflake"
+
+    def seed_types(self):
+        return {
+            "id": "FLOAT",
+            "birthday": "TEXT",
+        }
+
+    @property
+    def profile_config(self):
+        return self.snowflake_profile()
+
+    @attr(type='snowflake')
+    def test_simple_seed_with_column_override_snowflake(self):
+        self.run_dbt(["seed"])
+        self.run_dbt(["test"])
+
+class TestSimpleSeedColumnOverrideBQ(TestSimpleSeedColumnOverride):
+    @property
+    def models(self):
+        return "test/integration/005_simple_seed_test/models-bq"
+
+    def seed_types(self):
+        return {
+            "id": "FLOAT64",
+            "birthday": "STRING",
+        }
+
+    @property
+    def profile_config(self):
+        return self.bigquery_profile()
+
+    @attr(type='bigquery')
+    def test_simple_seed_with_column_override_bq(self):
+        self.run_dbt(["seed"])
+        self.run_dbt(["test"])
+
+
