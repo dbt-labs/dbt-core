@@ -853,9 +853,9 @@ def raise_duplicate_resource_name(node_1, node_2):
 
     raise_compiler_error(
         'dbt found two resources with the name "{}". Since these resources '
-        'have the same name,\ndbt will be unable to find the correct resource '
+        "have the same name,\ndbt will be unable to find the correct resource "
         "when {} is used. To fix this,\nchange the name of one of "
-        'these resources:\n- {} ({})\n- {} ({})'.format(
+        "these resources:\n- {} ({})\n- {} ({})".format(
             duped_name,
             get_func,
             node_1.unique_id,
