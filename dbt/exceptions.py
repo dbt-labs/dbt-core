@@ -293,7 +293,15 @@ def raise_dep_not_found(node, node_description, required_pkg):
         '`dbt deps`.'.format(node_description, required_pkg), node=node)
 
 
-def raise_duplicate_resource_name(resource_1_name, resource_2_name):
+def raise_duplicate_resource_name(node_1, node_2):
+    duped_name = node_1['name']
+
     raise_compiler_error(
-        'Found two resources with the same name: \n- {}\n- {}'.format(
-            resource_1_name, resource_2_name))
+        'dbt found two resources with the name "{}". Since these resources '
+        'have the same name,\ndbt will be unable to find the correct resource '
+        'when ref("{}") is used. To fix this,\nchange the name of one of '
+        'these resources:\n- {} ({})\n- {} ({})'.format(
+            duped_name,
+            duped_name,
+            node_1['unique_id'], node_1['original_file_path'],
+            node_2['unique_id'], node_2['original_file_path']))

@@ -289,8 +289,7 @@ def parse_sql_nodes(nodes, root_project, projects, tags=None, macros=None):
         existing_node = to_return.get(node_path)
         if existing_node is not None:
             dbt.exceptions.raise_duplicate_resource_name(
-                    existing_node.get('original_file_path'),
-                    node.get('original_file_path'))
+                    existing_node, node_parsed)
 
         to_return[node_path] = node_parsed
 

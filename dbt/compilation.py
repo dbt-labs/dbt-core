@@ -265,17 +265,17 @@ class Compiler(object):
         nodes = flat_graph['nodes']
         names_resources = {}
 
-        for resource, attribs in nodes.items():
-            if attribs.get('resource_type') not in NodeType.refable():
+        for resource, node in nodes.items():
+            if node.get('resource_type') not in NodeType.refable():
                 continue
 
-            name = attribs['name']
-            existing_name = names_resources.get(name)
-            if existing_name is not None:
-                dbt.exceptions.raise_duplicate_resource_name(resource,
-                                                             existing_name)
+            name = node['name']
+            existing_node = names_resources.get(name)
+            if existing_node is not None:
+                dbt.exceptions.raise_duplicate_resource_name(
+                        existing_node, node)
 
-            names_resources[name] = resource
+            names_resources[name] = node
 
     def compile(self):
         linker = Linker()
