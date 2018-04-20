@@ -416,7 +416,7 @@ class DefaultAdapter(object):
 
     @classmethod
     def cleanup_connections(cls):
-        global connections_in_use, connections_available
+        global connections_in_use, connections_available, lock
 
         try:
             lock.acquire()
@@ -429,8 +429,11 @@ class DefaultAdapter(object):
                     logger.debug("Connection '{}' was properly closed."
                                  .format(name))
 
-            # garbage collect, but don't close them in case someone
-            # still has a handle
+            conns_in_use = list(connections_in_use.values())
+            for conn in conns_in_use + connections_available:
+                cls.close(conn)
+
+            # garbage collect these connections
             connections_in_use = {}
             connections_available = []
 
@@ -531,15 +534,8 @@ class DefaultAdapter(object):
         if dbt.flags.STRICT_MODE:
             validate_connection(connection)
 
-        connection = cls.reload(connection)
-
-        if connection.get('state') == 'closed':
-            return connection
-
         connection.get('handle').close()
-
         connection['state'] = 'closed'
-        connections_in_use[connection.get('name')] = connection
 
         return connection
 
