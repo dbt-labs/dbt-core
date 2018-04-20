@@ -514,12 +514,18 @@ class BigQueryAdapter(PostgresAdapter):
     def load_csv_rows(cls, profile, schema, table_name, agate_table):
         bq_schema = cls._agate_to_schema(agate_table)
         dataset = cls.get_dataset(profile, schema, None)
-        table = dataset.table(table_name, schema=bq_schema)
+        table = dataset.table(table_name)
         conn = cls.get_connection(profile, None)
         client = conn.get('handle')
+
+        load_config = google.cloud.bigquery.LoadJobConfig()
+        load_config.skip_leading_rows = 1
+        load_config.schema = bq_schema
+
         with open(agate_table.original_abspath, "rb") as f:
-            job = table.upload_from_file(f, "CSV", rewind=True,
-                                         client=client, skip_leading_rows=1)
+            job = client.load_table_from_file(f, table, rewind=True,
+                                              job_config=load_config)
+
         with cls.exception_handler(profile, "LOAD TABLE"):
             cls.poll_until_job_completes(job, cls.get_timeout(conn))
 
