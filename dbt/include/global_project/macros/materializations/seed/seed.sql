@@ -16,7 +16,7 @@
   {%- set column_override = model['config'].get('column_types', {}) -%}
 
   {% set sql %}
-    create table {{ model['schema'] }}.{{ model['name'] }} (
+    create table {{ adapter.quote(model['schema']) }}.{{ adapter.quote(model['name']) }} (
         {% for col_name in agate_table.column_names %}
             {% set inferred_type = adapter.convert_type(agate_table, loop.index0) %}
             {% set type = column_override.get(col_name, inferred_type) %}
@@ -40,7 +40,7 @@
         {% set sql = create_csv_table(model) %}
     {% else %}
         {{ adapter.truncate(model['schema'], model['name']) }}
-        {% set sql = "truncate table " ~ model['schema'] ~ "." ~ model['name'] %}
+        {% set sql = "truncate table " ~ adapter.quote(model['schema']) ~ "." ~ adapter.quote(model['name']) %}
     {% endif %}
 
     {{ return(sql) }}
@@ -62,7 +62,7 @@
         {% endfor %}
 
         {% set sql %}
-            insert into {{ model['schema'] }}.{{ model['name'] }} ({{ cols_sql }}) values
+            insert into {{ adapter.quote(model['schema']) }}.{{ adapter.quote(model['name']) }} ({{ cols_sql }}) values
             {% for row in chunk -%}
                 ({%- for column in agate_table.column_names -%}
                     %s
