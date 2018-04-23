@@ -505,7 +505,7 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def load_dataframe(cls, profile, schema, table_name, agate_table,
-                      column_override, model_name=None):
+                       column_override, model_name=None):
         bq_schema = cls._agate_to_schema(agate_table, column_override)
         dataset = cls.get_dataset(profile, schema, None)
         table = dataset.table(table_name)
