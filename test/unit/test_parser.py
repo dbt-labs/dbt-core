@@ -57,6 +57,7 @@ class ParserTest(unittest.TestCase):
             'post-hook': [],
             'pre-hook': [],
             'vars': {},
+            'column_types': {},
         }
 
         self.disabled_config = {
@@ -65,6 +66,7 @@ class ParserTest(unittest.TestCase):
             'post-hook': [],
             'pre-hook': [],
             'vars': {},
+            'column_types': {},
         }
 
     def test__single_model(self):

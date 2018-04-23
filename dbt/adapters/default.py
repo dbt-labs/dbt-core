@@ -99,7 +99,8 @@ class DefaultAdapter(object):
             '`cancel_connection` is not implemented for this adapter!')
 
     @classmethod
-    def create_csv_table(cls, profile, schema, table_name, agate_table):
+    def create_csv_table(cls, profile, schema, table_name, agate_table,
+                         column_override):
         raise dbt.exceptions.NotImplementedException(
             '`create_csv_table` is not implemented for this adapter!')
 
@@ -110,7 +111,8 @@ class DefaultAdapter(object):
             '`reset_csv_table` is not implemented for this adapter!')
 
     @classmethod
-    def load_csv_rows(cls, profile, schema, table_name, agate_table):
+    def load_csv_rows(cls, profile, schema, table_name, agate_table,
+                      column_override):
         raise dbt.exceptions.NotImplementedException(
             '`load_csv_rows` is not implemented for this adapter!')
 
@@ -647,7 +649,7 @@ class DefaultAdapter(object):
 
     @classmethod
     def handle_csv_table(cls, profile, schema, table_name, agate_table,
-                         full_refresh=False):
+                         column_override, full_refresh=False):
         existing = cls.query_for_existing(profile, schema)
         existing_type = existing.get(table_name)
         if existing_type and existing_type != "table":
@@ -655,10 +657,12 @@ class DefaultAdapter(object):
                 "Cannot seed to '{}', it is a view".format(table_name))
         if existing_type:
             cls.reset_csv_table(profile, schema, table_name, agate_table,
-                                full_refresh=full_refresh)
+                                column_override, full_refresh=full_refresh)
         else:
-            cls.create_csv_table(profile, schema, table_name, agate_table)
-        cls.load_csv_rows(profile, schema, table_name, agate_table)
+            cls.create_csv_table(profile, schema, table_name, agate_table,
+                                 column_override)
+        cls.load_csv_rows(profile, schema, table_name, agate_table,
+                          column_override)
         cls.commit_if_has_connection(profile, None)
 
     @classmethod

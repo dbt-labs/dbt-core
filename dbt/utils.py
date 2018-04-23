@@ -26,6 +26,7 @@ DBTConfigKeys = [
     'pre-hook',
     'post-hook',
     'vars',
+    'column_types',
     'bind',
 ]
 

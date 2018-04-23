@@ -509,7 +509,10 @@ class SeedRunner(ModelRunner):
         schema = compiled_node["schema"]
         table_name = compiled_node["name"]
         table = compiled_node["agate_table"]
+
+        column_override = compiled_node['config'].get('column_types', {})
         self.adapter.handle_csv_table(self.profile, schema, table_name, table,
+                                      column_override,
                                       full_refresh=dbt.flags.FULL_REFRESH)
 
         if dbt.flags.FULL_REFRESH:

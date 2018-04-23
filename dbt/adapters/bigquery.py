@@ -493,7 +493,8 @@ class BigQueryAdapter(PostgresAdapter):
         return "datetime"
 
     @classmethod
-    def create_csv_table(cls, profile, schema, table_name, agate_table):
+    def create_csv_table(cls, profile, schema, table_name, agate_table,
+                         column_override):
         pass
 
     @classmethod
@@ -502,17 +503,19 @@ class BigQueryAdapter(PostgresAdapter):
         cls.drop(profile, schema, table_name, "table")
 
     @classmethod
-    def _agate_to_schema(cls, agate_table):
+    def _agate_to_schema(cls, agate_table, column_override):
         bq_schema = []
         for idx, col_name in enumerate(agate_table.column_names):
-            type_ = cls.convert_agate_type(agate_table, idx)
+            inferred_type = cls.convert_agate_type(agate_table, idx)
+            type_ = column_override.get(col_name, inferred_type)
             bq_schema.append(
                 google.cloud.bigquery.SchemaField(col_name, type_))
         return bq_schema
 
     @classmethod
-    def load_csv_rows(cls, profile, schema, table_name, agate_table):
-        bq_schema = cls._agate_to_schema(agate_table)
+    def load_csv_rows(cls, profile, schema, table_name, agate_table,
+                      column_override):
+        bq_schema = cls._agate_to_schema(agate_table, column_override)
         dataset = cls.get_dataset(profile, schema, None)
         table = dataset.table(table_name)
         conn = cls.get_connection(profile, None)

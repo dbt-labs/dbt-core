@@ -12,7 +12,7 @@ class SourceConfig(object):
     ConfigKeys = DBTConfigKeys
 
     AppendListFields = ['pre-hook', 'post-hook']
-    ExtendDictFields = ['vars']
+    ExtendDictFields = ['vars', 'column_types']
     ClobberFields = [
         'schema',
         'enabled',
