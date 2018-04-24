@@ -157,10 +157,9 @@ class RunManager(object):
 
                     yellow = dbt.ui.printer.COLOR_FG_YELLOW
                     dbt.ui.printer.print_timestamped_line(msg, yellow)
-                    raise
-
-                for conn_name in adapter.cancel_open_connections(profile):
-                    dbt.ui.printer.print_cancel_line(conn_name)
+                else:
+                    for conn_name in adapter.cancel_open_connections(profile):
+                        dbt.ui.printer.print_cancel_line(conn_name)
 
                 dbt.ui.printer.print_run_end_messages(node_results,
                                                       early_exit=True)
