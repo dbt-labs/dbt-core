@@ -505,23 +505,6 @@ class SeedRunner(ModelRunner):
         dbt.ui.printer.print_start_line(description, self.node_index,
                                         self.num_nodes)
 
-    def execute(self, compiled_node, existing_, flat_graph):
-        schema = compiled_node["schema"]
-        table_name = compiled_node["name"]
-        table = compiled_node["agate_table"]
-
-        column_override = compiled_node['config'].get('column_types', {})
-        self.adapter.handle_csv_table(self.profile, schema, table_name, table,
-                                      column_override,
-                                      full_refresh=dbt.flags.FULL_REFRESH)
-
-        if dbt.flags.FULL_REFRESH:
-            status = 'CREATE {}'.format(len(table.rows))
-        else:
-            status = 'INSERT {}'.format(len(table.rows))
-
-        return RunModelResult(compiled_node, status=status)
-
     def compile(self, flat_graph):
         return self.node
 

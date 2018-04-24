@@ -33,6 +33,7 @@ class BigQueryAdapter(PostgresAdapter):
         "make_date_partitioned_table",
         "already_exists",
         "expand_target_column_types",
+        "load_dataframe",
 
         "get_columns_in_table"
     ]
@@ -493,16 +494,6 @@ class BigQueryAdapter(PostgresAdapter):
         return "datetime"
 
     @classmethod
-    def create_csv_table(cls, profile, schema, table_name, agate_table,
-                         column_override):
-        pass
-
-    @classmethod
-    def reset_csv_table(cls, profile, schema, table_name, agate_table,
-                        full_refresh=False):
-        cls.drop(profile, schema, table_name, "table")
-
-    @classmethod
     def _agate_to_schema(cls, agate_table, column_override):
         bq_schema = []
         for idx, col_name in enumerate(agate_table.column_names):
@@ -513,8 +504,8 @@ class BigQueryAdapter(PostgresAdapter):
         return bq_schema
 
     @classmethod
-    def load_csv_rows(cls, profile, schema, table_name, agate_table,
-                      column_override):
+    def load_dataframe(cls, profile, schema, table_name, agate_table,
+                       column_override, model_name=None):
         bq_schema = cls._agate_to_schema(agate_table, column_override)
         dataset = cls.get_dataset(profile, schema, None)
         table = dataset.table(table_name)
