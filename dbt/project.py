@@ -12,6 +12,8 @@ import dbt.clients.jinja
 import dbt.compat
 import dbt.context.common
 import dbt.clients.system
+import dbt.ui.printer
+import dbt.links
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -233,13 +235,15 @@ class Project(object):
         if db_type == 'snowflake' and self.cfg \
                                           .get('quoting', {}) \
                                           .get('identifier') is None:
-            logger.warn(
+            msg = dbt.ui.printer.yellow(
                 'You are using Snowflake, but you did not specify a '
-                'quoting strategy for your identifiers. Quoting '
+                'quoting strategy for your identifiers.\nQuoting '
                 'behavior for Snowflake will change in a future release, '
-                'so it is recommended that you define this explicitly. '
-                '\n\n'
-                'For more information, see ADD LINK')
+                'so it is recommended that you define this explicitly.\n\n'
+                'For more information, see: {}\n'
+            )
+
+            logger.warn(msg.format(dbt.links.SnowflakeQuotingDocs))
 
     def hashed_name(self):
         if self.cfg.get("name", None) is None:
