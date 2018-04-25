@@ -121,8 +121,14 @@ class DBTIntegrationTest(unittest.TestCase):
         }
 
     def unique_schema(self):
-        schema =  self.schema
-        return "{}_{}".format(self.prefix, schema)
+        schema = self.schema
+
+        to_return = "{}_{}".format(self.prefix, schema)
+
+        if self.adapter_type == 'snowflake':
+            return to_return.upper()
+
+        return to_return.lower()
 
     def get_profile(self, adapter_type):
         if adapter_type == 'postgres':
@@ -133,6 +139,8 @@ class DBTIntegrationTest(unittest.TestCase):
             return self.bigquery_profile()
 
     def setUp(self):
+        self.adapter_type = 'postgres'
+
         # create a dbt_project.yml
 
         base_project_config = {
@@ -190,8 +198,9 @@ class DBTIntegrationTest(unittest.TestCase):
             adapter.drop_schema(profile, project, schema_name, '__test')
             adapter.create_schema(profile, project, schema_name, '__test')
         else:
-            self.run_sql('DROP SCHEMA IF EXISTS {} CASCADE'.format(self.unique_schema()))
-            self.run_sql('CREATE SCHEMA {}'.format(self.unique_schema()))
+            schema = self.adapter.quote(self.unique_schema())
+            self.run_sql('DROP SCHEMA IF EXISTS {} CASCADE'.format(schema))
+            self.run_sql('CREATE SCHEMA {}'.format(schema))
 
     def use_default_project(self, overrides=None):
         # create a dbt_project.yml
@@ -215,6 +224,8 @@ class DBTIntegrationTest(unittest.TestCase):
             yaml.safe_dump(project_config, f, default_flow_style=True)
 
     def use_profile(self, adapter_type):
+        self.adapter_type = adapter_type
+
         profile_config = {}
         default_profile_config = self.get_profile(adapter_type)
 
@@ -246,8 +257,9 @@ class DBTIntegrationTest(unittest.TestCase):
             adapter.create_schema(profile, self.project,
                                   self.unique_schema(), '__test')
         else:
-            self.run_sql('DROP SCHEMA IF EXISTS {} CASCADE'.format(self.unique_schema()))
-            self.run_sql('CREATE SCHEMA {}'.format(self.unique_schema()))
+            schema = self.adapter.quote(self.unique_schema())
+            self.run_sql('DROP SCHEMA IF EXISTS {} CASCADE'.format(schema))
+            self.run_sql('CREATE SCHEMA {}'.format(schema))
 
     def tearDown(self):
         os.remove(DBT_PROFILES)
@@ -266,11 +278,8 @@ class DBTIntegrationTest(unittest.TestCase):
             adapter.drop_schema(self._profile, self.project,
                                 self.unique_schema(), '__test')
         else:
-            if self.project.cfg.get('quoting', {}).get('schema', True):
-                schema = self.adapter.quote(self.unique_schema())
-
-            self.run_sql('DROP SCHEMA IF EXISTS {} CASCADE'
-                         .format(schema))
+            schema = self.adapter.quote(self.unique_schema())
+            self.run_sql('DROP SCHEMA IF EXISTS {} CASCADE'.format(schema))
             self.handle.close()
 
         # hack for BQ -- TODO
@@ -385,14 +394,6 @@ class DBTIntegrationTest(unittest.TestCase):
         else:
             columns_csv = ", ".join(['{}'.format(record[0]) for record in columns])
 
-        if self.project.cfg.get('quoting', {}).get('identifier', True):
-            table_a = self.adapter.quote(table_a)
-            table_b = self.adapter.quote(table_b)
-
-        if self.project.cfg.get('quoting', {}).get('schema', True):
-            table_a_schema = self.adapter.quote(table_a_schema)
-            table_b_schema = self.adapter.quote(table_b_schema)
-
         sql = """
             SELECT COUNT(*) FROM (
                 (SELECT {columns} FROM {table_a_schema}.{table_a} EXCEPT
@@ -402,10 +403,10 @@ class DBTIntegrationTest(unittest.TestCase):
                  SELECT {columns} FROM {table_a_schema}.{table_a})
             ) AS a""".format(
                 columns=columns_csv,
-                table_a_schema=table_a_schema,
-                table_b_schema=table_b_schema,
-                table_a=table_a,
-                table_b=table_b
+                table_a_schema=self.adapter.quote(table_a_schema),
+                table_b_schema=self.adapter.quote(table_b_schema),
+                table_a=self.adapter.quote(table_a),
+                table_b=self.adapter.quote(table_b)
             )
 
         return sql
@@ -441,20 +442,14 @@ class DBTIntegrationTest(unittest.TestCase):
         table_b_schema = self.unique_schema() \
                          if table_b_schema is None else table_b_schema
 
-        if self.project.cfg.get('quoting', {}).get('identifier', True):
-            table_a = self.adapter.quote(table_a)
-            table_b = self.adapter.quote(table_b)
-
-        if self.project.cfg.get('quoting', {}).get('schema', True):
-            table_a_schema = self.adapter.quote(table_a_schema)
-            table_b_schema = self.adapter.quote(table_b_schema)
-
         table_a_result = self.run_sql(
             'SELECT COUNT(*) FROM {}.{}'
-            .format(table_a_schema, table_a), fetch='one')
+            .format(self.adapter.quote(table_a_schema),
+                    self.adapter.quote(table_a)), fetch='one')
         table_b_result = self.run_sql(
             'SELECT COUNT(*) FROM {}.{}'
-            .format(table_b_schema, table_b), fetch='one')
+            .format(self.adapter.quote(table_b_schema),
+                    self.adapter.quote(table_b)), fetch='one')
 
         self.assertEquals(
             table_a_result[0],
@@ -486,14 +481,6 @@ class DBTIntegrationTest(unittest.TestCase):
     def assertTableColumnsEqual(self, table_a, table_b, table_a_schema=None, table_b_schema=None):
         table_a_schema = self.unique_schema() if table_a_schema is None else table_a_schema
         table_b_schema = self.unique_schema() if table_b_schema is None else table_b_schema
-
-        if self.project.cfg.get('quoting', {}).get('identifier', True):
-            table_a = self.adapter.quote(table_a)
-            table_b = self.adapter.quote(table_b)
-
-        if self.project.cfg.get('quoting', {}).get('schema', True):
-            table_a_schema = self.adapter.quote(table_a_schema)
-            table_b_schema = self.adapter.quote(table_b_schema)
 
         table_a_result = self.get_table_columns(table_a, table_a_schema)
         table_b_result = self.get_table_columns(table_b, table_b_schema)

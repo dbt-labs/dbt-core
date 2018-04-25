@@ -320,7 +320,7 @@ def get_relation_returned_multiple_results(kwargs, matches):
 def approximate_relation_match(target, relation):
     raise_compiler_error(
         'When searching for a relation, dbt found an approximate match. '
-        'Instead of guessing \nwhich relation to use, dbt will exit. '
+        'Instead of guessing \nwhich relation to use, dbt will move on. '
         'Please delete {relation}, or rename it to be less ambiguous.'
         '\nSearched for: {target}\nFound: {relation}'
         .format(target=target,

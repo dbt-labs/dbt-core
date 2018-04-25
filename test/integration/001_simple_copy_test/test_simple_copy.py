@@ -83,9 +83,9 @@ class TestSimpleCopy(DBTIntegrationTest):
         self.run_dbt(["seed"])
         self.run_dbt()
 
-        self.assertTablesEqual('"seed"', '"view_model"')
-        self.assertTablesEqual('"seed"', '"incremental"')
-        self.assertTablesEqual('"seed"', '"materialized"')
+        self.assertTablesEqual("seed", "view_model")
+        self.assertTablesEqual("seed", "incremental")
+        self.assertTablesEqual("seed", "materialized")
 
         self.use_default_project({
             "data-paths": [self.dir("seed-update")],
@@ -94,9 +94,9 @@ class TestSimpleCopy(DBTIntegrationTest):
         self.run_dbt(["seed"])
         self.run_dbt()
 
-        self.assertTablesEqual('"seed"', '"view_model"')
-        self.assertTablesEqual('"seed"', '"incremental"')
-        self.assertTablesEqual('"seed"', '"materialized"')
+        self.assertTablesEqual("seed", "view_model")
+        self.assertTablesEqual("seed", "incremental")
+        self.assertTablesEqual("seed", "materialized")
 
     @attr(type="snowflake")
     def test__snowflake__simple_copy__quoting_off(self):
@@ -109,9 +109,9 @@ class TestSimpleCopy(DBTIntegrationTest):
         self.run_dbt(["seed"])
         self.run_dbt()
 
-        self.assertTablesEqual("seed", "view_model")
-        self.assertTablesEqual("seed", "incremental")
-        self.assertTablesEqual("seed", "materialized")
+        self.assertTablesEqual("SEED", "VIEW_MODEL")
+        self.assertTablesEqual("SEED", "INCREMENTAL")
+        self.assertTablesEqual("SEED", "MATERIALIZED")
 
         self.use_default_project({
             "data-paths": [self.dir("seed-update")],
@@ -120,9 +120,9 @@ class TestSimpleCopy(DBTIntegrationTest):
         self.run_dbt(["seed"])
         self.run_dbt()
 
-        self.assertTablesEqual("seed", "view_model")
-        self.assertTablesEqual("seed", "incremental")
-        self.assertTablesEqual("seed", "materialized")
+        self.assertTablesEqual("SEED", "VIEW_MODEL")
+        self.assertTablesEqual("SEED", "INCREMENTAL")
+        self.assertTablesEqual("SEED", "MATERIALIZED")
 
     @attr(type="snowflake")
     def test__snowflake__seed__quoting_switch(self):

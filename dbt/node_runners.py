@@ -409,7 +409,8 @@ class ModelRunner(CompileRunner):
         self.print_result_line(result)
 
     def execute(self, model, flat_graph):
-        context = dbt.context.runtime.generate(model, self.project, flat_graph)
+        context = dbt.context.runtime.generate(
+            model, self.project.cfg, flat_graph)
 
         materialization_macro = dbt.utils.get_materialization_macro(
             flat_graph,

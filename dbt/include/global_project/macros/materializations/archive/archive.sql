@@ -1,30 +1,30 @@
-{% macro archive_select(source_schema, source_table, target_schema, target_table, unique_key, updated_at) %}
+{% macro archive_select(source_relation, target_relation, unique_key, updated_at) %}
 
     with current_data as (
 
         select
-            {% for col in adapter.get_columns_in_table(source_schema, source_table) %}
+            {% for col in adapter.get_columns_in_table(source_relation.schema, source_relation.identifier) %}
                 "{{ col.name }}" {% if not loop.last %},{% endif %}
             {% endfor %},
             {{ updated_at }} as "dbt_updated_at",
             {{ unique_key }} as "dbt_pk",
             {{ updated_at }} as "valid_from",
             null::timestamp as "tmp_valid_to"
-        from {{ source_schema }}.{{ source_table }}
+        from {{ source_relation }}
 
     ),
 
     archived_data as (
 
         select
-            {% for col in adapter.get_columns_in_table(source_schema, source_table) %}
+            {% for col in adapter.get_columns_in_table(source_relation.schema, source_relation.identifier) %}
                 "{{ col.name }}" {% if not loop.last %},{% endif %}
             {% endfor %},
             {{ updated_at }} as "dbt_updated_at",
             {{ unique_key }} as "dbt_pk",
             "valid_from",
             "valid_to" as "tmp_valid_to"
-        from {{ target_schema }}.{{ target_table }}
+        from {{ target_relation }}
 
     ),
 
@@ -76,16 +76,16 @@
   {%- set target_schema = config.get('target_schema') -%}
   {%- set target_table = config.get('target_table') -%}
 
+  {%- set source_schema = config.get('source_schema') -%}
+  {%- set source_table = config.get('source_table') -%}
+
   {%- set source_relation = adapter.get_relation(
-      schema=config.get('source_schema'),
-      identifier=config.get('source_table')) -%}
+      schema=source_schema,
+      identifier=source_table) -%}
 
   {%- set target_relation = adapter.get_relation(
       schema=target_schema,
       identifier=target_table) -%}
-
-  {%- set source_schema = config.get('source_schema') -%}
-  {%- set source_table = config.get('source_table') -%}
 
   {%- if source_relation is none -%}
     {{ exceptions.missing_relation(source_relation) }}
@@ -135,7 +135,7 @@
     {% set tmp_table_sql -%}
 
       with dbt_archive_sbq as (
-        {{ archive_select(source_schema, source_table, target_schema, target_table, unique_key, updated_at) }}
+        {{ archive_select(source_relation, target_relation, unique_key, updated_at) }}
       )
       select * from dbt_archive_sbq
 
@@ -150,15 +150,15 @@
                                         to_table=target_table) }}
 
   {% call statement('main') -%}
-    update {{ target_schema }}.{{ identifier }} set "valid_to" = tmp."valid_to"
-    from {{ tmp_identifier }} as tmp
-    where tmp."scd_id" = {{ target_schema }}.{{ identifier }}."scd_id"
+    update {{ target_relation }} set "valid_to" = tmp."valid_to"
+    from {{ tmp_relation }} as tmp
+    where tmp."scd_id" = {{ target_relation }}."scd_id"
       and "change_type" = 'update';
 
-    insert into {{ target_schema }}.{{ identifier }} (
+    insert into {{ target_relation }} (
       {{ column_list(dest_columns) }}
     )
-    select {{ column_list(dest_columns) }} from {{ tmp_identifier }}
+    select {{ column_list(dest_columns) }} from {{ tmp_relation }}
     where "change_type" = 'insert';
   {% endcall %}
 

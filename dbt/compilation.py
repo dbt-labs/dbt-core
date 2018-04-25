@@ -166,7 +166,7 @@ class Compiler(object):
         })
 
         context = dbt.context.runtime.generate(
-            compiled_node, self.project.cfg, flat_graph)
+            compiled_node, self.project, flat_graph)
 
         compiled_node['compiled_sql'] = dbt.clients.jinja.get_rendered(
             node.get('raw_sql'),

@@ -16,6 +16,11 @@ class TestSimpleArchive(DBTIntegrationTest):
 
     @property
     def project_config(self):
+        source_table = 'seed'
+
+        if self.adapter_type == 'snowflake':
+            source_table = source_table.upper()
+
         return {
             "archive": [
                 {
@@ -23,7 +28,7 @@ class TestSimpleArchive(DBTIntegrationTest):
                     "target_schema": self.unique_schema(),
                     "tables": [
                         {
-                            "source_table": "seed",
+                            "source_table": source_table,
                             "target_table": "archive_actual",
                             "updated_at": '"updated_at"',
                             "unique_key": '''"id" || '-' || "first_name"'''
@@ -58,11 +63,11 @@ class TestSimpleArchive(DBTIntegrationTest):
 
         self.run_dbt(["archive"])
 
-        self.assertTablesEqual("ARCHIVE_EXPECTED","ARCHIVE_ACTUAL")
+        self.assertTablesEqual("ARCHIVE_EXPECTED", "archive_actual")
 
         self.run_sql_file("test/integration/004_simple_archive_test/invalidate_snowflake.sql")
         self.run_sql_file("test/integration/004_simple_archive_test/update.sql")
 
         self.run_dbt(["archive"])
 
-        self.assertTablesEqual("ARCHIVE_EXPECTED","ARCHIVE_ACTUAL")
+        self.assertTablesEqual("ARCHIVE_EXPECTED", "archive_actual")

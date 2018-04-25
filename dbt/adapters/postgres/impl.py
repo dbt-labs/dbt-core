@@ -109,19 +109,20 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         4. Rename the new column to existing column
         """
 
+        relation = cls.Relation.create(schema=schema, identifier=table)
+
         opts = {
-            "schema": schema,
-            "table": table,
+            "relation": relation,
             "old_column": column_name,
             "tmp_column": "{}__dbt_alter".format(column_name),
             "dtype": new_column_type
         }
 
         sql = """
-        alter table {schema}.{table} add column "{tmp_column}" {dtype};
-        update {schema}.{table} set "{tmp_column}" = "{old_column}";
-        alter table {schema}.{table} drop column "{old_column}" cascade;
-        alter table {schema}.{table} rename column "{tmp_column}" to "{old_column}";
+        alter table {relation} add column "{tmp_column}" {dtype};
+        update {relation} set "{tmp_column}" = "{old_column}";
+        alter table {relation} drop column "{old_column}" cascade;
+        alter table {relation} rename column "{tmp_column}" to "{old_column}";
         """.format(**opts).strip()  # noqa
 
         connection, cursor = cls.add_query(profile, sql, model_name)

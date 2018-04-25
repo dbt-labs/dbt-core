@@ -106,7 +106,7 @@ class SnowflakeAdapter(PostgresAdapter):
         return result
 
     @classmethod
-    def list_relations(cls, profile, project, schema, model_name=None):
+    def list_relations(cls, profile, project_cfg, schema, model_name=None):
         sql = """
         select
           table_name as name, table_schema as schema, table_type as type
@@ -136,7 +136,7 @@ class SnowflakeAdapter(PostgresAdapter):
                 for (name, _schema, type) in results]
 
     @classmethod
-    def rename_relation(cls, profile, project, from_relation,
+    def rename_relation(cls, profile, project_cfg, from_relation,
                         to_relation, model_name=None):
         sql = 'alter table {} rename to {}'.format(
             from_relation, to_relation)
@@ -148,7 +148,7 @@ class SnowflakeAdapter(PostgresAdapter):
         return cls.add_query(profile, 'BEGIN', name, auto_begin=False)
 
     @classmethod
-    def get_existing_schemas(cls, profile, project, model_name=None):
+    def get_existing_schemas(cls, profile, project_cfg, model_name=None):
         sql = "select distinct schema_name from information_schema.schemata"
 
         connection, cursor = cls.add_query(profile, sql, model_name,
@@ -158,7 +158,7 @@ class SnowflakeAdapter(PostgresAdapter):
         return [row[0] for row in results]
 
     @classmethod
-    def check_schema_exists(cls, profile, project, schema, model_name=None):
+    def check_schema_exists(cls, profile, project_cfg, schema, model_name=None):
         sql = """
         select count(*)
         from information_schema.schemata
@@ -219,13 +219,13 @@ class SnowflakeAdapter(PostgresAdapter):
         return connection, cursor
 
     @classmethod
-    def _make_match_kwargs(cls, project, schema, identifier):
+    def _make_match_kwargs(cls, project_cfg, schema, identifier):
         if identifier is not None and \
-           project.cfg.get('quoting', {}).get('identifier', True) is False:
+           project_cfg.get('quoting', {}).get('identifier', True) is False:
             identifier = identifier.upper()
 
         if schema is not None and \
-           project.cfg.get('quoting', {}).get('schema', True) is False:
+           project_cfg.get('quoting', {}).get('schema', True) is False:
             schema = schema.upper()
 
         return filter_null_values({'identifier': identifier,

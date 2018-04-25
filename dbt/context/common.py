@@ -279,13 +279,12 @@ def _return(value):
     raise dbt.exceptions.MacroReturn(value)
 
 
-def get_this_relation(db_wrapper, project, profile, model):
+def get_this_relation(db_wrapper, project_cfg, profile, model):
     table_name = dbt.utils.model_immediate_name(
             model, dbt.flags.NON_DESTRUCTIVE)
 
     return db_wrapper.adapter.Relation.create_from_node(
-        profile, model, table_name=table_name,
-        quote_policy=project.get('quoting', {}))
+        profile, model, table_name=table_name)
 
 
 def create_relation(relation_type, quoting_config):
@@ -293,14 +292,30 @@ def create_relation(relation_type, quoting_config):
     class RelationWithContext(relation_type):
         @classmethod
         def create(cls, *args, **kwargs):
+            quote_policy = quoting_config
+
+            if 'quote_policy' in kwargs:
+                quote_policy = dbt.utils.merge(
+                    quote_policy,
+                    kwargs.pop('quote_policy'))
+
             return relation_type.create(*args,
-                                        quote_policy=quoting_config,
+                                        quote_policy=quote_policy,
                                         **kwargs)
 
     return RelationWithContext
 
 
-def generate(model, project, flat_graph, provider=None):
+def create_adapter(adapter_type, relation_type):
+
+    class AdapterWithContext(adapter_type):
+
+        Relation = relation_type
+
+    return AdapterWithContext
+
+
+def generate(model, project_cfg, flat_graph, provider=None):
     """
     Not meant to be called directly. Call with either:
         dbt.context.parser.generate
@@ -311,8 +326,8 @@ def generate(model, project, flat_graph, provider=None):
         raise dbt.exceptions.InternalException(
             "Invalid provider given to context: {}".format(provider))
 
-    target_name = project.get('target')
-    profile = project.get('outputs').get(target_name)
+    target_name = project_cfg.get('target')
+    profile = project_cfg.get('outputs').get(target_name)
     target = profile.copy()
     target.pop('pass', None)
     target['name'] = target_name
@@ -324,13 +339,18 @@ def generate(model, project, flat_graph, provider=None):
     pre_hooks = model.get('config', {}).get('pre-hook')
     post_hooks = model.get('config', {}).get('post-hook')
 
-    db_wrapper = DatabaseWrapper(model, adapter, profile, project)
+    relation_type = create_relation(adapter.Relation,
+                                    project_cfg.get('quoting'))
+
+    db_wrapper = DatabaseWrapper(model,
+                                 create_adapter(adapter, relation_type),
+                                 profile,
+                                 project_cfg)
 
     context = dbt.utils.merge(context, {
         "adapter": db_wrapper,
         "api": {
-            "Relation": create_relation(adapter.Relation,
-                                        project.get('quoting')),
+            "Relation": relation_type,
             "Column": adapter.Column,
         },
         "column": adapter.Column,
@@ -348,7 +368,7 @@ def generate(model, project, flat_graph, provider=None):
         },
         "post_hooks": post_hooks,
         "pre_hooks": pre_hooks,
-        "ref": provider.ref(model, project, profile, flat_graph),
+        "ref": provider.ref(db_wrapper, model, project_cfg, profile, flat_graph),
         "return": _return,
         "schema": model.get('schema', schema),
         "sql": model.get('injected_sql'),
@@ -356,7 +376,7 @@ def generate(model, project, flat_graph, provider=None):
         "fromjson": fromjson,
         "tojson": tojson,
         "target": target,
-        "this": get_this_relation(db_wrapper, project, profile, model),
+        "this": get_this_relation(db_wrapper, project_cfg, profile, model),
         "try_or_compiler_error": try_or_compiler_error(model)
     })
 
@@ -368,7 +388,7 @@ def generate(model, project, flat_graph, provider=None):
 
     context = _add_macros(context, model, flat_graph)
 
-    context["write"] = write(model, project.get('target-path'), 'run')
+    context["write"] = write(model, project_cfg.get('target-path'), 'run')
     context["render"] = render(context, model)
     context["var"] = Var(model, context=context)
     context['context'] = context
