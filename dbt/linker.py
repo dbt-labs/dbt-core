@@ -32,13 +32,16 @@ class Linker(object):
         return self.graph.node[node]
 
     def find_cycles(self):
-        try:
-            cycles = nx.algorithms.find_cycle(self.graph)
-        except nx.exception.NetworkXNoCycle:
-            return None
+        # There's a networkx find_cycle function, but there's a bug in the
+        # nx 1.11 release that prevents us from using it. We should use that
+        # function when we upgrade to 2.X. More info:
+        #     https://github.com/networkx/networkx/pull/2473
+        cycles = list(nx.simple_cycles(self.graph))
 
-        if cycles:
-            return " --> ".join([".".join(node) for node in cycles])
+        if len(cycles) > 0:
+            cycle_nodes = cycles[0]
+            cycle_nodes.append(cycle_nodes[0])
+            return " --> ".join(cycle_nodes)
 
         return None
 
