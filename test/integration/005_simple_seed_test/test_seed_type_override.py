@@ -1,6 +1,7 @@
 from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 
+
 class TestSimpleSeedColumnOverride(DBTIntegrationTest):
 
     @property
@@ -22,6 +23,7 @@ class TestSimpleSeedColumnOverride(DBTIntegrationTest):
                 }
             }
         }
+
 
 class TestSimpleSeedColumnOverridePostgres(TestSimpleSeedColumnOverride):
     @property
@@ -83,5 +85,3 @@ class TestSimpleSeedColumnOverrideBQ(TestSimpleSeedColumnOverride):
     def test_simple_seed_with_column_override_bq(self):
         self.run_dbt(["seed"])
         self.run_dbt(["test"])
-
-

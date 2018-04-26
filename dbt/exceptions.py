@@ -248,9 +248,21 @@ def missing_config(model, name):
         model)
 
 
-def missing_relation(relation_name, model=None):
+def missing_relation(relation, model=None):
     raise_compiler_error(
-        "Relation {} not found!".format(relation_name),
+        "Relation {} not found!".format(relation),
+        model)
+
+
+def relation_wrong_type(relation, expected_type, model=None):
+    raise_compiler_error(
+        ('Trying to create {expected_type} {relation}, '
+         'but it currently exists as a {current_type}. Either '
+         'drop {relation} manually, or run dbt with '
+         '`--full-refresh` and dbt will drop it for you.')
+        .format(relation=relation,
+                current_type=relation.type,
+                expected_type=expected_type),
         model)
 
 
@@ -291,6 +303,28 @@ def raise_dep_not_found(node, node_description, required_pkg):
         'Error while parsing {}.\nThe required package "{}" was not found. '
         'Is the package installed?\nHint: You may need to run '
         '`dbt deps`.'.format(node_description, required_pkg), node=node)
+
+
+def multiple_matching_relations(kwargs, matches):
+    raise_compiler_error(
+        'get_relation returned more than one relation with the given args. '
+        'Please specify a database or schema to narrow down the result set.'
+        '\n{}\n\n{}'
+        .format(kwargs, matches))
+
+
+def get_relation_returned_multiple_results(kwargs, matches):
+    multiple_matching_relations(kwargs, matches)
+
+
+def approximate_relation_match(target, relation):
+    raise_compiler_error(
+        'When searching for a relation, dbt found an approximate match. '
+        'Instead of guessing \nwhich relation to use, dbt will move on. '
+        'Please delete {relation}, or rename it to be less ambiguous.'
+        '\nSearched for: {target}\nFound: {relation}'
+        .format(target=target,
+                relation=relation))
 
 
 def raise_duplicate_resource_name(node_1, node_2):

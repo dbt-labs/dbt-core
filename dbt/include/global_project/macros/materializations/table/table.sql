@@ -2,17 +2,29 @@
   {%- set identifier = model['name'] -%}
   {%- set tmp_identifier = identifier + '__dbt_tmp' -%}
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
-  {%- set existing = adapter.query_for_existing(schema) -%}
-  {%- set existing_type = existing.get(identifier) -%}
 
-  {{ drop_if_exists(existing, schema, tmp_identifier) }}
+  {%- set existing_relations = adapter.list_relations(schema=schema) -%}
+  {%- set old_relation = adapter.get_relation(relations_list=existing_relations,
+                                              schema=schema, identifier=identifier) -%}
+  {%- set target_relation = api.Relation.create(identifier=identifier,
+                                                schema=schema, type='table') -%}
+  {%- set intermediate_relation = api.Relation.create(identifier=tmp_identifier,
+                                                      schema=schema, type='table') -%}
+  {%- set exists_as_table = (old_relation is not none and old_relation.is_table) -%}
+  {%- set exists_as_view = (old_relation is not none and old_relation.is_view) -%}
+  {%- set create_as_temporary = (exists_as_table and non_destructive_mode) -%}
 
-  -- setup
+
+  -- drop the temp relation if it exists for some reason
+  {{ adapter.drop_relation(intermediate_relation) }}
+
+  -- setup: if the target relation already exists, truncate or drop it
   {% if non_destructive_mode -%}
-    {% if existing_type == 'table' -%}
-      {{ adapter.truncate(schema, identifier) }}
-    {% elif existing_type == 'view' -%}
-      {{ adapter.drop(schema, identifier, existing_type) }}
+    {% if exists_as_table -%}
+      {{ adapter.truncate_relation(old_relation) }}
+    {% elif exists_as_view -%}
+      {{ adapter.drop_relation(old_relation) }}
+      {%- set old_relation = none -%}
     {%- endif %}
   {%- endif %}
 
@@ -24,21 +36,21 @@
   -- build model
   {% call statement('main') -%}
     {%- if non_destructive_mode -%}
-      {%- if adapter.already_exists(schema, identifier) -%}
-        {{ create_table_as(True, tmp_identifier, sql) }}
+      {%- if old_relation is not none -%}
+        {{ create_table_as(create_as_temporary, intermediate_relation, sql) }}
 
         {% set dest_columns = adapter.get_columns_in_table(schema, identifier) %}
         {% set dest_cols_csv = dest_columns | map(attribute='quoted') | join(', ') %}
 
-        insert into {{ schema }}.{{ identifier }} ({{ dest_cols_csv }}) (
+        insert into {{ target_relation }} ({{ dest_cols_csv }}) (
           select {{ dest_cols_csv }}
-          from "{{ tmp_identifier }}"
+          from {{ intermediate_relation.include(schema=(not create_as_temporary)) }}
         );
       {%- else -%}
-        {{ create_table_as(False, identifier, sql) }}
+        {{ create_table_as(create_as_temporary, target_relation, sql) }}
       {%- endif -%}
     {%- else -%}
-      {{ create_table_as(False, tmp_identifier, sql) }}
+      {{ create_table_as(create_as_temporary, intermediate_relation, sql) }}
     {%- endif -%}
   {%- endcall %}
 
@@ -48,8 +60,8 @@
   {% if non_destructive_mode -%}
     -- noop
   {%- else -%}
-    {{ drop_if_exists(existing, schema, identifier) }}
-    {{ adapter.rename(schema, tmp_identifier, identifier) }}
+    {{ drop_relation_if_exists(old_relation) }}
+    {{ adapter.rename_relation(intermediate_relation, target_relation) }}
   {%- endif %}
 
   -- `COMMIT` happens here

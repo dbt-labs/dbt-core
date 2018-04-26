@@ -29,37 +29,40 @@
 {%- endmacro %}
 
 {% macro create_schema(schema_name) %}
-  create schema if not exists "{{ schema_name }}";
+  create schema if not exists {{ schema_name }};
 {% endmacro %}
 
 
-{% macro create_table_as(temporary, identifier, sql) -%}
-  {{ adapter_macro('create_table_as', temporary, identifier, sql) }}
+{% macro create_table_as(temporary, relation, sql) -%}
+  {{ adapter_macro('create_table_as', temporary, relation, sql) }}
 {%- endmacro %}
 
-{% macro default__create_table_as(temporary, identifier, sql) -%}
-  create {% if temporary: -%}temporary{%- endif %} table "{{ schema }}"."{{ identifier }}" as (
-    {{ sql }}
-  );
-{% endmacro %}
-
-{% macro create_view_as(identifier, sql) -%}
-  {{ adapter_macro('create_view_as', identifier, sql) }}
-{%- endmacro %}
-
-{% macro default__create_view_as(identifier, sql) -%}
-  create view "{{ schema }}"."{{ identifier }}" as (
+{% macro default__create_table_as(temporary, relation, sql) -%}
+  create {% if temporary: -%}temporary{%- endif %} table
+    {{ relation.include(schema=(not temporary)) }}
+  as (
     {{ sql }}
   );
 {% endmacro %}
 
 
-{% macro create_archive_table(schema, identifier, columns) -%}
-  {{ adapter_macro('create_archive_table', schema, identifier, columns) }}
+{% macro create_view_as(relation, sql) -%}
+  {{ adapter_macro('create_view_as', relation, sql) }}
 {%- endmacro %}
 
-{% macro default__create_archive_table(schema, identifier, columns) -%}
-  create table if not exists "{{ schema }}"."{{ identifier }}" (
+{% macro default__create_view_as(relation, sql) -%}
+  create view {{ relation }} as (
+    {{ sql }}
+  );
+{% endmacro %}
+
+
+{% macro create_archive_table(relation, columns) -%}
+  {{ adapter_macro('create_archive_table', relation, columns) }}
+{%- endmacro %}
+
+{% macro default__create_archive_table(relation, columns) -%}
+  create table if not exists {{ relation }} (
     {{ column_list_for_create_table(columns) }}
   );
 {% endmacro %}

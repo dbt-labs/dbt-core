@@ -1,13 +1,13 @@
-{% macro dbt__incremental_delete(schema, model) -%}
+{% macro dbt__incremental_delete(target_relation, tmp_relation) -%}
 
   {%- set unique_key = config.require('unique_key') -%}
   {%- set identifier = model['name'] -%}
 
   delete
-  from "{{ schema }}"."{{ identifier }}"
+  from {{ target_relation }}
   where ({{ unique_key }}) in (
     select ({{ unique_key }})
-    from "{{ identifier }}__dbt_incremental_tmp"
+    from {{ tmp_relation.include(schema=False) }}
   );
 
 {%- endmacro %}
@@ -19,23 +19,31 @@
   {%- set identifier = model['name'] -%}
   {%- set tmp_identifier = model['name'] + '__dbt_incremental_tmp' -%}
 
+  {%- set existing_relations = adapter.list_relations(schema=schema) -%}
+  {%- set old_relation = adapter.get_relation(relations_list=existing_relations,
+                                              schema=schema, identifier=identifier) -%}
+  {%- set target_relation = api.Relation.create(identifier=identifier, schema=schema, type='table') -%}
+  {%- set tmp_relation = api.Relation.create(identifier=tmp_identifier,
+                                                 schema=schema, type='table') -%}
+
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
   {%- set full_refresh_mode = (flags.FULL_REFRESH == True) -%}
-  {%- set existing = adapter.query_for_existing(schema) -%}
-  {%- set existing_type = existing.get(identifier) -%}
 
-  {%- set exists_as_table = (existing_type == 'table') -%}
+  {%- set exists_as_table = (old_relation is not none and old_relation.is_table) -%}
+  {%- set exists_not_as_table = (old_relation is not none and not old_relation.is_table) -%}
+
   {%- set should_truncate = (non_destructive_mode and full_refresh_mode and exists_as_table) -%}
-  {%- set should_drop = (not should_truncate and (full_refresh_mode or (existing_type not in (none, 'table')))) -%}
+  {%- set should_drop = (not should_truncate and (full_refresh_mode or exists_not_as_table)) -%}
   {%- set force_create = (flags.FULL_REFRESH and not flags.NON_DESTRUCTIVE) -%}
 
   -- setup
-  {% if existing_type is none -%}
+  {% if old_relation is none -%}
     -- noop
   {%- elif should_truncate -%}
-    {{ adapter.truncate(schema, identifier) }}
+    {{ adapter.truncate_relation(old_relation) }}
   {%- elif should_drop -%}
-    {{ adapter.drop(schema, identifier, existing_type) }}
+    {{ adapter.drop_relation(old_relation) }}
+    {%- set old_relation = none -%}
   {%- endif %}
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
@@ -44,9 +52,9 @@
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
   -- build model
-  {% if force_create or not adapter.already_exists(schema, identifier) -%}
+  {% if force_create or old_relation is none -%}
     {%- call statement('main') -%}
-      {{ create_table_as(False, identifier, sql) }}
+      {{ create_table_as(False, target_relation, sql) }}
     {%- endcall -%}
   {%- else -%}
      {%- call statement() -%}
@@ -60,7 +68,7 @@
            or ({{ sql_where }}) is null
        {%- endset %}
 
-       {{ dbt.create_table_as(temporary=True, identifier=tmp_identifier, sql=tmp_table_sql) }}
+       {{ dbt.create_table_as(True, tmp_relation, tmp_table_sql) }}
 
      {%- endcall -%}
 
@@ -74,14 +82,14 @@
 
        {% if unique_key is not none -%}
 
-         {{ dbt__incremental_delete(schema, model) }}
+         {{ dbt__incremental_delete(target_relation, tmp_relation) }}
 
        {%- endif %}
 
-       insert into "{{ schema }}"."{{ identifier }}" ({{ dest_cols_csv }})
+       insert into {{ target_relation }} ({{ dest_cols_csv }})
        (
          select {{ dest_cols_csv }}
-         from "{{ identifier }}__dbt_incremental_tmp"
+         from {{ tmp_relation.include(schema=False) }}
        );
      {% endcall %}
   {%- endif %}

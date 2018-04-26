@@ -14,8 +14,8 @@ class TestCLIVars(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test__cli_vars_longform(self):
-        self.use_default_project()
         self.use_profile('postgres')
+        self.use_default_project()
 
         cli_vars = {
             "variable_1": "abc",
@@ -39,16 +39,16 @@ class TestCLIVarsSimple(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test__cli_vars_shorthand(self):
-        self.use_default_project()
         self.use_profile('postgres')
+        self.use_default_project()
 
         self.run_dbt(["run", "--vars", "simple: abc"])
         self.run_dbt(["test", "--vars", "simple: abc"])
 
     @attr(type='postgres')
     def test__cli_vars_longer(self):
-        self.use_default_project()
         self.use_profile('postgres')
+        self.use_default_project()
 
         self.run_dbt(["run", "--vars", "{simple: abc, unused: def}"])
         self.run_dbt(["test", "--vars", "{simple: abc, unused: def}"])

@@ -16,9 +16,10 @@ class TestSimpleReference(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test__postgres__simple_reference(self):
-        self.use_default_project()
         self.use_profile('postgres')
-        self.run_sql_file("test/integration/003_simple_reference_test/seed.sql")
+        self.use_default_project()
+        self.run_sql_file(
+            "test/integration/003_simple_reference_test/seed.sql")
 
         self.run_dbt()
 
@@ -50,42 +51,43 @@ class TestSimpleReference(DBTIntegrationTest):
 
     @attr(type='snowflake')
     def test__snowflake__simple_reference(self):
-        self.use_default_project()
         self.use_profile('snowflake')
+        self.use_default_project()
         self.run_sql_file("test/integration/003_simple_reference_test/seed.sql")
 
         self.run_dbt()
 
         # Copies should match
-        self.assertTablesEqual("seed","incremental_copy")
-        self.assertTablesEqual("seed","materialized_copy")
-        self.assertTablesEqual("seed","view_copy")
+        self.assertTablesEqual("SEED", "incremental_copy")
+        self.assertTablesEqual("SEED", "materialized_copy")
+        self.assertTablesEqual("SEED", "view_copy")
 
         # Summaries should match
-        self.assertTablesEqual("summary_expected","incremental_summary")
-        self.assertTablesEqual("summary_expected","materialized_summary")
-        self.assertTablesEqual("summary_expected","view_summary")
-        self.assertTablesEqual("summary_expected","ephemeral_summary")
+        self.assertTablesEqual("SUMMARY_EXPECTED", "incremental_summary")
+        self.assertTablesEqual("SUMMARY_EXPECTED", "materialized_summary")
+        self.assertTablesEqual("SUMMARY_EXPECTED", "view_summary")
+        self.assertTablesEqual("SUMMARY_EXPECTED", "ephemeral_summary")
 
-        self.run_sql_file("test/integration/003_simple_reference_test/update.sql")
+        self.run_sql_file(
+            "test/integration/003_simple_reference_test/update.sql")
 
         self.run_dbt()
 
         # Copies should match
-        self.assertTablesEqual("seed","incremental_copy")
-        self.assertTablesEqual("seed","materialized_copy")
-        self.assertTablesEqual("seed","view_copy")
+        self.assertTablesEqual("SEED", "incremental_copy")
+        self.assertTablesEqual("SEED", "materialized_copy")
+        self.assertTablesEqual("SEED", "view_copy")
 
         # Summaries should match
-        self.assertTablesEqual("summary_expected","incremental_summary")
-        self.assertTablesEqual("summary_expected","materialized_summary")
-        self.assertTablesEqual("summary_expected","view_summary")
-        self.assertTablesEqual("summary_expected","ephemeral_summary")
+        self.assertTablesEqual("SUMMARY_EXPECTED", "incremental_summary")
+        self.assertTablesEqual("SUMMARY_EXPECTED", "materialized_summary")
+        self.assertTablesEqual("SUMMARY_EXPECTED", "view_summary")
+        self.assertTablesEqual("SUMMARY_EXPECTED", "ephemeral_summary")
 
     @attr(type='postgres')
     def test__postgres__simple_reference_with_models(self):
-        self.use_default_project()
         self.use_profile('postgres')
+        self.use_default_project()
         self.run_sql_file("test/integration/003_simple_reference_test/seed.sql")
 
         # Run materialized_copy, ephemeral_copy, and their dependents
@@ -100,8 +102,8 @@ class TestSimpleReference(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test__postgres__simple_reference_with_models_and_children(self):
-        self.use_default_project()
         self.use_profile('postgres')
+        self.use_default_project()
         self.run_sql_file("test/integration/003_simple_reference_test/seed.sql")
 
         # Run materialized_copy, ephemeral_copy, and their dependents
@@ -136,8 +138,8 @@ class TestSimpleReference(DBTIntegrationTest):
 
     @attr(type='snowflake')
     def test__snowflake__simple_reference_with_models(self):
-        self.use_default_project()
         self.use_profile('snowflake')
+        self.use_default_project()
         self.run_sql_file("test/integration/003_simple_reference_test/seed.sql")
 
         # Run materialized_copy & ephemeral_copy
@@ -145,15 +147,15 @@ class TestSimpleReference(DBTIntegrationTest):
         self.run_dbt(['run', '--models', 'materialized_copy', 'ephemeral_copy'])
 
         # Copies should match
-        self.assertTablesEqual("seed","materialized_copy")
+        self.assertTablesEqual("SEED", "materialized_copy")
 
         created_models = self.get_models_in_schema()
         self.assertTrue('materialized_copy' in created_models)
 
     @attr(type='snowflake')
     def test__snowflake__simple_reference_with_models_and_children(self):
-        self.use_default_project()
         self.use_profile('snowflake')
+        self.use_default_project()
         self.run_sql_file("test/integration/003_simple_reference_test/seed.sql")
 
         # Run materialized_copy, ephemeral_copy, and their dependents
@@ -162,11 +164,11 @@ class TestSimpleReference(DBTIntegrationTest):
         self.run_dbt(['run', '--models', 'materialized_copy+', 'ephemeral_copy+'])
 
         # Copies should match
-        self.assertTablesEqual("seed","materialized_copy")
+        self.assertTablesEqual("SEED", "materialized_copy")
 
         # Summaries should match
-        self.assertTablesEqual("summary_expected","materialized_summary")
-        self.assertTablesEqual("summary_expected","ephemeral_summary")
+        self.assertTablesEqual("SUMMARY_EXPECTED", "materialized_summary")
+        self.assertTablesEqual("SUMMARY_EXPECTED", "ephemeral_summary")
 
         created_models = self.get_models_in_schema()
 

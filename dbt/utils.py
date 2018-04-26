@@ -28,6 +28,7 @@ DBTConfigKeys = [
     'vars',
     'column_types',
     'bind',
+    'quoting',
 ]
 
 
@@ -35,52 +36,6 @@ class ExitCodes(object):
     Success = 0
     ModelError = 1
     UnhandledError = 2
-
-
-class Relation(object):
-    def __init__(self, profile, adapter, node, use_temp=False):
-        self.node = node
-        self.schema = node.get('schema')
-        self.name = node.get('name')
-
-        if use_temp:
-            self.table = self._get_table_name(node)
-        else:
-            self.table = self.name
-
-        self.materialized = get_materialization(node)
-        self.sql = node.get('injected_sql')
-
-        self.do_quote = self._get_quote_function(profile, adapter)
-
-    def _get_quote_function(self, profile, adapter):
-
-        # make a closure so we don't need to store the profile
-        # on the `Relation` object. That shouldn't be accessible in user-land
-        def quote(schema, table):
-            return adapter.quote_schema_and_table(
-                        profile=profile,
-                        schema=schema,
-                        table=table
-                    )
-
-        return quote
-
-    def _get_table_name(self, node):
-        return model_immediate_name(node, dbt.flags.NON_DESTRUCTIVE)
-
-    def final_name(self):
-        if self.materialized == 'ephemeral':
-            msg = "final_name() was called on an ephemeral model"
-            dbt.exceptions.raise_compiler_error(msg, self.node)
-        else:
-            return self.do_quote(self.schema, self.name)
-
-    def __repr__(self):
-        if self.materialized == 'ephemeral':
-            return '__dbt__CTE__{}'.format(self.name)
-        else:
-            return self.do_quote(self.schema, self.table)
 
 
 def coalesce(*args):
@@ -441,3 +396,12 @@ def parse_cli_vars(var_string):
         logger.error(
                 "The YAML provided in the --vars argument is not valid.\n")
         raise
+
+
+def filter_null_values(input):
+    return dict((k, v) for (k, v) in input.items()
+                if v is not None)
+
+
+def add_ephemeral_model_prefix(s):
+    return '__dbt__CTE__{}'.format(s)

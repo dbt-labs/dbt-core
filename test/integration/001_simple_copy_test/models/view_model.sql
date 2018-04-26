@@ -4,4 +4,4 @@
   )
 }}
 
-select * from "{{ target.schema }}"."seed"
+select * from {{ ref('seed') }}

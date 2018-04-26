@@ -45,5 +45,6 @@ setup(
         'colorama==0.3.9',
         'google-cloud-bigquery==0.29.0',
         'agate>=1.6,<2',
+        'jsonschema==2.6.0',
     ]
 )

@@ -1,10 +1,7 @@
-{% macro snowflake__create_table_as(temporary, identifier, sql) -%}
+{% macro snowflake__create_table_as(temporary, relation, sql) -%}
   {% if temporary %}
-    use schema "{{ schema }}";
+    use schema {{ schema }};
   {% endif %}
 
-  create {% if temporary: -%}temporary{%- endif %} table
-    {% if not temporary: -%}"{{ schema }}".{%- endif %}"{{ identifier }}" as (
-    {{ sql }}
-  );
+  {{ default__create_table_as(temporary, relation, sql) }}
 {% endmacro %}

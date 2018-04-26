@@ -7,7 +7,6 @@ import dbt.compat
 import dbt.exceptions
 import agate
 
-from dbt.utils import chunks
 from dbt.logger import GLOBAL_LOGGER as logger
 
 
@@ -17,8 +16,6 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
     @contextmanager
     def exception_handler(cls, profile, sql, model_name=None,
                           connection_name=None):
-        connection = cls.get_connection(profile, connection_name)
-
         try:
             yield
 
@@ -86,81 +83,6 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         return result
 
     @classmethod
-    def alter_column_type(cls, profile, schema, table, column_name,
-                          new_column_type, model_name=None):
-        """
-        1. Create a new column (w/ temp name and correct type)
-        2. Copy data over to it
-        3. Drop the existing column (cascade!)
-        4. Rename the new column to existing column
-        """
-
-        opts = {
-            "schema": schema,
-            "table": table,
-            "old_column": column_name,
-            "tmp_column": "{}__dbt_alter".format(column_name),
-            "dtype": new_column_type
-        }
-
-        sql = """
-        alter table "{schema}"."{table}" add column "{tmp_column}" {dtype};
-        update "{schema}"."{table}" set "{tmp_column}" = "{old_column}";
-        alter table "{schema}"."{table}" drop column "{old_column}" cascade;
-        alter table "{schema}"."{table}" rename column "{tmp_column}" to "{old_column}";
-        """.format(**opts).strip()  # noqa
-
-        connection, cursor = cls.add_query(profile, sql, model_name)
-
-        return connection, cursor
-
-    @classmethod
-    def query_for_existing(cls, profile, schemas, model_name=None):
-        if not isinstance(schemas, (list, tuple)):
-            schemas = [schemas]
-
-        schema_list = ",".join(["'{}'".format(schema) for schema in schemas])
-
-        sql = """
-        select tablename as name, 'table' as type from pg_tables
-        where schemaname in ({schema_list})
-        union all
-        select viewname as name, 'view' as type from pg_views
-        where schemaname in ({schema_list})
-        """.format(schema_list=schema_list).strip()  # noqa
-
-        connection, cursor = cls.add_query(profile, sql, model_name,
-                                           auto_begin=False)
-
-        results = cursor.fetchall()
-
-        existing = [(name, relation_type) for (name, relation_type) in results]
-
-        return dict(existing)
-
-    @classmethod
-    def get_existing_schemas(cls, profile, model_name=None):
-        sql = "select distinct nspname from pg_namespace"
-
-        connection, cursor = cls.add_query(profile, sql, model_name,
-                                           auto_begin=False)
-        results = cursor.fetchall()
-
-        return [row[0] for row in results]
-
-    @classmethod
-    def check_schema_exists(cls, profile, schema, model_name=None):
-        sql = """
-        select count(*) from pg_namespace where nspname = '{schema}'
-        """.format(schema=schema).strip()  # noqa
-
-        connection, cursor = cls.add_query(profile, sql, model_name,
-                                           auto_begin=False)
-        results = cursor.fetchone()
-
-        return results[0] > 0
-
-    @classmethod
     def cancel_connection(cls, profile, connection):
         connection_name = connection.get('name')
         pid = connection.get('handle').get_backend_pid()
@@ -173,6 +95,87 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         res = cursor.fetchone()
 
         logger.debug("Cancel query '{}': {}".format(connection_name, res))
+
+    # DATABASE INSPECTION FUNCTIONS
+    # These require the profile AND project, as they need to know
+    # database-specific configs at the project level.
+    @classmethod
+    def alter_column_type(cls, profile, project, schema, table, column_name,
+                          new_column_type, model_name=None):
+        """
+        1. Create a new column (w/ temp name and correct type)
+        2. Copy data over to it
+        3. Drop the existing column (cascade!)
+        4. Rename the new column to existing column
+        """
+
+        relation = cls.Relation.create(schema=schema, identifier=table)
+
+        opts = {
+            "relation": relation,
+            "old_column": column_name,
+            "tmp_column": "{}__dbt_alter".format(column_name),
+            "dtype": new_column_type
+        }
+
+        sql = """
+        alter table {relation} add column "{tmp_column}" {dtype};
+        update {relation} set "{tmp_column}" = "{old_column}";
+        alter table {relation} drop column "{old_column}" cascade;
+        alter table {relation} rename column "{tmp_column}" to "{old_column}";
+        """.format(**opts).strip()  # noqa
+
+        connection, cursor = cls.add_query(profile, sql, model_name)
+
+        return connection, cursor
+
+    @classmethod
+    def list_relations(cls, profile, project, schema, model_name=None):
+        sql = """
+        select tablename as name, schemaname as schema, 'table' as type from pg_tables
+        where schemaname ilike '{schema}'
+        union all
+        select viewname as name, schemaname as schema, 'view' as type from pg_views
+        where schemaname ilike '{schema}'
+        """.format(schema=schema).strip()  # noqa
+
+        connection, cursor = cls.add_query(profile, sql, model_name,
+                                           auto_begin=False)
+
+        results = cursor.fetchall()
+
+        return [cls.Relation.create(
+            database=profile.get('dbname'),
+            schema=_schema,
+            identifier=name,
+            quote_policy={
+                'schema': True,
+                'identifier': True
+            },
+            type=type)
+                for (name, _schema, type) in results]
+
+    @classmethod
+    def get_existing_schemas(cls, profile, project, model_name=None):
+        sql = "select distinct nspname from pg_namespace"
+
+        connection, cursor = cls.add_query(profile, sql, model_name,
+                                           auto_begin=False)
+        results = cursor.fetchall()
+
+        return [row[0] for row in results]
+
+    @classmethod
+    def check_schema_exists(cls, profile, project, schema, model_name=None):
+        sql = """
+        select count(*) from pg_namespace where nspname = '{schema}'
+        """.format(schema=schema).strip()  # noqa
+
+        connection, cursor = cls.add_query(profile, sql, model_name,
+                                           auto_begin=False)
+        results = cursor.fetchone()
+
+        return results[0] > 0
 
     @classmethod
     def convert_text_type(cls, agate_table, col_idx):

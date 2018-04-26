@@ -42,6 +42,6 @@ class TestNoRunTargetDeprecation(DBTIntegrationTest):
     def test_deprecated_run_target_config(self):
         self.run_dbt()
 
-        self.assertTablesEqual("seed","view")
+        self.assertTablesEqual("seed","view_model")
 
         self.assertFalse('run-target' in dbt.deprecations.active_deprecations)

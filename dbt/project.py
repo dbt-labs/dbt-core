@@ -12,6 +12,8 @@ import dbt.clients.jinja
 import dbt.compat
 import dbt.context.common
 import dbt.clients.system
+import dbt.ui.printer
+import dbt.links
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -25,6 +27,7 @@ default_project_cfg = {
     'outputs': {'default': {}},
     'target': 'default',
     'models': {},
+    'quoting': {},
     'profile': None,
     'packages': [],
     'modules-path': 'dbt_modules'
@@ -90,6 +93,9 @@ class Project(object):
 
         if self.cfg.get('models') is None:
             self.cfg['models'] = {}
+
+        if self.cfg.get('quoting') is None:
+            self.cfg['quoting'] = {}
 
         if self.cfg['models'].get('vars') is None:
             self.cfg['models']['vars'] = {}
@@ -219,6 +225,23 @@ class Project(object):
                 raise DbtProjectError(
                     "Expected project configuration '{}' was not supplied"
                     .format('.'.join(e.path)), self)
+
+    def log_warnings(self):
+        target_cfg = self.run_environment()
+        db_type = target_cfg.get('type')
+
+        if db_type == 'snowflake' and self.cfg \
+                                          .get('quoting', {}) \
+                                          .get('identifier') is None:
+            msg = dbt.ui.printer.yellow(
+                'You are using Snowflake, but you did not specify a '
+                'quoting strategy for your identifiers.\nQuoting '
+                'behavior for Snowflake will change in a future release, '
+                'so it is recommended that you define this explicitly.\n\n'
+                'For more information, see: {}\n'
+            )
+
+            logger.warn(msg.format(dbt.links.SnowflakeQuotingDocs))
 
     def hashed_name(self):
         if self.cfg.get("name", None) is None:

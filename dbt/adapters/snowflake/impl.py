@@ -10,14 +10,16 @@ from contextlib import contextmanager
 
 import dbt.compat
 import dbt.exceptions
-import dbt.flags as flags
 
 from dbt.adapters.postgres import PostgresAdapter
-from dbt.contracts.connection import validate_connection
+from dbt.adapters.snowflake.relation import SnowflakeRelation
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.utils import filter_null_values
 
 
 class SnowflakeAdapter(PostgresAdapter):
+
+    Relation = SnowflakeRelation
 
     @classmethod
     @contextmanager
@@ -104,38 +106,40 @@ class SnowflakeAdapter(PostgresAdapter):
         return result
 
     @classmethod
-    def query_for_existing(cls, profile, schemas, model_name=None):
-        if not isinstance(schemas, (list, tuple)):
-            schemas = [schemas]
-
-        schema_list = ",".join(["'{}'".format(schema) for schema in schemas])
-
+    def list_relations(cls, profile, project_cfg, schema, model_name=None):
         sql = """
-        select TABLE_NAME as name, TABLE_TYPE as type
-        from INFORMATION_SCHEMA.TABLES
-        where TABLE_SCHEMA in ({schema_list})
-        """.format(schema_list=schema_list).strip()  # noqa
+        select
+          table_name as name, table_schema as schema, table_type as type
+        from information_schema.tables
+        where table_schema ilike '{schema}'
+        """.format(schema=schema).strip()  # noqa
 
-        _, cursor = cls.add_query(profile, sql, model_name, auto_begin=False)
+        _, cursor = cls.add_query(
+            profile, sql, model_name, auto_begin=False)
+
         results = cursor.fetchall()
 
         relation_type_lookup = {
             'BASE TABLE': 'table',
             'VIEW': 'view'
+
         }
-
-        existing = [(name, relation_type_lookup.get(relation_type))
-                    for (name, relation_type) in results]
-
-        return dict(existing)
+        return [cls.Relation.create(
+            database=profile.get('database'),
+            schema=_schema,
+            identifier=name,
+            quote_policy={
+                'schema': True,
+                'identifier': True
+            },
+            type=relation_type_lookup.get(type))
+                for (name, _schema, type) in results]
 
     @classmethod
-    def rename(cls, profile, schema, from_name, to_name, model_name=None):
-        sql = (('alter table "{schema}"."{from_name}" '
-                'rename to "{schema}"."{to_name}"')
-               .format(schema=schema,
-                       from_name=from_name,
-                       to_name=to_name))
+    def rename_relation(cls, profile, project_cfg, from_relation,
+                        to_relation, model_name=None):
+        sql = 'alter table {} rename to {}'.format(
+            from_relation, to_relation)
 
         connection, cursor = cls.add_query(profile, sql, model_name)
 
@@ -144,18 +148,8 @@ class SnowflakeAdapter(PostgresAdapter):
         return cls.add_query(profile, 'BEGIN', name, auto_begin=False)
 
     @classmethod
-    def create_schema(cls, profile, schema, model_name=None):
-        logger.debug('Creating schema "%s".', schema)
-        sql = cls.get_create_schema_sql(schema)
-        res = cls.add_query(profile, sql, model_name)
-
-        cls.commit_if_has_connection(profile, model_name)
-
-        return res
-
-    @classmethod
-    def get_existing_schemas(cls, profile, model_name=None):
-        sql = "select distinct SCHEMA_NAME from INFORMATION_SCHEMA.SCHEMATA"
+    def get_existing_schemas(cls, profile, project_cfg, model_name=None):
+        sql = "select distinct schema_name from information_schema.schemata"
 
         connection, cursor = cls.add_query(profile, sql, model_name,
                                            auto_begin=False)
@@ -164,11 +158,12 @@ class SnowflakeAdapter(PostgresAdapter):
         return [row[0] for row in results]
 
     @classmethod
-    def check_schema_exists(cls, profile, schema, model_name=None):
+    def check_schema_exists(cls, profile, project_cfg,
+                            schema, model_name=None):
         sql = """
         select count(*)
-        from INFORMATION_SCHEMA.SCHEMATA
-        where SCHEMA_NAME = '{schema}'
+        from information_schema.schemata
+        where upper(schema_name) = upper('{schema}')
         """.format(schema=schema).strip()  # noqa
 
         connection, cursor = cls.add_query(profile, sql, model_name,
@@ -225,6 +220,19 @@ class SnowflakeAdapter(PostgresAdapter):
         return connection, cursor
 
     @classmethod
+    def _make_match_kwargs(cls, project_cfg, schema, identifier):
+        if identifier is not None and \
+           project_cfg.get('quoting', {}).get('identifier', True) is False:
+            identifier = identifier.upper()
+
+        if schema is not None and \
+           project_cfg.get('quoting', {}).get('schema', True) is False:
+            schema = schema.upper()
+
+        return filter_null_values({'identifier': identifier,
+                                   'schema': schema})
+
+    @classmethod
     def cancel_connection(cls, profile, connection):
         handle = connection['handle']
         sid = handle.session_id
@@ -239,3 +247,28 @@ class SnowflakeAdapter(PostgresAdapter):
         res = cursor.fetchone()
 
         logger.debug("Cancel query '{}': {}".format(connection_name, res))
+
+    @classmethod
+    def _get_columns_in_table_sql(cls, schema_name, table_name, database):
+        schema_filter = '1=1'
+        if schema_name is not None:
+            schema_filter = "table_schema ilike '{}'".format(schema_name)
+
+        db_prefix = '' if database is None else '{}.'.format(database)
+
+        sql = """
+        select
+            column_name,
+            data_type,
+            character_maximum_length,
+            numeric_precision || ',' || numeric_scale as numeric_size
+
+        from {db_prefix}information_schema.columns
+        where table_name ilike '{table_name}'
+          and {schema_filter}
+        order by ordinal_position
+        """.format(db_prefix=db_prefix,
+                   table_name=table_name,
+                   schema_filter=schema_filter).strip()
+
+        return sql

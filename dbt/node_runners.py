@@ -89,7 +89,7 @@ class BaseRunner(object):
     def is_ephemeral_model(cls, node):
         return cls.is_refable(node) and cls.is_ephemeral(node)
 
-    def safe_run(self, flat_graph, existing):
+    def safe_run(self, flat_graph):
         catchable_errors = (dbt.exceptions.CompilationException,
                             dbt.exceptions.RuntimeException)
 
@@ -104,7 +104,7 @@ class BaseRunner(object):
 
             # for ephemeral nodes, we only want to compile, not run
             if not self.is_ephemeral_model(self.node):
-                result = self.run(compiled_node, existing, flat_graph)
+                result = self.run(compiled_node, flat_graph)
 
         except catchable_errors as e:
             if e.node is None:
@@ -147,11 +147,11 @@ class BaseRunner(object):
     def before_execute(self):
         raise NotImplementedException()
 
-    def execute(self, compiled_node, existing, flat_graph):
+    def execute(self, compiled_node, flat_graph):
         raise NotImplementedException()
 
-    def run(self, compiled_node, existing, flat_graph):
-        return self.execute(compiled_node, existing, flat_graph)
+    def run(self, compiled_node, flat_graph):
+        return self.execute(compiled_node, flat_graph)
 
     def after_execute(self, result):
         raise NotImplementedException()
@@ -208,7 +208,7 @@ class CompileRunner(BaseRunner):
     def after_execute(self, result):
         pass
 
-    def execute(self, compiled_node, existing, flat_graph):
+    def execute(self, compiled_node, flat_graph):
         return RunModelResult(compiled_node)
 
     def compile(self, flat_graph):
@@ -250,33 +250,34 @@ class CompileRunner(BaseRunner):
 
         def call_get_columns_in_table(schema_name, table_name):
             return adapter.get_columns_in_table(
-                profile, schema_name, table_name, model_name=node.get('name'))
+                profile, project, schema_name,
+                table_name, model_name=node.get('name'))
 
         def call_get_missing_columns(from_schema, from_table,
                                      to_schema, to_table):
             return adapter.get_missing_columns(
-                profile, from_schema, from_table,
+                profile, project, from_schema, from_table,
                 to_schema, to_table, node.get('name'))
 
-        def call_table_exists(schema, table):
-            return adapter.table_exists(
-                profile, schema, table, node.get('name'))
+        def call_already_exists(schema, table):
+            return adapter.already_exists(
+                profile, project, schema, table, node.get('name'))
 
         return {
             "run_started_at": dbt.tracking.active_user.run_started_at,
             "invocation_id": dbt.tracking.active_user.invocation_id,
             "get_columns_in_table": call_get_columns_in_table,
             "get_missing_columns": call_get_missing_columns,
-            "already_exists": call_table_exists,
+            "already_exists": call_already_exists,
         }
 
     @classmethod
     def create_schemas(cls, project, adapter, flat_graph):
         profile = project.run_environment()
         required_schemas = cls.get_model_schemas(flat_graph)
-        existing_schemas = set(adapter.get_existing_schemas(profile))
+        existing_schemas = set(adapter.get_existing_schemas(profile, project))
         for schema in (required_schemas - existing_schemas):
-            adapter.create_schema(profile, schema)
+            adapter.create_schema(profile, project, schema)
 
 
 class ModelRunner(CompileRunner):
@@ -345,12 +346,12 @@ class ModelRunner(CompileRunner):
         # is the one defined in the profile. Create this schema if it
         # does not exist, otherwise subsequent queries will fail. Generally,
         # dbt expects that this schema will exist anyway.
-        required_schemas.add(adapter.get_default_schema(profile))
+        required_schemas.add(adapter.get_default_schema(profile, project))
 
-        existing_schemas = set(adapter.get_existing_schemas(profile))
+        existing_schemas = set(adapter.get_existing_schemas(profile, project))
 
         for schema in (required_schemas - existing_schemas):
-            adapter.create_schema(profile, schema)
+            adapter.create_schema(profile, project, schema)
 
     @classmethod
     def before_run(cls, project, adapter, flat_graph):
@@ -407,8 +408,9 @@ class ModelRunner(CompileRunner):
         track_model_run(self.node_index, self.num_nodes, result)
         self.print_result_line(result)
 
-    def execute(self, model, existing, flat_graph):
-        context = dbt.context.runtime.generate(model, self.project, flat_graph)
+    def execute(self, model, flat_graph):
+        context = dbt.context.runtime.generate(
+            model, self.project.cfg, flat_graph)
 
         materialization_macro = dbt.utils.get_materialization_macro(
             flat_graph,
@@ -467,7 +469,7 @@ class TestRunner(CompileRunner):
     def before_execute(self):
         self.print_start_line()
 
-    def execute(self, test, existing, flat_graph):
+    def execute(self, test, flat_graph):
         status = self.execute_test(test)
         return RunModelResult(test, status=status)
 

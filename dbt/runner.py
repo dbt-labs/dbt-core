@@ -69,7 +69,6 @@ class RunManager(object):
 
     def call_runner(self, data):
         runner = data['runner']
-        existing = data['existing']
         flat_graph = data['flat_graph']
 
         if runner.skip:
@@ -79,7 +78,7 @@ class RunManager(object):
         if not runner.is_ephemeral_model(runner.node):
             runner.before_execute()
 
-        result = runner.safe_run(flat_graph, existing)
+        result = runner.safe_run(flat_graph)
 
         if not runner.is_ephemeral_model(runner.node):
             runner.after_execute(result)
@@ -110,10 +109,6 @@ class RunManager(object):
         dbt.ui.printer.print_timestamped_line("")
 
         schemas = list(Runner.get_model_schemas(flat_graph))
-        if len(schemas) > 0:
-            existing = adapter.query_for_existing(profile, schemas)
-        else:
-            existing = {}
         node_runners = self.get_runners(Runner, adapter, node_dependency_list)
 
         pool = ThreadPool(num_threads)
@@ -124,7 +119,6 @@ class RunManager(object):
             args_list = []
             for runner in runners:
                 args_list.append({
-                    'existing': existing,
                     'flat_graph': flat_graph,
                     'runner': runner
                 })
