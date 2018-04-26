@@ -47,4 +47,3 @@ class SnowflakeRelation(DefaultRelation):
             schema=node.get('schema'),
             identifier=node.get('name'),
             **kwargs)
-
