@@ -1,7 +1,8 @@
 {{
   config(
     materialized = "incremental",
-    sql_where = "TRUE"
+    sql_where = "TRUE",
+    unique_key = "id"
   )
 }}
 
