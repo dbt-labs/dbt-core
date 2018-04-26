@@ -72,16 +72,19 @@ class BaseRelation(FakeAPIObject, Hashable):
         schema: Optional[str] = None,
         identifier: Optional[str] = None,
     ) -> bool:
-        search = filter_null_values({
+        search = filter_null_values(
             {
                 ComponentName.Database: database,
                 ComponentName.Schema: schema,
-        })
+                ComponentName.Identifier: identifier,
+            }
+        )
 
         if not search:
             # nothing was passed in
             raise dbt.exceptions.RuntimeException(
-                "Tried to match relation, but no search path was passed!")
+                "Tried to match relation, but no search path was passed!"
+            )
 
         exact_match = True
         approximate_match = True
@@ -113,11 +116,13 @@ class BaseRelation(FakeAPIObject, Hashable):
         schema: Optional[bool] = None,
         identifier: Optional[bool] = None,
     ) -> Self:
-        policy = filter_null_values({
+        policy = filter_null_values(
             {
                 ComponentName.Database: database,
                 ComponentName.Schema: schema,
-        })
+                ComponentName.Identifier: identifier,
+            }
+        )
 
         new_quote_policy = self.quote_policy.replace_dict(policy)
         return self.replace(quote_policy=new_quote_policy)
@@ -128,11 +133,13 @@ class BaseRelation(FakeAPIObject, Hashable):
         schema: Optional[bool] = None,
         identifier: Optional[bool] = None,
     ) -> Self:
-        policy = filter_null_values({
+        policy = filter_null_values(
             {
                 ComponentName.Database: database,
                 ComponentName.Schema: schema,
-        })
+                ComponentName.Identifier: identifier,
+            }
+        )
 
         new_include_policy = self.include_policy.replace_dict(policy)
         return self.replace(include_policy=new_include_policy)
@@ -180,7 +187,7 @@ class BaseRelation(FakeAPIObject, Hashable):
         )
 
     def quoted(self, identifier):
-        return '{quote_char}{identifier}{quote_char}'.format(
+        return "{quote_char}{identifier}{quote_char}".format(
             quote_char=self.quote_character,
             identifier=identifier,
         )

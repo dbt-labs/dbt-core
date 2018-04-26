@@ -735,13 +735,13 @@ def raise_dataclass_not_dict(obj):
 
 def relation_wrong_type(relation, expected_type, model=None):
     raise_compiler_error(
-        ('Trying to create {expected_type} {relation}, '
-         'but it currently exists as a {current_type}. Either '
-         'drop {relation} manually, or run dbt with '
-         '`--full-refresh` and dbt will drop it for you.')
-        .format(relation=relation,
-                current_type=relation.type,
-                expected_type=expected_type),
+        (
+            "Trying to create {expected_type} {relation}, "
+            "but it currently exists as a {current_type}. Either "
+            "drop {relation} manually, or run dbt with "
+            "`--full-refresh` and dbt will drop it for you."
+        ).format(relation=relation, current_type=relation.type, expected_type=expected_type),
+        model,
         model)
 
 
@@ -790,10 +790,10 @@ def raise_dep_not_found(node, node_description, required_pkg):
 
 def multiple_matching_relations(kwargs, matches):
     raise_compiler_error(
-        'get_relation returned more than one relation with the given args. '
-        'Please specify a database or schema to narrow down the result set.'
-        '\n{}\n\n{}'
-        .format(kwargs, matches))
+        "get_relation returned more than one relation with the given args. "
+        "Please specify a database or schema to narrow down the result set."
+        "\n{}\n\n{}".format(kwargs, matches)
+    )
 
 
 def get_relation_returned_multiple_results(kwargs, matches):
@@ -802,12 +802,11 @@ def get_relation_returned_multiple_results(kwargs, matches):
 
 def approximate_relation_match(target, relation):
     raise_compiler_error(
-        'When searching for a relation, dbt found an approximate match. '
-        'Instead of guessing \nwhich relation to use, dbt will move on. '
-        'Please delete {relation}, or rename it to be less ambiguous.'
-        '\nSearched for: {target}\nFound: {relation}'
-        .format(target=target,
-                relation=relation))
+        "When searching for a relation, dbt found an approximate match. "
+        "Instead of guessing \nwhich relation to use, dbt will move on. "
+        "Please delete {relation}, or rename it to be less ambiguous."
+        "\nSearched for: {target}\nFound: {relation}".format(target=target, relation=relation)
+    )
 
 
 def raise_duplicate_macro_name(node_1, node_2, namespace) -> NoReturn:
