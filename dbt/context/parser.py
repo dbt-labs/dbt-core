@@ -2,13 +2,11 @@ import dbt.exceptions
 
 import dbt.context.common
 
-from dbt.adapters.factory import get_adapter
-
 
 execute = False
 
 
-def ref(model, project, profile, flat_graph):
+def ref(db_wrapper, model, project_cfg, profile, flat_graph):
 
     def ref(*args):
         if len(args) == 1 or len(args) == 2:
@@ -17,8 +15,7 @@ def ref(model, project, profile, flat_graph):
         else:
             dbt.exceptions.ref_invalid_args(model, args)
 
-        adapter = get_adapter(profile)
-        return adapter.Relation.create_from_node(profile, model)
+        return db_wrapper.adapter.Relation.create_from_node(profile, model)
 
     return ref
 
@@ -50,6 +47,6 @@ class Config:
         return ''
 
 
-def generate(model, project, flat_graph):
+def generate(model, project_cfg, flat_graph):
     return dbt.context.common.generate(
-        model, project, flat_graph, dbt.context.parser)
+        model, project_cfg, flat_graph, dbt.context.parser)

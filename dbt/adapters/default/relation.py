@@ -1,6 +1,8 @@
 from dbt.api import APIObject
 from dbt.utils import filter_null_values
 
+import dbt.exceptions
+
 
 class DefaultRelation(APIObject):
 
@@ -85,11 +87,22 @@ class DefaultRelation(APIObject):
             # nothing was passed in
             pass
 
+        exact_match = True
+        approximate_match = True
+
         for k, v in search.items():
             if self.get_path_part(k) != v:
-                return False
+                exact_match = False
 
-        return True
+            if self.get_path_part(k).lower() != v.lower():
+                approximate_match = False
+
+        if approximate_match and not exact_match:
+            target = self.create(
+                database=database, schema=schema, identifier=identifier)
+            dbt.exceptions.approximate_relation_match(target, self)
+
+        return exact_match
 
     def get_path_part(self, part):
         return self.path.get(part)
@@ -118,7 +131,7 @@ class DefaultRelation(APIObject):
 
         return self.incorporate(include_policy=policy)
 
-    def render(self):
+    def render(self, use_table_name=True):
         parts = []
 
         for k in self.PATH_ELEMENTS:
@@ -128,7 +141,10 @@ class DefaultRelation(APIObject):
                 if path_part is None:
                     continue
                 elif k == 'identifier':
-                    path_part = self.table
+                    if use_table_name:
+                        path_part = self.table
+                    else:
+                        path_part = self.identifier
 
                 parts.append(
                     self.quote_if(

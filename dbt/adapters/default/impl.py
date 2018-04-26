@@ -47,16 +47,18 @@ class DefaultAdapter(object):
         "drop_relation",
         "rename_relation",
         "truncate_relation",
+    ]
 
+    profile_functions = [
         "execute",
         "add_query",
-        "convert_type"
     ]
 
     raw_functions = [
         "get_status",
         "get_result_from_cursor",
         "quote",
+        "convert_type"
     ]
 
     Relation = DefaultRelation
@@ -89,13 +91,14 @@ class DefaultAdapter(object):
             '`get_status` is not implemented for this adapter!')
 
     @classmethod
-    def alter_column_type(cls, profile, schema, table, column_name,
-                          new_column_type, model_name=None):
+    def alter_column_type(cls, profile, project_cfg, schema, table,
+                          column_name, new_column_type, model_name=None):
         raise dbt.exceptions.NotImplementedException(
             '`alter_column_type` is not implemented for this adapter!')
 
     @classmethod
-    def query_for_existing(cls, profile, schemas, model_name=None):
+    def query_for_existing(cls, profile, project_cfg, schemas,
+                           model_name=None):
         if not isinstance(schemas, (list, tuple)):
             schemas = [schemas]
 
@@ -103,23 +106,23 @@ class DefaultAdapter(object):
 
         for schema in schemas:
             all_relations.extend(
-                cls.list_relations(profile, schema, model_name))
+                cls.list_relations(profile, project_cfg, schema, model_name))
 
         return {relation.identifier: relation.type
                 for relation in all_relations}
 
     @classmethod
-    def get_existing_schemas(cls, profile, model_name=None):
+    def get_existing_schemas(cls, profile, project_cfg, model_name=None):
         raise dbt.exceptions.NotImplementedException(
             '`get_existing_schemas` is not implemented for this adapter!')
 
     @classmethod
-    def check_schema_exists(cls, profile, schema):
+    def check_schema_exists(cls, profile, project_cfg, schema):
         raise dbt.exceptions.NotImplementedException(
             '`check_schema_exists` is not implemented for this adapter!')
 
     @classmethod
-    def cancel_connection(cls, project, connection):
+    def cancel_connection(cls, project_cfg, connection):
         raise dbt.exceptions.NotImplementedException(
             '`cancel_connection` is not implemented for this adapter!')
 
@@ -139,17 +142,18 @@ class DefaultAdapter(object):
         return dbt.clients.agate_helper.table_from_data(data)
 
     @classmethod
-    def drop(cls, profile, schema, relation, relation_type, model_name=None):
+    def drop(cls, profile, project_cfg, schema,
+             relation, relation_type, model_name=None):
         identifier = relation
         relation = cls.Relation.create(
             schema=schema,
             identifier=identifier,
             type=relation_type)
 
-        return cls.drop_relation(profile, relation, model_name)
+        return cls.drop_relation(profile, project_cfg, relation, model_name)
 
     @classmethod
-    def drop_relation(cls, profile, relation, model_name=None):
+    def drop_relation(cls, profile, project_cfg, relation, model_name=None):
         if relation.type is None:
             dbt.exceptions.raise_compiler_error(
                 'Tried to drop relation {}, but its type is null.'
@@ -160,24 +164,27 @@ class DefaultAdapter(object):
         connection, cursor = cls.add_query(profile, sql, model_name)
 
     @classmethod
-    def truncate(cls, profile, schema, table, model_name=None):
+    def truncate(cls, profile, project_cfg, schema, table, model_name=None):
         relation = cls.Relation.create(
             schema=schema,
             identifier=table,
             type='table')
 
-        return cls.truncate_relation(profile, relation, model_name)
+        return cls.truncate_relation(profile, project_cfg,
+                                     relation, model_name)
 
     @classmethod
-    def truncate_relation(cls, profile, relation, model_name=None):
+    def truncate_relation(cls, profile, project_cfg,
+                          relation, model_name=None):
         sql = 'truncate table {}'.format(relation)
 
         connection, cursor = cls.add_query(profile, sql, model_name)
 
     @classmethod
-    def rename(cls, profile, schema, from_name, to_name, model_name=None):
+    def rename(cls, profile, project_cfg, schema,
+               from_name, to_name, model_name=None):
         return cls.rename_relation(
-            profile,
+            profile, project_cfg,
             from_relation=cls.Relation.create(
                 schema=schema, identifier=from_name),
             to_relation=cls.Relation.create(
@@ -185,7 +192,7 @@ class DefaultAdapter(object):
             model_name=model_name)
 
     @classmethod
-    def rename_relation(cls, profile, from_relation,
+    def rename_relation(cls, profile, project_cfg, from_relation,
                         to_relation, model_name=None):
         sql = 'alter table {} rename to {}'.format(
             from_relation, to_relation.include(schema=False))
@@ -197,7 +204,7 @@ class DefaultAdapter(object):
         return True
 
     @classmethod
-    def get_missing_columns(cls, profile,
+    def get_missing_columns(cls, profile, project_cfg,
                             from_schema, from_table,
                             to_schema, to_table,
                             model_name=None):
@@ -205,11 +212,11 @@ class DefaultAdapter(object):
         missing from to_table"""
         from_columns = {col.name: col for col in
                         cls.get_columns_in_table(
-                            profile, from_schema, from_table,
+                            profile, project_cfg, from_schema, from_table,
                             model_name=model_name)}
         to_columns = {col.name: col for col in
                       cls.get_columns_in_table(
-                          profile, to_schema, to_table,
+                          profile, project_cfg, to_schema, to_table,
                           model_name=model_name)}
 
         missing_columns = set(from_columns.keys()) - set(to_columns.keys())
@@ -219,7 +226,6 @@ class DefaultAdapter(object):
 
     @classmethod
     def _get_columns_in_table_sql(cls, schema_name, table_name, database):
-
         schema_filter = '1=1'
         if schema_name is not None:
             schema_filter = "table_schema = '{}'".format(schema_name)
@@ -244,8 +250,8 @@ class DefaultAdapter(object):
         return sql
 
     @classmethod
-    def get_columns_in_table(cls, profile, schema_name, table_name,
-                             database=None, model_name=None):
+    def get_columns_in_table(cls, profile, project_cfg, schema_name,
+                             table_name, database=None, model_name=None):
         sql = cls._get_columns_in_table_sql(schema_name, table_name, database)
         connection, cursor = cls.add_query(
             profile, sql, model_name)
@@ -265,18 +271,19 @@ class DefaultAdapter(object):
         return {col.name: col for col in columns}
 
     @classmethod
-    def expand_target_column_types(cls, profile,
+    def expand_target_column_types(cls, profile, project_cfg,
                                    temp_table,
                                    to_schema, to_table,
                                    model_name=None):
 
         reference_columns = cls._table_columns_to_dict(
             cls.get_columns_in_table(
-                profile, None, temp_table, model_name=model_name))
+                profile, project_cfg, None, temp_table, model_name=model_name))
 
         target_columns = cls._table_columns_to_dict(
             cls.get_columns_in_table(
-                profile, to_schema, to_table, model_name=model_name))
+                profile, project_cfg, to_schema, to_table,
+                model_name=model_name))
 
         for column_name, reference_column in reference_columns.items():
             target_column = target_columns.get(column_name)
@@ -291,37 +298,54 @@ class DefaultAdapter(object):
                              to_schema,
                              to_table)
 
-                cls.alter_column_type(profile, to_schema, to_table,
-                                      column_name, new_type, model_name)
+                cls.alter_column_type(profile, project_cfg, to_schema,
+                                      to_table, column_name, new_type,
+                                      model_name)
 
     ###
     # RELATIONS
     ###
     @classmethod
-    def list_relations(cls, profile, schema, model_name=None):
+    def list_relations(cls, profile, project_cfg, schema, model_name=None):
         raise dbt.exceptions.NotImplementedException(
             '`list_relations` is not implemented for this adapter!')
 
     @classmethod
-    def get_relation(cls, profile, schema=None, relations_list=None,
-                     model_name=None, **kwargs):
+    def _make_match_kwargs(cls, project_cfg, schema, identifier):
+        if identifier is not None and \
+           project_cfg.get('quoting', {}).get('identifier') is False:
+            identifier = identifier.lower()
+
+        if schema is not None and \
+           project_cfg.get('quoting', {}).get('schema') is False:
+            schema = schema.lower()
+
+        return filter_null_values({'identifier': identifier,
+                                   'schema': schema})
+
+    @classmethod
+    def get_relation(cls, profile, project_cfg, schema=None, identifier=None,
+                     relations_list=None, model_name=None):
         if schema is None and relations_list is None:
             raise dbt.exceptions.RuntimeException(
                 'get_relation needs either a schema to query, or a list '
                 'of relations to use')
 
         if relations_list is None:
-            relations_list = cls.list_relations(profile, schema, model_name)
+            relations_list = cls.list_relations(
+                profile, project_cfg, schema, model_name)
 
         matches = []
 
+        search = cls._make_match_kwargs(project_cfg, schema, identifier)
+
         for relation in relations_list:
-            if relation.matches(schema=schema, **kwargs):
+            if relation.matches(**search):
                 matches.append(relation)
 
         if len(matches) > 1:
             dbt.exceptions.get_relation_returned_multiple_results(
-                kwargs, matches)
+                {'identifier': identifier, 'schema': schema}, matches)
 
         elif matches:
             return matches[0]
@@ -332,12 +356,18 @@ class DefaultAdapter(object):
     # SANE ANSI SQL DEFAULTS
     ###
     @classmethod
-    def get_create_schema_sql(cls, schema):
+    def get_create_schema_sql(cls, project_cfg, schema):
+        if project_cfg.get('quoting', {}).get('schema', True):
+            schema = cls.quote(schema)
+
         return ('create schema if not exists {schema}'
                 .format(schema=schema))
 
     @classmethod
-    def get_drop_schema_sql(cls, schema):
+    def get_drop_schema_sql(cls, project_cfg, schema):
+        if project_cfg.get('quoting', {}).get('schema', True):
+            schema = cls.quote(schema)
+
         return ('drop schema if exists {schema} cascade'
                 .format(schema=schema))
 
@@ -346,7 +376,7 @@ class DefaultAdapter(object):
     #                   although some adapters may override them
     ###
     @classmethod
-    def get_default_schema(cls, profile):
+    def get_default_schema(cls, profile, project_cfg):
         return profile.get('schema')
 
     @classmethod
@@ -663,9 +693,9 @@ class DefaultAdapter(object):
         return connection
 
     @classmethod
-    def create_schema(cls, profile, schema, model_name=None):
+    def create_schema(cls, profile, project_cfg, schema, model_name=None):
         logger.debug('Creating schema "%s".', schema)
-        sql = cls.get_create_schema_sql(schema)
+        sql = cls.get_create_schema_sql(project_cfg, schema)
         res = cls.add_query(profile, sql, model_name)
 
         cls.commit_if_has_connection(profile, model_name)
@@ -673,14 +703,16 @@ class DefaultAdapter(object):
         return res
 
     @classmethod
-    def drop_schema(cls, profile, schema, model_name=None):
+    def drop_schema(cls, profile, project_cfg, schema, model_name=None):
         logger.debug('Dropping schema "%s".', schema)
-        sql = cls.get_drop_schema_sql(schema)
+        sql = cls.get_drop_schema_sql(project_cfg, schema)
         return cls.add_query(profile, sql, model_name)
 
     @classmethod
-    def already_exists(cls, profile, schema, table, model_name=None):
-        relation = cls.get_relation(profile, schema=schema, identifier=table)
+    def already_exists(cls, profile, project_cfg,
+                       schema, table, model_name=None):
+        relation = cls.get_relation(
+            profile, project_cfg, schema=schema, identifier=table)
         return relation is not None
 
     @classmethod
@@ -688,7 +720,8 @@ class DefaultAdapter(object):
         return '"{}"'.format(identifier.replace('"', '""'))
 
     @classmethod
-    def quote_schema_and_table(cls, profile, schema, table, model_name=None):
+    def quote_schema_and_table(cls, profile, project_cfg,
+                               schema, table, model_name=None):
         return '{}.{}'.format(cls.quote(schema),
                               cls.quote(table))
 
@@ -723,7 +756,7 @@ class DefaultAdapter(object):
             '`convert_time_type` is not implemented for this adapter!')
 
     @classmethod
-    def convert_type(cls, profiel, agate_table, col_idx, model_name):
+    def convert_type(cls, agate_table, col_idx):
         return cls.convert_agate_type(agate_table, col_idx)
 
     @classmethod

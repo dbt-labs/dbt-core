@@ -12,7 +12,7 @@ class SourceConfig(object):
     ConfigKeys = DBTConfigKeys
 
     AppendListFields = ['pre-hook', 'post-hook']
-    ExtendDictFields = ['vars', 'column_types']
+    ExtendDictFields = ['vars', 'column_types', 'quoting']
     ClobberFields = [
         'schema',
         'enabled',
@@ -77,7 +77,8 @@ class SourceConfig(object):
         active_config = self.load_config_from_active_project()
 
         if self.active_project['name'] == self.own_project['name']:
-            cfg = self._merge(defaults, active_config, self.in_model_config)
+            cfg = self._merge(defaults, active_config,
+                              self.in_model_config)
         else:
             own_config = self.load_config_from_own_project()
 

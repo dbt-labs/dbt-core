@@ -28,6 +28,7 @@ DBTConfigKeys = [
     'vars',
     'column_types',
     'bind',
+    'quoting',
 ]
 
 

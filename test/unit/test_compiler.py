@@ -38,6 +38,7 @@ class CompilerTest(unittest.TestCase):
             'post-hook': [],
             'pre-hook': [],
             'vars': {},
+            'quoting': {},
             'column_types': {},
         }
 

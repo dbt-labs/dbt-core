@@ -7,7 +7,7 @@
   from {{ target_relation }}
   where ({{ unique_key }}) in (
     select ({{ unique_key }})
-    from {{ tmp_relation }}
+    from {{ tmp_relation.include(schema=False) }}
   );
 
 {%- endmacro %}

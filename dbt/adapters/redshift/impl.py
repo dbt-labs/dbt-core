@@ -91,7 +91,7 @@ class RedshiftAdapter(PostgresAdapter):
         return sql
 
     @classmethod
-    def drop_relation(cls, profile, relation, model_name=None):
+    def drop_relation(cls, profile, project, relation, model_name=None):
         """
         In Redshift, DROP TABLE ... CASCADE should not be used
         inside a transaction. Redshift doesn't prevent the CASCADE
@@ -121,7 +121,7 @@ class RedshiftAdapter(PostgresAdapter):
             cls.begin(profile, connection.get('name'))
 
             to_return = super(PostgresAdapter, cls).drop_relation(
-                profile, relation, model_name)
+                profile, project, relation, model_name)
 
             cls.commit(profile, connection)
             cls.begin(profile, connection.get('name'))

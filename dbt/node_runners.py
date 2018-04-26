@@ -250,17 +250,18 @@ class CompileRunner(BaseRunner):
 
         def call_get_columns_in_table(schema_name, table_name):
             return adapter.get_columns_in_table(
-                profile, schema_name, table_name, model_name=node.get('name'))
+                profile, project, schema_name,
+                table_name, model_name=node.get('name'))
 
         def call_get_missing_columns(from_schema, from_table,
                                      to_schema, to_table):
             return adapter.get_missing_columns(
-                profile, from_schema, from_table,
+                profile, project, from_schema, from_table,
                 to_schema, to_table, node.get('name'))
 
         def call_already_exists(schema, table):
             return adapter.already_exists(
-                profile, schema, table, node.get('name'))
+                profile, project, schema, table, node.get('name'))
 
         return {
             "run_started_at": dbt.tracking.active_user.run_started_at,
@@ -274,9 +275,9 @@ class CompileRunner(BaseRunner):
     def create_schemas(cls, project, adapter, flat_graph):
         profile = project.run_environment()
         required_schemas = cls.get_model_schemas(flat_graph)
-        existing_schemas = set(adapter.get_existing_schemas(profile))
+        existing_schemas = set(adapter.get_existing_schemas(profile, project))
         for schema in (required_schemas - existing_schemas):
-            adapter.create_schema(profile, schema)
+            adapter.create_schema(profile, project, schema)
 
 
 class ModelRunner(CompileRunner):
@@ -345,12 +346,12 @@ class ModelRunner(CompileRunner):
         # is the one defined in the profile. Create this schema if it
         # does not exist, otherwise subsequent queries will fail. Generally,
         # dbt expects that this schema will exist anyway.
-        required_schemas.add(adapter.get_default_schema(profile))
+        required_schemas.add(adapter.get_default_schema(profile, project))
 
-        existing_schemas = set(adapter.get_existing_schemas(profile))
+        existing_schemas = set(adapter.get_existing_schemas(profile, project))
 
         for schema in (required_schemas - existing_schemas):
-            adapter.create_schema(profile, schema)
+            adapter.create_schema(profile, project, schema)
 
     @classmethod
     def before_run(cls, project, adapter, flat_graph):
@@ -408,7 +409,8 @@ class ModelRunner(CompileRunner):
         self.print_result_line(result)
 
     def execute(self, model, flat_graph):
-        context = dbt.context.runtime.generate(model, self.project, flat_graph)
+        context = dbt.context.runtime.generate(
+            model, self.project.cfg, flat_graph)
 
         materialization_macro = dbt.utils.get_materialization_macro(
             flat_graph,
