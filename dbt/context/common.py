@@ -353,7 +353,7 @@ def generate(model, project_cfg, flat_graph, provider=None):
                                  profile,
                                  project_cfg)
 
-    cli_var_overrides = project.get('cli_vars', {})
+    cli_var_overrides = project_cfg.get('cli_vars', {})
 
     context = dbt.utils.merge(context, {
         "adapter": db_wrapper,
