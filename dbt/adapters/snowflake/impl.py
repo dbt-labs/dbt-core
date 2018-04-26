@@ -158,7 +158,8 @@ class SnowflakeAdapter(PostgresAdapter):
         return [row[0] for row in results]
 
     @classmethod
-    def check_schema_exists(cls, profile, project_cfg, schema, model_name=None):
+    def check_schema_exists(cls, profile, project_cfg,
+                            schema, model_name=None):
         sql = """
         select count(*)
         from information_schema.schemata

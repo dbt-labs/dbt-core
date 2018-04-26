@@ -27,6 +27,7 @@ default_project_cfg = {
     'outputs': {'default': {}},
     'target': 'default',
     'models': {},
+    'quoting': {},
     'profile': None,
     'packages': [],
     'modules-path': 'dbt_modules'

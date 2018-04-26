@@ -28,6 +28,7 @@ class ParserTest(unittest.TestCase):
             'profile': 'test',
             'project-root': os.path.abspath('.'),
             'target': 'test',
+            'quoting': {},
             'outputs': {
                 'test': {
                     'type': 'postgres',
@@ -42,6 +43,7 @@ class ParserTest(unittest.TestCase):
             'version': '0.1',
             'project-root': os.path.abspath('./dbt_modules/snowplow'),
             'target': 'test',
+            'quoting': {},
             'outputs': {
                 'test': {
                     'type': 'postgres',

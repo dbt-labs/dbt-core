@@ -181,7 +181,8 @@ class BigQueryAdapter(PostgresAdapter):
         credentials = connection.get('credentials', {})
         client = connection.get('handle')
 
-        bigquery_dataset = cls.get_dataset(profile, project_cfg, schema, model_name)
+        bigquery_dataset = cls.get_dataset(
+            profile, project_cfg, schema, model_name)
         all_tables = client.list_tables(bigquery_dataset)
 
         relation_types = {
@@ -206,12 +207,14 @@ class BigQueryAdapter(PostgresAdapter):
         conn = cls.get_connection(profile, model_name)
         client = conn.get('handle')
 
-        dataset = cls.get_dataset(profile, project_cfg, relation.schema, model_name)
+        dataset = cls.get_dataset(
+            profile, project_cfg, relation.schema, model_name)
         relation_object = dataset.table(relation.identifier)
         client.delete_table(relation_object)
 
     @classmethod
-    def rename(cls, profile, project_cfg, schema, from_name, to_name, model_name=None):
+    def rename(cls, profile, project_cfg, schema,
+               from_name, to_name, model_name=None):
         raise dbt.exceptions.NotImplementedException(
             '`rename` is not implemented for this adapter!')
 
@@ -267,7 +270,8 @@ class BigQueryAdapter(PostgresAdapter):
         conn = cls.get_connection(profile, model_name)
         client = conn.get('handle')
 
-        dataset = cls.get_dataset(profile, project_cfg, dataset_name, identifier)
+        dataset = cls.get_dataset(profile, project_cfg,
+                                  dataset_name, identifier)
         table_ref = dataset.table(identifier)
         table = google.cloud.bigquery.Table(table_ref)
         table.partitioning_type = 'DAY'
@@ -275,8 +279,8 @@ class BigQueryAdapter(PostgresAdapter):
         return client.create_table(table)
 
     @classmethod
-    def materialize_as_table(cls, profile, project_cfg, dataset, model, model_sql,
-                             decorator=None):
+    def materialize_as_table(cls, profile, project_cfg, dataset,
+                             model, model_sql, decorator=None):
         model_name = model.get('name')
 
         conn = cls.get_connection(profile, model_name)
@@ -302,7 +306,8 @@ class BigQueryAdapter(PostgresAdapter):
         return "CREATE TABLE"
 
     @classmethod
-    def execute_model(cls, profile, project_cfg, model, materialization, sql_override=None,
+    def execute_model(cls, profile, project_cfg, model,
+                      materialization, sql_override=None,
                       decorator=None, model_name=None):
 
         if sql_override is None:
@@ -315,13 +320,15 @@ class BigQueryAdapter(PostgresAdapter):
         model_name = model.get('name')
         model_schema = model.get('schema')
 
-        dataset = cls.get_dataset(profile, project_cfg, model_schema, model_name)
+        dataset = cls.get_dataset(profile, project_cfg,
+                                  model_schema, model_name)
 
         if materialization == 'view':
             res = cls.materialize_as_view(profile, project_cfg, dataset, model)
         elif materialization == 'table':
-            res = cls.materialize_as_table(profile, project_cfg, dataset, model,
-                                           sql_override, decorator)
+            res = cls.materialize_as_table(
+                profile, project_cfg, dataset, model,
+                sql_override, decorator)
         else:
             msg = "Invalid relation type: '{}'".format(materialization)
             raise dbt.exceptions.RuntimeException(msg, model)
@@ -391,7 +398,8 @@ class BigQueryAdapter(PostgresAdapter):
     def drop_schema(cls, profile, project_cfg, schema, model_name=None):
         logger.debug('Dropping schema "%s".', schema)
 
-        if not cls.check_schema_exists(profile, project_cfg, schema, model_name):
+        if not cls.check_schema_exists(profile, project_cfg,
+                                       schema, model_name):
             return
 
         conn = cls.get_connection(profile)
@@ -412,7 +420,8 @@ class BigQueryAdapter(PostgresAdapter):
             return [ds.dataset_id for ds in all_datasets]
 
     @classmethod
-    def get_columns_in_table(cls, profile, project_cfg, schema_name, table_name,
+    def get_columns_in_table(cls, profile, project_cfg,
+                             schema_name, table_name,
                              database=None, model_name=None):
 
         # BigQuery does not have databases -- the database parameter is here
@@ -439,7 +448,8 @@ class BigQueryAdapter(PostgresAdapter):
         return columns
 
     @classmethod
-    def check_schema_exists(cls, profile, project_cfg, schema, model_name=None):
+    def check_schema_exists(cls, profile, project_cfg,
+                            schema, model_name=None):
         conn = cls.get_connection(profile, model_name)
         client = conn.get('handle')
 
@@ -479,7 +489,8 @@ class BigQueryAdapter(PostgresAdapter):
         return '`{}`'.format(identifier)
 
     @classmethod
-    def quote_schema_and_table(cls, profile, project_cfg, schema, table, model_name=None):
+    def quote_schema_and_table(cls, profile, project_cfg, schema,
+                               table, model_name=None):
         return cls.render_relation(profile, project_cfg,
                                    cls.quote(schema),
                                    cls.quote(table))

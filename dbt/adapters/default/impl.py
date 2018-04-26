@@ -91,13 +91,14 @@ class DefaultAdapter(object):
             '`get_status` is not implemented for this adapter!')
 
     @classmethod
-    def alter_column_type(cls, profile, project_cfg, schema, table, column_name,
-                          new_column_type, model_name=None):
+    def alter_column_type(cls, profile, project_cfg, schema, table,
+                          column_name, new_column_type, model_name=None):
         raise dbt.exceptions.NotImplementedException(
             '`alter_column_type` is not implemented for this adapter!')
 
     @classmethod
-    def query_for_existing(cls, profile, project_cfg, schemas, model_name=None):
+    def query_for_existing(cls, profile, project_cfg, schemas,
+                           model_name=None):
         if not isinstance(schemas, (list, tuple)):
             schemas = [schemas]
 
@@ -169,10 +170,12 @@ class DefaultAdapter(object):
             identifier=table,
             type='table')
 
-        return cls.truncate_relation(profile, project_cfg, relation, model_name)
+        return cls.truncate_relation(profile, project_cfg,
+                                     relation, model_name)
 
     @classmethod
-    def truncate_relation(cls, profile, project_cfg, relation, model_name=None):
+    def truncate_relation(cls, profile, project_cfg,
+                          relation, model_name=None):
         sql = 'truncate table {}'.format(relation)
 
         connection, cursor = cls.add_query(profile, sql, model_name)
@@ -247,8 +250,8 @@ class DefaultAdapter(object):
         return sql
 
     @classmethod
-    def get_columns_in_table(cls, profile, project_cfg, schema_name, table_name,
-                             database=None, model_name=None):
+    def get_columns_in_table(cls, profile, project_cfg, schema_name,
+                             table_name, database=None, model_name=None):
         sql = cls._get_columns_in_table_sql(schema_name, table_name, database)
         connection, cursor = cls.add_query(
             profile, sql, model_name)
@@ -279,7 +282,8 @@ class DefaultAdapter(object):
 
         target_columns = cls._table_columns_to_dict(
             cls.get_columns_in_table(
-                profile, project_cfg, to_schema, to_table, model_name=model_name))
+                profile, project_cfg, to_schema, to_table,
+                model_name=model_name))
 
         for column_name, reference_column in reference_columns.items():
             target_column = target_columns.get(column_name)
@@ -294,8 +298,9 @@ class DefaultAdapter(object):
                              to_schema,
                              to_table)
 
-                cls.alter_column_type(profile, project_cfg, to_schema, to_table,
-                                      column_name, new_type, model_name)
+                cls.alter_column_type(profile, project_cfg, to_schema,
+                                      to_table, column_name, new_type,
+                                      model_name)
 
     ###
     # RELATIONS
@@ -704,7 +709,8 @@ class DefaultAdapter(object):
         return cls.add_query(profile, sql, model_name)
 
     @classmethod
-    def already_exists(cls, profile, project_cfg, schema, table, model_name=None):
+    def already_exists(cls, profile, project_cfg,
+                       schema, table, model_name=None):
         relation = cls.get_relation(
             profile, project_cfg, schema=schema, identifier=table)
         return relation is not None
