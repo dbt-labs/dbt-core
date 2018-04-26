@@ -175,17 +175,23 @@ class Var(object):
     NoneVarError = "Supplied var '{}' is undefined in config:\nVars supplied "\
                    "to {} = {}"
 
-    def __init__(self, model, context):
+    def __init__(self, model, context, overrides):
         self.model = model
         self.context = context
 
+        # These are hard-overrides (eg. CLI vars) that should take
+        # precedence over context-based var definitions
+        self.overrides = overrides
+
         if isinstance(model, dict) and model.get('unique_id'):
-            self.local_vars = model.get('config', {}).get('vars')
+            local_vars = model.get('config', {}).get('vars')
             self.model_name = model.get('name')
         else:
             # still used for wrapping
             self.model_name = model.nice_name
-            self.local_vars = model.config.get('vars', {})
+            local_vars = model.config.get('vars', {})
+
+        self.local_vars = dbt.utils.merge(local_vars, overrides)
 
     def pretty_dict(self, data):
         return json.dumps(data, sort_keys=True, indent=4)
@@ -297,6 +303,7 @@ def generate(model, project, flat_graph, provider=None):
     post_hooks = model.get('config', {}).get('post-hook')
 
     db_wrapper = DatabaseWrapper(model, adapter, profile)
+    cli_var_overrides = project.get('cli_vars', {})
 
     context = dbt.utils.merge(context, {
         "adapter": db_wrapper,
@@ -337,7 +344,7 @@ def generate(model, project, flat_graph, provider=None):
 
     context["write"] = write(model, project.get('target-path'), 'run')
     context["render"] = render(context, model)
-    context["var"] = Var(model, context=context)
+    context["var"] = Var(model, context=context, overrides=cli_var_overrides)
     context['context'] = context
 
     return context

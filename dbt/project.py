@@ -95,10 +95,7 @@ class Project(object):
             self.cfg['models']['vars'] = {}
 
         global_vars = dbt.utils.parse_cli_vars(getattr(args, 'vars', '{}'))
-        if 'vars' not in self.cfg['models']:
-            self.cfg['models']['vars'] = {}
-
-        self.cfg['models']['vars'].update(global_vars)
+        self.cfg['cli_vars'] = global_vars
 
     def __str__(self):
         return pprint.pformat({'project': self.cfg, 'profiles': self.profiles})
