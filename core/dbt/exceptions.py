@@ -722,9 +722,7 @@ def missing_config(model, name):
 
 
 def missing_relation(relation, model=None):
-    raise_compiler_error(
-        "Relation {} not found!".format(relation),
-        model)
+    raise_compiler_error("Relation {} not found!".format(relation), model)
 
 
 def raise_dataclass_not_dict(obj):
