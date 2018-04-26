@@ -18,7 +18,7 @@ class DefaultRelation(APIObject):
 
     DEFAULTS = {
         'metadata': {
-            '_type': 'DefaultRelation'
+            'type': 'DefaultRelation'
         },
         'quote_character': '"',
         'quote_policy': {
@@ -57,9 +57,12 @@ class DefaultRelation(APIObject):
         'type': 'object',
         'properties': {
             'metadata': {
-                '_type': {
-                    'type': 'string',
-                    'const': 'DefaultRelation',
+                'type': 'object',
+                'properties': {
+                    'type': {
+                        'type': 'string',
+                        'const': 'DefaultRelation',
+                    },
                 },
             },
             'type': {

@@ -4,7 +4,7 @@ from dbt.adapters.default.relation import DefaultRelation
 class SnowflakeRelation(DefaultRelation):
     DEFAULTS = {
         'metadata': {
-            '_type': 'SnowflakeRelation'
+            'type': 'SnowflakeRelation'
         },
         'quote_character': '"',
         'quote_policy': {
@@ -23,9 +23,12 @@ class SnowflakeRelation(DefaultRelation):
         'type': 'object',
         'properties': {
             'metadata': {
-                '_type': {
-                    'type': 'string',
-                    'const': 'SnowflakeRelation',
+                'type': 'object',
+                'properties': {
+                    'type': {
+                        'type': 'string',
+                        'const': 'SnowflakeRelation',
+                    },
                 },
             },
             'type': {

@@ -6,7 +6,7 @@ class BigQueryRelation(DefaultRelation):
 
     DEFAULTS = {
         'metadata': {
-            '_type': 'BigQueryRelation'
+            'type': 'BigQueryRelation'
         },
         'quote_character': '`',
         'quote_policy': {
@@ -45,9 +45,12 @@ class BigQueryRelation(DefaultRelation):
         'type': 'object',
         'properties': {
             'metadata': {
-                '_type': {
-                    'type': 'string',
-                    'const': 'BigQueryRelation',
+                'type': 'object',
+                'properties': {
+                    'type': {
+                        'type': 'string',
+                        'const': 'BigQueryRelation',
+                    },
                 },
             },
             'type': {
