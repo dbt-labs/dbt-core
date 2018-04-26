@@ -48,5 +48,3 @@ class SnowflakeRelation(DefaultRelation):
             identifier=node.get('name'),
             **kwargs)
 
-    def get_path_part(self, part):
-        return self.path.get(part)

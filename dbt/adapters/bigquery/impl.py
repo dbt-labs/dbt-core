@@ -31,7 +31,6 @@ class BigQueryAdapter(PostgresAdapter):
         "query_for_existing",
         "execute_model",
         "drop",
-        "drop_relation",
         "execute",
         "quote_schema_and_table",
         "make_date_partitioned_table",

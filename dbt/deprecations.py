@@ -33,17 +33,6 @@ class SeedDropExistingDeprecation(DBTDeprecation):
   will be removed in a future version of dbt."""
 
 
-class NonRelationAdapterFunctionDeprecation(DBTDeprecation):
-    # TODO add link to docs
-    name = 'relations-api'
-    description = """
-    Your project uses a deprecated adapter function '{fn}'.
-    Please use the Relations API instead. You can find
-    more information in the documentation.
-    (ADD LINK)
-    """
-
-
 def warn(name, *args, **kwargs):
     if name not in deprecations:
         # this should (hopefully) never happen
@@ -61,8 +50,7 @@ active_deprecations = set()
 
 deprecations_list = [
     DBTRepositoriesDeprecation(),
-    SeedDropExistingDeprecation(),
-    NonRelationAdapterFunctionDeprecation(),
+    SeedDropExistingDeprecation()
 ]
 
 deprecations = {d.name: d for d in deprecations_list}

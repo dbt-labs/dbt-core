@@ -85,7 +85,8 @@ class DefaultRelation(APIObject):
 
         if not search:
             # nothing was passed in
-            pass
+            raise dbt.exceptions.RuntimeException(
+                "Tried to match relation, but no search path was passed!")
 
         exact_match = True
         approximate_match = True
@@ -152,8 +153,7 @@ class DefaultRelation(APIObject):
                         self.should_quote(k)))
 
         if len(parts) == 0:
-            # TODO
-            raise RuntimeError(
+            raise dbt.exceptions.RuntimeException(
                 "No path parts are included! Nothing to render.")
 
         return '.'.join(parts)
