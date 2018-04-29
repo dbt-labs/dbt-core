@@ -79,9 +79,18 @@ def compiler_warning(model, msg):
 
 
 def model_immediate_name(model, non_destructive):
-    "The name of the model table/view within the transaction"
+    """
+    Returns the name of the model relation within the transaction. This is
+    useful for referencing the model in pre or post hooks. Non-destructive
+    models aren't created with temp suffixes, nor are incremental models or
+    seeds.
+    """
+
     model_name = model.get('name')
-    if non_destructive or get_materialization(model) == 'incremental':
+    is_incremental = (get_materialization(model) == 'incremental')
+    is_seed = is_type(model, 'seed')
+
+    if non_destructive or is_incremental or is_seed:
         return model_name
     else:
         return "{}__dbt_tmp".format(model_name)
