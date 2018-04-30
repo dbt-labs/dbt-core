@@ -1,6 +1,6 @@
 ## dbt 0.10.1 (Unreleased)
 
-This release focuses on achieving functional parity between all of dbt's adapters. With this release, most dbt functionality should work on every adapter except where noted [here](ADD LINK!)
+This release focuses on achieving functional parity between all of dbt's adapters. With this release, most dbt functionality should work on every adapter except where noted [here](https://docs.getdbt.com/v0.10/docs/supported-databases#section-caveats).
 
 ### tl;dr
  - Configure model schema and name quoting in your `dbt_project.yml` file [Docs](https://docs.getdbt.com/v0.10/docs/configuring-quoting)
