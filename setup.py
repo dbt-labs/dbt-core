@@ -4,7 +4,7 @@ from distutils.core import setup
 
 
 package_name = "dbt"
-package_version = "0.10.0"
+package_version = "0.10.1rc1"
 
 setup(
     name=package_name,
