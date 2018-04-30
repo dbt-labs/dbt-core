@@ -3,11 +3,11 @@
 This release focuses on achieving functional parity between all of dbt's adapters. With this release, most dbt functionality should work on every adapter except where noted [here](https://docs.getdbt.com/v0.10/docs/supported-databases#section-caveats).
 
 ### tl;dr
- - Configure model schema and name quoting in your `dbt_project.yml` file [Docs](https://docs.getdbt.com/v0.10/docs/configuring-quoting)
+ - Configure model schema and name quoting in your `dbt_project.yml` file ([Docs](https://docs.getdbt.com/v0.10/docs/configuring-quoting))
  - Add a `Relation` object to the context to simplify model quoting [Docs](https://docs.getdbt.com/v0.10/reference#relation)
- - Implement BigQuery materializations using new `create table as (...)` syntax, support `partition by` clause [Docs](https://docs.getdbt.com/v0.10/docs/warehouse-specific-configurations#section-partition-clause)
- - Override seed column types [Docs](https://docs.getdbt.com/v0.10/reference#section-override-column-types)
- - Add `get_columns_in_table` context function for BigQuery
+ - Implement BigQuery materializations using new `create table as (...)` syntax, support `partition by` clause ([Docs](https://docs.getdbt.com/v0.10/docs/warehouse-specific-configurations#section-partition-clause))
+ - Override seed column types ([Docs](https://docs.getdbt.com/v0.10/reference#section-override-column-types))
+ - Add `get_columns_in_table` context function for BigQuery ([Docs](https://docs.getdbt.com/v0.10/reference#get_columns_in_table))
 
 ### Changes
  - Consistent schema and identifier quoting ([#727](https://github.com/fishtown-analytics/dbt/pull/727))
