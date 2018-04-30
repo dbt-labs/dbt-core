@@ -27,7 +27,9 @@ class TestSimpleBigQueryRun(DBTIntegrationTest):
     def test__bigquery_simple_run(self):
         self.use_profile('bigquery')
         self.use_default_project()
+        # make sure seed works twice. Full-refresh is a no-op
         self.run_dbt(['seed'])
+        self.run_dbt(['seed', '--full-refresh'])
         self.run_dbt()
 
         # The 'dupe' model should fail, but all others should pass
