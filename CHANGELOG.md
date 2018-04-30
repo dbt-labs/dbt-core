@@ -1,3 +1,38 @@
+## dbt 0.10.1 (Unreleased)
+
+This release focuses on achieving functional parity between all of dbt's adapters. With this release, most dbt functionality should work on every adapter except where noted [here](https://docs.getdbt.com/v0.10/docs/supported-databases#section-caveats).
+
+### tl;dr
+ - Configure model schema and name quoting in your `dbt_project.yml` file ([Docs](https://docs.getdbt.com/v0.10/docs/configuring-quoting))
+ - Add a `Relation` object to the context to simplify model quoting [Docs](https://docs.getdbt.com/v0.10/reference#relation)
+ - Implement BigQuery materializations using new `create table as (...)` syntax, support `partition by` clause ([Docs](https://docs.getdbt.com/v0.10/docs/warehouse-specific-configurations#section-partition-clause))
+ - Override seed column types ([Docs](https://docs.getdbt.com/v0.10/reference#section-override-column-types))
+ - Add `get_columns_in_table` context function for BigQuery ([Docs](https://docs.getdbt.com/v0.10/reference#get_columns_in_table))
+
+### Changes
+ - Consistent schema and identifier quoting ([#727](https://github.com/fishtown-analytics/dbt/pull/727))
+   - Configure quoting settings in the `dbt_project.yml` file ([#742](https://github.com/fishtown-analytics/dbt/pull/742))
+   - Add a `Relation` object to the context to make quoting consistent and simple ([#742](https://github.com/fishtown-analytics/dbt/pull/742))
+ - Use the new `create table as (...)` syntax on BigQuery ([#717](https://github.com/fishtown-analytics/dbt/pull/717))
+   - Support `partition by` clause
+ - CSV Updates:
+   - Use floating point as default seed column type to avoid issues with type inference ([#694](https://github.com/fishtown-analytics/dbt/pull/694))
+   - Provide a mechanism for overriding seed column types in the `dbt_project.yml` file ([#708](https://github.com/fishtown-analytics/dbt/pull/708))
+   - Fix seeding for files with more than 16k rows on Snowflake ([#694](https://github.com/fishtown-analytics/dbt/pull/694))
+   - Implement seeds using a materialization
+ - Improve `get_columns_in_table` context function ([#709](https://github.com/fishtown-analytics/dbt/pull/709))
+   - Support numeric types on Redshift, Postgres
+   - Support BigQuery (including nested columns in `struct` types)
+   - Support cross-database `information_schema` queries for Snowflake
+   - Retain column ordinal positions
+
+### Bugfixes
+ - Fix for incorrect var precendence when using `--vars` on the CLI ([#739](https://github.com/fishtown-analytics/dbt/pull/739))
+ - Fix for closed connections in `on-run-end` hooks for long-running dbt invocations ([#693](https://github.com/fishtown-analytics/dbt/pull/693))
+ - Fix: don't try to run empty hooks ([#620](https://github.com/fishtown-analytics/dbt/issues/620), [#693](https://github.com/fishtown-analytics/dbt/pull/693))
+ - Fix: Prevent seed data from being serialized into `graph.gpickle` file ([#720](https://github.com/fishtown-analytics/dbt/pull/720))
+ - Fix: Disallow seed and model files with the same name ([#737](https://github.com/fishtown-analytics/dbt/pull/737))
+
 ## dbt 0.10.0 (March 8, 2018)
 
 This release overhauls dbt's package management functionality, makes seeding csv files work across all adapters, and adds date partitioning support for BigQuery.
