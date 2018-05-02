@@ -140,7 +140,7 @@ class DataTestLoader(ResourceLoader):
             root_dir=project.get('project-root'),
             relative_dirs=project.get('test-paths', []),
             resource_type=NodeType.Test,
-            tags={'data'},
+            tags=['data'],
             macros=macros)
 
 

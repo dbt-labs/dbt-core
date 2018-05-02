@@ -620,7 +620,7 @@ def parse_schema_test(test_base, model_name, test_config, test_namespace,
                       root_project_config,
                       package_project_config,
                       all_projects,
-                      tags={'schema'},
+                      tags=['schema'],
                       fqn_extra=None,
                       fqn=fqn_override,
                       macros=macros)
