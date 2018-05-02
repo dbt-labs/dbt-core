@@ -72,8 +72,7 @@ class APIObject(dict):
         errors = []
 
         for error in validator.iter_errors(self.serialize()):
-            errors.append('property "{}", {}'.format(
-                ".".join(error.path), error.message))
+            errors.append('.'.join(list(map(str, error.path)) + [error.message]))
 
         if errors:
             raise ValidationException(
