@@ -32,7 +32,6 @@ unparsed_node_contract = unparsed_base_contract.extend({
 unparsed_nodes_contract = Schema([unparsed_node_contract])
 
 
-
 UNPARSED_BASE_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
@@ -103,9 +102,3 @@ UNPARSED_NODE_CONTRACT = deep_merge(
 
 class UnparsedNode(APIObject):
     SCHEMA = UNPARSED_NODE_CONTRACT
-
-
-def validate_nodes(nodes):
-    for n in nodes:
-        node = UnparsedNode(**n)
-        node.validate()

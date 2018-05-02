@@ -193,7 +193,7 @@ class NodeSelector(object):
             node = graph.node.get(node_name)
 
             matched_resource = node.get('resource_type') in resource_types
-            matched_tags = (len(tags) == 0 or bool(node.get('tags') & tags))
+            matched_tags = (len(tags) == 0 or bool(set(node.get('tags', [])) & set(tags)))
 
             if matched_resource and matched_tags:
                 filtered_nodes.add(node_name)

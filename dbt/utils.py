@@ -324,8 +324,8 @@ def get_pseudo_hook_path(hook_name):
 def get_nodes_by_tags(nodes, match_tags, resource_type):
     matched_nodes = []
     for node in nodes:
-        node_tags = node.get('tags', set())
-        if len(node_tags & match_tags):
+        node_tags = node.get('tags', [])
+        if len(set(node_tags) & match_tags):
             matched_nodes.append(node)
     return matched_nodes
 
