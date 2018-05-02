@@ -2,6 +2,7 @@ import os
 import hashlib
 import itertools
 import collections
+import copy
 import functools
 
 import dbt.exceptions
@@ -240,10 +241,10 @@ def deep_merge(*args):
         return None
 
     if len(args) == 1:
-        return args[0]
+        return copy.deepcopy(args[0])
 
     lst = list(args)
-    last = lst.pop(len(lst)-1)
+    last = copy.deepcopy(lst.pop(len(lst)-1))
 
     return _deep_merge(deep_merge(*lst), last)
 
