@@ -54,7 +54,7 @@ def prepend_ctes(model, flat_graph):
 
 def recursively_prepend_ctes(model, flat_graph):
     if dbt.flags.STRICT_MODE:
-        dbt.contracts.graph.compiled.validate_node(model)
+        dbt.contracts.graph.compiled.CompiledNode(**model)
         dbt.contracts.graph.compiled.validate(flat_graph)
 
     model = model.copy()

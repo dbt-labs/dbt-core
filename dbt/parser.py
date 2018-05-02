@@ -132,7 +132,7 @@ def parse_macro_file(macro_file_path,
     to_return = {}
 
     if tags is None:
-        tags = set()
+        tags = []
 
     context = {}
 
@@ -185,7 +185,7 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     logger.debug("Parsing {}".format(node_path))
     node = copy.deepcopy(node)
 
-    tags = coalesce(tags, set())
+    tags = coalesce(tags, [])
     fqn_extra = coalesce(fqn_extra, [])
     macros = coalesce(macros, {})
 
@@ -257,7 +257,7 @@ def parse_node(node, node_path, root_project_config, package_project_config,
 
 def parse_sql_nodes(nodes, root_project, projects, tags=None, macros=None):
     if tags is None:
-        tags = set()
+        tags = []
 
     if macros is None:
         macros = {}
@@ -304,7 +304,7 @@ def load_and_parse_sql(package_name, root_project, all_projects, root_dir,
     extension = "[!.#~]*.sql"
 
     if tags is None:
-        tags = set()
+        tags = []
 
     if macros is None:
         macros = {}
@@ -397,7 +397,7 @@ def load_and_parse_run_hook_type(root_project, all_projects, hook_type,
                 'index': i
             })
 
-    tags = {hook_type}
+    tags = [hook_type]
     return parse_sql_nodes(result, root_project, all_projects, tags=tags,
                            macros=macros)
 
@@ -422,7 +422,7 @@ def load_and_parse_macros(package_name, root_project, all_projects, root_dir,
     extension = "[!.#~]*.sql"
 
     if tags is None:
-        tags = set()
+        tags = []
 
     if dbt.flags.STRICT_MODE:
         dbt.contracts.project.validate_list(all_projects)

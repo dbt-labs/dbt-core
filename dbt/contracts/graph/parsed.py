@@ -39,7 +39,7 @@ parsed_node_contract = unparsed_node_contract.extend({
     Required('fqn'): All(list, [All(basestring)]),
     Required('schema'): basestring,
 
-    Required('refs'): [All(tuple)],
+    Required('refs'): [All(list)],
 
     # parsed fields
     Required('depends_on'): {
@@ -49,7 +49,7 @@ parsed_node_contract = unparsed_node_contract.extend({
 
     Required('empty'): bool,
     Required('config'): config_contract,
-    Required('tags'): All(set),
+    Required('tags'): All(list),
 
     # For csv files
     Optional('agate_table'): object,
@@ -63,7 +63,7 @@ parsed_macro_contract = unparsed_base_contract.extend({
     # identifiers
     Required('resource_type'): Any(NodeType.Macro),
     Required('unique_id'): All(basestring, Length(min=1, max=255)),
-    Required('tags'): All(set),
+    Required('tags'): All(list),
 
     # parsed fields
     Required('depends_on'): {
@@ -235,7 +235,70 @@ PARSED_NODES_CONTRACT = {
     'additionalProperties': False,
     'patternProperties': {
         '.*': PARSED_NODE_CONTRACT
+    },
+}
+
+
+PARSED_MACRO_CONTRACT = deep_merge(
+    UNPARSED_BASE_CONTRACT,
+    {
+        # we have to set this because of the 'generator' property, I think.
+        'additionalProperties': True,
+        'properties': {
+            'resource_type': {
+                'enum': [NodeType.Macro],
+            },
+            'unique_id': {
+                'type': 'string',
+                'minLength': 1,
+                'maxLength': 255,
+            },
+            'tags': {
+                'type': 'array',
+                'items': {
+                    'type': 'string',
+                },
+            },
+            'depends_on': {
+                'type': 'object',
+                'additionalProperties': False,
+                'properties': {
+                    'macros': {
+                        'type': 'array',
+                        'items': {
+                            'type': 'string',
+                            'minLength': 1,
+                            'maxLength': 255,
+                            'description': 'A single macro unique ID.'
+                        }
+                    }
+                },
+                'description': 'A list of all macros this macro depends on.',
+                'required': ['macros'],
+            }
+        },
+        'required': UNPARSED_BASE_CONTRACT['required'] + [
+            'resource_type', 'unique_id', 'tags', 'depends_on'
+        ]
     }
+)
+
+PARSED_MACROS_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'patternProperties': {
+        '.*': PARSED_MACRO_CONTRACT
+    },
+}
+
+PARSED_GRAPH_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'properties': {
+        'nodes': PARSED_NODES_CONTRACT,
+        'macros': PARSED_MACROS_CONTRACT,
+    },
+    'required': ['nodes', 'macros'],
 }
 
 
@@ -245,6 +308,26 @@ class ParsedManifest(APIObject):
 
 class Hook(APIObject):
     SCHEMA = HOOK_CONTRACT
+
+
+class ParsedMacro(APIObject):
+    SCHEMA = PARSED_MACRO_CONTRACT
+
+    def __init__(self, *args, **kwargs):
+        # this is a little hairy - basically, yank the generator argument out
+        # before we go to validate in the superclasses, then put it back in
+        # after.
+        if 'generator' not in kwargs:
+            raise ValidationException((
+                'Invalid arguments passed to "{}" instance: missing '
+                '"generator"').format(type(self).__name__))
+        generator = kwargs.pop('generator')
+        super(ParsedMacro, self).__init__(*args, **kwargs)
+        self['generator'] = generator
+
+
+class ParsedGraph(APIObject):
+    SCHEMA = PARSED_GRAPH_CONTRACT
 
 
 def validate_macros(parsed_macros):

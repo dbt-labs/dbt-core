@@ -33,7 +33,7 @@ def parse_spec(node_spec):
         index_end -= 1
 
     node_selector = node_spec[index_start:index_end]
-    qualified_node_name = tuple(node_selector.split('.'))
+    qualified_node_name = node_selector.split('.')
 
     return {
         "select_parents": select_parents,
@@ -182,7 +182,7 @@ class NodeSelector(object):
 
         include = coalesce(include, ['*'])
         exclude = coalesce(exclude, [])
-        tags = coalesce(tags, set())
+        tags = coalesce(tags, [])
 
         to_run = self.get_valid_nodes(graph)
         filtered_graph = graph.subgraph(to_run)
