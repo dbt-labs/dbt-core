@@ -70,8 +70,8 @@ class APIObject(Mapping):
 
         for error in validator.iter_errors(self.serialize()):
             errors.append('.'.join(
-                list(map(str, error.path)) + [error.message])
-            )
+                list(map(str, error.path)) + [error.message]
+            ))
 
         if errors:
             raise ValidationException(
