@@ -96,7 +96,10 @@ class APIObject(Mapping):
 
     # most users of APIObject also expect the attributes to be available via
     # dot-notation because the previous implementation assigned to __dict__.
+    # we should consider removing this if we fix all uses to have properties.
     def __getattr__(self, name):
         if name in self._contents:
             return self._contents[name]
-        raise AttributeError('Could not find attribute "{}"'.format(name))
+        raise AttributeError((
+            "'{}' object has no attribute '{}'"
+        ).format(type(self).__name__, name))
