@@ -445,7 +445,7 @@ def load_and_parse_macros(package_name, root_project, all_projects, root_dir,
                 root_dir,
                 package_name))
 
-    dbt.contracts.graph.parsed.validate_macros(result)
+    dbt.contracts.graph.parsed.ParsedMacros(**result)
 
     return result
 

@@ -1,88 +1,12 @@
-from voluptuous import Schema, Required, All, Any, Length, ALLOW_EXTRA
-from voluptuous import Optional
-
-import dbt.exceptions
-
 from dbt.api import APIObject
-from dbt.compat import basestring
 from dbt.utils import deep_merge
 from dbt.node_types import NodeType
-
-from dbt.contracts.common import validate_with
-from dbt.contracts.graph.unparsed import unparsed_node_contract, \
-    unparsed_base_contract
 
 from dbt.contracts.graph.unparsed import UNPARSED_NODE_CONTRACT, \
     UNPARSED_BASE_CONTRACT
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
-hook_contract = Schema({
-    Required('sql'): basestring,
-    Required('transaction'): bool,
-    Required('index'): int,
-})
-
-config_contract = Schema({
-    Required('enabled'): bool,
-    Required('materialized'): basestring,
-    Required('post-hook'): [hook_contract],
-    Required('pre-hook'): [hook_contract],
-    Required('vars'): dict,
-    Required('quoting'): dict,
-    Required('column_types'): dict,
-}, extra=ALLOW_EXTRA)
-
-parsed_node_contract = unparsed_node_contract.extend({
-    # identifiers
-    Required('unique_id'): All(basestring, Length(min=1, max=255)),
-    Required('fqn'): All(list, [All(basestring)]),
-    Required('schema'): basestring,
-
-    Required('refs'): [All(list)],
-
-    # parsed fields
-    Required('depends_on'): {
-        Required('nodes'): [All(basestring, Length(min=1, max=255))],
-        Required('macros'): [All(basestring, Length(min=1, max=255))],
-    },
-
-    Required('empty'): bool,
-    Required('config'): config_contract,
-    Required('tags'): All(list),
-
-    # For csv files
-    Optional('agate_table'): object,
-})
-
-parsed_nodes_contract = Schema({
-    str: parsed_node_contract,
-})
-
-parsed_macro_contract = unparsed_base_contract.extend({
-    # identifiers
-    Required('resource_type'): Any(NodeType.Macro),
-    Required('unique_id'): All(basestring, Length(min=1, max=255)),
-    Required('tags'): All(list),
-
-    # parsed fields
-    Required('depends_on'): {
-        Required('macros'): [All(basestring, Length(min=1, max=255))],
-    },
-
-    # contents
-    Required('generator'): callable
-})
-
-parsed_macros_contract = Schema({
-    str: parsed_macro_contract,
-})
-
-
-parsed_graph_contract = Schema({
-    Required('nodes'): parsed_nodes_contract,
-    Required('macros'): parsed_macros_contract,
-})
 
 HOOK_CONTRACT = {
     'type': 'object',
@@ -100,6 +24,7 @@ HOOK_CONTRACT = {
     },
     'required': ['sql', 'transaction', 'index'],
 }
+
 
 CONFIG_CONTRACT = {
     'type': 'object',
@@ -230,6 +155,7 @@ PARSED_NODE_CONTRACT = deep_merge(
     }
 )
 
+
 PARSED_NODES_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
@@ -242,8 +168,7 @@ PARSED_NODES_CONTRACT = {
 PARSED_MACRO_CONTRACT = deep_merge(
     UNPARSED_BASE_CONTRACT,
     {
-        # we have to set this because of the 'generator' property, I think.
-        'additionalProperties': True,
+        'additionalProperties': False,
         'properties': {
             'resource_type': {
                 'enum': [NodeType.Macro],
@@ -310,29 +235,9 @@ class Hook(APIObject):
     SCHEMA = HOOK_CONTRACT
 
 
-class ParsedMacro(APIObject):
-    SCHEMA = PARSED_MACRO_CONTRACT
-
-    def __init__(self, *args, **kwargs):
-        # this is a little hairy - basically, yank the generator argument out
-        # before we go to validate in the superclasses, then put it back in
-        # after.
-        if 'generator' not in kwargs:
-            raise ValidationException((
-                'Invalid arguments passed to "{}" instance: missing '
-                '"generator"').format(type(self).__name__))
-        generator = kwargs.pop('generator')
-        super(ParsedMacro, self).__init__(*args, **kwargs)
-        self['generator'] = generator
+class ParsedMacros(APIObject):
+    SCHEMA = PARSED_MACROS_CONTRACT
 
 
 class ParsedGraph(APIObject):
     SCHEMA = PARSED_GRAPH_CONTRACT
-
-
-def validate_macros(parsed_macros):
-    validate_with(parsed_macros_contract, parsed_macros)
-
-
-def validate(parsed_graph):
-    validate_with(parsed_graph_contract, parsed_graph)

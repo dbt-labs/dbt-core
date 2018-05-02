@@ -269,7 +269,7 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'events_tx'],
                     'empty': False,
                     'package_name': 'root',
-                    'refs': [('base',)],
+                    'refs': [['base']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -389,7 +389,7 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'events_tx'],
                     'empty': False,
                     'package_name': 'root',
-                    'refs': [('events',)],
+                    'refs': [['events']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -410,7 +410,7 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'sessions_tx'],
                     'empty': False,
                     'package_name': 'root',
-                    'refs': [('sessions',)],
+                    'refs': [['sessions']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -431,7 +431,7 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'multi'],
                     'empty': False,
                     'package_name': 'root',
-                    'refs': [('sessions_tx',), ('events_tx',)],
+                    'refs': [['sessions_tx'], ['events_tx']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -553,7 +553,7 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['snowplow', 'events_tx'],
                     'empty': False,
                     'package_name': 'snowplow',
-                    'refs': [('events',)],
+                    'refs': [['events']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -574,7 +574,7 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['snowplow', 'sessions_tx'],
                     'empty': False,
                     'package_name': 'snowplow',
-                    'refs': [('sessions',)],
+                    'refs': [['sessions']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -595,8 +595,8 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'multi'],
                     'empty': False,
                     'package_name': 'root',
-                    'refs': [('snowplow', 'sessions_tx'),
-                             ('snowplow', 'events_tx')],
+                    'refs': [['snowplow', 'sessions_tx'],
+                             ['snowplow', 'events_tx']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -664,7 +664,7 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'dep'],
                     'empty': False,
                     'package_name': 'root',
-                    'refs': [('events',)],
+                    'refs': [['events']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -732,7 +732,7 @@ class ParserTest(unittest.TestCase):
                         'fqn': ['root', 'dep'],
                         'empty': False,
                         'package_name': 'root',
-                        'refs': [('events',)],
+                        'refs': [['events']],
                         'depends_on': {
                             'nodes': ['model.root.events'],
                             'macros': []
@@ -1168,7 +1168,7 @@ class ParserTest(unittest.TestCase):
                     'empty': False,
                     'package_name': 'root',
                     'root_path': get_os_path('/usr/src/app'),
-                    'refs': [('model_one',)],
+                    'refs': [['model_one']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -1189,7 +1189,7 @@ class ParserTest(unittest.TestCase):
                     'empty': False,
                     'package_name': 'root',
                     'root_path': get_os_path('/usr/src/app'),
-                    'refs': [('model_one',)],
+                    'refs': [['model_one']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -1211,7 +1211,7 @@ class ParserTest(unittest.TestCase):
                     'package_name': 'root',
                     'original_file_path': 'test_one.yml',
                     'root_path': get_os_path('/usr/src/app'),
-                    'refs': [('model_one',)],
+                    'refs': [['model_one']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -1233,7 +1233,7 @@ class ParserTest(unittest.TestCase):
                     'package_name': 'root',
                     'original_file_path': 'test_one.yml',
                     'root_path': get_os_path('/usr/src/app'),
-                    'refs': [('model_one',), ('model_two',)],
+                    'refs': [['model_one'], ['model_two']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -1322,7 +1322,7 @@ another_model:
                     'fqn': ['root', 'no_events'],
                     'empty': False,
                     'package_name': 'root',
-                    'refs': [('base',)],
+                    'refs': [['base']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []

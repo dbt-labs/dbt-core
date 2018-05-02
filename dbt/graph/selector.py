@@ -91,7 +91,7 @@ def get_nodes_by_qualified_name(graph, qualified_name):
 
         else:
             for package_name in package_names:
-                local_qualified_node_name = (package_name,) + qualified_name
+                local_qualified_node_name = [package_name] + qualified_name
                 if is_selected_node(fqn_ish, local_qualified_node_name):
                     yield node
                     break
