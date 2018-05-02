@@ -264,7 +264,9 @@ def parse_sql_nodes(nodes, root_project, projects, tags=None, macros=None):
 
     to_return = {}
 
-    dbt.contracts.graph.unparsed.validate_nodes(nodes)
+    for n in nodes:
+        node = dbt.contracts.graph.unparsed.UnparsedNode(**n)
+        node.validate()
 
     for node in nodes:
         package_name = node.get('package_name')
