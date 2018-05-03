@@ -1,3 +1,9 @@
+## Betsy Ross (Unreleased)
+
+### Changes
+
+ - Use Mapping instead of dict as the base class for APIObject ([#756](https://github.com/fishtown-analytics/dbt/pull/756))
+
 ## dbt 0.10.1 (Unreleased)
 
 This release focuses on achieving functional parity between all of dbt's adapters. With this release, most dbt functionality should work on every adapter except where noted [here](https://docs.getdbt.com/v0.10/docs/supported-databases#section-caveats).
