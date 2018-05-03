@@ -92,7 +92,10 @@ class APIObject(Mapping):
 
     # implement this because everyone always expects it.
     def get(self, key, default=None):
-        return self._contents.get(key, default)
+        try:
+            return self[key]
+        except KeyError:
+            return default
 
     # most users of APIObject also expect the attributes to be available via
     # dot-notation because the previous implementation assigned to __dict__.

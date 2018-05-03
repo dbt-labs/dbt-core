@@ -221,7 +221,7 @@ PARSED_MACROS_CONTRACT = {
     },
 }
 
-PARSED_GRAPH_CONTRACT = {
+PARSED_MANIFEST_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
     'properties': {
@@ -232,7 +232,15 @@ PARSED_GRAPH_CONTRACT = {
 }
 
 
-class ParsedManifest(APIObject):
+class ParsedNode(APIObject):
+    SCHEMA = PARSED_NODE_CONTRACT
+
+
+class ParsedMacro(APIObject):
+    SCHEMA = PARSED_MACRO_CONTRACT
+
+
+class ParsedNodes(APIObject):
     SCHEMA = PARSED_NODES_CONTRACT
 
 
@@ -244,5 +252,5 @@ class ParsedMacros(APIObject):
     SCHEMA = PARSED_MACROS_CONTRACT
 
 
-class ParsedGraph(APIObject):
-    SCHEMA = PARSED_GRAPH_CONTRACT
+class ParsedManifest(APIObject):
+    SCHEMA = PARSED_MANIFEST_CONTRACT

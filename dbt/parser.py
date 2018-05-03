@@ -294,7 +294,7 @@ def parse_sql_nodes(nodes, root_project, projects, tags=None, macros=None):
 
         to_return[node_path] = node_parsed
 
-    dbt.contracts.graph.parsed.ParsedManifest(**to_return)
+    dbt.contracts.graph.parsed.ParsedNodes(**to_return)
 
     return to_return
 
@@ -763,5 +763,5 @@ def load_and_parse_seeds(package_name, root_project, all_projects, root_dir,
         # parsed['empty'] = False
         result[node_path] = parsed
 
-    dbt.contracts.graph.parsed.ParsedManifest(**result)
+    dbt.contracts.graph.parsed.ParsedNodes(**result)
     return result
