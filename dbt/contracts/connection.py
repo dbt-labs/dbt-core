@@ -6,7 +6,7 @@ POSTGRES_CREDENTIALS_CONTRACT = {
     'additionalProperties': False,
     'properties': {
         'type': {
-            'enum': ['postgres']
+            'enum': ['postgres', 'redshift']
         },
         'threads': {
             'type': 'integer'
