@@ -117,9 +117,20 @@ def _add_tracking(context):
 
 
 def _add_validation(context):
+    def validate_any(*args):
+        def inner(value):
+            for arg in args:
+                if isinstance(arg, type) and isinstance(value, arg):
+                    return
+                elif value == arg:
+                    return
+            raise dbt.exceptions.ValidationException(
+                'Expected value "{}" to be one of {}'
+                .format(value, ','.join(map(str, args))))
+        return inner
+
     validation_utils = dbt.utils.AttrDict({
-        'any': voluptuous.Any,
-        'all': voluptuous.All,
+        'any': validate_any,
     })
 
     return dbt.utils.merge(
