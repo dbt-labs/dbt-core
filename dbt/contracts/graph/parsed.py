@@ -162,6 +162,9 @@ PARSED_NODE_CONTRACT = deep_merge(
 PARSED_NODES_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
+    'description': (
+        'A collection of the parsed nodes, stored by their unique IDs.'
+    ),
     'patternProperties': {
         '.*': PARSED_NODE_CONTRACT
     },
@@ -184,6 +187,9 @@ PARSED_MACRO_CONTRACT = deep_merge(
                 'maxLength': 255,
             },
             'tags': {
+                'description': (
+                    'An array of arbitrary strings to use as tags.'
+                ),
                 'type': 'array',
                 'items': {
                     'type': 'string',
@@ -216,6 +222,9 @@ PARSED_MACRO_CONTRACT = deep_merge(
 PARSED_MACROS_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
+    'description': (
+        'A collection of the parsed macros, stored by their unique IDs.'
+    ),
     'patternProperties': {
         '.*': PARSED_MACRO_CONTRACT
     },
@@ -224,6 +233,10 @@ PARSED_MACROS_CONTRACT = {
 PARSED_MANIFEST_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
+    'description': (
+        'The full parsed manifest of the graph, with both the required nodes'
+        ' and required macros.'
+    ),
     'properties': {
         'nodes': PARSED_NODES_CONTRACT,
         'macros': PARSED_MACROS_CONTRACT,

@@ -12,12 +12,20 @@ COMPILED_NODE_CONTRACT = deep_merge(
         'additionalProperties': True,
         'properties': {
             'compiled': {
+                'description': (
+                    'This is true after the node has been compiled, but ctes '
+                    'have not necessarily been injected into the node.'
+                ),
                 'type': 'boolean'
             },
             'compiled_sql': {
                 'type': ['string', 'null'],
             },
             'extra_ctes_injected': {
+                'description': (
+                    'This is true after extra ctes have been injected into '
+                    'the compiled node.'
+                ),
                 'type': 'boolean',
             },
             # TODO: add this back in, and add back to 'required' list
@@ -41,6 +49,9 @@ COMPILED_NODE_CONTRACT = deep_merge(
 COMPILED_NODES_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
+    'description': (
+        'A collection of the compiled nodes, stored by their unique IDs.'
+    ),
     'patternProperties': {
         '.*': COMPILED_NODE_CONTRACT
     },
@@ -51,6 +62,9 @@ COMPILED_MACRO_CONTRACT = PARSED_MACRO_CONTRACT
 COMPILED_MACROS_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
+    'description': (
+        'A collection of the compiled macros, stored by their unique IDs.'
+    ),
     'patternProperties': {
         '.*': COMPILED_MACRO_CONTRACT
     },
@@ -59,6 +73,10 @@ COMPILED_MACROS_CONTRACT = {
 COMPILED_GRAPH_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
+    'description': (
+        'The full compiled graph, with both the required nodes and required '
+        'macros.'
+    ),
     'properties': {
         'nodes': COMPILED_NODES_CONTRACT,
         'macros': COMPILED_MACROS_CONTRACT,

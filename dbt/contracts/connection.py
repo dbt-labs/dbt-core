@@ -5,12 +5,6 @@ POSTGRES_CREDENTIALS_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
     'properties': {
-        'type': {
-            'enum': ['postgres', 'redshift']
-        },
-        'threads': {
-            'type': 'integer'
-        },
         'dbname': {
             'type': 'string',
         },
@@ -46,12 +40,6 @@ SNOWFLAKE_CREDENTIALS_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
     'properties': {
-        'type': {
-            'enum': ['snowflake']
-        },
-        'threads': {
-            'type': 'integer'
-        },
         'account': {
             'type': 'string',
         },
@@ -81,12 +69,6 @@ BIGQUERY_CREDENTIALS_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
     'properties': {
-        'type': {
-            'enum': ['bigquery']
-        },
-        'threads': {
-            'type': 'integer'
-        },
         'method': {
             'enum': ['oauth', 'service-account', 'service-account-json'],
         },
@@ -130,6 +112,10 @@ CONNECTION_CONTRACT = {
             'type': ['null', 'object'],
         },
         'credentials': {
+            'description': (
+                'The credentials object here should match the connection '
+                'type. Redshift uses the Postgres connection model.'
+            ),
             'oneOf': [
                 POSTGRES_CREDENTIALS_CONTRACT,
                 SNOWFLAKE_CREDENTIALS_CONTRACT,
