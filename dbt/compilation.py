@@ -61,9 +61,9 @@ def recursively_prepend_ctes(model, flat_graph):
     prepend_ctes = OrderedDict()
 
     if model.get('all_ctes_injected') is True:
-        return (model, model.get('extra_ctes', []), flat_graph)
+        return (model, model.get('extra_ctes').keys(), flat_graph)
 
-    for cte_id in model.get('extra_ctes', []):
+    for cte_id in model.get('extra_ctes', {}):
         cte_to_add = flat_graph.get('nodes').get(cte_id)
         cte_to_add, new_prepend_ctes, flat_graph = recursively_prepend_ctes(
             cte_to_add, flat_graph)
@@ -75,7 +75,7 @@ def recursively_prepend_ctes(model, flat_graph):
             cte_to_add.get('compiled_sql'))
 
     model['extra_ctes_injected'] = True
-    model['extra_ctes'] = list(prepend_ctes)  # get a list of the keys
+    model['extra_ctes'] = prepend_ctes
     model['injected_sql'] = inject_ctes_into_sql(
         model.get('compiled_sql'),
         prepend_ctes)
@@ -257,7 +257,7 @@ class Compiler(object):
             all_projects[name] = project.cfg
 
         if dbt.flags.STRICT_MODE:
-            dbt.contracts.project.validate_list(all_projects)
+            dbt.contracts.project.ProjectList(**all_projects)
 
         return all_projects
 

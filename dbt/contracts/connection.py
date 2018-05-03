@@ -5,6 +5,12 @@ POSTGRES_CREDENTIALS_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
     'properties': {
+        'type': {
+            'enum': ['postgres']
+        },
+        'threads': {
+            'type': 'integer'
+        },
         'dbname': {
             'type': 'string',
         },
@@ -40,6 +46,12 @@ SNOWFLAKE_CREDENTIALS_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
     'properties': {
+        'type': {
+            'enum': ['snowflake']
+        },
+        'threads': {
+            'type': 'integer'
+        },
         'account': {
             'type': 'string',
         },
@@ -69,6 +81,12 @@ BIGQUERY_CREDENTIALS_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
     'properties': {
+        'type': {
+            'enum': ['bigquery']
+        },
+        'threads': {
+            'type': 'integer'
+        },
         'method': {
             'enum': ['oauth', 'service-account', 'service-account-json'],
         },
@@ -134,7 +152,7 @@ class SnowflakeCredentials(APIObject):
 
 
 class BigQueryCredentials(APIObject):
-    SHCEMA = BIGQUERY_CREDENTIALS_CONTRACT
+    SCHEMA = BIGQUERY_CREDENTIALS_CONTRACT
 
 
 CREDENTIALS_MAPPING = {

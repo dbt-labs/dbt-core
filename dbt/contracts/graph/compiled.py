@@ -8,6 +8,8 @@ from dbt.contracts.graph.parsed import PARSED_NODE_CONTRACT, \
 COMPILED_NODE_CONTRACT = deep_merge(
     PARSED_NODE_CONTRACT,
     {
+        # TODO: when we add 'extra_ctes' back in, flip this back to False
+        'additionalProperties': True,
         'properties': {
             'compiled': {
                 'type': 'boolean'
@@ -18,18 +20,19 @@ COMPILED_NODE_CONTRACT = deep_merge(
             'extra_ctes_injected': {
                 'type': 'boolean',
             },
-            'extra_ctes': {
-                'type': 'array',
-                'items': {
-                    'type': 'string',
-                }
-            },
+            # TODO: add this back in, and add back to 'required' list
+            # 'extra_ctes': {
+            #     'type': 'array',
+            #     'items': {
+            #         'type': 'string',
+            #     }
+            # },
             'injected_sql': {
                 'type': ['string', 'null'],
             },
         },
         'required': PARSED_NODE_CONTRACT['required'] + [
-            'compiled', 'compiled_sql', 'extra_ctes_injected', 'extra_ctes',
+            'compiled', 'compiled_sql', 'extra_ctes_injected',
             'injected_sql'
         ]
     }

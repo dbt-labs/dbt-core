@@ -48,8 +48,7 @@ def ref(db_wrapper, model, project_cfg, profile, flat_graph):
         is_ephemeral = (get_materialization(target_model) == 'ephemeral')
 
         if is_ephemeral:
-            # TODO: I commented this out, because I don't think I need it
-            # model['extra_ctes'][target_model_id] = None
+            model['extra_ctes'][target_model_id] = None
             return adapter.Relation.create(
                 type=adapter.Relation.CTE,
                 identifier=add_ephemeral_model_prefix(

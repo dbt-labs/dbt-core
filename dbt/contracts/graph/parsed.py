@@ -67,6 +67,9 @@ CONFIG_CONTRACT = {
 PARSED_NODE_CONTRACT = deep_merge(
     UNPARSED_NODE_CONTRACT,
     {
+        # TODO: fix this so we no longer need 'agate_tables', then swap to
+        # False before release.
+        'additionalProperties': True,
         'properties': {
             'unique_id': {
                 'type': 'string',
@@ -144,9 +147,9 @@ PARSED_NODE_CONTRACT = deep_merge(
                 }
             },
             # TODO: Might be a python object? if so, class attr or something.
-            'agate_table': {
-                'type': 'object',
-            },
+            # 'agate_table': {
+            #     'type': 'object',
+            # },
         },
         'required': UNPARSED_NODE_CONTRACT['required'] + [
             'unique_id', 'fqn', 'schema', 'refs', 'depends_on', 'empty',
@@ -168,7 +171,9 @@ PARSED_NODES_CONTRACT = {
 PARSED_MACRO_CONTRACT = deep_merge(
     UNPARSED_BASE_CONTRACT,
     {
-        'additionalProperties': False,
+        # This is required for the 'generator' field to work.
+        # TODO: fix before release
+        'additionalProperties': True,
         'properties': {
             'resource_type': {
                 'enum': [NodeType.Macro],
@@ -200,7 +205,7 @@ PARSED_MACRO_CONTRACT = deep_merge(
                 },
                 'description': 'A list of all macros this macro depends on.',
                 'required': ['macros'],
-            }
+            },
         },
         'required': UNPARSED_BASE_CONTRACT['required'] + [
             'resource_type', 'unique_id', 'tags', 'depends_on'

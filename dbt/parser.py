@@ -310,7 +310,7 @@ def load_and_parse_sql(package_name, root_project, all_projects, root_dir,
         macros = {}
 
     if dbt.flags.STRICT_MODE:
-        dbt.contracts.project.validate_list(all_projects)
+        dbt.contracts.project.ProjectList(**all_projects)
 
     file_matches = dbt.clients.system.find_matching(
         root_dir,
@@ -374,7 +374,7 @@ def load_and_parse_run_hook_type(root_project, all_projects, hook_type,
                                  macros=None):
 
     if dbt.flags.STRICT_MODE:
-        dbt.contracts.project.validate_list(all_projects)
+        dbt.contracts.project.ProjectList(**all_projects)
 
     project_hooks = get_hooks(all_projects, hook_type)
 
@@ -425,7 +425,7 @@ def load_and_parse_macros(package_name, root_project, all_projects, root_dir,
         tags = []
 
     if dbt.flags.STRICT_MODE:
-        dbt.contracts.project.validate_list(all_projects)
+        dbt.contracts.project.ProjectList(**all_projects)
 
     file_matches = dbt.clients.system.find_matching(
         root_dir,
@@ -631,7 +631,7 @@ def load_and_parse_yml(package_name, root_project, all_projects, root_dir,
     extension = "[!.#~]*.yml"
 
     if dbt.flags.STRICT_MODE:
-        dbt.contracts.project.validate_list(all_projects)
+        dbt.contracts.project.ProjectList(**all_projects)
 
     file_matches = dbt.clients.system.find_matching(
         root_dir,
@@ -748,7 +748,7 @@ def load_and_parse_seeds(package_name, root_project, all_projects, root_dir,
                          relative_dirs, resource_type, tags=None, macros=None):
     extension = "[!.#~]*.csv"
     if dbt.flags.STRICT_MODE:
-        dbt.contracts.project.validate_list(all_projects)
+        dbt.contracts.project.ProjectList(**all_projects)
     file_matches = dbt.clients.system.find_matching(
         root_dir,
         relative_dirs,
