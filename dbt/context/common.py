@@ -1,7 +1,6 @@
 import json
 import os
 import pytz
-import voluptuous
 
 from dbt.adapters.factory import get_adapter
 from dbt.compat import basestring, to_string

@@ -3,7 +3,6 @@ import pprint
 import copy
 import hashlib
 import re
-from voluptuous import Required, Invalid
 
 import dbt.deprecations
 import dbt.contracts.connection
