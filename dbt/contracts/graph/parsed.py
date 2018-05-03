@@ -2,8 +2,10 @@ from dbt.api import APIObject
 from dbt.utils import deep_merge
 from dbt.node_types import NodeType
 
+import dbt.clients.jinja
+
 from dbt.contracts.graph.unparsed import UNPARSED_NODE_CONTRACT, \
-    UNPARSED_BASE_CONTRACT
+    UNPARSED_MACRO_CONTRACT
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -172,12 +174,20 @@ PARSED_NODES_CONTRACT = {
 
 
 PARSED_MACRO_CONTRACT = deep_merge(
-    UNPARSED_BASE_CONTRACT,
+    UNPARSED_MACRO_CONTRACT,
     {
         # This is required for the 'generator' field to work.
         # TODO: fix before release
         'additionalProperties': True,
         'properties': {
+            'name': {
+                'type': 'string',
+                'description': (
+                    'Name of this node. For models, this is used as the '
+                    'identifier in the database.'),
+                'minLength': 1,
+                'maxLength': 127,
+            },
             'resource_type': {
                 'enum': [NodeType.Macro],
             },
@@ -213,8 +223,8 @@ PARSED_MACRO_CONTRACT = deep_merge(
                 'required': ['macros'],
             },
         },
-        'required': UNPARSED_BASE_CONTRACT['required'] + [
-            'resource_type', 'unique_id', 'tags', 'depends_on'
+        'required': UNPARSED_MACRO_CONTRACT['required'] + [
+            'resource_type', 'unique_id', 'tags', 'depends_on', 'name',
         ]
     }
 )
@@ -251,6 +261,20 @@ class ParsedNode(APIObject):
 
 class ParsedMacro(APIObject):
     SCHEMA = PARSED_MACRO_CONTRACT
+
+    def __init__(self, template=None, **kwargs):
+        self.template = template
+        super(ParsedMacro, self).__init__(**kwargs)
+
+    @property
+    def generator(self):
+        """
+        Returns a function that can be called to render the macro results.
+        """
+        # TODO: we can generate self.template from the other properties
+        # available in this class. should we just generate this here?
+        return dbt.clients.jinja.macro_generator(
+            self.template, self._contents)
 
 
 class ParsedNodes(APIObject):

@@ -78,7 +78,7 @@ def _add_macros(context, model, flat_graph):
         package_name = macro.get('package_name')
 
         macro_map = {
-            macro.get('name'): macro.get('generator')(context)
+            macro.get('name'): macro.generator(context)
         }
 
         if context.get(package_name) is None:

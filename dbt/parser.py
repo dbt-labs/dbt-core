@@ -17,14 +17,14 @@ import dbt.clients.agate_helper
 
 import dbt.context.parser
 
-import dbt.contracts.graph.parsed
-import dbt.contracts.graph.unparsed
 import dbt.contracts.project
 
 from dbt.node_types import NodeType, RunHookType
 from dbt.compat import basestring, to_string
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import get_pseudo_test_path, coalesce
+from dbt.contracts.graph.unparsed import UnparsedMacro
+from dbt.contracts.graph.parsed import ParsedMacro, ParsedMacros, ParsedNodes
 
 
 def get_path(resource_type, package_name, resource_name):
@@ -136,15 +136,14 @@ def parse_macro_file(macro_file_path,
 
     context = {}
 
-    base_node = {
-        'path': macro_file_path,
-        'original_file_path': macro_file_path,
-        'resource_type': NodeType.Macro,
-        'package_name': package_name,
-        'depends_on': {
-            'macros': [],
-        }
-    }
+    # change these to actual kwargs
+    base_node = UnparsedMacro(
+        path=macro_file_path,
+        original_file_path=macro_file_path,
+        package_name=package_name,
+        raw_sql=macro_file_contents,
+        root_path=root_path,
+    )
 
     try:
         template = dbt.clients.jinja.get_template(
@@ -161,19 +160,19 @@ def parse_macro_file(macro_file_path,
                                  package_name,
                                  name)
 
-            new_node = base_node.copy()
-            new_node.update({
-                'name': name,
-                'unique_id': unique_id,
-                'tags': tags,
-                'root_path': root_path,
-                'path': macro_file_path,
-                'original_file_path': macro_file_path,
-                'raw_sql': macro_file_contents,
-            })
+            merged = dbt.utils.deep_merge(
+                base_node.serialize(),
+                {
+                    'name': name,
+                    'unique_id': unique_id,
+                    'tags': tags,
+                    'resource_type': NodeType.Macro,
+                    'depends_on': {'macros': []},
+                })
 
-            new_node['generator'] = dbt.clients.jinja.macro_generator(
-                template, new_node)
+            new_node = ParsedMacro(
+                template=template,
+                **merged)
 
             to_return[unique_id] = new_node
 
@@ -294,7 +293,7 @@ def parse_sql_nodes(nodes, root_project, projects, tags=None, macros=None):
 
         to_return[node_path] = node_parsed
 
-    dbt.contracts.graph.parsed.ParsedNodes(**to_return)
+    ParsedNodes(**to_return)
 
     return to_return
 
@@ -444,8 +443,6 @@ def load_and_parse_macros(package_name, root_project, all_projects, root_dir,
                 file_contents,
                 root_dir,
                 package_name))
-
-    dbt.contracts.graph.parsed.ParsedMacros(**result)
 
     return result
 
@@ -763,5 +760,5 @@ def load_and_parse_seeds(package_name, root_project, all_projects, root_dir,
         # parsed['empty'] = False
         result[node_path] = parsed
 
-    dbt.contracts.graph.parsed.ParsedNodes(**result)
+    ParsedNodes(**result)
     return result

@@ -422,7 +422,7 @@ class ModelRunner(CompileRunner):
                 model,
                 self.adapter.type())
 
-        materialization_macro.get('generator')(context)()
+        materialization_macro.generator(context)()
 
         result = context['load_result']('main')
 

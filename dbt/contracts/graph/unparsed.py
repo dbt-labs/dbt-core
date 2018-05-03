@@ -8,14 +8,6 @@ UNPARSED_BASE_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
     'properties': {
-        'name': {
-            'type': 'string',
-            'description': (
-                'Name of this node. For models, this is used as the '
-                'identifier in the database.'),
-            'minLength': 1,
-            'maxLength': 127,
-        },
         'package_name': {
             'type': 'string',
         },
@@ -49,14 +41,24 @@ UNPARSED_BASE_CONTRACT = {
             'type': 'integer',
         }
     },
-    'required': ['name', 'package_name', 'root_path', 'path',
-                 'original_file_path', 'raw_sql']
+    'required': ['package_name', 'root_path', 'path', 'original_file_path',
+                 'raw_sql']
 }
+
+UNPARSED_MACRO_CONTRACT = UNPARSED_BASE_CONTRACT
 
 UNPARSED_NODE_CONTRACT = deep_merge(
     UNPARSED_BASE_CONTRACT,
     {
         'properties': {
+            'name': {
+                'type': 'string',
+                'description': (
+                    'Name of this node. For models, this is used as the '
+                    'identifier in the database.'),
+                'minLength': 1,
+                'maxLength': 127,
+            },
             'resource_type': {
                 'enum': [
                     NodeType.Model,
@@ -67,9 +69,14 @@ UNPARSED_NODE_CONTRACT = deep_merge(
                 ]
             }
         },
-        'required': UNPARSED_BASE_CONTRACT['required'] + ['resource_type']
+        'required': UNPARSED_BASE_CONTRACT['required'] + [
+            'resource_type', 'name']
     }
 )
+
+
+class UnparsedMacro(APIObject):
+    SCHEMA = UNPARSED_MACRO_CONTRACT
 
 
 class UnparsedNode(APIObject):
