@@ -1351,9 +1351,7 @@ another_model:
             root_path=get_os_path('/usr/src/app'),
             package_name='root')
 
-        self.assertTrue(callable(result['macro.root.simple']['generator']))
-
-        del result['macro.root.simple']['generator']
+        self.assertTrue(callable(result['macro.root.simple'].generator))
 
         self.assertEquals(
             result,
@@ -1388,9 +1386,7 @@ another_model:
             root_path=get_os_path('/usr/src/app'),
             package_name='root')
 
-        self.assertTrue(callable(result['macro.root.simple']['generator']))
-
-        del result['macro.root.simple']['generator']
+        self.assertTrue(callable(result['macro.root.simple'].generator))
 
         self.assertEquals(
             result,
