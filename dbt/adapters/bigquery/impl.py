@@ -12,7 +12,7 @@ import dbt.clients.agate_helper
 
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.adapters.bigquery.relation import BigQueryRelation
-from dbt.contracts.connection import validate_connection
+from dbt.contracts.connection import Connection
 from dbt.logger import GLOBAL_LOGGER as logger
 
 import google.auth
@@ -168,7 +168,7 @@ class BigQueryAdapter(PostgresAdapter):
     @classmethod
     def close(cls, connection):
         if dbt.flags.STRICT_MODE:
-            validate_connection(connection)
+            Connection(**connection)
 
         connection['state'] = 'closed'
 
@@ -314,7 +314,7 @@ class BigQueryAdapter(PostgresAdapter):
 
         if flags.STRICT_MODE:
             connection = cls.get_connection(profile, model.get('name'))
-            validate_connection(connection)
+            Connection(**connection)
 
         model_name = model.get('name')
         model_schema = model.get('schema')

@@ -61,6 +61,7 @@ COMPILED_GRAPH_CONTRACT = {
         'macros': COMPILED_MACROS_CONTRACT,
     },
     'required': ['nodes', 'macros'],
+    'serialize': ['nodes'],
 }
 
 
