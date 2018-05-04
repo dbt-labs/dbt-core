@@ -283,18 +283,11 @@ class Compiler(object):
         root_project = self.project.cfg
         all_projects = self.get_all_projects()
 
-        flat_graph = dbt.loader.GraphLoader.load_all(
-            root_project, all_projects)
+        manifest = dbt.loader.GraphLoader.load_all(root_project, all_projects)
 
-        # convert the nodes back to dictionaries (with the agate_tables)
-        # before we return, or else Compiler.compile() will fail
-        # Worth noting, if you change this and then have Compiler.link_nodes()
-        # do the to_dict call, some tests that go through another path will
-        # fail in a non-obvious way. So it's not safe to just hoist this up
-        # to that level.
-        flat_graph['nodes'] = {
-            k: v.to_dict() for k, v in flat_graph['nodes'].items()
-        }
+        # here is where we want to call json.dumps(manifest.serialize()) and
+        # write that to disk.
+        flat_graph = manifest.to_flat_graph()
 
         self._check_resource_uniqueness(flat_graph)
 

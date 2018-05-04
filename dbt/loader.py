@@ -2,6 +2,7 @@ import dbt.exceptions
 import dbt.parser
 
 from dbt.node_types import NodeType
+from dbt.contracts.graph.parsed import ParsedManifest
 
 
 class GraphLoader(object):
@@ -10,21 +11,15 @@ class GraphLoader(object):
 
     @classmethod
     def load_all(cls, root_project, all_projects):
-        to_return = {}
-
-        subgraphs = ['nodes', 'macros']
-
         macros = MacroLoader.load_all(root_project, all_projects)
-        for subgraph in subgraphs:
-            subgraph_nodes = {}
+        # note: no macro loaders are ever registered, so we don't have to
+        # iterate over subgraphs.
+        # TODO: make sure this assumption is ok. if so, clean up _LOADERS, etc
+        nodes = {}
+        for loader in cls._LOADERS['nodes']:
+            nodes.update(loader.load_all(root_project, all_projects, macros))
 
-            for loader in cls._LOADERS[subgraph]:
-                subgraph_nodes.update(
-                    loader.load_all(root_project, all_projects, macros))
-
-            to_return[subgraph] = subgraph_nodes
-
-        return to_return
+        return ParsedManifest(nodes=nodes, macros=macros)
 
     @classmethod
     def register(cls, loader, subgraph='nodes'):
@@ -193,4 +188,3 @@ GraphLoader.register(DataTestLoader, 'nodes')
 GraphLoader.register(RunHookLoader, 'nodes')
 GraphLoader.register(ArchiveLoader, 'nodes')
 GraphLoader.register(SeedLoader, 'nodes')
-GraphLoader.register(MacroLoader, 'macros')

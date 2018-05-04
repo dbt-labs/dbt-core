@@ -305,5 +305,36 @@ class ParsedMacros(APIObject):
     SCHEMA = PARSED_MACROS_CONTRACT
 
 
-class ParsedManifest(APIObject):
-    SCHEMA = PARSED_MANIFEST_CONTRACT
+class ParsedManifest(object):
+    """The final result of parsing all macros and nodes in a graph."""
+    def __init__(self, nodes, macros):
+        """The constructor. nodes and macros are dictionaries mapping unique
+        IDs to ParsedNode and ParsedMacro objects, respectively.
+        """
+        self.nodes = nodes
+        self.macros = macros
+
+    def serialize(self):
+        """Convert the parsed manifest to a nested dict structure that we can
+        safely serialize to JSON.
+        """
+        return {
+            'nodes': {k: v.serialize() for k, v in self.nodes.items()},
+            'macros': {k: v.serialize() for k, v in self.macros.items()},
+        }
+
+    def to_flat_graph(self):
+        """Convert the parsed manifest to the 'flat graph' that the compiler
+        expects.
+
+        Kind of hacky note: everything in the code is happy to deal with
+        macros as ParsedMacro objects (in fact, it's been changed to require
+        that), so those can just be returned without any work. Nodes sadly
+        require a lot of work on the compiler side.
+
+        Ideally in the future we won't need to have this method.
+        """
+        return {
+            'nodes': {k: v.to_dict() for k, v in self.nodes.items()},
+            'macros': self.macros,
+        }
