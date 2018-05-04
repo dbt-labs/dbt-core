@@ -69,9 +69,6 @@ CONFIG_CONTRACT = {
 PARSED_NODE_CONTRACT = deep_merge(
     UNPARSED_NODE_CONTRACT,
     {
-        # TODO: fix this so we no longer need 'agate_tables', then swap to
-        # False before release.
-        'additionalProperties': True,
         'properties': {
             'unique_id': {
                 'type': 'string',
