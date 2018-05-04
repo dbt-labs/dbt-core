@@ -180,7 +180,8 @@ def parse_macro_file(macro_file_path,
 
 
 def parse_node(node, node_path, root_project_config, package_project_config,
-               all_projects, tags=None, fqn_extra=None, fqn=None, macros=None):
+               all_projects, tags=None, fqn_extra=None, fqn=None, macros=None,
+               agate_table=None):
     """Parse a node, given an unparsed node dictionary and any other required
     information.
     """
@@ -191,7 +192,9 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     # Another wrinkle: The archive parsing path also goes through here, and
     # archive isn't a supported node type.
     logger.debug("Parsing {}".format(node_path))
-    node = copy.deepcopy(node)
+    node = node.serialize()
+    if agate_table is not None:
+        node['agate_table'] = agate_table
 
     tags = coalesce(tags, [])
     fqn_extra = coalesce(fqn_extra, [])
@@ -280,7 +283,7 @@ def parse_sql_nodes(nodes, root_project, projects, tags=None, macros=None):
                              package_name,
                              node.get('name'))
         # TODO: change parse_node to just take an UnparsedNode as the argument
-        node_parsed = parse_node(node.serialize(),
+        node_parsed = parse_node(node,
                                  node_path,
                                  root_project,
                                  projects.get(package_name),
@@ -616,7 +619,7 @@ def parse_schema_test(test_base, model_name, test_config, test_namespace,
         raw_sql=raw_sql
     )
 
-    return parse_node(to_return.serialize(),
+    return parse_node(to_return,
                       get_test_path(test_base.get('package_name'),
                                     full_name),
                       root_project_config,
@@ -678,7 +681,8 @@ def parse_archives_from_projects(root_project, all_projects, macros=None):
     # additional properties?
     # We're going to have a similar issue with parsed nodes, if we want to
     # make parse_node return those.
-    for archive in archives:
+    for a in archives:
+        archive = UnparsedNode(**a)
         node_path = get_path(archive.get('resource_type'),
                              archive.get('package_name'),
                              archive.get('name'))
@@ -725,31 +729,33 @@ def parse_archives_from_project(project):
 
 
 def parse_seed_file(file_match, root_dir, package_name):
+    """Parse the given seed file, returning an UnparsedNode and the agate
+    table.
+    """
     abspath = file_match['absolute_path']
     logger.debug("Parsing {}".format(abspath))
     to_return = {}
     table_name = os.path.basename(abspath)[:-4]
-    node = {
-        'unique_id': get_path(NodeType.Seed, package_name, table_name),
-        'path': file_match['relative_path'],
-        'name': table_name,
-        'root_path': root_dir,
-        'resource_type': NodeType.Seed,
+    node = UnparsedNode(
+        unique_id=get_path(NodeType.Seed, package_name, table_name),
+        path=file_match['relative_path'],
+        name=table_name,
+        root_path=root_dir,
+        resource_type=NodeType.Seed,
         # Give this raw_sql so it conforms to the node spec,
         # use dummy text so it doesn't look like an empty node
-        'raw_sql': '-- csv --',
-        'package_name': package_name,
-        'depends_on': {'nodes': []},
-        'original_file_path': os.path.join(file_match.get('searched_path'),
-                                           file_match.get('relative_path')),
-    }
+        raw_sql='-- csv --',
+        package_name=package_name,
+        depends_on={'nodes': []},
+        original_file_path=os.path.join(file_match.get('searched_path'),
+                                        file_match.get('relative_path')),
+    )
     try:
         table = dbt.clients.agate_helper.from_csv(abspath)
     except ValueError as e:
         dbt.exceptions.raise_compiler_error(str(e), node)
     table.original_abspath = abspath
-    node['agate_table'] = table
-    return node
+    return node, table
 
 
 def load_and_parse_seeds(package_name, root_project, all_projects, root_dir,
@@ -763,11 +769,13 @@ def load_and_parse_seeds(package_name, root_project, all_projects, root_dir,
         extension)
     result = {}
     for file_match in file_matches:
-        node = parse_seed_file(file_match, root_dir, package_name)
+        node, agate_table = parse_seed_file(file_match, root_dir,
+                                            package_name)
         node_path = node['unique_id']
         parsed = parse_node(node, node_path, root_project,
                             all_projects.get(package_name),
-                            all_projects, tags=tags, macros=macros)
+                            all_projects, tags=tags, macros=macros,
+                            agate_table=agate_table)
         # parsed['empty'] = False
         result[node_path] = parsed
 
