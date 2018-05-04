@@ -21,9 +21,11 @@ import dbt.flags
 import dbt.loader
 import dbt.parser
 
+from dbt.clients.system import write_file
 from dbt.logger import GLOBAL_LOGGER as logger
 
 graph_file_name = 'graph.gpickle'
+manifest_file_name = 'manifest.json'
 
 
 def print_compile_stats(stats):
@@ -148,8 +150,7 @@ class Compiler(object):
     def __write(self, build_filepath, payload):
         target_path = os.path.join(self.project['target-path'], build_filepath)
 
-        dbt.clients.system.make_directory(os.path.dirname(target_path))
-        dbt.compat.write_file(target_path, payload)
+        write_file(target_path, payload)
 
         return target_path
 
@@ -206,6 +207,15 @@ class Compiler(object):
             injected_node['wrapped_sql'] = None
 
         return injected_node
+
+    def write_manifest_file(self, manifest):
+        """Write the manifest file to disk.
+
+        manifest should be a ParsedManifest.
+        """
+        filename = manifest_file_name
+        manifest_path = os.path.join(self.project['target-path'], filename)
+        write_file(manifest_path, json.dumps(manifest.serialize()))
 
     def write_graph_file(self, linker):
         filename = graph_file_name
@@ -285,8 +295,8 @@ class Compiler(object):
 
         manifest = dbt.loader.GraphLoader.load_all(root_project, all_projects)
 
-        # here is where we want to call json.dumps(manifest.serialize()) and
-        # write that to disk.
+        self.write_manifest_file(manifest)
+
         flat_graph = manifest.to_flat_graph()
 
         self._check_resource_uniqueness(flat_graph)

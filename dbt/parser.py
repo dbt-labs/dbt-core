@@ -182,8 +182,7 @@ def parse_macro_file(macro_file_path,
 def parse_node(node, node_path, root_project_config, package_project_config,
                all_projects, tags=None, fqn_extra=None, fqn=None, macros=None,
                agate_table=None, archive_config=None):
-    """Parse a node, given an unparsed node dictionary and any other required
-    information.
+    """Parse a node, given an UnparsedNode and any other required information.
 
     agate_table should be set if the node came from a seed file.
     archive_config should be set if the node is an Archive node.
