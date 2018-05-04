@@ -181,21 +181,19 @@ def parse_macro_file(macro_file_path,
 
 def parse_node(node, node_path, root_project_config, package_project_config,
                all_projects, tags=None, fqn_extra=None, fqn=None, macros=None,
-               agate_table=None):
+               agate_table=None, archive_config=None):
     """Parse a node, given an unparsed node dictionary and any other required
     information.
+
+    agate_table should be set if the node came from a seed file.
+    archive_config should be set if the node is an Archive node.
     """
-    # The node parameter is a dictionary, not an UnparsedNode as you might
-    # expect, to handle issues around parse_seed, which returns a dictionary
-    # that has too much to be an UnparsedNode but not enough to be a
-    # ParsedNode. I'd like to fix that.
-    # Another wrinkle: The archive parsing path also goes through here, and
-    # archive isn't a supported node type.
     logger.debug("Parsing {}".format(node_path))
+
     node = node.serialize()
+
     if agate_table is not None:
         node['agate_table'] = agate_table
-
     tags = coalesce(tags, [])
     fqn_extra = coalesce(fqn_extra, [])
     macros = coalesce(macros, {})
@@ -226,7 +224,7 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     # Set this temporarily. Not the full config yet (as config() hasn't been
     # called from jinja yet). But the Var() call below needs info about project
     # level configs b/c they might contain refs. TODO: Restructure this?
-    config_dict = node.get('config', {})
+    config_dict = coalesce(archive_config, {})
     config_dict.update(config.config)
     node['config'] = config_dict
 
@@ -675,13 +673,13 @@ def parse_archives_from_projects(root_project, all_projects, macros=None):
     for name, project in all_projects.items():
         archives = archives + parse_archives_from_project(project)
 
-    # TODO: archives are not UnparsedNodes, as their resource type isn't in
-    # the allowed list. Should it be? If so, we're going to have to consider
-    # allowing 'config' in unparsed nodes. Maybe parsed nodes should allow
-    # additional properties?
     # We're going to have a similar issue with parsed nodes, if we want to
     # make parse_node return those.
     for a in archives:
+        # archives have a config, but that would make for an invalid
+        # UnparsedNode, so remove it and pass it along to parse_node as an
+        # argument.
+        archive_config = a.pop('config')
         archive = UnparsedNode(**a)
         node_path = get_path(archive.get('resource_type'),
                              archive.get('package_name'),
@@ -693,7 +691,8 @@ def parse_archives_from_projects(root_project, all_projects, macros=None):
             root_project,
             all_projects.get(archive.get('package_name')),
             all_projects,
-            macros=macros)
+            macros=macros,
+            archive_config=archive_config)
 
     return to_return
 
@@ -737,7 +736,6 @@ def parse_seed_file(file_match, root_dir, package_name):
     to_return = {}
     table_name = os.path.basename(abspath)[:-4]
     node = UnparsedNode(
-        unique_id=get_path(NodeType.Seed, package_name, table_name),
         path=file_match['relative_path'],
         name=table_name,
         root_path=root_dir,
@@ -746,7 +744,6 @@ def parse_seed_file(file_match, root_dir, package_name):
         # use dummy text so it doesn't look like an empty node
         raw_sql='-- csv --',
         package_name=package_name,
-        depends_on={'nodes': []},
         original_file_path=os.path.join(file_match.get('searched_path'),
                                         file_match.get('relative_path')),
     )
@@ -771,7 +768,7 @@ def load_and_parse_seeds(package_name, root_project, all_projects, root_dir,
     for file_match in file_matches:
         node, agate_table = parse_seed_file(file_match, root_dir,
                                             package_name)
-        node_path = node['unique_id']
+        node_path = get_path(NodeType.Seed, package_name, node.name)
         parsed = parse_node(node, node_path, root_project,
                             all_projects.get(package_name),
                             all_projects, tags=tags, macros=macros,

@@ -50,9 +50,6 @@ UNPARSED_MACRO_CONTRACT = UNPARSED_BASE_CONTRACT
 UNPARSED_NODE_CONTRACT = deep_merge(
     UNPARSED_BASE_CONTRACT,
     {
-        # a bunch of the parsing code passes unparsed nodes with extra data
-        # tacked on into parse_node.
-        'additionalProperties': True,
         'properties': {
             'name': {
                 'type': 'string',
