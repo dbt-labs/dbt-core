@@ -23,8 +23,8 @@ from dbt.node_types import NodeType, RunHookType
 from dbt.compat import basestring, to_string
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import get_pseudo_test_path, coalesce
-from dbt.contracts.graph.unparsed import UnparsedMacro
-from dbt.contracts.graph.parsed import ParsedMacro, ParsedMacros, ParsedNodes
+from dbt.contracts.graph.unparsed import UnparsedMacro, UnparsedNode
+from dbt.contracts.graph.parsed import ParsedMacro, ParsedNodes, ParsedNode
 
 
 def get_path(resource_type, package_name, resource_name):
@@ -181,6 +181,15 @@ def parse_macro_file(macro_file_path,
 
 def parse_node(node, node_path, root_project_config, package_project_config,
                all_projects, tags=None, fqn_extra=None, fqn=None, macros=None):
+    """Parse a node, given an unparsed node dictionary and any other required
+    information.
+    """
+    # The node parameter is a dictionary, not an UnparsedNode as you might
+    # expect, to handle issues around parse_seed, which returns a dictionary
+    # that has too much to be an UnparsedNode but not enough to be a
+    # ParsedNode. I'd like to fix that.
+    # Another wrinkle: The archive parsing path also goes through here, and
+    # archive isn't a supported node type.
     logger.debug("Parsing {}".format(node_path))
     node = copy.deepcopy(node)
 
@@ -265,15 +274,13 @@ def parse_sql_nodes(nodes, root_project, projects, tags=None, macros=None):
 
     for n in nodes:
         node = dbt.contracts.graph.unparsed.UnparsedNode(**n)
-
-    for node in nodes:
         package_name = node.get('package_name')
 
         node_path = get_path(node.get('resource_type'),
                              package_name,
                              node.get('name'))
-
-        node_parsed = parse_node(node,
+        # TODO: change parse_node to just take an UnparsedNode as the argument
+        node_parsed = parse_node(node.serialize(),
                                  node_path,
                                  root_project,
                                  projects.get(package_name),
@@ -601,17 +608,17 @@ def parse_schema_test(test_base, model_name, test_config, test_namespace,
     # supply our own fqn which overrides the hashed version from the path
     fqn_override = get_fqn(full_path, package_project_config)
 
-    to_return = {
-        'name': full_name,
-        'resource_type': test_base.get('resource_type'),
-        'package_name': test_base.get('package_name'),
-        'root_path': test_base.get('root_path'),
-        'path': hashed_path,
-        'original_file_path': test_base.get('original_file_path'),
-        'raw_sql': raw_sql
-    }
+    to_return = UnparsedNode(
+        name=full_name,
+        resource_type=test_base.get('resource_type'),
+        package_name=test_base.get('package_name'),
+        root_path=test_base.get('root_path'),
+        path=hashed_path,
+        original_file_path=test_base.get('original_file_path'),
+        raw_sql=raw_sql
+    )
 
-    return parse_node(to_return,
+    return parse_node(to_return.serialize(),
                       get_test_path(test_base.get('package_name'),
                                     full_name),
                       root_project_config,
@@ -667,6 +674,12 @@ def parse_archives_from_projects(root_project, all_projects, macros=None):
     for name, project in all_projects.items():
         archives = archives + parse_archives_from_project(project)
 
+    # TODO: archives are not UnparsedNodes, as their resource type isn't in
+    # the allowed list. Should it be? If so, we're going to have to consider
+    # allowing 'config' in unparsed nodes. Maybe parsed nodes should allow
+    # additional properties?
+    # We're going to have a similar issue with parsed nodes, if we want to
+    # make parse_node return those.
     for archive in archives:
         node_path = get_path(archive.get('resource_type'),
                              archive.get('package_name'),
