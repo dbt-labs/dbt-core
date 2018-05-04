@@ -258,6 +258,22 @@ class ParsedNode(APIObject):
         self.agate_table = agate_table
         super(ParsedNode, self).__init__(**kwargs)
 
+    def to_dict(self):
+        """Similar to 'serialize', but tacks the agate_table attribute in too.
+
+        Why we need this:
+            - networkx demands that the attr_dict it gets (the node) be a dict
+                or subclass and does not respect the abstract Mapping class
+            - many jinja things access the agate_table attribute (member) of
+                the node dict.
+            - the nodes are passed around between those two contexts in a way
+                that I don't quite have clear enough yet.
+        """
+        ret = self.serialize()
+        # note: not a copy/deep copy.
+        ret['agate_table'] = self.agate_table
+        return ret
+
 
 class ParsedMacro(APIObject):
     SCHEMA = PARSED_MACRO_CONTRACT
