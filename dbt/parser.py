@@ -279,7 +279,6 @@ def parse_sql_nodes(nodes, root_project, projects, tags=None, macros=None):
         node_path = get_path(node.get('resource_type'),
                              package_name,
                              node.get('name'))
-        # TODO: change parse_node to just take an UnparsedNode as the argument
         node_parsed = parse_node(node,
                                  node_path,
                                  root_project,

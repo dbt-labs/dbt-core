@@ -14,8 +14,7 @@ UNPARSED_BASE_CONTRACT = {
         # filesystem
         'root_path': {
             'type': 'string',
-            # TODO figure this out
-            'description': '??? i think it is an absolute path to the file',
+            'description': 'The absolute path to the project root',
         },
         'path': {
             'type': 'string',
