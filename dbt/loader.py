@@ -24,16 +24,6 @@ class GraphLoader(object):
 
             to_return[subgraph] = subgraph_nodes
 
-        to_return['macros'] = macros
-        # convert the nodes back to dictionaries (with the agate_tables)
-        # before we return, or else Compiler.compile() will fail
-        # Worth noting, if you change this and then have Compiler.link_nodes()
-        # do the to_dict call, some tests that go through another path will
-        # fail in a non-obvious way. So it's not safe to just hoist this up
-        # to that level.
-        to_return['nodes'] = {
-            k: v.to_dict() for k, v in to_return['nodes'].items()
-        }
         return to_return
 
     @classmethod
@@ -203,3 +193,4 @@ GraphLoader.register(DataTestLoader, 'nodes')
 GraphLoader.register(RunHookLoader, 'nodes')
 GraphLoader.register(ArchiveLoader, 'nodes')
 GraphLoader.register(SeedLoader, 'nodes')
+GraphLoader.register(MacroLoader, 'macros')
