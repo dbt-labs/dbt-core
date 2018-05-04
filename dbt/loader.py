@@ -7,28 +7,20 @@ from dbt.contracts.graph.parsed import ParsedManifest
 
 class GraphLoader(object):
 
-    _LOADERS = {'nodes': [], 'macros': []}
+    _LOADERS = []
 
     @classmethod
     def load_all(cls, root_project, all_projects):
         macros = MacroLoader.load_all(root_project, all_projects)
-        # note: no macro loaders are ever registered, so we don't have to
-        # iterate over subgraphs.
-        # TODO: make sure this assumption is ok. if so, clean up _LOADERS, etc
         nodes = {}
-        for loader in cls._LOADERS['nodes']:
+        for loader in cls._LOADERS:
             nodes.update(loader.load_all(root_project, all_projects, macros))
 
         return ParsedManifest(nodes=nodes, macros=macros)
 
     @classmethod
-    def register(cls, loader, subgraph='nodes'):
-        if subgraph not in ['nodes', 'macros']:
-            raise dbt.exceptions.InternalException(
-                'Invalid subgraph type {}, should be "nodes" or "macros"!'
-                .format(subgraph))
-
-        cls._LOADERS[subgraph].append(loader)
+    def register(cls, loader):
+        cls._LOADERS.append(loader)
 
 
 class ResourceLoader(object):
@@ -181,10 +173,10 @@ class SeedLoader(ResourceLoader):
 
 
 # node loaders
-GraphLoader.register(ModelLoader, 'nodes')
-GraphLoader.register(AnalysisLoader, 'nodes')
-GraphLoader.register(SchemaTestLoader, 'nodes')
-GraphLoader.register(DataTestLoader, 'nodes')
-GraphLoader.register(RunHookLoader, 'nodes')
-GraphLoader.register(ArchiveLoader, 'nodes')
-GraphLoader.register(SeedLoader, 'nodes')
+GraphLoader.register(ModelLoader)
+GraphLoader.register(AnalysisLoader)
+GraphLoader.register(SchemaTestLoader)
+GraphLoader.register(DataTestLoader)
+GraphLoader.register(RunHookLoader)
+GraphLoader.register(ArchiveLoader)
+GraphLoader.register(SeedLoader)
