@@ -24,7 +24,7 @@ from dbt.compat import basestring, to_string
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import get_pseudo_test_path, coalesce
 from dbt.contracts.graph.unparsed import UnparsedMacro, UnparsedNode
-from dbt.contracts.graph.parsed import ParsedMacro, ParsedNodes, ParsedNode
+from dbt.contracts.graph.parsed import ParsedMacro, ParsedNode
 
 
 def get_path(resource_type, package_name, resource_name):
@@ -260,7 +260,7 @@ def parse_node(node, node_path, root_project_config, package_project_config,
 
     del node['config_reference']
 
-    return node
+    return ParsedNode(**node)
 
 
 def parse_sql_nodes(nodes, root_project, projects, tags=None, macros=None):
@@ -299,8 +299,6 @@ def parse_sql_nodes(nodes, root_project, projects, tags=None, macros=None):
                     existing_node, node_parsed)
 
         to_return[node_path] = node_parsed
-
-    ParsedNodes(**to_return)
 
     return to_return
 
@@ -773,5 +771,4 @@ def load_and_parse_seeds(package_name, root_project, all_projects, root_dir,
         # parsed['empty'] = False
         result[node_path] = parsed
 
-    ParsedNodes(**result)
     return result

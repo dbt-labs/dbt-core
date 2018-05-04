@@ -66,6 +66,8 @@ UNPARSED_NODE_CONTRACT = deep_merge(
                     NodeType.Analysis,
                     NodeType.Operation,
                     NodeType.Seed,
+                    # we need this if parse_node is going to handle archives.
+                    NodeType.Archive,
                 ]
             }
         },
