@@ -215,11 +215,9 @@ class Compiler(object):
     def link_node(self, linker, node, flat_graph):
         linker.add_node(node.get('unique_id'))
 
-        # Note: we have to serialize the node here as we end up calling into
-        # networkx and it wants dictionaries (and doesn't know about Mapping)
         linker.update_node_data(
             node.get('unique_id'),
-            node.to_dict())
+            node)
 
         for dependency in node.get('depends_on', {}).get('nodes'):
             if flat_graph.get('nodes').get(dependency):
