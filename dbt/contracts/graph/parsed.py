@@ -148,10 +148,6 @@ PARSED_NODE_CONTRACT = deep_merge(
                     'type': 'string',
                 }
             },
-            # TODO: Might be a python object? if so, class attr or something.
-            # 'agate_table': {
-            #     'type': 'object',
-            # },
         },
         'required': UNPARSED_NODE_CONTRACT['required'] + [
             'unique_id', 'fqn', 'schema', 'refs', 'depends_on', 'empty',
@@ -257,6 +253,10 @@ PARSED_MANIFEST_CONTRACT = {
 
 class ParsedNode(APIObject):
     SCHEMA = PARSED_NODE_CONTRACT
+
+    def __init__(self, agate_table=None, **kwargs):
+        self.agate_table = agate_table
+        super(ParsedNode, self).__init__(**kwargs)
 
 
 class ParsedMacro(APIObject):
