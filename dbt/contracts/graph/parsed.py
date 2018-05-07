@@ -317,7 +317,7 @@ def build_edges(nodes):
     forward_edges = {node.unique_id: [] for node in nodes}
     for node in nodes:
         backward_edges[node.unique_id] = node.depends_on_nodes[:]
-        for unique_id in node.depends_on_nodes[:]:
+        for unique_id in node.depends_on_nodes:
             forward_edges[unique_id].append(node.unique_id)
     return forward_edges, backward_edges
 
