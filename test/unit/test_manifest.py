@@ -1,5 +1,6 @@
 import unittest
 
+import copy
 import os
 
 import dbt.flags
@@ -21,15 +22,7 @@ class ManifestTest(unittest.TestCase):
             'column_types': {},
         }
 
-    def test__no_nodes(self):
-        manifest = ParsedManifest(nodes={}, macros={})
-        self.assertEqual(
-            manifest.serialize(),
-            {'nodes': {}, 'macros': {}, 'parent_map': {}, 'child_map': {}}
-        )
-
-    def test__nested_nodes(self):
-        nodes = {
+        self.nested_nodes = {
             'model.snowplow.events': ParsedNode(
                 name='events',
                 schema='analytics',
@@ -151,6 +144,16 @@ class ManifestTest(unittest.TestCase):
                 raw_sql='does not matter'
             ),
         }
+
+    def test__no_nodes(self):
+        manifest = ParsedManifest(nodes={}, macros={})
+        self.assertEqual(
+            manifest.serialize(),
+            {'nodes': {}, 'macros': {}, 'parent_map': {}, 'child_map': {}}
+        )
+
+    def test__nested_nodes(self):
+        nodes = copy.copy(self.nested_nodes)
         manifest = ParsedManifest(nodes=nodes, macros={})
         serialized = manifest.serialize()
         parent_map = serialized['parent_map']
@@ -208,3 +211,15 @@ class ManifestTest(unittest.TestCase):
             child_map['model.snowplow.events'],
             []
         )
+
+    def test__to_flat_graph(self):
+        nodes = copy.copy(self.nested_nodes)
+        manifest = ParsedManifest(nodes=nodes, macros={})
+        flat_graph = manifest.to_flat_graph()
+        flat_nodes = flat_graph['nodes']
+        self.assertEqual(set(flat_graph), set(['nodes', 'macros']))
+        self.assertEqual(flat_graph['macros'], {})
+        self.assertEqual(set(flat_nodes), set(self.nested_nodes))
+        expected_keys = set(ParsedNode.SCHEMA['required']) | {'agate_table'}
+        for node in flat_nodes.values():
+            self.assertEqual(set(node), expected_keys)
