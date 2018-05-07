@@ -3,6 +3,7 @@
 ### Changes
 
  - Use Mapping instead of dict as the base class for APIObject ([#756](https://github.com/fishtown-analytics/dbt/pull/756))
+ - Write JSON manifest file to disk during compilation ([#761](https://github.com/fishtown-analytics/dbt/pull/761))
 
 ## dbt 0.10.1 (Unreleased)
 
