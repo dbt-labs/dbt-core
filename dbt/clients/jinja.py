@@ -65,7 +65,7 @@ def macro_generator(template, node):
 
 
 class MaterializationExtension(jinja2.ext.Extension):
-    tags = set(['materialization'])
+    tags = ['materialization']
 
     def parse(self, parser):
         node = jinja2.nodes.Macro(lineno=next(parser.stream).lineno)

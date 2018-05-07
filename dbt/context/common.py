@@ -1,7 +1,6 @@
 import json
 import os
 import pytz
-import voluptuous
 
 from dbt.adapters.factory import get_adapter
 from dbt.compat import basestring, to_string
@@ -79,7 +78,7 @@ def _add_macros(context, model, flat_graph):
         package_name = macro.get('package_name')
 
         macro_map = {
-            macro.get('name'): macro.get('generator')(context)
+            macro.get('name'): macro.generator(context)
         }
 
         if context.get(package_name) is None:
@@ -117,9 +116,20 @@ def _add_tracking(context):
 
 
 def _add_validation(context):
+    def validate_any(*args):
+        def inner(value):
+            for arg in args:
+                if isinstance(arg, type) and isinstance(value, arg):
+                    return
+                elif value == arg:
+                    return
+            raise dbt.exceptions.ValidationException(
+                'Expected value "{}" to be one of {}'
+                .format(value, ','.join(map(str, args))))
+        return inner
+
     validation_utils = dbt.utils.AttrDict({
-        'any': voluptuous.Any,
-        'all': voluptuous.All,
+        'any': validate_any,
     })
 
     return dbt.utils.merge(

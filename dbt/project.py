@@ -3,7 +3,6 @@ import pprint
 import copy
 import hashlib
 import re
-from voluptuous import Required, Invalid
 
 import dbt.deprecations
 import dbt.contracts.connection
@@ -15,6 +14,8 @@ import dbt.clients.system
 import dbt.ui.printer
 import dbt.links
 
+from dbt.api.object import APIObject
+from dbt.utils import deep_merge
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 default_project_cfg = {
@@ -199,23 +200,37 @@ class Project(object):
                  'underscores, and must start with a letter.'), self)
 
         db_type = target_cfg.get('type')
-        validator = dbt.contracts.connection.credentials_mapping.get(db_type)
+        validator = dbt.contracts.connection.CREDENTIALS_MAPPING.get(db_type)
 
         if validator is None:
-            valid_types = dbt.contracts.connection.credentials_mapping.keys()
+            valid_types = dbt.contracts.connection.CREDENTIALS_MAPPING.keys()
             raise DbtProjectError(
                 "Invalid db type '{}' should be one of [{}]".format(
                     db_type,
                     ", ".join(valid_types)), self)
 
-        validator = validator.extend({
-            Required('type'): dbt.compat.basestring,
-            Required('threads'): int,
-        })
+        # This is python so I guess we'll just make a class here...
+        # it might be wise to tack an extend classmethod onto APIObject,
+        # similar to voluptous, to do all the deep merge stuff for us and spit
+        # out a new class.
+        class CredentialsValidator(APIObject):
+            SCHEMA = deep_merge(
+                validator.SCHEMA,
+                {
+                    'properties': {
+                        'type': {'type': 'string'},
+                        'threads': {'type': 'integer'},
+                    },
+                    'required': (
+                        validator.SCHEMA.get('required', []) +
+                        ['type', 'threads']
+                    ),
+                }
+            )
 
         try:
-            validator(target_cfg)
-        except Invalid as e:
+            CredentialsValidator(**target_cfg)
+        except dbt.exceptions.ValidationException as e:
             if 'extra keys not allowed' in str(e):
                 raise DbtProjectError(
                     "Extra project configuration '{}' is not recognized"

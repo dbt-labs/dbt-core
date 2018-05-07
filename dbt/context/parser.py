@@ -10,7 +10,7 @@ def ref(db_wrapper, model, project_cfg, profile, flat_graph):
 
     def ref(*args):
         if len(args) == 1 or len(args) == 2:
-            model['refs'].append(args)
+            model['refs'].append(list(args))
 
         else:
             dbt.exceptions.ref_invalid_args(model, args)

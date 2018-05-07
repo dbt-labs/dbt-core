@@ -318,7 +318,7 @@ class ModelRunner(CompileRunner):
             model_name = hook.get('name')
 
             if dbt.flags.STRICT_MODE:
-                dbt.contracts.graph.parsed.validate_hook(hook)
+                dbt.contracts.graph.parsed.Hook(**hook)
 
             sql = hook.get('sql', '')
 
@@ -422,7 +422,7 @@ class ModelRunner(CompileRunner):
                 model,
                 self.adapter.type())
 
-        materialization_macro.get('generator')(context)()
+        materialization_macro.generator(context)()
 
         result = context['load_result']('main')
 

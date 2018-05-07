@@ -10,7 +10,7 @@ import dbt.flags
 import dbt.schema
 import dbt.clients.agate_helper
 
-from dbt.contracts.connection import validate_connection
+from dbt.contracts.connection import Connection
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.schema import Column
 from dbt.utils import filter_null_values
@@ -464,7 +464,7 @@ class DefaultAdapter(object):
             }
 
             if dbt.flags.STRICT_MODE:
-                validate_connection(result)
+                Connection(**result)
 
             return cls.open_connection(result)
         finally:
@@ -542,7 +542,7 @@ class DefaultAdapter(object):
         connection = cls.get_connection(profile, name)
 
         if dbt.flags.STRICT_MODE:
-            validate_connection(connection)
+            Connection(**connection)
 
         if connection['transaction_open'] is True:
             raise dbt.exceptions.InternalException(
@@ -575,7 +575,7 @@ class DefaultAdapter(object):
         global connections_in_use
 
         if dbt.flags.STRICT_MODE:
-            validate_connection(connection)
+            Connection(**connection)
 
         connection = cls.reload(connection)
 
@@ -595,7 +595,7 @@ class DefaultAdapter(object):
     @classmethod
     def rollback(cls, connection):
         if dbt.flags.STRICT_MODE:
-            validate_connection(connection)
+            Connection(**connection)
 
         connection = cls.reload(connection)
 
@@ -615,7 +615,7 @@ class DefaultAdapter(object):
     @classmethod
     def close(cls, connection):
         if dbt.flags.STRICT_MODE:
-            validate_connection(connection)
+            Connection(**connection)
 
         connection.get('handle').close()
         connection['state'] = 'closed'

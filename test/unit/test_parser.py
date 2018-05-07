@@ -107,7 +107,7 @@ class ParserTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'model_one.sql',
                     'raw_sql': self.find_input_by_name(
                         models, 'model_one').get('raw_sql')
@@ -165,7 +165,7 @@ class ParserTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': ephemeral_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': get_os_path('nested/path/model_one.sql'),
                     'raw_sql': self.find_input_by_name(
                         models, 'model_one').get('raw_sql')
@@ -204,7 +204,7 @@ class ParserTest(unittest.TestCase):
                         'macros': [],
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'model_one.sql',
                     'original_file_path': 'model_one.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -254,7 +254,7 @@ class ParserTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'base.sql',
                     'original_file_path': 'base.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -269,13 +269,13 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'events_tx'],
                     'empty': False,
                     'package_name': 'root',
-                    'refs': [('base',)],
+                    'refs': [['base']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'events_tx.sql',
                     'original_file_path': 'events_tx.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -353,7 +353,7 @@ class ParserTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'events.sql',
                     'original_file_path': 'events.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -374,7 +374,7 @@ class ParserTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'sessions.sql',
                     'original_file_path': 'sessions.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -389,13 +389,13 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'events_tx'],
                     'empty': False,
                     'package_name': 'root',
-                    'refs': [('events',)],
+                    'refs': [['events']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'events_tx.sql',
                     'original_file_path': 'events_tx.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -410,13 +410,13 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'sessions_tx'],
                     'empty': False,
                     'package_name': 'root',
-                    'refs': [('sessions',)],
+                    'refs': [['sessions']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'sessions_tx.sql',
                     'original_file_path': 'sessions_tx.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -431,13 +431,13 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'multi'],
                     'empty': False,
                     'package_name': 'root',
-                    'refs': [('sessions_tx',), ('events_tx',)],
+                    'refs': [['sessions_tx'], ['events_tx']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'multi.sql',
                     'original_file_path': 'multi.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -517,7 +517,7 @@ class ParserTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'events.sql',
                     'original_file_path': 'events.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -538,7 +538,7 @@ class ParserTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'sessions.sql',
                     'original_file_path': 'sessions.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -553,13 +553,13 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['snowplow', 'events_tx'],
                     'empty': False,
                     'package_name': 'snowplow',
-                    'refs': [('events',)],
+                    'refs': [['events']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'events_tx.sql',
                     'original_file_path': 'events_tx.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -574,13 +574,13 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['snowplow', 'sessions_tx'],
                     'empty': False,
                     'package_name': 'snowplow',
-                    'refs': [('sessions',)],
+                    'refs': [['sessions']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'sessions_tx.sql',
                     'original_file_path': 'sessions_tx.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -595,14 +595,14 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'multi'],
                     'empty': False,
                     'package_name': 'root',
-                    'refs': [('snowplow', 'sessions_tx'),
-                             ('snowplow', 'events_tx')],
+                    'refs': [['snowplow', 'sessions_tx'],
+                             ['snowplow', 'events_tx']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'multi.sql',
                     'original_file_path': 'multi.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -630,7 +630,7 @@ class ParserTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.disabled_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'events.sql',
                     'original_file_path': 'events.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -650,7 +650,7 @@ class ParserTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'events.sql',
                     'original_file_path': 'events.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -664,13 +664,13 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'dep'],
                     'empty': False,
                     'package_name': 'root',
-                    'refs': [('events',)],
+                    'refs': [['events']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'multi.sql',
                     'original_file_path': 'multi.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -698,7 +698,7 @@ class ParserTest(unittest.TestCase):
                             'macros': []
                         },
                         'config': self.disabled_config,
-                        'tags': set(),
+                        'tags': [],
                         'path': 'events.sql',
                         'original_file_path': 'events.sql',
                         'root_path': get_os_path('/usr/src/app'),
@@ -718,7 +718,7 @@ class ParserTest(unittest.TestCase):
                             'macros': []
                         },
                         'config': self.model_config,
-                        'tags': set(),
+                        'tags': [],
                         'path': 'events.sql',
                         'original_file_path': 'events.sql',
                         'root_path': get_os_path('/usr/src/app'),
@@ -732,13 +732,13 @@ class ParserTest(unittest.TestCase):
                         'fqn': ['root', 'dep'],
                         'empty': False,
                         'package_name': 'root',
-                        'refs': [('events',)],
+                        'refs': [['events']],
                         'depends_on': {
                             'nodes': ['model.root.events'],
                             'macros': []
                         },
                         'config': self.model_config,
-                        'tags': set(),
+                        'tags': [],
                         'path': 'multi.sql',
                         'original_file_path': 'multi.sql',
                         'root_path': get_os_path('/usr/src/app'),
@@ -785,7 +785,7 @@ class ParserTest(unittest.TestCase):
                         'macros': [],
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'root_path': get_os_path('/usr/src/app'),
                     'path': 'model_one.sql',
                     'original_file_path': 'model_one.sql',
@@ -869,7 +869,7 @@ class ParserTest(unittest.TestCase):
                     'path': 'table.sql',
                     'original_file_path': 'table.sql',
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'root_path': get_os_path('/usr/src/app'),
                     'raw_sql': self.find_input_by_name(
                         models, 'table').get('raw_sql')
@@ -890,7 +890,7 @@ class ParserTest(unittest.TestCase):
                     'path': 'ephemeral.sql',
                     'original_file_path': 'ephemeral.sql',
                     'config': ephemeral_config,
-                    'tags': set(),
+                    'tags': [],
                     'root_path': get_os_path('/usr/src/app'),
                     'raw_sql': self.find_input_by_name(
                         models, 'ephemeral').get('raw_sql')
@@ -912,7 +912,7 @@ class ParserTest(unittest.TestCase):
                     'original_file_path': 'view.sql',
                     'root_path': get_os_path('/usr/src/app'),
                     'config': view_config,
-                    'tags': set(),
+                    'tags': [],
                     'raw_sql': self.find_input_by_name(
                         models, 'ephemeral').get('raw_sql')
                 }
@@ -1061,7 +1061,7 @@ class ParserTest(unittest.TestCase):
                     'original_file_path': 'table.sql',
                     'root_path': get_os_path('/usr/src/app'),
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'raw_sql': self.find_input_by_name(
                         models, 'table').get('raw_sql')
                 },
@@ -1082,7 +1082,7 @@ class ParserTest(unittest.TestCase):
                     'original_file_path': 'ephemeral.sql',
                     'root_path': get_os_path('/usr/src/app'),
                     'config': ephemeral_config,
-                    'tags': set(),
+                    'tags': [],
                     'raw_sql': self.find_input_by_name(
                         models, 'ephemeral').get('raw_sql')
                 },
@@ -1103,7 +1103,7 @@ class ParserTest(unittest.TestCase):
                     'original_file_path': 'view.sql',
                     'root_path': get_os_path('/usr/src/app'),
                     'config': view_config,
-                    'tags': set(),
+                    'tags': [],
                     'raw_sql': self.find_input_by_name(
                         models, 'view').get('raw_sql')
                 },
@@ -1124,7 +1124,7 @@ class ParserTest(unittest.TestCase):
                     'original_file_path': get_os_path('views/multi_sort.sql'),
                     'root_path': get_os_path('/usr/src/app'),
                     'config': multi_sort_config,
-                    'tags': set(),
+                    'tags': [],
                     'raw_sql': self.find_input_by_name(
                         models, 'multi_sort').get('raw_sql')
                 }
@@ -1168,7 +1168,7 @@ class ParserTest(unittest.TestCase):
                     'empty': False,
                     'package_name': 'root',
                     'root_path': get_os_path('/usr/src/app'),
-                    'refs': [('model_one',)],
+                    'refs': [['model_one']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -1177,7 +1177,7 @@ class ParserTest(unittest.TestCase):
                     'original_file_path': 'test_one.yml',
                     'path': get_os_path(
                         'schema_test/not_null_model_one_id.sql'),
-                    'tags': set(['schema']),
+                    'tags': ['schema'],
                     'raw_sql': not_null_sql,
                 },
                 'test.root.unique_model_one_id': {
@@ -1189,7 +1189,7 @@ class ParserTest(unittest.TestCase):
                     'empty': False,
                     'package_name': 'root',
                     'root_path': get_os_path('/usr/src/app'),
-                    'refs': [('model_one',)],
+                    'refs': [['model_one']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -1197,7 +1197,7 @@ class ParserTest(unittest.TestCase):
                     'config': self.model_config,
                     'original_file_path': 'test_one.yml',
                     'path': get_os_path('schema_test/unique_model_one_id.sql'),
-                    'tags': set(['schema']),
+                    'tags': ['schema'],
                     'raw_sql': unique_sql,
                 },
                 'test.root.accepted_values_model_one_id__a__b': {
@@ -1211,7 +1211,7 @@ class ParserTest(unittest.TestCase):
                     'package_name': 'root',
                     'original_file_path': 'test_one.yml',
                     'root_path': get_os_path('/usr/src/app'),
-                    'refs': [('model_one',)],
+                    'refs': [['model_one']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -1219,7 +1219,7 @@ class ParserTest(unittest.TestCase):
                     'config': self.model_config,
                     'path': get_os_path(
                         'schema_test/accepted_values_model_one_id__a__b.sql'),
-                    'tags': set(['schema']),
+                    'tags': ['schema'],
                     'raw_sql': accepted_values_sql,
                 },
                 'test.root.relationships_model_one_id__id__ref_model_two_': {
@@ -1233,14 +1233,14 @@ class ParserTest(unittest.TestCase):
                     'package_name': 'root',
                     'original_file_path': 'test_one.yml',
                     'root_path': get_os_path('/usr/src/app'),
-                    'refs': [('model_one',), ('model_two',)],
+                    'refs': [['model_one'], ['model_two']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
                     },
                     'config': self.model_config,
                     'path': get_os_path('schema_test/relationships_model_one_id__id__ref_model_two_.sql'), # noqa
-                    'tags': set(['schema']),
+                    'tags': ['schema'],
                     'raw_sql': relationships_sql,
                 }
 
@@ -1322,7 +1322,7 @@ another_model:
                     'fqn': ['root', 'no_events'],
                     'empty': False,
                     'package_name': 'root',
-                    'refs': [('base',)],
+                    'refs': [['base']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -1331,7 +1331,7 @@ another_model:
                     'path': 'no_events.sql',
                     'original_file_path': 'no_events.sql',
                     'root_path': get_os_path('/usr/src/app'),
-                    'tags': set(),
+                    'tags': [],
                     'raw_sql': self.find_input_by_name(
                         tests, 'no_events').get('raw_sql')
                 }
@@ -1351,9 +1351,7 @@ another_model:
             root_path=get_os_path('/usr/src/app'),
             package_name='root')
 
-        self.assertTrue(callable(result['macro.root.simple']['generator']))
-
-        del result['macro.root.simple']['generator']
+        self.assertTrue(callable(result['macro.root.simple'].generator))
 
         self.assertEquals(
             result,
@@ -1368,7 +1366,7 @@ another_model:
                     },
                     'original_file_path': 'simple_macro.sql',
                     'root_path': get_os_path('/usr/src/app'),
-                    'tags': set(),
+                    'tags': [],
                     'path': 'simple_macro.sql',
                     'raw_sql': macro_file_contents,
                 }
@@ -1388,9 +1386,7 @@ another_model:
             root_path=get_os_path('/usr/src/app'),
             package_name='root')
 
-        self.assertTrue(callable(result['macro.root.simple']['generator']))
-
-        del result['macro.root.simple']['generator']
+        self.assertTrue(callable(result['macro.root.simple'].generator))
 
         self.assertEquals(
             result,
@@ -1405,7 +1401,7 @@ another_model:
                     },
                     'original_file_path': 'simple_macro.sql',
                     'root_path': get_os_path('/usr/src/app'),
-                    'tags': set(),
+                    'tags': [],
                     'path': 'simple_macro.sql',
                     'raw_sql': macro_file_contents,
                 }
@@ -1445,7 +1441,7 @@ another_model:
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'model_one.sql',
                     'raw_sql': self.find_input_by_name(
                         models, 'model_one').get('raw_sql')
@@ -1486,7 +1482,7 @@ another_model:
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'model_one.sql',
                     'original_file_path': 'model_one.sql',
                     'raw_sql': self.find_input_by_name(

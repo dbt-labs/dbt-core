@@ -33,7 +33,7 @@ def parse_spec(node_spec):
         index_end -= 1
 
     node_selector = node_spec[index_start:index_end]
-    qualified_node_name = tuple(node_selector.split('.'))
+    qualified_node_name = node_selector.split('.')
 
     return {
         "select_parents": select_parents,
@@ -91,7 +91,7 @@ def get_nodes_by_qualified_name(graph, qualified_name):
 
         else:
             for package_name in package_names:
-                local_qualified_node_name = (package_name,) + qualified_name
+                local_qualified_node_name = [package_name] + qualified_name
                 if is_selected_node(fqn_ish, local_qualified_node_name):
                     yield node
                     break
@@ -182,7 +182,7 @@ class NodeSelector(object):
 
         include = coalesce(include, ['*'])
         exclude = coalesce(exclude, [])
-        tags = coalesce(tags, set())
+        tags = coalesce(tags, [])
 
         to_run = self.get_valid_nodes(graph)
         filtered_graph = graph.subgraph(to_run)
@@ -193,7 +193,8 @@ class NodeSelector(object):
             node = graph.node.get(node_name)
 
             matched_resource = node.get('resource_type') in resource_types
-            matched_tags = (len(tags) == 0 or bool(node.get('tags') & tags))
+            matched_tags = (len(tags) == 0 or
+                            bool(set(node.get('tags', [])) & set(tags)))
 
             if matched_resource and matched_tags:
                 filtered_nodes.add(node_name)

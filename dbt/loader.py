@@ -2,39 +2,25 @@ import dbt.exceptions
 import dbt.parser
 
 from dbt.node_types import NodeType
+from dbt.contracts.graph.parsed import ParsedManifest
 
 
 class GraphLoader(object):
 
-    _LOADERS = {'nodes': [], 'macros': []}
+    _LOADERS = []
 
     @classmethod
     def load_all(cls, root_project, all_projects):
-        to_return = {}
-
-        subgraphs = ['nodes', 'macros']
-
         macros = MacroLoader.load_all(root_project, all_projects)
-        for subgraph in subgraphs:
-            subgraph_nodes = {}
+        nodes = {}
+        for loader in cls._LOADERS:
+            nodes.update(loader.load_all(root_project, all_projects, macros))
 
-            for loader in cls._LOADERS[subgraph]:
-                subgraph_nodes.update(
-                    loader.load_all(root_project, all_projects, macros))
-
-            to_return[subgraph] = subgraph_nodes
-
-        to_return['macros'] = macros
-        return to_return
+        return ParsedManifest(nodes=nodes, macros=macros)
 
     @classmethod
-    def register(cls, loader, subgraph='nodes'):
-        if subgraph not in ['nodes', 'macros']:
-            raise dbt.exceptions.InternalException(
-                'Invalid subgraph type {}, should be "nodes" or "macros"!'
-                .format(subgraph))
-
-        cls._LOADERS[subgraph].append(loader)
+    def register(cls, loader):
+        cls._LOADERS.append(loader)
 
 
 class ResourceLoader(object):
@@ -140,7 +126,7 @@ class DataTestLoader(ResourceLoader):
             root_dir=project.get('project-root'),
             relative_dirs=project.get('test-paths', []),
             resource_type=NodeType.Test,
-            tags={'data'},
+            tags=['data'],
             macros=macros)
 
 
@@ -187,10 +173,10 @@ class SeedLoader(ResourceLoader):
 
 
 # node loaders
-GraphLoader.register(ModelLoader, 'nodes')
-GraphLoader.register(AnalysisLoader, 'nodes')
-GraphLoader.register(SchemaTestLoader, 'nodes')
-GraphLoader.register(DataTestLoader, 'nodes')
-GraphLoader.register(RunHookLoader, 'nodes')
-GraphLoader.register(ArchiveLoader, 'nodes')
-GraphLoader.register(SeedLoader, 'nodes')
+GraphLoader.register(ModelLoader)
+GraphLoader.register(AnalysisLoader)
+GraphLoader.register(SchemaTestLoader)
+GraphLoader.register(DataTestLoader)
+GraphLoader.register(RunHookLoader)
+GraphLoader.register(ArchiveLoader)
+GraphLoader.register(SeedLoader)
