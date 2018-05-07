@@ -255,6 +255,11 @@ class ParsedNode(APIObject):
         self.agate_table = agate_table
         super(ParsedNode, self).__init__(**kwargs)
 
+    @property
+    def depends_on_nodes(self):
+        """Return the list of node IDs that this node depends on."""
+        return self._contents['depends_on']['nodes']
+
     def to_dict(self):
         """Similar to 'serialize', but tacks the agate_table attribute in too.
 
@@ -302,6 +307,21 @@ class ParsedMacros(APIObject):
     SCHEMA = PARSED_MACROS_CONTRACT
 
 
+def build_edges(nodes):
+    """Build the forward and backward edges on the given list of ParsedNodes
+    and return them as two separate dictionaries, each mapping unique IDs to
+    lists of edges.
+    """
+    backward_edges = {}
+    # pre-populate the forward edge dict for simplicity
+    forward_edges = {node.unique_id: [] for node in nodes}
+    for node in nodes:
+        backward_edges[node.unique_id] = node.depends_on_nodes[:]
+        for unique_id in node.depends_on_nodes[:]:
+            forward_edges[unique_id].append(node.unique_id)
+    return forward_edges, backward_edges
+
+
 class ParsedManifest(object):
     """The final result of parsing all macros and nodes in a graph."""
     def __init__(self, nodes, macros):
@@ -315,9 +335,13 @@ class ParsedManifest(object):
         """Convert the parsed manifest to a nested dict structure that we can
         safely serialize to JSON.
         """
+        forward_edges, backward_edges = build_edges(self.nodes.values())
+
         return {
             'nodes': {k: v.serialize() for k, v in self.nodes.items()},
             'macros': {k: v.serialize() for k, v in self.macros.items()},
+            'parent_map': backward_edges,
+            'child_map': forward_edges,
         }
 
     def to_flat_graph(self):
