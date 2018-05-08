@@ -17,6 +17,7 @@ import dbt.task.init as init_task
 import dbt.task.seed as seed_task
 import dbt.task.test as test_task
 import dbt.task.archive as archive_task
+import dbt.task.generate as generate_task
 
 import dbt.tracking
 import dbt.config as config
@@ -354,6 +355,7 @@ def parse_args(args):
     compile_sub = subs.add_parser('compile', parents=[base_subparser])
     compile_sub.set_defaults(cls=compile_task.CompileTask, which='compile')
 
+
     for sub in [run_sub, compile_sub]:
         sub.add_argument(
             '--models',
@@ -413,6 +415,15 @@ def parse_args(args):
         help='Show a sample of the loaded data in the terminal'
     )
     seed_sub.set_defaults(cls=seed_task.SeedTask, which='seed')
+
+    catalog_sub = subs.add_parser('catalog', parents=[base_subparser])
+    catalog_subs = catalog_sub.add_subparsers()
+    # it might look like catalog_sub is the correct parents entry, but that
+    # will cause weird errors about 'conflicting option strings'.
+    generate_sub = catalog_subs.add_parser('generate',
+                                           parents=[base_subparser])
+    generate_sub.set_defaults(cls=generate_task.GenerateTask,
+                              which='generate')
 
     sub = subs.add_parser('test', parents=[base_subparser])
     sub.add_argument(

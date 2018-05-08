@@ -178,6 +178,59 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         return results[0] > 0
 
     @classmethod
+    def get_catalog_for_schemas(cls, profile, schemas=None):
+        """Get the catalog information for a given profile and list of
+        schemas. If no schemas are given, return all schemas.
+        Returns a list of dictionaries, each one representing a single column.
+
+        TODO: document the minimum guaranteed information callers can expect
+            (what keys are in each dict, basically)
+        """
+        # from https://github.com/fishtown-analytics/dbt/issues/763#issuecomment-387490363
+        sql = """
+            with tables as (
+            select
+                table_schema,
+                table_name,
+                table_type
+
+            from information_schema.tables
+
+            ),
+
+            columns as (
+
+                select
+                    table_schema,
+                    table_name,
+                    null as table_comment,
+
+                    column_name,
+                    ordinal_position as column_index,
+                    data_type as column_type,
+                    null as column_comment
+
+
+                from information_schema.columns
+
+            )
+
+            select *
+            from tables
+            join columns using (table_schema, table_name)
+
+            where table_schema != 'information_schema'
+              and table_schema not like 'pg_%'
+        """.strip()
+        # TODO: make sure I can just ignore status.
+        _, results = cls.execute(profile, sql, fetch=True)
+        # ok, have an agate.Table now consisting of my results. Filter out
+        # schemas if necessary (this should probably happen in SQL, right?).
+        if schemas is not None:
+            results = results.where(lambda r: r['table_schema'] in schemas)
+        return [dict(zip(results.column_names, row)) for row in results]
+
+    @classmethod
     def convert_text_type(cls, agate_table, col_idx):
         return "text"
 
