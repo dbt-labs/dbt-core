@@ -292,8 +292,9 @@ class ModelRunner(CompileRunner):
         nodes = flat_graph.get('nodes', {}).values()
         hooks = get_nodes_by_tags(nodes, {hook_type}, NodeType.Operation)
 
-        compiled_hooks = []
-        for hook in hooks:
+        ordered_hooks = sorted(hooks, key=lambda h: h.get('index', len(hooks)))
+
+        for i, hook in enumerate(ordered_hooks):
             model_name = hook.get('name')
 
             # This will clear out an open transaction if there is one.
@@ -309,24 +310,17 @@ class ModelRunner(CompileRunner):
 
             hook_index = hook.get('index', len(hooks))
             hook_dict = dbt.hooks.get_hook_dict(statement, index=hook_index)
-            compiled_hooks.append(hook_dict)
-            adapter.release_connection(profile, model_name)
-
-        ordered_hooks = sorted(compiled_hooks, key=lambda h: h.get('index', 0))
-
-        for hook in ordered_hooks:
-            model_name = hook.get('name')
 
             if dbt.flags.STRICT_MODE:
-                dbt.contracts.graph.parsed.validate_hook(hook)
+                dbt.contracts.graph.parsed.validate_hook(hook_dict)
 
-            sql = hook.get('sql', '')
+            sql = hook_dict.get('sql', '')
 
             if len(sql.strip()) > 0:
                 adapter.execute_one(profile, sql, model_name=model_name,
                                     auto_begin=False)
 
-                adapter.release_connection(profile, model_name)
+            adapter.release_connection(profile, model_name)
 
     @classmethod
     def safe_run_hooks(cls, project, adapter, flat_graph, hook_type):
