@@ -390,13 +390,8 @@ class DefaultAdapter(object):
         return profile.get('schema')
 
     @classmethod
-    def get_connection(cls, profile, name=None, recache_if_missing=True):
+    def get_connection(cls, profile, name='master', recache_if_missing=True):
         global connections_in_use
-
-        if name is None:
-            # if a name isn't specified, we'll re-use a single handle
-            # named 'master'
-            name = 'master'
 
         if connections_in_use.get(name):
             return connections_in_use.get(name)
@@ -481,7 +476,7 @@ class DefaultAdapter(object):
             lock.release()
 
     @classmethod
-    def release_connection(cls, profile, name):
+    def release_connection(cls, profile, name='master'):
         global connections_in_use, connections_available, lock
 
         if connections_in_use.get(name) is None:

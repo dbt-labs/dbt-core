@@ -44,6 +44,7 @@ def unflatten(columns):
                     'comment': None,
                     'name': 'table',
                     'type': 'BASE_TABLE'
+                    'schema': 'test_schema',
                 }
                 'columns': [
                     {
@@ -55,9 +56,6 @@ def unflatten(columns):
             }
         }
     }
-
-    TODO: Verify that we want 'name' but not 'schema' inside the metadata
-        (seems to me we would want none or both since both are represented?)
 
     Note: the docstring for DefaultAdapter.get_catalog_for_schemas discusses
     what keys are guaranteed to exist. This method makes use of those keys.
@@ -82,8 +80,8 @@ def unflatten(columns):
         table = schema[table_name]
 
         column = get_stripped_prefix(entry, 'column_')
-        # TODO: is this ok? Is it safe to assume that index is always
-        # representable with long/int?
+        # the index should really never be that big so it's ok to end up
+        # serializing this to JSON (2^53 is the max safe value there)
         column['index'] = bigint(column['index'])
         table['columns'].append(column)
     return structured
@@ -105,10 +103,7 @@ class GenerateTask(BaseTask):
         # TODO: talk to connor/drew about this question.
         try:
             columns = adapter.get_catalog_for_schemas(profile, schemas=None)
-            # TODO: should we uncomment this line to shut up a cranky message
-            # when run with debug? Or make a special name that we pass through
-            # from get_catalog_for_schemas and then pass here?
-            # adapter.release_connection(profile, name='master')
+            adapter.release_connection(profile)
         finally:
             adapter.cleanup_connections()
 
