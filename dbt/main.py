@@ -355,7 +355,6 @@ def parse_args(args):
     compile_sub = subs.add_parser('compile', parents=[base_subparser])
     compile_sub.set_defaults(cls=compile_task.CompileTask, which='compile')
 
-
     for sub in [run_sub, compile_sub]:
         sub.add_argument(
             '--models',

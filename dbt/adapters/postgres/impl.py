@@ -179,14 +179,8 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
 
     @classmethod
     def get_catalog_for_schemas(cls, profile, schemas=None):
-        """Get the catalog information for a given profile and list of
-        schemas. If no schemas are given, return all schemas.
-        Returns a list of dictionaries, each one representing a single column.
-
-        TODO: document the minimum guaranteed information callers can expect
-            (what keys are in each dict, basically)
-        """
-        # from https://github.com/fishtown-analytics/dbt/issues/763#issuecomment-387490363
+        # TODO: we want to move this into separate files that users can modify
+        # so they can generate their own.
         sql = """
             with tables as (
             select
