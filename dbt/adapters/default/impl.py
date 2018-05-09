@@ -276,8 +276,7 @@ class DefaultAdapter(object):
         schemas. If no schemas are given, return all schemas.
         Returns a list of dictionaries, each one representing a single column.
 
-        TODO: document the minimum guaranteed information callers can expect
-            (what keys are in each dict, basically)
+        Required keys in the output: table_schema, table_name, column_index
         """
         raise NotImplementedError()
 

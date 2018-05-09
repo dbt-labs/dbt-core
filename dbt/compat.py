@@ -10,8 +10,10 @@ except NameError:
 
 if WHICH_PYTHON == 2:
     basestring = basestring
+    bigint = long
 else:
     basestring = str
+    bigint = int
 
 
 def to_unicode(s):
