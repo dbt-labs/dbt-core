@@ -1,7 +1,6 @@
 import json
 import os
 
-from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.adapters.factory import get_adapter
 from dbt.clients.system import write_file
 from dbt.compat import bigint

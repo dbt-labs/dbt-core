@@ -216,7 +216,6 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
             where table_schema != 'information_schema'
               and table_schema not like 'pg_%'
         """.strip()
-        # TODO: make sure I can just ignore status.
         _, results = cls.execute(profile, sql, fetch=True)
         # ok, have an agate.Table now consisting of my results. Filter out
         # schemas if necessary (this should probably happen in SQL, right?).

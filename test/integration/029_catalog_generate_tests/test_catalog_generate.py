@@ -4,6 +4,7 @@ import os
 from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 
+
 class TestCatalogGenerate(DBTIntegrationTest):
 
     def setUp(self):
@@ -27,7 +28,6 @@ class TestCatalogGenerate(DBTIntegrationTest):
         }
 
     @attr(type='postgres')
-    @attr(type='catalog')
     def test_simple_generate(self):
         self.run_dbt(["catalog", "generate"])
         self.assertTrue(os.path.exists('./target/catalog.json'))
