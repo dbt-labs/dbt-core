@@ -30,32 +30,33 @@ def unflatten(columns):
             'column_name': 'id',
             'column_type': 'integer',
             'table_comment': None,
-            'table_name': 'test_table,
+            'table_name': 'test_table',
             'table_schema': 'test_schema',
             'table_type': 'BASE TABLE'
         }]
 
     unflatten will convert them into a dict with this nested structure:
 
-    {
-        'test_schema': {
-            'test_table': {
-                'metadata': {
-                    'comment': None,
-                    'name': 'table',
-                    'type': 'BASE_TABLE'
-                    'schema': 'test_schema',
-                }
-                'columns': [
-                    {
-                        'type': 'integer',
+        {
+            'test_schema': {
+                'test_table': {
+                    'metadata': {
                         'comment': None,
-                        'index': 1,
-                    }
-                ]
+                        'name': 'test_table',
+                        'type': 'BASE TABLE',
+                        'schema': 'test_schema',
+                    },
+                    'columns': [
+                        {
+                            'type': 'integer',
+                            'comment': None,
+                            'index': bigint(1),
+                            'name': 'id'
+                        }
+                    ]
+                }
             }
         }
-    }
 
     Note: the docstring for DefaultAdapter.get_catalog_for_schemas discusses
     what keys are guaranteed to exist. This method makes use of those keys.
@@ -75,7 +76,6 @@ def unflatten(columns):
 
         if table_name not in schema:
             metadata = get_stripped_prefix(entry, 'table_')
-            metadata.pop('schema')
             schema[table_name] = {'metadata': metadata, 'columns': []}
         table = schema[table_name]
 
