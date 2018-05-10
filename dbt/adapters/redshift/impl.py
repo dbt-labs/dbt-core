@@ -20,35 +20,42 @@ class RedshiftAdapter(PostgresAdapter):
         return 'getdate()'
 
     @classmethod
+    def get_tmp_cluster_credentials(cls, config):
+        creds = config.copy()
+
+        cluster_id = creds.get('cluster_id')
+        if not cluster_id:
+            error = '`cluster_id` must be set in profile if IAM authentication method selected'
+            raise dbt.exceptions.FailedToConnectException(error)
+
+        client = boto3.client('redshift')
+
+        # replace username and password with temporary redshift credentials
+        try:
+            cluster_creds = client.get_cluster_credentials(DbUser=creds.get('user'),
+                                                           DbName=creds.get('dbname'),
+                                                           ClusterIdentifier=creds.get('cluster_id'),
+                                                           AutoCreate=False)
+            creds['user'] = cluster_creds.get('DbUser')
+            creds['pass'] = cluster_creds.get('DbPassword')
+
+            return creds
+
+        except client.exceptions.ClientError as e:
+            error = ('Unable to get temporary Redshift cluster credentials: "{}"'.format(str(e)))
+            raise dbt.exceptions.FailedToConnectException(error)
+
+    @classmethod
     def get_redshift_credentials(cls, config):
-        result = config.copy()
+        creds = config.copy()
 
-        method = result.get('method')
+        method = creds.get('method')
 
-        if method == 'database':
-            return (result)
+        if method == 'database' or method is None:   # Support missing method for backwards compatibility
+            return creds
 
         elif method == 'iam':
-            cluster_id = result.get('cluster_id')
-            if not cluster_id:
-                error = '`cluster_id` must be set in profile if IAM authentication method selected'
-                raise dbt.exceptions.FailedToConnectException(error)
-
-            client = boto3.client('redshift')
-
-            # replace username and password with temporary redshift credentials
-            try:
-                cluster_creds = client.get_cluster_credentials(DbUser=result.get('user'),
-                                                               DbName=result.get('dbname'),
-                                                               ClusterIdentifier=result.get('cluster_id'),
-                                                               AutoCreate=False)
-                result['user_tmp'] = cluster_creds.get('DbUser')
-                result['pass_tmp'] = cluster_creds.get('DbPassword')
-            except client.exceptions.ClientError as e:
-                error = ('Unable to get temporary Redshift cluster credentials: "{}"'.format(str(e)))
-                raise dbt.exceptions.FailedToConnectException(error)
-
-            return result
+            return cls.get_tmp_cluster_credentials(creds)
 
         else:
             error = ('Invalid `method` in profile: "{}"'.format(method))
@@ -64,14 +71,12 @@ class RedshiftAdapter(PostgresAdapter):
 
         try:
             credentials = cls.get_redshift_credentials(connection.get('credentials', {}))
-            user = credentials.get('user_tmp') if credentials.get('user_tmp') else credentials.get('user')
-            password = credentials.get('pass_tmp') if credentials.get('pass_tmp') else credentials.get('pass')
 
             handle = psycopg2.connect(
                 dbname=credentials.get('dbname'),
-                user=user,
+                user=credentials.get('user'),
                 host=credentials.get('host'),
-                password=password,
+                password=credentials.get('pass'),
                 port=credentials.get('port'),
                 connect_timeout=10)
 

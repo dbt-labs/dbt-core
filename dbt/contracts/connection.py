@@ -25,11 +25,11 @@ postgres_credentials_contract = Schema({
 
 redshift_auth_methods = ['database', 'iam']
 redshift_credentials_contract = Schema({
-    Required('method'): Any(*redshift_auth_methods),
+    Optional('method'): Any(*redshift_auth_methods),
     Required('dbname'): basestring,
     Required('host'): basestring,
     Required('user'): basestring,
-    Optional('pass'): basestring,
+    Optional('pass'): basestring, # TODO: require if 'database' method selected
     Required('port'): Any(All(int, Range(min=0, max=65535)), basestring),
     Required('schema'): basestring,
     Optional('cluster_id'): basestring,  # TODO: require if 'iam' method selected
