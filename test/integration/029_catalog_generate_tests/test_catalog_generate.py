@@ -38,36 +38,127 @@ class TestCatalogGenerate(DBTIntegrationTest):
         my_schema_name = self.unique_schema()
         self.assertIn(my_schema_name, data)
         my_schema = data[my_schema_name]
-        expected_tables = {
-            'seed', 'seed_config_expected_1', 'seed_config_expected_2',
-            'seed_config_expected_3', 'seed_summary'
-        }
-        self.assertEqual(set(my_schema), expected_tables)
-        expected_summary = {
-            'metadata': {
-                'schema': my_schema_name,
-                'name': 'seed_summary',
-                'type': 'BASE TABLE',
-                'comment': None,
-            },
-            'columns': [
-                {
-                    'name': 'year',
-                    'index': 1,
-                    'type': 'timestamp without time zone',
-                    'comment': None,
-                },
-                {
-                    'name': 'count',
-                    'index': 2,
-                    'type': 'bigint',
+        expected = {
+            'seed': {
+                'metadata': {
+                    'schema': my_schema_name,
+                    'name': 'seed',
+                    'type': 'BASE TABLE',
                     'comment': None
                 },
-            ],
+                'columns': [
+                    {
+                        'name': 'id',
+                        'index': 1,
+                        'type': 'integer',
+                        'comment': None
+                    },
+                    {
+                        'name': 'first_name',
+                        'index': 2,
+                        'type': 'character varying',
+                        'comment': None
+                    },
+                    {
+                        'name': 'email', 'index': 3,
+                        'type': 'character varying',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'ip_address',
+                        'index': 4,
+                        'type': 'character varying',
+                        'comment': None
+                    },
+                    {
+                        'name': 'updated_at',
+                        'index': 5,
+                        'type': 'timestamp without time zone',
+                        'comment': None
+                    },
+                ],
+            },
+            'seed_config_expected_1':
+                {
+                    'metadata': {
+                    'schema': my_schema_name,
+                    'name': 'seed_config_expected_1',
+                    'type': 'BASE TABLE',
+                    'comment': None,
+                },
+               'columns': [
+                    {
+                        'name': 'id',
+                        'index': 1,
+                        'type': 'integer',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'first_name',
+                        'index': 2,
+                        'type': 'character varying',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'email',
+                        'index': 3,
+                        'type': 'character varying',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'ip_address',
+                        'index': 4,
+                        'type': 'character varying',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'updated_at',
+                        'index': 5,
+                        'type': 'timestamp without time zone',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'c1',
+                        'index': 6,
+                        'type': 'text',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'c2',
+                        'index': 7,
+                        'type': 'text',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'some_bool',
+                        'index': 8,
+                        'type': 'text',
+                        'comment': None,
+                    },
+                ],
+            },
+            'seed_summary': {
+                'metadata': {
+                    'schema': my_schema_name,
+                    'name': 'seed_summary',
+                    'type': 'BASE TABLE',
+                    'comment': None
+                },
+                'columns': [
+                    {
+                        'name': 'year',
+                        'index': 1,
+                        'type': 'timestamp without time zone',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'count',
+                        'index': 2,
+                        'type': 'bigint',
+                        'comment': None,
+                    },
+                ]
+            }
         }
-        self.assertEqual(expected_summary, my_schema_name)
 
-
-
-
-
+        self.assertEqual(expected, my_schema)
