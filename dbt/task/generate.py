@@ -10,6 +10,9 @@ import dbt.ui.printer
 from dbt.task.base_task import BaseTask
 
 
+CATALOG_FILENAME = 'catalog.json'
+
+
 def get_stripped_prefix(source, prefix):
     """Go through source, extracting every key/value pair where the key starts
     with the given prefix.
@@ -93,8 +96,8 @@ class GenerateTask(BaseTask):
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
 
-        # To get a list of schemas, we'd need to generate the parsed manifest
-        # for now just pass None.
+        # To get a list of schemas, we'd need to generate the parsed manifest.
+        # For now just pass None.
         try:
             columns = adapter.get_catalog_for_schemas(profile, schemas=None)
             adapter.release_connection(profile)
@@ -103,7 +106,7 @@ class GenerateTask(BaseTask):
 
         results = unflatten(columns)
 
-        path = os.path.join(self.project['target-path'], 'catalog.json')
+        path = os.path.join(self.project['target-path'], CATALOG_FILENAME)
         write_file(path, json.dumps(results))
 
         dbt.ui.printer.print_timestamped_line(
