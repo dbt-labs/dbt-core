@@ -271,6 +271,16 @@ class DefaultAdapter(object):
         return {col.name: col for col in columns}
 
     @classmethod
+    def get_catalog_for_schemas(cls, profile, schemas=None):
+        """Get the catalog information for a given profile and list of
+        schemas. If no schemas are given, return all schemas.
+        Returns a list of dictionaries, each one representing a single column.
+
+        Required keys in the output: table_schema, table_name, column_index
+        """
+        raise NotImplementedError()
+
+    @classmethod
     def expand_target_column_types(cls, profile, project_cfg,
                                    temp_table,
                                    to_schema, to_table,
@@ -471,7 +481,7 @@ class DefaultAdapter(object):
             lock.release()
 
     @classmethod
-    def release_connection(cls, profile, name):
+    def release_connection(cls, profile, name='master'):
         global connections_in_use, connections_available, lock
 
         if connections_in_use.get(name) is None:
