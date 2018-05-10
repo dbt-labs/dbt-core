@@ -102,62 +102,62 @@ class RedshiftAdapter(PostgresAdapter):
                 schema_name=schema_name)
 
         sql = """
-            WITH bound_views AS (
-                SELECT
+            with bound_views as (
+                select
                     ordinal_position,
                     table_schema,
                     column_name,
                     data_type,
                     character_maximum_length,
-                    numeric_precision || ',' || numeric_scale AS numeric_size
+                    numeric_precision || ',' || numeric_scale as numeric_size
 
-                FROM information_schema.columns
-                WHERE table_name = '{table_name}'
+                from information_schema.columns
+                where table_name = '{table_name}'
             ),
 
-            unbound_views AS (
-                SELECT
+            unbound_views as (
+                select
                     ordinal_position,
                     view_schema,
                     col_name,
-                    CASE
-                        WHEN col_type ILIKE 'character varying%' THEN
+                    case
+                        when col_type ilike 'character varying%' then
                             'character varying'
-                        WHEN col_type ILIKE 'numeric%' THEN 'numeric'
-                        ELSE col_type
-                    END AS col_type,
-                    CASE
-                        WHEN col_type LIKE 'character%'
-                        THEN nullif(REGEXP_SUBSTR(col_type, '[0-9]+'), '')::INT
-                        ELSE NULL
-                    END AS character_maximum_length,
-                    CASE
-                        WHEN col_type LIKE 'numeric%'
-                        THEN nullif(REGEXP_SUBSTR(col_type, '[0-9,]+'), '')
-                        ELSE NULL
-                    END AS numeric_size
+                        when col_type ilike 'numeric%' then 'numeric'
+                        else col_type
+                    end as col_type,
+                    case
+                        when col_type like 'character%'
+                        then nullif(REGEXP_SUBSTR(col_type, '[0-9]+'), '')::int
+                        else null
+                    end as character_maximum_length,
+                    case
+                        when col_type like 'numeric%'
+                        then nullif(REGEXP_SUBSTR(col_type, '[0-9,]+'), '')
+                        else null
+                    end as numeric_size
 
-                FROM pg_get_late_binding_view_cols()
-                cols(view_schema NAME, view_name NAME, col_name NAME,
-                     col_type VARCHAR, ordinal_position INT)
-                WHERE view_name = '{table_name}'
+                from pg_get_late_binding_view_cols()
+                cols(view_schema name, view_name name, col_name name,
+                     col_type varchar, ordinal_position int)
+                where view_name = '{table_name}'
             ),
 
-            unioned AS (
-                SELECT * FROM bound_views
-                UNION ALL
-                SELECT * FROM unbound_views
+            unioned as (
+                select * from bound_views
+                union all
+                select * from unbound_views
             )
 
-            SELECT
+            select
                 column_name,
                 data_type,
                 character_maximum_length,
                 numeric_size
 
-            FROM unioned
-            WHERE {table_schema_filter}
-            ORDER BY ordinal_position
+            from unioned
+            where {table_schema_filter}
+            order by ordinal_position
         """.format(table_name=table_name,
                    table_schema_filter=table_schema_filter).strip()
         return sql
