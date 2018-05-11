@@ -3,3 +3,4 @@ name: dbt
 version: 1.0
 
 macro-paths: ["macros"]
+operation-paths: ["operations"]

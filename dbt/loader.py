@@ -12,7 +12,6 @@ class GraphLoader(object):
     @classmethod
     def load_all(cls, root_project, all_projects):
         macros = MacroLoader.load_all(root_project, all_projects)
-        nodes = {}
         for loader in cls._LOADERS:
             nodes.update(loader.load_all(root_project, all_projects, macros))
 
@@ -83,6 +82,21 @@ class ModelLoader(ResourceLoader):
                 relative_dirs=project.get('source-paths', []),
                 resource_type=NodeType.Model,
                 macros=macros)
+
+
+class OperationLoader(ResourceLoader):
+
+    @classmethod
+    def load_project(cls, root_project, all_projects, project, project_name,
+                     macros):
+        return dbt.parser.load_and_parse_sql(
+            package_name=project_name,
+            root_project=root_project,
+            all_projects=all_projects,
+            root_dir=project.get('project-root'),
+            relative_dirs=project.get('operation-paths', []),
+            resource_type=NodeType.Operation,
+            macros=macros)
 
 
 class AnalysisLoader(ResourceLoader):
@@ -180,3 +194,4 @@ GraphLoader.register(DataTestLoader)
 GraphLoader.register(RunHookLoader)
 GraphLoader.register(ArchiveLoader)
 GraphLoader.register(SeedLoader)
+GraphLoader.register(OperationLoader)
