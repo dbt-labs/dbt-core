@@ -61,6 +61,25 @@ class RunModelResult(object):
     def skipped(self):
         return self.skip
 
+class RunOperationResult(RunModelResult):
+    def __init__(self, node, error=None, skip=False, status=None,
+                 failed=None, execution_time=0, returned=None):
+        super(RunOperationResult, self).__init__(node, error, skip, status,
+                                             failed, execution_time)
+        self.returned = returned
+
+    @property
+    def errored(self):
+        return self.error is not None
+
+    @property
+    def failed(self):
+        return self.fail
+
+    @property
+    def skipped(self):
+        return self.skip
+
 
 class BaseRunner(object):
     print_header = True
@@ -527,23 +546,42 @@ class OperationRunner(ModelRunner):
     def before_execute(self):
         pass
 
-    def execute(self, compiled_node, flat_graph):
-        # remember, compiled node really isn't compiled!
+    def execute(self, model, flat_graph):
+        context = dbt.context.runtime.generate(
+            model,
+            self.project.cfg,
+            flat_graph
+        )
+
+        # TODO: this is probably wrong. I made this up b/c it sounds nice
+        operation_name = model.name
+        operation = dbt.utils.get_operation(flat_graph, operation_name)
+
+        operation.generator(context)()
+
+        # TODO: this is probably wrong too, copied from CompileRunner.
+        # I think we need to end up passing the agate table out, need to
+        # understand how that works (and where status comes in now, I don't
+        # get that).
+        result = context['load_result']('main')
+        # TODO: thing I also don't understand. If we switch to RunManager,
+        # etc, how can I get the result back out? Callers (safe_run, etc) care
+        # about RunModelResult having a compiled node object. May need to
+        # refactor safe_run or subclass RunModelResult?
+
+        # get the schemas to filter by, though it seems like the caller should
+        # really do this as another op and then combine the info approriately
+        # TODO: check on this
         adapter = get_adapter(self.profile)
 
-        schemas = adapter.get_existing_schemas(self.profile, self.project)
-        # I'm not sure this is right. I think we might have to do a compile
-        # pass to get jinja run across it, or something?
-        sql = compiled_node.get('raw_sql')
-
         try:
-            _, result = adapter.execute(profile, sql, fetch=True)
-            adapter.release_connection(profile)
+            schemas = adapter.get_existing_schemas(self.profile, self.project)
+            adapter.release_connection(self.profile)
         finally:
             adapter.cleanup_connections()
 
         result = result.where(lambda r: r['table_schema'] in schemas)
-        return [dict(zip(result.column_names, row)) for row in result]
+        return RunOperationResult(model, returned=result)
 
     def after_execute(self, result):
         pass

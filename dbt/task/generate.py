@@ -105,7 +105,13 @@ class GenerateTask(BaseTask):
             "tags": []
         }
 
-        results = runner.run(query, OperationRunner)
+        # we get back an agate table inside our run result.
+        run_result = runner.run(query, OperationRunner)
+        agate_table = run_result.returned
+        results = [
+            dict(zip(agate_table.column_names, row))
+            for row in agate_table
+        ]
         results = unflatten(results)
 
         profile = self.project.run_environment()
