@@ -4,6 +4,7 @@ import os
 from dbt.adapters.factory import get_adapter
 from dbt.clients.system import write_file
 from dbt.compat import bigint
+from dbt.node_runners import OperationRunner
 import dbt.ui.printer
 
 from dbt.task.base_task import BaseTask
@@ -104,7 +105,7 @@ class GenerateTask(BaseTask):
             "tags": []
         }
 
-        results = runner.run(query, GenerateRunner)
+        results = runner.run(query, OperationRunner)
         results = unflatten(results)
 
         profile = self.project.run_environment()
