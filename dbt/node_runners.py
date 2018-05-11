@@ -3,6 +3,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.exceptions import NotImplementedException
 from dbt.utils import get_nodes_by_tags
 from dbt.node_types import NodeType, RunHookType
+from dbt.adapters.factory import get_adapter
 
 import dbt.clients.jinja
 import dbt.context.runtime
@@ -516,3 +517,33 @@ class SeedRunner(ModelRunner):
                                               schema_name,
                                               self.node_index,
                                               self.num_nodes)
+
+
+class OperationRunner(ModelRunner):
+    def compile(self, flat_graph):
+        # Operations don't compile, I think
+        return self.node
+
+    def before_execute(self):
+        pass
+
+    def execute(self, compiled_node, flat_graph):
+        # remember, compiled node really isn't compiled!
+        adapter = get_adapter(self.profile)
+
+        schemas = adapter.get_existing_schemas(self.profile, self.project)
+        # I'm not sure this is right. I think we might have to do a compile
+        # pass to get jinja run across it, or something?
+        sql = compiled_node.get('raw_sql')
+
+        try:
+            _, result = adapter.execute(profile, sql, fetch=True)
+            adapter.release_connection(profile)
+        finally:
+            adapter.cleanup_connections()
+
+        result = result.where(lambda r: r['table_schema'] in schemas)
+        return [dict(zip(result.column_names, row)) for row in result]
+
+    def after_execute(self, result):
+        pass

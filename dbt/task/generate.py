@@ -92,18 +92,22 @@ def unflatten(columns):
 # derive from BaseTask as I don't really want any result interpretation.
 class GenerateTask(BaseTask):
     def run(self):
+        runner = RunManager(
+            self.project, self.project['target-path'], self.args
+        )
+
+        # TODO: this is probably wrong
+        query = {
+            "include": self.args.models,
+            "exclude": self.args.exclude,
+            "resource_types": NodeType.executable(),
+            "tags": []
+        }
+
+        results = runner.run(query, GenerateRunner)
+        results = unflatten(results)
+
         profile = self.project.run_environment()
-        adapter = get_adapter(profile)
-
-        # To get a list of schemas, we'd need to generate the parsed manifest.
-        # For now just pass None.
-        try:
-            columns = adapter.get_catalog_for_schemas(profile, schemas=None)
-            adapter.release_connection(profile)
-        finally:
-            adapter.cleanup_connections()
-
-        results = unflatten(columns)
 
         path = os.path.join(self.project['target-path'], CATALOG_FILENAME)
         write_file(path, json.dumps(results))

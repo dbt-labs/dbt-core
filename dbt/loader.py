@@ -12,6 +12,7 @@ class GraphLoader(object):
     @classmethod
     def load_all(cls, root_project, all_projects):
         macros = MacroLoader.load_all(root_project, all_projects)
+        nodes = {}
         for loader in cls._LOADERS:
             nodes.update(loader.load_all(root_project, all_projects, macros))
 
