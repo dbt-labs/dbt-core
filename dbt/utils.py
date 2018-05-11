@@ -107,6 +107,11 @@ def find_macro_by_name(flat_graph, target_name, target_package):
                         'macros', [NodeType.Macro])
 
 
+def find_operation_by_name(flat_graph, target_name, target_package):
+    return find_by_name(flat_graph, target_name, target_package,
+                        'macros', [NodeType.Operation])
+
+
 def find_by_name(flat_graph, target_name, target_package, subgraph,
                  nodetype):
     for name, model in flat_graph.get(subgraph).items():
@@ -168,6 +173,15 @@ def get_materialization_macro(flat_graph, materialization_name,
             None)
 
     return macro
+
+
+def get_operation_name(operation_name):
+    return 'operation_{}'.format(operation_name)
+
+
+def get_operation(flat_graph, operation_name):
+    macro_name = get_operation_name(operation_name)
+    return find_operation_by_name(flat_graph, macro_name, None)
 
 
 def load_project_with_profile(source_project, project_dir):
