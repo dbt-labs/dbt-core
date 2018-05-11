@@ -5,6 +5,8 @@ from dbt.adapters.factory import get_adapter
 from dbt.clients.system import write_file
 from dbt.compat import bigint
 from dbt.node_runners import OperationRunner
+from dbt.node_types import NodeType
+from dbt.runner import RunManager
 import dbt.ui.printer
 
 from dbt.task.base_task import BaseTask
@@ -99,9 +101,9 @@ class GenerateTask(BaseTask):
 
         # TODO: this is probably wrong
         query = {
-            "include": self.args.models,
-            "exclude": self.args.exclude,
-            "resource_types": NodeType.executable(),
+            "include": [],
+            "exclude": [],
+            "resource_types": [NodeType.Operation],
             "tags": []
         }
 
