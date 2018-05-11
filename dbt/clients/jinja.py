@@ -164,6 +164,7 @@ def get_template(string, ctx, node=None, capture_macros=False):
             args['undefined'] = create_macro_capture_env(node)
 
         args['extensions'].append(MaterializationExtension)
+        args['extensions'].append(OperationExtension)
 
         env = MacroFuzzEnvironment(**args)
 
