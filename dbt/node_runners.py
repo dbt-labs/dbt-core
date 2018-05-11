@@ -61,11 +61,12 @@ class RunModelResult(object):
     def skipped(self):
         return self.skip
 
+
 class RunOperationResult(RunModelResult):
     def __init__(self, node, error=None, skip=False, status=None,
                  failed=None, execution_time=0, returned=None):
         super(RunOperationResult, self).__init__(node, error, skip, status,
-                                             failed, execution_time)
+                                                 failed, execution_time)
         self.returned = returned
 
     @property
