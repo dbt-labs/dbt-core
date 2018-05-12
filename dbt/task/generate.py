@@ -94,29 +94,44 @@ def unflatten(columns):
 
 # derive from BaseTask as I don't really want any result interpretation.
 class GenerateTask(BaseTask):
+    def get_all_projects(self):
+        # TODO: I copy+pasted this from dbt/compilation.py, refactor!
+        root_project = self.project.cfg
+        all_projects = {root_project.get('name'): root_project}
+        dependency_projects = dbt.utils.dependency_projects(self.project)
+
+        for project in dependency_projects:
+            name = project.cfg.get('name', 'unknown')
+            all_projects[name] = project.cfg
+
+        if dbt.flags.STRICT_MODE:
+            dbt.contracts.project.ProjectList(**all_projects)
+
+        return all_projects
+
     def run(self):
-        runner = RunManager(
-            self.project, self.project['target-path'], self.args
-        )
 
-        # TODO: this is probably wrong
-        query = {
-            "include": [],
-            "exclude": [],
-            "resource_types": [NodeType.Operation],
-            "tags": []
-        }
+        profile = self.project.run_environment()
 
-        # we get back an agate table inside our run result.
-        run_result = runner.run(query, OperationRunner)
+        # From dbt/compilation.py
+        root_project = self.project.cfg
+        all_projects = self.get_all_projects()
+
+        manifest = dbt.loader.GraphLoader.load_all(root_project, all_projects)
+        flat_graph = manifest.to_flat_graph()
+        operation_name = 'adapters.catalog.get_catalog'  # TODO: is it?
+        operation = dbt.utils.get_operation(flat_graph, operation_name)
+
+        adapter = get_adapter(profile)
+
+        runner = OperationRunner(self.project, adapter, operation, 0, 0)
+        run_result = runner.safe_run(flat_graph)
         agate_table = run_result.returned
         results = [
             dict(zip(agate_table.column_names, row))
             for row in agate_table
         ]
         results = unflatten(results)
-
-        profile = self.project.run_environment()
 
         path = os.path.join(self.project['target-path'], CATALOG_FILENAME)
         write_file(path, json.dumps(results))
