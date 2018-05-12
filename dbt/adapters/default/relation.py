@@ -177,7 +177,7 @@ class DefaultRelation(APIObject):
         return cls.create(
             database=profile.get('dbname'),
             schema=node.get('schema'),
-            identifier=node.get('name'),
+            identifier=node.get('alias'),
             table_name=table_name,
             **kwargs)
 

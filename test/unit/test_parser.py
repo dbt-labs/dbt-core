@@ -92,6 +92,7 @@ class ParserTest(unittest.TestCase):
                  'snowplow': self.snowplow_project_config}),
             {
                 'model.root.model_one': {
+                    'alias': 'model_one',
                     'name': 'model_one',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -150,6 +151,7 @@ class ParserTest(unittest.TestCase):
                  'snowplow': self.snowplow_project_config}),
             {
                 'model.root.model_one': {
+                    'alias': 'model_one',
                     'name': 'model_one',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -191,6 +193,7 @@ class ParserTest(unittest.TestCase):
                 {'root': self.root_project_config}),
             {
                 'model.root.model_one': {
+                    'alias': 'model_one',
                     'name': 'model_one',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -241,6 +244,7 @@ class ParserTest(unittest.TestCase):
                  'snowplow': self.snowplow_project_config}),
             {
                 'model.root.base': {
+                    'alias': 'base',
                     'name': 'base',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -262,6 +266,7 @@ class ParserTest(unittest.TestCase):
                         models, 'base').get('raw_sql')
                 },
                 'model.root.events_tx': {
+                    'alias': 'events_tx',
                     'name': 'events_tx',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -340,6 +345,7 @@ class ParserTest(unittest.TestCase):
                  'snowplow': self.snowplow_project_config}),
             {
                 'model.root.events': {
+                    'alias': 'events',
                     'name': 'events',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -361,6 +367,7 @@ class ParserTest(unittest.TestCase):
                         models, 'events').get('raw_sql')
                 },
                 'model.root.sessions': {
+                    'alias': 'sessions',
                     'name': 'sessions',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -382,6 +389,7 @@ class ParserTest(unittest.TestCase):
                         models, 'sessions').get('raw_sql')
                 },
                 'model.root.events_tx': {
+                    'alias': 'events_tx',
                     'name': 'events_tx',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -403,6 +411,7 @@ class ParserTest(unittest.TestCase):
                         models, 'events_tx').get('raw_sql')
                 },
                 'model.root.sessions_tx': {
+                    'alias': 'sessions_tx',
                     'name': 'sessions_tx',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -424,6 +433,7 @@ class ParserTest(unittest.TestCase):
                         models, 'sessions_tx').get('raw_sql')
                 },
                 'model.root.multi': {
+                    'alias': 'multi',
                     'name': 'multi',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -504,6 +514,7 @@ class ParserTest(unittest.TestCase):
                  'snowplow': self.snowplow_project_config}),
             {
                 'model.snowplow.events': {
+                    'alias': 'events',
                     'name': 'events',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -525,6 +536,7 @@ class ParserTest(unittest.TestCase):
                         models, 'events').get('raw_sql')
                 },
                 'model.snowplow.sessions': {
+                    'alias': 'sessions',
                     'name': 'sessions',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -546,6 +558,7 @@ class ParserTest(unittest.TestCase):
                         models, 'sessions').get('raw_sql')
                 },
                 'model.snowplow.events_tx': {
+                    'alias': 'events_tx',
                     'name': 'events_tx',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -567,6 +580,7 @@ class ParserTest(unittest.TestCase):
                         models, 'events_tx').get('raw_sql')
                 },
                 'model.snowplow.sessions_tx': {
+                    'alias': 'sessions_tx',
                     'name': 'sessions_tx',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -588,6 +602,7 @@ class ParserTest(unittest.TestCase):
                         models, 'sessions_tx').get('raw_sql')
                 },
                 'model.root.multi': {
+                    'alias': 'multi',
                     'name': 'multi',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -772,6 +787,7 @@ class ParserTest(unittest.TestCase):
                  'snowplow': self.snowplow_project_config}),
             {
                 'model.root.model_one': {
+                    'alias': 'model_one',
                     'name': 'model_one',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -854,6 +870,7 @@ class ParserTest(unittest.TestCase):
                  'snowplow': self.snowplow_project_config}),
             {
                 'model.root.table': {
+                    'alias': 'table',
                     'name': 'table',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -875,6 +892,7 @@ class ParserTest(unittest.TestCase):
                         models, 'table').get('raw_sql')
                 },
                 'model.root.ephemeral': {
+                    'alias': 'ephemeral',
                     'name': 'ephemeral',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -896,6 +914,7 @@ class ParserTest(unittest.TestCase):
                         models, 'ephemeral').get('raw_sql')
                 },
                 'model.root.view': {
+                    'alias': 'view',
                     'name': 'view',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -1045,6 +1064,7 @@ class ParserTest(unittest.TestCase):
                  'snowplow': self.snowplow_project_config}),
             {
                 'model.root.table': {
+                    'alias': 'table',
                     'name': 'table',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -1066,6 +1086,7 @@ class ParserTest(unittest.TestCase):
                         models, 'table').get('raw_sql')
                 },
                 'model.root.ephemeral': {
+                    'alias': 'ephemeral',
                     'name': 'ephemeral',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -1087,6 +1108,7 @@ class ParserTest(unittest.TestCase):
                         models, 'ephemeral').get('raw_sql')
                 },
                 'model.root.view': {
+                    'alias': 'view',
                     'name': 'view',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -1108,6 +1130,7 @@ class ParserTest(unittest.TestCase):
                         models, 'view').get('raw_sql')
                 },
                 'model.snowplow.multi_sort': {
+                    'alias': 'multi_sort',
                     'name': 'multi_sort',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -1160,6 +1183,7 @@ class ParserTest(unittest.TestCase):
                  'snowplow': self.snowplow_project_config}),
             {
                 'test.root.not_null_model_one_id': {
+                    'alias': 'not_null_model_one_id',
                     'name': 'not_null_model_one_id',
                     'schema': 'analytics',
                     'resource_type': 'test',
@@ -1181,6 +1205,7 @@ class ParserTest(unittest.TestCase):
                     'raw_sql': not_null_sql,
                 },
                 'test.root.unique_model_one_id': {
+                    'alias': 'unique_model_one_id',
                     'name': 'unique_model_one_id',
                     'schema': 'analytics',
                     'resource_type': 'test',
@@ -1201,6 +1226,7 @@ class ParserTest(unittest.TestCase):
                     'raw_sql': unique_sql,
                 },
                 'test.root.accepted_values_model_one_id__a__b': {
+                    'alias': 'accepted_values_model_one_id__a__b',
                     'name': 'accepted_values_model_one_id__a__b',
                     'schema': 'analytics',
                     'resource_type': 'test',
@@ -1223,6 +1249,7 @@ class ParserTest(unittest.TestCase):
                     'raw_sql': accepted_values_sql,
                 },
                 'test.root.relationships_model_one_id__id__ref_model_two_': {
+                    'alias': 'relationships_model_one_id__id__ref_model_two_',
                     'name': 'relationships_model_one_id__id__ref_model_two_',
                     'schema': 'analytics',
                     'resource_type': 'test',
@@ -1315,6 +1342,7 @@ another_model:
                  'snowplow': self.snowplow_project_config}),
             {
                 'test.root.no_events': {
+                    'alias': 'no_events',
                     'name': 'no_events',
                     'schema': 'analytics',
                     'resource_type': 'test',
@@ -1430,6 +1458,7 @@ another_model:
                  'snowplow': self.snowplow_project_config}),
             {
                 'model.root.model_one': {
+                    'alias': 'model_one',
                     'name': 'model_one',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -1472,6 +1501,7 @@ another_model:
                  'snowplow': self.snowplow_project_config}),
             {
                 'model.root.model_one': {
+                    'alias': 'model_one',
                     'name': 'model_one',
                     'schema': 'analytics',
                     'resource_type': 'model',

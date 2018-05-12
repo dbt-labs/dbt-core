@@ -1,5 +1,5 @@
 {% materialization table, default %}
-  {%- set identifier = model['name'] -%}
+  {%- set identifier = model['alias'] -%}
   {%- set tmp_identifier = identifier + '__dbt_tmp' -%}
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
 

@@ -156,7 +156,7 @@ def print_model_result_line(result, schema_name, index, total):
             info=info,
             model_type=get_materialization(model),
             schema=schema_name,
-            relation=model.get('name')),
+            relation=model.get('alias')),
         status,
         index,
         total,
@@ -187,7 +187,7 @@ def print_seed_result_line(result, schema_name, index, total):
         "{info} seed file {schema}.{relation}".format(
             info=info,
             schema=schema_name,
-            relation=model.get('name')),
+            relation=model.get('alias')),
         status,
         index,
         total,
