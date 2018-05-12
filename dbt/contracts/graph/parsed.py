@@ -1,5 +1,5 @@
-from voluptuous import Schema, Required, All, Any, Length, ALLOW_EXTRA
-from voluptuous import Optional
+from voluptuous import Schema, Required, Optional, All, Any, Length
+from voluptuous import ALLOW_EXTRA
 
 import dbt.exceptions
 
@@ -34,6 +34,7 @@ parsed_node_contract = unparsed_node_contract.extend({
     Required('unique_id'): All(basestring, Length(min=1, max=255)),
     Required('fqn'): All(list, [All(basestring)]),
     Required('schema'): basestring,
+    Optional('alias'): basestring,
 
     Required('refs'): [All(tuple)],
 

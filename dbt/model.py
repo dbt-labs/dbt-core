@@ -14,6 +14,7 @@ class SourceConfig(object):
     AppendListFields = ['pre-hook', 'post-hook']
     ExtendDictFields = ['vars', 'column_types', 'quoting']
     ClobberFields = [
+        'alias',
         'schema',
         'enabled',
         'materialized',

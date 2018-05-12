@@ -1,7 +1,7 @@
 {% macro dbt__incremental_delete(target_relation, tmp_relation) -%}
 
   {%- set unique_key = config.require('unique_key') -%}
-  {%- set identifier = model['name'] -%}
+  {%- set identifier = model['alias'] -%}
 
   delete
   from {{ target_relation }}
@@ -16,8 +16,8 @@
   {%- set sql_where = config.require('sql_where') -%}
   {%- set unique_key = config.get('unique_key') -%}
 
-  {%- set identifier = model['name'] -%}
-  {%- set tmp_identifier = model['name'] + '__dbt_incremental_tmp' -%}
+  {%- set identifier = model['alias'] -%}
+  {%- set tmp_identifier = identifier + '__dbt_incremental_tmp' -%}
 
   {%- set existing_relations = adapter.list_relations(schema=schema) -%}
   {%- set old_relation = adapter.get_relation(relations_list=existing_relations,

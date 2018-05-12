@@ -89,7 +89,7 @@ class BigQueryRelation(DefaultRelation):
         return cls.create(
             project=profile.get('project'),
             schema=node.get('schema'),
-            identifier=node.get('name'),
+            identifier=node.get('alias'),
             **kwargs)
 
     @classmethod

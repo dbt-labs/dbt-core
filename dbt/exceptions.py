@@ -164,6 +164,10 @@ This typically happens when ref() is placed within a conditional block.
 To fix this, add the following hint to the top of the model "{model_name}":
 
 -- depends_on: {ref_string}"""
+    # This explicitly references model['name'], instead of model['alias'], for
+    # better error messages. Ex. If models foo_users and bar_users are aliased
+    # to 'users', in their respective schemas, then you would want to see
+    # 'bar_users' in your error messge instead of just 'users'.
     error_msg = base_error_msg.format(
         model_name=model['name'],
         model_path=model['path'],

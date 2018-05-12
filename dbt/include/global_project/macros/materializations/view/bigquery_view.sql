@@ -1,6 +1,6 @@
 {% materialization view, adapter='bigquery' -%}
 
-  {%- set identifier = model['name'] -%}
+  {%- set identifier = model['alias'] -%}
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
 
   {%- set existing_relations = adapter.list_relations(schema=schema) -%}
