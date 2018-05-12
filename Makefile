@@ -20,3 +20,17 @@ test-integration:
 test-quick:
 	@echo "Integration test run starting..."
 	@time docker-compose run test tox -e integration-postgres-py36 -- -x
+
+clean:
+	rm -f .coverage
+	rm -rf .eggs/
+	rm -rf .tox/
+	rm -rf build/
+	rm -rf dbt.egg-info/
+	rm -f dbt_project.yml
+	rm -rf dist/
+	rm -f htmlcov/*.{css,html,js,json,png}
+	rm -rf logs/
+	rm -rf target/
+	find . -type f -name '*.pyc' -delete
+	find . -type d -name '__pycache__' -depth -delete
