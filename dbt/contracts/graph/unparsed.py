@@ -63,8 +63,9 @@ UNPARSED_NODE_CONTRACT = deep_merge(
                     NodeType.Model,
                     NodeType.Test,
                     NodeType.Analysis,
-                    # TODO: added this to ParsedMacro, does that mean we don't
-                    # need it here anymore?
+                    # Note: Hooks fail if you remove this, even though it's
+                    # also allowed in ParsedMacro, which seems wrong.
+                    # Maybe need to move hook operations into macros?
                     NodeType.Operation,
                     NodeType.Seed,
                     # we need this if parse_node is going to handle archives.
