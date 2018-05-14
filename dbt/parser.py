@@ -126,7 +126,7 @@ def parse_macro_file(macro_file_path,
                      package_name,
                      resource_type,
                      tags=None,
-                     context=None,):
+                     context=None):
 
     logger.debug("Parsing {}".format(macro_file_path))
 

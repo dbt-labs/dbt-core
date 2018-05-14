@@ -64,8 +64,7 @@ def unflatten(columns):
             }
         }
 
-    Note: the docstring for DefaultAdapter.get_catalog_for_schemas discusses
-    what keys are guaranteed to exist. This method makes use of those keys.
+    Required keys in each column: table_schema, table_name, column_index
 
     Keys prefixed with 'column_' end up in per-column data and keys prefixed
     with 'table_' end up in table metadata. Keys without either prefix are
