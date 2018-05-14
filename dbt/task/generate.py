@@ -4,6 +4,7 @@ import os
 from dbt.adapters.factory import get_adapter
 from dbt.clients.system import write_file
 from dbt.compat import bigint
+from dbt.include import GLOBAL_DBT_MODULES_PATH
 from dbt.node_runners import OperationRunner
 from dbt.node_types import NodeType
 from dbt.runner import RunManager
@@ -95,10 +96,13 @@ def unflatten(columns):
 # derive from BaseTask as I don't really want any result interpretation.
 class GenerateTask(BaseTask):
     def get_all_projects(self):
-        # TODO: I copy+pasted this from dbt/compilation.py, refactor!
         root_project = self.project.cfg
         all_projects = {root_project.get('name'): root_project}
-        dependency_projects = dbt.utils.dependency_projects(self.project)
+        # we only need to load the global deps. We haven't compiled, so our
+        # project['module-path'] does not exist.
+        dependency_projects = dbt.utils.dependencies_for_path(
+            self.project, GLOBAL_DBT_MODULES_PATH
+        )
 
         for project in dependency_projects:
             name = project.cfg.get('name', 'unknown')
@@ -110,7 +114,6 @@ class GenerateTask(BaseTask):
         return all_projects
 
     def run(self):
-
         profile = self.project.run_environment()
 
         # From dbt/compilation.py
@@ -119,7 +122,7 @@ class GenerateTask(BaseTask):
 
         manifest = dbt.loader.GraphLoader.load_all(root_project, all_projects)
         flat_graph = manifest.to_flat_graph()
-        operation_name = 'adapters.catalog.get_catalog'  # TODO: is it?
+        operation_name = 'get_catalog_data'
         operation = dbt.utils.get_operation(flat_graph, operation_name)
 
         adapter = get_adapter(profile)

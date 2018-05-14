@@ -100,6 +100,9 @@ def _add_macros(context, model, flat_graph):
     return context
 
 
+# TODO: add _add_operations here?
+
+
 def _add_tracking(context):
     if dbt.tracking.active_user is not None:
         context = dbt.utils.merge(context, {
@@ -149,6 +152,7 @@ def _env_var(var, default=None):
 
 def _store_result(sql_results):
     def call(name, status, agate_table=None):
+        print('in store_result call, name={}'.format(name))
         if agate_table is None:
             agate_table = dbt.clients.agate_helper.empty_table()
 
@@ -164,6 +168,7 @@ def _store_result(sql_results):
 
 def _load_result(sql_results):
     def call(name):
+        print('sql_results={}'.format(sql_results))
         return sql_results.get(name)
 
     return call
@@ -201,7 +206,7 @@ class Var(object):
         self.overrides = overrides
 
         if isinstance(model, dict) and model.get('unique_id'):
-            local_vars = model.get('config', {}).get('vars')
+            local_vars = model.get('config', {}).get('vars', {})
             self.model_name = model.get('name')
         else:
             # still used for wrapping

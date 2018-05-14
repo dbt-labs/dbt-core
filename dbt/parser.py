@@ -157,7 +157,7 @@ def parse_macro_file(macro_file_path,
         if type(item) == jinja2.runtime.Macro:
             name = key.replace(dbt.utils.MACRO_PREFIX, '')
 
-            unique_id = get_path(NodeType.Macro,
+            unique_id = get_path(resource_type,
                                  package_name,
                                  name)
 

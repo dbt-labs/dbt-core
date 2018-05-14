@@ -548,14 +548,15 @@ class OperationRunner(ModelRunner):
         pass
 
     def execute(self, model, flat_graph):
-        context = dbt.context.runtime.generate(
-            model,
+        context = dbt.context.parser.generate(
+            model.serialize(),
             self.project.cfg,
             flat_graph
         )
 
         # TODO: this is probably wrong. I made this up b/c it sounds nice
-        operation_name = model.name
+        operation_name = model['name']
+        import pdb;pdb.set_trace()
         operation = dbt.utils.get_operation(flat_graph, operation_name)
 
         operation.generator(context)()
@@ -564,7 +565,7 @@ class OperationRunner(ModelRunner):
         # I think we need to end up passing the agate table out, need to
         # understand how that works (and where status comes in now, I don't
         # get that).
-        result = context['load_result']('main')
+        result = context['load_result']('catalog').table
         # TODO: thing I also don't understand. If we switch to RunManager,
         # etc, how can I get the result back out? Callers (safe_run, etc) care
         # about RunModelResult having a compiled node object. May need to

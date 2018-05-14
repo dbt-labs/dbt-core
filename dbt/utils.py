@@ -175,13 +175,16 @@ def get_materialization_macro(flat_graph, materialization_name,
     return macro
 
 
-def get_operation_name(operation_name):
-    return 'operation_{}'.format(operation_name)
+def get_operation_name(operation_name, with_prefix=True):
+    if with_prefix:
+        return get_dbt_macro_name(operation_name)
+    else:
+        return operation_name
 
 
 def get_operation(flat_graph, operation_name):
-    macro_name = get_operation_name(operation_name)
-    return find_operation_by_name(flat_graph, macro_name, None)
+    name = get_operation_name(operation_name, with_prefix=False)
+    return find_operation_by_name(flat_graph, name, None)
 
 
 def load_project_with_profile(source_project, project_dir):
@@ -193,33 +196,38 @@ def load_project_with_profile(source_project, project_dir):
         args=source_project.args)
 
 
-def dependency_projects(project):
+def dependencies_for_path(project, module_path):
+    """Given a module path, yield all dependencies in that path."""
     import dbt.project
+    logger.debug("Loading dependency project from {}".format(module_path))
+
+    for obj in os.listdir(module_path):
+        full_obj = os.path.join(module_path, obj)
+
+        if not os.path.isdir(full_obj) or obj.startswith('__'):
+            # exclude non-dirs and dirs that start with __
+            # the latter could be something like __pycache__
+            # for the global dbt modules dir
+            continue
+
+        try:
+            yield load_project_with_profile(project, full_obj)
+        except dbt.project.DbtProjectError as e:
+            logger.info(
+                "Error reading dependency project at {}".format(
+                    full_obj)
+            )
+            logger.info(str(e))
+
+
+def dependency_projects(project):
     module_paths = [
         GLOBAL_DBT_MODULES_PATH,
         os.path.join(project['project-root'], project['modules-path'])
     ]
 
     for module_path in module_paths:
-        logger.debug("Loading dependency project from {}".format(module_path))
-
-        for obj in os.listdir(module_path):
-            full_obj = os.path.join(module_path, obj)
-
-            if not os.path.isdir(full_obj) or obj.startswith('__'):
-                # exclude non-dirs and dirs that start with __
-                # the latter could be something like __pycache__
-                # for the global dbt modules dir
-                continue
-
-            try:
-                yield load_project_with_profile(project, full_obj)
-            except dbt.project.DbtProjectError as e:
-                logger.info(
-                    "Error reading dependency project at {}".format(
-                        full_obj)
-                )
-                logger.info(str(e))
+        yield from dependencies_for_path(project, module_path)
 
 
 def split_path(path):
