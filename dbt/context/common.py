@@ -152,7 +152,6 @@ def _env_var(var, default=None):
 
 def _store_result(sql_results):
     def call(name, status, agate_table=None):
-        print('in store_result call, name={}'.format(name))
         if agate_table is None:
             agate_table = dbt.clients.agate_helper.empty_table()
 
@@ -168,7 +167,6 @@ def _store_result(sql_results):
 
 def _load_result(sql_results):
     def call(name):
-        print('sql_results={}'.format(sql_results))
         return sql_results.get(name)
 
     return call

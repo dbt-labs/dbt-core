@@ -548,28 +548,20 @@ class OperationRunner(ModelRunner):
         pass
 
     def execute(self, model, flat_graph):
-        context = dbt.context.parser.generate(
+        # even though we haven't compiled, use `runtime.generate` so we can
+        # execute SQL...
+        context = dbt.context.runtime.generate(
             model.serialize(),
             self.project.cfg,
             flat_graph
         )
 
-        # TODO: this is probably wrong. I made this up b/c it sounds nice
         operation_name = model['name']
-        import pdb;pdb.set_trace()
         operation = dbt.utils.get_operation(flat_graph, operation_name)
 
         operation.generator(context)()
 
-        # TODO: this is probably wrong too, copied from CompileRunner.
-        # I think we need to end up passing the agate table out, need to
-        # understand how that works (and where status comes in now, I don't
-        # get that).
-        result = context['load_result']('catalog').table
-        # TODO: thing I also don't understand. If we switch to RunManager,
-        # etc, how can I get the result back out? Callers (safe_run, etc) care
-        # about RunModelResult having a compiled node object. May need to
-        # refactor safe_run or subclass RunModelResult?
+        result = context['load_result']('catalog')
 
         # get the schemas to filter by, though it seems like the caller should
         # really do this as another op and then combine the info approriately
@@ -582,7 +574,7 @@ class OperationRunner(ModelRunner):
         finally:
             adapter.cleanup_connections()
 
-        result = result.where(lambda r: r['table_schema'] in schemas)
+        result = result.table.where(lambda r: r['table_schema'] in schemas)
         return RunOperationResult(model, returned=result)
 
     def after_execute(self, result):

@@ -83,46 +83,8 @@
   {{ exceptions.raise_compiler_error(msg) }}
 {% endmacro %}
 
-{% macro postgres__get_catalog() %}
-  {%- set sql = render("with tables as (
-      select
-          table_schema,
-          table_name,
-          table_type
 
-      from information_schema.tables
-
-      ),
-
-      columns as (
-
-          select
-              table_schema,
-              table_name,
-              null as table_comment,
-
-              column_name,
-              ordinal_position as column_index,
-              data_type as column_type,
-              null as column_comment
-
-
-          from information_schema.columns
-
-      )
-
-      select *
-      from tables
-      join columns using (table_schema, table_name)
-
-      where table_schema != 'information_schema'
-        and table_schema not like 'pg_%'") -%}
-
-  {%- set status, res = adapter.execute(sql, auto_begin=True, fetch=True) -%}
-  {{ store_result('catalog', status=status, agate_table=res) }}
-{% endmacro %}
-
-{% macro postgres__get_catalog_notworking() -%}
+{% macro postgres__get_catalog() -%}
   {%- call statement('catalog', fetch_result=True) -%}
     with tables as (
       select
