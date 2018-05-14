@@ -100,9 +100,6 @@ def _add_macros(context, model, flat_graph):
     return context
 
 
-# TODO: add _add_operations here?
-
-
 def _add_tracking(context):
     if dbt.tracking.active_user is not None:
         context = dbt.utils.merge(context, {
