@@ -5,6 +5,7 @@ import os
 import dbt.flags
 import dbt.parser
 
+from dbt.node_types import NodeType
 
 def get_os_path(unix_path):
     return os.path.normpath(unix_path)
@@ -1349,7 +1350,8 @@ another_model:
             macro_file_path='simple_macro.sql',
             macro_file_contents=macro_file_contents,
             root_path=get_os_path('/usr/src/app'),
-            package_name='root')
+            package_name='root',
+            resource_type=NodeType.Macro)
 
         self.assertTrue(callable(result['macro.root.simple'].generator))
 
@@ -1384,7 +1386,8 @@ another_model:
             macro_file_path='simple_macro.sql',
             macro_file_contents=macro_file_contents,
             root_path=get_os_path('/usr/src/app'),
-            package_name='root')
+            package_name='root',
+            resource_type=NodeType.Macro)
 
         self.assertTrue(callable(result['macro.root.simple'].generator))
 
