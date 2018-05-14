@@ -120,9 +120,7 @@
       where table_schema != 'information_schema'
         and table_schema not like 'pg_%'
   {%- endcall -%}
-  {{ log('trying to load results?', info=True) }}
-  {% set catalog = load_result('catalog') %}
-  {{ log(catalog, info=True) }}
-  {{ return(catalog['table']) }}
-
+  {# There's no point in returning anything as the jinja macro stuff calls #}
+  {# str() on all returns. To get the results, you'll need to use #}
+  {# context['load_result']('catalog') #}
 {%- endmacro %}
