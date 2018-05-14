@@ -227,7 +227,8 @@ def dependency_projects(project):
     ]
 
     for module_path in module_paths:
-        yield from dependencies_for_path(project, module_path)
+        for entry in dependencies_for_path(project, module_path):
+            yield entry
 
 
 def split_path(path):
