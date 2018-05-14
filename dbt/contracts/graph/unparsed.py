@@ -63,6 +63,8 @@ UNPARSED_NODE_CONTRACT = deep_merge(
                     NodeType.Model,
                     NodeType.Test,
                     NodeType.Analysis,
+                    # TODO: added this to ParsedMacro, does that mean we don't
+                    # need it here anymore?
                     NodeType.Operation,
                     NodeType.Seed,
                     # we need this if parse_node is going to handle archives.

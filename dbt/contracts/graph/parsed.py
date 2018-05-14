@@ -182,7 +182,10 @@ PARSED_MACRO_CONTRACT = deep_merge(
                 'maxLength': 127,
             },
             'resource_type': {
-                'enum': [NodeType.Macro],
+                'enum': [
+                    NodeType.Macro,
+                    NodeType.Operation,
+                ],
             },
             'unique_id': {
                 'type': 'string',
