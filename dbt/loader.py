@@ -96,7 +96,7 @@ class OperationLoader(ResourceLoader):
             root_project=root_project,
             all_projects=all_projects,
             root_dir=project.get('project-root'),
-            relative_dirs=project.get('operation-paths', []),
+            relative_dirs=project.get('macro-paths', []),
             resource_type=NodeType.Operation)
 
 

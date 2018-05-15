@@ -50,11 +50,6 @@ data-paths: ["data"]
 # macros. These macros will be globally available to all models in your project
 macro-paths: ['macros']
 
-# operation-paths: Optional. Specify which path(s) dbt should look in to find
-# operations. These macros will be globally available to all models in your
-# project
-operation-paths: ['operations']
-
 # log-path: Optional. Specify which path dbt should write debug logs to.
 log-path: "logs"
 

@@ -21,7 +21,6 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 default_project_cfg = {
     'source-paths': ['models'],
     'macro-paths': ['macros'],
-    'operation-paths': ['operations'],
     'data-paths': ['data'],
     'test-paths': ['test'],
     'target-path': 'target',
