@@ -549,30 +549,37 @@ class OperationRunner(ModelRunner):
 
     def execute(self, model, flat_graph):
         # even though we haven't compiled, use `runtime.generate` so we can
-        # execute SQL...
+        # execute SQL.
+        # TODO: make runtime.generate() support the ParsedMacro model. I think
+        # this is a problem because generate() expects a Node for the model,
+        # not a Macro.
         context = dbt.context.runtime.generate(
             model.serialize(),
             self.project.cfg,
             flat_graph
         )
 
-        operation_name = model['name']
-        operation = dbt.utils.get_operation(flat_graph, operation_name)
+        operation = dbt.utils.get_operation_macro(flat_graph, model.name)
 
+        # TODO: should I get the return value here in case future operations
+        # want to return some string? Jinja (I think) stringifies the results
+        # so it's not super useful. Status, I guess?
         operation.generator(context)()
 
+        # This is a lot of magic, have to know the magic name is 'catalog'.
+        # how can we make this part of the data set? Could we make it the
+        # operation's name/unique ID somehow instead?
+        # result is going to be an AttrDict with attributes 'table', 'data',
+        # and 'status'.
         result = context['load_result']('catalog')
 
         # get the schemas to filter by, though it seems like the caller should
         # really do this as another op and then combine the info approriately
         # TODO: check on this
-        adapter = get_adapter(self.profile)
-
-        try:
-            schemas = adapter.get_existing_schemas(self.profile, self.project)
-            adapter.release_connection(self.profile)
-        finally:
-            adapter.cleanup_connections()
+        schemas = self.adapter.get_existing_schemas(
+            self.profile,
+            self.project
+        )
 
         result = result.table.where(lambda r: r['table_schema'] in schemas)
         return RunOperationResult(model, returned=result)

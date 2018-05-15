@@ -175,15 +175,15 @@ def get_materialization_macro(flat_graph, materialization_name,
     return macro
 
 
-def get_operation_name(operation_name, with_prefix=True):
+def get_operation_macro_name(operation_name, with_prefix=True):
     if with_prefix:
         return get_dbt_macro_name(operation_name)
     else:
         return operation_name
 
 
-def get_operation(flat_graph, operation_name):
-    name = get_operation_name(operation_name, with_prefix=False)
+def get_operation_macro(flat_graph, operation_name):
+    name = get_operation_macro_name(operation_name, with_prefix=False)
     return find_operation_by_name(flat_graph, name, None)
 
 

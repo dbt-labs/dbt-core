@@ -14,6 +14,7 @@ from dbt.task.base_task import BaseTask
 
 
 CATALOG_FILENAME = 'catalog.json'
+OPERATION_NAME = 'get_catalog_data'
 
 
 def get_stripped_prefix(source, prefix):
@@ -112,23 +113,34 @@ class GenerateTask(BaseTask):
 
         return all_projects
 
-    def run(self):
-        profile = self.project.run_environment()
-
-        # From dbt/compilation.py
+    def _get_flat_graph(self):
+        # TODO: I'd like to do this better. We can't use
+        # utils.dependency_projects because it assumes you have compiled your
+        # project (I think?) - it assumes that you have an existing and
+        # populated project['modules-path'], but 'catalog generate' shouldn't
+        # require that. It might be better to suppress the exception in
+        # dependency_projects if that's reasonable, or make it a flag.
         root_project = self.project.cfg
         all_projects = self.get_all_projects()
 
         manifest = dbt.loader.GraphLoader.load_all(root_project, all_projects)
-        flat_graph = manifest.to_flat_graph()
-        operation_name = 'get_catalog_data'
-        operation = dbt.utils.get_operation(flat_graph, operation_name)
+        return manifest.to_flat_graph()
 
-        adapter = get_adapter(profile)
+    def _get_adapter(self):
+        profile = self.project.run_environment()
+        return get_adapter(profile)
 
+    def run(self):
+        flat_graph = self._get_flat_graph()
+        operation = dbt.utils.get_operation_macro(flat_graph, OPERATION_NAME)
+        adapter = self._get_adapter()
+
+        # TODO: this really feels like it should be along the lines of
+        # agate_table = adapter.run_operation(flat_graph, operation)
         runner = OperationRunner(self.project, adapter, operation, 0, 0)
         run_result = runner.safe_run(flat_graph)
         agate_table = run_result.returned
+
         results = [
             dict(zip(agate_table.column_names, row))
             for row in agate_table

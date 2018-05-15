@@ -114,7 +114,7 @@ class OperationExtension(jinja2.ext.Extension):
         while parser.stream.skip_if('comma'):
             target = parser.parse_assign_target(name_only=True)
 
-        node.name = dbt.utils.get_operation_name(operation_name)
+        node.name = dbt.utils.get_operation_macro_name(operation_name)
 
         node.body = parser.parse_statements(('name:endoperation',),
                                             drop_needle=True)
