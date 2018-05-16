@@ -788,14 +788,11 @@ class DefaultAdapter(object):
         """
         operation = manifest.find_operation_by_name(operation_name, None)
 
-        # TODO: make runtime.generate() support the ParsedMacro model. I think
-        # this is a problem because generate() expects a Node for the model,
-        # not a Macro.
         # This causes a reference cycle, as dbt.context.runtime.generate()
         # ends up calling get_adapter, so the import has to be here.
         import dbt.context.runtime
         context = dbt.context.runtime.generate(
-            operation.serialize(),
+            operation,
             project_cfg,
             manifest.to_flat_graph(),
         )
