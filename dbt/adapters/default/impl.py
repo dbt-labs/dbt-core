@@ -778,7 +778,8 @@ class DefaultAdapter(object):
     # Operations involving the manifest
     ###
     @classmethod
-    def run_operation(cls, profile, project_cfg, manifest, operation_name):
+    def run_operation(cls, profile, project_cfg, manifest, operation_name,
+                      result_key):
         """Look the operation identified by operation_name up in the manifest
         and run it.
 
@@ -807,7 +808,7 @@ class DefaultAdapter(object):
         # This is a lot of magic, have to know the magic name is 'catalog'.
         # TODO: How can we make this part of the data set? Could we make it
         # the operation's name/unique ID somehow instead?
-        result = context['load_result']('catalog')
+        result = context['load_result'](result_key)
         return result
 
     ###
