@@ -114,7 +114,23 @@ def find_operation_by_name(flat_graph, target_name, target_package):
 
 def find_by_name(flat_graph, target_name, target_package, subgraph,
                  nodetype):
-    for name, model in flat_graph.get(subgraph).items():
+    return find_in_subgraph_by_name(
+        flat_graph.get(subgraph),
+        target_name,
+        target_package,
+        nodetype)
+
+
+def find_in_subgraph_by_name(subgraph, target_name, target_package, nodetype):
+    """Find an entry in a subgraph by name. Any mapping that implements
+    .items() and maps unique id -> something can be used as the subgraph.
+
+    Names are like:
+        '{nodetype}.{target_package}.{target_name}'
+
+    You can use `None` for the package name as a wildcard.
+    """
+    for name, model in subgraph.items():
         node_parts = name.split('.')
         if len(node_parts) != 3:
             node_type = model.get('resource_type', 'node')

@@ -4,6 +4,7 @@ import pytz
 
 from dbt.adapters.factory import get_adapter
 from dbt.compat import basestring, to_string
+from dbt.node_types import NodeType
 
 import dbt.clients.jinja
 import dbt.clients.agate_helper
@@ -75,6 +76,8 @@ def _add_macros(context, model, flat_graph):
     macros_to_add = {'global': [], 'local': []}
 
     for unique_id, macro in flat_graph.get('macros', {}).items():
+        if macro.get('resource_type') != NodeType.Macro:
+            continue
         package_name = macro.get('package_name')
 
         macro_map = {

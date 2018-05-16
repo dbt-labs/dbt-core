@@ -11,6 +11,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 
 GET_CATALOG_OPERATION_NAME = 'get_catalog_data'
 
+
 class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
 
     @classmethod
@@ -204,8 +205,8 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         return "time"
 
     @classmethod
-    def get_catalog(cls, profile, project_cfg, flat_graph):
-        results = cls.run_operation(profile, project_cfg, flat_graph,
+    def get_catalog(cls, profile, project_cfg, manifest):
+        results = cls.run_operation(profile, project_cfg, manifest,
                                     GET_CATALOG_OPERATION_NAME)
 
         schemas = cls.get_existing_schemas(profile, project_cfg)

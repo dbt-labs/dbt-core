@@ -9,7 +9,6 @@ import dbt.exceptions
 import dbt.flags
 import dbt.schema
 import dbt.clients.agate_helper
-import dbt.context.runtime
 
 from dbt.contracts.connection import Connection
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -775,27 +774,29 @@ class DefaultAdapter(object):
             if isinstance(agate_type, agate_cls):
                 return func(agate_table, col_idx)
 
-
     ###
-    # Operations involving the flat graph
+    # Operations involving the manifest
     ###
     @classmethod
-    def run_operation(cls, profile, project_cfg, flat_graph, operation_name):
-        """Look the operation identified by operation_name up in the flat
-        graph and run it.
+    def run_operation(cls, profile, project_cfg, manifest, operation_name):
+        """Look the operation identified by operation_name up in the manifest
+        and run it.
 
         Return an an AttrDict with three attributes: 'table', 'data', and
             'status'. 'table' is an agate.Table.
         """
-        operation = dbt.utils.get_operation_macro(flat_graph, operation_name)
+        operation = manifest.find_operation_by_name(operation_name, None)
 
         # TODO: make runtime.generate() support the ParsedMacro model. I think
         # this is a problem because generate() expects a Node for the model,
         # not a Macro.
+        # This causes a reference cycle, as dbt.context.runtime.generate()
+        # ends up calling get_adapter, so the import has to be here.
+        import dbt.context.runtime
         context = dbt.context.runtime.generate(
             operation.serialize(),
             project_cfg,
-            flat_graph
+            manifest.to_flat_graph(),
         )
 
         # TODO: should I get the return value here in case future operations
@@ -809,11 +810,10 @@ class DefaultAdapter(object):
         result = context['load_result']('catalog')
         return result
 
-
     ###
     # Abstract methods involving the flat graph
     ###
     @classmethod
-    def get_catalog(cls, profile, project_cfg, flat_graph):
+    def get_catalog(cls, profile, project_cfg, run_operation):
         raise dbt.exceptions.NotImplementedException(
             '`get_catalog` is not implemented for this adapter!')

@@ -111,7 +111,7 @@ class GenerateTask(BaseTask):
 
         return all_projects
 
-    def _get_flat_graph(self):
+    def _get_manifest(self):
         # TODO: I'd like to do this better. We can't use
         # utils.dependency_projects because it assumes you have compiled your
         # project (I think?) - it assumes that you have an existing and
@@ -122,14 +122,14 @@ class GenerateTask(BaseTask):
         all_projects = self.get_all_projects()
 
         manifest = dbt.loader.GraphLoader.load_all(root_project, all_projects)
-        return manifest.to_flat_graph()
+        return manifest
 
     def run(self):
-        flat_graph = self._get_flat_graph()
+        manifest = self._get_manifest()
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
 
-        results = adapter.get_catalog(profile, self.project.cfg, flat_graph)
+        results = adapter.get_catalog(profile, self.project.cfg, manifest)
 
         results = [
             dict(zip(results.column_names, row))

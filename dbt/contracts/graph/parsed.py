@@ -347,6 +347,29 @@ class ParsedManifest(object):
             'child_map': forward_edges,
         }
 
+    def _find_by_name(self, name, package, subgraph, nodetype):
+        """
+
+        Find a node by its given name in the appropraite sugraph.
+        """
+        if subgraph == 'nodes':
+            search = self.nodes
+        elif subgraph == 'macros':
+            search = self.macros
+        else:
+            raise NotImplementedError(
+                'subgraph search for {} not implemented'.format(subgraph)
+            )
+        return dbt.utils.find_in_subgraph_by_name(
+            search,
+            name,
+            package,
+            nodetype)
+
+    def find_operation_by_name(self, name, package):
+        return self._find_by_name(name, package, 'macros',
+                                  [NodeType.Operation])
+
     def to_flat_graph(self):
         """Convert the parsed manifest to the 'flat graph' that the compiler
         expects.
