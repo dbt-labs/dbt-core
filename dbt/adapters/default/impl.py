@@ -132,7 +132,7 @@ class DefaultAdapter(object):
     @classmethod
     def get_result_from_cursor(cls, cursor):
         data = []
-        column_name = []
+        column_names = []
 
         if cursor.description is not None:
             column_names = [col[0] for col in cursor.description]
