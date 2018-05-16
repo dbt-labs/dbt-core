@@ -13,7 +13,6 @@ from dbt.task.base_task import BaseTask
 
 
 CATALOG_FILENAME = 'catalog.json'
-GET_CATALOG_OPERATION_NAME = 'get_catalog_data'
 
 
 def get_stripped_prefix(source, prefix):
@@ -125,54 +124,12 @@ class GenerateTask(BaseTask):
         manifest = dbt.loader.GraphLoader.load_all(root_project, all_projects)
         return manifest.to_flat_graph()
 
-    def _execute_operation(self, flat_graph, operation_name):
-        """
-        Run the given operation. Operation is a ParsedMacro with a
-            resource_type of NodeType.Operation.
-
-        Return an an AttrDict with three attributes: 'table', 'data', and
-            'status'. 'table' is an agate.Table.
-        """
-        operation = dbt.utils.get_operation_macro(flat_graph, operation_name)
-
-        # TODO: make runtime.generate() support the ParsedMacro model. I think
-        # this is a problem because generate() expects a Node for the model,
-        # not a Macro.
-        context = dbt.context.runtime.generate(
-            operation.serialize(),
-            self.project.cfg,
-            flat_graph
-        )
-
-        # TODO: should I get the return value here in case future operations
-        # want to return some string? Jinja (I think) stringifies the results
-        # so it's not super useful. Status, I guess?
-        operation.generator(context)()
-
-        # This is a lot of magic, have to know the magic name is 'catalog'.
-        # TODO: How can we make this part of the data set? Could we make it
-        # the operation's name/unique ID somehow instead?
-        result = context['load_result']('catalog')
-        return result
-
     def run(self):
         flat_graph = self._get_flat_graph()
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
 
-        # TODO: is there some way to have this be a method on the adapter?
-        # I think the only way that's possible is if operations are pure SQL,
-        # or adapter is modified to understand the flat graph. As it is, the
-        # operation has to manipulate the adapter.
-        results = self._execute_operation(
-            flat_graph,
-            GET_CATALOG_OPERATION_NAME
-        )
-
-        # get the schemas to filter by. TODO: should this be an 'operation'
-        # as well?
-        schemas = adapter.get_existing_schemas(profile, self.project)
-        results = results.table.where(lambda r: r['table_schema'] in schemas)
+        results = adapter.get_catalog(profile, self.project.cfg, flat_graph)
 
         results = [
             dict(zip(results.column_names, row))

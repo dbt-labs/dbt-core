@@ -9,6 +9,7 @@ import dbt.exceptions
 import dbt.flags
 import dbt.schema
 import dbt.clients.agate_helper
+import dbt.context.runtime
 
 from dbt.contracts.connection import Connection
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -773,3 +774,46 @@ class DefaultAdapter(object):
         for agate_cls, func in conversions:
             if isinstance(agate_type, agate_cls):
                 return func(agate_table, col_idx)
+
+
+    ###
+    # Operations involving the flat graph
+    ###
+    @classmethod
+    def run_operation(cls, profile, project_cfg, flat_graph, operation_name):
+        """Look the operation identified by operation_name up in the flat
+        graph and run it.
+
+        Return an an AttrDict with three attributes: 'table', 'data', and
+            'status'. 'table' is an agate.Table.
+        """
+        operation = dbt.utils.get_operation_macro(flat_graph, operation_name)
+
+        # TODO: make runtime.generate() support the ParsedMacro model. I think
+        # this is a problem because generate() expects a Node for the model,
+        # not a Macro.
+        context = dbt.context.runtime.generate(
+            operation.serialize(),
+            project_cfg,
+            flat_graph
+        )
+
+        # TODO: should I get the return value here in case future operations
+        # want to return some string? Jinja (I think) stringifies the results
+        # so it's not super useful. Status, I guess?
+        operation.generator(context)()
+
+        # This is a lot of magic, have to know the magic name is 'catalog'.
+        # TODO: How can we make this part of the data set? Could we make it
+        # the operation's name/unique ID somehow instead?
+        result = context['load_result']('catalog')
+        return result
+
+
+    ###
+    # Abstract methods involving the flat graph
+    ###
+    @classmethod
+    def get_catalog(cls, profile, project_cfg, flat_graph):
+        raise dbt.exceptions.NotImplementedException(
+            '`get_catalog` is not implemented for this adapter!')
