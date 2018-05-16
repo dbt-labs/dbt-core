@@ -132,6 +132,7 @@ class DefaultAdapter(object):
     @classmethod
     def get_result_from_cursor(cls, cursor):
         data = []
+        column_names = []
 
         if cursor.description is not None:
             column_names = [col[0] for col in cursor.description]
@@ -139,7 +140,7 @@ class DefaultAdapter(object):
             data = [dict(zip(column_names, row))
                     for row in raw_results]
 
-        return dbt.clients.agate_helper.table_from_data(data)
+        return dbt.clients.agate_helper.table_from_data(data, column_names)
 
     @classmethod
     def drop(cls, profile, project_cfg, schema,
