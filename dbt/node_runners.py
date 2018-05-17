@@ -69,18 +69,6 @@ class RunOperationResult(RunModelResult):
                                                  failed, execution_time)
         self.returned = returned
 
-    @property
-    def errored(self):
-        return self.error is not None
-
-    @property
-    def failed(self):
-        return self.fail
-
-    @property
-    def skipped(self):
-        return self.skip
-
 
 class BaseRunner(object):
     print_header = True

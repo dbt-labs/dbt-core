@@ -786,7 +786,7 @@ class DefaultAdapter(object):
         Return an an AttrDict with three attributes: 'table', 'data', and
             'status'. 'table' is an agate.Table.
         """
-        operation = manifest.find_operation_by_name(operation_name, None)
+        operation = manifest.find_operation_by_name(operation_name, 'dbt')
 
         # This causes a reference cycle, as dbt.context.runtime.generate()
         # ends up calling get_adapter, so the import has to be here.
@@ -797,21 +797,15 @@ class DefaultAdapter(object):
             manifest.to_flat_graph(),
         )
 
-        # TODO: should I get the return value here in case future operations
-        # want to return some string? Jinja (I think) stringifies the results
-        # so it's not super useful. Status, I guess?
         operation.generator(context)()
 
-        # This is a lot of magic, have to know the magic name is 'catalog'.
-        # TODO: How can we make this part of the data set? Could we make it
-        # the operation's name/unique ID somehow instead?
         result = context['load_result'](result_key)
         return result
 
     ###
-    # Abstract methods involving the flat graph
+    # Abstract methods involving the manifest
     ###
     @classmethod
-    def get_catalog(cls, profile, project_cfg, run_operation):
+    def get_catalog(cls, profile, project_cfg, manifest):
         raise dbt.exceptions.NotImplementedException(
             '`get_catalog` is not implemented for this adapter!')

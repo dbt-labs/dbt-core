@@ -415,12 +415,11 @@ def parse_args(args):
     )
     seed_sub.set_defaults(cls=seed_task.SeedTask, which='seed')
 
-    catalog_sub = subs.add_parser('catalog', parents=[base_subparser])
-    catalog_subs = catalog_sub.add_subparsers()
-    # it might look like catalog_sub is the correct parents entry, but that
+    docs_sub = subs.add_parser('docs', parents=[base_subparser])
+    docs_subs = docs_sub.add_subparsers()
+    # it might look like docs_sub is the correct parents entry, but that
     # will cause weird errors about 'conflicting option strings'.
-    generate_sub = catalog_subs.add_parser('generate',
-                                           parents=[base_subparser])
+    generate_sub = docs_subs.add_parser('generate', parents=[base_subparser])
     generate_sub.set_defaults(cls=generate_task.GenerateTask,
                               which='generate')
 

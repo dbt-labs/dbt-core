@@ -29,7 +29,7 @@ class TestCatalogGenerate(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test_simple_generate(self):
-        self.run_dbt(["catalog", "generate"])
+        self.run_dbt(["docs", "generate"])
         self.assertTrue(os.path.exists('./target/catalog.json'))
 
         with open('./target/catalog.json') as fp:

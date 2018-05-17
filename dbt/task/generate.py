@@ -91,7 +91,6 @@ def unflatten(columns):
     return structured
 
 
-# derive from BaseTask as I don't really want any result interpretation.
 class GenerateTask(BaseTask):
     def get_all_projects(self):
         root_project = self.project.cfg
