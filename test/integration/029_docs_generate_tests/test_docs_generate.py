@@ -5,11 +5,11 @@ from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 
 
-class TestCatalogGenerate(DBTIntegrationTest):
+class TestDocsGenerate(DBTIntegrationTest):
 
     def setUp(self):
-        super(TestCatalogGenerate, self).setUp()
-        self.run_sql_file("test/integration/029_catalog_generate_tests/seed.sql")
+        super(TestDocsGenerate, self).setUp()
+        self.run_sql_file("test/integration/029_docs_generate_tests/seed.sql")
 
     @property
     def schema(self):
@@ -17,7 +17,7 @@ class TestCatalogGenerate(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/029_catalog_generate_tests/models"
+        return "test/integration/029_docs_generate_tests/models"
 
     @property
     def project_config(self):
