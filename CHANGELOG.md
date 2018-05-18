@@ -1,4 +1,4 @@
-## dbt 0.10.1 (Unreleased)
+## dbt 0.10.1 (May 18, 2018)
 
 This release focuses on achieving functional parity between all of dbt's adapters. With this release, most dbt functionality should work on every adapter except where noted [here](https://docs.getdbt.com/v0.10/docs/supported-databases#section-caveats).
 
