@@ -4,6 +4,8 @@ import pytz
 
 from dbt.adapters.factory import get_adapter
 from dbt.compat import basestring, to_string
+from dbt.node_types import NodeType
+from dbt.contracts.graph.parsed import ParsedMacro, ParsedNode
 
 import dbt.clients.jinja
 import dbt.clients.agate_helper
@@ -75,6 +77,8 @@ def _add_macros(context, model, flat_graph):
     macros_to_add = {'global': [], 'local': []}
 
     for unique_id, macro in flat_graph.get('macros', {}).items():
+        if macro.get('resource_type') != NodeType.Macro:
+            continue
         package_name = macro.get('package_name')
 
         macro_map = {
@@ -201,8 +205,14 @@ class Var(object):
         self.overrides = overrides
 
         if isinstance(model, dict) and model.get('unique_id'):
-            local_vars = model.get('config', {}).get('vars')
+            local_vars = model.get('config', {}).get('vars', {})
             self.model_name = model.get('name')
+        elif isinstance(model, ParsedMacro):
+            local_vars = {}  # macros have no config
+            self.model_name = model.name
+        elif isinstance(model, ParsedNode):
+            local_vars = model.config.get('vars', {})
+            self.model_name = model.name
         else:
             # still used for wrapping
             self.model_name = model.nice_name

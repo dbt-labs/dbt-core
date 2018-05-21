@@ -471,7 +471,7 @@ class DefaultAdapter(object):
             lock.release()
 
     @classmethod
-    def release_connection(cls, profile, name):
+    def release_connection(cls, profile, name='master'):
         global connections_in_use, connections_available, lock
 
         if connections_in_use.get(name) is None:
@@ -773,3 +773,39 @@ class DefaultAdapter(object):
         for agate_cls, func in conversions:
             if isinstance(agate_type, agate_cls):
                 return func(agate_table, col_idx)
+
+    ###
+    # Operations involving the manifest
+    ###
+    @classmethod
+    def run_operation(cls, profile, project_cfg, manifest, operation_name,
+                      result_key):
+        """Look the operation identified by operation_name up in the manifest
+        and run it.
+
+        Return an an AttrDict with three attributes: 'table', 'data', and
+            'status'. 'table' is an agate.Table.
+        """
+        operation = manifest.find_operation_by_name(operation_name, 'dbt')
+
+        # This causes a reference cycle, as dbt.context.runtime.generate()
+        # ends up calling get_adapter, so the import has to be here.
+        import dbt.context.runtime
+        context = dbt.context.runtime.generate(
+            operation,
+            project_cfg,
+            manifest.to_flat_graph(),
+        )
+
+        operation.generator(context)()
+
+        result = context['load_result'](result_key)
+        return result
+
+    ###
+    # Abstract methods involving the manifest
+    ###
+    @classmethod
+    def get_catalog(cls, profile, project_cfg, manifest):
+        raise dbt.exceptions.NotImplementedException(
+            '`get_catalog` is not implemented for this adapter!')

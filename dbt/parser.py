@@ -124,6 +124,7 @@ def parse_macro_file(macro_file_path,
                      macro_file_contents,
                      root_path,
                      package_name,
+                     resource_type,
                      tags=None,
                      context=None):
 
@@ -156,7 +157,7 @@ def parse_macro_file(macro_file_path,
         if type(item) == jinja2.runtime.Macro:
             name = key.replace(dbt.utils.MACRO_PREFIX, '')
 
-            unique_id = get_path(NodeType.Macro,
+            unique_id = get_path(resource_type,
                                  package_name,
                                  name)
 
@@ -166,7 +167,7 @@ def parse_macro_file(macro_file_path,
                     'name': name,
                     'unique_id': unique_id,
                     'tags': tags,
-                    'resource_type': NodeType.Macro,
+                    'resource_type': resource_type,
                     'depends_on': {'macros': []},
                 })
 
@@ -446,7 +447,8 @@ def load_and_parse_macros(package_name, root_project, all_projects, root_dir,
                 file_match.get('relative_path'),
                 file_contents,
                 root_dir,
-                package_name))
+                package_name,
+                resource_type))
 
     return result
 
