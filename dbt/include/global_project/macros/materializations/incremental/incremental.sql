@@ -60,10 +60,8 @@
      {%- call statement() -%}
 
        {% set tmp_table_sql -%}
-         with dbt_incr_sbq as (
-           {{ sql }}
-         )
-         select * from dbt_incr_sbq
+         {# We are using a subselect instead of a CTE here to allow PostgreSQL to use indexes. -#}
+         select * from ({{ sql }}) as dbt_incr_sbq
          where ({{ sql_where }})
            or ({{ sql_where }}) is null
        {%- endset %}
