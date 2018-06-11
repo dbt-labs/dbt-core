@@ -2,7 +2,9 @@ import multiprocessing
 
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
-
+import dbt.exceptions
+import boto3
+import psycopg2
 
 drop_lock = multiprocessing.Lock()
 
@@ -18,6 +20,81 @@ class RedshiftAdapter(PostgresAdapter):
         return 'getdate()'
 
     @classmethod
+    def get_tmp_cluster_credentials(cls, config):
+        creds = config.copy()
+
+        cluster_id = creds.get('cluster_id')
+        if not cluster_id:
+            error = '`cluster_id` must be set in profile if IAM authentication method selected'
+            raise dbt.exceptions.FailedToConnectException(error)
+
+        client = boto3.client('redshift')
+
+        # replace username and password with temporary redshift credentials
+        try:
+            cluster_creds = client.get_cluster_credentials(DbUser=creds.get('user'),
+                                                           DbName=creds.get('dbname'),
+                                                           ClusterIdentifier=creds.get('cluster_id'),
+                                                           AutoCreate=False)
+            creds['user'] = cluster_creds.get('DbUser')
+            creds['pass'] = cluster_creds.get('DbPassword')
+
+            return creds
+
+        except client.exceptions.ClientError as e:
+            error = ('Unable to get temporary Redshift cluster credentials: "{}"'.format(str(e)))
+            raise dbt.exceptions.FailedToConnectException(error)
+
+    @classmethod
+    def get_redshift_credentials(cls, config):
+        creds = config.copy()
+
+        method = creds.get('method')
+
+        if method == 'database' or method is None:   # Support missing method for backwards compatibility
+            return creds
+
+        elif method == 'iam':
+            return cls.get_tmp_cluster_credentials(creds)
+
+        else:
+            error = ('Invalid `method` in profile: "{}"'.format(method))
+            raise dbt.exceptions.FailedToConnectException(error)
+
+    @classmethod
+    def open_connection(cls, connection):
+        if connection.get('state') == 'open':
+            logger.debug('Connection is already open, skipping open.')
+            return connection
+
+        result = connection.copy()
+
+        try:
+            credentials = cls.get_redshift_credentials(connection.get('credentials', {}))
+
+            handle = psycopg2.connect(
+                dbname=credentials.get('dbname'),
+                user=credentials.get('user'),
+                host=credentials.get('host'),
+                password=credentials.get('pass'),
+                port=credentials.get('port'),
+                connect_timeout=10)
+
+            result['handle'] = handle
+            result['state'] = 'open'
+        except psycopg2.Error as e:
+            logger.debug("Got an error when attempting to open a postgres "
+                         "connection: '{}'"
+                         .format(e))
+
+            result['handle'] = None
+            result['state'] = 'fail'
+
+            raise dbt.exceptions.FailedToConnectException(str(e))
+
+        return result
+
+    @classmethod
     def _get_columns_in_table_sql(cls, schema_name, table_name, database):
         # Redshift doesn't support cross-database queries,
         # so we can ignore the `database` argument
@@ -27,7 +104,7 @@ class RedshiftAdapter(PostgresAdapter):
             table_schema_filter = '1=1'
         else:
             table_schema_filter = "table_schema = '{schema_name}'".format(
-                    schema_name=schema_name)
+                schema_name=schema_name)
 
         sql = """
             with bound_views as (
