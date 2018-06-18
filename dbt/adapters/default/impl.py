@@ -10,7 +10,7 @@ import dbt.flags
 import dbt.schema
 import dbt.clients.agate_helper
 
-from dbt.contracts.connection import validate_connection
+from dbt.contracts.connection import Connection
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.schema import Column
 from dbt.utils import filter_null_values
@@ -132,6 +132,7 @@ class DefaultAdapter(object):
     @classmethod
     def get_result_from_cursor(cls, cursor):
         data = []
+        column_names = []
 
         if cursor.description is not None:
             column_names = [col[0] for col in cursor.description]
@@ -139,7 +140,7 @@ class DefaultAdapter(object):
             data = [dict(zip(column_names, row))
                     for row in raw_results]
 
-        return dbt.clients.agate_helper.table_from_data(data)
+        return dbt.clients.agate_helper.table_from_data(data, column_names)
 
     @classmethod
     def drop(cls, profile, project_cfg, schema,
@@ -464,14 +465,14 @@ class DefaultAdapter(object):
             }
 
             if dbt.flags.STRICT_MODE:
-                validate_connection(result)
+                Connection(**result)
 
             return cls.open_connection(result)
         finally:
             lock.release()
 
     @classmethod
-    def release_connection(cls, profile, name):
+    def release_connection(cls, profile, name='master'):
         global connections_in_use, connections_available, lock
 
         if connections_in_use.get(name) is None:
@@ -542,7 +543,7 @@ class DefaultAdapter(object):
         connection = cls.get_connection(profile, name)
 
         if dbt.flags.STRICT_MODE:
-            validate_connection(connection)
+            Connection(**connection)
 
         if connection['transaction_open'] is True:
             raise dbt.exceptions.InternalException(
@@ -575,7 +576,7 @@ class DefaultAdapter(object):
         global connections_in_use
 
         if dbt.flags.STRICT_MODE:
-            validate_connection(connection)
+            Connection(**connection)
 
         connection = cls.reload(connection)
 
@@ -595,7 +596,7 @@ class DefaultAdapter(object):
     @classmethod
     def rollback(cls, connection):
         if dbt.flags.STRICT_MODE:
-            validate_connection(connection)
+            Connection(**connection)
 
         connection = cls.reload(connection)
 
@@ -615,7 +616,7 @@ class DefaultAdapter(object):
     @classmethod
     def close(cls, connection):
         if dbt.flags.STRICT_MODE:
-            validate_connection(connection)
+            Connection(**connection)
 
         connection.get('handle').close()
         connection['state'] = 'closed'
@@ -773,3 +774,39 @@ class DefaultAdapter(object):
         for agate_cls, func in conversions:
             if isinstance(agate_type, agate_cls):
                 return func(agate_table, col_idx)
+
+    ###
+    # Operations involving the manifest
+    ###
+    @classmethod
+    def run_operation(cls, profile, project_cfg, manifest, operation_name,
+                      result_key):
+        """Look the operation identified by operation_name up in the manifest
+        and run it.
+
+        Return an an AttrDict with three attributes: 'table', 'data', and
+            'status'. 'table' is an agate.Table.
+        """
+        operation = manifest.find_operation_by_name(operation_name, 'dbt')
+
+        # This causes a reference cycle, as dbt.context.runtime.generate()
+        # ends up calling get_adapter, so the import has to be here.
+        import dbt.context.runtime
+        context = dbt.context.runtime.generate(
+            operation,
+            project_cfg,
+            manifest.to_flat_graph(),
+        )
+
+        operation.generator(context)()
+
+        result = context['load_result'](result_key)
+        return result
+
+    ###
+    # Abstract methods involving the manifest
+    ###
+    @classmethod
+    def get_catalog(cls, profile, project_cfg, manifest):
+        raise dbt.exceptions.NotImplementedException(
+            '`get_catalog` is not implemented for this adapter!')

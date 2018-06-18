@@ -12,7 +12,7 @@ import dbt.clients.agate_helper
 
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.adapters.bigquery.relation import BigQueryRelation
-from dbt.contracts.connection import validate_connection
+from dbt.contracts.connection import Connection
 from dbt.logger import GLOBAL_LOGGER as logger
 
 import google.auth
@@ -168,7 +168,7 @@ class BigQueryAdapter(PostgresAdapter):
     @classmethod
     def close(cls, connection):
         if dbt.flags.STRICT_MODE:
-            validate_connection(connection)
+            Connection(**connection)
 
         connection['state'] = 'closed'
 
@@ -314,7 +314,7 @@ class BigQueryAdapter(PostgresAdapter):
 
         if flags.STRICT_MODE:
             connection = cls.get_connection(profile, model.get('name'))
-            validate_connection(connection)
+            Connection(**connection)
 
         model_name = model.get('name')
         model_schema = model.get('schema')
@@ -350,24 +350,25 @@ class BigQueryAdapter(PostgresAdapter):
         with cls.exception_handler(profile, 'create dataset', model_name):
             iterator = query_job.result()
 
-        res = []
         if fetch:
-            res = list(iterator)
+            res = cls.get_table_from_response(iterator)
+        else:
+            res = dbt.clients.agate_helper.empty_table()
 
         # If we get here, the query succeeded
         status = 'OK'
-        return status, cls.get_table_from_response(res)
+        return status, res
 
     @classmethod
     def execute_and_fetch(cls, profile, sql, model_name, auto_begin=None):
-        status, res = cls.execute(profile, sql, model_name, fetch=True)
-        table = cls.get_table_from_response(res)
+        status, table = cls.execute(profile, sql, model_name, fetch=True)
         return status, table
 
     @classmethod
     def get_table_from_response(cls, resp):
+        column_names = [field.name for field in resp.schema]
         rows = [dict(row.items()) for row in resp]
-        return dbt.clients.agate_helper.table_from_data(rows)
+        return dbt.clients.agate_helper.table_from_data(rows, column_names)
 
     @classmethod
     def add_begin_query(cls, profile, name):
