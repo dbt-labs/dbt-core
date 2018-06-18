@@ -46,7 +46,6 @@ setup(
         'networkx==1.11',
         'snowplow-tracker==0.7.2',
         'celery==3.1.23',
-        'voluptuous==0.10.5',
         'snowflake-connector-python>=1.4.9',
         'requests>=2.18.0',
         'colorama==0.3.9',

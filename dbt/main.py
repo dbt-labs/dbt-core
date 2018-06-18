@@ -17,6 +17,7 @@ import dbt.task.init as init_task
 import dbt.task.seed as seed_task
 import dbt.task.test as test_task
 import dbt.task.archive as archive_task
+import dbt.task.generate as generate_task
 
 import dbt.tracking
 import dbt.config as config
@@ -413,6 +414,14 @@ def parse_args(args):
         help='Show a sample of the loaded data in the terminal'
     )
     seed_sub.set_defaults(cls=seed_task.SeedTask, which='seed')
+
+    docs_sub = subs.add_parser('docs', parents=[base_subparser])
+    docs_subs = docs_sub.add_subparsers()
+    # it might look like docs_sub is the correct parents entry, but that
+    # will cause weird errors about 'conflicting option strings'.
+    generate_sub = docs_subs.add_parser('generate', parents=[base_subparser])
+    generate_sub.set_defaults(cls=generate_task.GenerateTask,
+                              which='generate')
 
     sub = subs.add_parser('test', parents=[base_subparser])
     sub.add_argument(

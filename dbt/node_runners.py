@@ -3,6 +3,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.exceptions import NotImplementedException
 from dbt.utils import get_nodes_by_tags
 from dbt.node_types import NodeType, RunHookType
+from dbt.adapters.factory import get_adapter
 
 import dbt.clients.jinja
 import dbt.context.runtime
@@ -59,6 +60,14 @@ class RunModelResult(object):
     @property
     def skipped(self):
         return self.skip
+
+
+class RunOperationResult(RunModelResult):
+    def __init__(self, node, error=None, skip=False, status=None,
+                 failed=None, execution_time=0, returned=None):
+        super(RunOperationResult, self).__init__(node, error, skip, status,
+                                                 failed, execution_time)
+        self.returned = returned
 
 
 class BaseRunner(object):
@@ -312,7 +321,7 @@ class ModelRunner(CompileRunner):
             hook_dict = dbt.hooks.get_hook_dict(statement, index=hook_index)
 
             if dbt.flags.STRICT_MODE:
-                dbt.contracts.graph.parsed.validate_hook(hook_dict)
+                dbt.contracts.graph.parsed.Hook(**hook_dict)
 
             sql = hook_dict.get('sql', '')
 
@@ -416,7 +425,7 @@ class ModelRunner(CompileRunner):
                 model,
                 self.adapter.type())
 
-        materialization_macro.get('generator')(context)()
+        materialization_macro.generator(context)()
 
         result = context['load_result']('main')
 

@@ -66,7 +66,7 @@ class CompilerTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'view.sql',
                     'original_file_path': 'view.sql',
                     'raw_sql': 'select * from {{ref("ephemeral")}}',
@@ -95,7 +95,7 @@ class CompilerTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': ephemeral_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'ephemeral.sql',
                     'original_file_path': 'ephemeral.sql',
                     'raw_sql': 'select * from source_table',
@@ -146,7 +146,7 @@ class CompilerTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'view.sql',
                     'original_file_path': 'view.sql',
                     'raw_sql': ('with cte as (select * from something_else) '
@@ -173,7 +173,7 @@ class CompilerTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'view.sql',
                     'original_file_path': 'view.sql',
                     'raw_sql': 'select * from source_table',
@@ -238,7 +238,7 @@ class CompilerTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'view.sql',
                     'original_file_path': 'view.sql',
                     'raw_sql': 'select * from {{ref("ephemeral")}}',
@@ -265,7 +265,7 @@ class CompilerTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': ephemeral_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'ephemeral.sql',
                     'original_file_path': 'ephemeral.sql',
                     'raw_sql': 'select * from source_table',
@@ -324,7 +324,7 @@ class CompilerTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'view.sql',
                     'original_file_path': 'view.sql',
                     'raw_sql': 'select * from {{ref("ephemeral")}}',
@@ -351,7 +351,7 @@ class CompilerTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': ephemeral_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'ephemeral.sql',
                     'original_file_path': 'ephemeral.sql',
                     'raw_sql': 'select * from {{ref("ephemeral_level_two")}}',
@@ -378,7 +378,7 @@ class CompilerTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': ephemeral_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'ephemeral_level_two.sql',
                     'original_file_path': 'ephemeral_level_two.sql',
                     'raw_sql': 'select * from source_table',

@@ -20,7 +20,7 @@ class RunTask(RunnableTask):
             "include": self.args.models,
             "exclude": self.args.exclude,
             "resource_types": [NodeType.Model],
-            "tags": set()
+            "tags": []
         }
 
         results = runner.run(query, ModelRunner)
