@@ -1,7 +1,6 @@
 {% macro dbt__incremental_delete(target_relation, tmp_relation) -%}
 
   {%- set unique_key = config.require('unique_key') -%}
-  {%- set identifier = model['alias'] -%}
 
   delete
   from {{ target_relation }}

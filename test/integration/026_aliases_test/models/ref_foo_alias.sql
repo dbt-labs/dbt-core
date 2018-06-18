@@ -15,4 +15,4 @@ WITH trigger_ref AS (
 
 SELECT
   -- this name should still be the filename
-  '{{ this.alias }}' as "tablename"
+  '{{ this.name }}' as "tablename"

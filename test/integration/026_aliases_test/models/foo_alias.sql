@@ -7,4 +7,4 @@
 }}
 
 SELECT
-  '{{ this.alias }}'   as "tablename"
+  '{{ this.name }}'   as "tablename"

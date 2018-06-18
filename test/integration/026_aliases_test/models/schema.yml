@@ -1,0 +1,20 @@
+
+foo_alias:
+    constraints:
+        accepted_values:
+            - {field: tablename, values: ['foo']}
+
+ref_foo_alias:
+    constraints:
+        accepted_values:
+            - {field: tablename, values: ['ref_foo_alias']}
+
+alias_in_project:
+    constraints:
+        accepted_values:
+            - {field: tablename, values: ['project_alias']}
+
+alias_in_project_with_override:
+    constraints:
+        accepted_values:
+            - {field: tablename, values: ['override_alias']}

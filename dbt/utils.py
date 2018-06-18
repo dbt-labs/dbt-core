@@ -66,7 +66,7 @@ def get_model_name_or_none(model):
     elif isinstance(model, basestring):
         name = model
     elif isinstance(model, dict):
-        name = get_alias(model)
+        name = model['alias']
     else:
         name = model.nice_name
     return name
@@ -88,7 +88,7 @@ def model_immediate_name(model, non_destructive):
     seeds.
     """
 
-    model_name = get_alias(model)
+    model_name = model['alias']
     is_incremental = (get_materialization(model) == 'incremental')
     is_seed = is_type(model, 'seed')
 
@@ -337,10 +337,6 @@ def is_blocking_dependency(node):
 
 def get_materialization(node):
     return node.get('config', {}).get('materialized')
-
-
-def get_alias(node):
-    return node.get('config', {}).get('alias', node.get('name'))
 
 
 def is_enabled(node):

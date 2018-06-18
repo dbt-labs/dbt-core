@@ -228,11 +228,12 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     config_dict.update(config.config)
     node['config'] = config_dict
 
-    # Set this temporarily so get_rendered() below has access to a schema
+    # Set this temporarily so get_rendered() below has access to a schema & alias
     profile = dbt.utils.get_profile_from_project(root_project_config)
     default_schema = profile.get('schema', 'public')
     node['schema'] = default_schema
-    node['alias'] = dbt.utils.get_alias(node)
+    default_alias = node.get('name')
+    node['alias'] = default_alias
     context = dbt.context.parser.generate(node, root_project_config,
                                           {"macros": macros})
 
@@ -255,6 +256,10 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     config_dict = node.get('config', {})
     config_dict.update(config.config)
     node['config'] = config_dict
+
+    # This macro uses the node config, so it must run after the config update
+    get_alias = context.get('generate_model_alias', lambda x: default_alias)
+    node['alias'] = get_alias(node)
 
     for hook_type in dbt.hooks.ModelHookType.Both:
         node['config'][hook_type] = dbt.hooks.get_hooks(node, hook_type)

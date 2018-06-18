@@ -388,7 +388,7 @@ class ModelRunner(CompileRunner):
     def describe_node(self):
         materialization = dbt.utils.get_materialization(self.node)
         schema_name = self.node.get('schema')
-        node_name = dbt.utils.get_alias(self.node)
+        node_name = self.node.get('alias')
         return "{} model {}.{}".format(materialization, schema_name, node_name)
 
     def print_start_line(self):
@@ -498,7 +498,7 @@ class SeedRunner(ModelRunner):
 
     def describe_node(self):
         schema_name = self.node.get('schema')
-        return "seed file {}.{}".format(schema_name, self.node["name"])
+        return "seed file {}.{}".format(schema_name, self.node['alias'])
 
     @classmethod
     def before_run(cls, project, adapter, flat_graph):
