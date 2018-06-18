@@ -6,13 +6,13 @@ import dbt.version
 
 class VersionTest(unittest.TestCase):
 
-    @patch("dbt.version.__version__", "1.1.1")
+    @patch("dbt.version.__version__", "0.10.0")
     def test_versions_equal(self):
 
         dbt.version.get_remote_version_file_contents = MagicMock(
             return_value="""
                 [bumpversion]
-                current_version = 1.1.1
+                current_version = 0.10.0
                 commit = True
                 tag = True
 
@@ -25,24 +25,21 @@ class VersionTest(unittest.TestCase):
         installed_version = dbt.version.get_installed_version()
         version_information = dbt.version.get_version_information()
 
-        expected_version_information = "Installed version: 1.1.1\n" \
-            "Current version: 1.1.1\n" \
+        expected_version_information = "installed version: 0.10.0\n" \
+            "   latest version: 0.10.0\n\n" \
             "Up to date!"
 
-        assert isinstance(latest_version, dbt.version.Version)
-        assert isinstance(installed_version, dbt.version.Version)
-        self.assertTrue(latest_version.is_latest)
-        self.assertFalse(installed_version.is_latest)
+        self.assertEqual(latest_version, installed_version)
         self.assertEqual(latest_version, installed_version)
         self.assertMultiLineEqual(version_information,
                                   expected_version_information)
 
-    @patch("dbt.version.__version__", "1.12.1")
+    @patch("dbt.version.__version__", "0.10.2-a1")
     def test_installed_version_greater(self):
         dbt.version.get_remote_version_file_contents = MagicMock(
             return_value="""
                 [bumpversion]
-                current_version = 1.1.12
+                current_version = 0.10.1
                 commit = True
                 tag = True
 
@@ -55,20 +52,20 @@ class VersionTest(unittest.TestCase):
         installed_version = dbt.version.get_installed_version()
         version_information = dbt.version.get_version_information()
 
-        expected_version_information = "Installed version: 1.12.1\n" \
-            "Current version: 1.1.12\n" \
-            "Your version is ahead!"
+        expected_version_information = "installed version: 0.10.2-a1\n" \
+            "   latest version: 0.10.1\n\n" \
+            "Your version of dbt is ahead of the latest release!"
 
         assert installed_version > latest_version
         self.assertMultiLineEqual(version_information,
                                   expected_version_information)
 
-    @patch("dbt.version.__version__", "1.10.1a")
+    @patch("dbt.version.__version__", "0.9.5")
     def test_installed_version_lower(self):
         dbt.version.get_remote_version_file_contents = MagicMock(
             return_value="""
                 [bumpversion]
-                current_version = 2.0.113a
+                current_version = 0.10.0
                 commit = True
                 tag = True
 
@@ -81,11 +78,11 @@ class VersionTest(unittest.TestCase):
         installed_version = dbt.version.get_installed_version()
         version_information = dbt.version.get_version_information()
 
-        expected_version_information = "Installed version: 1.10.1a\n" \
-            "Current version: 2.0.113a\n" \
-            "Your version of dbt is out of date!\n" \
-            "\tYou can find instructions for upgrading here:\n" \
-            "\thttps://docs.getdbt.com/docs/installation"
+        expected_version_information = "installed version: 0.9.5\n" \
+            "   latest version: 0.10.0\n\n" \
+            "Your version of dbt is out of date! " \
+            "You can find instructions for upgrading here:\n" \
+            "https://docs.getdbt.com/docs/installation"
 
         assert installed_version < latest_version
         self.assertMultiLineEqual(version_information,

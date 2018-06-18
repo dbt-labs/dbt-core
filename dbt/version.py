@@ -1,5 +1,6 @@
-from string import ascii_lowercase
 import re
+
+import dbt.semver
 
 try:
     # For Python 3.0 and later
@@ -11,63 +12,6 @@ except ImportError:
 REMOTE_VERSION_FILE = \
     'https://raw.githubusercontent.com/fishtown-analytics/dbt/' \
     'master/.bumpversion.cfg'
-
-
-class Version(object):
-
-    def __init__(self, name, is_latest=True):
-        self.name = name
-        self.parts = self.get_parts()
-        self.numeric_parts = self.get_numeric_parts()
-        self.is_latest = is_latest
-
-    def get_parts(self):
-        return self.name.split('.')
-
-    def get_numeric_parts(self):
-        numeric_name = ''.join(
-            [ch for ch in self.name if ch not in ascii_lowercase])
-        return numeric_name.split('.')
-
-    def __str__(self):
-        if self.is_latest:
-            return "Current version: {}\n".format(self.name)
-        return "Installed version: {}\n".format(self.name)
-
-    def __eq__(self, other):
-        if not isinstance(other, Version):
-            return NotImplemented
-        return self.name == other.name
-
-    def __gt__(self, other):
-        if not isinstance(other, Version):
-            return NotImplemented
-
-        if len(self.parts) > len(other.parts):
-            return True
-
-        zipped_parts = zip(self.numeric_parts, other.numeric_parts)
-        for self_part, other_part in zipped_parts:
-            if other_part > self_part:
-                return False
-            if self_part > other_part:
-                return True
-        return False
-
-    def __lt__(self, other):
-        if not isinstance(other, Version):
-            return NotImplemented
-
-        if len(self.parts) < len(other.parts):
-            return True
-
-        zipped_parts = zip(self.numeric_parts, other.numeric_parts)
-        for self_part, other_part in zipped_parts:
-            if other_part > self_part:
-                return True
-            if self_part > other_part:
-                return False
-        return False
 
 
 def get_version_string_from_text(contents):
@@ -92,27 +36,35 @@ def get_remote_version_file_contents(url=REMOTE_VERSION_FILE):
 def get_latest_version():
     contents = get_remote_version_file_contents()
     version_string = get_version_string_from_text(contents)
-    return Version(version_string)
+    return dbt.semver.VersionSpecifier.from_version_string(version_string)
 
 
 def get_installed_version():
-    return Version(__version__, is_latest=False)
+    return dbt.semver.VersionSpecifier.from_version_string(__version__)
 
 
 def get_version_information():
     installed = get_installed_version()
     latest = get_latest_version()
+
+    installed_s = installed.to_version_string(skip_matcher=True)
+    latest_s = latest.to_version_string(skip_matcher=True)
+
+    version_msg = ("installed version: {}\n"
+                   "   latest version: {}\n\n".format(installed_s, latest_s))
+
     if installed == latest:
-        return "{}{}Up to date!".format(installed, latest)
+        return "{}Up to date!".format(version_msg)
 
     elif installed > latest:
-        return "{}{}Your version is ahead!".format(
-                installed, latest)
+        return ("{}Your version of dbt is ahead of the latest "
+                "release!".format(version_msg))
+
     else:
-        return "{}{}Your version of dbt is out of date!\n" \
-            "\tYou can find instructions for upgrading here:\n" \
-            "\thttps://docs.getdbt.com/docs/installation" \
-            .format(installed, latest)
+        return ("{}Your version of dbt is out of date! "
+                "You can find instructions for upgrading here:\n"
+                "https://docs.getdbt.com/docs/installation"
+                .format(version_msg))
 
 
 __version__ = '0.10.1'
