@@ -7,7 +7,7 @@
  - Add forward and backward graph edges to the JSON manifest file ([#762](https://github.com/fishtown-analytics/dbt/pull/762))
 - Add a 'dbt docs generate' command to generate a JSON catalog file ([#774](https://github.com/fishtown-analytics/dbt/pull/774))
 
-## dbt 0.10.1 (Unreleased)
+## dbt 0.10.1 (May 18, 2018)
 
 This release focuses on achieving functional parity between all of dbt's adapters. With this release, most dbt functionality should work on every adapter except where noted [here](https://docs.getdbt.com/v0.10/docs/supported-databases#section-caveats).
 
