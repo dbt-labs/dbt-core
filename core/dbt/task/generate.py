@@ -26,7 +26,7 @@ import dbt.compilation
 import dbt.exceptions
 
 
-CATALOG_FILENAME = 'catalog.json'
+CATALOG_FILENAME = "catalog.json"
 
 
 def get_stripped_prefix(source: Dict[str, Any], prefix: str) -> Dict[str, Any]:
@@ -34,10 +34,7 @@ def get_stripped_prefix(source: Dict[str, Any], prefix: str) -> Dict[str, Any]:
     with the given prefix.
     """
     cut = len(prefix)
-    return {
-        k[cut:]: v for k, v in source.items()
-        if k.startswith(prefix)
-    }
+    return {k[cut:]: v for k, v in source.items() if k.startswith(prefix)}
 
 
 def build_catalog_table(data) -> CatalogTable:

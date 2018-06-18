@@ -354,7 +354,7 @@ class QueryStringGenerator(BaseMacroGenerator):
 
 
 class MaterializationExtension(jinja2.ext.Extension):
-    tags = ['materialization']
+    tags = ["materialization"]
 
     def parse(self, parser):
         node = jinja2.nodes.Macro(lineno=next(parser.stream).lineno)
