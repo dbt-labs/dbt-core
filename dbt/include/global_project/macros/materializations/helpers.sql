@@ -1,5 +1,10 @@
 {% macro run_hooks(hooks, inside_transaction=True) %}
   {% for hook in hooks | selectattr('transaction', 'equalto', inside_transaction)  %}
+    {% if not inside_transaction and loop.first %}
+      {% call statement(auto_begin=inside_transaction) %}
+        commit;
+      {% endcall %}
+    {% endif %}
     {% call statement(auto_begin=inside_transaction) %}
       {{ hook.get('sql') }}
     {% endcall %}
@@ -40,10 +45,8 @@
     {{ make_hook_config(sql, inside_transaction=False) }}
 {% endmacro %}
 
-
-{% macro drop_if_exists(existing, schema, name) %}
-  {% set existing_type = existing.get(name) %}
-  {% if existing_type is not none %}
-    {{ adapter.drop(schema, name, existing_type) }}
+{% macro drop_relation_if_exists(relation) %}
+  {% if relation is not none %}
+    {{ adapter.drop_relation(relation) }}
   {% endif %}
 {% endmacro %}

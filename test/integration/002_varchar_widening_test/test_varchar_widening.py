@@ -16,8 +16,8 @@ class TestVarcharWidening(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test__postgres__varchar_widening(self):
-        self.use_default_project()
         self.use_profile('postgres')
+        self.use_default_project()
         self.run_sql_file("test/integration/002_varchar_widening_test/seed.sql")
 
         self.run_dbt()
@@ -34,18 +34,18 @@ class TestVarcharWidening(DBTIntegrationTest):
 
     @attr(type='snowflake')
     def test__snowflake__varchar_widening(self):
-        self.use_default_project()
         self.use_profile('snowflake')
+        self.use_default_project()
         self.run_sql_file("test/integration/002_varchar_widening_test/seed.sql")
 
         self.run_dbt()
 
-        self.assertTablesEqual("seed","incremental")
-        self.assertTablesEqual("seed","materialized")
+        self.assertTablesEqual("SEED", "incremental")
+        self.assertTablesEqual("SEED", "materialized")
 
         self.run_sql_file("test/integration/002_varchar_widening_test/update.sql")
 
         self.run_dbt()
 
-        self.assertTablesEqual("seed","incremental")
-        self.assertTablesEqual("seed","materialized")
+        self.assertTablesEqual("SEED", "incremental")
+        self.assertTablesEqual("SEED", "materialized")

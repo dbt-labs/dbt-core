@@ -8,7 +8,7 @@
 
 with t as (
 
-    select * from {{ ref('view') }}
+    select * from {{ ref('view_model') }}
 
 )
 

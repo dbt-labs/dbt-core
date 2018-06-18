@@ -1,6 +1,8 @@
 import os
 import hashlib
 import itertools
+import collections
+import functools
 
 import dbt.exceptions
 import dbt.flags
@@ -9,6 +11,7 @@ from dbt.include import GLOBAL_DBT_MODULES_PATH
 from dbt.compat import basestring
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
+from dbt.clients import yaml_helper
 
 
 DBTConfigKeys = [
@@ -22,7 +25,10 @@ DBTConfigKeys = [
     'sort_type',
     'pre-hook',
     'post-hook',
-    'vars'
+    'vars',
+    'column_types',
+    'bind',
+    'quoting',
 ]
 
 
@@ -32,57 +38,17 @@ class ExitCodes(object):
     UnhandledError = 2
 
 
-class Relation(object):
-    def __init__(self, profile, adapter, node, use_temp=False):
-        self.node = node
-        self.schema = node.get('schema')
-        self.name = node.get('name')
-
-        if use_temp:
-            self.table = self._get_table_name(node)
-        else:
-            self.table = self.name
-
-        self.materialized = get_materialization(node)
-        self.sql = node.get('injected_sql')
-
-        self.do_quote = self._get_quote_function(profile, adapter)
-
-    def _get_quote_function(self, profile, adapter):
-
-        # make a closure so we don't need to store the profile
-        # on the `Relation` object. That shouldn't be accessible in user-land
-        def quote(schema, table):
-            return adapter.quote_schema_and_table(
-                        profile=profile,
-                        schema=schema,
-                        table=table
-                    )
-
-        return quote
-
-    def _get_table_name(self, node):
-        return model_immediate_name(node, dbt.flags.NON_DESTRUCTIVE)
-
-    def final_name(self):
-        if self.materialized == 'ephemeral':
-            msg = "final_name() was called on an ephemeral model"
-            dbt.exceptions.raise_compiler_error(msg, self.node)
-        else:
-            return self.do_quote(self.schema, self.name)
-
-    def __repr__(self):
-        if self.materialized == 'ephemeral':
-            return '__dbt__CTE__{}'.format(self.name)
-        else:
-            return self.do_quote(self.schema, self.table)
-
-
 def coalesce(*args):
     for arg in args:
         if arg is not None:
             return arg
     return None
+
+
+def chunks(l, n):
+    """Yield successive n-sized chunks from l."""
+    for i in range(0, len(l), n):
+        yield l[i:i + n]
 
 
 def get_profile_from_project(project):
@@ -113,22 +79,31 @@ def compiler_warning(model, msg):
 
 
 def model_immediate_name(model, non_destructive):
-    "The name of the model table/view within the transaction"
+    """
+    Returns the name of the model relation within the transaction. This is
+    useful for referencing the model in pre or post hooks. Non-destructive
+    models aren't created with temp suffixes, nor are incremental models or
+    seeds.
+    """
+
     model_name = model.get('name')
-    if non_destructive or get_materialization(model) == 'incremental':
+    is_incremental = (get_materialization(model) == 'incremental')
+    is_seed = is_type(model, 'seed')
+
+    if non_destructive or is_incremental or is_seed:
         return model_name
     else:
         return "{}__dbt_tmp".format(model_name)
 
 
-def find_model_by_name(flat_graph, target_name, target_package):
+def find_refable_by_name(flat_graph, target_name, target_package):
     return find_by_name(flat_graph, target_name, target_package,
-                        'nodes', NodeType.Model)
+                        'nodes', NodeType.refable())
 
 
 def find_macro_by_name(flat_graph, target_name, target_package):
     return find_by_name(flat_graph, target_name, target_package,
-                        'macros', NodeType.Macro)
+                        'macros', [NodeType.Macro])
 
 
 def find_by_name(flat_graph, target_name, target_package, subgraph,
@@ -142,7 +117,7 @@ def find_by_name(flat_graph, target_name, target_package, subgraph,
 
         resource_type, package_name, node_name = node_parts
 
-        if (resource_type == nodetype and
+        if (resource_type in nodetype and
             ((target_name == node_name) and
              (target_package is None or
               target_package == package_name))):
@@ -194,6 +169,15 @@ def get_materialization_macro(flat_graph, materialization_name,
     return macro
 
 
+def load_project_with_profile(source_project, project_dir):
+    project_filepath = os.path.join(project_dir, 'dbt_project.yml')
+    return dbt.project.read_project(
+        project_filepath,
+        source_project.profiles_dir,
+        profile_to_load=source_project.profile_to_load,
+        args=source_project.args)
+
+
 def dependency_projects(project):
     import dbt.project
     module_paths = [
@@ -214,11 +198,7 @@ def dependency_projects(project):
                 continue
 
             try:
-                yield dbt.project.read_project(
-                    os.path.join(full_obj, 'dbt_project.yml'),
-                    project.profiles_dir,
-                    profile_to_load=project.profile_to_load,
-                    args=project.args)
+                yield load_project_with_profile(project, full_obj)
             except dbt.project.DbtProjectError as e:
                 logger.info(
                     "Error reading dependency project at {}".format(
@@ -238,10 +218,10 @@ def merge(*args):
     if len(args) == 1:
         return args[0]
 
-    l = list(args)
-    last = l.pop(len(l)-1)
+    lst = list(args)
+    last = lst.pop(len(lst)-1)
 
-    return _merge(merge(*l), last)
+    return _merge(merge(*lst), last)
 
 
 def _merge(a, b):
@@ -262,10 +242,10 @@ def deep_merge(*args):
     if len(args) == 1:
         return args[0]
 
-    l = list(args)
-    last = l.pop(len(l)-1)
+    lst = list(args)
+    last = lst.pop(len(lst)-1)
 
-    return _deep_merge(deep_merge(*l), last)
+    return _deep_merge(deep_merge(*lst), last)
 
 
 def _deep_merge(destination, source):
@@ -349,6 +329,10 @@ def get_nodes_by_tags(nodes, match_tags, resource_type):
     return matched_nodes
 
 
+def md5(string):
+    return hashlib.md5(string.encode('utf-8')).hexdigest()
+
+
 def get_hash(model):
     return hashlib.md5(model.get('unique_id').encode('utf-8')).hexdigest()
 
@@ -359,3 +343,74 @@ def get_hashed_contents(model):
 
 def flatten_nodes(dep_list):
     return list(itertools.chain.from_iterable(dep_list))
+
+
+class memoized(object):
+    '''Decorator. Caches a function's return value each time it is called. If
+    called later with the same arguments, the cached value is returned (not
+    reevaluated).
+
+    Taken from https://wiki.python.org/moin/PythonDecoratorLibrary#Memoize'''
+    def __init__(self, func):
+        self.func = func
+        self.cache = {}
+
+    def __call__(self, *args):
+        if not isinstance(args, collections.Hashable):
+            # uncacheable. a list, for instance.
+            # better to not cache than blow up.
+            return self.func(*args)
+        if args in self.cache:
+            return self.cache[args]
+        value = self.func(*args)
+        self.cache[args] = value
+        return value
+
+    def __repr__(self):
+        '''Return the function's docstring.'''
+        return self.func.__doc__
+
+    def __get__(self, obj, objtype):
+        '''Support instance methods.'''
+        return functools.partial(self.__call__, obj)
+
+
+def invalid_ref_fail_unless_test(node, target_model_name,
+                                 target_model_package):
+    if node.get('resource_type') == NodeType.Test:
+        warning = dbt.exceptions.get_target_not_found_msg(
+                    node,
+                    target_model_name,
+                    target_model_package)
+        logger.debug("WARNING: {}".format(warning))
+    else:
+        dbt.exceptions.ref_target_not_found(
+            node,
+            target_model_name,
+            target_model_package)
+
+
+def parse_cli_vars(var_string):
+    try:
+        cli_vars = yaml_helper.load_yaml_text(var_string)
+        var_type = type(cli_vars)
+        if var_type == dict:
+            return cli_vars
+        else:
+            type_name = var_type.__name__
+            dbt.exceptions.raise_compiler_error(
+                "The --vars argument must be a YAML dictionary, but was "
+                "of type '{}'".format(type_name))
+    except dbt.exceptions.ValidationException as e:
+        logger.error(
+                "The YAML provided in the --vars argument is not valid.\n")
+        raise
+
+
+def filter_null_values(input):
+    return dict((k, v) for (k, v) in input.items()
+                if v is not None)
+
+
+def add_ephemeral_model_prefix(s):
+    return '__dbt__CTE__{}'.format(s)

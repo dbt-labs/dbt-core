@@ -82,7 +82,7 @@ def get_remote_version_file_contents(url=REMOTE_VERSION_FILE):
     try:
         f = urlopen(url)
         contents = f.read()
-    except:
+    except Exception:
         contents = ''
     if hasattr(contents, 'decode'):
         contents = contents.decode('utf-8')
@@ -115,6 +115,6 @@ def get_version_information():
             .format(installed, latest)
 
 
-__version__ = '0.9.0'
+__version__ = '0.10.1'
 installed = get_installed_version()
 latest = get_latest_version()

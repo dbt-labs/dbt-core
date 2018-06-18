@@ -95,8 +95,21 @@ class TestPrePostModelHooks(DBTIntegrationTest):
             'macro-paths': ['test/integration/014_hook_tests/macros'],
             'models': {
                 'test': {
-                    'pre-hook': MODEL_PRE_HOOK,
-                    'post-hook': MODEL_POST_HOOK,
+                    'pre-hook': [
+                        # inside transaction (runs second)
+                        MODEL_PRE_HOOK,
+
+                        # outside transaction (runs first)
+                        {"sql": "vacuum {{ this.schema }}.on_model_hook", "transaction": False},
+                    ],
+
+                    'post-hook':[
+                        # outside transaction (runs second)
+                        {"sql": "vacuum {{ this.schema }}.on_model_hook", "transaction": False},
+
+                        # inside transaction (runs first)
+                        MODEL_POST_HOOK,
+                    ]
                 }
             }
         }
@@ -139,3 +152,32 @@ class TestPrePostModelHooks(DBTIntegrationTest):
 
         self.check_hooks('start')
         self.check_hooks('end')
+
+
+class TestPrePostModelHooksOnSeeds(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "model_hooks_014"
+
+    @property
+    def models(self):
+        return "test/integration/014_hook_tests/seed-models"
+
+    @property
+    def project_config(self):
+        return {
+            'data-paths': ['test/integration/014_hook_tests/data'],
+            'models': {},
+            'seeds': {
+                'post-hook': [
+                    'alter table {{ this }} add column new_col int',
+                    'update {{ this }} set new_col = 1'
+                ]
+            }
+        }
+
+    @attr(type='postgres')
+    def test_hooks_on_seeds(self):
+        self.run_dbt(['seed'])
+        self.run_dbt(['test'])
+

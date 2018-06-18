@@ -26,7 +26,7 @@ class RunManager(object):
         profile = self.project.run_environment()
 
         # TODO validate the number of threads
-        if self.args.threads is None:
+        if not getattr(self.args, "threads", None):
             self.threads = profile.get('threads', 1)
         else:
             self.threads = self.args.threads
@@ -69,7 +69,6 @@ class RunManager(object):
 
     def call_runner(self, data):
         runner = data['runner']
-        existing = data['existing']
         flat_graph = data['flat_graph']
 
         if runner.skip:
@@ -79,7 +78,7 @@ class RunManager(object):
         if not runner.is_ephemeral_model(runner.node):
             runner.before_execute()
 
-        result = runner.safe_run(flat_graph, existing)
+        result = runner.safe_run(flat_graph)
 
         if not runner.is_ephemeral_model(runner.node):
             runner.after_execute(result)
@@ -110,10 +109,6 @@ class RunManager(object):
         dbt.ui.printer.print_timestamped_line("")
 
         schemas = list(Runner.get_model_schemas(flat_graph))
-        if len(schemas) > 0:
-            existing = adapter.query_for_existing(profile, schemas)
-        else:
-            existing = {}
         node_runners = self.get_runners(Runner, adapter, node_dependency_list)
 
         pool = ThreadPool(num_threads)
@@ -124,7 +119,6 @@ class RunManager(object):
             args_list = []
             for runner in runners:
                 args_list.append({
-                    'existing': existing,
                     'flat_graph': flat_graph,
                     'runner': runner
                 })
@@ -203,11 +197,13 @@ class RunManager(object):
             logger.info("")
 
         try:
-            Runner.before_run(self.project, adapter, flat_graph)
+            Runner.before_hooks(self.project, adapter, flat_graph)
             started = time.time()
+            Runner.before_run(self.project, adapter, flat_graph)
             res = self.execute_nodes(linker, Runner, flat_graph, dep_list)
+            Runner.after_run(self.project, adapter, res, flat_graph)
             elapsed = time.time() - started
-            Runner.after_run(self.project, adapter, res, flat_graph, elapsed)
+            Runner.after_hooks(self.project, adapter, res, flat_graph, elapsed)
 
         finally:
             adapter.cleanup_connections()

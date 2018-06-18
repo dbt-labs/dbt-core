@@ -1,8 +1,8 @@
 from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 
-import dbt.flags
 import os
+
 
 class TestContextVars(DBTIntegrationTest):
 
@@ -89,7 +89,10 @@ class TestContextVars(DBTIntegrationTest):
         self.run_dbt(['run'])
         ctx = self.get_ctx_vars()
 
-        self.assertEqual(ctx['this'], '"{}"."context__dbt_tmp"'.format(self.unique_schema()))
+        self.assertEqual(
+            ctx['this'],
+            '"{}"."context__dbt_tmp"'.format(self.unique_schema()))
+
         self.assertEqual(ctx['this.name'], 'context')
         self.assertEqual(ctx['this.schema'], self.unique_schema())
         self.assertEqual(ctx['this.table'], 'context__dbt_tmp')
@@ -111,7 +114,10 @@ class TestContextVars(DBTIntegrationTest):
         self.run_dbt(['run', '--target', 'prod'])
         ctx = self.get_ctx_vars()
 
-        self.assertEqual(ctx['this'], '"{}"."context__dbt_tmp"'.format(self.unique_schema()))
+        self.assertEqual(
+            ctx['this'],
+            '"{}"."context__dbt_tmp"'.format(self.unique_schema()))
+
         self.assertEqual(ctx['this.name'], 'context')
         self.assertEqual(ctx['this.schema'], self.unique_schema())
         self.assertEqual(ctx['this.table'], 'context__dbt_tmp')

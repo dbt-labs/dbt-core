@@ -34,17 +34,10 @@ def print_compile_stats(stats):
         NodeType.Analysis: 'analyses',
         NodeType.Macro: 'macros',
         NodeType.Operation: 'operations',
+        NodeType.Seed: 'seed files',
     }
 
-    results = {
-        NodeType.Model: 0,
-        NodeType.Test: 0,
-        NodeType.Archive: 0,
-        NodeType.Analysis: 0,
-        NodeType.Macro: 0,
-        NodeType.Operation: 0,
-    }
-
+    results = {k: 0 for k in names.keys()}
     results.update(stats)
 
     stat_line = ", ".join(
@@ -173,7 +166,7 @@ class Compiler(object):
         })
 
         context = dbt.context.runtime.generate(
-            compiled_node, self.project.cfg, flat_graph)
+            compiled_node, self.project, flat_graph)
 
         compiled_node['compiled_sql'] = dbt.clients.jinja.get_rendered(
             node.get('raw_sql'),
@@ -268,6 +261,22 @@ class Compiler(object):
 
         return all_projects
 
+    def _check_resource_uniqueness(cls, flat_graph):
+        nodes = flat_graph['nodes']
+        names_resources = {}
+
+        for resource, node in nodes.items():
+            if node.get('resource_type') not in NodeType.refable():
+                continue
+
+            name = node['name']
+            existing_node = names_resources.get(name)
+            if existing_node is not None:
+                dbt.exceptions.raise_duplicate_resource_name(
+                        existing_node, node)
+
+            names_resources[name] = node
+
     def compile(self):
         linker = Linker()
 
@@ -276,6 +285,8 @@ class Compiler(object):
 
         flat_graph = dbt.loader.GraphLoader.load_all(
             root_project, all_projects)
+
+        self._check_resource_uniqueness(flat_graph)
 
         flat_graph = dbt.parser.process_refs(flat_graph,
                                              root_project.get('name'))

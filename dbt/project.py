@@ -11,6 +11,9 @@ import dbt.clients.yaml_helper
 import dbt.clients.jinja
 import dbt.compat
 import dbt.context.common
+import dbt.clients.system
+import dbt.ui.printer
+import dbt.links
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -24,8 +27,9 @@ default_project_cfg = {
     'outputs': {'default': {}},
     'target': 'default',
     'models': {},
+    'quoting': {},
     'profile': None,
-    'repositories': [],
+    'packages': [],
     'modules-path': 'dbt_modules'
 }
 
@@ -86,6 +90,18 @@ class Project(object):
             raise DbtProjectError(
                 "Could not find profile named '{}'"
                 .format(self.profile_to_load), self)
+
+        if self.cfg.get('models') is None:
+            self.cfg['models'] = {}
+
+        if self.cfg.get('quoting') is None:
+            self.cfg['quoting'] = {}
+
+        if self.cfg['models'].get('vars') is None:
+            self.cfg['models']['vars'] = {}
+
+        global_vars = dbt.utils.parse_cli_vars(getattr(args, 'vars', '{}'))
+        self.cfg['cli_vars'] = global_vars
 
     def __str__(self):
         return pprint.pformat({'project': self.cfg, 'profiles': self.profiles})
@@ -210,6 +226,23 @@ class Project(object):
                     "Expected project configuration '{}' was not supplied"
                     .format('.'.join(e.path)), self)
 
+    def log_warnings(self):
+        target_cfg = self.run_environment()
+        db_type = target_cfg.get('type')
+
+        if db_type == 'snowflake' and self.cfg \
+                                          .get('quoting', {}) \
+                                          .get('identifier') is None:
+            msg = dbt.ui.printer.yellow(
+                'You are using Snowflake, but you did not specify a '
+                'quoting strategy for your identifiers.\nQuoting '
+                'behavior for Snowflake will change in a future release, '
+                'so it is recommended that you define this explicitly.\n\n'
+                'For more information, see: {}\n'
+            )
+
+            logger.warn(msg.format(dbt.links.SnowflakeQuotingDocs))
+
     def hashed_name(self):
         if self.cfg.get("name", None) is None:
             return None
@@ -232,16 +265,37 @@ def read_profiles(profiles_dir=None):
     return profiles
 
 
-def read_project(filename, profiles_dir=None, validate=True,
+def read_packages(project_dir):
+
+    package_filepath = dbt.clients.system.resolve_path_from_base(
+            'packages.yml', project_dir)
+
+    if dbt.clients.system.path_exists(package_filepath):
+        package_file_contents = dbt.clients.system.load_file_contents(
+                package_filepath)
+        package_cfg = dbt.clients.yaml_helper.load_yaml_text(
+                package_file_contents)
+    else:
+        package_cfg = {}
+
+    return package_cfg.get('packages', [])
+
+
+def read_project(project_filepath, profiles_dir=None, validate=True,
                  profile_to_load=None, args=None):
     if profiles_dir is None:
         profiles_dir = default_profiles_dir
 
-    project_file_contents = dbt.clients.system.load_file_contents(filename)
+    project_dir = os.path.dirname(os.path.abspath(project_filepath))
+    project_file_contents = dbt.clients.system.load_file_contents(
+            project_filepath)
 
     project_cfg = dbt.clients.yaml_helper.load_yaml_text(project_file_contents)
-    project_cfg['project-root'] = os.path.dirname(
-        os.path.abspath(filename))
+    package_cfg = read_packages(project_dir)
+
+    project_cfg['project-root'] = project_dir
+    project_cfg['packages'] = package_cfg
+
     profiles = read_profiles(profiles_dir)
     proj = Project(project_cfg,
                    profiles,

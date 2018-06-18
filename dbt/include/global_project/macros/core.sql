@@ -9,7 +9,7 @@
 
     {%- set status, res = adapter.execute(sql, auto_begin=auto_begin, fetch=fetch_result) -%}
     {%- if name is not none -%}
-      {{ store_result(name, status=status, data=res) }}
+      {{ store_result(name, status=status, agate_table=res) }}
     {%- endif -%}
 
   {%- endif -%}
@@ -24,7 +24,7 @@
   {%- endif -%}
 
   {%- if name is not none -%}
-    {{ store_result(name, status=status, data=res) }}
+    {{ store_result(name, status=status, agate_table=res) }}
   {%- endif -%}
 
 {%- endmacro %}

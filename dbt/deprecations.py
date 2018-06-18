@@ -11,14 +11,26 @@ class DBTDeprecation(object):
             logger.info("* Deprecation Warning: {}\n".format(desc))
             active_deprecations.add(self.name)
 
-# Leaving this as an example. Make sure to add new ones to deprecations_list
-#       - Connor
-#
-# class DBTRunTargetDeprecation(DBTDeprecation):
-#     name = 'run-target'
-#     description = """profiles.yml configuration option 'run-target' is
-#     deprecated. Please use 'target' instead. The 'run-target' option will be
-#     removed (in favor of 'target') in DBT version 0.7.0"""
+
+class DBTRepositoriesDeprecation(DBTDeprecation):
+    name = "repositories"
+    description = """The dbt_project.yml configuration option 'repositories' is
+  deprecated. Please place dependencies in the `packages.yml` file instead.
+  The 'repositories' option will be removed in a future version of dbt.
+
+  For more information, see: https://docs.getdbt.com/docs/package-management
+
+  # Example packages.yml contents:
+
+{recommendation}
+  """
+
+
+class SeedDropExistingDeprecation(DBTDeprecation):
+    name = 'drop-existing'
+    description = """The --drop-existing argument to `dbt seed` has been
+  deprecated. Please use --full-refresh instead. The --drop-existing option
+  will be removed in a future version of dbt."""
 
 
 def warn(name, *args, **kwargs):
@@ -37,6 +49,8 @@ def warn(name, *args, **kwargs):
 active_deprecations = set()
 
 deprecations_list = [
+    DBTRepositoriesDeprecation(),
+    SeedDropExistingDeprecation()
 ]
 
 deprecations = {d.name: d for d in deprecations_list}

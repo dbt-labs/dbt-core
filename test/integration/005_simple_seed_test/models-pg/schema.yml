@@ -1,0 +1,6 @@
+
+seed_enabled:
+    constraints:
+        column_type:
+            - {field: id, type: 'character varying(255)' }
+            - {field: birthday, type: 'date' }

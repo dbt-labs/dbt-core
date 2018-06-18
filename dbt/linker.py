@@ -4,6 +4,11 @@ from collections import defaultdict
 import dbt.utils
 
 
+GRAPH_SERIALIZE_BLACKLIST = [
+    'agate_table'
+]
+
+
 def from_file(graph_file):
     linker = Linker()
     linker.read_graph(graph_file)
@@ -27,13 +32,16 @@ class Linker(object):
         return self.graph.node[node]
 
     def find_cycles(self):
-        try:
-            cycles = nx.algorithms.find_cycle(self.graph)
-        except nx.exception.NetworkXNoCycle:
-            return None
+        # There's a networkx find_cycle function, but there's a bug in the
+        # nx 1.11 release that prevents us from using it. We should use that
+        # function when we upgrade to 2.X. More info:
+        #     https://github.com/networkx/networkx/pull/2473
+        cycles = list(nx.simple_cycles(self.graph))
 
-        if cycles:
-            return " --> ".join([".".join(node) for node in cycles])
+        if len(cycles) > 0:
+            cycle_nodes = cycles[0]
+            cycle_nodes.append(cycle_nodes[0])
+            return " --> ".join(cycle_nodes)
 
         return None
 
@@ -97,7 +105,20 @@ class Linker(object):
         self.graph.add_node(node, data)
 
     def write_graph(self, outfile):
-        nx.write_gpickle(self.graph, outfile)
+        out_graph = self.remove_blacklisted_attributes_from_nodes(self.graph)
+        nx.write_gpickle(out_graph, outfile)
 
     def read_graph(self, infile):
         self.graph = nx.read_gpickle(infile)
+
+    @classmethod
+    def remove_blacklisted_attributes_from_nodes(cls, graph):
+        graph = graph.copy()
+        for node_name, node in graph.node.items():
+            slim_node = node.copy()
+            for key in GRAPH_SERIALIZE_BLACKLIST:
+                if key in slim_node:
+                    del slim_node[key]
+
+            graph.node[node_name] = slim_node
+        return graph

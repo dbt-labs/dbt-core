@@ -1,13 +1,13 @@
-create table "{schema}"."summary_expected" (
+create table {schema}.summary_expected (
 	gender VARCHAR(10),
     ct BIGINT
 );
 
-insert into "{schema}"."summary_expected" (gender, ct) values
+insert into {schema}.summary_expected (gender, ct) values
 ('Female', 40),
 ('Male', 60);
 
-create table "{schema}"."seed" (
+create table {schema}.seed (
 	id BIGSERIAL PRIMARY KEY,
 	first_name VARCHAR(50),
 	last_name VARCHAR(50),
@@ -16,7 +16,7 @@ create table "{schema}"."seed" (
 	ip_address VARCHAR(20)
 );
 
-insert into "{schema}"."seed" (first_name, last_name, email, gender, ip_address) values
+insert into {schema}.seed (first_name, last_name, email, gender, ip_address) values
 ('Jack', 'Hunter', 'jhunter0@pbs.org', 'Male', '59.80.20.168'),
 ('Kathryn', 'Walker', 'kwalker1@ezinearticles.com', 'Female', '194.121.179.35'),
 ('Gerald', 'Ryan', 'gryan2@com.com', 'Male', '11.3.212.243'),

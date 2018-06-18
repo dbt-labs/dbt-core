@@ -6,9 +6,6 @@ import dbt.exceptions
 
 class TestExitCodes(DBTIntegrationTest):
 
-    def setUp(self):
-        pass
-
     @property
     def schema(self):
         return "exit_codes_test_023"
@@ -38,24 +35,24 @@ class TestExitCodes(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test_exit_code_run_succeed(self):
-        self.use_default_project()
         self.use_profile('postgres')
+        self.use_default_project()
         _, success = self.run_dbt_and_check(['run', '--model', 'good'])
         self.assertTrue(success)
         self.assertTableDoesExist('good')
 
     @attr(type='postgres')
     def test__exit_code_run_fail(self):
-        self.use_default_project()
         self.use_profile('postgres')
+        self.use_default_project()
         _, success = self.run_dbt_and_check(['run', '--model', 'bad'])
         self.assertFalse(success)
         self.assertTableDoesNotExist('bad')
 
     @attr(type='postgres')
     def test___schema_test_pass(self):
-        self.use_default_project()
         self.use_profile('postgres')
+        self.use_default_project()
         _, success = self.run_dbt_and_check(['run', '--model', 'good'])
         self.assertTrue(success)
         _, success = self.run_dbt_and_check(['test', '--model', 'good'])
@@ -63,8 +60,8 @@ class TestExitCodes(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test___schema_test_fail(self):
-        self.use_default_project()
         self.use_profile('postgres')
+        self.use_default_project()
         _, success = self.run_dbt_and_check(['run', '--model', 'dupe'])
         self.assertTrue(success)
         _, success = self.run_dbt_and_check(['test', '--model', 'dupe'])
@@ -72,15 +69,15 @@ class TestExitCodes(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test___compile(self):
-        self.use_default_project()
         self.use_profile('postgres')
+        self.use_default_project()
         _, success = self.run_dbt_and_check(['compile'])
         self.assertTrue(success)
 
     @attr(type='postgres')
     def test___archive_pass(self):
-        self.use_default_project()
         self.use_profile('postgres')
+        self.use_default_project()
 
         self.run_dbt_and_check(['run', '--model', 'good'])
         _, success = self.run_dbt_and_check(['archive'])
@@ -118,8 +115,8 @@ class TestExitCodesArchiveFail(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test___archive_fail(self):
-        self.use_default_project()
         self.use_profile('postgres')
+        self.use_default_project()
 
         _, success = self.run_dbt_and_check(['run', '--model', 'good'])
         self.assertTrue(success)
@@ -214,5 +211,8 @@ class TestExitCodesSeedFail(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test_seed(self):
-        _, success = self.run_dbt_and_check(['seed'])
-        self.assertFalse(success)
+        try:
+            _, success = self.run_dbt_and_check(['seed'])
+            self.assertTrue(False)
+        except dbt.exceptions.CompilationException as e:
+            pass

@@ -1,0 +1,7 @@
+
+The cycle in this graph looks like:
+
+A -> B -> C -> D
+     ^         |
+     |         |
+     +--- E <--+

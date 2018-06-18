@@ -5,13 +5,14 @@ import dbt.exceptions
 from dbt.compat import basestring
 
 from dbt.utils import split_path, deep_merge, DBTConfigKeys
+from dbt.node_types import NodeType
 
 
 class SourceConfig(object):
     ConfigKeys = DBTConfigKeys
 
     AppendListFields = ['pre-hook', 'post-hook']
-    ExtendDictFields = ['vars']
+    ExtendDictFields = ['vars', 'column_types', 'quoting']
     ClobberFields = [
         'schema',
         'enabled',
@@ -20,14 +21,16 @@ class SourceConfig(object):
         'sort',
         'sql_where',
         'unique_key',
-        'sort_type'
+        'sort_type',
+        'bind'
     ]
 
-    def __init__(self, active_project, own_project, fqn):
+    def __init__(self, active_project, own_project, fqn, node_type):
         self._config = None
         self.active_project = active_project
         self.own_project = own_project
         self.fqn = fqn
+        self.node_type = node_type
 
         # the config options defined within the model
         self.in_model_config = {}
@@ -65,11 +68,17 @@ class SourceConfig(object):
            - active project config
            - in-model config
         """
+
         defaults = {"enabled": True, "materialized": "view"}
+
+        if self.node_type == NodeType.Seed:
+            defaults['materialized'] = 'seed'
+
         active_config = self.load_config_from_active_project()
 
         if self.active_project['name'] == self.own_project['name']:
-            cfg = self._merge(defaults, active_config, self.in_model_config)
+            cfg = self._merge(defaults, active_config,
+                              self.in_model_config)
         else:
             own_config = self.load_config_from_own_project()
 
@@ -132,7 +141,10 @@ class SourceConfig(object):
         for k in SourceConfig.ExtendDictFields:
             config[k] = {}
 
-        model_configs = project.get('models')
+        if self.node_type == NodeType.Seed:
+            model_configs = project.get('seeds')
+        else:
+            model_configs = project.get('models')
 
         if model_configs is None:
             return config

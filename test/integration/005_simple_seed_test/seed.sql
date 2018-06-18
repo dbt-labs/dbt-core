@@ -1,8 +1,8 @@
 create table {schema}.seed_expected (
 	id INTEGER,
-	first_name VARCHAR(11),
-	email VARCHAR(31),
-	ip_address VARCHAR(15),
+	first_name TEXT,
+	email TEXT,
+	ip_address TEXT,
 	birthday TIMESTAMP WITHOUT TIME ZONE
 );
 

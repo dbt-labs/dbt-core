@@ -73,6 +73,20 @@ class MacroLoader(ResourceLoader):
 class ModelLoader(ResourceLoader):
 
     @classmethod
+    def load_all(cls, root_project, all_projects, macros=None):
+        to_return = {}
+
+        for project_name, project in all_projects.items():
+            project_loaded = cls.load_project(root_project,
+                                              all_projects,
+                                              project, project_name,
+                                              macros)
+
+            to_return.update(project_loaded)
+
+        return to_return
+
+    @classmethod
     def load_project(cls, root_project, all_projects, project, project_name,
                      macros):
         return dbt.parser.load_and_parse_sql(
@@ -157,6 +171,21 @@ class RunHookLoader(ResourceLoader):
                                                    macros)
 
 
+class SeedLoader(ResourceLoader):
+
+    @classmethod
+    def load_project(cls, root_project, all_projects, project, project_name,
+                     macros):
+        return dbt.parser.load_and_parse_seeds(
+            package_name=project_name,
+            root_project=root_project,
+            all_projects=all_projects,
+            root_dir=project.get('project-root'),
+            relative_dirs=project.get('data-paths', []),
+            resource_type=NodeType.Seed,
+            macros=macros)
+
+
 # node loaders
 GraphLoader.register(ModelLoader, 'nodes')
 GraphLoader.register(AnalysisLoader, 'nodes')
@@ -164,3 +193,4 @@ GraphLoader.register(SchemaTestLoader, 'nodes')
 GraphLoader.register(DataTestLoader, 'nodes')
 GraphLoader.register(RunHookLoader, 'nodes')
 GraphLoader.register(ArchiveLoader, 'nodes')
+GraphLoader.register(SeedLoader, 'nodes')
