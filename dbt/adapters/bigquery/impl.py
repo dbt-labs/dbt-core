@@ -301,7 +301,8 @@ class BigQueryAdapter(PostgresAdapter):
         query_job = client.query(model_sql, job_config=job_config)
 
         # this waits for the job to complete
-        with cls.exception_handler(profile, model_sql, model_alias, model_name):
+        with cls.exception_handler(profile, model_sql, model_alias,
+                                   model_name):
             query_job.result(timeout=cls.get_timeout(conn))
 
         return "CREATE TABLE"

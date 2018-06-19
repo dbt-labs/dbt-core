@@ -1,4 +1,3 @@
-import copy
 import os
 import re
 import hashlib
@@ -165,6 +164,7 @@ def parse_macro_file(macro_file_path,
                 base_node.serialize(),
                 {
                     'name': name,
+                    'alias': name, #  TODO - macros should not have aliases
                     'unique_id': unique_id,
                     'tags': tags,
                     'resource_type': resource_type,
@@ -228,7 +228,7 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     config_dict.update(config.config)
     node['config'] = config_dict
 
-    # Set this temporarily so get_rendered() below has access to a schema & alias
+    # Set this temporarily so get_rendered() has access to a schema & alias
     profile = dbt.utils.get_profile_from_project(root_project_config)
     default_schema = profile.get('schema', 'public')
     node['schema'] = default_schema
