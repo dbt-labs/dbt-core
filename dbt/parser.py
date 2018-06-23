@@ -164,7 +164,6 @@ def parse_macro_file(macro_file_path,
                 base_node.serialize(),
                 {
                     'name': name,
-                    'alias': name, #  TODO - macros should not have aliases
                     'unique_id': unique_id,
                     'tags': tags,
                     'resource_type': resource_type,
