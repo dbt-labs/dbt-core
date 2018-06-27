@@ -47,8 +47,9 @@ def get_version_information():
     else:
         latest_s = latest.to_version_string(skip_matcher=True)
 
-    version_msg = ("installed version: {}\n"
-                   "   latest version: {}\n\n".format(installed_s, latest_s))
+    version_msg = "installed version: {}\n" "   latest version: {}\n\n".format(
+        installed_s, latest_s
+    )
 
     plugin_version_msg = "Plugins:\n"
     for plugin_name, version in _get_dbt_plugins_info():
@@ -89,12 +90,12 @@ def get_version_information():
         return f"{version_msg}{green('Up to date!')}\n\n{plugin_version_msg}"
 
     elif installed > latest:
-        return ("{}Your version of dbt is ahead of the latest "
+        return "{}Your version of dbt is ahead of the latest " "release!\n\n{}".format(
                 "release!\n\n{}".format(version_msg, plugin_version_msg))
 
     else:
-        return ("{}Your version of dbt is out of date! "
-                "You can find instructions for upgrading here:\n"
+        return (
+            "{}Your version of dbt is out of date! "
                 "https://docs.getdbt.com/docs/installation\n\n{}"
                 .format(version_msg, plugin_version_msg))
 
