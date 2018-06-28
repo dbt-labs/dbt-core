@@ -41,7 +41,7 @@ setup(
         'Jinja2>=2.8',
         'pytz==2017.2',
         'PyYAML>=3.11',
-        'psycopg2==2.7.1',
+        'psycopg2==2.7.5',
         'sqlparse==0.2.3',
         'networkx==1.11',
         'snowplow-tracker==0.7.2',
