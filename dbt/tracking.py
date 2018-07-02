@@ -9,8 +9,6 @@ import platform
 import uuid
 import yaml
 import os
-import json
-import logging
 
 import dbt.clients.system
 
@@ -24,7 +22,7 @@ COOKIE_PATH = os.path.join(os.path.expanduser('~'), '.dbt/.user.yml')
 
 INVOCATION_SPEC = 'iglu:com.dbt/invocation/jsonschema/1-0-0'
 PLATFORM_SPEC = 'iglu:com.dbt/platform/jsonschema/1-0-0'
-RUN_MODEL_SPEC = 'iglu:com.dbt/run_model/jsonschema/1-0-0'
+RUN_MODEL_SPEC = 'iglu:com.dbt/run_model/jsonschema/2-0-0'
 INVOCATION_ENV_SPEC = 'iglu:com.dbt/invocation_env/jsonschema/1-0-0'
 PACKAGE_INSTALL_SPEC = 'iglu:com.dbt/package_install/jsonschema/1-0-0'
 
@@ -78,7 +76,7 @@ class User(object):
                     user = yaml.safe_load(fh)
                     if user is None:
                         user = self.set_cookie()
-                except yaml.reader.ReaderError as e:
+                except yaml.reader.ReaderError:
                     user = self.set_cookie()
         return user
 
@@ -89,15 +87,15 @@ def get_run_type(args):
 
 def get_invocation_context(user, project, args):
     return {
-      "project_id": None if project is None else project.hashed_name(),
-      "user_id": user.id,
-      "invocation_id": user.invocation_id,
+        "project_id": None if project is None else project.hashed_name(),
+        "user_id": user.id,
+        "invocation_id": user.invocation_id,
 
-      "command": args.which,
-      "options": None,
-      "version": dbt_version.installed,
+        "command": args.which,
+        "options": None,
+        "version": dbt_version.installed,
 
-      "run_type": get_run_type(args),
+        "run_type": get_run_type(args),
     }
 
 
@@ -171,7 +169,7 @@ def track(user, *args, **kwargs):
         logger.debug("Sending event: {}".format(kwargs))
         try:
             tracker.track_struct_event(*args, **kwargs)
-        except Exception as e:
+        except Exception:
             logger.debug(
                 "An error was encountered while trying to send an event"
             )
@@ -179,9 +177,9 @@ def track(user, *args, **kwargs):
 
 def track_invocation_start(project=None, args=None):
     context = [
-            get_invocation_start_context(active_user, project, args),
-            get_platform_context(),
-            get_dbt_env_context()
+        get_invocation_start_context(active_user, project, args),
+        get_platform_context(),
+        get_dbt_env_context()
     ]
 
     track(
@@ -195,7 +193,7 @@ def track_invocation_start(project=None, args=None):
 
 def track_model_run(options):
     context = [SelfDescribingJson(RUN_MODEL_SPEC, options)]
-    model_id = options['model_id']
+
     track(
         active_user,
         category="dbt",
@@ -241,11 +239,11 @@ def track_invalid_invocation(
 
     user = active_user
     invocation_context = get_invocation_invalid_context(
-            user,
-            project,
-            args,
-            result_type,
-            result
+        user,
+        project,
+        args,
+        result_type,
+        result
     )
 
     context = [
