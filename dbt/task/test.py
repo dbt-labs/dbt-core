@@ -33,11 +33,11 @@ class TestTask(RunnableTask):
         test_types = [self.args.data, self.args.schema]
 
         if all(test_types) or not any(test_types):
-            tags = set()
+            tags = []
         elif self.args.data:
-            tags = {'data'}
+            tags = ['data']
         elif self.args.schema:
-            tags = {'schema'}
+            tags = ['schema']
         else:
             raise RuntimeError("unexpected")
 

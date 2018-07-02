@@ -17,14 +17,14 @@ import dbt.clients.agate_helper
 
 import dbt.context.parser
 
-import dbt.contracts.graph.parsed
-import dbt.contracts.graph.unparsed
 import dbt.contracts.project
 
 from dbt.node_types import NodeType, RunHookType
 from dbt.compat import basestring, to_string
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import get_pseudo_test_path, coalesce
+from dbt.contracts.graph.unparsed import UnparsedMacro, UnparsedNode
+from dbt.contracts.graph.parsed import ParsedMacro, ParsedNode
 
 
 def get_path(resource_type, package_name, resource_name):
@@ -124,6 +124,7 @@ def parse_macro_file(macro_file_path,
                      macro_file_contents,
                      root_path,
                      package_name,
+                     resource_type,
                      tags=None,
                      context=None):
 
@@ -132,19 +133,18 @@ def parse_macro_file(macro_file_path,
     to_return = {}
 
     if tags is None:
-        tags = set()
+        tags = []
 
     context = {}
 
-    base_node = {
-        'path': macro_file_path,
-        'original_file_path': macro_file_path,
-        'resource_type': NodeType.Macro,
-        'package_name': package_name,
-        'depends_on': {
-            'macros': [],
-        }
-    }
+    # change these to actual kwargs
+    base_node = UnparsedMacro(
+        path=macro_file_path,
+        original_file_path=macro_file_path,
+        package_name=package_name,
+        raw_sql=macro_file_contents,
+        root_path=root_path,
+    )
 
     try:
         template = dbt.clients.jinja.get_template(
@@ -157,23 +157,23 @@ def parse_macro_file(macro_file_path,
         if type(item) == jinja2.runtime.Macro:
             name = key.replace(dbt.utils.MACRO_PREFIX, '')
 
-            unique_id = get_path(NodeType.Macro,
+            unique_id = get_path(resource_type,
                                  package_name,
                                  name)
 
-            new_node = base_node.copy()
-            new_node.update({
-                'name': name,
-                'unique_id': unique_id,
-                'tags': tags,
-                'root_path': root_path,
-                'path': macro_file_path,
-                'original_file_path': macro_file_path,
-                'raw_sql': macro_file_contents,
-            })
+            merged = dbt.utils.deep_merge(
+                base_node.serialize(),
+                {
+                    'name': name,
+                    'unique_id': unique_id,
+                    'tags': tags,
+                    'resource_type': resource_type,
+                    'depends_on': {'macros': []},
+                })
 
-            new_node['generator'] = dbt.clients.jinja.macro_generator(
-                template, new_node)
+            new_node = ParsedMacro(
+                template=template,
+                **merged)
 
             to_return[unique_id] = new_node
 
@@ -181,11 +181,20 @@ def parse_macro_file(macro_file_path,
 
 
 def parse_node(node, node_path, root_project_config, package_project_config,
-               all_projects, tags=None, fqn_extra=None, fqn=None, macros=None):
-    logger.debug("Parsing {}".format(node_path))
-    node = copy.deepcopy(node)
+               all_projects, tags=None, fqn_extra=None, fqn=None, macros=None,
+               agate_table=None, archive_config=None):
+    """Parse a node, given an UnparsedNode and any other required information.
 
-    tags = coalesce(tags, set())
+    agate_table should be set if the node came from a seed file.
+    archive_config should be set if the node is an Archive node.
+    """
+    logger.debug("Parsing {}".format(node_path))
+
+    node = node.serialize()
+
+    if agate_table is not None:
+        node['agate_table'] = agate_table
+    tags = coalesce(tags, [])
     fqn_extra = coalesce(fqn_extra, [])
     macros = coalesce(macros, {})
 
@@ -215,7 +224,7 @@ def parse_node(node, node_path, root_project_config, package_project_config,
     # Set this temporarily. Not the full config yet (as config() hasn't been
     # called from jinja yet). But the Var() call below needs info about project
     # level configs b/c they might contain refs. TODO: Restructure this?
-    config_dict = node.get('config', {})
+    config_dict = coalesce(archive_config, {})
     config_dict.update(config.config)
     node['config'] = config_dict
 
@@ -252,27 +261,25 @@ def parse_node(node, node_path, root_project_config, package_project_config,
 
     del node['config_reference']
 
-    return node
+    return ParsedNode(**node)
 
 
 def parse_sql_nodes(nodes, root_project, projects, tags=None, macros=None):
     if tags is None:
-        tags = set()
+        tags = []
 
     if macros is None:
         macros = {}
 
     to_return = {}
 
-    dbt.contracts.graph.unparsed.validate_nodes(nodes)
-
-    for node in nodes:
+    for n in nodes:
+        node = dbt.contracts.graph.unparsed.UnparsedNode(**n)
         package_name = node.get('package_name')
 
         node_path = get_path(node.get('resource_type'),
                              package_name,
                              node.get('name'))
-
         node_parsed = parse_node(node,
                                  node_path,
                                  root_project,
@@ -293,8 +300,6 @@ def parse_sql_nodes(nodes, root_project, projects, tags=None, macros=None):
 
         to_return[node_path] = node_parsed
 
-    dbt.contracts.graph.parsed.validate_nodes(to_return)
-
     return to_return
 
 
@@ -303,13 +308,13 @@ def load_and_parse_sql(package_name, root_project, all_projects, root_dir,
     extension = "[!.#~]*.sql"
 
     if tags is None:
-        tags = set()
+        tags = []
 
     if macros is None:
         macros = {}
 
     if dbt.flags.STRICT_MODE:
-        dbt.contracts.project.validate_list(all_projects)
+        dbt.contracts.project.ProjectList(**all_projects)
 
     file_matches = dbt.clients.system.find_matching(
         root_dir,
@@ -373,7 +378,7 @@ def load_and_parse_run_hook_type(root_project, all_projects, hook_type,
                                  macros=None):
 
     if dbt.flags.STRICT_MODE:
-        dbt.contracts.project.validate_list(all_projects)
+        dbt.contracts.project.ProjectList(**all_projects)
 
     project_hooks = get_hooks(all_projects, hook_type)
 
@@ -396,7 +401,7 @@ def load_and_parse_run_hook_type(root_project, all_projects, hook_type,
                 'index': i
             })
 
-    tags = {hook_type}
+    tags = [hook_type]
     return parse_sql_nodes(result, root_project, all_projects, tags=tags,
                            macros=macros)
 
@@ -421,10 +426,10 @@ def load_and_parse_macros(package_name, root_project, all_projects, root_dir,
     extension = "[!.#~]*.sql"
 
     if tags is None:
-        tags = set()
+        tags = []
 
     if dbt.flags.STRICT_MODE:
-        dbt.contracts.project.validate_list(all_projects)
+        dbt.contracts.project.ProjectList(**all_projects)
 
     file_matches = dbt.clients.system.find_matching(
         root_dir,
@@ -442,9 +447,8 @@ def load_and_parse_macros(package_name, root_project, all_projects, root_dir,
                 file_match.get('relative_path'),
                 file_contents,
                 root_dir,
-                package_name))
-
-    dbt.contracts.graph.parsed.validate_macros(result)
+                package_name,
+                resource_type))
 
     return result
 
@@ -603,15 +607,15 @@ def parse_schema_test(test_base, model_name, test_config, test_namespace,
     # supply our own fqn which overrides the hashed version from the path
     fqn_override = get_fqn(full_path, package_project_config)
 
-    to_return = {
-        'name': full_name,
-        'resource_type': test_base.get('resource_type'),
-        'package_name': test_base.get('package_name'),
-        'root_path': test_base.get('root_path'),
-        'path': hashed_path,
-        'original_file_path': test_base.get('original_file_path'),
-        'raw_sql': raw_sql
-    }
+    to_return = UnparsedNode(
+        name=full_name,
+        resource_type=test_base.get('resource_type'),
+        package_name=test_base.get('package_name'),
+        root_path=test_base.get('root_path'),
+        path=hashed_path,
+        original_file_path=test_base.get('original_file_path'),
+        raw_sql=raw_sql
+    )
 
     return parse_node(to_return,
                       get_test_path(test_base.get('package_name'),
@@ -619,7 +623,7 @@ def parse_schema_test(test_base, model_name, test_config, test_namespace,
                       root_project_config,
                       package_project_config,
                       all_projects,
-                      tags={'schema'},
+                      tags=['schema'],
                       fqn_extra=None,
                       fqn=fqn_override,
                       macros=macros)
@@ -630,7 +634,7 @@ def load_and_parse_yml(package_name, root_project, all_projects, root_dir,
     extension = "[!.#~]*.yml"
 
     if dbt.flags.STRICT_MODE:
-        dbt.contracts.project.validate_list(all_projects)
+        dbt.contracts.project.ProjectList(**all_projects)
 
     file_matches = dbt.clients.system.find_matching(
         root_dir,
@@ -669,7 +673,14 @@ def parse_archives_from_projects(root_project, all_projects, macros=None):
     for name, project in all_projects.items():
         archives = archives + parse_archives_from_project(project)
 
-    for archive in archives:
+    # We're going to have a similar issue with parsed nodes, if we want to
+    # make parse_node return those.
+    for a in archives:
+        # archives have a config, but that would make for an invalid
+        # UnparsedNode, so remove it and pass it along to parse_node as an
+        # argument.
+        archive_config = a.pop('config')
+        archive = UnparsedNode(**a)
         node_path = get_path(archive.get('resource_type'),
                              archive.get('package_name'),
                              archive.get('name'))
@@ -680,7 +691,8 @@ def parse_archives_from_projects(root_project, all_projects, macros=None):
             root_project,
             all_projects.get(archive.get('package_name')),
             all_projects,
-            macros=macros)
+            macros=macros,
+            archive_config=archive_config)
 
     return to_return
 
@@ -716,51 +728,52 @@ def parse_archives_from_project(project):
 
 
 def parse_seed_file(file_match, root_dir, package_name):
+    """Parse the given seed file, returning an UnparsedNode and the agate
+    table.
+    """
     abspath = file_match['absolute_path']
     logger.debug("Parsing {}".format(abspath))
     to_return = {}
     table_name = os.path.basename(abspath)[:-4]
-    node = {
-        'unique_id': get_path(NodeType.Seed, package_name, table_name),
-        'path': file_match['relative_path'],
-        'name': table_name,
-        'root_path': root_dir,
-        'resource_type': NodeType.Seed,
+    node = UnparsedNode(
+        path=file_match['relative_path'],
+        name=table_name,
+        root_path=root_dir,
+        resource_type=NodeType.Seed,
         # Give this raw_sql so it conforms to the node spec,
         # use dummy text so it doesn't look like an empty node
-        'raw_sql': '-- csv --',
-        'package_name': package_name,
-        'depends_on': {'nodes': []},
-        'original_file_path': os.path.join(file_match.get('searched_path'),
-                                           file_match.get('relative_path')),
-    }
+        raw_sql='-- csv --',
+        package_name=package_name,
+        original_file_path=os.path.join(file_match.get('searched_path'),
+                                        file_match.get('relative_path')),
+    )
     try:
         table = dbt.clients.agate_helper.from_csv(abspath)
     except ValueError as e:
         dbt.exceptions.raise_compiler_error(str(e), node)
     table.original_abspath = abspath
-    node['agate_table'] = table
-    return node
+    return node, table
 
 
 def load_and_parse_seeds(package_name, root_project, all_projects, root_dir,
                          relative_dirs, resource_type, tags=None, macros=None):
     extension = "[!.#~]*.csv"
     if dbt.flags.STRICT_MODE:
-        dbt.contracts.project.validate_list(all_projects)
+        dbt.contracts.project.ProjectList(**all_projects)
     file_matches = dbt.clients.system.find_matching(
         root_dir,
         relative_dirs,
         extension)
     result = {}
     for file_match in file_matches:
-        node = parse_seed_file(file_match, root_dir, package_name)
-        node_path = node['unique_id']
+        node, agate_table = parse_seed_file(file_match, root_dir,
+                                            package_name)
+        node_path = get_path(NodeType.Seed, package_name, node.name)
         parsed = parse_node(node, node_path, root_project,
                             all_projects.get(package_name),
-                            all_projects, tags=tags, macros=macros)
+                            all_projects, tags=tags, macros=macros,
+                            agate_table=agate_table)
         # parsed['empty'] = False
         result[node_path] = parsed
 
-    dbt.contracts.graph.parsed.validate_nodes(result)
     return result

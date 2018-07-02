@@ -3,6 +3,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.exceptions import NotImplementedException
 from dbt.utils import get_nodes_by_tags
 from dbt.node_types import NodeType, RunHookType
+from dbt.adapters.factory import get_adapter
 
 import dbt.clients.jinja
 import dbt.context.runtime
@@ -59,6 +60,14 @@ class RunModelResult(object):
     @property
     def skipped(self):
         return self.skip
+
+
+class RunOperationResult(RunModelResult):
+    def __init__(self, node, error=None, skip=False, status=None,
+                 failed=None, execution_time=0, returned=None):
+        super(RunOperationResult, self).__init__(node, error, skip, status,
+                                                 failed, execution_time)
+        self.returned = returned
 
 
 class BaseRunner(object):
@@ -292,8 +301,9 @@ class ModelRunner(CompileRunner):
         nodes = flat_graph.get('nodes', {}).values()
         hooks = get_nodes_by_tags(nodes, {hook_type}, NodeType.Operation)
 
-        compiled_hooks = []
-        for hook in hooks:
+        ordered_hooks = sorted(hooks, key=lambda h: h.get('index', len(hooks)))
+
+        for i, hook in enumerate(ordered_hooks):
             model_name = hook.get('name')
 
             # This will clear out an open transaction if there is one.
@@ -309,24 +319,17 @@ class ModelRunner(CompileRunner):
 
             hook_index = hook.get('index', len(hooks))
             hook_dict = dbt.hooks.get_hook_dict(statement, index=hook_index)
-            compiled_hooks.append(hook_dict)
-            adapter.release_connection(profile, model_name)
-
-        ordered_hooks = sorted(compiled_hooks, key=lambda h: h.get('index', 0))
-
-        for hook in ordered_hooks:
-            model_name = hook.get('name')
 
             if dbt.flags.STRICT_MODE:
-                dbt.contracts.graph.parsed.validate_hook(hook)
+                dbt.contracts.graph.parsed.Hook(**hook_dict)
 
-            sql = hook.get('sql', '')
+            sql = hook_dict.get('sql', '')
 
             if len(sql.strip()) > 0:
                 adapter.execute_one(profile, sql, model_name=model_name,
                                     auto_begin=False)
 
-                adapter.release_connection(profile, model_name)
+            adapter.release_connection(profile, model_name)
 
     @classmethod
     def safe_run_hooks(cls, project, adapter, flat_graph, hook_type):
@@ -422,7 +425,7 @@ class ModelRunner(CompileRunner):
                 model,
                 self.adapter.type())
 
-        materialization_macro.get('generator')(context)()
+        materialization_macro.generator(context)()
 
         result = context['load_result']('main')
 

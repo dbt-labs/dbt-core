@@ -65,7 +65,7 @@ def macro_generator(template, node):
 
 
 class MaterializationExtension(jinja2.ext.Extension):
-    tags = set(['materialization'])
+    tags = ['materialization']
 
     def parse(self, parser):
         node = jinja2.nodes.Macro(lineno=next(parser.stream).lineno)
@@ -95,6 +95,28 @@ class MaterializationExtension(jinja2.ext.Extension):
             materialization_name, adapter_name)
 
         node.body = parser.parse_statements(('name:endmaterialization',),
+                                            drop_needle=True)
+
+        return node
+
+
+class OperationExtension(jinja2.ext.Extension):
+    tags = ['operation']
+
+    def parse(self, parser):
+        node = jinja2.nodes.Macro(lineno=next(parser.stream).lineno)
+        operation_name = \
+            parser.parse_assign_target(name_only=True).name
+
+        node.args = []
+        node.defaults = []
+
+        while parser.stream.skip_if('comma'):
+            target = parser.parse_assign_target(name_only=True)
+
+        node.name = dbt.utils.get_operation_macro_name(operation_name)
+
+        node.body = parser.parse_statements(('name:endoperation',),
                                             drop_needle=True)
 
         return node
@@ -142,6 +164,7 @@ def get_template(string, ctx, node=None, capture_macros=False):
             args['undefined'] = create_macro_capture_env(node)
 
         args['extensions'].append(MaterializationExtension)
+        args['extensions'].append(OperationExtension)
 
         env = MacroFuzzEnvironment(**args)
 

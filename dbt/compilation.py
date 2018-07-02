@@ -1,5 +1,6 @@
 import itertools
 import os
+import json
 from collections import OrderedDict, defaultdict
 import sqlparse
 
@@ -21,9 +22,11 @@ import dbt.flags
 import dbt.loader
 import dbt.parser
 
+from dbt.clients.system import write_file
 from dbt.logger import GLOBAL_LOGGER as logger
 
 graph_file_name = 'graph.gpickle'
+manifest_file_name = 'manifest.json'
 
 
 def print_compile_stats(stats):
@@ -54,8 +57,8 @@ def prepend_ctes(model, flat_graph):
 
 def recursively_prepend_ctes(model, flat_graph):
     if dbt.flags.STRICT_MODE:
-        dbt.contracts.graph.compiled.validate_node(model)
-        dbt.contracts.graph.compiled.validate(flat_graph)
+        dbt.contracts.graph.compiled.CompiledNode(**model)
+        dbt.contracts.graph.compiled.CompiledGraph(**flat_graph)
 
     model = model.copy()
     prepend_ctes = OrderedDict()
@@ -63,7 +66,7 @@ def recursively_prepend_ctes(model, flat_graph):
     if model.get('all_ctes_injected') is True:
         return (model, model.get('extra_ctes').keys(), flat_graph)
 
-    for cte_id in model.get('extra_ctes', {}).keys():
+    for cte_id in model.get('extra_ctes', {}):
         cte_to_add = flat_graph.get('nodes').get(cte_id)
         cte_to_add, new_prepend_ctes, flat_graph = recursively_prepend_ctes(
             cte_to_add, flat_graph)
@@ -78,7 +81,7 @@ def recursively_prepend_ctes(model, flat_graph):
     model['extra_ctes'] = prepend_ctes
     model['injected_sql'] = inject_ctes_into_sql(
         model.get('compiled_sql'),
-        model.get('extra_ctes'))
+        prepend_ctes)
 
     flat_graph['nodes'][model.get('unique_id')] = model
 
@@ -148,8 +151,7 @@ class Compiler(object):
     def __write(self, build_filepath, payload):
         target_path = os.path.join(self.project['target-path'], build_filepath)
 
-        dbt.clients.system.make_directory(os.path.dirname(target_path))
-        dbt.compat.write_file(target_path, payload)
+        write_file(target_path, payload)
 
         return target_path
 
@@ -207,6 +209,15 @@ class Compiler(object):
 
         return injected_node
 
+    def write_manifest_file(self, manifest):
+        """Write the manifest file to disk.
+
+        manifest should be a ParsedManifest.
+        """
+        filename = manifest_file_name
+        manifest_path = os.path.join(self.project['target-path'], filename)
+        write_file(manifest_path, json.dumps(manifest.serialize()))
+
     def write_graph_file(self, linker):
         filename = graph_file_name
         graph_path = os.path.join(self.project['target-path'], filename)
@@ -257,7 +268,7 @@ class Compiler(object):
             all_projects[name] = project.cfg
 
         if dbt.flags.STRICT_MODE:
-            dbt.contracts.project.validate_list(all_projects)
+            dbt.contracts.project.ProjectList(**all_projects)
 
         return all_projects
 
@@ -283,8 +294,11 @@ class Compiler(object):
         root_project = self.project.cfg
         all_projects = self.get_all_projects()
 
-        flat_graph = dbt.loader.GraphLoader.load_all(
-            root_project, all_projects)
+        manifest = dbt.loader.GraphLoader.load_all(root_project, all_projects)
+
+        self.write_manifest_file(manifest)
+
+        flat_graph = manifest.to_flat_graph()
 
         self._check_resource_uniqueness(flat_graph)
 

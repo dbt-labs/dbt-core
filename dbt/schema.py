@@ -57,7 +57,10 @@ class Column(object):
     def numeric_type(cls, dtype, size):
         # This could be decimal(...), numeric(...), number(...)
         # Just use whatever was fed in here -- don't try to get too clever
-        return "{}({})".format(dtype, size)
+        if size is None:
+            return dtype
+        else:
+            return "{}({})".format(dtype, size)
 
     def __repr__(self):
         return "<Column {} ({})>".format(self.name, self.data_type)
