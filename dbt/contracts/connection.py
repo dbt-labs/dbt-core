@@ -41,8 +41,7 @@ REDSHIFT_CREDENTIALS_CONTRACT = {
     'additionalProperties': False,
     'properties': {
         'method': {
-            'enum': ['credentials', 'iam'],
-            'default': 'credentials' # TODO : Can I do this?
+            'enum': ['database', 'iam']
         },
         'dbname': {
             'type': 'string',
@@ -74,15 +73,13 @@ REDSHIFT_CREDENTIALS_CONTRACT = {
         'cluster_id': {
             'type': 'string'
         },
-    },
-    # Confirm this works as intended. cluster_id only required if method == iam
-    "anyOf": [{
-        "properties": {
-            "method": { "enum": ["iam"] }
+        'iam_duration_seconds': {
+            'type': ['null', 'integer'],
+            'minimum': 900,
+            'maximum': 3600
         },
-        "required": ["cluster_id"]
-    }],
-    'required': ['dbname', 'host', 'user', 'pass', 'port', 'schema', 'method'],
+        'required': ['dbname', 'host', 'user', 'port', 'schema']
+    }
 }
 
 SNOWFLAKE_CREDENTIALS_CONTRACT = {
@@ -162,11 +159,11 @@ CONNECTION_CONTRACT = {
         },
         'credentials': {
             'description': (
-                'The credentials object here should match the connection '
-                'type. Redshift uses the Postgres connection model.'
+                'The credentials object here should match the connection type.'
             ),
             'oneOf': [
                 POSTGRES_CREDENTIALS_CONTRACT,
+                REDSHIFT_CREDENTIALS_CONTRACT,
                 SNOWFLAKE_CREDENTIALS_CONTRACT,
                 BIGQUERY_CREDENTIALS_CONTRACT,
             ],

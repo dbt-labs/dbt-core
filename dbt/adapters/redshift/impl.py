@@ -4,13 +4,11 @@ from dbt.adapters.postgres import PostgresAdapter
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 import dbt.exceptions
 import boto3
-import psycopg2
 
 drop_lock = multiprocessing.Lock()
 
 
 class RedshiftAdapter(PostgresAdapter):
-
     @classmethod
     def type(cls):
         return 'redshift'
@@ -20,79 +18,58 @@ class RedshiftAdapter(PostgresAdapter):
         return 'getdate()'
 
     @classmethod
-    def get_tmp_cluster_credentials(cls, config):
-        creds = config.copy()
+    def get_tmp_iam_cluster_credentials(cls, credentials):
+        cluster_id = credentials.get('cluster_id')
 
-        cluster_id = creds.get('cluster_id')
+        # default via:
+        # boto3.readthedocs.io/en/latest/reference/services/redshift.html
+        iam_duration_s = credentials.get('iam_duration_seconds', 900)
+
         if not cluster_id:
-            error = '`cluster_id` must be set in profile if IAM authentication method selected'
-            raise dbt.exceptions.FailedToConnectException(error)
+            raise dbt.exceptions.FailedToConnectException(
+                    "'cluster_id' must be provided in profile if IAM "
+                    "authentication method selected")
 
-        client = boto3.client('redshift')
+        boto_client = boto3.client('redshift')
 
         # replace username and password with temporary redshift credentials
+        to_update = {}
         try:
-            cluster_creds = client.get_cluster_credentials(DbUser=creds.get('user'),
-                                                           DbName=creds.get('dbname'),
-                                                           ClusterIdentifier=creds.get('cluster_id'),
-                                                           AutoCreate=False)
-            creds['user'] = cluster_creds.get('DbUser')
-            creds['pass'] = cluster_creds.get('DbPassword')
+            cluster_creds = boto_client.get_cluster_credentials(
+                DbUser=credentials.get('user'),
+                DbName=credentials.get('dbname'),
+                ClusterIdentifier=credentials.get('cluster_id'),
+                DurationSeconds=iam_duration_s,
+                AutoCreate=False)
 
-            return creds
+            to_update = {
+                'user': cluster_creds.get('DbUser'),
+                'pass': cluster_creds.get('DbPassword')
+            }
 
-        except client.exceptions.ClientError as e:
-            error = ('Unable to get temporary Redshift cluster credentials: "{}"'.format(str(e)))
-            raise dbt.exceptions.FailedToConnectException(error)
+        except boto_client.exceptions.ClientError as e:
+            raise dbt.exceptions.FailedToConnectException(
+                    "Unable to get temporary Redshift cluster credentials: "
+                    "{}".format(e))
+
+        return dbt.utils.merge(credentials, to_update)
 
     @classmethod
-    def get_redshift_credentials(cls, config):
-        creds = config.copy()
+    def get_credentials(cls, credentials):
+        method = credentials.get('method')
 
-        method = creds.get('method')
-
-        if method == 'database' or method is None:   # Support missing method for backwards compatibility
-            return creds
+        # Support missing 'method' for backwards compatibility
+        if method == 'database' or method is None:
+            logger.debug("Connecting to Redshift using 'database' credentials")
+            return credentials
 
         elif method == 'iam':
-            return cls.get_tmp_cluster_credentials(creds)
+            logger.debug("Connecting to Redshift using 'IAM' credentials")
+            return cls.get_tmp_iam_cluster_credentials(credentials)
 
         else:
-            error = ('Invalid `method` in profile: "{}"'.format(method))
-            raise dbt.exceptions.FailedToConnectException(error)
-
-    @classmethod
-    def open_connection(cls, connection):
-        if connection.get('state') == 'open':
-            logger.debug('Connection is already open, skipping open.')
-            return connection
-
-        result = connection.copy()
-
-        try:
-            credentials = cls.get_redshift_credentials(connection.get('credentials', {}))
-
-            handle = psycopg2.connect(
-                dbname=credentials.get('dbname'),
-                user=credentials.get('user'),
-                host=credentials.get('host'),
-                password=credentials.get('pass'),
-                port=credentials.get('port'),
-                connect_timeout=10)
-
-            result['handle'] = handle
-            result['state'] = 'open'
-        except psycopg2.Error as e:
-            logger.debug("Got an error when attempting to open a postgres "
-                         "connection: '{}'"
-                         .format(e))
-
-            result['handle'] = None
-            result['state'] = 'fail'
-
-            raise dbt.exceptions.FailedToConnectException(str(e))
-
-        return result
+            raise dbt.exceptions.FailedToConnectException(
+                    'Invalid `method` in profile: "{}"'.format(method))
 
     @classmethod
     def _get_columns_in_table_sql(cls, schema_name, table_name, database):
