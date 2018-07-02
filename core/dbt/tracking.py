@@ -270,7 +270,7 @@ def track_invocation_start(config=None, args=None):
     context = [
         get_invocation_start_context(active_user, config, args),
         get_platform_context(),
-        get_dbt_env_context()
+        get_dbt_env_context(),
     ]
 
     track(
