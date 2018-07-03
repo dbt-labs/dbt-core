@@ -3,8 +3,7 @@ import dbt.exceptions
 from dbt.node_types import NodeType
 from dbt.contracts.graph.parsed import ParsedManifest
 
-from dbt.parser import ParserUtils
-from dbt.parser import *
+import dbt.parser
 
 
 class GraphLoader(object):
@@ -20,7 +19,7 @@ class GraphLoader(object):
             nodes.update(loader.load_all(root_project, all_projects, macros))
 
         manifest = ParsedManifest(nodes=nodes, macros=macros)
-        manifest = ParserUtils.process_refs(manifest, root_project)
+        manifest = dbt.parser.ParserUtils.process_refs(manifest, root_project)
         return manifest
 
     @classmethod
