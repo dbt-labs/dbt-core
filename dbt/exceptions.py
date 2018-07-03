@@ -108,9 +108,11 @@ EXTRA_PROPERTIES = re.compile(
 MISSING_PROPERTIES = re.compile(r'(.*) is a required property')
 
 
-def _causes_from_errors(errors):
-    """Generate an error content causes string from the array of errors returned
-    by the validators.
+def _extract_error_cause_types(errors):
+    """Given an array of errors, generate three lists:
+        - list of extra values that must be removed
+        - list of missing values that must be added
+        - list of errors that aren't either of those
     """
     extras = []
     missing = []
@@ -125,6 +127,14 @@ def _causes_from_errors(errors):
             missing.append(match.group(1))
             continue
         unknown.append(err)
+    return extras, missing, unknown
+
+
+def _causes_from_errors(errors):
+    """Generate an error content causes string from the array of errors returned
+    by the validators.
+    """
+    extras, missing, unknown = _extract_error_cause_types(errors)
     parts = []
     if extras:
         parts.append(
