@@ -50,7 +50,7 @@ class ProjectTest(unittest.TestCase):
             profiles_dir=None
         )
 
-        message = r'.*schema.* not supplied.*'
+        message = r'.*schema.* is a required property.*'
         with self.assertRaisesRegexp(dbt.project.DbtProjectError, message):
             project.validate()
 
@@ -63,7 +63,7 @@ class ProjectTest(unittest.TestCase):
             profiles_dir=None
         )
 
-        message = r'.*foo.* not recognized.*'
+        message = r'.*not allowed.*foo.* was unexpected.*'
         with self.assertRaisesRegexp(dbt.project.DbtProjectError, message):
             project.validate()
 
@@ -77,11 +77,9 @@ class ProjectTest(unittest.TestCase):
             profiles_dir=None
         )
 
-        unrecognized = r'foo.* not recognized'
-        extra = r'schema.* not supplied'
+        unrecognized = r'not allowed.*foo.* was unexpected'
+        extra = r'schema.* is a required property'
         # fun with regexp ordering: want both, don't care about order
         message = '.*({0}.*{1}|{1}.*{0}).*'.format(unrecognized, extra)
         with self.assertRaisesRegexp(dbt.project.DbtProjectError, message):
             project.validate()
-
-
