@@ -20,7 +20,7 @@ COLLECTOR_PROTOCOL = "https"
 
 COOKIE_PATH = os.path.join(os.path.expanduser('~'), '.dbt/.user.yml')
 
-INVOCATION_SPEC = 'iglu:com.dbt/invocation/jsonschema/1-0-0'
+INVOCATION_SPEC = 'iglu:com.dbt/invocation/jsonschema/2-0-0'
 PLATFORM_SPEC = 'iglu:com.dbt/platform/jsonschema/1-0-0'
 RUN_MODEL_SPEC = 'iglu:com.dbt/run_model/jsonschema/2-0-0'
 INVOCATION_ENV_SPEC = 'iglu:com.dbt/invocation_env/jsonschema/1-0-0'
@@ -104,34 +104,31 @@ def get_invocation_start_context(user, project, args):
 
     start_data = {
         "progress": "start",
-        "result_type": None,
-        "result": None
+        "result_type": None
     }
 
     data.update(start_data)
     return SelfDescribingJson(INVOCATION_SPEC, data)
 
 
-def get_invocation_end_context(user, project, args, result_type, result):
+def get_invocation_end_context(user, project, args, result_type):
     data = get_invocation_context(user, project, args)
 
     start_data = {
         "progress": "end",
-        "result_type": result_type,
-        "result": result,
+        "result_type": result_type
     }
 
     data.update(start_data)
     return SelfDescribingJson(INVOCATION_SPEC, data)
 
 
-def get_invocation_invalid_context(user, project, args, result_type, result):
+def get_invocation_invalid_context(user, project, args, result_type):
     data = get_invocation_context(user, project, args)
 
     start_data = {
         "progress": "invalid",
-        "result_type": result_type,
-        "result": result,
+        "result_type": result_type
     }
 
     data.update(start_data)
@@ -216,11 +213,11 @@ def track_package_install(options):
 
 
 def track_invocation_end(
-        project=None, args=None, result_type=None, result=None
+        project=None, args=None, result_type=None
 ):
     user = active_user
     context = [
-        get_invocation_end_context(user, project, args, result_type, result),
+        get_invocation_end_context(user, project, args, result_type),
         get_platform_context(),
         get_dbt_env_context()
     ]
@@ -234,7 +231,7 @@ def track_invocation_end(
 
 
 def track_invalid_invocation(
-        project=None, args=None, result_type=None, result=None
+        project=None, args=None, result_type=None
 ):
 
     user = active_user
@@ -242,8 +239,7 @@ def track_invalid_invocation(
         user,
         project,
         args,
-        result_type,
-        result
+        result_type
     )
 
     context = [
