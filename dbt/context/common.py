@@ -340,32 +340,7 @@ def create_adapter(adapter_type, relation_type):
     return AdapterWithContext
 
 
-def _add_model_context(context, node, project_cfg, flat_graph, db_wrapper,
-                       provider):
-
-    # These fields do not apply to operations.
-    if node.get('resource_type') == NodeType.Operation:
-        return context
-
-    target_name = project_cfg.get('target')
-    profile = project_cfg.get('outputs').get(target_name)
-
-    pre_hooks = node.get('config', {}).get('pre-hook')
-    post_hooks = node.get('config', {}).get('post-hook')
-
-    model_context = {
-        "post_hooks": post_hooks,
-        "pre_hooks": pre_hooks,
-        "model": node,
-        "sql": node.get('injected_sql'),
-        "this": get_this_relation(db_wrapper, project_cfg, profile, node),
-        "ref": provider.ref(db_wrapper, node, project_cfg, profile, flat_graph)
-    }
-
-    return dbt.utils.merge(context, model_context)
-
-
-def generate(node, project_cfg, flat_graph, provider=None):
+def generate(model, project_cfg, flat_graph, provider=None):
     """
     Not meant to be called directly. Call with either:
         dbt.context.parser.generate
@@ -382,14 +357,17 @@ def generate(node, project_cfg, flat_graph, provider=None):
     target.pop('pass', None)
     target['name'] = target_name
     adapter = get_adapter(profile)
-    default_schema = profile.get('schema', 'public')
 
     context = {'env': target}
+    schema = profile.get('schema', 'public')
+
+    pre_hooks = model.get('config', {}).get('pre-hook')
+    post_hooks = model.get('config', {}).get('post-hook')
 
     relation_type = create_relation(adapter.Relation,
                                     project_cfg.get('quoting'))
 
-    db_wrapper = DatabaseWrapper(node,
+    db_wrapper = DatabaseWrapper(model,
                                  create_adapter(adapter, relation_type),
                                  profile,
                                  project_cfg)
@@ -403,21 +381,27 @@ def generate(node, project_cfg, flat_graph, provider=None):
             "Column": adapter.Column,
         },
         "column": adapter.Column,
-        "config": provider.Config(node),
+        "config": provider.Config(model),
         "env_var": _env_var,
         "exceptions": dbt.exceptions,
         "execute": provider.execute,
         "flags": dbt.flags,
         "graph": flat_graph,
         "log": log,
+        "model": model,
         "modules": {
             "pytz": pytz,
             "datetime": datetime
         },
+        "post_hooks": post_hooks,
+        "pre_hooks": pre_hooks,
+        "ref": provider.ref(db_wrapper, model, project_cfg,
+                            profile, flat_graph),
         "return": _return,
+        "schema": model.get('schema', schema),
+        "sql": model.get('injected_sql'),
         "sql_now": adapter.date_function(),
         "fromjson": fromjson,
-        "schema": node.get('schema', default_schema),
         "tojson": tojson,
         "target": target,
         "try_or_compiler_error": try_or_compiler_error(model)
@@ -431,16 +415,14 @@ def generate(node, project_cfg, flat_graph, provider=None):
     context = _add_tracking(context)
     context = _add_validation(context)
     context = _add_sql_handlers(context)
-    context = _add_model_context(context, node, project_cfg,
-                                 flat_graph, db_wrapper, provider)
 
     # we make a copy of the context for each of these ^^
 
-    context = _add_macros(context, node, flat_graph)
+    context = _add_macros(context, model, flat_graph)
 
-    context["write"] = write(node, project_cfg.get('target-path'), 'run')
-    context["render"] = render(context, node)
-    context["var"] = Var(node, context=context, overrides=cli_var_overrides)
+    context["write"] = write(model, project_cfg.get('target-path'), 'run')
+    context["render"] = render(context, model)
+    context["var"] = Var(model, context=context, overrides=cli_var_overrides)
     context['context'] = context
 
     return context
