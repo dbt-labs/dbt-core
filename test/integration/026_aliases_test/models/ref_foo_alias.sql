@@ -5,14 +5,12 @@
     )
 }}
 
-WITH trigger_ref AS (
-  SELECT
-    *
-  FROM
-    -- we should still be able to ref a model by its filepath
-    {{ ref('foo_alias') }}
+with trigger_ref as (
+
+  -- we should still be able to ref a model by its filepath
+  select * from {{ ref('foo_alias') }}
+
 )
 
-SELECT
-  -- this name should still be the filename
-  '{{ this.name }}' as "tablename"
+-- this name should still be the filename
+select '{{ this.name }}' as tablename

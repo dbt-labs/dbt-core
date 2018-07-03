@@ -6,5 +6,4 @@
     )
 }}
 
-SELECT
-  '{{ this.name }}'   as "tablename"
+select '{{ this.name }}' as tablename

@@ -14,6 +14,7 @@ class TestAliases(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
+            "macro-paths": ['test/integration/026_aliases_test/macros'],
             "models": {
                 "test": {
                     "alias_in_project": {
@@ -28,6 +29,19 @@ class TestAliases(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test__alias_model_name(self):
+        self.use_profile('postgres')
+        self.run_dbt(['run'])
+        self.run_dbt(['test'])
+
+    @attr(type='bigquery')
+    def test__alias_model_name_bigquery(self):
+        self.use_profile('bigquery')
+        self.run_dbt(['run'])
+        self.run_dbt(['test'])
+
+    @attr(type='snowflake')
+    def test__alias_model_name_snowflake(self):
+        self.use_profile('snowflake')
         self.run_dbt(['run'])
         self.run_dbt(['test'])
 
@@ -39,6 +53,12 @@ class TestAliasErrors(DBTIntegrationTest):
     @property
     def models(self):
         return "test/integration/026_aliases_test/models-dupe"
+
+    @property
+    def project_config(self):
+        return {
+            "macro-paths": ['test/integration/026_aliases_test/macros'],
+        }
 
     @attr(type='postgres')
     def test__alias_dupe_throws_exception(self):
@@ -55,10 +75,16 @@ class TestSameAliasDifferentSchemas(DBTIntegrationTest):
     def models(self):
         return "test/integration/026_aliases_test/models-dupe-custom-schema"
 
+    @property
+    def project_config(self):
+        return {
+            "macro-paths": ['test/integration/026_aliases_test/macros'],
+        }
+
     @attr(type='postgres')
     def test__same_alias_succeeds_in_different_schemas(self):
         self.run_dbt(['run'])
         res = self.run_dbt(['test'])
 
         # Make extra sure the tests ran
-        self.assertEqual(len(res) > 0)
+        self.assertTrue(len(res) > 0)
