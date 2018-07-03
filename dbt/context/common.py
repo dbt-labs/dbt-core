@@ -420,8 +420,13 @@ def generate(node, project_cfg, flat_graph, provider=None):
         "schema": node.get('schema', default_schema),
         "tojson": tojson,
         "target": target,
-        "try_or_compiler_error": try_or_compiler_error(node)
+        "try_or_compiler_error": try_or_compiler_error(model)
     })
+
+    # Operations do not represent database relations, so 'this' does not apply
+    if model.get('resource_type') != NodeType.Operation:
+        context["this"] = get_this_relation(db_wrapper, project_cfg, profile,
+                                            model)
 
     context = _add_tracking(context)
     context = _add_validation(context)
