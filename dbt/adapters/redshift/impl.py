@@ -18,7 +18,8 @@ class RedshiftAdapter(PostgresAdapter):
         return 'getdate()'
 
     @classmethod
-    def fetch_cluster_credentials(cls, db_user, db_name, cluster_id, duration_s):
+    def fetch_cluster_credentials(cls, db_user, db_name, cluster_id,
+                                  duration_s):
         """Fetches temporary login credentials from AWS. The specified user
         must already exist in the database, or else an error will occur"""
         boto_client = boto3.client('redshift')
