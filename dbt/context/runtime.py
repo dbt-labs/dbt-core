@@ -3,6 +3,7 @@ from dbt.utils import get_materialization, add_ephemeral_model_prefix
 import dbt.clients.jinja
 import dbt.context.common
 import dbt.flags
+import dbt.parser
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -25,7 +26,7 @@ def ref(db_wrapper, model, project_cfg, profile, flat_graph):
         else:
             dbt.exceptions.ref_invalid_args(model, args)
 
-        target_model = dbt.parser.resolve_ref(
+        target_model = dbt.parser.ParserUtils.resolve_ref(
             flat_graph,
             target_model_name,
             target_model_package,

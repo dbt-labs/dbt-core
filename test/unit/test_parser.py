@@ -3,7 +3,7 @@ import unittest
 import os
 
 import dbt.flags
-import dbt.parser
+from dbt.parser import ModelParser, MacroParser, DataTestParser, SchemaParser, ParserUtils
 
 from dbt.node_types import NodeType
 from dbt.contracts.graph.parsed import ParsedManifest, ParsedNode, ParsedMacro
@@ -87,7 +87,7 @@ class ParserTest(unittest.TestCase):
         }]
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
@@ -145,7 +145,7 @@ class ParserTest(unittest.TestCase):
         })
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
@@ -187,7 +187,7 @@ class ParserTest(unittest.TestCase):
         }]
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config}),
@@ -236,7 +236,7 @@ class ParserTest(unittest.TestCase):
         }]
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
@@ -335,7 +335,7 @@ class ParserTest(unittest.TestCase):
         }]
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
@@ -499,7 +499,7 @@ class ParserTest(unittest.TestCase):
         }]
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
@@ -686,7 +686,7 @@ class ParserTest(unittest.TestCase):
             macros={k: ParsedMacro(**v) for (k,v) in graph['macros'].items()},
         )
 
-        processed_manifest = dbt.parser.process_refs(manifest, 'root')
+        processed_manifest = ParserUtils.process_refs(manifest, 'root')
         self.assertEquals(
             processed_manifest.to_flat_graph(),
             {
@@ -776,7 +776,7 @@ class ParserTest(unittest.TestCase):
         })
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
@@ -858,7 +858,7 @@ class ParserTest(unittest.TestCase):
         })
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
@@ -1049,7 +1049,7 @@ class ParserTest(unittest.TestCase):
         })
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
@@ -1164,7 +1164,7 @@ class ParserTest(unittest.TestCase):
         relationships_sql = "{{ test_relationships(model=ref('model_one'), field='id', from='id', to=ref('model_two')) }}" # noqa
 
         self.assertEquals(
-            dbt.parser.parse_schema_tests(
+            SchemaParser.parse_schema_tests(
                 tests,
                 self.root_project_config,
                 {'root': self.root_project_config,
@@ -1281,7 +1281,7 @@ another_model:
         }]
 
         self.assertEquals(
-            dbt.parser.parse_schema_tests(
+            SchemaParser.parse_schema_tests(
                 tests,
                 self.root_project_config,
                 {'root': self.root_project_config,
@@ -1300,7 +1300,7 @@ another_model:
         }]
 
         self.assertEquals(
-            dbt.parser.parse_schema_tests(
+            SchemaParser.parse_schema_tests(
                 tests,
                 self.root_project_config,
                 {'root': self.root_project_config,
@@ -1319,7 +1319,7 @@ another_model:
         }]
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            DataTestParser.parse_sql_nodes(
                 tests,
                 self.root_project_config,
                 {'root': self.root_project_config,
@@ -1356,7 +1356,7 @@ another_model:
 {% endmacro %}
 """
 
-        result = dbt.parser.parse_macro_file(
+        result = MacroParser.parse_macro_file(
             macro_file_path='simple_macro.sql',
             macro_file_contents=macro_file_contents,
             root_path=get_os_path('/usr/src/app'),
@@ -1392,7 +1392,7 @@ another_model:
 {% endmacro %}
 """
 
-        result = dbt.parser.parse_macro_file(
+        result = MacroParser.parse_macro_file(
             macro_file_path='simple_macro.sql',
             macro_file_contents=macro_file_contents,
             root_path=get_os_path('/usr/src/app'),
@@ -1432,7 +1432,7 @@ another_model:
         }]
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
@@ -1474,7 +1474,7 @@ another_model:
         }]
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,

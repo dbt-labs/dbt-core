@@ -20,7 +20,6 @@ import dbt.contracts.project
 import dbt.exceptions
 import dbt.flags
 import dbt.loader
-import dbt.parser
 
 from dbt.clients.system import write_file
 from dbt.logger import GLOBAL_LOGGER as logger
