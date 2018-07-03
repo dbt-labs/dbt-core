@@ -1,0 +1,21 @@
+
+# All of these models have the same alias, but are materialized
+# in different schemas, so they should all succeed
+
+model_a:
+    constraints:
+        accepted_values:
+            - {field: schemaname, values: ['aliases_026_schema_a']}
+            - {field: tablename, values: ['duped_alias']}
+
+model_b:
+    constraints:
+        accepted_values:
+            - {field: schemaname, values: ['aliases_026_schema_b']}
+            - {field: tablename, values: ['duped_alias']}
+
+model_c:
+    constraints:
+        accepted_values:
+            - {field: schemaname, values: ['aliases_026']}
+            - {field: tablename, values: ['duped_alias']}

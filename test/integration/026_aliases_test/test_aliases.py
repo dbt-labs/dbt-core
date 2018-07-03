@@ -46,22 +46,19 @@ class TestAliasErrors(DBTIntegrationTest):
         with self.assertRaisesRegexp(Exception, message):
             self.run_dbt(['run'])
 
-class TestAliaseWithMacroConfig(DBTIntegrationTest):
+class TestSameAliasDifferentSchemas(DBTIntegrationTest):
     @property
     def schema(self):
         return "aliases_026"
 
     @property
     def models(self):
-        return "test/integration/026_aliases_test/models-with-config"
-
-    @property
-    def project_config(self):
-        return {
-            "macro-paths": ['test/integration/026_aliases_test/macros']
-        }
+        return "test/integration/026_aliases_test/models-dupe-custom-schema"
 
     @attr(type='postgres')
-    def test__adds_alias_suffix(self):
+    def test__same_alias_succeeds_in_different_schemas(self):
         self.run_dbt(['run'])
-        self.run_dbt(['test'])
+        res = self.run_dbt(['test'])
+
+        # Make extra sure the tests ran
+        self.assertEqual(len(res) > 0)
