@@ -231,7 +231,7 @@ class Project(object):
         try:
             CredentialsValidator(**target_cfg)
         except dbt.exceptions.ValidationException as e:
-            raise DbtProjectError(e.causes, self)
+            raise DbtProjectError(str(e), self)
 
     def log_warnings(self):
         target_cfg = self.run_environment()

@@ -1,9 +1,59 @@
 import copy
+import re
 from collections import Mapping
 from jsonschema import Draft4Validator
 
 from dbt.exceptions import ValidationException
 from dbt.utils import deep_merge
+
+
+EXTRA_PROPERTIES = re.compile(
+    r'Additional properties are not allowed \(([^)]*) (were|was) unexpected\)'
+)
+MISSING_PROPERTIES = re.compile(r'(.*) is a required property')
+
+
+def _extract_error_cause_types(errors):
+    """Given an array of errors, generate three lists:
+        - list of extra values that must be removed
+        - list of missing values that must be added
+        - list of errors that aren't either of those
+    """
+    extras = []
+    missing = []
+    unknown = []
+    for err in errors:
+        match = EXTRA_PROPERTIES.match(err)
+        if match:
+            extras.extend(match.group(1).split(', '))
+            continue
+        match = MISSING_PROPERTIES.match(err)
+        if match:
+            missing.append(match.group(1))
+            continue
+        unknown.append(err)
+    return extras, missing, unknown
+
+
+def _causes_from_errors(errors):
+    """Generate an error content causes string from the array of errors returned
+    by the validators.
+    """
+    extras, missing, unknown = _extract_error_cause_types(errors)
+    parts = []
+    if extras:
+        parts.append(
+            "Extra project configuration value(s) {} not recognized"
+            .format(', '.join(extras)))
+    if missing:
+        parts.append(
+            "Project configuration value(s) {} not supplied"
+            .format(', '.join(missing)))
+    if unknown:
+        parts.extend(("Unrecognized error: '{}'".format(e) for e in unknown))
+    if not parts:
+        parts = ["Unable to read credentials"]
+    return ' and '.join(parts)
 
 
 class APIObject(Mapping):
@@ -74,7 +124,9 @@ class APIObject(Mapping):
             ))
 
         if errors:
-            raise ValidationException(type(self).__name__, errors)
+            msg = ('Invalid arguments passed to "{}" instance: {}'.format(
+                type(self).__name__, _causes_from_errors(errors)))
+            raise ValidationException(msg)
 
     # implement the Mapping protocol:
     # https://docs.python.org/3/library/collections.abc.html
