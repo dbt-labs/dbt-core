@@ -18,6 +18,25 @@ class RedshiftAdapter(PostgresAdapter):
         return 'getdate()'
 
     @classmethod
+    def fetch_cluster_credentials(cls, db_user, db_name, cluster_id, duration_s):
+        """Fetches temporary login credentials from AWS. The specified user
+        must already exist in the database, or else an error will occur"""
+        boto_client = boto3.client('redshift')
+
+        try:
+            return boto_client.get_cluster_credentials(
+                DbUser=db_user,
+                DbName=db_name,
+                ClusterIdentifier=cluster_id,
+                DurationSeconds=duration_s,
+                AutoCreate=False)
+
+        except boto_client.exceptions.ClientError as e:
+            raise dbt.exceptions.FailedToConnectException(
+                    "Unable to get temporary Redshift cluster credentials: "
+                    "{}".format(e))
+
+    @classmethod
     def get_tmp_iam_cluster_credentials(cls, credentials):
         cluster_id = credentials.get('cluster_id')
 
@@ -30,29 +49,18 @@ class RedshiftAdapter(PostgresAdapter):
                     "'cluster_id' must be provided in profile if IAM "
                     "authentication method selected")
 
-        boto_client = boto3.client('redshift')
+        cluster_creds = cls.fetch_cluster_credentials(
+            credentials.get('user'),
+            credentials.get('dbname'),
+            credentials.get('cluster_id'),
+            iam_duration_s,
+        )
 
         # replace username and password with temporary redshift credentials
-        to_update = {}
-        try:
-            cluster_creds = boto_client.get_cluster_credentials(
-                DbUser=credentials.get('user'),
-                DbName=credentials.get('dbname'),
-                ClusterIdentifier=credentials.get('cluster_id'),
-                DurationSeconds=iam_duration_s,
-                AutoCreate=False)
-
-            to_update = {
-                'user': cluster_creds.get('DbUser'),
-                'pass': cluster_creds.get('DbPassword')
-            }
-
-        except boto_client.exceptions.ClientError as e:
-            raise dbt.exceptions.FailedToConnectException(
-                    "Unable to get temporary Redshift cluster credentials: "
-                    "{}".format(e))
-
-        return dbt.utils.merge(credentials, to_update)
+        return dbt.utils.merge(credentials, {
+            'user': cluster_creds.get('DbUser'),
+            'pass': cluster_creds.get('DbPassword')
+        })
 
     @classmethod
     def get_credentials(cls, credentials):
@@ -69,7 +77,7 @@ class RedshiftAdapter(PostgresAdapter):
 
         else:
             raise dbt.exceptions.FailedToConnectException(
-                    'Invalid `method` in profile: "{}"'.format(method))
+                    "Invalid 'method' in profile: '{}'".format(method))
 
     @classmethod
     def _get_columns_in_table_sql(cls, schema_name, table_name, database):

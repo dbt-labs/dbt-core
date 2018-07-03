@@ -41,7 +41,10 @@ REDSHIFT_CREDENTIALS_CONTRACT = {
     'additionalProperties': False,
     'properties': {
         'method': {
-            'enum': ['database', 'iam']
+            'enum': ['database', 'iam'],
+            'description': (
+                'database: use user/pass creds; iam: use temporary creds'
+            ),
         },
         'dbname': {
             'type': 'string',
@@ -71,12 +74,18 @@ REDSHIFT_CREDENTIALS_CONTRACT = {
             'type': 'string',
         },
         'cluster_id': {
-            'type': 'string'
+            'type': 'string',
+            'description': (
+                'If using IAM auth, the name of the cluster'
+            )
         },
         'iam_duration_seconds': {
-            'type': ['null', 'integer'],
+            'type': 'integer',
             'minimum': 900,
-            'maximum': 3600
+            'maximum': 3600,
+            'description': (
+                'If using IAM auth, the ttl for the temporary credentials'
+            )
         },
         'required': ['dbname', 'host', 'user', 'port', 'schema']
     }
@@ -161,7 +170,7 @@ CONNECTION_CONTRACT = {
             'description': (
                 'The credentials object here should match the connection type.'
             ),
-            'oneOf': [
+            'anyOf': [
                 POSTGRES_CREDENTIALS_CONTRACT,
                 REDSHIFT_CREDENTIALS_CONTRACT,
                 SNOWFLAKE_CREDENTIALS_CONTRACT,
