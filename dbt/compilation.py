@@ -20,7 +20,6 @@ import dbt.contracts.project
 import dbt.exceptions
 import dbt.flags
 import dbt.loader
-import dbt.parser
 
 from dbt.clients.system import write_file
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -310,9 +309,6 @@ class Compiler(object):
         flat_graph = manifest.to_flat_graph()
 
         self._check_resource_uniqueness(flat_graph)
-
-        flat_graph = dbt.parser.process_refs(flat_graph,
-                                             root_project.get('name'))
 
         linked_graph = self.link_graph(linker, flat_graph)
 
