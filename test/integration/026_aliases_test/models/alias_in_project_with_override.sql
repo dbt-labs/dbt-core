@@ -1,4 +1,4 @@
 
 {{ config(alias='override_alias') }}
 
-select '{{ this.name }}' as tablename
+select {{ string_literal(this.name) }} as tablename

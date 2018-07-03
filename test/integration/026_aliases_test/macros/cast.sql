@@ -1,13 +1,13 @@
 
 
-{% macro cast_to_string(expr) -%}
-  {{ adapter_macro('test.cast_to_string') }}
+{% macro string_literal(s) -%}
+  {{ adapter_macro('test.string_literal', s) }}
 {%- endmacro %}
 
-{% macro default__cast_to_string(expr) %}
-    {{ expr }}::text
+{% macro default__string_literal(s) %}
+    '{{ s }}'::text
 {% endmacro %}
 
-{% macro bigquery__cast_to_string(expr) %}
-    cast({{ expr }} as string)
+{% macro bigquery__string_literal(s) %}
+    cast('{{ s }}' as string)
 {% endmacro %}

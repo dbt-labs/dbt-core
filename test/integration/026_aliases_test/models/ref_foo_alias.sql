@@ -13,4 +13,4 @@ with trigger_ref as (
 )
 
 -- this name should still be the filename
-select '{{ this.name }}' as tablename
+select {{ string_literal(this.name) }} as tablename
