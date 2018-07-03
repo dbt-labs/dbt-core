@@ -1,13 +1,13 @@
 import json
 import os
 
+from dbt.contracts.graph.parsed import ParsedManifest, ParsedNode, ParsedMacro
 from dbt.adapters.factory import get_adapter
 from dbt.clients.system import write_file
 from dbt.compat import bigint
-from dbt.include import GLOBAL_DBT_MODULES_PATH
-from dbt.node_types import NodeType
 import dbt.ui.printer
 import dbt.utils
+import dbt.compilation
 
 from dbt.task.base_task import BaseTask
 
@@ -92,42 +92,22 @@ def unflatten(columns):
 
 
 class GenerateTask(BaseTask):
-    def get_all_projects(self):
-        root_project = self.project.cfg
-        all_projects = {root_project.get('name'): root_project}
-        # we only need to load the global deps. We haven't compiled, so our
-        # project['module-path'] does not exist.
-        dependency_projects = dbt.utils.dependencies_for_path(
-            self.project, GLOBAL_DBT_MODULES_PATH
-        )
+    def _get_manifest(self, project):
+        compiler = dbt.compilation.Compiler(project)
+        compiler.initialize()
 
-        for project in dependency_projects:
-            name = project.cfg.get('name', 'unknown')
-            all_projects[name] = project.cfg
-
-        if dbt.flags.STRICT_MODE:
-            dbt.contracts.project.ProjectList(**all_projects)
-
-        return all_projects
-
-    def _get_manifest(self):
-        # TODO: I'd like to do this better. We can't use
-        # utils.dependency_projects because it assumes you have compiled your
-        # project (I think?) - it assumes that you have an existing and
-        # populated project['modules-path'], but 'catalog generate' shouldn't
-        # require that. It might be better to suppress the exception in
-        # dependency_projects if that's reasonable, or make it a flag.
-        root_project = self.project.cfg
-        all_projects = self.get_all_projects()
+        root_project = project.cfg
+        all_projects = compiler.get_all_projects()
 
         manifest = dbt.loader.GraphLoader.load_all(root_project, all_projects)
         return manifest
 
     def run(self):
-        manifest = self._get_manifest()
+        manifest = self._get_manifest(self.project)
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
 
+        dbt.ui.printer.print_timestamped_line("Building catalog")
         results = adapter.get_catalog(profile, self.project.cfg, manifest)
 
         results = [

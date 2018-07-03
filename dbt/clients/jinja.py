@@ -44,7 +44,11 @@ def macro_generator(template, node):
             name = node.get('name')
             module = template.make_module(
                 context, False, context)
-            macro = module.__dict__[dbt.utils.get_dbt_macro_name(name)]
+
+            if node['resource_type'] == NodeType.Operation:
+                macro = module.__dict__[dbt.utils.get_dbt_operation_name(name)]
+            else:
+                macro = module.__dict__[dbt.utils.get_dbt_macro_name(name)]
             module.__dict__.update(context)
 
             try:

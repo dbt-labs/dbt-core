@@ -6,6 +6,7 @@ import dbt.flags
 import dbt.parser
 
 from dbt.node_types import NodeType
+from dbt.contracts.graph.parsed import ParsedManifest, ParsedNode, ParsedMacro
 
 def get_os_path(unix_path):
     return os.path.normpath(unix_path)
@@ -680,8 +681,14 @@ class ParserTest(unittest.TestCase):
             }
         }
 
+        manifest = ParsedManifest(
+            nodes={k: ParsedNode(**v) for (k,v) in graph['nodes'].items()},
+            macros={k: ParsedMacro(**v) for (k,v) in graph['macros'].items()},
+        )
+
+        processed_manifest = dbt.parser.process_refs(manifest, 'root')
         self.assertEquals(
-            dbt.parser.process_refs(graph, 'root'),
+            processed_manifest.to_flat_graph(),
             {
                 'macros': {},
                 'nodes': {
@@ -703,7 +710,8 @@ class ParserTest(unittest.TestCase):
                         'path': 'events.sql',
                         'original_file_path': 'events.sql',
                         'root_path': get_os_path('/usr/src/app'),
-                        'raw_sql': 'does not matter'
+                        'raw_sql': 'does not matter',
+                        'agate_table': None,
                     },
                     'model.root.events': {
                         'name': 'events',
@@ -723,7 +731,8 @@ class ParserTest(unittest.TestCase):
                         'path': 'events.sql',
                         'original_file_path': 'events.sql',
                         'root_path': get_os_path('/usr/src/app'),
-                        'raw_sql': 'does not matter'
+                        'raw_sql': 'does not matter',
+                        'agate_table': None,
                     },
                     'model.root.dep': {
                         'name': 'dep',
@@ -743,7 +752,8 @@ class ParserTest(unittest.TestCase):
                         'path': 'multi.sql',
                         'original_file_path': 'multi.sql',
                         'root_path': get_os_path('/usr/src/app'),
-                        'raw_sql': 'does not matter'
+                        'raw_sql': 'does not matter',
+                        'agate_table': None,
                     }
                 }
             }

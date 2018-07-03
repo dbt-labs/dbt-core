@@ -73,8 +73,9 @@ def resolve_ref(flat_graph, target_model_name, target_model_package,
         None)
 
 
-def process_refs(flat_graph, current_project):
-    for _, node in flat_graph.get('nodes').items():
+def process_refs(manifest, current_project):
+    flat_graph = manifest.to_flat_graph()
+    for _, node in manifest.nodes.items():
         target_model = None
         target_model_name = None
         target_model_package = None
@@ -106,7 +107,7 @@ def process_refs(flat_graph, current_project):
             node['depends_on']['nodes'].append(target_model_id)
             flat_graph['nodes'][node['unique_id']] = node
 
-    return flat_graph
+    return manifest
 
 
 def get_fqn(path, package_project_config, extra=[]):
@@ -154,28 +155,38 @@ def parse_macro_file(macro_file_path,
         raise e
 
     for key, item in template.module.__dict__.items():
-        if type(item) == jinja2.runtime.Macro:
+        if type(item) != jinja2.runtime.Macro:
+            continue
+
+        node_type = None
+        if key.startswith(dbt.utils.MACRO_PREFIX):
+            node_type = NodeType.Macro
             name = key.replace(dbt.utils.MACRO_PREFIX, '')
 
-            unique_id = get_path(resource_type,
-                                 package_name,
-                                 name)
+        elif key.startswith(dbt.utils.OPERATION_PREFIX):
+            node_type = NodeType.Operation
+            name = key.replace(dbt.utils.OPERATION_PREFIX, '')
 
-            merged = dbt.utils.deep_merge(
-                base_node.serialize(),
-                {
-                    'name': name,
-                    'unique_id': unique_id,
-                    'tags': tags,
-                    'resource_type': resource_type,
-                    'depends_on': {'macros': []},
-                })
+        if node_type != resource_type:
+            continue
 
-            new_node = ParsedMacro(
-                template=template,
-                **merged)
+        unique_id = get_path(resource_type, package_name, name)
 
-            to_return[unique_id] = new_node
+        merged = dbt.utils.deep_merge(
+            base_node.serialize(),
+            {
+                'name': name,
+                'unique_id': unique_id,
+                'tags': tags,
+                'resource_type': resource_type,
+                'depends_on': {'macros': []},
+            })
+
+        new_node = ParsedMacro(
+            template=template,
+            **merged)
+
+        to_return[unique_id] = new_node
 
     return to_return
 

@@ -17,7 +17,9 @@ class GraphLoader(object):
         for loader in cls._LOADERS:
             nodes.update(loader.load_all(root_project, all_projects, macros))
 
-        return ParsedManifest(nodes=nodes, macros=macros)
+        manifest = ParsedManifest(nodes=nodes, macros=macros)
+        manifest = dbt.parser.process_refs(manifest, root_project)
+        return manifest
 
     @classmethod
     def register(cls, loader):

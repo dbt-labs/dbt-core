@@ -302,9 +302,6 @@ class Compiler(object):
 
         self._check_resource_uniqueness(flat_graph)
 
-        flat_graph = dbt.parser.process_refs(flat_graph,
-                                             root_project.get('name'))
-
         linked_graph = self.link_graph(linker, flat_graph)
 
         stats = defaultdict(int)

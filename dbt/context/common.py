@@ -1,9 +1,8 @@
 import json
 import os
-import pytz
 
 from dbt.adapters.factory import get_adapter
-from dbt.compat import basestring, to_string
+from dbt.compat import basestring
 from dbt.node_types import NodeType
 from dbt.contracts.graph.parsed import ParsedMacro, ParsedNode
 
@@ -405,9 +404,13 @@ def generate(model, project_cfg, flat_graph, provider=None):
         "fromjson": fromjson,
         "tojson": tojson,
         "target": target,
-        "this": get_this_relation(db_wrapper, project_cfg, profile, model),
         "try_or_compiler_error": try_or_compiler_error(model)
     })
+
+    # Operations do not represent database relations, so 'this' does not apply
+    if model.get('resource_type') != NodeType.Operation:
+        context["this"] = get_this_relation(db_wrapper, project_cfg, profile,
+                                            model)
 
     context = _add_tracking(context)
     context = _add_validation(context)
