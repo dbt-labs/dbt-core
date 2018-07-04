@@ -635,6 +635,7 @@ class ParserTest(unittest.TestCase):
             'nodes': {
                 'model.snowplow.events': {
                     'name': 'events',
+                    'alias': 'events',
                     'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.snowplow.events',
@@ -655,6 +656,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.root.events': {
                     'name': 'events',
+                    'alias': 'events',
                     'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.events',
@@ -675,6 +677,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.root.dep': {
                     'name': 'dep',
+                    'alias': 'dep',
                     'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.dep',
@@ -709,6 +712,7 @@ class ParserTest(unittest.TestCase):
                 'nodes': {
                     'model.snowplow.events': {
                         'name': 'events',
+                        'alias': 'events',
                         'schema': 'analytics',
                         'resource_type': 'model',
                         'unique_id': 'model.snowplow.events',
@@ -730,6 +734,7 @@ class ParserTest(unittest.TestCase):
                     },
                     'model.root.events': {
                         'name': 'events',
+                        'alias': 'events',
                         'schema': 'analytics',
                         'resource_type': 'model',
                         'unique_id': 'model.root.events',
@@ -751,6 +756,7 @@ class ParserTest(unittest.TestCase):
                     },
                     'model.root.dep': {
                         'name': 'dep',
+                        'alias': 'dep',
                         'schema': 'analytics',
                         'resource_type': 'model',
                         'unique_id': 'model.root.dep',
