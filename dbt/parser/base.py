@@ -90,10 +90,12 @@ class BaseParser(object):
         config_dict.update(config.config)
         node['config'] = config_dict
 
-        # Set this temporarily so get_rendered() below has access to a schema
+        # Set this temporarily so get_rendered() has access to a schema & alias
         profile = dbt.utils.get_profile_from_project(root_project_config)
         default_schema = profile.get('schema', 'public')
         node['schema'] = default_schema
+        default_alias = node.get('name')
+        node['alias'] = default_alias
 
         context = dbt.context.parser.generate(node, root_project_config,
                                               {"macros": macros})
@@ -113,6 +115,7 @@ class BaseParser(object):
         get_schema = context.get('generate_schema_name',
                                  lambda x: default_schema)
         node['schema'] = get_schema(schema_override)
+        node['alias'] = config.config.get('alias', default_alias)
 
         # Overwrite node config
         config_dict = node.get('config', {})

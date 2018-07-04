@@ -16,6 +16,7 @@ from dbt.clients import yaml_helper
 
 
 DBTConfigKeys = [
+    'alias',
     'schema',
     'enabled',
     'materialized',
@@ -65,7 +66,7 @@ def get_model_name_or_none(model):
     elif isinstance(model, basestring):
         name = model
     elif isinstance(model, dict):
-        name = model.get('name')
+        name = model['alias']
     else:
         name = model.nice_name
     return name
@@ -87,7 +88,7 @@ def model_immediate_name(model, non_destructive):
     seeds.
     """
 
-    model_name = model.get('name')
+    model_name = model['alias']
     is_incremental = (get_materialization(model) == 'incremental')
     is_seed = is_type(model, 'seed')
 

@@ -86,7 +86,7 @@
 
 {% materialization seed, default %}
 
-  {%- set identifier = model['name'] -%}
+  {%- set identifier = model['alias'] -%}
   {%- set full_refresh_mode = (flags.FULL_REFRESH == True) -%}
   {%- set existing_relations = adapter.list_relations(schema=schema) -%}
 

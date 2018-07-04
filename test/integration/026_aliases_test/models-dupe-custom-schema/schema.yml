@@ -1,0 +1,18 @@
+
+# All of these models have the same alias, but are materialized
+# in different schemas, so they should all succeed
+
+model_a:
+    constraints:
+        expect_value:
+            - {field: tablename, value: 'duped_alias'}
+
+model_b:
+    constraints:
+        expect_value:
+            - {field: tablename, value: duped_alias}
+
+model_c:
+    constraints:
+        expect_value:
+            - {field: tablename, value: 'duped_alias'}

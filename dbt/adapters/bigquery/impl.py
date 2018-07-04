@@ -231,12 +231,13 @@ class BigQueryAdapter(PostgresAdapter):
     @classmethod
     def materialize_as_view(cls, profile, project_cfg, dataset, model):
         model_name = model.get('name')
+        model_alias = model.get('alias')
         model_sql = model.get('injected_sql')
 
         conn = cls.get_connection(profile, project_cfg, model_name)
         client = conn.get('handle')
 
-        view_ref = dataset.table(model_name)
+        view_ref = dataset.table(model_alias)
         view = google.cloud.bigquery.Table(view_ref)
         view.view_query = model_sql
         view.view_use_legacy_sql = False
@@ -281,14 +282,15 @@ class BigQueryAdapter(PostgresAdapter):
     def materialize_as_table(cls, profile, project_cfg, dataset,
                              model, model_sql, decorator=None):
         model_name = model.get('name')
+        model_alias = model.get('alias')
 
         conn = cls.get_connection(profile, model_name)
         client = conn.get('handle')
 
         if decorator is None:
-            table_name = model_name
+            table_name = model_alias
         else:
-            table_name = "{}${}".format(model_name, decorator)
+            table_name = "{}${}".format(model_alias, decorator)
 
         table_ref = dataset.table(table_name)
         job_config = google.cloud.bigquery.QueryJobConfig()
@@ -299,7 +301,8 @@ class BigQueryAdapter(PostgresAdapter):
         query_job = client.query(model_sql, job_config=job_config)
 
         # this waits for the job to complete
-        with cls.exception_handler(profile, model_sql, model_name, model_name):
+        with cls.exception_handler(profile, model_sql, model_alias,
+                                   model_name):
             query_job.result(timeout=cls.get_timeout(conn))
 
         return "CREATE TABLE"

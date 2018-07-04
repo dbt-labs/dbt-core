@@ -87,6 +87,12 @@ PARSED_NODE_CONTRACT = deep_merge(
                     'The actual database string that this will build into.'
                 )
             },
+            'alias': {
+                'type': 'string',
+                'description': (
+                    'The name of the relation that this will build into'
+                )
+            },
             'refs': {
                 'type': 'array',
                 'items': {
@@ -148,7 +154,7 @@ PARSED_NODE_CONTRACT = deep_merge(
         },
         'required': UNPARSED_NODE_CONTRACT['required'] + [
             'unique_id', 'fqn', 'schema', 'refs', 'depends_on', 'empty',
-            'config', 'tags',
+            'config', 'tags', 'alias',
         ]
     }
 )

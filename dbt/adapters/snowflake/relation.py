@@ -48,5 +48,5 @@ class SnowflakeRelation(DefaultRelation):
         return cls.create(
             database=profile.get('database'),
             schema=node.get('schema'),
-            identifier=node.get('name'),
+            identifier=node.get('alias'),
             **kwargs)
