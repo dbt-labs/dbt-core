@@ -36,6 +36,61 @@ POSTGRES_CREDENTIALS_CONTRACT = {
     'required': ['dbname', 'host', 'user', 'pass', 'port', 'schema'],
 }
 
+REDSHIFT_CREDENTIALS_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'properties': {
+        'method': {
+            'enum': ['database', 'iam'],
+            'description': (
+                'database: use user/pass creds; iam: use temporary creds'
+            ),
+        },
+        'dbname': {
+            'type': 'string',
+        },
+        'host': {
+            'type': 'string',
+        },
+        'user': {
+            'type': 'string',
+        },
+        'pass': {
+            'type': 'string',
+        },
+        'port': {
+            'oneOf': [
+                {
+                    'type': 'integer',
+                    'minimum': 0,
+                    'maximum': 65535,
+                },
+                {
+                    'type': 'string'
+                },
+            ],
+        },
+        'schema': {
+            'type': 'string',
+        },
+        'cluster_id': {
+            'type': 'string',
+            'description': (
+                'If using IAM auth, the name of the cluster'
+            )
+        },
+        'iam_duration_seconds': {
+            'type': 'integer',
+            'minimum': 900,
+            'maximum': 3600,
+            'description': (
+                'If using IAM auth, the ttl for the temporary credentials'
+            )
+        },
+        'required': ['dbname', 'host', 'user', 'port', 'schema']
+    }
+}
+
 SNOWFLAKE_CREDENTIALS_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
@@ -113,11 +168,11 @@ CONNECTION_CONTRACT = {
         },
         'credentials': {
             'description': (
-                'The credentials object here should match the connection '
-                'type. Redshift uses the Postgres connection model.'
+                'The credentials object here should match the connection type.'
             ),
-            'oneOf': [
+            'anyOf': [
                 POSTGRES_CREDENTIALS_CONTRACT,
+                REDSHIFT_CREDENTIALS_CONTRACT,
                 SNOWFLAKE_CREDENTIALS_CONTRACT,
                 BIGQUERY_CREDENTIALS_CONTRACT,
             ],
@@ -133,6 +188,10 @@ class PostgresCredentials(APIObject):
     SCHEMA = POSTGRES_CREDENTIALS_CONTRACT
 
 
+class RedshiftCredentials(APIObject):
+    SCHEMA = REDSHIFT_CREDENTIALS_CONTRACT
+
+
 class SnowflakeCredentials(APIObject):
     SCHEMA = SNOWFLAKE_CREDENTIALS_CONTRACT
 
@@ -143,7 +202,7 @@ class BigQueryCredentials(APIObject):
 
 CREDENTIALS_MAPPING = {
     'postgres': PostgresCredentials,
-    'redshift': PostgresCredentials,
+    'redshift': RedshiftCredentials,
     'snowflake': SnowflakeCredentials,
     'bigquery': BigQueryCredentials,
 }

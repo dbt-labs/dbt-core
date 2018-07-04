@@ -54,6 +54,10 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         return cursor.statusmessage
 
     @classmethod
+    def get_credentials(cls, credentials):
+        return credentials
+
+    @classmethod
     def open_connection(cls, connection):
         if connection.get('state') == 'open':
             logger.debug('Connection is already open, skipping open.')
@@ -61,8 +65,10 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
 
         result = connection.copy()
 
+        base_credentials = connection.get('credentials', {})
+        credentials = cls.get_credentials(base_credentials.copy())
+
         try:
-            credentials = connection.get('credentials', {})
             handle = psycopg2.connect(
                 dbname=credentials.get('dbname'),
                 user=credentials.get('user'),
