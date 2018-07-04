@@ -2,6 +2,7 @@
 
   {%- set identifier = model['alias'] -%}
   {%- set tmp_identifier = identifier + '__dbt_tmp' -%}
+  {%- set backup_identifier = identifier + '__dbt_backup' -%}
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
 
   {%- set existing_relations = adapter.list_relations(schema=schema) -%}
@@ -11,6 +12,8 @@
                                                 type='view') -%}
   {%- set intermediate_relation = api.Relation.create(identifier=tmp_identifier,
                                                       schema=schema, type='view') -%}
+  {%- set backup_relation = api.Relation.create(identifier=backup_identifier,
+                                                schema=schema, type='view') -%}
 
   {%- set exists_as_view = (old_relation is not none and old_relation.is_view) -%}
 
@@ -45,7 +48,10 @@
 
   -- cleanup
   {% if not should_ignore -%}
-    {{ drop_relation_if_exists(old_relation) }}
+    -- move the existing view out of the way
+    {% if exists_as_view %}
+      {{ adapter.rename_relation(target_relation, backup_relation) }}
+    {% endif %}
     {{ adapter.rename_relation(intermediate_relation, target_relation) }}
   {%- endif %}
 
@@ -55,6 +61,7 @@
   #}
   {% if has_transactional_hooks or not should_ignore %}
       {{ adapter.commit() }}
+      {{ drop_relation_if_exists(backup_relation) }}
   {% endif %}
 
   {{ run_hooks(post_hooks, inside_transaction=False) }}

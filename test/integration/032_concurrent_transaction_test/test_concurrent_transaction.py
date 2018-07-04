@@ -2,7 +2,7 @@ from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 import threading
 
-class TestConcurrentTransaction(DBTIntegrationTest):
+class BaseTestConcurrentTransaction(DBTIntegrationTest):
 
     def reset(self):
         self.query_state = {
@@ -13,10 +13,6 @@ class TestConcurrentTransaction(DBTIntegrationTest):
     @property
     def schema(self):
         return "concurrent_transaction_032"
-
-    @property
-    def models(self):
-        return "test/integration/032_concurrent_transaction_test/models-table"
 
     @property
     def project_config(self):
@@ -84,26 +80,32 @@ class TestConcurrentTransaction(DBTIntegrationTest):
         self.assertEqual(self.query_state['view_model'], 'good')
         self.assertEqual(self.query_state['model_1'], 'good')
 
+class TableTestConcurrentTransaction(BaseTestConcurrentTransaction):
+    @property
+    def models(self):
+        return "test/integration/032_concurrent_transaction_test/models-table"
+
     @attr(type="redshift")
     def test__redshift__concurrent_transaction_table(self):
-        self.use_default_project({
-            "model-paths": ["test/integration/032_concurrent_transaction_test/models-table"],
-        })
         self.reset()
         self.run_test()
+
+class ViewTestConcurrentTransaction(BaseTestConcurrentTransaction):
+    @property
+    def models(self):
+        return "test/integration/032_concurrent_transaction_test/models-view"
 
     @attr(type="redshift")
     def test__redshift__concurrent_transaction_view(self):
-        self.use_default_project({
-            "model-paths": ["test/integration/032_concurrent_transaction_test/models-view"],
-        })
         self.reset()
         self.run_test()
 
+class IncrementalTestConcurrentTransaction(BaseTestConcurrentTransaction):
+    @property
+    def models(self):
+        return "test/integration/032_concurrent_transaction_test/models-incremental"
+
     @attr(type="redshift")
     def test__redshift__concurrent_transaction_incremental(self):
-        self.use_default_project({
-            "model-paths": ["test/integration/032_concurrent_transaction_test/models-incremental"],
-        })
         self.reset()
         self.run_test()
