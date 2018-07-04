@@ -372,8 +372,11 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def add_begin_query(cls, profile, name):
-        raise dbt.exceptions.NotImplementedException(
-            '`add_begin_query` is not implemented for this adapter!')
+        pass
+
+    @classmethod
+    def add_commit_query(cls, profile, name):
+        pass
 
     @classmethod
     def create_schema(cls, profile, project_cfg, schema, model_name=None):
@@ -464,21 +467,6 @@ class BigQueryAdapter(PostgresAdapter):
 
         dataset_ref = client.dataset(dataset_name)
         return google.cloud.bigquery.Dataset(dataset_ref)
-
-    @classmethod
-    def warning_on_hooks(cls, hook_type):
-        msg = "{} is not supported in bigquery and will be ignored"
-        dbt.ui.printer.print_timestamped_line(msg.format(hook_type),
-                                              dbt.ui.printer.COLOR_FG_YELLOW)
-
-    @classmethod
-    def add_query(cls, profile, sql, model_name=None, auto_begin=True,
-                  bindings=None, abridge_sql_log=False):
-        if model_name in ['on-run-start', 'on-run-end']:
-            cls.warning_on_hooks(model_name)
-        else:
-            raise dbt.exceptions.NotImplementedException(
-                '`add_query` is not implemented for this adapter!')
 
     @classmethod
     def is_cancelable(cls):

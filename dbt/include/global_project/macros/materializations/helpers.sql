@@ -11,6 +11,13 @@
   {% endfor %}
 {% endmacro %}
 
+{% macro run_bigquery_hooks(hooks) %}
+  {% for hook in hooks %}
+    {% call statement(auto_begin=inside_transaction) %}
+      {{ hook.get('sql') }}
+    {% endcall %}
+  {% endfor %}
+{% endmacro %}
 
 {% macro column_list(columns) %}
   {%- for col in columns %}

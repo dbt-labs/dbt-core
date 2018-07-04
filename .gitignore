@@ -68,3 +68,6 @@ target/
 
 # Sublime Text
 *.sublime-*
+
+#PyCharm/IntelliJ
+.idea/

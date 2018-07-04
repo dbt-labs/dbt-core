@@ -16,6 +16,11 @@
 
   create or replace table {{ relation }}
   {{ partition_by(raw_partition_by) }}
+  {% if temporary %}
+  OPTIONS(
+    expiration_timestamp=TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 1 DAY)
+  )
+  {% endif %}
   as (
     {{ sql }}
   );
