@@ -66,18 +66,17 @@ class APIObject(Mapping):
         """
         validator = Draft4Validator(self.SCHEMA)
 
-        errors = []
+        errors = set()  # make errors a set to avoid duplicates
 
         for error in validator.iter_errors(self.serialize()):
-            errors.append('.'.join(
+            errors.add('.'.join(
                 list(map(str, error.path)) + [error.message]
             ))
 
         if errors:
-            raise ValidationException(
-                'Invalid arguments passed to "{}" instance: {}'
-                .format(type(self).__name__,
-                        ", ".join(errors)))
+            msg = ('Invalid arguments passed to "{}" instance: {}'.format(
+                type(self).__name__, ', '.join(errors)))
+            raise ValidationException(msg)
 
     # implement the Mapping protocol:
     # https://docs.python.org/3/library/collections.abc.html

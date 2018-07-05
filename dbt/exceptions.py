@@ -1,5 +1,6 @@
 from dbt.compat import basestring
 from dbt.logger import GLOBAL_LOGGER as logger
+import re
 
 
 class Exception(BaseException):

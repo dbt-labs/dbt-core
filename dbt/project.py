@@ -234,15 +234,7 @@ class Project(object):
         try:
             CredentialsValidator(**target_cfg)
         except dbt.exceptions.ValidationException as e:
-            if 'extra keys not allowed' in str(e):
-                raise DbtProjectError(
-                    "Extra project configuration '{}' is not recognized"
-                    .format('.'.join(e.path)), self)
-            else:
-                # TODO : does this fail if eg. project is missing?
-                raise DbtProjectError(
-                    "Expected project configuration '{}' was not supplied"
-                    .format('.'.join(e.path)), self)
+            raise DbtProjectError(str(e), self)
 
     def log_warnings(self):
         target_cfg = self.run_environment()
