@@ -32,9 +32,9 @@ class SeedTask(RunnableTask):
         rand_table = table.order_by(lambda x: random.random())
 
         schema = result.node['schema']
-        name = result.node['name']
+        alias = result.node['alias']
 
-        header = "Random sample of table: {}.{}".format(schema, name)
+        header = "Random sample of table: {}.{}".format(schema, alias)
         logger.info("")
         logger.info(header)
         logger.info("-" * len(header))

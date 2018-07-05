@@ -260,17 +260,17 @@ class CompileRunner(BaseRunner):
         def call_get_columns_in_table(schema_name, table_name):
             return adapter.get_columns_in_table(
                 profile, project, schema_name,
-                table_name, model_name=node.get('name'))
+                table_name, model_name=node.get('alias'))
 
         def call_get_missing_columns(from_schema, from_table,
                                      to_schema, to_table):
             return adapter.get_missing_columns(
                 profile, project, from_schema, from_table,
-                to_schema, to_table, node.get('name'))
+                to_schema, to_table, node.get('alias'))
 
         def call_already_exists(schema, table):
             return adapter.already_exists(
-                profile, project, schema, table, node.get('name'))
+                profile, project, schema, table, node.get('alias'))
 
         return {
             "run_started_at": dbt.tracking.active_user.run_started_at,
@@ -388,8 +388,7 @@ class ModelRunner(CompileRunner):
     def describe_node(self):
         materialization = dbt.utils.get_materialization(self.node)
         schema_name = self.node.get('schema')
-        node_name = self.node.get('name')
-
+        node_name = self.node.get('alias')
         return "{} model {}.{}".format(materialization, schema_name, node_name)
 
     def print_start_line(self):
@@ -499,7 +498,7 @@ class SeedRunner(ModelRunner):
 
     def describe_node(self):
         schema_name = self.node.get('schema')
-        return "seed file {}.{}".format(schema_name, self.node["name"])
+        return "seed file {}.{}".format(schema_name, self.node['alias'])
 
     @classmethod
     def before_run(cls, project, adapter, flat_graph):

@@ -127,8 +127,8 @@
     {% endcall %}
   {% endfor %}
 
-  {%- set identifier = model['name'] -%}
-  {%- set tmp_identifier = model['name'] + '__dbt_archival_tmp' -%}
+  {%- set identifier = model['alias'] -%}
+  {%- set tmp_identifier = identifier + '__dbt_archival_tmp' -%}
   {%- set tmp_relation = api.Relation.create(identifier=tmp_identifier, type='table') -%}
 
   {% call statement() %}

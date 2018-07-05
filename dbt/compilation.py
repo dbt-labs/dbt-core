@@ -20,7 +20,6 @@ import dbt.contracts.project
 import dbt.exceptions
 import dbt.flags
 import dbt.loader
-import dbt.parser
 
 from dbt.clients.system import write_file
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -275,18 +274,27 @@ class Compiler(object):
     def _check_resource_uniqueness(cls, flat_graph):
         nodes = flat_graph['nodes']
         names_resources = {}
+        alias_resources = {}
 
         for resource, node in nodes.items():
             if node.get('resource_type') not in NodeType.refable():
                 continue
 
             name = node['name']
+            alias = "{}.{}".format(node['schema'], node['alias'])
+
             existing_node = names_resources.get(name)
             if existing_node is not None:
                 dbt.exceptions.raise_duplicate_resource_name(
                         existing_node, node)
 
+            existing_alias = alias_resources.get(alias)
+            if existing_alias is not None:
+                dbt.exceptions.raise_ambiguous_alias(
+                        existing_alias, node)
+
             names_resources[name] = node
+            alias_resources[alias] = node
 
     def compile(self):
         linker = Linker()
@@ -301,9 +309,6 @@ class Compiler(object):
         flat_graph = manifest.to_flat_graph()
 
         self._check_resource_uniqueness(flat_graph)
-
-        flat_graph = dbt.parser.process_refs(flat_graph,
-                                             root_project.get('name'))
 
         linked_graph = self.link_graph(linker, flat_graph)
 

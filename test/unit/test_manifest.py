@@ -26,6 +26,7 @@ class ManifestTest(unittest.TestCase):
             'model.snowplow.events': ParsedNode(
                 name='events',
                 schema='analytics',
+                alias='events',
                 resource_type='model',
                 unique_id='model.snowplow.events',
                 fqn=['snowplow', 'events'],
@@ -46,6 +47,7 @@ class ManifestTest(unittest.TestCase):
             'model.root.events': ParsedNode(
                 name='events',
                 schema='analytics',
+                alias='events',
                 resource_type='model',
                 unique_id='model.root.events',
                 fqn=['root', 'events'],
@@ -66,6 +68,7 @@ class ManifestTest(unittest.TestCase):
             'model.root.dep': ParsedNode(
                 name='dep',
                 schema='analytics',
+                alias='dep',
                 resource_type='model',
                 unique_id='model.root.dep',
                 fqn=['root', 'dep'],
@@ -86,6 +89,7 @@ class ManifestTest(unittest.TestCase):
             'model.root.nested': ParsedNode(
                 name='nested',
                 schema='analytics',
+                alias='nested',
                 resource_type='model',
                 unique_id='model.root.nested',
                 fqn=['root', 'nested'],
@@ -106,6 +110,7 @@ class ManifestTest(unittest.TestCase):
             'model.root.sibling': ParsedNode(
                 name='sibling',
                 schema='analytics',
+                alias='sibling',
                 resource_type='model',
                 unique_id='model.root.sibling',
                 fqn=['root', 'sibling'],
@@ -126,6 +131,7 @@ class ManifestTest(unittest.TestCase):
             'model.root.multi': ParsedNode(
                 name='multi',
                 schema='analytics',
+                alias='multi',
                 resource_type='model',
                 unique_id='model.root.multi',
                 fqn=['root', 'multi'],

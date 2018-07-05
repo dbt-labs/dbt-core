@@ -145,6 +145,9 @@ class Project(object):
 
             compiled[key] = compiled_val
 
+        if self.args and hasattr(self.args, 'threads') and self.args.threads:
+            compiled['threads'] = self.args.threads
+
         return compiled
 
     def compile_and_update_target(self):
