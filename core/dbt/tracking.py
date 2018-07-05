@@ -207,11 +207,7 @@ def get_invocation_context(user, config, args):
 def get_invocation_start_context(user, config, args):
     data = get_invocation_context(user, config, args)
 
-    start_data = {
-        "progress": "start",
-        "result_type": None,
-        "result": None
-    }
+    start_data = {"progress": "start", "result_type": None, "result": None}
 
     data.update(start_data)
     return SelfDescribingJson(INVOCATION_SPEC, data)
@@ -220,11 +216,7 @@ def get_invocation_start_context(user, config, args):
 def get_invocation_end_context(user, config, args, result_type):
     data = get_invocation_context(user, config, args)
 
-    start_data = {
-        "progress": "end",
-        "result_type": result_type,
-        "result": None
-    }
+    start_data = {"progress": "end", "result_type": result_type, "result": None}
 
     data.update(start_data)
     return SelfDescribingJson(INVOCATION_SPEC, data)
