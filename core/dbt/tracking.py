@@ -225,11 +225,7 @@ def get_invocation_end_context(user, config, args, result_type):
 def get_invocation_invalid_context(user, config, args, result_type):
     data = get_invocation_context(user, config, args)
 
-    start_data = {
-        "progress": "invalid",
-        "result_type": result_type,
-        "result": None
-    }
+    start_data = {"progress": "invalid", "result_type": result_type, "result": None}
 
     data.update(start_data)
     return SelfDescribingJson(INVOCATION_SPEC, data)
