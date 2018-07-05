@@ -20,9 +20,9 @@ COLLECTOR_PROTOCOL = "https"
 
 COOKIE_PATH = os.path.join(os.path.expanduser('~'), '.dbt/.user.yml')
 
-INVOCATION_SPEC = 'iglu:com.dbt/invocation/jsonschema/2-0-0'
+INVOCATION_SPEC = 'iglu:com.dbt/invocation/jsonschema/1-0-0'
 PLATFORM_SPEC = 'iglu:com.dbt/platform/jsonschema/1-0-0'
-RUN_MODEL_SPEC = 'iglu:com.dbt/run_model/jsonschema/2-0-0'
+RUN_MODEL_SPEC = 'iglu:com.dbt/run_model/jsonschema/1-0-0'
 INVOCATION_ENV_SPEC = 'iglu:com.dbt/invocation_env/jsonschema/1-0-0'
 PACKAGE_INSTALL_SPEC = 'iglu:com.dbt/package_install/jsonschema/1-0-0'
 
@@ -104,7 +104,8 @@ def get_invocation_start_context(user, project, args):
 
     start_data = {
         "progress": "start",
-        "result_type": None
+        "result_type": None,
+        "result": None
     }
 
     data.update(start_data)
@@ -116,7 +117,8 @@ def get_invocation_end_context(user, project, args, result_type):
 
     start_data = {
         "progress": "end",
-        "result_type": result_type
+        "result_type": result_type,
+        "result": None
     }
 
     data.update(start_data)
@@ -128,7 +130,8 @@ def get_invocation_invalid_context(user, project, args, result_type):
 
     start_data = {
         "progress": "invalid",
-        "result_type": result_type
+        "result_type": result_type,
+        "result": None
     }
 
     data.update(start_data)

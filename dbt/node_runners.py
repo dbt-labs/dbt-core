@@ -32,6 +32,7 @@ def track_model_run(index, num_nodes, run_model_result):
         "execution_time": run_model_result.execution_time,
         "run_status": run_model_result.status,
         "run_skipped": run_model_result.skip,
+        "run_error": None,
         "model_materialization": dbt.utils.get_materialization(run_model_result.node),  # noqa
         "model_id": dbt.utils.get_hash(run_model_result.node),
         "hashed_contents": dbt.utils.get_hashed_contents(run_model_result.node),  # noqa
