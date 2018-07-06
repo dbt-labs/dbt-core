@@ -147,17 +147,17 @@ def run_from_task(task, proj, parsed_args):
     try:
         result = task.run()
         dbt.tracking.track_invocation_end(
-            project=proj, args=parsed_args, result_type="ok", result=None
+            project=proj, args=parsed_args, result_type="ok"
         )
     except (dbt.exceptions.NotImplementedException,
             dbt.exceptions.FailedToConnectException) as e:
         logger.info('ERROR: {}'.format(e))
         dbt.tracking.track_invocation_end(
-            project=proj, args=parsed_args, result_type="error", result=str(e)
+            project=proj, args=parsed_args, result_type="error"
         )
     except Exception as e:
         dbt.tracking.track_invocation_end(
-            project=proj, args=parsed_args, result_type="error", result=str(e)
+            project=proj, args=parsed_args, result_type="error"
         )
         raise
 
@@ -196,8 +196,7 @@ def invoke_dbt(parsed):
         dbt.tracking.track_invalid_invocation(
             project=proj,
             args=parsed,
-            result_type="invalid_profile",
-            result=str(e))
+            result_type="invalid_profile")
 
         return None
     except project.DbtProfileError as e:
@@ -207,8 +206,7 @@ def invoke_dbt(parsed):
         dbt.tracking.track_invalid_invocation(
             project=proj,
             args=parsed,
-            result_type="invalid_profile",
-            result=str(e))
+            result_type="invalid_profile")
 
         return None
 
@@ -228,8 +226,7 @@ def invoke_dbt(parsed):
             dbt.tracking.track_invalid_invocation(
                 project=proj,
                 args=parsed,
-                result_type="invalid_target",
-                result="target not found")
+                result_type="invalid_target")
 
             return None
 
