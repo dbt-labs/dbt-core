@@ -21,7 +21,10 @@
   {%- set should_ignore = non_destructive_mode and exists_as_view %}
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
+
+  -- drop the temp relations if they exists for some reason
   {{ adapter.drop_relation(intermediate_relation) }}
+  {{ adapter.drop_relation(backup_relation) }}
 
   -- `BEGIN` happens here:
   {{ run_hooks(pre_hooks, inside_transaction=True) }}

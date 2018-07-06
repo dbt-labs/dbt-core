@@ -18,8 +18,9 @@
   {%- set create_as_temporary = (exists_as_table and non_destructive_mode) -%}
 
 
-  -- drop the temp relation if it exists for some reason
+  -- drop the temp relations if they exists for some reason
   {{ adapter.drop_relation(intermediate_relation) }}
+  {{ adapter.drop_relation(backup_relation) }}
 
   -- setup: if the target relation already exists, truncate or drop it (if it's a view)
   {% if non_destructive_mode -%}
