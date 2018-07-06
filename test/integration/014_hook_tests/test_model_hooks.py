@@ -153,6 +153,15 @@ class TestPrePostModelHooks(DBTIntegrationTest):
         self.check_hooks('start')
         self.check_hooks('end')
 
+    @attr(type='bigquery')
+    def test_bigquery_pre_and_post_model_hooks(self):
+        self.use_profile('bigquery')
+
+        self.run_dbt(['run'])
+
+        self.check_hooks('start')
+        self.check_hooks('end')
+
 
 class TestPrePostModelHooksOnSeeds(DBTIntegrationTest):
     @property
