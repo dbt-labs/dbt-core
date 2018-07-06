@@ -93,7 +93,7 @@ def get_invocation_context(user, project, args):
 
         "command": args.which,
         "options": None,
-        "version": dbt_version.installed,
+        "version": str(dbt_version.installed),
 
         "run_type": get_run_type(args),
     }
