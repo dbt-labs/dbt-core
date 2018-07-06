@@ -15,6 +15,8 @@
       identifier=identifier, schema=schema,
       type='view') -%}
 
+  {{ run_hooks(pre_hooks) }}
+
   -- drop if exists
   {%- if old_relation is not none -%}
     {%- if old_relation.is_table and not flags.FULL_REFRESH -%}
@@ -35,5 +37,7 @@
       {{ create_view_as(target_relation, sql) }}
     {%- endcall %}
   {%- endif %}
+
+  {{ run_hooks(post_hooks) }}
 
 {%- endmaterialization %}
