@@ -1,5 +1,6 @@
 import dbt.compat
 import logging
+import logging.handlers
 import os
 import sys
 
