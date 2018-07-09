@@ -182,8 +182,18 @@ class BigQueryAdapter(PostgresAdapter):
 
         bigquery_dataset = cls.get_dataset(
             profile, project_cfg, schema, model_name)
+
+
         all_tables = client.list_tables(
             bigquery_dataset,
+            # BigQuery paginates tables by alphabetizing them, and using
+            # the name of the last table on a page as the key for the
+            # next page. If that key table gets dropped before we run
+            # list_relations, then this will 404. So, we avoid this
+            # situation by not paginating the list of tables.
+            # see: https://github.com/fishtown-analytics/dbt/issues/726
+            # TODO: cache the list of relations up front, and then we
+            #       won't need to do this
             max_results=0)
 
         relation_types = {
