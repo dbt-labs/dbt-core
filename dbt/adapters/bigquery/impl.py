@@ -183,7 +183,6 @@ class BigQueryAdapter(PostgresAdapter):
         bigquery_dataset = cls.get_dataset(
             profile, project_cfg, schema, model_name)
 
-
         all_tables = client.list_tables(
             bigquery_dataset,
             # BigQuery paginates tables by alphabetizing them, and using
