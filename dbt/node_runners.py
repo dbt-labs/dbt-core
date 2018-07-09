@@ -326,8 +326,8 @@ class ModelRunner(CompileRunner):
             sql = hook_dict.get('sql', '')
 
             if len(sql.strip()) > 0:
-                adapter.execute_one(profile, sql, model_name=model_name,
-                                    auto_begin=False)
+                adapter.execute(profile, sql, model_name=model_name,
+                                auto_begin=False, fetch=False)
 
             adapter.release_connection(profile, model_name)
 
