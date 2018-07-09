@@ -474,19 +474,19 @@ class BigQueryAdapter(PostgresAdapter):
         return google.cloud.bigquery.Dataset(dataset_ref)
 
     @classmethod
+    def warning_on_hooks(cls, hook_type):
+        msg = "{} is not supported in bigquery and will be ignored"
+        dbt.ui.printer.print_timestamped_line(msg.format(hook_type),
+                                              dbt.ui.printer.COLOR_FG_YELLOW)
+
+    @classmethod
     def add_query(cls, profile, sql, model_name=None, auto_begin=True,
                   bindings=None, abridge_sql_log=False):
-        if model_name not in ['on-run-start', 'on-run-end']:
+        if model_name in ['on-run-start', 'on-run-end']:
+            cls.warning_on_hooks(model_name)
+        else:
             raise dbt.exceptions.NotImplementedException(
                 '`add_query` is not implemented for this adapter!')
-        return super(BigQueryAdapter, self).add_query(
-            profile=profile,
-            sql=sql,
-            model_name=model_name,
-            auto_begin=auto_begin,
-            bindings=bindings,
-            abridge_sql_log=abridge_sql_log
-        )
 
     @classmethod
     def is_cancelable(cls):
