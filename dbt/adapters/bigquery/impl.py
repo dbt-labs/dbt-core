@@ -350,7 +350,7 @@ class BigQueryAdapter(PostgresAdapter):
         query_job = client.query(sql, job_config)
 
         # this blocks until the query has completed
-        with cls.exception_handler(profile, 'create dataset', model_name):
+        with cls.exception_handler(profile, sql, model_name):
             iterator = query_job.result()
 
         if fetch:
