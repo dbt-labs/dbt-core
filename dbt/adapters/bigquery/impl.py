@@ -182,7 +182,9 @@ class BigQueryAdapter(PostgresAdapter):
 
         bigquery_dataset = cls.get_dataset(
             profile, project_cfg, schema, model_name)
-        all_tables = client.list_tables(bigquery_dataset)
+        all_tables = client.list_tables(
+            bigquery_dataset,
+            max_results=0)
 
         relation_types = {
             'TABLE': 'table',
