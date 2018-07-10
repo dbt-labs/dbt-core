@@ -376,7 +376,8 @@ class DBTIntegrationTest(unittest.TestCase):
             schema,
             table
         )
-        return [(c.name, c.data_type, c.char_size) for c in columns]
+        return sorted(((c.name, c.data_type, c.char_size) for c in columns),
+                      key=lambda x: x[0])
 
     def get_models_in_schema(self, schema=None):
         schema = self.unique_schema() if schema is None else schema
