@@ -373,8 +373,8 @@ class DBTIntegrationTest(unittest.TestCase):
         return self.adapter.get_columns_in_table(
             self._profile,
             self.project_config,
-            table,
-            schema
+            schema,
+            table
         )
 
     def get_models_in_schema(self, schema=None):
