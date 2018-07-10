@@ -370,12 +370,13 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def get_table_columns(self, table, schema=None):
         schema = self.unique_schema() if schema is None else schema
-        return self.adapter.get_columns_in_table(
+        columns = self.adapter.get_columns_in_table(
             self._profile,
             self.project_config,
             schema,
             table
         )
+        return [(c.name, c.data_type, c.char_size) for c in columns]
 
     def get_models_in_schema(self, schema=None):
         schema = self.unique_schema() if schema is None else schema
