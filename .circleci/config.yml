@@ -10,7 +10,7 @@ jobs:
           POSTGRES_DB: "dbt"
     steps:
       - checkout
-      - run: apt-get update && apt-get install python-dev python3-dev
+      - run: apt-get update && apt-get install -y python-dev python3-dev
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run: bash test/setup_db.sh
@@ -22,7 +22,7 @@ jobs:
         environment: *pgenv
     steps:
       - checkout
-      - run: apt-get install python3-dev
+      - run: apt-get install -y python3-dev
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run: chown -R $(id -nu):$(id -ng) /root/
@@ -35,7 +35,7 @@ jobs:
       - image: python:3.6
     steps:
       - checkout
-      - run: apt-get install python3-dev
+      - run: apt-get install -y python3-dev
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run:
@@ -46,7 +46,7 @@ jobs:
       - image: python:3.6
     steps:
       - checkout
-      - run: apt-get install python3-dev
+      - run: apt-get install -y python3-dev
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run:
@@ -57,7 +57,7 @@ jobs:
       - image: python:3.6
     steps:
       - checkout
-      - run: apt-get install python3-dev
+      - run: apt-get install -y python3-dev
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run:
@@ -70,7 +70,7 @@ jobs:
         environment: *pgenv
     steps:
       - checkout
-      - run: apt-get install python-dev
+      - run: apt-get install -y python-dev
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run: bash test/setup_db.sh
@@ -82,7 +82,7 @@ jobs:
       - image: python:2.7
     steps:
       - checkout
-      - run: apt-get install python-dev
+      - run: apt-get install -y python-dev
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run:
@@ -93,7 +93,7 @@ jobs:
       - image: python:2.7
     steps:
       - checkout
-      - run: apt-get install python-dev
+      - run: apt-get install -y python-dev
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run:
@@ -104,7 +104,7 @@ jobs:
       - image: python:2.7
     steps:
       - checkout
-      - run: apt-get update && apt-get install python-dev
+      - run: apt-get update && apt-get install -y python-dev
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run:
