@@ -12,7 +12,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 
 
 DBT_CONFIG_DIR = os.path.abspath(
-    os.path.expanduser(os.environ.get("DBT_CONFIG_DIR", '~/.dbt'))
+    os.path.expanduser(os.environ.get("DBT_CONFIG_DIR", '/root/.dbt'))
 )
 
 DBT_PROFILES = os.path.join(DBT_CONFIG_DIR, 'profiles.yml')
