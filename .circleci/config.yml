@@ -6,7 +6,7 @@ jobs:
       - image: postgres
     steps:
       - checkout
-      - run: sudo apt-get install python3-dev
+      - run: sudo apt-get install python-dev python3-dev
       - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
       - run: sudo pip install virtualenvwrapper tox
       - run: sudo chown -R $(id -nu):$(id -ng) /root/
