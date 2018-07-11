@@ -6,10 +6,11 @@ jobs:
       - image: postgres
     steps:
       - checkout
-      - run: sudo apt-get install python-dev python3-dev
+      - run: sudo apt-get update && sudo apt-get install python-dev python3-dev
       - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
       - run: sudo pip install virtualenvwrapper tox
       - run: sudo chown -R $(id -nu):$(id -ng) /root/
+      - run: bash test/setup_db.sh
       - run: tox -e pep8,unit-py27,unit-py36
   integration-postgres-py36:
     docker:
@@ -21,9 +22,7 @@ jobs:
       - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
       - run: sudo pip install virtualenvwrapper tox
       - run: sudo chown -R $(id -nu):$(id -ng) /root/
-      - run:
-          name: Setup database
-          command: bash test/setup_db.sh
+      - run: bash test/setup_db.sh
       - run:
           name: Run tests
           command: tox -e integration-postgres-py36
@@ -73,9 +72,7 @@ jobs:
       - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
       - run: sudo pip install virtualenvwrapper tox
       - run: sudo chown -R $(id -nu):$(id -ng) /root/
-      - run:
-          name: Setup database
-          command: bash test/setup_db.sh
+      - run: bash test/setup_db.sh
       - run:
           name: Run tests
           command: tox -e integration-postgres-py27
@@ -108,7 +105,7 @@ jobs:
       - image: circleci/python:2.7
     steps:
       - checkout
-      - run: sudo apt-get install python-dev
+      - run: sudo apt-get update && sudo apt-get install python-dev
       - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
       - run: sudo pip install virtualenvwrapper tox
       - run: sudo chown -R $(id -nu):$(id -ng) /root/
