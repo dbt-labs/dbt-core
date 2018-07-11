@@ -3,8 +3,11 @@ jobs:
   unit:
     docker:
       - image: circleci/python:3.6
+      - image: postgres
     steps:
       - checkout
+      - run: sudo apt-get install python3-dev
+      - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
       - run: sudo pip install virtualenvwrapper tox
       - run: sudo chown -R $(id -nu):$(id -ng) /root/
       - run: tox -e pep8,unit-py27,unit-py36
@@ -14,6 +17,7 @@ jobs:
       - image: postgres
     steps:
       - checkout
+      - run: sudo apt-get install python3-dev
       - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
       - run: sudo pip install virtualenvwrapper tox
       - run: sudo chown -R $(id -nu):$(id -ng) /root/
@@ -28,6 +32,7 @@ jobs:
       - image: circleci/python:3.6
     steps:
       - checkout
+      - run: sudo apt-get install python3-dev
       - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
       - run: sudo pip install virtualenvwrapper tox
       - run: sudo chown -R $(id -nu):$(id -ng) /root/
@@ -39,6 +44,7 @@ jobs:
       - image: circleci/python:3.6
     steps:
       - checkout
+      - run: sudo apt-get install python3-dev
       - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
       - run: sudo pip install virtualenvwrapper tox
       - run: sudo chown -R $(id -nu):$(id -ng) /root/
@@ -50,6 +56,7 @@ jobs:
       - image: circleci/python:3.6
     steps:
       - checkout
+      - run: sudo apt-get install python3-dev
       - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
       - run: sudo pip install virtualenvwrapper tox
       - run: sudo chown -R $(id -nu):$(id -ng) /root/
@@ -62,6 +69,7 @@ jobs:
       - image: postgres
     steps:
       - checkout
+      - run: sudo apt-get install python-dev
       - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
       - run: sudo pip install virtualenvwrapper tox
       - run: sudo chown -R $(id -nu):$(id -ng) /root/
@@ -76,6 +84,7 @@ jobs:
       - image: circleci/python:2.7
     steps:
       - checkout
+      - run: sudo apt-get install python-dev
       - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
       - run: sudo pip install virtualenvwrapper tox
       - run: sudo chown -R $(id -nu):$(id -ng) /root/
@@ -87,6 +96,7 @@ jobs:
       - image: circleci/python:2.7
     steps:
       - checkout
+      - run: sudo apt-get install python-dev
       - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
       - run: sudo pip install virtualenvwrapper tox
       - run: sudo chown -R $(id -nu):$(id -ng) /root/
@@ -98,6 +108,7 @@ jobs:
       - image: circleci/python:2.7
     steps:
       - checkout
+      - run: sudo apt-get install python-dev
       - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
       - run: sudo pip install virtualenvwrapper tox
       - run: sudo chown -R $(id -nu):$(id -ng) /root/
