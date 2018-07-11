@@ -99,7 +99,6 @@ class TestBigqueryPrePostModelHooks(DBTIntegrationTest):
 
     def check_hooks(self, state):
         ctx = self.get_ctx_vars(state)
-        print('ctx={}'.format(ctx))
 
         self.assertEqual(ctx['state'], state)
         self.assertEqual(ctx['target_name'], 'default2')
@@ -118,13 +117,18 @@ class TestBigqueryPrePostModelHooks(DBTIntegrationTest):
 
 
 class TestBigqueryPrePostModelHooksOnSeeds(DBTIntegrationTest):
+    def setUp(self):
+        DBTIntegrationTest.setUp(self)
+        self.use_profile('bigquery')
+        self.use_default_project()
+
     @property
     def schema(self):
         return "model_hooks_014"
 
     @property
     def models(self):
-        return "test/integration/014_hook_tests/seed-models"
+        return "test/integration/014_hook_tests/seed-models-bq"
 
     @property
     def project_config(self):
@@ -133,14 +137,20 @@ class TestBigqueryPrePostModelHooksOnSeeds(DBTIntegrationTest):
             'models': {},
             'seeds': {
                 'post-hook': [
-                    'alter table {{ this }} add column new_col int',
-                    'update {{ this }} set new_col = 1'
+                    'insert into {{ this }} (a, b, c) VALUES (10, 11, 12)',
                 ]
             }
         }
 
     @attr(type='bigquery')
     def test_hooks_on_seeds(self):
-        self.run_dbt(['seed'])
-        self.run_dbt(['test'])
-
+        res = self.run_dbt(['seed'])
+        self.assertEqual(len(res), 1, 'Expected exactly one item')
+        res = self.run_dbt(['test'])
+        self.assertEqual(len(res), 1, 'Expected exactly one item')
+        result = self.run_sql(
+            'select a, b, c from `{schema}`.`example_seed` where a = 10',
+            fetch='all'
+        )
+        self.assertFalse(len(result) == 0, 'nothing inserted into table by hook')
+        self.assertFalse(len(result) > 1, 'too many rows in table')
