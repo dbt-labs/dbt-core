@@ -13,7 +13,14 @@ jobs:
       - run: apt-get update && apt-get install -y python-dev python3-dev
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
-      - run: bash test/setup_db.sh
+      - run: &setupdb
+          name: Setup postgres
+          command: bash test/setup_db.sh
+          environment:
+            PGHOST: 127.0.0.1
+            PGUSER: root
+            PGPASSWORD: password
+            PGDATABASE: postgres
       - run: tox -e pep8,unit-py27,unit-py36
   integration-postgres-py36:
     docker: *py36
@@ -22,8 +29,7 @@ jobs:
       - run: apt-get update && apt-get install -y python3-dev
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
-      - run: chown -R $(id -nu):$(id -ng) /root/
-      - run: bash test/setup_db.sh
+      - run: *setupdb
       - run:
           name: Run tests
           command: tox -e integration-postgres-py36
@@ -41,7 +47,7 @@ jobs:
     docker: *py36
     steps:
       - checkout
-      - run: apt-get install -y python3-dev
+      - run: apt-get update && apt-get install -y python3-dev
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run:
@@ -67,7 +73,7 @@ jobs:
       - run: apt-get update && apt-get install -y python-dev
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
-      - run: bash test/setup_db.sh
+      - run: *setupdb
       - run:
           name: Run tests
           command: tox -e integration-postgres-py27
