@@ -4,6 +4,10 @@ jobs:
     docker:
       - image: circleci/python:3.6
       - image: postgres
+        environment: &pgenv
+          POSTGRES_USER: "root"
+          POSTGRES_PASSWORD: "password"
+          POSTGRES_DB: "dbt"
     steps:
       - checkout
       - run: sudo apt-get update && sudo apt-get install python-dev python3-dev
@@ -16,6 +20,7 @@ jobs:
     docker:
       - image: circleci/python:3.6
       - image: postgres
+        environment: *pgenv
     steps:
       - checkout
       - run: sudo apt-get install python3-dev
@@ -66,6 +71,7 @@ jobs:
     docker:
       - image: circleci/python:2.7
       - image: postgres
+        environment: *pgenv
     steps:
       - checkout
       - run: sudo apt-get install python-dev
