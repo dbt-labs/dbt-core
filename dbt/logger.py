@@ -1,5 +1,6 @@
 import dbt.compat
 import logging
+import logging.handlers
 import os
 import sys
 
@@ -32,6 +33,14 @@ logger = logging.getLogger('dbt')
 logger.addHandler(stdout_handler)
 logger.setLevel(logging.DEBUG)
 logging.getLogger().setLevel(logging.CRITICAL)
+
+# Quiet these down in the logs
+logging.getLogger('botocore').setLevel(logging.INFO)
+logging.getLogger('requests').setLevel(logging.INFO)
+logging.getLogger('urllib3').setLevel(logging.INFO)
+logging.getLogger('google').setLevel(logging.INFO)
+logging.getLogger('snowflake.connector').setLevel(logging.INFO)
+logging.getLogger('parsedatetime').setLevel(logging.INFO)
 
 # Redirect warnings through our logging setup
 # They will be logged to a file below

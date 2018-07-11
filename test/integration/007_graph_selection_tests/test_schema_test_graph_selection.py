@@ -23,14 +23,10 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
             ]
         }
 
-    def setUp(self):
-        DBTIntegrationTest.setUp(self)
-
-        self.use_default_project()
-        self.project = read_project('dbt_project.yml')
-
     def run_schema_and_assert(self, include, exclude, expected_tests):
         self.use_profile('postgres')
+        self.use_default_project()
+        self.project = read_project('dbt_project.yml')
 
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
         self.run_dbt(["deps"])
@@ -56,7 +52,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
             None,
             None,
             ['unique_emails_email',
-             'unique_table_id',
+             'unique_table_model_id',
              'unique_users_id',
              'unique_users_rollup_gender']
         )
@@ -98,7 +94,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         self.run_schema_and_assert(
             None,
             ['users_rollup'],
-            ['unique_emails_email', 'unique_table_id', 'unique_users_id']
+            ['unique_emails_email', 'unique_table_model_id', 'unique_users_id']
         )
 
     @attr(type='postgres')
@@ -116,7 +112,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         self.run_schema_and_assert(
             ['*'],
             ['users'],
-            ['unique_emails_email', 'unique_table_id', 'unique_users_rollup_gender']
+            ['unique_emails_email', 'unique_table_model_id', 'unique_users_rollup_gender']
         )
 
     @attr(type='postgres')
@@ -124,15 +120,15 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         self.run_schema_and_assert(
             ['dbt_integration_project'],
             None,
-            ['unique_table_id']
+            ['unique_table_model_id']
         )
 
     @attr(type='postgres')
     def test__postgres__schema_tests_model_in_dep_pkg(self):
         self.run_schema_and_assert(
-            ['dbt_integration_project.table'],
+            ['dbt_integration_project.table_model'],
             None,
-            ['unique_table_id']
+            ['unique_table_model_id']
         )
 
     @attr(type='postgres')

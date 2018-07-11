@@ -2,6 +2,7 @@ import os
 import hashlib
 import itertools
 import collections
+import copy
 import functools
 
 import dbt.exceptions
@@ -15,6 +16,7 @@ from dbt.clients import yaml_helper
 
 
 DBTConfigKeys = [
+    'alias',
     'schema',
     'enabled',
     'materialized',
@@ -27,7 +29,9 @@ DBTConfigKeys = [
     'pre-hook',
     'post-hook',
     'vars',
-    'bind',         # redshift
+    'column_types',
+    'bind',
+    'quoting',
 ]
 
 
@@ -37,57 +41,17 @@ class ExitCodes(object):
     UnhandledError = 2
 
 
-class Relation(object):
-    def __init__(self, profile, adapter, node, use_temp=False):
-        self.node = node
-        self.schema = node.get('schema')
-        self.name = node.get('name')
-
-        if use_temp:
-            self.table = self._get_table_name(node)
-        else:
-            self.table = self.name
-
-        self.materialized = get_materialization(node)
-        self.sql = node.get('injected_sql')
-
-        self.do_quote = self._get_quote_function(profile, adapter)
-
-    def _get_quote_function(self, profile, adapter):
-
-        # make a closure so we don't need to store the profile
-        # on the `Relation` object. That shouldn't be accessible in user-land
-        def quote(schema, table):
-            return adapter.quote_schema_and_table(
-                        profile=profile,
-                        schema=schema,
-                        table=table
-                    )
-
-        return quote
-
-    def _get_table_name(self, node):
-        return model_immediate_name(node, dbt.flags.NON_DESTRUCTIVE)
-
-    def final_name(self):
-        if self.materialized == 'ephemeral':
-            msg = "final_name() was called on an ephemeral model"
-            dbt.exceptions.raise_compiler_error(msg, self.node)
-        else:
-            return self.do_quote(self.schema, self.name)
-
-    def __repr__(self):
-        if self.materialized == 'ephemeral':
-            return '__dbt__CTE__{}'.format(self.name)
-        else:
-            return self.do_quote(self.schema, self.table)
-
-
 def coalesce(*args):
     for arg in args:
         if arg is not None:
             return arg
     return None
+
+
+def chunks(l, n):
+    """Yield successive n-sized chunks from l."""
+    for i in range(0, len(l), n):
+        yield l[i:i + n]
 
 
 def get_profile_from_project(project):
@@ -103,7 +67,7 @@ def get_model_name_or_none(model):
     elif isinstance(model, basestring):
         name = model
     elif isinstance(model, dict):
-        name = model.get('name')
+        name = model['alias']
     else:
         name = model.nice_name
     return name
@@ -118,9 +82,18 @@ def compiler_warning(model, msg):
 
 
 def model_immediate_name(model, non_destructive):
-    "The name of the model table/view within the transaction"
-    model_name = model.get('name')
-    if non_destructive or get_materialization(model) == 'incremental':
+    """
+    Returns the name of the model relation within the transaction. This is
+    useful for referencing the model in pre or post hooks. Non-destructive
+    models aren't created with temp suffixes, nor are incremental models or
+    seeds.
+    """
+
+    model_name = model['alias']
+    is_incremental = (get_materialization(model) == 'incremental')
+    is_seed = is_type(model, 'seed')
+
+    if non_destructive or is_incremental or is_seed:
         return model_name
     else:
         return "{}__dbt_tmp".format(model_name)
@@ -128,7 +101,7 @@ def model_immediate_name(model, non_destructive):
 
 def find_refable_by_name(flat_graph, target_name, target_package):
     return find_by_name(flat_graph, target_name, target_package,
-                        'nodes', [NodeType.Model, NodeType.Seed])
+                        'nodes', NodeType.refable())
 
 
 def find_macro_by_name(flat_graph, target_name, target_package):
@@ -136,9 +109,30 @@ def find_macro_by_name(flat_graph, target_name, target_package):
                         'macros', [NodeType.Macro])
 
 
+def find_operation_by_name(flat_graph, target_name, target_package):
+    return find_by_name(flat_graph, target_name, target_package,
+                        'macros', [NodeType.Operation])
+
+
 def find_by_name(flat_graph, target_name, target_package, subgraph,
                  nodetype):
-    for name, model in flat_graph.get(subgraph).items():
+    return find_in_subgraph_by_name(
+        flat_graph.get(subgraph),
+        target_name,
+        target_package,
+        nodetype)
+
+
+def find_in_subgraph_by_name(subgraph, target_name, target_package, nodetype):
+    """Find an entry in a subgraph by name. Any mapping that implements
+    .items() and maps unique id -> something can be used as the subgraph.
+
+    Names are like:
+        '{nodetype}.{target_package}.{target_name}'
+
+    You can use `None` for the package name as a wildcard.
+    """
+    for name, model in subgraph.items():
         node_parts = name.split('.')
         if len(node_parts) != 3:
             node_type = model.get('resource_type', 'node')
@@ -157,10 +151,15 @@ def find_by_name(flat_graph, target_name, target_package, subgraph,
 
 
 MACRO_PREFIX = 'dbt_macro__'
+OPERATION_PREFIX = 'dbt_operation__'
 
 
 def get_dbt_macro_name(name):
     return '{}{}'.format(MACRO_PREFIX, name)
+
+
+def get_dbt_operation_name(name):
+    return '{}{}'.format(OPERATION_PREFIX, name)
 
 
 def get_materialization_macro_name(materialization_name, adapter_type=None,
@@ -199,6 +198,18 @@ def get_materialization_macro(flat_graph, materialization_name,
     return macro
 
 
+def get_operation_macro_name(operation_name, with_prefix=True):
+    if with_prefix:
+        return get_dbt_operation_name(operation_name)
+    else:
+        return operation_name
+
+
+def get_operation_macro(flat_graph, operation_name):
+    name = get_operation_macro_name(operation_name, with_prefix=False)
+    return find_operation_by_name(flat_graph, name, None)
+
+
 def load_project_with_profile(source_project, project_dir):
     project_filepath = os.path.join(project_dir, 'dbt_project.yml')
     return dbt.project.read_project(
@@ -208,33 +219,39 @@ def load_project_with_profile(source_project, project_dir):
         args=source_project.args)
 
 
-def dependency_projects(project):
+def dependencies_for_path(project, module_path):
+    """Given a module path, yield all dependencies in that path."""
     import dbt.project
+    logger.debug("Loading dependency project from {}".format(module_path))
+
+    for obj in os.listdir(module_path):
+        full_obj = os.path.join(module_path, obj)
+
+        if not os.path.isdir(full_obj) or obj.startswith('__'):
+            # exclude non-dirs and dirs that start with __
+            # the latter could be something like __pycache__
+            # for the global dbt modules dir
+            continue
+
+        try:
+            yield load_project_with_profile(project, full_obj)
+        except dbt.project.DbtProjectError as e:
+            logger.info(
+                "Error reading dependency project at {}".format(
+                    full_obj)
+            )
+            logger.info(str(e))
+
+
+def dependency_projects(project):
     module_paths = [
         GLOBAL_DBT_MODULES_PATH,
         os.path.join(project['project-root'], project['modules-path'])
     ]
 
     for module_path in module_paths:
-        logger.debug("Loading dependency project from {}".format(module_path))
-
-        for obj in os.listdir(module_path):
-            full_obj = os.path.join(module_path, obj)
-
-            if not os.path.isdir(full_obj) or obj.startswith('__'):
-                # exclude non-dirs and dirs that start with __
-                # the latter could be something like __pycache__
-                # for the global dbt modules dir
-                continue
-
-            try:
-                yield load_project_with_profile(project, full_obj)
-            except dbt.project.DbtProjectError as e:
-                logger.info(
-                    "Error reading dependency project at {}".format(
-                        full_obj)
-                )
-                logger.info(str(e))
+        for entry in dependencies_for_path(project, module_path):
+            yield entry
 
 
 def split_path(path):
@@ -270,10 +287,10 @@ def deep_merge(*args):
         return None
 
     if len(args) == 1:
-        return args[0]
+        return copy.deepcopy(args[0])
 
     lst = list(args)
-    last = lst.pop(len(lst)-1)
+    last = copy.deepcopy(lst.pop(len(lst)-1))
 
     return _deep_merge(deep_merge(*lst), last)
 
@@ -353,8 +370,8 @@ def get_pseudo_hook_path(hook_name):
 def get_nodes_by_tags(nodes, match_tags, resource_type):
     matched_nodes = []
     for node in nodes:
-        node_tags = node.get('tags', set())
-        if len(node_tags & match_tags):
+        node_tags = node.get('tags', [])
+        if len(set(node_tags) & match_tags):
             matched_nodes.append(node)
     return matched_nodes
 
@@ -435,3 +452,12 @@ def parse_cli_vars(var_string):
         logger.error(
                 "The YAML provided in the --vars argument is not valid.\n")
         raise
+
+
+def filter_null_values(input):
+    return dict((k, v) for (k, v) in input.items()
+                if v is not None)
+
+
+def add_ephemeral_model_prefix(s):
+    return '__dbt__CTE__{}'.format(s)

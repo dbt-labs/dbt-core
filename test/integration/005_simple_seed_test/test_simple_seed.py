@@ -120,4 +120,3 @@ class TestSimpleSeedDisabled(DBTIntegrationTest):
         self.run_dbt(["seed"])
         self.assertTableDoesExist('seed_enabled')
         self.assertTableDoesNotExist('seed_disabled')
-

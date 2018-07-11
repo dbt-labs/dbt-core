@@ -22,7 +22,7 @@ def clone(repo, cwd, dirname=None, remove_git_dir=False):
 
 def list_tags(cwd):
     out, err = run_cmd(cwd, ['git', 'tag', '--list'])
-    tags = set(out.decode('utf-8').strip().split("\n"))
+    tags = out.decode('utf-8').strip().split("\n")
     return tags
 
 

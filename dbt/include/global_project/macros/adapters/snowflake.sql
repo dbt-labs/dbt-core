@@ -12,15 +12,20 @@
   {%- endif -%}
 {%- endmacro -%}
 
-{% macro snowflake__create_table_as(temporary, identifier, sql) -%}
+{% macro snowflake__create_table_as(temporary, relation, sql) -%}
   {%- set _clusterby = config.get('clusterby') -%}
 
   {% if temporary %}
-    use schema "{{ schema }}";
+    use schema {{ schema }};
   {% endif %}
 
+  {# FIXME: We cannot call default__create_table_as here
+            as it terminates the return string with a semicolon.
+            Conversely, we have introduced code-copy as
+            a potential source of drift. #}
   create {% if temporary: -%}temporary{%- endif %} table
-    {% if not temporary: -%}"{{ schema }}".{%- endif %}"{{ identifier }}" as (
+    {{ relation.include(schema=(not temporary)) }}
+  as (
     {{ sql }}
   )
   {{ clusterby(_clusterby) }}

@@ -65,3 +65,6 @@ target/
 
 #Emacs
 *~
+
+# Sublime Text
+*.sublime-*

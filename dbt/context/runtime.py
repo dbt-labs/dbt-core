@@ -1,12 +1,9 @@
-import json
-
-from dbt.adapters.factory import get_adapter
-from dbt.compat import basestring
+from dbt.utils import get_materialization, add_ephemeral_model_prefix
 
 import dbt.clients.jinja
 import dbt.context.common
 import dbt.flags
-import dbt.utils
+import dbt.parser
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -14,8 +11,9 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 execute = True
 
 
-def ref(model, project, profile, flat_graph):
-    current_project = project.get('name')
+def ref(db_wrapper, model, project_cfg, profile, flat_graph):
+    current_project = project_cfg.get('name')
+    adapter = db_wrapper.adapter
 
     def do_ref(*args):
         target_model_name = None
@@ -28,7 +26,7 @@ def ref(model, project, profile, flat_graph):
         else:
             dbt.exceptions.ref_invalid_args(model, args)
 
-        target_model = dbt.parser.resolve_ref(
+        target_model = dbt.parser.ParserUtils.resolve_ref(
             flat_graph,
             target_model_name,
             target_model_package,
@@ -48,11 +46,16 @@ def ref(model, project, profile, flat_graph):
                                            target_model_name,
                                            target_model_package)
 
-        if dbt.utils.get_materialization(target_model) == 'ephemeral':
-            model['extra_ctes'][target_model_id] = None
+        is_ephemeral = (get_materialization(target_model) == 'ephemeral')
 
-        adapter = get_adapter(profile)
-        return dbt.utils.Relation(profile, adapter, target_model)
+        if is_ephemeral:
+            model['extra_ctes'][target_model_id] = None
+            return adapter.Relation.create(
+                type=adapter.Relation.CTE,
+                identifier=add_ephemeral_model_prefix(
+                    target_model_name)).quote(identifier=False)
+        else:
+            return adapter.Relation.create_from_node(profile, target_model)
 
     return do_ref
 
@@ -90,6 +93,6 @@ class Config:
         return to_return
 
 
-def generate(model, project, flat_graph):
+def generate(model, project_cfg, flat_graph):
     return dbt.context.common.generate(
-        model, project, flat_graph, dbt.context.runtime)
+        model, project_cfg, flat_graph, dbt.context.runtime)

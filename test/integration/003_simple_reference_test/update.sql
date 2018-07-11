@@ -1,10 +1,10 @@
 
-truncate table "{schema}"."summary_expected";
-insert into "{schema}"."summary_expected" (gender, ct) values
+truncate table {schema}.summary_expected;
+insert into {schema}.summary_expected (gender, ct) values
 ('Female', 94),
 ('Male', 106);
 
-insert into "{schema}"."seed" (first_name, last_name, email, gender, ip_address) values
+insert into {schema}.seed (first_name, last_name, email, gender, ip_address) values
 ('Michael', 'Perez', 'mperez0@chronoengine.com', 'Male', '106.239.70.175'),
 ('Shawn', 'Mccoy', 'smccoy1@reddit.com', 'Male', '24.165.76.182'),
 ('Kathleen', 'Payne', 'kpayne2@cargocollective.com', 'Female', '113.207.168.106'),

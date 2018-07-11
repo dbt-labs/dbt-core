@@ -3,7 +3,6 @@ import pprint
 import copy
 import hashlib
 import re
-from voluptuous import Required, Invalid
 
 import dbt.deprecations
 import dbt.contracts.connection
@@ -12,7 +11,11 @@ import dbt.clients.jinja
 import dbt.compat
 import dbt.context.common
 import dbt.clients.system
+import dbt.ui.printer
+import dbt.links
 
+from dbt.api.object import APIObject
+from dbt.utils import deep_merge
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 default_project_cfg = {
@@ -25,6 +28,7 @@ default_project_cfg = {
     'outputs': {'default': {}},
     'target': 'default',
     'models': {},
+    'quoting': {},
     'profile': None,
     'packages': [],
     'modules-path': 'dbt_modules'
@@ -91,14 +95,14 @@ class Project(object):
         if self.cfg.get('models') is None:
             self.cfg['models'] = {}
 
+        if self.cfg.get('quoting') is None:
+            self.cfg['quoting'] = {}
+
         if self.cfg['models'].get('vars') is None:
             self.cfg['models']['vars'] = {}
 
         global_vars = dbt.utils.parse_cli_vars(getattr(args, 'vars', '{}'))
-        if 'vars' not in self.cfg['models']:
-            self.cfg['models']['vars'] = {}
-
-        self.cfg['models']['vars'].update(global_vars)
+        self.cfg['cli_vars'] = global_vars
 
     def __str__(self):
         return pprint.pformat({'project': self.cfg, 'profiles': self.profiles})
@@ -140,6 +144,9 @@ class Project(object):
                 compiled_val = value
 
             compiled[key] = compiled_val
+
+        if self.args and hasattr(self.args, 'threads') and self.args.threads:
+            compiled['threads'] = self.args.threads
 
         return compiled
 
@@ -196,32 +203,55 @@ class Project(object):
                  'underscores, and must start with a letter.'), self)
 
         db_type = target_cfg.get('type')
-        validator = dbt.contracts.connection.credentials_mapping.get(db_type)
+        validator = dbt.contracts.connection.CREDENTIALS_MAPPING.get(db_type)
 
         if validator is None:
-            valid_types = dbt.contracts.connection.credentials_mapping.keys()
+            valid_types = dbt.contracts.connection.CREDENTIALS_MAPPING.keys()
             raise DbtProjectError(
                 "Invalid db type '{}' should be one of [{}]".format(
                     db_type,
                     ", ".join(valid_types)), self)
 
-        validator = validator.extend({
-            Required('type'): dbt.compat.basestring,
-            Required('threads'): int,
-        })
+        # This is python so I guess we'll just make a class here...
+        # it might be wise to tack an extend classmethod onto APIObject,
+        # similar to voluptous, to do all the deep merge stuff for us and spit
+        # out a new class.
+        class CredentialsValidator(APIObject):
+            SCHEMA = deep_merge(
+                validator.SCHEMA,
+                {
+                    'properties': {
+                        'type': {'type': 'string'},
+                        'threads': {'type': 'integer'},
+                    },
+                    'required': (
+                        validator.SCHEMA.get('required', []) +
+                        ['type', 'threads']
+                    ),
+                }
+            )
 
         try:
-            validator(target_cfg)
-        except Invalid as e:
-            if 'extra keys not allowed' in str(e):
-                raise DbtProjectError(
-                    "Extra project configuration '{}' is not recognized"
-                    .format('.'.join(e.path)), self)
-            else:
-                # TODO : does this fail if eg. project is missing?
-                raise DbtProjectError(
-                    "Expected project configuration '{}' was not supplied"
-                    .format('.'.join(e.path)), self)
+            CredentialsValidator(**target_cfg)
+        except dbt.exceptions.ValidationException as e:
+            raise DbtProjectError(str(e), self)
+
+    def log_warnings(self):
+        target_cfg = self.run_environment()
+        db_type = target_cfg.get('type')
+
+        if db_type == 'snowflake' and self.cfg \
+                                          .get('quoting', {}) \
+                                          .get('identifier') is None:
+            msg = dbt.ui.printer.yellow(
+                'You are using Snowflake, but you did not specify a '
+                'quoting strategy for your identifiers.\nQuoting '
+                'behavior for Snowflake will change in a future release, '
+                'so it is recommended that you define this explicitly.\n\n'
+                'For more information, see: {}\n'
+            )
+
+            logger.warn(msg.format(dbt.links.SnowflakeQuotingDocs))
 
     def hashed_name(self):
         if self.cfg.get("name", None) is None:

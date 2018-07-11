@@ -111,20 +111,20 @@ class GraphSelectionTest(unittest.TestCase):
         )
 
     def test__spec_parsing(self):
-        self.parse_spec_and_assert('a', False, False, ('a',))
-        self.parse_spec_and_assert('+a', True, False, ('a',))
-        self.parse_spec_and_assert('a+', False, True, ('a',))
-        self.parse_spec_and_assert('+a+', True, True, ('a',))
+        self.parse_spec_and_assert('a', False, False, ['a'])
+        self.parse_spec_and_assert('+a', True, False, ['a'])
+        self.parse_spec_and_assert('a+', False, True, ['a'])
+        self.parse_spec_and_assert('+a+', True, True, ['a'])
 
-        self.parse_spec_and_assert('a.b', False, False, ('a', 'b'))
-        self.parse_spec_and_assert('+a.b', True, False, ('a', 'b'))
-        self.parse_spec_and_assert('a.b+', False, True, ('a', 'b'))
-        self.parse_spec_and_assert('+a.b+', True, True, ('a', 'b'))
+        self.parse_spec_and_assert('a.b', False, False, ['a', 'b'])
+        self.parse_spec_and_assert('+a.b', True, False, ['a', 'b'])
+        self.parse_spec_and_assert('a.b+', False, True, ['a', 'b'])
+        self.parse_spec_and_assert('+a.b+', True, True, ['a', 'b'])
 
-        self.parse_spec_and_assert('a.b.*', False, False, ('a', 'b', '*'))
-        self.parse_spec_and_assert('+a.b.*', True, False, ('a', 'b', '*'))
-        self.parse_spec_and_assert('a.b.*+', False, True, ('a', 'b', '*'))
-        self.parse_spec_and_assert('+a.b.*+', True, True, ('a', 'b', '*'))
+        self.parse_spec_and_assert('a.b.*', False, False, ['a', 'b', '*'])
+        self.parse_spec_and_assert('+a.b.*', True, False, ['a', 'b', '*'])
+        self.parse_spec_and_assert('a.b.*+', False, True, ['a', 'b', '*'])
+        self.parse_spec_and_assert('+a.b.*+', True, True, ['a', 'b', '*'])
 
     def test__package_name_getter(self):
         found = graph_selector.get_package_names(self.package_graph)

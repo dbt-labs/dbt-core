@@ -1,0 +1,6 @@
+
+seed_enabled:
+    constraints:
+        column_type:
+            - {field: ID, type: 'FLOAT' }
+            - {field: BIRTHDAY, type: 'character varying(16777216)' }

@@ -20,6 +20,13 @@ class NodeType(object):
             cls.Seed,
         ]
 
+    @classmethod
+    def refable(cls):
+        return [
+            cls.Model,
+            cls.Seed,
+        ]
+
 
 class RunHookType:
     Start = 'on-run-start'

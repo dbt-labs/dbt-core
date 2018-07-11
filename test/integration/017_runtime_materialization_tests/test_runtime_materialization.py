@@ -82,5 +82,5 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
         self.run_sql_file("test/integration/017_runtime_materialization_tests/create_view__dbt_tmp.sql")
         self.run_dbt(['run', '--model', 'view'])
 
-        self.assertTableDoesNotExist('view__dbt_tmp')
+        self.assertTableDoesNotExist('view__model_dbt_tmp')
         self.assertTablesEqual("seed","view")

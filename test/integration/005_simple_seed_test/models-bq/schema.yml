@@ -1,0 +1,6 @@
+
+seed_enabled:
+    constraints:
+        column_type:
+            - {field: id, type: 'FLOAT' }
+            - {field: birthday, type: 'STRING' }

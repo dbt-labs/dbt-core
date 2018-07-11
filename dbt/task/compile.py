@@ -19,7 +19,7 @@ class CompileTask(RunnableTask):
             "include": self.args.models,
             "exclude": self.args.exclude,
             "resource_types": NodeType.executable(),
-            "tags": set()
+            "tags": []
         }
 
         results = runner.run(query, CompileRunner)
