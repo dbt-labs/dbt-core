@@ -64,6 +64,28 @@ class DBTIntegrationTest(unittest.TestCase):
             }
         }
 
+    def redshift_profile(self):
+        return {
+            'config': {
+                'send_anonymous_usage_stats': False
+            },
+            'test': {
+                'outputs': {
+                    'default2': {
+                        'type': 'redshift',
+                        'threads': 1,
+                        'host': os.getenv('REDSHIFT_TEST_HOST'),
+                        'port': os.getenv('REDSHIFT_TEST_PORT'),
+                        'user': os.getenv('REDSHIFT_TEST_USER'),
+                        'pass': os.getenv('REDSHIFT_TEST_PASS'),
+                        'dbname': os.getenv('REDSHIFT_TEST_DBNAME'),
+                        'schema': self.unique_schema()
+                    }
+                },
+                'target': 'default2'
+            }
+        }
+
     def snowflake_profile(self):
         return {
             'config': {
@@ -137,6 +159,8 @@ class DBTIntegrationTest(unittest.TestCase):
             return self.snowflake_profile()
         elif adapter_type == 'bigquery':
             return self.bigquery_profile()
+        elif adapter_type == 'redshift':
+            return self.redshift_profile()
 
     def setUp(self):
         self.adapter_type = 'postgres'

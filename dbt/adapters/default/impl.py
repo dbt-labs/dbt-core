@@ -162,7 +162,8 @@ class DefaultAdapter(object):
 
         sql = 'drop {} if exists {} cascade'.format(relation.type, relation)
 
-        connection, cursor = cls.add_query(profile, sql, model_name)
+        connection, cursor = cls.add_query(profile, sql, model_name,
+                                           auto_begin=False)
 
     @classmethod
     def truncate(cls, profile, project_cfg, schema, table, model_name=None):

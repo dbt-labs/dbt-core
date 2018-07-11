@@ -8,6 +8,7 @@
  - Write JSON manifest file to disk during compilation ([#761](https://github.com/fishtown-analytics/dbt/pull/761))
  - Add forward and backward graph edges to the JSON manifest file ([#762](https://github.com/fishtown-analytics/dbt/pull/762))
 - Add a 'dbt docs generate' command to generate a JSON catalog file ([#774](https://github.com/fishtown-analytics/dbt/pull/774))
+- Stop tracking `run_error` in tracking code ([#817](https://github.com/fishtown-analytics/dbt/pull/817))
 
 ## dbt 0.10.1 (May 18, 2018)
 
