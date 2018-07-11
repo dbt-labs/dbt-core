@@ -1,6 +1,7 @@
 import unittest
 import mock
 
+import dbt.adapters
 import dbt.flags as flags
 import dbt.utils
 
@@ -20,8 +21,7 @@ class TestRedshiftAdapter(unittest.TestCase):
     def setUp(self):
         flags.STRICT_MODE = True
 
-    def test_implicit_database_conn(self):
-        implicit_database_profile = {
+        self.profile = {
             'dbname': 'redshift',
             'user': 'root',
             'host': 'database',
@@ -30,69 +30,83 @@ class TestRedshiftAdapter(unittest.TestCase):
             'schema': 'public'
         }
 
-        creds = RedshiftAdapter.get_credentials(implicit_database_profile)
-        self.assertEquals(creds, implicit_database_profile)
+    def test_implicit_database_conn(self):
+        creds = RedshiftAdapter.get_credentials(self.profile)
+        self.assertEquals(creds, self.profile)
 
     def test_explicit_database_conn(self):
-        explicit_database_profile = {
-            'method': 'database',
-            'dbname': 'redshift',
-            'user': 'root',
-            'host': 'database',
-            'pass': 'password',
-            'port': 5439,
-            'schema': 'public'
-        }
+        self.profile['method'] = 'database'
 
-        creds = RedshiftAdapter.get_credentials(explicit_database_profile)
-        self.assertEquals(creds, explicit_database_profile)
+        creds = RedshiftAdapter.get_credentials(self.profile)
+        self.assertEquals(creds, self.profile)
 
     def test_explicit_iam_conn(self):
-        explicit_iam_profile = {
+        self.profile.update({
             'method': 'iam',
             'cluster_id': 'my_redshift',
             'iam_duration_s': 1200,
-            'dbname': 'redshift',
-            'user': 'root',
-            'host': 'database',
-            'port': 5439,
-            'schema': 'public',
-        }
+        })
 
         with mock.patch.object(RedshiftAdapter, 'fetch_cluster_credentials', new=fetch_cluster_credentials):
-            creds = RedshiftAdapter.get_credentials(explicit_iam_profile)
+            creds = RedshiftAdapter.get_credentials(self.profile)
 
-        expected_creds = dbt.utils.merge(explicit_iam_profile, {'pass': 'tmp_password'})
+        expected_creds = dbt.utils.merge(self.profile, {'pass': 'tmp_password'})
         self.assertEquals(creds, expected_creds)
 
     def test_invalid_auth_method(self):
-        invalid_profile = {
-            'method': 'badmethod',
-            'dbname': 'redshift',
-            'user': 'root',
-            'host': 'database',
-            'pass': 'password',
-            'port': 5439,
-            'schema': 'public'
-        }
+        self.profile['method'] = 'badmethod'
 
         with self.assertRaises(dbt.exceptions.FailedToConnectException) as context:
             with mock.patch.object(RedshiftAdapter, 'fetch_cluster_credentials', new=fetch_cluster_credentials):
-                RedshiftAdapter.get_credentials(invalid_profile)
+                RedshiftAdapter.get_credentials(self.profile)
 
         self.assertTrue('badmethod' in context.exception.msg)
 
     def test_invalid_iam_no_cluster_id(self):
-        invalid_profile = {
-            'method': 'iam',
-            'dbname': 'redshift',
-            'user': 'root',
-            'host': 'database',
-            'port': 5439,
-            'schema': 'public'
-        }
+        self.profile['method'] = 'iam'
         with self.assertRaises(dbt.exceptions.FailedToConnectException) as context:
             with mock.patch.object(RedshiftAdapter, 'fetch_cluster_credentials', new=fetch_cluster_credentials):
-                RedshiftAdapter.get_credentials(invalid_profile)
+                RedshiftAdapter.get_credentials(self.profile)
 
         self.assertTrue("'cluster_id' must be provided" in context.exception.msg)
+
+
+    @mock.patch('dbt.adapters.postgres.impl.psycopg2')
+    def test_default_keepalive(self, psycopg2):
+        connection = RedshiftAdapter.acquire_connection(self.profile, 'dummy')
+
+        psycopg2.connect.assert_called_once_with(
+            dbname='redshift',
+            user='root',
+            host='database',
+            password='password',
+            port=5439,
+            connect_timeout=10,
+            keepalives_idle=RedshiftAdapter.DEFAULT_TCP_KEEPALIVE)
+
+    @mock.patch('dbt.adapters.postgres.impl.psycopg2')
+    def test_changed_keepalive(self, psycopg2):
+        self.profile['keepalives_idle'] = 256
+        connection = RedshiftAdapter.acquire_connection(self.profile, 'dummy')
+
+        psycopg2.connect.assert_called_once_with(
+            dbname='redshift',
+            user='root',
+            host='database',
+            password='password',
+            port=5439,
+            connect_timeout=10,
+            keepalives_idle=256)
+
+    @mock.patch('dbt.adapters.postgres.impl.psycopg2')
+    def test_set_zero_keepalive(self, psycopg2):
+        self.profile['keepalives_idle'] = 0
+        connection = RedshiftAdapter.acquire_connection(self.profile, 'dummy')
+
+        psycopg2.connect.assert_called_once_with(
+            dbname='redshift',
+            user='root',
+            host='database',
+            password='password',
+            port=5439,
+            connect_timeout=10)
