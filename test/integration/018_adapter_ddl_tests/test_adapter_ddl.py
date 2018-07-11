@@ -10,14 +10,14 @@ class TestAdapterDDL(DBTIntegrationTest):
 
     @property
     def schema(self):
-        return "adaper_ddl_018"
+        return "adapter_ddl_018"
 
     @property
     def models(self):
         return "test/integration/018_adapter_ddl_tests/models"
 
     @attr(type='postgres')
-    def test_sort_and_dist_keys_are_nops_on_postgres(self):
+    def test_clusterby_and_sort_and_dist_keys_are_nops_on_postgres(self):
         self.run_dbt(['run'])
 
         self.assertTablesEqual("seed","materialized")

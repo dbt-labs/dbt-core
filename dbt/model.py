@@ -18,12 +18,13 @@ class SourceConfig(object):
         'schema',
         'enabled',
         'materialized',
-        'dist',
-        'sort',
+        'dist',         # redshift
+        'sort',         # redshift
+        'clusterby',    # snowflake
         'sql_where',
         'unique_key',
-        'sort_type',
-        'bind'
+        'sort_type',    # redshift
+        'bind'          # redshift
     ]
 
     def __init__(self, active_project, own_project, fqn, node_type):

@@ -120,6 +120,7 @@ models:
             adwords_ads:
                 enabled: true
                 materialized: table
+                clusterby: ["date_day", "ad_group_id % 10"]
 
         # Applies to all SQL files found under ./models/snowplow/
         snowplow:

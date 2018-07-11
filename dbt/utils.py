@@ -20,11 +20,12 @@ DBTConfigKeys = [
     'schema',
     'enabled',
     'materialized',
-    'dist',
-    'sort',
+    'dist',         # redshift
+    'sort',         # redshift
+    'clusterby',    # snowflake
     'sql_where',
     'unique_key',
-    'sort_type',
+    'sort_type',    # redshift
     'pre-hook',
     'post-hook',
     'vars',
