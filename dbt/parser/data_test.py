@@ -1,4 +1,3 @@
-
 from dbt.parser.base_sql import BaseSqlParser
 import dbt.utils
 

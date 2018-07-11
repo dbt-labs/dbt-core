@@ -50,21 +50,26 @@ def get_version_information():
     installed_s = installed.to_version_string(skip_matcher=True)
     latest_s = latest.to_version_string(skip_matcher=True)
 
-    version_msg = ("installed version: {}\n"
-                   "   latest version: {}\n\n".format(installed_s, latest_s))
+    version_msg = (
+        "installed version: {}\n"
+        "   latest version: {}\n\n".format(installed_s, latest_s)
+    )
 
     if installed == latest:
         return "{}Up to date!".format(version_msg)
 
     elif installed > latest:
-        return ("{}Your version of dbt is ahead of the latest "
-                "release!".format(version_msg))
+        return (
+            "{}Your version of dbt is ahead of the latest "
+            "release!".format(version_msg)
+        )
 
     else:
-        return ("{}Your version of dbt is out of date! "
-                "You can find instructions for upgrading here:\n"
-                "https://docs.getdbt.com/docs/installation"
-                .format(version_msg))
+        return (
+            "{}Your version of dbt is out of date! "
+            "You can find instructions for upgrading here:\n"
+            "https://docs.getdbt.com/docs/installation".format(version_msg)
+        )
 
 
 __version__ = '0.10.1'

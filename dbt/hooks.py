@@ -1,4 +1,3 @@
-
 import json
 from dbt.compat import to_string
 

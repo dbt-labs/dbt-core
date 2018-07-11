@@ -25,7 +25,9 @@ def _wrap_exceptions(fn):
             return fn(*args, **kwargs)
         except requests.exceptions.ConnectionError as e:
             six.raise_from(
-                RegistryException('Unable to connect to registry hub'), e)
+                RegistryException('Unable to connect to registry hub'), e
+            )
+
     return wrapper
 
 

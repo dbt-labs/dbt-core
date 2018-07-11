@@ -43,16 +43,17 @@ class BigQueryAdapter(PostgresAdapter):
         "get_relation",
         "drop_relation",
         "rename_relation",
-
         "get_columns_in_table"
     ]
 
     Relation = BigQueryRelation
     Column = dbt.schema.BigQueryColumn
 
-    SCOPE = ('https://www.googleapis.com/auth/bigquery',
-             'https://www.googleapis.com/auth/cloud-platform',
-             'https://www.googleapis.com/auth/drive')
+    SCOPE = (
+        'https://www.googleapis.com/auth/bigquery',
+        'https://www.googleapis.com/auth/cloud-platform',
+        'https://www.googleapis.com/auth/drive'
+    )
 
     QUERY_TIMEOUT = 300
 
@@ -60,15 +61,15 @@ class BigQueryAdapter(PostgresAdapter):
     def handle_error(cls, error, message, sql):
         logger.debug(message.format(sql=sql))
         logger.debug(error)
-        error_msg = "\n".join(
-            [item['message'] for item in error.errors])
+        error_msg = "\n".join([item['message'] for item in error.errors])
 
         raise dbt.exceptions.DatabaseException(error_msg)
 
     @classmethod
     @contextmanager
-    def exception_handler(cls, profile, sql, model_name=None,
-                          connection_name='master'):
+    def exception_handler(
+        cls, profile, sql, model_name=None, connection_name='master'
+    ):
         try:
             yield
 
@@ -104,7 +105,8 @@ class BigQueryAdapter(PostgresAdapter):
     @classmethod
     def get_status(cls, cursor):
         raise dbt.exceptions.NotImplementedException(
-            '`get_status` is not implemented for this adapter!')
+            '`get_status` is not implemented for this adapter!'
+        )
 
     @classmethod
     def get_bigquery_credentials(cls, config):
@@ -153,8 +155,10 @@ class BigQueryAdapter(PostgresAdapter):
 
         except Exception as e:
             raise
-            logger.debug("Got an error when attempting to create a bigquery "
-                         "client: '{}'".format(e))
+            logger.debug(
+                "Got an error when attempting to create a bigquery "
+                "client: '{}'".format(e)
+            )
 
             result['handle'] = None
             result['state'] = 'fail'
@@ -181,7 +185,8 @@ class BigQueryAdapter(PostgresAdapter):
         client = connection.get('handle')
 
         bigquery_dataset = cls.get_dataset(
-            profile, project_cfg, schema, model_name)
+            profile, project_cfg, schema, model_name
+        )
         all_tables = client.list_tables(bigquery_dataset)
 
         relation_types = {
@@ -190,16 +195,18 @@ class BigQueryAdapter(PostgresAdapter):
             'EXTERNAL': 'external'
         }
 
-        return [cls.Relation.create(
-            project=credentials.get('project'),
-            schema=schema,
-            identifier=table.table_id,
-            quote_policy={
-                'schema': True,
-                'identifier': True
-            },
-            type=relation_types.get(table.table_type))
-                for table in all_tables]
+        return [
+            cls.Relation.create(
+                project=credentials.get('project'),
+                schema=schema,
+                identifier=table.table_id,
+                quote_policy={
+                    'schema': True,
+                    'identifier': True
+                },
+                type=relation_types.get(table.table_type)
+            ) for table in all_tables
+        ]
 
     @classmethod
     def drop_relation(cls, profile, project_cfg, relation, model_name=None):
@@ -207,21 +214,26 @@ class BigQueryAdapter(PostgresAdapter):
         client = conn.get('handle')
 
         dataset = cls.get_dataset(
-            profile, project_cfg, relation.schema, model_name)
+            profile, project_cfg, relation.schema, model_name
+        )
         relation_object = dataset.table(relation.identifier)
         client.delete_table(relation_object)
 
     @classmethod
-    def rename(cls, profile, project_cfg, schema,
-               from_name, to_name, model_name=None):
+    def rename(
+        cls, profile, project_cfg, schema, from_name, to_name, model_name=None
+    ):
         raise dbt.exceptions.NotImplementedException(
-            '`rename` is not implemented for this adapter!')
+            '`rename` is not implemented for this adapter!'
+        )
 
     @classmethod
-    def rename_relation(cls, profile, project_cfg, from_relation, to_relation,
-                        model_name=None):
+    def rename_relation(
+        cls, profile, project_cfg, from_relation, to_relation, model_name=None
+    ):
         raise dbt.exceptions.NotImplementedException(
-            '`rename_relation` is not implemented for this adapter!')
+            '`rename_relation` is not implemented for this adapter!'
+        )
 
     @classmethod
     def get_timeout(cls, conn):
@@ -265,13 +277,15 @@ class BigQueryAdapter(PostgresAdapter):
             raise job.exception()
 
     @classmethod
-    def make_date_partitioned_table(cls, profile, project_cfg, dataset_name,
-                                    identifier, model_name=None):
+    def make_date_partitioned_table(
+        cls, profile, project_cfg, dataset_name, identifier, model_name=None
+    ):
         conn = cls.get_connection(profile, model_name)
         client = conn.get('handle')
 
-        dataset = cls.get_dataset(profile, project_cfg,
-                                  dataset_name, identifier)
+        dataset = cls.get_dataset(
+            profile, project_cfg, dataset_name, identifier
+        )
         table_ref = dataset.table(identifier)
         table = google.cloud.bigquery.Table(table_ref)
         table.partitioning_type = 'DAY'
@@ -279,8 +293,9 @@ class BigQueryAdapter(PostgresAdapter):
         return client.create_table(table)
 
     @classmethod
-    def materialize_as_table(cls, profile, project_cfg, dataset,
-                             model, model_sql, decorator=None):
+    def materialize_as_table(
+        cls, profile, project_cfg, dataset, model, model_sql, decorator=None
+    ):
         model_name = model.get('name')
         model_alias = model.get('alias')
 
@@ -301,16 +316,22 @@ class BigQueryAdapter(PostgresAdapter):
         query_job = client.query(model_sql, job_config=job_config)
 
         # this waits for the job to complete
-        with cls.exception_handler(profile, model_sql, model_alias,
-                                   model_name):
+        with cls.exception_handler(profile, model_sql, model_alias, model_name):
             query_job.result(timeout=cls.get_timeout(conn))
 
         return "CREATE TABLE"
 
     @classmethod
-    def execute_model(cls, profile, project_cfg, model,
-                      materialization, sql_override=None,
-                      decorator=None, model_name=None):
+    def execute_model(
+        cls,
+        profile,
+        project_cfg,
+        model,
+        materialization,
+        sql_override=None,
+        decorator=None,
+        model_name=None
+    ):
 
         if sql_override is None:
             sql_override = model.get('injected_sql')
@@ -322,15 +343,16 @@ class BigQueryAdapter(PostgresAdapter):
         model_name = model.get('name')
         model_schema = model.get('schema')
 
-        dataset = cls.get_dataset(profile, project_cfg,
-                                  model_schema, model_name)
+        dataset = cls.get_dataset(
+            profile, project_cfg, model_schema, model_name
+        )
 
         if materialization == 'view':
             res = cls.materialize_as_view(profile, project_cfg, dataset, model)
         elif materialization == 'table':
             res = cls.materialize_as_table(
-                profile, project_cfg, dataset, model,
-                sql_override, decorator)
+                profile, project_cfg, dataset, model, sql_override, decorator
+            )
         else:
             msg = "Invalid relation type: '{}'".format(materialization)
             raise dbt.exceptions.RuntimeException(msg, model)
@@ -376,7 +398,8 @@ class BigQueryAdapter(PostgresAdapter):
     @classmethod
     def add_begin_query(cls, profile, name):
         raise dbt.exceptions.NotImplementedException(
-            '`add_begin_query` is not implemented for this adapter!')
+            '`add_begin_query` is not implemented for this adapter!'
+        )
 
     @classmethod
     def create_schema(cls, profile, project_cfg, schema, model_name=None):
@@ -401,8 +424,9 @@ class BigQueryAdapter(PostgresAdapter):
     def drop_schema(cls, profile, project_cfg, schema, model_name=None):
         logger.debug('Dropping schema "%s".', schema)
 
-        if not cls.check_schema_exists(profile, project_cfg,
-                                       schema, model_name):
+        if not cls.check_schema_exists(
+            profile, project_cfg, schema, model_name
+        ):
             return
 
         conn = cls.get_connection(profile)
@@ -423,9 +447,15 @@ class BigQueryAdapter(PostgresAdapter):
             return [ds.dataset_id for ds in all_datasets]
 
     @classmethod
-    def get_columns_in_table(cls, profile, project_cfg,
-                             schema_name, table_name,
-                             database=None, model_name=None):
+    def get_columns_in_table(
+        cls,
+        profile,
+        project_cfg,
+        schema_name,
+        table_name,
+        database=None,
+        model_name=None
+    ):
 
         # BigQuery does not have databases -- the database parameter is here
         # for consistency with the base implementation
@@ -444,15 +474,13 @@ class BigQueryAdapter(PostgresAdapter):
 
         columns = []
         for col in table_schema:
-            column = cls.Column(
-                col.name, col.field_type, col.fields, col.mode)
+            column = cls.Column(col.name, col.field_type, col.fields, col.mode)
             columns.append(column)
 
         return columns
 
     @classmethod
-    def check_schema_exists(cls, profile, project_cfg,
-                            schema, model_name=None):
+    def check_schema_exists(cls, profile, project_cfg, schema, model_name=None):
         conn = cls.get_connection(profile, model_name)
         client = conn.get('handle')
 
@@ -471,17 +499,26 @@ class BigQueryAdapter(PostgresAdapter):
     @classmethod
     def warning_on_hooks(cls, hook_type):
         msg = "{} is not supported in bigquery and will be ignored"
-        dbt.ui.printer.print_timestamped_line(msg.format(hook_type),
-                                              dbt.ui.printer.COLOR_FG_YELLOW)
+        dbt.ui.printer.print_timestamped_line(
+            msg.format(hook_type), dbt.ui.printer.COLOR_FG_YELLOW
+        )
 
     @classmethod
-    def add_query(cls, profile, sql, model_name=None, auto_begin=True,
-                  bindings=None, abridge_sql_log=False):
+    def add_query(
+        cls,
+        profile,
+        sql,
+        model_name=None,
+        auto_begin=True,
+        bindings=None,
+        abridge_sql_log=False
+    ):
         if model_name in ['on-run-start', 'on-run-end']:
             cls.warning_on_hooks(model_name)
         else:
             raise dbt.exceptions.NotImplementedException(
-                '`add_query` is not implemented for this adapter!')
+                '`add_query` is not implemented for this adapter!'
+            )
 
     @classmethod
     def is_cancelable(cls):
@@ -492,11 +529,12 @@ class BigQueryAdapter(PostgresAdapter):
         return '`{}`'.format(identifier)
 
     @classmethod
-    def quote_schema_and_table(cls, profile, project_cfg, schema,
-                               table, model_name=None):
-        return cls.render_relation(profile, project_cfg,
-                                   cls.quote(schema),
-                                   cls.quote(table))
+    def quote_schema_and_table(
+        cls, profile, project_cfg, schema, table, model_name=None
+    ):
+        return cls.render_relation(
+            profile, project_cfg, cls.quote(schema), cls.quote(table)
+        )
 
     @classmethod
     def render_relation(cls, profile, project_cfg, schema, table):
@@ -528,14 +566,20 @@ class BigQueryAdapter(PostgresAdapter):
         for idx, col_name in enumerate(agate_table.column_names):
             inferred_type = cls.convert_agate_type(agate_table, idx)
             type_ = column_override.get(col_name, inferred_type)
-            bq_schema.append(
-                google.cloud.bigquery.SchemaField(col_name, type_))
+            bq_schema.append(google.cloud.bigquery.SchemaField(col_name, type_))
         return bq_schema
 
     @classmethod
-    def load_dataframe(cls, profile, project_cfg, schema,
-                       table_name, agate_table,
-                       column_override, model_name=None):
+    def load_dataframe(
+        cls,
+        profile,
+        project_cfg,
+        schema,
+        table_name,
+        agate_table,
+        column_override,
+        model_name=None
+    ):
         bq_schema = cls._agate_to_schema(agate_table, column_override)
         dataset = cls.get_dataset(profile, project_cfg, schema, None)
         table = dataset.table(table_name)
@@ -547,14 +591,22 @@ class BigQueryAdapter(PostgresAdapter):
         load_config.schema = bq_schema
 
         with open(agate_table.original_abspath, "rb") as f:
-            job = client.load_table_from_file(f, table, rewind=True,
-                                              job_config=load_config)
+            job = client.load_table_from_file(
+                f, table, rewind=True, job_config=load_config
+            )
 
         with cls.exception_handler(profile, "LOAD TABLE"):
             cls.poll_until_job_completes(job, cls.get_timeout(conn))
 
     @classmethod
-    def expand_target_column_types(cls, profile, project_cfg, temp_table,
-                                   to_schema, to_table, model_name=None):
+    def expand_target_column_types(
+        cls,
+        profile,
+        project_cfg,
+        temp_table,
+        to_schema,
+        to_table,
+        model_name=None
+    ):
         # This is a no-op on BigQuery
         pass

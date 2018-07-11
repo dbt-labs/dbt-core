@@ -15,9 +15,7 @@ import dbt.exceptions
 from dbt.logger import GLOBAL_LOGGER as logger
 
 
-def find_matching(root_path,
-                  relative_paths_to_search,
-                  file_pattern):
+def find_matching(root_path, relative_paths_to_search, file_pattern):
     """
     Given an absolute `root_path`, a list of relative paths to that
     absolute root path (`relative_paths_to_search`), and a `file_pattern`
@@ -36,21 +34,25 @@ def find_matching(root_path,
 
     for relative_path_to_search in relative_paths_to_search:
         absolute_path_to_search = os.path.join(
-            root_path, relative_path_to_search)
+            root_path, relative_path_to_search
+        )
         walk_results = os.walk(absolute_path_to_search)
 
         for current_path, subdirectories, local_files in walk_results:
             for local_file in local_files:
                 absolute_path = os.path.join(current_path, local_file)
                 relative_path = os.path.relpath(
-                    absolute_path, absolute_path_to_search)
+                    absolute_path, absolute_path_to_search
+                )
 
                 if fnmatch.fnmatch(local_file, file_pattern):
-                    matching.append({
-                        'searched_path': relative_path_to_search,
-                        'absolute_path': absolute_path,
-                        'relative_path': relative_path,
-                    })
+                    matching.append(
+                        {
+                            'searched_path': relative_path_to_search,
+                            'absolute_path': absolute_path,
+                            'relative_path': relative_path,
+                        }
+                    )
 
     return matching
 
@@ -135,9 +137,8 @@ def resolve_path_from_base(path_to_resolve, base_path):
     resolve it to an absolute path and return.
     """
     return os.path.abspath(
-        os.path.join(
-            base_path,
-            os.path.expanduser(path_to_resolve)))
+        os.path.join(base_path, os.path.expanduser(path_to_resolve))
+    )
 
 
 def rmdir(path):
@@ -182,10 +183,8 @@ def open_dir_cmd():
 def run_cmd(cwd, cmd):
     logger.debug('Executing "{}"'.format(' '.join(cmd)))
     proc = subprocess.Popen(
-        cmd,
-        cwd=cwd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE)
+        cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
 
     out, err = proc.communicate()
 
@@ -198,7 +197,7 @@ def run_cmd(cwd, cmd):
 def download(url, path):
     response = requests.get(url)
     with open(path, 'wb') as handle:
-        for block in response.iter_content(1024*64):
+        for block in response.iter_content(1024 * 64):
             handle.write(block)
 
 

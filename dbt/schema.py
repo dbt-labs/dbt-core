@@ -79,8 +79,9 @@ class BigQueryColumn(Column):
 
     @classmethod
     def create(cls, field):
-        return BigQueryColumn(field.name, field.field_type, field.fields,
-                              field.mode)
+        return BigQueryColumn(
+            field.name, field.field_type, field.fields, field.mode
+        )
 
     @classmethod
     def _flatten_recursive(cls, col, prefix=None):
@@ -89,8 +90,9 @@ class BigQueryColumn(Column):
 
         if len(col.fields) == 0:
             prefixed_name = ".".join(prefix + [col.column])
-            new_col = BigQueryColumn(prefixed_name, col.dtype, col.fields,
-                                     col.mode)
+            new_col = BigQueryColumn(
+                prefixed_name, col.dtype, col.fields, col.mode
+            )
             return [new_col]
 
         new_fields = []
@@ -122,5 +124,6 @@ class BigQueryColumn(Column):
         return self.is_string() and other_column.is_string()
 
     def __repr__(self):
-        return "<BigQueryColumn {} ({}, {})>".format(self.name, self.data_type,
-                                                     self.mode)
+        return "<BigQueryColumn {} ({}, {})>".format(
+            self.name, self.data_type, self.mode
+        )

@@ -43,7 +43,8 @@ def print_compile_stats(stats):
     results.update(stats)
 
     stat_line = ", ".join(
-        ["{} {}".format(ct, names.get(t)) for t, ct in results.items()])
+        ["{} {}".format(ct, names.get(t)) for t, ct in results.items()]
+    )
 
     logger.info("Found {}".format(stat_line))
 
@@ -68,19 +69,20 @@ def recursively_prepend_ctes(model, flat_graph):
     for cte_id in model.get('extra_ctes', {}):
         cte_to_add = flat_graph.get('nodes').get(cte_id)
         cte_to_add, new_prepend_ctes, flat_graph = recursively_prepend_ctes(
-            cte_to_add, flat_graph)
+            cte_to_add, flat_graph
+        )
 
         prepend_ctes.update(new_prepend_ctes)
         new_cte_name = '__dbt__CTE__{}'.format(cte_to_add.get('name'))
         prepend_ctes[cte_id] = ' {} as (\n{}\n)'.format(
-            new_cte_name,
-            cte_to_add.get('compiled_sql'))
+            new_cte_name, cte_to_add.get('compiled_sql')
+        )
 
     model['extra_ctes_injected'] = True
     model['extra_ctes'] = prepend_ctes
     model['injected_sql'] = inject_ctes_into_sql(
-        model.get('compiled_sql'),
-        prepend_ctes)
+        model.get('compiled_sql'), prepend_ctes
+    )
 
     flat_graph['nodes'][model.get('unique_id')] = model
 
@@ -134,7 +136,8 @@ def inject_ctes_into_sql(sql, ctes):
 
     parsed.insert_after(
         with_stmt,
-        sqlparse.sql.Token(sqlparse.tokens.Keyword, ", ".join(ctes.values())))
+        sqlparse.sql.Token(sqlparse.tokens.Keyword, ", ".join(ctes.values()))
+    )
 
     return dbt.compat.to_string(parsed)
 
@@ -158,40 +161,41 @@ class Compiler(object):
         logger.debug("Compiling {}".format(node.get('unique_id')))
 
         compiled_node = node.copy()
-        compiled_node.update({
-            'compiled': False,
-            'compiled_sql': None,
-            'extra_ctes_injected': False,
-            'extra_ctes': OrderedDict(),
-            'injected_sql': None,
-        })
+        compiled_node.update(
+            {
+                'compiled': False,
+                'compiled_sql': None,
+                'extra_ctes_injected': False,
+                'extra_ctes': OrderedDict(),
+                'injected_sql': None,
+            }
+        )
 
         context = dbt.context.runtime.generate(
-            compiled_node, self.project, flat_graph)
+            compiled_node, self.project, flat_graph
+        )
 
         compiled_node['compiled_sql'] = dbt.clients.jinja.get_rendered(
-            node.get('raw_sql'),
-            context,
-            node)
+            node.get('raw_sql'), context, node
+        )
 
         compiled_node['compiled'] = True
 
         injected_node, _ = prepend_ctes(compiled_node, flat_graph)
 
-        if compiled_node.get('resource_type') in [NodeType.Test,
-                                                  NodeType.Analysis,
-                                                  NodeType.Operation]:
+        if compiled_node.get('resource_type') in [
+            NodeType.Test, NodeType.Analysis, NodeType.Operation
+        ]:
             # data tests get wrapped in count(*)
             # TODO : move this somewhere more reasonable
             if 'data' in injected_node['tags'] and \
                is_type(injected_node, NodeType.Test):
                 injected_node['wrapped_sql'] = (
-                    "select count(*) from (\n{test_sql}\n) sbq").format(
-                        test_sql=injected_node['injected_sql'])
+                    "select count(*) from (\n{test_sql}\n) sbq"
+                ).format(test_sql=injected_node['injected_sql'])
             else:
                 # don't wrap schema tests or analyses.
-                injected_node['wrapped_sql'] = injected_node.get(
-                    'injected_sql')
+                injected_node['wrapped_sql'] = injected_node.get('injected_sql')
 
         elif is_type(injected_node, NodeType.Archive):
             # unfortunately we do everything automagically for
@@ -199,8 +203,10 @@ class Compiler(object):
             # the SQL at the parser level.
             pass
 
-        elif(is_type(injected_node, NodeType.Model) and
-             get_materialization(injected_node) == 'ephemeral'):
+        elif (
+            is_type(injected_node, NodeType.Model) and
+            get_materialization(injected_node) == 'ephemeral'
+        ):
             pass
 
         else:
@@ -225,26 +231,20 @@ class Compiler(object):
     def link_node(self, linker, node, flat_graph):
         linker.add_node(node.get('unique_id'))
 
-        linker.update_node_data(
-            node.get('unique_id'),
-            node)
+        linker.update_node_data(node.get('unique_id'), node)
 
         for dependency in node.get('depends_on', {}).get('nodes'):
             if flat_graph.get('nodes').get(dependency):
                 linker.dependency(
                     node.get('unique_id'),
-                    (flat_graph.get('nodes')
-                               .get(dependency)
-                               .get('unique_id')))
+                    (flat_graph.get('nodes').get(dependency).get('unique_id'))
+                )
 
             else:
                 dbt.exceptions.dependency_not_found(node, dependency)
 
     def link_graph(self, linker, flat_graph):
-        linked_graph = {
-            'nodes': {},
-            'macros': flat_graph.get('macros')
-        }
+        linked_graph = {'nodes': {}, 'macros': flat_graph.get('macros')}
 
         for name, node in flat_graph.get('nodes').items():
             self.link_node(linker, node, flat_graph)
@@ -286,12 +286,12 @@ class Compiler(object):
             existing_node = names_resources.get(name)
             if existing_node is not None:
                 dbt.exceptions.raise_duplicate_resource_name(
-                        existing_node, node)
+                    existing_node, node
+                )
 
             existing_alias = alias_resources.get(alias)
             if existing_alias is not None:
-                dbt.exceptions.raise_ambiguous_alias(
-                        existing_alias, node)
+                dbt.exceptions.raise_ambiguous_alias(existing_alias, node)
 
             names_resources[name] = node
             alias_resources[alias] = node
@@ -315,8 +315,9 @@ class Compiler(object):
         stats = defaultdict(int)
 
         for node_name, node in itertools.chain(
-                linked_graph.get('nodes').items(),
-                linked_graph.get('macros').items()):
+            linked_graph.get('nodes').items(),
+            linked_graph.get('macros').items()
+        ):
             stats[node.get('resource_type')] += 1
 
         self.write_graph_file(linker)

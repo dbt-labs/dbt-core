@@ -25,7 +25,9 @@ default_project_cfg = {
     'test-paths': ['test'],
     'target-path': 'target',
     'clean-targets': ['target'],
-    'outputs': {'default': {}},
+    'outputs': {
+        'default': {}
+    },
     'target': 'default',
     'models': {},
     'quoting': {},
@@ -64,9 +66,9 @@ class DbtProfileError(Exception):
 
 
 class Project(object):
-
-    def __init__(self, cfg, profiles, profiles_dir, profile_to_load=None,
-                 args=None):
+    def __init__(
+        self, cfg, profiles, profiles_dir, profile_to_load=None, args=None
+    ):
 
         self.cfg = default_project_cfg.copy()
         self.cfg.update(cfg)
@@ -90,7 +92,8 @@ class Project(object):
         else:
             raise DbtProjectError(
                 "Could not find profile named '{}'"
-                .format(self.profile_to_load), self)
+                .format(self.profile_to_load), self
+            )
 
         if self.cfg.get('models') is None:
             self.cfg['models'] = {}
@@ -161,8 +164,9 @@ class Project(object):
             return self.compile_target(target_cfg)
         else:
             raise DbtProfileError(
-                    "'target' config was not found in profile entry for "
-                    "'{}'".format(target_name), self)
+                "'target' config was not found in profile entry for "
+                "'{}'".format(target_name), self
+            )
 
     def get_target(self):
         ctx = self.context().get('env').copy()
@@ -170,9 +174,7 @@ class Project(object):
         return ctx
 
     def base_context(self):
-        return {
-            'env_var': dbt.context.common._env_var
-        }
+        return {'env_var': dbt.context.common._env_var}
 
     def context(self):
         target_cfg = self.run_environment()
@@ -180,9 +182,7 @@ class Project(object):
         filtered_target.pop('pass', None)
 
         ctx = self.base_context()
-        ctx.update({
-            'env': filtered_target
-        })
+        ctx.update({'env': filtered_target})
 
         return ctx
 
@@ -195,12 +195,16 @@ class Project(object):
 
         if package_name is None or package_version is None:
             raise DbtProjectError(
-                "Project name and version is not provided", self)
+                "Project name and version is not provided", self
+            )
 
         if not self.is_valid_package_name():
             raise DbtProjectError(
-                ('Package name can only contain letters, numbers, and '
-                 'underscores, and must start with a letter.'), self)
+                (
+                    'Package name can only contain letters, numbers, and '
+                    'underscores, and must start with a letter.'
+                ), self
+            )
 
         db_type = target_cfg.get('type')
         validator = dbt.contracts.connection.CREDENTIALS_MAPPING.get(db_type)
@@ -209,8 +213,9 @@ class Project(object):
             valid_types = dbt.contracts.connection.CREDENTIALS_MAPPING.keys()
             raise DbtProjectError(
                 "Invalid db type '{}' should be one of [{}]".format(
-                    db_type,
-                    ", ".join(valid_types)), self)
+                    db_type, ", ".join(valid_types)
+                ), self
+            )
 
         # This is python so I guess we'll just make a class here...
         # it might be wise to tack an extend classmethod onto APIObject,
@@ -218,16 +223,21 @@ class Project(object):
         # out a new class.
         class CredentialsValidator(APIObject):
             SCHEMA = deep_merge(
-                validator.SCHEMA,
-                {
-                    'properties': {
-                        'type': {'type': 'string'},
-                        'threads': {'type': 'integer'},
-                    },
-                    'required': (
-                        validator.SCHEMA.get('required', []) +
-                        ['type', 'threads']
-                    ),
+                validator.SCHEMA, {
+                    'properties':
+                        {
+                            'type': {
+                                'type': 'string'
+                            },
+                            'threads': {
+                                'type': 'integer'
+                            },
+                        },
+                    'required':
+                        (
+                            validator.SCHEMA.get('required', []) +
+                            ['type', 'threads']
+                        ),
                 }
             )
 
@@ -278,27 +288,36 @@ def read_profiles(profiles_dir=None):
 def read_packages(project_dir):
 
     package_filepath = dbt.clients.system.resolve_path_from_base(
-            'packages.yml', project_dir)
+        'packages.yml', project_dir
+    )
 
     if dbt.clients.system.path_exists(package_filepath):
         package_file_contents = dbt.clients.system.load_file_contents(
-                package_filepath)
+            package_filepath
+        )
         package_cfg = dbt.clients.yaml_helper.load_yaml_text(
-                package_file_contents)
+            package_file_contents
+        )
     else:
         package_cfg = {}
 
     return package_cfg.get('packages', [])
 
 
-def read_project(project_filepath, profiles_dir=None, validate=True,
-                 profile_to_load=None, args=None):
+def read_project(
+    project_filepath,
+    profiles_dir=None,
+    validate=True,
+    profile_to_load=None,
+    args=None
+):
     if profiles_dir is None:
         profiles_dir = default_profiles_dir
 
     project_dir = os.path.dirname(os.path.abspath(project_filepath))
     project_file_contents = dbt.clients.system.load_file_contents(
-            project_filepath)
+        project_filepath
+    )
 
     project_cfg = dbt.clients.yaml_helper.load_yaml_text(project_file_contents)
     package_cfg = read_packages(project_dir)
@@ -307,11 +326,13 @@ def read_project(project_filepath, profiles_dir=None, validate=True,
     project_cfg['packages'] = package_cfg
 
     profiles = read_profiles(profiles_dir)
-    proj = Project(project_cfg,
-                   profiles,
-                   profiles_dir,
-                   profile_to_load=profile_to_load,
-                   args=args)
+    proj = Project(
+        project_cfg,
+        profiles,
+        profiles_dir,
+        profile_to_load=profile_to_load,
+        args=args
+    )
 
     if validate:
         proj.validate()

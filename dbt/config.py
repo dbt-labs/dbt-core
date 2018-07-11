@@ -6,7 +6,6 @@ import dbt.clients.system
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
-
 INVALID_PROFILE_MESSAGE = """
 dbt encountered an error while trying to read your profiles.yml file.
 

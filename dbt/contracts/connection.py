@@ -4,189 +4,213 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 POSTGRES_CREDENTIALS_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
-    'properties': {
-        'dbname': {
-            'type': 'string',
-        },
-        'host': {
-            'type': 'string',
-        },
-        'user': {
-            'type': 'string',
-        },
-        'pass': {
-            'type': 'string',
-        },
-        'port': {
-            'oneOf': [
+    'properties':
+        {
+            'dbname': {
+                'type': 'string',
+            },
+            'host': {
+                'type': 'string',
+            },
+            'user': {
+                'type': 'string',
+            },
+            'pass': {
+                'type': 'string',
+            },
+            'port':
                 {
-                    'type': 'integer',
-                    'minimum': 0,
-                    'maximum': 65535,
+                    'oneOf':
+                        [
+                            {
+                                'type': 'integer',
+                                'minimum': 0,
+                                'maximum': 65535,
+                            },
+                            {
+                                'type': 'string'
+                            },
+                        ],
                 },
-                {
-                    'type': 'string'
-                },
-            ],
+            'schema': {
+                'type': 'string',
+            },
+            'keepalives_idle': {
+                'type': 'integer',
+            },
         },
-        'schema': {
-            'type': 'string',
-        },
-        'keepalives_idle': {
-            'type': 'integer',
-        },
-    },
     'required': ['dbname', 'host', 'user', 'pass', 'port', 'schema'],
 }
 
 REDSHIFT_CREDENTIALS_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
-    'properties': {
-        'method': {
-            'enum': ['database', 'iam'],
-            'description': (
-                'database: use user/pass creds; iam: use temporary creds'
-            ),
-        },
-        'dbname': {
-            'type': 'string',
-        },
-        'host': {
-            'type': 'string',
-        },
-        'user': {
-            'type': 'string',
-        },
-        'pass': {
-            'type': 'string',
-        },
-        'port': {
-            'oneOf': [
+    'properties':
+        {
+            'method':
                 {
-                    'type': 'integer',
-                    'minimum': 0,
-                    'maximum': 65535,
+                    'enum': ['database', 'iam'],
+                    'description':
+                        (
+                            'database: use user/pass creds; iam: use temporary creds'
+                        ),
                 },
+            'dbname': {
+                'type': 'string',
+            },
+            'host': {
+                'type': 'string',
+            },
+            'user': {
+                'type': 'string',
+            },
+            'pass': {
+                'type': 'string',
+            },
+            'port':
                 {
-                    'type': 'string'
+                    'oneOf':
+                        [
+                            {
+                                'type': 'integer',
+                                'minimum': 0,
+                                'maximum': 65535,
+                            },
+                            {
+                                'type': 'string'
+                            },
+                        ],
                 },
-            ],
-        },
-        'schema': {
-            'type': 'string',
-        },
-        'cluster_id': {
-            'type': 'string',
-            'description': (
-                'If using IAM auth, the name of the cluster'
-            )
-        },
-        'iam_duration_seconds': {
-            'type': 'integer',
-            'minimum': 900,
-            'maximum': 3600,
-            'description': (
-                'If using IAM auth, the ttl for the temporary credentials'
-            )
-        },
-        'keepalives_idle': {
-            'type': 'integer',
-        },
-        'required': ['dbname', 'host', 'user', 'port', 'schema']
-    }
+            'schema': {
+                'type': 'string',
+            },
+            'cluster_id':
+                {
+                    'type':
+                        'string',
+                    'description':
+                        ('If using IAM auth, the name of the cluster')
+                },
+            'iam_duration_seconds':
+                {
+                    'type':
+                        'integer',
+                    'minimum':
+                        900,
+                    'maximum':
+                        3600,
+                    'description':
+                        (
+                            'If using IAM auth, the ttl for the temporary credentials'
+                        )
+                },
+            'keepalives_idle': {
+                'type': 'integer',
+            },
+            'required': ['dbname', 'host', 'user', 'port', 'schema']
+        }
 }
 
 SNOWFLAKE_CREDENTIALS_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
-    'properties': {
-        'account': {
-            'type': 'string',
+    'properties':
+        {
+            'account': {
+                'type': 'string',
+            },
+            'user': {
+                'type': 'string',
+            },
+            'password': {
+                'type': 'string',
+            },
+            'database': {
+                'type': 'string',
+            },
+            'schema': {
+                'type': 'string',
+            },
+            'warehouse': {
+                'type': 'string',
+            },
+            'role': {
+                'type': 'string',
+            },
         },
-        'user': {
-            'type': 'string',
-        },
-        'password': {
-            'type': 'string',
-        },
-        'database': {
-            'type': 'string',
-        },
-        'schema': {
-            'type': 'string',
-        },
-        'warehouse': {
-            'type': 'string',
-        },
-        'role': {
-            'type': 'string',
-        },
-    },
     'required': ['account', 'user', 'password', 'database', 'schema'],
 }
 
 BIGQUERY_CREDENTIALS_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
-    'properties': {
-        'method': {
-            'enum': ['oauth', 'service-account', 'service-account-json'],
+    'properties':
+        {
+            'method':
+                {
+                    'enum': [
+                        'oauth', 'service-account', 'service-account-json'
+                    ],
+                },
+            'project': {
+                'type': 'string',
+            },
+            'schema': {
+                'type': 'string',
+            },
+            'keyfile': {
+                'type': 'string',
+            },
+            'keyfile_json': {
+                'type': 'object',
+            },
+            'timeout_seconds': {
+                'type': 'integer',
+            },
         },
-        'project': {
-            'type': 'string',
-        },
-        'schema': {
-            'type': 'string',
-        },
-        'keyfile': {
-            'type': 'string',
-        },
-        'keyfile_json': {
-            'type': 'object',
-        },
-        'timeout_seconds': {
-            'type': 'integer',
-        },
-    },
     'required': ['method', 'project', 'schema'],
 }
 
-
 CONNECTION_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'properties': {
-        'type': {
-            'enum': ['postgres', 'redshift', 'snowflake', 'bigquery'],
+    'type':
+        'object',
+    'additionalProperties':
+        False,
+    'properties':
+        {
+            'type':
+                {
+                    'enum': ['postgres', 'redshift', 'snowflake', 'bigquery'],
+                },
+            'name': {
+                'type': ['null', 'string'],
+            },
+            'state': {
+                'enum': ['init', 'open', 'closed', 'fail'],
+            },
+            'transaction_open': {
+                'type': 'boolean',
+            },
+            'handle': {
+                'type': ['null', 'object'],
+            },
+            'credentials':
+                {
+                    'description':
+                        (
+                            'The credentials object here should match the connection type.'
+                        ),
+                    'anyOf':
+                        [
+                            POSTGRES_CREDENTIALS_CONTRACT,
+                            REDSHIFT_CREDENTIALS_CONTRACT,
+                            SNOWFLAKE_CREDENTIALS_CONTRACT,
+                            BIGQUERY_CREDENTIALS_CONTRACT,
+                        ],
+                }
         },
-        'name': {
-            'type': ['null', 'string'],
-        },
-        'state': {
-            'enum': ['init', 'open', 'closed', 'fail'],
-        },
-        'transaction_open': {
-            'type': 'boolean',
-        },
-        'handle': {
-            'type': ['null', 'object'],
-        },
-        'credentials': {
-            'description': (
-                'The credentials object here should match the connection type.'
-            ),
-            'anyOf': [
-                POSTGRES_CREDENTIALS_CONTRACT,
-                REDSHIFT_CREDENTIALS_CONTRACT,
-                SNOWFLAKE_CREDENTIALS_CONTRACT,
-                BIGQUERY_CREDENTIALS_CONTRACT,
-            ],
-        }
-    },
-    'required': [
-        'type', 'name', 'state', 'transaction_open', 'handle', 'credentials'
-    ],
+    'required':
+        ['type', 'name', 'state', 'transaction_open', 'handle', 'credentials'],
 }
 
 

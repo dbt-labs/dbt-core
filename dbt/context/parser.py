@@ -2,12 +2,10 @@ import dbt.exceptions
 
 import dbt.context.common
 
-
 execute = False
 
 
 def ref(db_wrapper, model, project_cfg, profile, flat_graph):
-
     def ref(*args):
         if len(args) == 1 or len(args) == 2:
             model['refs'].append(list(args))
@@ -31,8 +29,8 @@ class Config:
             opts = kwargs
         else:
             dbt.exceptions.raise_compiler_error(
-                "Invalid inline model config",
-                self.model)
+                "Invalid inline model config", self.model
+            )
 
         self.model['config_reference'].update_in_model_config(opts)
         return ''
@@ -49,4 +47,5 @@ class Config:
 
 def generate(model, project_cfg, flat_graph):
     return dbt.context.common.generate(
-        model, project_cfg, flat_graph, dbt.context.parser)
+        model, project_cfg, flat_graph, dbt.context.parser
+    )

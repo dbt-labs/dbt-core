@@ -149,8 +149,10 @@ def run_from_task(task, proj, parsed_args):
         dbt.tracking.track_invocation_end(
             project=proj, args=parsed_args, result_type="ok"
         )
-    except (dbt.exceptions.NotImplementedException,
-            dbt.exceptions.FailedToConnectException) as e:
+    except (
+        dbt.exceptions.NotImplementedException,
+        dbt.exceptions.FailedToConnectException
+    ) as e:
         logger.info('ERROR: {}'.format(e))
         dbt.tracking.track_invocation_end(
             project=proj, args=parsed_args, result_type="error"
@@ -188,15 +190,16 @@ def invoke_dbt(parsed):
             for profile in all_profiles:
                 logger.info(" - {}".format(profile))
         else:
-            logger.info("There are no profiles defined in your "
-                        "profiles.yml file")
+            logger.info(
+                "There are no profiles defined in your "
+                "profiles.yml file"
+            )
 
         logger.info(PROFILES_HELP_MESSAGE)
 
         dbt.tracking.track_invalid_invocation(
-            project=proj,
-            args=parsed,
-            result_type="invalid_profile")
+            project=proj, args=parsed, result_type="invalid_profile"
+        )
 
         return None
     except project.DbtProfileError as e:
@@ -204,9 +207,8 @@ def invoke_dbt(parsed):
         logger.info("  ERROR {}".format(str(e)))
 
         dbt.tracking.track_invalid_invocation(
-            project=proj,
-            args=parsed,
-            result_type="invalid_profile")
+            project=proj, args=parsed, result_type="invalid_profile"
+        )
 
         return None
 
@@ -218,15 +220,14 @@ def invoke_dbt(parsed):
             proj.compile_and_update_target()
         else:
             logger.info("Encountered an error while reading the project:")
-            logger.info("  ERROR Specified target {} is not a valid option "
-                        "for profile {}"
-                        .format(parsed.target, proj.profile_to_load))
-            logger.info("Valid targets are: {}".format(
-                ', '.join(targets)))
+            logger.info(
+                "  ERROR Specified target {} is not a valid option "
+                "for profile {}".format(parsed.target, proj.profile_to_load)
+            )
+            logger.info("Valid targets are: {}".format(', '.join(targets)))
             dbt.tracking.track_invalid_invocation(
-                project=proj,
-                args=parsed,
-                result_type="invalid_target")
+                project=proj, args=parsed, result_type="invalid_target"
+            )
 
             return None
 
@@ -253,27 +254,31 @@ def invoke_dbt(parsed):
 def parse_args(args):
     p = argparse.ArgumentParser(
         prog='dbt: data build tool',
-        formatter_class=argparse.RawTextHelpFormatter)
+        formatter_class=argparse.RawTextHelpFormatter
+    )
 
     p.add_argument(
         '--version',
         action='version',
         version=dbt.version.get_version_information(),
-        help="Show version information")
+        help="Show version information"
+    )
 
     p.add_argument(
         '-d',
         '--debug',
         action='store_true',
         help='''Display debug logging during dbt execution. Useful for
-        debugging and making bug reports.''')
+        debugging and making bug reports.'''
+    )
 
     p.add_argument(
         '-S',
         '--strict',
         action='store_true',
         help='''Run schema validations at runtime. This will surface
-        bugs in dbt, but may incur a performance penalty.''')
+        bugs in dbt, but may incur a performance penalty.'''
+    )
 
     subs = p.add_subparsers()
 
@@ -392,7 +397,8 @@ def parse_args(args):
             help="""
             If specified, DBT will drop incremental models and
             fully-recalculate the incremental table from the model definition.
-            """)
+            """
+        )
 
     seed_sub = subs.add_parser('seed', parents=[base_subparser])
     seed_sub.add_argument(
@@ -417,8 +423,7 @@ def parse_args(args):
     # it might look like docs_sub is the correct parents entry, but that
     # will cause weird errors about 'conflicting option strings'.
     generate_sub = docs_subs.add_parser('generate', parents=[base_subparser])
-    generate_sub.set_defaults(cls=generate_task.GenerateTask,
-                              which='generate')
+    generate_sub.set_defaults(cls=generate_task.GenerateTask, which='generate')
 
     sub = subs.add_parser('test', parents=[base_subparser])
     sub.add_argument(

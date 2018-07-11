@@ -10,11 +10,7 @@ class DefaultRelation(APIObject):
     View = "view"
     CTE = "cte"
 
-    RelationTypes = [
-        Table,
-        View,
-        CTE
-    ]
+    RelationTypes = [Table, View, CTE]
 
     DEFAULTS = {
         'metadata': {
@@ -26,70 +22,98 @@ class DefaultRelation(APIObject):
             'schema': True,
             'identifier': True
         },
-        'include_policy': {
-            'database': False,
-            'schema': True,
-            'identifier': True
-        }
+        'include_policy':
+            {
+                'database': False,
+                'schema': True,
+                'identifier': True
+            }
     }
 
     PATH_SCHEMA = {
         'type': 'object',
-        'properties': {
-            'database': {'type': ['string', 'null']},
-            'schema': {'type': ['string', 'null']},
-            'identifier': {'type': 'string'},
-        },
+        'properties':
+            {
+                'database': {
+                    'type': ['string', 'null']
+                },
+                'schema': {
+                    'type': ['string', 'null']
+                },
+                'identifier': {
+                    'type': 'string'
+                },
+            },
         'required': ['database', 'schema', 'identifier'],
     }
 
     POLICY_SCHEMA = {
         'type': 'object',
-        'properties': {
-            'database': {'type': 'boolean'},
-            'schema': {'type': 'boolean'},
-            'identifier': {'type': 'boolean'},
-        },
+        'properties':
+            {
+                'database': {
+                    'type': 'boolean'
+                },
+                'schema': {
+                    'type': 'boolean'
+                },
+                'identifier': {
+                    'type': 'boolean'
+                },
+            },
         'required': ['database', 'schema', 'identifier'],
     }
 
     SCHEMA = {
-        'type': 'object',
-        'properties': {
-            'metadata': {
-                'type': 'object',
-                'properties': {
-                    'type': {
-                        'type': 'string',
-                        'const': 'DefaultRelation',
+        'type':
+            'object',
+        'properties':
+            {
+                'metadata':
+                    {
+                        'type': 'object',
+                        'properties':
+                            {
+                                'type':
+                                    {
+                                        'type': 'string',
+                                        'const': 'DefaultRelation',
+                                    },
+                            },
                     },
+                'type': {
+                    'enum': RelationTypes + [None],
+                },
+                'path': PATH_SCHEMA,
+                'include_policy': POLICY_SCHEMA,
+                'quote_policy': POLICY_SCHEMA,
+                'quote_character': {
+                    'type': 'string'
                 },
             },
-            'type': {
-                'enum': RelationTypes + [None],
-            },
-            'path': PATH_SCHEMA,
-            'include_policy': POLICY_SCHEMA,
-            'quote_policy': POLICY_SCHEMA,
-            'quote_character': {'type': 'string'},
-        },
-        'required': ['metadata', 'type', 'path', 'include_policy',
-                     'quote_policy', 'quote_character']
+        'required':
+            [
+                'metadata', 'type', 'path', 'include_policy', 'quote_policy',
+                'quote_character'
+            ]
     }
 
     PATH_ELEMENTS = ['database', 'schema', 'identifier']
 
     def matches(self, database=None, schema=None, identifier=None):
-        search = filter_null_values({
-            'database': database,
-            'schema': schema,
-            'identifier': identifier
-        })
+        search = filter_null_values(
+            {
+                'database': database,
+                'schema': schema,
+                'identifier': identifier
+            }
+        )
 
         if not search:
             # nothing was passed in
             raise dbt.exceptions.RuntimeException(
-                "Tried to match relation, but no search path was passed!")
+                "Tried to match relation, but no search path was passed!"
+            )
 
         exact_match = True
         approximate_match = True
@@ -103,7 +127,8 @@ class DefaultRelation(APIObject):
 
         if approximate_match and not exact_match:
             target = self.create(
-                database=database, schema=schema, identifier=identifier)
+                database=database, schema=schema, identifier=identifier
+            )
             dbt.exceptions.approximate_relation_match(target, self)
 
         return exact_match
@@ -118,20 +143,24 @@ class DefaultRelation(APIObject):
         return self.include_policy.get(part)
 
     def quote(self, database=None, schema=None, identifier=None):
-        policy = filter_null_values({
-            'database': database,
-            'schema': schema,
-            'identifier': identifier
-        })
+        policy = filter_null_values(
+            {
+                'database': database,
+                'schema': schema,
+                'identifier': identifier
+            }
+        )
 
         return self.incorporate(quote_policy=policy)
 
     def include(self, database=None, schema=None, identifier=None):
-        policy = filter_null_values({
-            'database': database,
-            'schema': schema,
-            'identifier': identifier
-        })
+        policy = filter_null_values(
+            {
+                'database': database,
+                'schema': schema,
+                'identifier': identifier
+            }
+        )
 
         return self.incorporate(include_policy=policy)
 
@@ -150,14 +179,12 @@ class DefaultRelation(APIObject):
                     else:
                         path_part = self.identifier
 
-                parts.append(
-                    self.quote_if(
-                        path_part,
-                        self.should_quote(k)))
+                parts.append(self.quote_if(path_part, self.should_quote(k)))
 
         if len(parts) == 0:
             raise dbt.exceptions.RuntimeException(
-                "No path parts are included! Nothing to render.")
+                "No path parts are included! Nothing to render."
+            )
 
         return '.'.join(parts)
 
@@ -169,8 +196,8 @@ class DefaultRelation(APIObject):
 
     def quoted(self, identifier):
         return '{quote_char}{identifier}{quote_char}'.format(
-            quote_char=self.quote_character,
-            identifier=identifier)
+            quote_char=self.quote_character, identifier=identifier
+        )
 
     @classmethod
     def create_from_node(cls, profile, node, table_name=None, **kwargs):
@@ -179,23 +206,32 @@ class DefaultRelation(APIObject):
             schema=node.get('schema'),
             identifier=node.get('alias'),
             table_name=table_name,
-            **kwargs)
+            **kwargs
+        )
 
     @classmethod
-    def create(cls, database=None, schema=None,
-               identifier=None, table_name=None,
-               type=None, **kwargs):
+    def create(
+        cls,
+        database=None,
+        schema=None,
+        identifier=None,
+        table_name=None,
+        type=None,
+        **kwargs
+    ):
         if table_name is None:
             table_name = identifier
 
-        return cls(type=type,
-                   path={
-                       'database': database,
-                       'schema': schema,
-                       'identifier': identifier
-                   },
-                   table_name=table_name,
-                   **kwargs)
+        return cls(
+            type=type,
+            path={
+                'database': database,
+                'schema': schema,
+                'identifier': identifier
+            },
+            table_name=table_name,
+            **kwargs
+        )
 
     def __repr__(self):
         return "<{} {}>".format(self.__class__.__name__, self.render())

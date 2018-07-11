@@ -1,5 +1,3 @@
 from dbt.api.object import APIObject
 
-__all__ = [
-    'APIObject'
-]
+__all__ = ['APIObject']

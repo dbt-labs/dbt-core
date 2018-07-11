@@ -14,7 +14,6 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt.clients import yaml_helper
 
-
 DBTConfigKeys = [
     'alias',
     'schema',
@@ -99,27 +98,27 @@ def model_immediate_name(model, non_destructive):
 
 
 def find_refable_by_name(flat_graph, target_name, target_package):
-    return find_by_name(flat_graph, target_name, target_package,
-                        'nodes', NodeType.refable())
+    return find_by_name(
+        flat_graph, target_name, target_package, 'nodes', NodeType.refable()
+    )
 
 
 def find_macro_by_name(flat_graph, target_name, target_package):
-    return find_by_name(flat_graph, target_name, target_package,
-                        'macros', [NodeType.Macro])
+    return find_by_name(
+        flat_graph, target_name, target_package, 'macros', [NodeType.Macro]
+    )
 
 
 def find_operation_by_name(flat_graph, target_name, target_package):
-    return find_by_name(flat_graph, target_name, target_package,
-                        'macros', [NodeType.Operation])
+    return find_by_name(
+        flat_graph, target_name, target_package, 'macros', [NodeType.Operation]
+    )
 
 
-def find_by_name(flat_graph, target_name, target_package, subgraph,
-                 nodetype):
+def find_by_name(flat_graph, target_name, target_package, subgraph, nodetype):
     return find_in_subgraph_by_name(
-        flat_graph.get(subgraph),
-        target_name,
-        target_package,
-        nodetype)
+        flat_graph.get(subgraph), target_name, target_package, nodetype
+    )
 
 
 def find_in_subgraph_by_name(subgraph, target_name, target_package, nodetype):
@@ -140,10 +139,12 @@ def find_in_subgraph_by_name(subgraph, target_name, target_package, nodetype):
 
         resource_type, package_name, node_name = node_parts
 
-        if (resource_type in nodetype and
-            ((target_name == node_name) and
-             (target_package is None or
-              target_package == package_name))):
+        if (
+            resource_type in nodetype and (
+                (target_name == node_name) and
+                (target_package is None or target_package == package_name)
+            )
+        ):
             return model
 
     return None
@@ -161,8 +162,9 @@ def get_dbt_operation_name(name):
     return '{}{}'.format(OPERATION_PREFIX, name)
 
 
-def get_materialization_macro_name(materialization_name, adapter_type=None,
-                                   with_prefix=True):
+def get_materialization_macro_name(
+    materialization_name, adapter_type=None, with_prefix=True
+):
     if adapter_type is None:
         adapter_type = 'default'
 
@@ -174,25 +176,20 @@ def get_materialization_macro_name(materialization_name, adapter_type=None,
         return name
 
 
-def get_materialization_macro(flat_graph, materialization_name,
-                              adapter_type=None):
-    macro_name = get_materialization_macro_name(materialization_name,
-                                                adapter_type,
-                                                with_prefix=False)
+def get_materialization_macro(
+    flat_graph, materialization_name, adapter_type=None
+):
+    macro_name = get_materialization_macro_name(
+        materialization_name, adapter_type, with_prefix=False
+    )
 
-    macro = find_macro_by_name(
-        flat_graph,
-        macro_name,
-        None)
+    macro = find_macro_by_name(flat_graph, macro_name, None)
 
     if adapter_type not in ('default', None) and macro is None:
-        macro_name = get_materialization_macro_name(materialization_name,
-                                                    adapter_type='default',
-                                                    with_prefix=False)
-        macro = find_macro_by_name(
-            flat_graph,
-            macro_name,
-            None)
+        macro_name = get_materialization_macro_name(
+            materialization_name, adapter_type='default', with_prefix=False
+        )
+        macro = find_macro_by_name(flat_graph, macro_name, None)
 
     return macro
 
@@ -215,7 +212,8 @@ def load_project_with_profile(source_project, project_dir):
         project_filepath,
         source_project.profiles_dir,
         profile_to_load=source_project.profile_to_load,
-        args=source_project.args)
+        args=source_project.args
+    )
 
 
 def dependencies_for_path(project, module_path):
@@ -236,8 +234,7 @@ def dependencies_for_path(project, module_path):
             yield load_project_with_profile(project, full_obj)
         except dbt.project.DbtProjectError as e:
             logger.info(
-                "Error reading dependency project at {}".format(
-                    full_obj)
+                "Error reading dependency project at {}".format(full_obj)
             )
             logger.info(str(e))
 
@@ -265,7 +262,7 @@ def merge(*args):
         return args[0]
 
     lst = list(args)
-    last = lst.pop(len(lst)-1)
+    last = lst.pop(len(lst) - 1)
 
     return _merge(merge(*lst), last)
 
@@ -289,7 +286,7 @@ def deep_merge(*args):
         return copy.deepcopy(args[0])
 
     lst = list(args)
-    last = copy.deepcopy(lst.pop(len(lst)-1))
+    last = copy.deepcopy(lst.pop(len(lst) - 1))
 
     return _deep_merge(deep_merge(*lst), last)
 
@@ -397,6 +394,7 @@ class memoized(object):
     reevaluated).
 
     Taken from https://wiki.python.org/moin/PythonDecoratorLibrary#Memoize'''
+
     def __init__(self, func):
         self.func = func
         self.cache = {}
@@ -421,19 +419,16 @@ class memoized(object):
         return functools.partial(self.__call__, obj)
 
 
-def invalid_ref_fail_unless_test(node, target_model_name,
-                                 target_model_package):
+def invalid_ref_fail_unless_test(node, target_model_name, target_model_package):
     if node.get('resource_type') == NodeType.Test:
         warning = dbt.exceptions.get_target_not_found_msg(
-                    node,
-                    target_model_name,
-                    target_model_package)
+            node, target_model_name, target_model_package
+        )
         logger.debug("WARNING: {}".format(warning))
     else:
         dbt.exceptions.ref_target_not_found(
-            node,
-            target_model_name,
-            target_model_package)
+            node, target_model_name, target_model_package
+        )
 
 
 def parse_cli_vars(var_string):
@@ -446,16 +441,15 @@ def parse_cli_vars(var_string):
             type_name = var_type.__name__
             dbt.exceptions.raise_compiler_error(
                 "The --vars argument must be a YAML dictionary, but was "
-                "of type '{}'".format(type_name))
+                "of type '{}'".format(type_name)
+            )
     except dbt.exceptions.ValidationException as e:
-        logger.error(
-                "The YAML provided in the --vars argument is not valid.\n")
+        logger.error("The YAML provided in the --vars argument is not valid.\n")
         raise
 
 
 def filter_null_values(input):
-    return dict((k, v) for (k, v) in input.items()
-                if v is not None)
+    return dict((k, v) for (k, v) in input.items() if v is not None)
 
 
 def add_ephemeral_model_prefix(s):

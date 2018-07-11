@@ -17,9 +17,11 @@ class TestTask(RunnableTask):
            c) referential integrity
            d) accepted value
     """
+
     def run(self):
         runner = RunManager(
-            self.project, self.project['target-path'], self.args)
+            self.project, self.project['target-path'], self.args
+        )
 
         include = self.args.models
         exclude = self.args.exclude

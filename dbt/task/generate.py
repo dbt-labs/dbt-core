@@ -11,7 +11,6 @@ import dbt.compilation
 
 from dbt.task.base_task import BaseTask
 
-
 CATALOG_FILENAME = 'catalog.json'
 
 
@@ -20,10 +19,7 @@ def get_stripped_prefix(source, prefix):
     with the given prefix.
     """
     cut = len(prefix)
-    return {
-        k[cut:]: v for k, v in source.items()
-        if k.startswith(prefix)
-    }
+    return {k[cut:]: v for k, v in source.items() if k.startswith(prefix)}
 
 
 def unflatten(columns):
@@ -110,10 +106,7 @@ class GenerateTask(BaseTask):
         dbt.ui.printer.print_timestamped_line("Building catalog")
         results = adapter.get_catalog(profile, self.project.cfg, manifest)
 
-        results = [
-            dict(zip(results.column_names, row))
-            for row in results
-        ]
+        results = [dict(zip(results.column_names, row)) for row in results]
         results = unflatten(results)
 
         path = os.path.join(self.project['target-path'], CATALOG_FILENAME)

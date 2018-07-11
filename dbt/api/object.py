@@ -18,10 +18,7 @@ class APIObject(Mapping):
     calls this constructor.
     """
 
-    SCHEMA = {
-        'type': 'object',
-        'properties': {}
-    }
+    SCHEMA = {'type': 'object', 'properties': {}}
 
     DEFAULTS = {}
 
@@ -69,13 +66,14 @@ class APIObject(Mapping):
         errors = set()  # make errors a set to avoid duplicates
 
         for error in validator.iter_errors(self.serialize()):
-            errors.add('.'.join(
-                list(map(str, error.path)) + [error.message]
-            ))
+            errors.add('.'.join(list(map(str, error.path)) + [error.message]))
 
         if errors:
-            msg = ('Invalid arguments passed to "{}" instance: {}'.format(
-                type(self).__name__, ', '.join(errors)))
+            msg = (
+                'Invalid arguments passed to "{}" instance: {}'.format(
+                    type(self).__name__, ', '.join(errors)
+                )
+            )
             raise ValidationException(msg)
 
     # implement the Mapping protocol:
@@ -102,6 +100,7 @@ class APIObject(Mapping):
     def __getattr__(self, name):
         if name in self._contents:
             return self._contents[name]
-        raise AttributeError((
-            "'{}' object has no attribute '{}'"
-        ).format(type(self).__name__, name))
+        raise AttributeError(
+            ("'{}' object has no attribute '{}'"
+            ).format(type(self).__name__, name)
+        )

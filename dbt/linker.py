@@ -3,10 +3,7 @@ from collections import defaultdict
 
 import dbt.utils
 
-
-GRAPH_SERIALIZE_BLACKLIST = [
-    'agate_table'
-]
+GRAPH_SERIALIZE_BLACKLIST = ['agate_table']
 
 
 def from_file(graph_file):
@@ -66,15 +63,18 @@ class Linker(object):
                     "it disabled?".format(node)
                 )
 
-            num_ancestors = len([
-                ancestor for ancestor in
-                nx.ancestors(self.graph, node)
-                if (dbt.utils.is_blocking_dependency(
-                        self.get_node(ancestor)) and
-                    (ephemeral_only is False or
-                     dbt.utils.get_materialization(
-                         self.get_node(ancestor)) == 'ephemeral'))
-            ])
+            num_ancestors = len(
+                [
+                    ancestor for ancestor in nx.ancestors(self.graph, node) if (
+                        dbt.utils.
+                        is_blocking_dependency(self.get_node(ancestor)) and (
+                            ephemeral_only is False or dbt.utils.
+                            get_materialization(self.get_node(ancestor)
+                                               ) == 'ephemeral'
+                        )
+                    )
+                ]
+            )
 
             depth_nodes[num_ancestors].append(node)
 

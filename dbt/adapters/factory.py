@@ -7,7 +7,6 @@ from dbt.adapters.bigquery import BigQueryAdapter
 
 import dbt.exceptions
 
-
 adapters = {
     'postgres': PostgresAdapter,
     'redshift': RedshiftAdapter,

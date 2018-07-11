@@ -23,56 +23,82 @@ class BigQueryRelation(DefaultRelation):
 
     PATH_SCHEMA = {
         'type': 'object',
-        'properties': {
-            'project': {'type': ['string', 'null']},
-            'schema': {'type': ['string', 'null']},
-            'identifier': {'type': 'string'},
-        },
+        'properties':
+            {
+                'project': {
+                    'type': ['string', 'null']
+                },
+                'schema': {
+                    'type': ['string', 'null']
+                },
+                'identifier': {
+                    'type': 'string'
+                },
+            },
         'required': ['project', 'schema', 'identifier'],
     }
 
     POLICY_SCHEMA = {
         'type': 'object',
-        'properties': {
-            'project': {'type': 'boolean'},
-            'schema': {'type': 'boolean'},
-            'identifier': {'type': 'boolean'},
-        },
+        'properties':
+            {
+                'project': {
+                    'type': 'boolean'
+                },
+                'schema': {
+                    'type': 'boolean'
+                },
+                'identifier': {
+                    'type': 'boolean'
+                },
+            },
         'required': ['project', 'schema', 'identifier'],
     }
 
     SCHEMA = {
-        'type': 'object',
-        'properties': {
-            'metadata': {
-                'type': 'object',
-                'properties': {
-                    'type': {
-                        'type': 'string',
-                        'const': 'BigQueryRelation',
+        'type':
+            'object',
+        'properties':
+            {
+                'metadata':
+                    {
+                        'type': 'object',
+                        'properties':
+                            {
+                                'type':
+                                    {
+                                        'type': 'string',
+                                        'const': 'BigQueryRelation',
+                                    },
+                            },
                     },
+                'type': {
+                    'enum': DefaultRelation.RelationTypes + [None],
+                },
+                'path': PATH_SCHEMA,
+                'include_policy': POLICY_SCHEMA,
+                'quote_policy': POLICY_SCHEMA,
+                'quote_character': {
+                    'type': 'string'
                 },
             },
-            'type': {
-                'enum': DefaultRelation.RelationTypes + [None],
-            },
-            'path': PATH_SCHEMA,
-            'include_policy': POLICY_SCHEMA,
-            'quote_policy': POLICY_SCHEMA,
-            'quote_character': {'type': 'string'},
-        },
-        'required': ['metadata', 'type', 'path', 'include_policy',
-                     'quote_policy', 'quote_character']
+        'required':
+            [
+                'metadata', 'type', 'path', 'include_policy', 'quote_policy',
+                'quote_character'
+            ]
     }
 
     PATH_ELEMENTS = ['project', 'schema', 'identifier']
 
     def matches(self, project=None, schema=None, identifier=None):
-        search = filter_null_values({
-            'project': project,
-            'schema': schema,
-            'identifier': identifier
-        })
+        search = filter_null_values(
+            {
+                'project': project,
+                'schema': schema,
+                'identifier': identifier
+            }
+        )
 
         if not search:
             # nothing was passed in
@@ -90,39 +116,52 @@ class BigQueryRelation(DefaultRelation):
             project=profile.get('project'),
             schema=node.get('schema'),
             identifier=node.get('alias'),
-            **kwargs)
+            **kwargs
+        )
 
     @classmethod
-    def create(cls, project=None, schema=None,
-               identifier=None, table_name=None,
-               type=None, **kwargs):
+    def create(
+        cls,
+        project=None,
+        schema=None,
+        identifier=None,
+        table_name=None,
+        type=None,
+        **kwargs
+    ):
         if table_name is None:
             table_name = identifier
 
-        return cls(type=type,
-                   path={
-                       'project': project,
-                       'schema': schema,
-                       'identifier': identifier
-                   },
-                   table_name=table_name,
-                   **kwargs)
+        return cls(
+            type=type,
+            path={
+                'project': project,
+                'schema': schema,
+                'identifier': identifier
+            },
+            table_name=table_name,
+            **kwargs
+        )
 
     def quote(self, project=None, schema=None, identifier=None):
-        policy = filter_null_values({
-            'project': project,
-            'schema': schema,
-            'identifier': identifier
-        })
+        policy = filter_null_values(
+            {
+                'project': project,
+                'schema': schema,
+                'identifier': identifier
+            }
+        )
 
         return self.incorporate(quote_policy=policy)
 
     def include(self, project=None, schema=None, identifier=None):
-        policy = filter_null_values({
-            'project': project,
-            'schema': schema,
-            'identifier': identifier
-        })
+        policy = filter_null_values(
+            {
+                'project': project,
+                'schema': schema,
+                'identifier': identifier
+            }
+        )
 
         return self.incorporate(include_policy=policy)
 

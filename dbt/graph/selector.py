@@ -102,8 +102,9 @@ def get_nodes_from_spec(graph, spec):
     select_children = spec['select_children']
     qualified_node_name = spec['qualified_node_name']
 
-    selected_nodes = set(get_nodes_by_qualified_name(graph,
-                                                     qualified_node_name))
+    selected_nodes = set(
+        get_nodes_by_qualified_name(graph, qualified_node_name)
+    )
 
     additional_nodes = set()
     test_nodes = set()
@@ -123,9 +124,10 @@ def get_nodes_from_spec(graph, spec):
     for node in model_nodes:
         # include tests that depend on this node. if we aren't running tests,
         # they'll be filtered out later.
-        child_tests = [n for n in graph.successors(node)
-                       if graph.node.get(n).get('resource_type') ==
-                       NodeType.Test]
+        child_tests = [
+            n for n in graph.successors(node)
+            if graph.node.get(n).get('resource_type') == NodeType.Test
+        ]
         test_nodes.update(child_tests)
 
     return model_nodes | test_nodes
@@ -193,8 +195,9 @@ class NodeSelector(object):
             node = graph.node.get(node_name)
 
             matched_resource = node.get('resource_type') in resource_types
-            matched_tags = (len(tags) == 0 or
-                            bool(set(node.get('tags', [])) & set(tags)))
+            matched_tags = (
+                len(tags) == 0 or bool(set(node.get('tags', [])) & set(tags))
+            )
 
             if matched_resource and matched_tags:
                 filtered_nodes.add(node_name)
@@ -206,13 +209,13 @@ class NodeSelector(object):
         is_ephemeral = get_materialization(node) == 'ephemeral'
         return is_model and is_ephemeral
 
-    def get_ancestor_ephemeral_nodes(self, flat_graph, linked_graph,
-                                     selected_nodes):
+    def get_ancestor_ephemeral_nodes(
+        self, flat_graph, linked_graph, selected_nodes
+    ):
 
         node_names = {
             node: flat_graph['nodes'].get(node).get('name')
-            for node in selected_nodes
-            if node in flat_graph['nodes']
+            for node in selected_nodes if node in flat_graph['nodes']
         }
 
         include_spec = [
@@ -247,8 +250,8 @@ class NodeSelector(object):
 
     def as_node_list(self, selected_nodes, ephemeral_only=False):
         dependency_list = self.linker.as_dependency_list(
-            selected_nodes,
-            ephemeral_only=ephemeral_only)
+            selected_nodes, ephemeral_only=ephemeral_only
+        )
 
         concurrent_dependency_list = []
         for level in dependency_list:
@@ -260,5 +263,6 @@ class NodeSelector(object):
 
 class FlatNodeSelector(NodeSelector):
     def as_node_list(self, selected_nodes):
-        return super(FlatNodeSelector, self).as_node_list(selected_nodes,
-                                                          ephemeral_only=True)
+        return super(FlatNodeSelector, self).as_node_list(
+            selected_nodes, ephemeral_only=True
+        )

@@ -1,4 +1,3 @@
-
 import collections
 
 import dbt.flags
@@ -30,8 +29,9 @@ class HookParser(BaseSqlParser):
         return project_hooks
 
     @classmethod
-    def load_and_parse_run_hook_type(cls, root_project, all_projects,
-                                     hook_type, macros=None):
+    def load_and_parse_run_hook_type(
+        cls, root_project, all_projects, hook_type, macros=None
+    ):
 
         if dbt.flags.STRICT_MODE:
             dbt.contracts.project.ProjectList(**all_projects)
@@ -44,20 +44,23 @@ class HookParser(BaseSqlParser):
                 hook_name = '{}-{}-{}'.format(project_name, hook_type, i)
                 hook_path = dbt.utils.get_pseudo_hook_path(hook_name)
 
-                result.append({
-                    'name': hook_name,
-                    'root_path': "{}/dbt_project.yml".format(project_name),
-                    'resource_type': NodeType.Operation,
-                    'path': hook_path,
-                    'original_file_path': hook_path,
-                    'package_name': project_name,
-                    'raw_sql': hook,
-                    'index': i
-                })
+                result.append(
+                    {
+                        'name': hook_name,
+                        'root_path': "{}/dbt_project.yml".format(project_name),
+                        'resource_type': NodeType.Operation,
+                        'path': hook_path,
+                        'original_file_path': hook_path,
+                        'package_name': project_name,
+                        'raw_sql': hook,
+                        'index': i
+                    }
+                )
 
         tags = [hook_type]
-        return cls.parse_sql_nodes(result, root_project, all_projects,
-                                   tags=tags, macros=macros)
+        return cls.parse_sql_nodes(
+            result, root_project, all_projects, tags=tags, macros=macros
+        )
 
     @classmethod
     def load_and_parse(cls, root_project, all_projects, macros=None):
@@ -66,10 +69,9 @@ class HookParser(BaseSqlParser):
 
         hook_nodes = {}
         for hook_type in RunHookType.Both:
-            project_hooks = cls.load_and_parse_run_hook_type(root_project,
-                                                             all_projects,
-                                                             hook_type,
-                                                             macros=macros)
+            project_hooks = cls.load_and_parse_run_hook_type(
+                root_project, all_projects, hook_type, macros=macros
+            )
             hook_nodes.update(project_hooks)
 
         return hook_nodes

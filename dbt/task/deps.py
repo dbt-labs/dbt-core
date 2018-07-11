@@ -41,8 +41,8 @@ class Package(object):
             return []
         if not isinstance(version, (list, basestring)):
             dbt.exceptions.raise_dependency_error(
-                'version must be list or string, got {}'
-                .format(type(version)))
+                'version must be list or string, got {}'.format(type(version))
+            )
         if not isinstance(version, list):
             version = [version]
         return version
@@ -54,8 +54,7 @@ class Package(object):
         try:
             self._resolve_version()
         except dbt.exceptions.VersionsNotCompatibleException as e:
-            new_msg = ('Version error for package {}: {}'
-                       .format(self.name, e))
+            new_msg = ('Version error for package {}: {}'.format(self.name, e))
             six.raise_from(dbt.exceptions.DependencyException(new_msg), e)
 
     def source_type(self):
@@ -92,9 +91,11 @@ class RegistryPackage(Package):
 
     @classmethod
     def _sanitize_version(cls, version):
-        version = [v if isinstance(v, VersionSpecifier)
-                   else VersionSpecifier.from_version_string(v)
-                   for v in cls.version_to_list(version)]
+        version = [
+            v if isinstance(v, VersionSpecifier) else
+            VersionSpecifier.from_version_string(v)
+            for v in cls.version_to_list(version)
+        ]
         return version or [UnboundedVersionSpecifier()]
 
     def source_type(self):
@@ -135,13 +136,15 @@ class RegistryPackage(Package):
         target = dbt.semver.resolve_to_specific_version(range_, available)
         if not target:
             dbt.exceptions.package_version_not_found(
-                self.package, range_, available)
+                self.package, range_, available
+            )
         self.version = target
 
     def _check_version_pinned(self):
         if len(self.version) != 1:
             dbt.exceptions.raise_dependency_error(
-                'Cannot fetch metadata until the version is pinned.')
+                'Cannot fetch metadata until the version is pinned.'
+            )
 
     def _fetch_metadata(self, project):
         version_string = self.version_name()
@@ -198,7 +201,8 @@ class GitPackage(Package):
         if len(requested) != 1:
             dbt.exceptions.raise_dependency_error(
                 'git dependencies should contain exactly one version. '
-                '{} contains: {}'.format(self.git, requested))
+                '{} contains: {}'.format(self.git, requested)
+            )
         self.version = requested.pop()
 
     def _checkout(self, project):
@@ -208,10 +212,14 @@ class GitPackage(Package):
         the path to the checked out directory."""
         if len(self.version) != 1:
             dbt.exceptions.raise_dependency_error(
-                'Cannot checkout repository until the version is pinned.')
+                'Cannot checkout repository until the version is pinned.'
+            )
         dir_ = dbt.clients.git.clone_and_checkout(
-            self.git, DOWNLOADS_PATH, branch=self.version[0],
-            dirname=self._checkout_name)
+            self.git,
+            DOWNLOADS_PATH,
+            branch=self.version[0],
+            dirname=self._checkout_name
+        )
         return os.path.join(DOWNLOADS_PATH, dir_)
 
     def _fetch_metadata(self, project):
@@ -247,15 +255,15 @@ class LocalPackage(Package):
 
     def _fetch_metadata(self, project):
         project_file_path = dbt.clients.system.resolve_path_from_base(
-            self.local,
-            project['project-root'])
+            self.local, project['project-root']
+        )
 
         return dbt.utils.load_project_with_profile(project, project_file_path)
 
     def install(self, project):
         src_path = dbt.clients.system.resolve_path_from_base(
-            self.local,
-            project['project-root'])
+            self.local, project['project-root']
+        )
 
         dest_path = self.get_installation_path(project)
 
@@ -272,8 +280,10 @@ class LocalPackage(Package):
             dbt.clients.system.make_symlink(src_path, dest_path)
 
         else:
-            logger.debug('  Symlinks are not available on this '
-                         'OS, copying dependency.')
+            logger.debug(
+                '  Symlinks are not available on this '
+                'OS, copying dependency.'
+            )
             shutil.copytree(src_path, dest_path)
 
 
@@ -284,23 +294,26 @@ def _parse_package(dict_):
         dbt.exceptions.raise_dependency_error(
             'Packages should not contain more than one of {}; '
             'yours has {} of them - {}'
-            .format(only_1_keys, len(specified), specified))
+            .format(only_1_keys, len(specified), specified)
+        )
     if dict_.get('package'):
         return RegistryPackage(dict_['package'], dict_.get('version'))
     if dict_.get('git'):
         if dict_.get('version'):
-            msg = ("Keyword 'version' specified for git package {}.\nDid "
-                   "you mean 'revision'?".format(dict_.get('git')))
+            msg = (
+                "Keyword 'version' specified for git package {}.\nDid "
+                "you mean 'revision'?".format(dict_.get('git'))
+            )
             dbt.exceptions.raise_dependency_error(msg)
         return GitPackage(dict_['git'], dict_.get('revision'))
     if dict_.get('local'):
         return LocalPackage(dict_['local'])
     dbt.exceptions.raise_dependency_error(
-        'Malformed package definition. Must contain package, git, or local.')
+        'Malformed package definition. Must contain package, git, or local.'
+    )
 
 
 class PackageListing(AttrDict):
-
     def incorporate(self, package):
         if not isinstance(package, Package):
             package = _parse_package(package)
@@ -315,7 +328,8 @@ class PackageListing(AttrDict):
         if not isinstance(parsed_yaml, list):
             dbt.exceptions.raise_dependency_error(
                 'Package definitions must be a list, got: {}'
-                .format(type(parsed_yaml)))
+                .format(type(parsed_yaml))
+            )
         for package in parsed_yaml:
             to_return.incorporate(package)
         return to_return
@@ -329,9 +343,8 @@ class PackageListing(AttrDict):
 def _split_at_branch(repo_spec):
     parts = repo_spec.split('@')
     error = RuntimeError(
-        "Invalid dep specified: '{}' -- not a repo we can clone".format(
-            repo_spec
-        )
+        "Invalid dep specified: '{}' -- not a repo we can clone".
+        format(repo_spec)
     )
     repo = None
     if repo_spec.startswith('git@'):
@@ -381,7 +394,8 @@ class DepsTask(BaseTask):
                 dbt.exceptions.raise_dependency_error(
                     'Found duplicate project {}. This occurs when a dependency'
                     ' has the same project name as some other dependency.'
-                    .format(project_name))
+                    .format(project_name)
+                )
             seen.add(project_name)
 
     def track_package_install(self, package_name, source_type, version):
@@ -390,11 +404,13 @@ class DepsTask(BaseTask):
         h_package_name = dbt.utils.md5(package_name)
         h_version = dbt.utils.md5(version)
 
-        dbt.tracking.track_package_install({
-            "name": h_package_name,
-            "source": source_type,
-            "version": h_version
-        })
+        dbt.tracking.track_package_install(
+            {
+                "name": h_package_name,
+                "source": source_type,
+                "version": h_version
+            }
+        )
 
     def run(self):
         dbt.clients.system.make_directory(self.project['modules-path'])
@@ -427,4 +443,5 @@ class DepsTask(BaseTask):
             self.track_package_install(
                 package_name=package.name,
                 source_type=package.source_type(),
-                version=package.version_name())
+                version=package.version_name()
+            )

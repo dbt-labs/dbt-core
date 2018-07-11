@@ -30,7 +30,6 @@ Need help? Don't hesitate to reach out to us via GitHub issues or on Slack --
 There's a link to our Slack group in the GitHub Readme. Happy modeling!
 """
 
-
 STARTER_PROFILE = """
 # For more information on how to configure this file, please see:
 # {profiles_sample}
@@ -62,8 +61,8 @@ default:
 class InitTask(BaseTask):
     def clone_starter_repo(self, project_name):
         dbt.clients.git.clone(
-            STARTER_REPO, '.', project_name,
-            remove_git_dir=True)
+            STARTER_REPO, '.', project_name, remove_git_dir=True
+        )
         dbt.clients.git.remove_remote(project_name)
 
     def create_profiles_dir(self, profiles_dir):
@@ -101,9 +100,9 @@ class InitTask(BaseTask):
         logger.info(msg.format(profiles_dir))
 
         if os.path.exists(project_dir):
-            raise RuntimeError("directory {} already exists!".format(
-                project_dir
-            ))
+            raise RuntimeError(
+                "directory {} already exists!".format(project_dir)
+            )
 
         self.clone_starter_repo(project_dir)
 

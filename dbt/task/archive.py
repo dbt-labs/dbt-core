@@ -11,9 +11,7 @@ import dbt.ui.printer
 class ArchiveTask(RunnableTask):
     def run(self):
         runner = RunManager(
-            self.project,
-            self.project['target-path'],
-            self.args
+            self.project, self.project['target-path'], self.args
         )
 
         query = {

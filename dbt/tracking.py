@@ -35,7 +35,6 @@ active_user = None
 
 
 class User(object):
-
     def __init__(self):
         self.do_not_track = True
 
@@ -90,11 +89,9 @@ def get_invocation_context(user, project, args):
         "project_id": None if project is None else project.hashed_name(),
         "user_id": user.id,
         "invocation_id": user.invocation_id,
-
         "command": args.which,
         "options": None,
         "version": str(dbt_version.installed),
-
         "run_type": get_run_type(args),
     }
 
@@ -102,11 +99,7 @@ def get_invocation_context(user, project, args):
 def get_invocation_start_context(user, project, args):
     data = get_invocation_context(user, project, args)
 
-    start_data = {
-        "progress": "start",
-        "result_type": None,
-        "result": None
-    }
+    start_data = {"progress": "start", "result_type": None, "result": None}
 
     data.update(start_data)
     return SelfDescribingJson(INVOCATION_SPEC, data)
@@ -115,11 +108,7 @@ def get_invocation_start_context(user, project, args):
 def get_invocation_end_context(user, project, args, result_type):
     data = get_invocation_context(user, project, args)
 
-    start_data = {
-        "progress": "end",
-        "result_type": result_type,
-        "result": None
-    }
+    start_data = {"progress": "end", "result_type": result_type, "result": None}
 
     data.update(start_data)
     return SelfDescribingJson(INVOCATION_SPEC, data)
@@ -215,9 +204,7 @@ def track_package_install(options):
     )
 
 
-def track_invocation_end(
-        project=None, args=None, result_type=None
-):
+def track_invocation_end(project=None, args=None, result_type=None):
     user = active_user
     context = [
         get_invocation_end_context(user, project, args, result_type),
@@ -233,16 +220,11 @@ def track_invocation_end(
     )
 
 
-def track_invalid_invocation(
-        project=None, args=None, result_type=None
-):
+def track_invalid_invocation(project=None, args=None, result_type=None):
 
     user = active_user
     invocation_context = get_invocation_invalid_context(
-        user,
-        project,
-        args,
-        result_type
+        user, project, args, result_type
     )
 
     context = [

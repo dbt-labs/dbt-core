@@ -1,4 +1,3 @@
-
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import get_materialization
 from dbt.node_types import NodeType
@@ -55,9 +54,8 @@ def print_fancy_output_line(msg, status, index, total, execution_time=None):
     else:
         progress = '{} of {} '.format(index, total)
     prefix = "{timestamp} | {progress}{message}".format(
-        timestamp=get_timestamp(),
-        progress=progress,
-        message=msg)
+        timestamp=get_timestamp(), progress=progress, message=msg
+    )
 
     justified = prefix.ljust(80, ".")
 
@@ -65,12 +63,14 @@ def print_fancy_output_line(msg, status, index, total, execution_time=None):
         status_time = ""
     else:
         status_time = " in {execution_time:0.2f}s".format(
-            execution_time=execution_time)
+            execution_time=execution_time
+        )
 
     status_txt = status
 
     output = "{justified} [{status}{status_time}]".format(
-        justified=justified, status=status_txt, status_time=status_time)
+        justified=justified, status=status_txt, status_time=status_time
+    )
 
     logger.info(output)
 
@@ -86,8 +86,7 @@ def get_counts(flat_nodes):
 
         counts[t] = counts.get(t, 0) + 1
 
-    stat_line = ", ".join(
-        ["{} {}s".format(v, k) for k, v in counts.items()])
+    stat_line = ", ".join(["{} {}s".format(v, k) for k, v in counts.items()])
 
     return stat_line
 
@@ -139,11 +138,9 @@ def print_test_result_line(result, schema_name, index, total):
         raise RuntimeError("unexpected status: {}".format(result.status))
 
     print_fancy_output_line(
-        "{info} {name}".format(info=info, name=model.get('name')),
-        color(info),
-        index,
-        total,
-        result.execution_time)
+        "{info} {name}".format(info=info, name=model.get('name')), color(info),
+        index, total, result.execution_time
+    )
 
 
 def print_model_result_line(result, schema_name, index, total):
@@ -156,11 +153,9 @@ def print_model_result_line(result, schema_name, index, total):
             info=info,
             model_type=get_materialization(model),
             schema=schema_name,
-            relation=model.get('alias')),
-        status,
-        index,
-        total,
-        result.execution_time)
+            relation=model.get('alias')
+        ), status, index, total, result.execution_time
+    )
 
 
 def print_archive_result_line(result, index, total):
@@ -171,11 +166,9 @@ def print_archive_result_line(result, index, total):
 
     print_fancy_output_line(
         "{info} {source_schema}.{source_table} --> "
-        "{target_schema}.{target_table}".format(info=info, **cfg),
-        status,
-        index,
-        total,
-        result.execution_time)
+        "{target_schema}.{target_table}".format(info=info, **cfg), status,
+        index, total, result.execution_time
+    )
 
 
 def print_seed_result_line(result, schema_name, index, total):
@@ -185,13 +178,9 @@ def print_seed_result_line(result, schema_name, index, total):
 
     print_fancy_output_line(
         "{info} seed file {schema}.{relation}".format(
-            info=info,
-            schema=schema_name,
-            relation=model.get('alias')),
-        status,
-        index,
-        total,
-        result.execution_time)
+            info=info, schema=schema_name, relation=model.get('alias')
+        ), status, index, total, result.execution_time
+    )
 
 
 def interpret_run_result(result):
@@ -224,16 +213,19 @@ def print_run_result_error(result):
     logger.info("")
 
     if result.failed:
-        logger.info(yellow("Failure in {} {} ({})").format(
-            result.node.get('resource_type'),
-            result.node.get('name'),
-            result.node.get('original_file_path')))
+        logger.info(
+            yellow("Failure in {} {} ({})").format(
+                result.node.get('resource_type'), result.node.get('name'),
+                result.node.get('original_file_path')
+            )
+        )
         logger.info("  Got {} results, expected 0.".format(result.status))
 
         if result.node.get('build_path') is not None:
             logger.info("")
-            logger.info("  compiled SQL at {}".format(
-                result.node.get('build_path')))
+            logger.info(
+                "  compiled SQL at {}".format(result.node.get('build_path'))
+            )
 
     else:
         first = True

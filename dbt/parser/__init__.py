@@ -1,4 +1,3 @@
-
 from .analysis import AnalysisParser
 from .archives import ArchiveParser
 from .data_test import DataTestParser
@@ -19,6 +18,5 @@ __all__ = [
     'ModelParser',
     'SchemaParser',
     'SeedParser',
-
     'ParserUtils',
 ]

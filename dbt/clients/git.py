@@ -62,11 +62,13 @@ def remove_remote(cwd):
     return run_cmd(cwd, ['git', 'remote', 'rm', 'origin'])
 
 
-def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
-                       branch=None):
+def clone_and_checkout(
+    repo, cwd, dirname=None, remove_git_dir=False, branch=None
+):
     _, err = clone(repo, cwd, dirname=dirname, remove_git_dir=remove_git_dir)
-    exists = re.match("fatal: destination path '(.+)' already exists",
-                      err.decode('utf-8'))
+    exists = re.match(
+        "fatal: destination path '(.+)' already exists", err.decode('utf-8')
+    )
     directory = None
     start_sha = None
     if exists:
@@ -84,8 +86,9 @@ def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
         if start_sha == end_sha:
             logger.debug('  Already at %s, nothing to do.', start_sha[:7])
         else:
-            logger.debug('  Updated checkout from %s to %s.',
-                         start_sha[:7], end_sha[:7])
+            logger.debug(
+                '  Updated checkout from %s to %s.', start_sha[:7], end_sha[:7]
+            )
     else:
         logger.debug('  Checked out at %s.', end_sha[:7])
     return directory

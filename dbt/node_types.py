@@ -1,4 +1,3 @@
-
 class NodeType(object):
     Base = 'base'
     Model = 'model'

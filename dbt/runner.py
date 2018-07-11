@@ -36,8 +36,7 @@ class RunManager(object):
 
         base_target_path = self.project['target-path']
         graph_file = os.path.join(
-            base_target_path,
-            dbt.compilation.graph_file_name
+            base_target_path, dbt.compilation.graph_file_name
         )
 
         return dbt.linker.from_file(graph_file)
@@ -50,9 +49,9 @@ class RunManager(object):
     def get_runners(self, Runner, adapter, node_dependency_list):
         all_nodes = dbt.utils.flatten_nodes(node_dependency_list)
 
-        num_nodes = len([
-            n for n in all_nodes if not Runner.is_ephemeral_model(n)
-        ])
+        num_nodes = len(
+            [n for n in all_nodes if not Runner.is_ephemeral_model(n)]
+        )
 
         node_runners = {}
         i = 0
@@ -118,10 +117,7 @@ class RunManager(object):
 
             args_list = []
             for runner in runners:
-                args_list.append({
-                    'flat_graph': flat_graph,
-                    'runner': runner
-                })
+                args_list.append({'flat_graph': flat_graph, 'runner': runner})
 
             try:
                 for result in pool.imap_unordered(self.call_runner, args_list):
@@ -145,9 +141,11 @@ class RunManager(object):
                 adapter = get_adapter(profile)
 
                 if not adapter.is_cancelable():
-                    msg = ("The {} adapter does not support query "
-                           "cancellation. Some queries may still be "
-                           "running!".format(adapter.type()))
+                    msg = (
+                        "The {} adapter does not support query "
+                        "cancellation. Some queries may still be "
+                        "running!".format(adapter.type())
+                    )
 
                     yellow = dbt.ui.printer.COLOR_FG_YELLOW
                     dbt.ui.printer.print_timestamped_line(msg, yellow)
@@ -156,8 +154,9 @@ class RunManager(object):
                 for conn_name in adapter.cancel_open_connections(profile):
                     dbt.ui.printer.print_cancel_line(conn_name)
 
-                dbt.ui.printer.print_run_end_messages(node_results,
-                                                      early_exit=True)
+                dbt.ui.printer.print_run_end_messages(
+                    node_results, early_exit=True
+                )
 
                 pool.join()
                 raise
@@ -185,8 +184,10 @@ class RunManager(object):
 
         flat_nodes = dbt.utils.flatten_nodes(dep_list)
         if len(flat_nodes) == 0:
-            logger.info("WARNING: Nothing to do. Try checking your model "
-                        "configs and model specification args")
+            logger.info(
+                "WARNING: Nothing to do. Try checking your model "
+                "configs and model specification args"
+            )
             return []
         elif Runner.print_header:
             stat_line = dbt.ui.printer.get_counts(flat_nodes)

@@ -14,16 +14,8 @@ class SourceConfig(object):
     AppendListFields = ['pre-hook', 'post-hook']
     ExtendDictFields = ['vars', 'column_types', 'quoting']
     ClobberFields = [
-        'alias',
-        'schema',
-        'enabled',
-        'materialized',
-        'dist',
-        'sort',
-        'sql_where',
-        'unique_key',
-        'sort_type',
-        'bind'
+        'alias', 'schema', 'enabled', 'materialized', 'dist', 'sort',
+        'sql_where', 'unique_key', 'sort_type', 'bind'
     ]
 
     def __init__(self, active_project, own_project, fqn, node_type):
@@ -78,8 +70,7 @@ class SourceConfig(object):
         active_config = self.load_config_from_active_project()
 
         if self.active_project['name'] == self.own_project['name']:
-            cfg = self._merge(defaults, active_config,
-                              self.in_model_config)
+            cfg = self._merge(defaults, active_config, self.in_model_config)
         else:
             own_config = self.load_config_from_own_project()
 
@@ -113,15 +104,15 @@ class SourceConfig(object):
 
     def smart_update(self, mutable_config, new_configs):
         relevant_configs = {
-            key: new_configs[key] for key
-            in new_configs if key in self.ConfigKeys
+            key: new_configs[key]
+            for key in new_configs if key in self.ConfigKeys
         }
 
         for key in SourceConfig.AppendListFields:
             new_hooks = self.__get_hooks(relevant_configs, key)
-            mutable_config[key].extend([
-                h for h in new_hooks if h not in mutable_config[key]
-            ])
+            mutable_config[key].extend(
+                [h for h in new_hooks if h not in mutable_config[key]]
+            )
 
         for key in SourceConfig.ExtendDictFields:
             dict_val = relevant_configs.get(key, {})
@@ -163,7 +154,8 @@ class SourceConfig(object):
             relevant_configs = self.smart_update(config, level_config)
 
             clobber_configs = {
-                k: v for (k, v) in relevant_configs.items()
+                k: v
+                for (k, v) in relevant_configs.items()
                 if k not in SourceConfig.AppendListFields and
                 k not in SourceConfig.ExtendDictFields
             }
@@ -220,9 +212,8 @@ class DBTSource(object):
 
 class Csv(DBTSource):
     def __init__(self, project, target_dir, rel_filepath, own_project):
-        super(Csv, self).__init__(
-            project, target_dir, rel_filepath, own_project
-        )
+        super(Csv,
+              self).__init__(project, target_dir, rel_filepath, own_project)
 
     def __repr__(self):
         return "<Csv {}.{}: {}>".format(

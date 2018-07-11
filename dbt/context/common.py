@@ -17,7 +17,6 @@ import dbt.hooks
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
-
 # These modules are added to the context. Consider alternative
 # approaches which will extend well to potentially many modules
 import pytz
@@ -42,19 +41,22 @@ class DatabaseWrapper(object):
         # `model_name` as the last. This automatically injects those arguments.
         # In model code, these functions can be called without those two args.
         for context_function in self.adapter.context_functions:
-            setattr(self,
-                    context_function,
-                    self.wrap(context_function, (self.profile, self.project,)))
+            setattr(
+                self, context_function,
+                self.wrap(context_function, (
+                    self.profile,
+                    self.project,
+                ))
+            )
 
         for profile_function in self.adapter.profile_functions:
-            setattr(self,
-                    profile_function,
-                    self.wrap(profile_function, (self.profile,)))
+            setattr(
+                self, profile_function,
+                self.wrap(profile_function, (self.profile, ))
+            )
 
         for raw_function in self.adapter.raw_functions:
-            setattr(self,
-                    raw_function,
-                    getattr(self.adapter, raw_function))
+            setattr(self, raw_function, getattr(self.adapter, raw_function))
 
     def wrap(self, fn, arg_prefix):
         def wrapped(*args, **kwargs):
@@ -69,7 +71,8 @@ class DatabaseWrapper(object):
 
     def commit(self):
         return self.adapter.commit_if_has_connection(
-            self.profile, self.model.get('name'))
+            self.profile, self.model.get('name')
+        )
 
 
 def _add_macros(context, model, flat_graph):
@@ -80,9 +83,7 @@ def _add_macros(context, model, flat_graph):
             continue
         package_name = macro.get('package_name')
 
-        macro_map = {
-            macro.get('name'): macro.generator(context)
-        }
+        macro_map = {macro.get('name'): macro.generator(context)}
 
         if context.get(package_name) is None:
             context[package_name] = {}
@@ -105,15 +106,19 @@ def _add_macros(context, model, flat_graph):
 
 def _add_tracking(context):
     if dbt.tracking.active_user is not None:
-        context = dbt.utils.merge(context, {
-            "run_started_at": dbt.tracking.active_user.run_started_at,
-            "invocation_id": dbt.tracking.active_user.invocation_id,
-        })
+        context = dbt.utils.merge(
+            context, {
+                "run_started_at": dbt.tracking.active_user.run_started_at,
+                "invocation_id": dbt.tracking.active_user.invocation_id,
+            }
+        )
     else:
-        context = dbt.utils.merge(context, {
-            "run_started_at": None,
-            "invocation_id": None
-        })
+        context = dbt.utils.merge(
+            context, {
+                "run_started_at": None,
+                "invocation_id": None
+            }
+        )
 
     return context
 
@@ -128,16 +133,16 @@ def _add_validation(context):
                     return
             raise dbt.exceptions.ValidationException(
                 'Expected value "{}" to be one of {}'
-                .format(value, ','.join(map(str, args))))
+                .format(value, ','.join(map(str, args)))
+            )
+
         return inner
 
     validation_utils = dbt.utils.AttrDict({
         'any': validate_any,
     })
 
-    return dbt.utils.merge(
-        context,
-        {'validation': validation_utils})
+    return dbt.utils.merge(context, {'validation': validation_utils})
 
 
 def _env_var(var, default=None):
@@ -155,11 +160,13 @@ def _store_result(sql_results):
         if agate_table is None:
             agate_table = dbt.clients.agate_helper.empty_table()
 
-        sql_results[name] = dbt.utils.AttrDict({
-            'status': status,
-            'data': dbt.clients.agate_helper.as_matrix(agate_table),
-            'table': agate_table
-        })
+        sql_results[name] = dbt.utils.AttrDict(
+            {
+                'status': status,
+                'data': dbt.clients.agate_helper.as_matrix(agate_table),
+                'table': agate_table
+            }
+        )
         return ''
 
     return call
@@ -174,11 +181,13 @@ def _load_result(sql_results):
 
 def _add_sql_handlers(context):
     sql_results = {}
-    return dbt.utils.merge(context, {
-        '_sql_results': sql_results,
-        'store_result': _store_result(sql_results),
-        'load_result': _load_result(sql_results),
-    })
+    return dbt.utils.merge(
+        context, {
+            '_sql_results': sql_results,
+            'store_result': _store_result(sql_results),
+            'load_result': _load_result(sql_results),
+        }
+    )
 
 
 def log(msg, info=False):
@@ -228,8 +237,7 @@ class Var(object):
             dbt.exceptions.raise_compiler_error(
                 self.UndefinedVarError.format(
                     var_name, self.model_name, pretty_vars
-                ),
-                self.model
+                ), self.model
             )
 
     def assert_var_not_none(self, var_name):
@@ -238,9 +246,7 @@ class Var(object):
             pretty_vars = self.pretty_dict(self.local_vars)
             model_name = dbt.utils.get_model_name_or_none(self.model)
             dbt.exceptions.raise_compiler_error(
-                self.NoneVarError.format(
-                    var_name, model_name, pretty_vars
-                ),
+                self.NoneVarError.format(var_name, model_name, pretty_vars),
                 self.model
             )
 
@@ -264,7 +270,8 @@ class Var(object):
 def write(node, target_path, subdirectory):
     def fn(payload):
         node['build_path'] = dbt.writer.write_node(
-            node, target_path, subdirectory, payload)
+            node, target_path, subdirectory, payload
+        )
         return ''
 
     return fn
@@ -297,6 +304,7 @@ def try_or_compiler_error(model):
             return func(*args, **kwargs)
         except Exception as e:
             dbt.exceptions.raise_compiler_error(message_if_exception, model)
+
     return impl
 
 
@@ -306,14 +314,15 @@ def _return(value):
 
 def get_this_relation(db_wrapper, project_cfg, profile, model):
     table_name = dbt.utils.model_immediate_name(
-            model, dbt.flags.NON_DESTRUCTIVE)
+        model, dbt.flags.NON_DESTRUCTIVE
+    )
 
     return db_wrapper.adapter.Relation.create_from_node(
-        profile, model, table_name=table_name)
+        profile, model, table_name=table_name
+    )
 
 
 def create_relation(relation_type, quoting_config):
-
     class RelationWithContext(relation_type):
         @classmethod
         def create(cls, *args, **kwargs):
@@ -321,18 +330,17 @@ def create_relation(relation_type, quoting_config):
 
             if 'quote_policy' in kwargs:
                 quote_policy = dbt.utils.merge(
-                    quote_policy,
-                    kwargs.pop('quote_policy'))
+                    quote_policy, kwargs.pop('quote_policy')
+                )
 
-            return relation_type.create(*args,
-                                        quote_policy=quote_policy,
-                                        **kwargs)
+            return relation_type.create(
+                *args, quote_policy=quote_policy, **kwargs
+            )
 
     return RelationWithContext
 
 
 def create_adapter(adapter_type, relation_type):
-
     class AdapterWithContext(adapter_type):
 
         Relation = relation_type
@@ -349,7 +357,8 @@ def generate(model, project_cfg, flat_graph, provider=None):
     """
     if provider is None:
         raise dbt.exceptions.InternalException(
-            "Invalid provider given to context: {}".format(provider))
+            "Invalid provider given to context: {}".format(provider)
+        )
 
     target_name = project_cfg.get('target')
     profile = project_cfg.get('outputs').get(target_name)
@@ -364,53 +373,78 @@ def generate(model, project_cfg, flat_graph, provider=None):
     pre_hooks = model.get('config', {}).get('pre-hook')
     post_hooks = model.get('config', {}).get('post-hook')
 
-    relation_type = create_relation(adapter.Relation,
-                                    project_cfg.get('quoting'))
+    relation_type = create_relation(
+        adapter.Relation, project_cfg.get('quoting')
+    )
 
-    db_wrapper = DatabaseWrapper(model,
-                                 create_adapter(adapter, relation_type),
-                                 profile,
-                                 project_cfg)
+    db_wrapper = DatabaseWrapper(
+        model, create_adapter(adapter, relation_type), profile, project_cfg
+    )
 
     cli_var_overrides = project_cfg.get('cli_vars', {})
 
-    context = dbt.utils.merge(context, {
-        "adapter": db_wrapper,
-        "api": {
-            "Relation": relation_type,
-            "Column": adapter.Column,
-        },
-        "column": adapter.Column,
-        "config": provider.Config(model),
-        "env_var": _env_var,
-        "exceptions": dbt.exceptions,
-        "execute": provider.execute,
-        "flags": dbt.flags,
-        "graph": flat_graph,
-        "log": log,
-        "model": model,
-        "modules": {
-            "pytz": pytz,
-            "datetime": datetime
-        },
-        "post_hooks": post_hooks,
-        "pre_hooks": pre_hooks,
-        "ref": provider.ref(db_wrapper, model, project_cfg,
-                            profile, flat_graph),
-        "return": _return,
-        "schema": model.get('schema', schema),
-        "sql": model.get('injected_sql'),
-        "sql_now": adapter.date_function(),
-        "fromjson": fromjson,
-        "tojson": tojson,
-        "target": target,
-        "try_or_compiler_error": try_or_compiler_error(model)
-    })
+    context = dbt.utils.merge(
+        context, {
+            "adapter":
+                db_wrapper,
+            "api": {
+                "Relation": relation_type,
+                "Column": adapter.Column,
+            },
+            "column":
+                adapter.Column,
+            "config":
+                provider.Config(model),
+            "env_var":
+                _env_var,
+            "exceptions":
+                dbt.exceptions,
+            "execute":
+                provider.execute,
+            "flags":
+                dbt.flags,
+            "graph":
+                flat_graph,
+            "log":
+                log,
+            "model":
+                model,
+            "modules": {
+                "pytz": pytz,
+                "datetime": datetime
+            },
+            "post_hooks":
+                post_hooks,
+            "pre_hooks":
+                pre_hooks,
+            "ref":
+                provider.ref(
+                    db_wrapper, model, project_cfg, profile, flat_graph
+                ),
+            "return":
+                _return,
+            "schema":
+                model.get('schema', schema),
+            "sql":
+                model.get('injected_sql'),
+            "sql_now":
+                adapter.date_function(),
+            "fromjson":
+                fromjson,
+            "tojson":
+                tojson,
+            "target":
+                target,
+            "try_or_compiler_error":
+                try_or_compiler_error(model)
+        }
+    )
 
     # Operations do not represent database relations, so 'this' does not apply
     if model.get('resource_type') != NodeType.Operation:
-        context["this"] = get_this_relation(db_wrapper, project_cfg, profile,
-                                            model)
+        context["this"] = get_this_relation(
+            db_wrapper, project_cfg, profile, model
+        )
 
     context = _add_tracking(context)
     context = _add_validation(context)
