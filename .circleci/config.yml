@@ -1,25 +1,111 @@
-machine:
-  python:
-    version: 3.6.0
-  post:
-    - pyenv global 2.7.12 3.6.0
-  hosts:
-    database: 127.0.0.1
+version: 2
+jobs:
+  unit:
+    docker:
+      - image: circleci/python:3.6
+    steps:
+      - checkout
+      - run: sudo pip install virtualenvwrapper tox
+      - run: tox -e pep8,unit-py27,unit-py36
+  integration-postgres-py36:
+    docker:
+      - image: circleci/python:3.6
+      - image: postgres
+    steps:
+      - checkout
+      - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
+      - run: sudo pip install virtualenvwrapper tox
+      - run:
+          name: Setup database
+          command: bash test/setup_db.sh
+      - run:
+          name: Run tests
+          command: tox -e integration-postgres-py36
+  integration-snowflake-py36:
+    docker:
+      - image: circleci/python:3.6
+    steps:
+      - checkout
+      - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
+      - run: sudo pip install virtualenvwrapper tox
+      - run:
+          name: Run tests
+          command: tox -e integration-snowflake-py36
+  integration-redshift-py36:
+    docker:
+      - image: circleci/python:3.6
+    steps:
+      - checkout
+      - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
+      - run: sudo pip install virtualenvwrapper tox
+      - run:
+          name: Run tests
+          command: tox -e integration-redshift-py36
+  integration-bigquery-py36:
+    docker:
+      - image: circleci/python:3.6
+    steps:
+      - checkout
+      - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
+      - run: sudo pip install virtualenvwrapper tox
+      - run:
+          name: Run tests
+          command: tox -e integration-bigquery-py36
+  integration-postgres-py27:
+    docker:
+      - image: circleci/python:2.7
+      - image: postgres
+    steps:
+      - checkout
+      - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
+      - run: sudo pip install virtualenvwrapper tox
+      - run:
+          name: Setup database
+          command: bash test/setup_db.sh
+      - run:
+          name: Run tests
+          command: tox -e integration-postgres-py27
+  integration-snowflake-py27:
+    docker:
+      - image: circleci/python:2.7
+    steps:
+      - checkout
+      - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
+      - run: sudo pip install virtualenvwrapper tox
+      - run:
+          name: Run tests
+          command: tox -e integration-snowflake-py27
+  integration-redshift-py27:
+    docker:
+      - image: circleci/python:2.7
+    steps:
+      - checkout
+      - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
+      - run: sudo pip install virtualenvwrapper tox
+      - run:
+          name: Run tests
+          command: tox -e integration-redshift-py27
+  integration-bigquery-py27:
+    docker:
+      - image: circleci/python:2.7
+    steps:
+      - checkout
+      - run: echo 127.0.0.1 database | sudo tee -a /etc/hosts
+      - run: sudo pip install virtualenvwrapper tox
+      - run:
+          name: Run tests
+          command: tox -e integration-bigquery-py27
 
-database:
-  override:
-    - bash test/setup_db.sh
-
-dependencies:
-  pre:
-    - pip install --upgrade pip setuptools || true
-    - pip install --upgrade tox tox-pyenv
-  override:
-    - pyenv local 2.7.12 3.6.0
-
-test:
-  override:
-    - sudo chown -R ubuntu:ubuntu /root/
-    - /bin/bash -c 'cd /home/ubuntu/dbt && tox'
-  post:
-    - mv htmlcov $CIRCLE_ARTIFACTS/
+workflows:
+  version: 2
+  test-everything:
+    jobs:
+      - unit
+      - integration-snowflake-py36
+      - integration-snowflake-py27
+      - integration-postgres-py36
+      - integration-postgres-py27
+      - integration-redshift-py36
+      - integration-redshift-py27
+      - integration-bigquery-py36
+      - integration-bigquery-py27
