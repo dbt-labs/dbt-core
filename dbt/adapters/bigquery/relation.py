@@ -3,6 +3,7 @@ from dbt.utils import filter_null_values
 
 
 class BigQueryRelation(DefaultRelation):
+    External = "external"
 
     DEFAULTS = {
         'metadata': {
@@ -54,7 +55,7 @@ class BigQueryRelation(DefaultRelation):
                 },
             },
             'type': {
-                'enum': DefaultRelation.RelationTypes + [None],
+                'enum': DefaultRelation.RelationTypes + [External, None],
             },
             'path': PATH_SCHEMA,
             'include_policy': POLICY_SCHEMA,
