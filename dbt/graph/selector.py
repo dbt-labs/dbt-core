@@ -4,9 +4,9 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import is_enabled, get_materialization, coalesce
 from dbt.node_types import NodeType
 
-SELECTOR_PARENTS = '+'
-SELECTOR_CHILDREN = '+'
-SELECTOR_GLOB = '*'
+SELECTOR_PARENTS = "+"
+SELECTOR_CHILDREN = "+"
+SELECTOR_GLOB = "*"
 
 
 def split_specs(node_specs):
@@ -33,13 +33,13 @@ def parse_spec(node_spec):
         index_end -= 1
 
     node_selector = node_spec[index_start:index_end]
-    qualified_node_name = node_selector.split('.')
+    qualified_node_name = node_selector.split(".")
 
     return {
         "select_parents": select_parents,
         "select_children": select_children,
         "qualified_node_name": qualified_node_name,
-        "raw": node_spec
+        "raw": node_spec,
     }
 
 
@@ -50,7 +50,7 @@ def get_package_names(graph):
 def is_selected_node(real_node, node_selector):
     for i, selector_part in enumerate(node_selector):
 
-        is_last = (i == len(node_selector) - 1)
+        is_last = i == len(node_selector) - 1
 
         # if we hit a GLOB, then this node is selected
         if selector_part == SELECTOR_GLOB:
@@ -80,7 +80,7 @@ def get_nodes_by_qualified_name(graph, qualified_name):
     package_names = get_package_names(graph)
 
     for node in graph.nodes():
-        fqn_ish = graph.node[node]['fqn']
+        fqn_ish = graph.node[node]["fqn"]
 
         if len(qualified_name) == 1 and fqn_ish[-1] == qualified_name[0]:
             yield node
@@ -98,12 +98,13 @@ def get_nodes_by_qualified_name(graph, qualified_name):
 
 
 def get_nodes_from_spec(graph, spec):
-    select_parents = spec['select_parents']
-    select_children = spec['select_children']
-    qualified_node_name = spec['qualified_node_name']
+    select_parents = spec["select_parents"]
+    select_children = spec["select_children"]
+    qualified_node_name = spec["qualified_node_name"]
 
-    selected_nodes = set(get_nodes_by_qualified_name(graph,
-                                                     qualified_node_name))
+    selected_nodes = set(
+        get_nodes_by_qualified_name(graph, qualified_node_name)
+    )
 
     additional_nodes = set()
     test_nodes = set()
@@ -123,9 +124,11 @@ def get_nodes_from_spec(graph, spec):
     for node in model_nodes:
         # include tests that depend on this node. if we aren't running tests,
         # they'll be filtered out later.
-        child_tests = [n for n in graph.successors(node)
-                       if graph.node.get(n).get('resource_type') ==
-                       NodeType.Test]
+        child_tests = [
+            n
+            for n in graph.successors(node)
+            if graph.node.get(n).get("resource_type") == NodeType.Test
+        ]
         test_nodes.update(child_tests)
 
     return model_nodes | test_nodes
@@ -136,8 +139,9 @@ def warn_if_useless_spec(spec, nodes):
         return
 
     logger.info(
-        "* Spec='{}' does not identify any models and was ignored\n"
-        .format(spec['raw'])
+        "* Spec='{}' does not identify any models and was ignored\n".format(
+            spec["raw"]
+        )
     )
 
 
@@ -173,14 +177,14 @@ class NodeSelector(object):
         for node_name in graph.nodes():
             node = graph.node.get(node_name)
 
-            if not node.get('empty') and is_enabled(node):
+            if not node.get("empty") and is_enabled(node):
                 valid.append(node_name)
         return valid
 
     def get_selected(self, include, exclude, resource_types, tags):
         graph = self.linker.graph
 
-        include = coalesce(include, ['*'])
+        include = coalesce(include, ["*"])
         exclude = coalesce(exclude, [])
         tags = coalesce(tags, [])
 
@@ -192,9 +196,10 @@ class NodeSelector(object):
         for node_name in selected_nodes:
             node = graph.node.get(node_name)
 
-            matched_resource = node.get('resource_type') in resource_types
-            matched_tags = (len(tags) == 0 or
-                            bool(set(node.get('tags', [])) & set(tags)))
+            matched_resource = node.get("resource_type") in resource_types
+            matched_tags = len(tags) == 0 or bool(
+                set(node.get("tags", [])) & set(tags)
+            )
 
             if matched_resource and matched_tags:
                 filtered_nodes.add(node_name)
@@ -202,29 +207,31 @@ class NodeSelector(object):
         return filtered_nodes
 
     def is_ephemeral_model(self, node):
-        is_model = node.get('resource_type') == NodeType.Model
-        is_ephemeral = get_materialization(node) == 'ephemeral'
+        is_model = node.get("resource_type") == NodeType.Model
+        is_ephemeral = get_materialization(node) == "ephemeral"
         return is_model and is_ephemeral
 
-    def get_ancestor_ephemeral_nodes(self, flat_graph, linked_graph,
-                                     selected_nodes):
+    def get_ancestor_ephemeral_nodes(
+        self, flat_graph, linked_graph, selected_nodes
+    ):
 
         node_names = {
-            node: flat_graph['nodes'].get(node).get('name')
+            node: flat_graph["nodes"].get(node).get("name")
             for node in selected_nodes
-            if node in flat_graph['nodes']
+            if node in flat_graph["nodes"]
         }
 
         include_spec = [
-            '+{}'.format(node_names[node])
-            for node in selected_nodes if node in node_names
+            "+{}".format(node_names[node])
+            for node in selected_nodes
+            if node in node_names
         ]
 
         all_ancestors = select_nodes(linked_graph, include_spec, [])
 
         res = []
         for ancestor in all_ancestors:
-            ancestor_node = flat_graph['nodes'].get(ancestor, None)
+            ancestor_node = flat_graph["nodes"].get(ancestor, None)
 
             if ancestor_node and self.is_ephemeral_model(ancestor_node):
                 res.append(ancestor)
@@ -232,10 +239,10 @@ class NodeSelector(object):
         return set(res)
 
     def select(self, query):
-        include = query.get('include')
-        exclude = query.get('exclude')
-        resource_types = query.get('resource_types')
-        tags = query.get('tags')
+        include = query.get("include")
+        exclude = query.get("exclude")
+        resource_types = query.get("resource_types")
+        tags = query.get("tags")
 
         flat_graph = self.flat_graph
         graph = self.linker.graph
@@ -247,8 +254,8 @@ class NodeSelector(object):
 
     def as_node_list(self, selected_nodes, ephemeral_only=False):
         dependency_list = self.linker.as_dependency_list(
-            selected_nodes,
-            ephemeral_only=ephemeral_only)
+            selected_nodes, ephemeral_only=ephemeral_only
+        )
 
         concurrent_dependency_list = []
         for level in dependency_list:
@@ -260,5 +267,6 @@ class NodeSelector(object):
 
 class FlatNodeSelector(NodeSelector):
     def as_node_list(self, selected_nodes):
-        return super(FlatNodeSelector, self).as_node_list(selected_nodes,
-                                                          ephemeral_only=True)
+        return super(FlatNodeSelector, self).as_node_list(
+            selected_nodes, ephemeral_only=True
+        )

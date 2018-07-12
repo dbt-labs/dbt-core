@@ -9,9 +9,7 @@ except ImportError:
     # Fall back to Python 2's urllib2
     from urllib2 import urlopen
 
-REMOTE_VERSION_FILE = \
-    'https://raw.githubusercontent.com/fishtown-analytics/dbt/' \
-    'master/.bumpversion.cfg'
+REMOTE_VERSION_FILE = "https://raw.githubusercontent.com/fishtown-analytics/dbt/" "master/.bumpversion.cfg"
 
 
 def get_version_string_from_text(contents):
@@ -27,9 +25,9 @@ def get_remote_version_file_contents(url=REMOTE_VERSION_FILE):
         f = urlopen(url)
         contents = f.read()
     except Exception:
-        contents = ''
-    if hasattr(contents, 'decode'):
-        contents = contents.decode('utf-8')
+        contents = ""
+    if hasattr(contents, "decode"):
+        contents = contents.decode("utf-8")
     return contents
 
 
@@ -50,23 +48,27 @@ def get_version_information():
     installed_s = installed.to_version_string(skip_matcher=True)
     latest_s = latest.to_version_string(skip_matcher=True)
 
-    version_msg = ("installed version: {}\n"
-                   "   latest version: {}\n\n".format(installed_s, latest_s))
+    version_msg = "installed version: {}\n" "   latest version: {}\n\n".format(
+        installed_s, latest_s
+    )
 
     if installed == latest:
         return "{}Up to date!".format(version_msg)
 
     elif installed > latest:
-        return ("{}Your version of dbt is ahead of the latest "
-                "release!".format(version_msg))
+        return (
+            "{}Your version of dbt is ahead of the latest "
+            "release!".format(version_msg)
+        )
 
     else:
-        return ("{}Your version of dbt is out of date! "
-                "You can find instructions for upgrading here:\n"
-                "https://docs.getdbt.com/docs/installation"
-                .format(version_msg))
+        return (
+            "{}Your version of dbt is out of date! "
+            "You can find instructions for upgrading here:\n"
+            "https://docs.getdbt.com/docs/installation".format(version_msg)
+        )
 
 
-__version__ = '0.10.1'
+__version__ = "0.10.1"
 installed = get_installed_version()
 latest = get_latest_version()

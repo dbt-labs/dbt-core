@@ -10,30 +10,32 @@ class ArchiveParser(BaseParser):
     @classmethod
     def parse_archives_from_project(cls, project):
         archives = []
-        archive_configs = project.get('archive', [])
+        archive_configs = project.get("archive", [])
 
         for archive_config in archive_configs:
-            tables = archive_config.get('tables')
+            tables = archive_config.get("tables")
 
             if tables is None:
                 continue
 
             for table in tables:
                 config = table.copy()
-                config['source_schema'] = archive_config.get('source_schema')
-                config['target_schema'] = archive_config.get('target_schema')
+                config["source_schema"] = archive_config.get("source_schema")
+                config["target_schema"] = archive_config.get("target_schema")
 
-                fake_path = [config['target_schema'], config['target_table']]
-                archives.append({
-                    'name': table.get('target_table'),
-                    'root_path': project.get('project-root'),
-                    'resource_type': NodeType.Archive,
-                    'path': os.path.join('archive', *fake_path),
-                    'original_file_path': 'dbt_project.yml',
-                    'package_name': project.get('name'),
-                    'config': config,
-                    'raw_sql': '{{config(materialized="archive")}} -- noop'
-                })
+                fake_path = [config["target_schema"], config["target_table"]]
+                archives.append(
+                    {
+                        "name": table.get("target_table"),
+                        "root_path": project.get("project-root"),
+                        "resource_type": NodeType.Archive,
+                        "path": os.path.join("archive", *fake_path),
+                        "original_file_path": "dbt_project.yml",
+                        "package_name": project.get("name"),
+                        "config": config,
+                        "raw_sql": '{{config(materialized="archive")}} -- noop',
+                    }
+                )
 
         return archives
 
@@ -54,19 +56,22 @@ class ArchiveParser(BaseParser):
             # archives have a config, but that would make for an invalid
             # UnparsedNode, so remove it and pass it along to parse_node as an
             # argument.
-            archive_config = a.pop('config')
+            archive_config = a.pop("config")
             archive = UnparsedNode(**a)
-            node_path = cls.get_path(archive.get('resource_type'),
-                                     archive.get('package_name'),
-                                     archive.get('name'))
+            node_path = cls.get_path(
+                archive.get("resource_type"),
+                archive.get("package_name"),
+                archive.get("name"),
+            )
 
             to_return[node_path] = cls.parse_node(
                 archive,
                 node_path,
                 root_project,
-                all_projects.get(archive.get('package_name')),
+                all_projects.get(archive.get("package_name")),
                 all_projects,
                 macros=macros,
-                archive_config=archive_config)
+                archive_config=archive_config,
+            )
 
         return to_return

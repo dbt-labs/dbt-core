@@ -18,8 +18,16 @@ from dbt.contracts.graph.parsed import ParsedMacro
 
 class MacroParser(BaseParser):
     @classmethod
-    def parse_macro_file(cls, macro_file_path, macro_file_contents, root_path,
-                         package_name, resource_type, tags=None, context=None):
+    def parse_macro_file(
+        cls,
+        macro_file_path,
+        macro_file_contents,
+        root_path,
+        package_name,
+        resource_type,
+        tags=None,
+        context=None,
+    ):
 
         logger.debug("Parsing {}".format(macro_file_path))
 
@@ -41,7 +49,8 @@ class MacroParser(BaseParser):
 
         try:
             template = dbt.clients.jinja.get_template(
-                macro_file_contents, context, node=base_node)
+                macro_file_contents, context, node=base_node
+            )
         except dbt.exceptions.CompilationException as e:
             e.node = base_node
             raise e
@@ -53,11 +62,11 @@ class MacroParser(BaseParser):
             node_type = None
             if key.startswith(dbt.utils.MACRO_PREFIX):
                 node_type = NodeType.Macro
-                name = key.replace(dbt.utils.MACRO_PREFIX, '')
+                name = key.replace(dbt.utils.MACRO_PREFIX, "")
 
             elif key.startswith(dbt.utils.OPERATION_PREFIX):
                 node_type = NodeType.Operation
-                name = key.replace(dbt.utils.OPERATION_PREFIX, '')
+                name = key.replace(dbt.utils.OPERATION_PREFIX, "")
 
             if node_type != resource_type:
                 continue
@@ -67,24 +76,31 @@ class MacroParser(BaseParser):
             merged = dbt.utils.deep_merge(
                 base_node.serialize(),
                 {
-                    'name': name,
-                    'unique_id': unique_id,
-                    'tags': tags,
-                    'resource_type': resource_type,
-                    'depends_on': {'macros': []},
-                })
+                    "name": name,
+                    "unique_id": unique_id,
+                    "tags": tags,
+                    "resource_type": resource_type,
+                    "depends_on": {"macros": []},
+                },
+            )
 
-            new_node = ParsedMacro(
-                template=template,
-                **merged)
+            new_node = ParsedMacro(template=template, **merged)
 
             to_return[unique_id] = new_node
 
         return to_return
 
     @classmethod
-    def load_and_parse(cls, package_name, root_project, all_projects, root_dir,
-                       relative_dirs, resource_type, tags=None):
+    def load_and_parse(
+        cls,
+        package_name,
+        root_project,
+        all_projects,
+        root_dir,
+        relative_dirs,
+        resource_type,
+        tags=None,
+    ):
         extension = "[!.#~]*.sql"
 
         if tags is None:
@@ -94,22 +110,24 @@ class MacroParser(BaseParser):
             dbt.contracts.project.ProjectList(**all_projects)
 
         file_matches = dbt.clients.system.find_matching(
-            root_dir,
-            relative_dirs,
-            extension)
+            root_dir, relative_dirs, extension
+        )
 
         result = {}
 
         for file_match in file_matches:
             file_contents = dbt.clients.system.load_file_contents(
-                file_match.get('absolute_path'))
+                file_match.get("absolute_path")
+            )
 
             result.update(
                 cls.parse_macro_file(
-                    file_match.get('relative_path'),
+                    file_match.get("relative_path"),
                     file_contents,
                     root_dir,
                     package_name,
-                    resource_type))
+                    resource_type,
+                )
+            )
 
         return result

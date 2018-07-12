@@ -9,8 +9,8 @@ import agate
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
-GET_CATALOG_OPERATION_NAME = 'get_catalog_data'
-GET_CATALOG_RESULT_KEY = 'catalog'  # defined in get_catalog() macro
+GET_CATALOG_OPERATION_NAME = "get_catalog_data"
+GET_CATALOG_RESULT_KEY = "catalog"  # defined in get_catalog() macro
 
 
 class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
@@ -19,13 +19,14 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
 
     @classmethod
     @contextmanager
-    def exception_handler(cls, profile, sql, model_name=None,
-                          connection_name=None):
+    def exception_handler(
+        cls, profile, sql, model_name=None, connection_name=None
+    ):
         try:
             yield
 
         except psycopg2.DatabaseError as e:
-            logger.debug('Postgres error: {}'.format(str(e)))
+            logger.debug("Postgres error: {}".format(str(e)))
 
             try:
                 # attempt to release the connection
@@ -35,7 +36,8 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
                 pass
 
             raise dbt.exceptions.DatabaseException(
-                dbt.compat.to_string(e).strip())
+                dbt.compat.to_string(e).strip()
+            )
 
         except Exception as e:
             logger.debug("Error running SQL: %s", sql)
@@ -45,11 +47,11 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
 
     @classmethod
     def type(cls):
-        return 'postgres'
+        return "postgres"
 
     @classmethod
     def date_function(cls):
-        return 'datenow()'
+        return "datenow()"
 
     @classmethod
     def get_status(cls, cursor):
@@ -61,41 +63,44 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
 
     @classmethod
     def open_connection(cls, connection):
-        if connection.get('state') == 'open':
-            logger.debug('Connection is already open, skipping open.')
+        if connection.get("state") == "open":
+            logger.debug("Connection is already open, skipping open.")
             return connection
 
         result = connection.copy()
 
-        base_credentials = connection.get('credentials', {})
+        base_credentials = connection.get("credentials", {})
         credentials = cls.get_credentials(base_credentials.copy())
         kwargs = {}
-        keepalives_idle = credentials.get('keepalives_idle',
-                                          cls.DEFAULT_TCP_KEEPALIVE)
+        keepalives_idle = credentials.get(
+            "keepalives_idle", cls.DEFAULT_TCP_KEEPALIVE
+        )
         # we don't want to pass 0 along to connect() as postgres will try to
         # call an invalid setsockopt() call (contrary to the docs).
         if keepalives_idle:
-            kwargs['keepalives_idle'] = keepalives_idle
+            kwargs["keepalives_idle"] = keepalives_idle
 
         try:
             handle = psycopg2.connect(
-                dbname=credentials.get('dbname'),
-                user=credentials.get('user'),
-                host=credentials.get('host'),
-                password=credentials.get('pass'),
-                port=credentials.get('port'),
+                dbname=credentials.get("dbname"),
+                user=credentials.get("user"),
+                host=credentials.get("host"),
+                password=credentials.get("pass"),
+                port=credentials.get("port"),
                 connect_timeout=10,
-                **kwargs)
+                **kwargs
+            )
 
-            result['handle'] = handle
-            result['state'] = 'open'
+            result["handle"] = handle
+            result["state"] = "open"
         except psycopg2.Error as e:
-            logger.debug("Got an error when attempting to open a postgres "
-                         "connection: '{}'"
-                         .format(e))
+            logger.debug(
+                "Got an error when attempting to open a postgres "
+                "connection: '{}'".format(e)
+            )
 
-            result['handle'] = None
-            result['state'] = 'fail'
+            result["handle"] = None
+            result["state"] = "fail"
 
             raise dbt.exceptions.FailedToConnectException(str(e))
 
@@ -103,14 +108,14 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
 
     @classmethod
     def cancel_connection(cls, profile, connection):
-        connection_name = connection.get('name')
-        pid = connection.get('handle').get_backend_pid()
+        connection_name = connection.get("name")
+        pid = connection.get("handle").get_backend_pid()
 
         sql = "select pg_terminate_backend({})".format(pid)
 
         logger.debug("Cancelling query '{}' ({})".format(connection_name, pid))
 
-        _, cursor = cls.add_query(profile, sql, 'master')
+        _, cursor = cls.add_query(profile, sql, "master")
         res = cursor.fetchone()
 
         logger.debug("Cancel query '{}': {}".format(connection_name, res))
@@ -119,8 +124,16 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
     # These require the profile AND project, as they need to know
     # database-specific configs at the project level.
     @classmethod
-    def alter_column_type(cls, profile, project, schema, table, column_name,
-                          new_column_type, model_name=None):
+    def alter_column_type(
+        cls,
+        profile,
+        project,
+        schema,
+        table,
+        column_name,
+        new_column_type,
+        model_name=None,
+    ):
         """
         1. Create a new column (w/ temp name and correct type)
         2. Copy data over to it
@@ -134,7 +147,7 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
             "relation": relation,
             "old_column": column_name,
             "tmp_column": "{}__dbt_alter".format(column_name),
-            "dtype": new_column_type
+            "dtype": new_column_type,
         }
 
         sql = """
@@ -142,7 +155,9 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         update {relation} set "{tmp_column}" = "{old_column}";
         alter table {relation} drop column "{old_column}" cascade;
         alter table {relation} rename column "{tmp_column}" to "{old_column}";
-        """.format(**opts).strip()  # noqa
+        """.format(
+            **opts
+        ).strip()  # noqa
 
         connection, cursor = cls.add_query(profile, sql, model_name)
 
@@ -156,30 +171,34 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         union all
         select viewname as name, schemaname as schema, 'view' as type from pg_views
         where schemaname ilike '{schema}'
-        """.format(schema=schema).strip()  # noqa
+        """.format(
+            schema=schema
+        ).strip()  # noqa
 
-        connection, cursor = cls.add_query(profile, sql, model_name,
-                                           auto_begin=False)
+        connection, cursor = cls.add_query(
+            profile, sql, model_name, auto_begin=False
+        )
 
         results = cursor.fetchall()
 
-        return [cls.Relation.create(
-            database=profile.get('dbname'),
-            schema=_schema,
-            identifier=name,
-            quote_policy={
-                'schema': True,
-                'identifier': True
-            },
-            type=type)
-                for (name, _schema, type) in results]
+        return [
+            cls.Relation.create(
+                database=profile.get("dbname"),
+                schema=_schema,
+                identifier=name,
+                quote_policy={"schema": True, "identifier": True},
+                type=type,
+            )
+            for (name, _schema, type) in results
+        ]
 
     @classmethod
     def get_existing_schemas(cls, profile, project, model_name=None):
         sql = "select distinct nspname from pg_namespace"
 
-        connection, cursor = cls.add_query(profile, sql, model_name,
-                                           auto_begin=False)
+        connection, cursor = cls.add_query(
+            profile, sql, model_name, auto_begin=False
+        )
         results = cursor.fetchall()
 
         return [row[0] for row in results]
@@ -188,10 +207,13 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
     def check_schema_exists(cls, profile, project, schema, model_name=None):
         sql = """
         select count(*) from pg_namespace where nspname = '{schema}'
-        """.format(schema=schema).strip()  # noqa
+        """.format(
+            schema=schema
+        ).strip()  # noqa
 
-        connection, cursor = cls.add_query(profile, sql, model_name,
-                                           auto_begin=False)
+        connection, cursor = cls.add_query(
+            profile, sql, model_name, auto_begin=False
+        )
         results = cursor.fetchone()
 
         return results[0] > 0
@@ -223,11 +245,15 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
 
     @classmethod
     def get_catalog(cls, profile, project_cfg, manifest):
-        results = cls.run_operation(profile, project_cfg, manifest,
-                                    GET_CATALOG_OPERATION_NAME,
-                                    GET_CATALOG_RESULT_KEY)
+        results = cls.run_operation(
+            profile,
+            project_cfg,
+            manifest,
+            GET_CATALOG_OPERATION_NAME,
+            GET_CATALOG_RESULT_KEY,
+        )
 
         schemas = cls.get_existing_schemas(profile, project_cfg)
-        results = results.table.where(lambda r: r['table_schema'] in schemas)
+        results = results.table.where(lambda r: r["table_schema"] in schemas)
 
         return results

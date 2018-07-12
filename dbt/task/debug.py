@@ -17,8 +17,7 @@ class DebugTask(BaseTask):
         profiles_dir = dbt.project.default_profiles_dir
 
         message = PROFILE_DIR_MESSAGE.format(
-            open_cmd=open_cmd,
-            profiles_dir=profiles_dir
+            open_cmd=open_cmd, profiles_dir=profiles_dir
         )
 
         logger.info(message)

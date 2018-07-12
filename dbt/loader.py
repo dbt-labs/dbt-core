@@ -28,165 +28,174 @@ class GraphLoader(object):
 
 
 class ResourceLoader(object):
-
     @classmethod
     def load_all(cls, root_project, all_projects, macros=None):
         to_return = {}
 
         for project_name, project in all_projects.items():
-            to_return.update(cls.load_project(root_project, all_projects,
-                                              project, project_name, macros))
+            to_return.update(
+                cls.load_project(
+                    root_project, all_projects, project, project_name, macros
+                )
+            )
 
         return to_return
 
     @classmethod
-    def load_project(cls, root_project, all_projects, project, project_name,
-                     macros):
+    def load_project(
+        cls, root_project, all_projects, project, project_name, macros
+    ):
         raise dbt.exceptions.NotImplementedException(
-            'load_project is not implemented for this loader!')
+            "load_project is not implemented for this loader!"
+        )
 
 
 class MacroLoader(ResourceLoader):
-
     @classmethod
-    def load_project(cls, root_project, all_projects, project, project_name,
-                     macros):
+    def load_project(
+        cls, root_project, all_projects, project, project_name, macros
+    ):
         return dbt.parser.MacroParser.load_and_parse(
             package_name=project_name,
             root_project=root_project,
             all_projects=all_projects,
-            root_dir=project.get('project-root'),
-            relative_dirs=project.get('macro-paths', []),
-            resource_type=NodeType.Macro)
+            root_dir=project.get("project-root"),
+            relative_dirs=project.get("macro-paths", []),
+            resource_type=NodeType.Macro,
+        )
 
 
 class ModelLoader(ResourceLoader):
-
     @classmethod
     def load_all(cls, root_project, all_projects, macros=None):
         to_return = {}
 
         for project_name, project in all_projects.items():
-            project_loaded = cls.load_project(root_project,
-                                              all_projects,
-                                              project, project_name,
-                                              macros)
+            project_loaded = cls.load_project(
+                root_project, all_projects, project, project_name, macros
+            )
 
             to_return.update(project_loaded)
 
         return to_return
 
     @classmethod
-    def load_project(cls, root_project, all_projects, project, project_name,
-                     macros):
+    def load_project(
+        cls, root_project, all_projects, project, project_name, macros
+    ):
         return dbt.parser.ModelParser.load_and_parse(
-                package_name=project_name,
-                root_project=root_project,
-                all_projects=all_projects,
-                root_dir=project.get('project-root'),
-                relative_dirs=project.get('source-paths', []),
-                resource_type=NodeType.Model,
-                macros=macros)
+            package_name=project_name,
+            root_project=root_project,
+            all_projects=all_projects,
+            root_dir=project.get("project-root"),
+            relative_dirs=project.get("source-paths", []),
+            resource_type=NodeType.Model,
+            macros=macros,
+        )
 
 
 class OperationLoader(ResourceLoader):
-
     @classmethod
-    def load_project(cls, root_project, all_projects, project, project_name,
-                     macros):
+    def load_project(
+        cls, root_project, all_projects, project, project_name, macros
+    ):
         return dbt.parser.MacroParser.load_and_parse(
             package_name=project_name,
             root_project=root_project,
             all_projects=all_projects,
-            root_dir=project.get('project-root'),
-            relative_dirs=project.get('macro-paths', []),
-            resource_type=NodeType.Operation)
+            root_dir=project.get("project-root"),
+            relative_dirs=project.get("macro-paths", []),
+            resource_type=NodeType.Operation,
+        )
 
 
 class AnalysisLoader(ResourceLoader):
-
     @classmethod
-    def load_project(cls, root_project, all_projects, project, project_name,
-                     macros):
+    def load_project(
+        cls, root_project, all_projects, project, project_name, macros
+    ):
         return dbt.parser.AnalysisParser.load_and_parse(
             package_name=project_name,
             root_project=root_project,
             all_projects=all_projects,
-            root_dir=project.get('project-root'),
-            relative_dirs=project.get('analysis-paths', []),
+            root_dir=project.get("project-root"),
+            relative_dirs=project.get("analysis-paths", []),
             resource_type=NodeType.Analysis,
-            macros=macros)
+            macros=macros,
+        )
 
 
 class SchemaTestLoader(ResourceLoader):
-
     @classmethod
-    def load_project(cls, root_project, all_projects, project, project_name,
-                     macros):
+    def load_project(
+        cls, root_project, all_projects, project, project_name, macros
+    ):
         return dbt.parser.SchemaParser.load_and_parse(
             package_name=project_name,
             root_project=root_project,
             all_projects=all_projects,
-            root_dir=project.get('project-root'),
-            relative_dirs=project.get('source-paths', []),
-            macros=macros)
+            root_dir=project.get("project-root"),
+            relative_dirs=project.get("source-paths", []),
+            macros=macros,
+        )
 
 
 class DataTestLoader(ResourceLoader):
-
     @classmethod
-    def load_project(cls, root_project, all_projects, project, project_name,
-                     macros):
+    def load_project(
+        cls, root_project, all_projects, project, project_name, macros
+    ):
         return dbt.parser.DataTestParser.load_and_parse(
             package_name=project_name,
             root_project=root_project,
             all_projects=all_projects,
-            root_dir=project.get('project-root'),
-            relative_dirs=project.get('test-paths', []),
+            root_dir=project.get("project-root"),
+            relative_dirs=project.get("test-paths", []),
             resource_type=NodeType.Test,
-            tags=['data'],
-            macros=macros)
+            tags=["data"],
+            macros=macros,
+        )
 
 
 # ArchiveLoader and RunHookLoader operate on configs, so we just need to run
 # them both once, not for each project
 class ArchiveLoader(ResourceLoader):
-
     @classmethod
     def load_all(cls, root_project, all_projects, macros=None):
         return cls.load_project(root_project, all_projects, macros)
 
     @classmethod
     def load_project(cls, root_project, all_projects, macros):
-        return dbt.parser.ArchiveParser.load_and_parse(root_project,
-                                                       all_projects,
-                                                       macros)
+        return dbt.parser.ArchiveParser.load_and_parse(
+            root_project, all_projects, macros
+        )
 
 
 class RunHookLoader(ResourceLoader):
-
     @classmethod
     def load_all(cls, root_project, all_projects, macros=None):
         return cls.load_project(root_project, all_projects, macros)
 
     @classmethod
     def load_project(cls, root_project, all_projects, macros):
-        return dbt.parser.HookParser.load_and_parse(root_project, all_projects,
-                                                    macros)
+        return dbt.parser.HookParser.load_and_parse(
+            root_project, all_projects, macros
+        )
 
 
 class SeedLoader(ResourceLoader):
-
     @classmethod
-    def load_project(cls, root_project, all_projects, project, project_name,
-                     macros):
+    def load_project(
+        cls, root_project, all_projects, project, project_name, macros
+    ):
         return dbt.parser.SeedParser.load_and_parse(
             package_name=project_name,
             root_project=root_project,
             all_projects=all_projects,
-            root_dir=project.get('project-root'),
-            relative_dirs=project.get('data-paths', []),
-            macros=macros)
+            root_dir=project.get("project-root"),
+            relative_dirs=project.get("data-paths", []),
+            macros=macros,
+        )
 
 
 # node loaders

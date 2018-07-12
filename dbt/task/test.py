@@ -17,9 +17,11 @@ class TestTask(RunnableTask):
            c) referential integrity
            d) accepted value
     """
+
     def run(self):
         runner = RunManager(
-            self.project, self.project['target-path'], self.args)
+            self.project, self.project["target-path"], self.args
+        )
 
         include = self.args.models
         exclude = self.args.exclude
@@ -27,7 +29,7 @@ class TestTask(RunnableTask):
         query = {
             "include": self.args.models,
             "exclude": self.args.exclude,
-            "resource_types": NodeType.Test
+            "resource_types": NodeType.Test,
         }
 
         test_types = [self.args.data, self.args.schema]
@@ -35,13 +37,13 @@ class TestTask(RunnableTask):
         if all(test_types) or not any(test_types):
             tags = []
         elif self.args.data:
-            tags = ['data']
+            tags = ["data"]
         elif self.args.schema:
-            tags = ['schema']
+            tags = ["schema"]
         else:
             raise RuntimeError("unexpected")
 
-        query['tags'] = tags
+        query["tags"] = tags
         results = runner.run_flat(query, TestRunner)
 
         dbt.ui.printer.print_run_end_messages(results)

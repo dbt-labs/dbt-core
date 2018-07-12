@@ -13,14 +13,14 @@ from dbt.task.base_task import RunnableTask
 class RunTask(RunnableTask):
     def run(self):
         runner = RunManager(
-            self.project, self.project['target-path'], self.args
+            self.project, self.project["target-path"], self.args
         )
 
         query = {
             "include": self.args.models,
             "exclude": self.args.exclude,
             "resource_types": [NodeType.Model],
-            "tags": []
+            "tags": [],
         }
 
         results = runner.run(query, ModelRunner)

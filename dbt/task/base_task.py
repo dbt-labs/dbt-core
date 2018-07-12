@@ -7,7 +7,7 @@ class BaseTask(object):
         self.project = project
 
     def run(self):
-        raise dbt.exceptions.NotImplementedException('Not Implemented')
+        raise dbt.exceptions.NotImplementedException("Not Implemented")
 
     def interpret_results(self, results):
         return True

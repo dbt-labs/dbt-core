@@ -27,7 +27,7 @@ class DBTRepositoriesDeprecation(DBTDeprecation):
 
 
 class SeedDropExistingDeprecation(DBTDeprecation):
-    name = 'drop-existing'
+    name = "drop-existing"
     description = """The --drop-existing argument to `dbt seed` has been
   deprecated. Please use --full-refresh instead. The --drop-existing option
   will be removed in a future version of dbt."""
@@ -36,9 +36,7 @@ class SeedDropExistingDeprecation(DBTDeprecation):
 def warn(name, *args, **kwargs):
     if name not in deprecations:
         # this should (hopefully) never happen
-        raise RuntimeError(
-            "Error showing deprecation warning: {}".format(name)
-        )
+        raise RuntimeError("Error showing deprecation warning: {}".format(name))
 
     deprecations[name].show(*args, **kwargs)
 
@@ -50,7 +48,7 @@ active_deprecations = set()
 
 deprecations_list = [
     DBTRepositoriesDeprecation(),
-    SeedDropExistingDeprecation()
+    SeedDropExistingDeprecation(),
 ]
 
 deprecations = {d.name: d for d in deprecations_list}

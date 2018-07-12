@@ -12,7 +12,7 @@ import dbt.compilation
 from dbt.task.base_task import BaseTask
 
 
-CATALOG_FILENAME = 'catalog.json'
+CATALOG_FILENAME = "catalog.json"
 
 
 def get_stripped_prefix(source, prefix):
@@ -20,10 +20,7 @@ def get_stripped_prefix(source, prefix):
     with the given prefix.
     """
     cut = len(prefix)
-    return {
-        k[cut:]: v for k, v in source.items()
-        if k.startswith(prefix)
-    }
+    return {k[cut:]: v for k, v in source.items() if k.startswith(prefix)}
 
 
 def unflatten(columns):
@@ -71,23 +68,23 @@ def unflatten(columns):
     """
     structured = {}
     for entry in columns:
-        schema_name = entry['table_schema']
-        table_name = entry['table_name']
+        schema_name = entry["table_schema"]
+        table_name = entry["table_name"]
 
         if schema_name not in structured:
             structured[schema_name] = {}
         schema = structured[schema_name]
 
         if table_name not in schema:
-            metadata = get_stripped_prefix(entry, 'table_')
-            schema[table_name] = {'metadata': metadata, 'columns': []}
+            metadata = get_stripped_prefix(entry, "table_")
+            schema[table_name] = {"metadata": metadata, "columns": []}
         table = schema[table_name]
 
-        column = get_stripped_prefix(entry, 'column_')
+        column = get_stripped_prefix(entry, "column_")
         # the index should really never be that big so it's ok to end up
         # serializing this to JSON (2^53 is the max safe value there)
-        column['index'] = bigint(column['index'])
-        table['columns'].append(column)
+        column["index"] = bigint(column["index"])
+        table["columns"].append(column)
     return structured
 
 
@@ -110,17 +107,14 @@ class GenerateTask(BaseTask):
         dbt.ui.printer.print_timestamped_line("Building catalog")
         results = adapter.get_catalog(profile, self.project.cfg, manifest)
 
-        results = [
-            dict(zip(results.column_names, row))
-            for row in results
-        ]
+        results = [dict(zip(results.column_names, row)) for row in results]
         results = unflatten(results)
 
-        path = os.path.join(self.project['target-path'], CATALOG_FILENAME)
+        path = os.path.join(self.project["target-path"], CATALOG_FILENAME)
         write_file(path, json.dumps(results))
 
         dbt.ui.printer.print_timestamped_line(
-            'Catalog written to {}'.format(os.path.abspath(path))
+            "Catalog written to {}".format(os.path.abspath(path))
         )
 
         return results

@@ -11,14 +11,13 @@ from .seeds import SeedParser
 from .util import ParserUtils
 
 __all__ = [
-    'AnalysisParser',
-    'ArchiveParser',
-    'DataTestParser',
-    'HookParser',
-    'MacroParser',
-    'ModelParser',
-    'SchemaParser',
-    'SeedParser',
-
-    'ParserUtils',
+    "AnalysisParser",
+    "ArchiveParser",
+    "DataTestParser",
+    "HookParser",
+    "MacroParser",
+    "ModelParser",
+    "SchemaParser",
+    "SeedParser",
+    "ParserUtils",
 ]

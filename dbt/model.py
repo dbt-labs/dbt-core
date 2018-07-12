@@ -11,19 +11,19 @@ from dbt.node_types import NodeType
 class SourceConfig(object):
     ConfigKeys = DBTConfigKeys
 
-    AppendListFields = ['pre-hook', 'post-hook']
-    ExtendDictFields = ['vars', 'column_types', 'quoting']
+    AppendListFields = ["pre-hook", "post-hook"]
+    ExtendDictFields = ["vars", "column_types", "quoting"]
     ClobberFields = [
-        'alias',
-        'schema',
-        'enabled',
-        'materialized',
-        'dist',
-        'sort',
-        'sql_where',
-        'unique_key',
-        'sort_type',
-        'bind'
+        "alias",
+        "schema",
+        "enabled",
+        "materialized",
+        "dist",
+        "sort",
+        "sql_where",
+        "unique_key",
+        "sort_type",
+        "bind",
     ]
 
     def __init__(self, active_project, own_project, fqn, node_type):
@@ -37,8 +37,9 @@ class SourceConfig(object):
         self.in_model_config = {}
 
         # make sure we categorize all configs
-        all_configs = self.AppendListFields + self.ExtendDictFields + \
-            self.ClobberFields
+        all_configs = (
+            self.AppendListFields + self.ExtendDictFields + self.ClobberFields
+        )
 
         for config in self.ConfigKeys:
             assert config in all_configs, config
@@ -73,13 +74,12 @@ class SourceConfig(object):
         defaults = {"enabled": True, "materialized": "view"}
 
         if self.node_type == NodeType.Seed:
-            defaults['materialized'] = 'seed'
+            defaults["materialized"] = "seed"
 
         active_config = self.load_config_from_active_project()
 
-        if self.active_project['name'] == self.own_project['name']:
-            cfg = self._merge(defaults, active_config,
-                              self.in_model_config)
+        if self.active_project["name"] == self.own_project["name"]:
+            cfg = self._merge(defaults, active_config, self.in_model_config)
         else:
             own_config = self.load_config_from_own_project()
 
@@ -94,7 +94,7 @@ class SourceConfig(object):
 
         # make sure we're not clobbering an array of hooks with a single hook
         # string
-        hook_fields = ['pre-hook', 'post-hook']
+        hook_fields = ["pre-hook", "post-hook"]
         for hook_field in hook_fields:
             if hook_field in config:
                 config[hook_field] = self.__get_hooks(config, hook_field)
@@ -113,15 +113,16 @@ class SourceConfig(object):
 
     def smart_update(self, mutable_config, new_configs):
         relevant_configs = {
-            key: new_configs[key] for key
-            in new_configs if key in self.ConfigKeys
+            key: new_configs[key]
+            for key in new_configs
+            if key in self.ConfigKeys
         }
 
         for key in SourceConfig.AppendListFields:
             new_hooks = self.__get_hooks(relevant_configs, key)
-            mutable_config[key].extend([
-                h for h in new_hooks if h not in mutable_config[key]
-            ])
+            mutable_config[key].extend(
+                [h for h in new_hooks if h not in mutable_config[key]]
+            )
 
         for key in SourceConfig.ExtendDictFields:
             dict_val = relevant_configs.get(key, {})
@@ -143,9 +144,9 @@ class SourceConfig(object):
             config[k] = {}
 
         if self.node_type == NodeType.Seed:
-            model_configs = project.get('seeds')
+            model_configs = project.get("seeds")
         else:
-            model_configs = project.get('models')
+            model_configs = project.get("models")
 
         if model_configs is None:
             return config
@@ -163,9 +164,10 @@ class SourceConfig(object):
             relevant_configs = self.smart_update(config, level_config)
 
             clobber_configs = {
-                k: v for (k, v) in relevant_configs.items()
-                if k not in SourceConfig.AppendListFields and
-                k not in SourceConfig.ExtendDictFields
+                k: v
+                for (k, v) in relevant_configs.items()
+                if k not in SourceConfig.AppendListFields
+                and k not in SourceConfig.ExtendDictFields
             }
 
             config.update(clobber_configs)
@@ -211,7 +213,7 @@ class DBTSource(object):
         """
         parts = split_path(self.filepath)
         name, _ = os.path.splitext(parts[-1])
-        return [self.own_project['name']] + parts[1:-1] + [name]
+        return [self.own_project["name"]] + parts[1:-1] + [name]
 
     @property
     def nice_name(self):
@@ -226,5 +228,5 @@ class Csv(DBTSource):
 
     def __repr__(self):
         return "<Csv {}.{}: {}>".format(
-            self.project['name'], self.model_name, self.filepath
+            self.project["name"], self.model_name, self.filepath
         )

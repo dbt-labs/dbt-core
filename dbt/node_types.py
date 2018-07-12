@@ -1,13 +1,12 @@
-
 class NodeType(object):
-    Base = 'base'
-    Model = 'model'
-    Analysis = 'analysis'
-    Test = 'test'
-    Archive = 'archive'
-    Macro = 'macro'
-    Operation = 'operation'
-    Seed = 'seed'
+    Base = "base"
+    Model = "model"
+    Analysis = "analysis"
+    Test = "test"
+    Archive = "archive"
+    Macro = "macro"
+    Operation = "operation"
+    Seed = "seed"
 
     @classmethod
     def executable(cls):
@@ -22,13 +21,10 @@ class NodeType(object):
 
     @classmethod
     def refable(cls):
-        return [
-            cls.Model,
-            cls.Seed,
-        ]
+        return [cls.Model, cls.Seed]
 
 
 class RunHookType:
-    Start = 'on-run-start'
-    End = 'on-run-end'
+    Start = "on-run-start"
+    End = "on-run-end"
     Both = [Start, End]

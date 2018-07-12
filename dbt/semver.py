@@ -15,7 +15,9 @@ _BASE_VERSION_REGEX = r"""
 (?P<major>{num_no_leading_zeros})\.
 (?P<minor>{num_no_leading_zeros})\.
 (?P<patch>{num_no_leading_zeros})
-""".format(num_no_leading_zeros=_NUM_NO_LEADING_ZEROS)
+""".format(
+    num_no_leading_zeros=_NUM_NO_LEADING_ZEROS
+)
 
 _VERSION_EXTRA_REGEX = r"""
 (\-
@@ -25,32 +27,34 @@ _VERSION_EXTRA_REGEX = r"""
   (?P<build>
     {alpha}(\.{alpha})*))?
 """.format(
-    alpha_no_leading_zeros=_ALPHA_NO_LEADING_ZEROS,
-    alpha=_ALPHA)
+    alpha_no_leading_zeros=_ALPHA_NO_LEADING_ZEROS, alpha=_ALPHA
+)
 
-_VERSION_REGEX = re.compile(r"""
+_VERSION_REGEX = re.compile(
+    r"""
 ^
 {matchers}
 {base_version_regex}
 {version_extra_regex}
 $
 """.format(
-    matchers=_MATCHERS,
-    base_version_regex=_BASE_VERSION_REGEX,
-    version_extra_regex=_VERSION_EXTRA_REGEX),
-                            re.VERBOSE)
+        matchers=_MATCHERS,
+        base_version_regex=_BASE_VERSION_REGEX,
+        version_extra_regex=_VERSION_EXTRA_REGEX,
+    ),
+    re.VERBOSE,
+)
 
 
 class Matchers:
-    GREATER_THAN = '>'
-    GREATER_THAN_OR_EQUAL = '>='
-    LESS_THAN = '<'
-    LESS_THAN_OR_EQUAL = '<='
-    EXACT = '='
+    GREATER_THAN = ">"
+    GREATER_THAN_OR_EQUAL = ">="
+    LESS_THAN = "<"
+    LESS_THAN_OR_EQUAL = "<="
+    EXACT = "="
 
 
 class VersionRange(dbt.utils.AttrDict):
-
     def _try_combine_exact(self, a, b):
         if a.compare(b) == 0:
             return a
@@ -60,9 +64,9 @@ class VersionRange(dbt.utils.AttrDict):
     def _try_combine_lower_bound_with_exact(self, lower, exact):
         comparison = lower.compare(exact)
 
-        if (comparison < 0 or
-            (comparison == 0 and
-             lower.matcher == Matchers.GREATER_THAN_OR_EQUAL)):
+        if comparison < 0 or (
+            comparison == 0 and lower.matcher == Matchers.GREATER_THAN_OR_EQUAL
+        ):
             return exact
 
         raise VersionsNotCompatibleException()
@@ -74,7 +78,7 @@ class VersionRange(dbt.utils.AttrDict):
             return b
 
         if not (a.is_exact or b.is_exact):
-            comparison = (a.compare(b) < 0)
+            comparison = a.compare(b) < 0
 
             if comparison:
                 return b
@@ -90,9 +94,9 @@ class VersionRange(dbt.utils.AttrDict):
     def _try_combine_upper_bound_with_exact(self, upper, exact):
         comparison = upper.compare(exact)
 
-        if (comparison > 0 or
-            (comparison == 0 and
-             upper.matcher == Matchers.LESS_THAN_OR_EQUAL)):
+        if comparison > 0 or (
+            comparison == 0 and upper.matcher == Matchers.LESS_THAN_OR_EQUAL
+        ):
             return exact
 
         raise VersionsNotCompatibleException()
@@ -104,7 +108,7 @@ class VersionRange(dbt.utils.AttrDict):
             return b
 
         if not (a.is_exact or b.is_exact):
-            comparison = (a.compare(b) > 0)
+            comparison = a.compare(b) > 0
 
             if comparison:
                 return b
@@ -120,7 +124,7 @@ class VersionRange(dbt.utils.AttrDict):
     def reduce(self, other):
         start = None
 
-        if(self.start.is_exact and other.start.is_exact):
+        if self.start.is_exact and other.start.is_exact:
             start = end = self._try_combine_exact(self.start, other.start)
 
         else:
@@ -136,7 +140,7 @@ class VersionRange(dbt.utils.AttrDict):
         result = []
 
         if self.start.is_unbounded and self.end.is_unbounded:
-            return 'ANY'
+            return "ANY"
 
         if not self.start.is_unbounded:
             result.append(self.start.to_version_string())
@@ -144,7 +148,7 @@ class VersionRange(dbt.utils.AttrDict):
         if not self.end.is_unbounded:
             result.append(self.end.to_version_string())
 
-        return ', '.join(result)
+        return ", ".join(result)
 
     def to_version_string_pair(self):
         to_return = []
@@ -159,7 +163,6 @@ class VersionRange(dbt.utils.AttrDict):
 
 
 class VersionSpecifier(dbt.utils.AttrDict):
-
     def __init__(self, *args, **kwargs):
         super(VersionSpecifier, self).__init__(*args, **kwargs)
 
@@ -167,25 +170,21 @@ class VersionSpecifier(dbt.utils.AttrDict):
             self.matcher = Matchers.EXACT
 
     def to_version_string(self, skip_matcher=False):
-        prerelease = ''
-        build = ''
-        matcher = ''
+        prerelease = ""
+        build = ""
+        matcher = ""
 
         if self.prerelease:
-            prerelease = '-' + self.prerelease
+            prerelease = "-" + self.prerelease
 
         if self.build:
-            build = '+' + self.build
+            build = "+" + self.build
 
         if not skip_matcher:
             matcher = self.matcher
-        return '{}{}.{}.{}{}{}'.format(
-            matcher,
-            self.major,
-            self.minor,
-            self.patch,
-            prerelease,
-            build)
+        return "{}{}.{}.{}{}{}".format(
+            matcher, self.major, self.minor, self.patch, prerelease, build
+        )
 
     @classmethod
     def from_version_string(cls, version_string):
@@ -193,7 +192,8 @@ class VersionSpecifier(dbt.utils.AttrDict):
 
         if not match:
             raise dbt.exceptions.SemverException(
-                'Could not parse version "{}"'.format(version_string))
+                'Could not parse version "{}"'.format(version_string)
+            )
 
         return VersionSpecifier(match.groupdict())
 
@@ -208,23 +208,22 @@ class VersionSpecifier(dbt.utils.AttrDict):
             range_start = self
             range_end = self
 
-        elif self.matcher in [Matchers.GREATER_THAN,
-                              Matchers.GREATER_THAN_OR_EQUAL]:
+        elif self.matcher in [
+            Matchers.GREATER_THAN,
+            Matchers.GREATER_THAN_OR_EQUAL,
+        ]:
             range_start = self
 
-        elif self.matcher in [Matchers.LESS_THAN,
-                              Matchers.LESS_THAN_OR_EQUAL]:
+        elif self.matcher in [Matchers.LESS_THAN, Matchers.LESS_THAN_OR_EQUAL]:
             range_end = self
 
-        return VersionRange(
-            start=range_start,
-            end=range_end)
+        return VersionRange(start=range_start, end=range_end)
 
     def compare(self, other):
         if self.is_unbounded or other.is_unbounded:
             return 0
 
-        for key in ['major', 'minor', 'patch']:
+        for key in ["major", "minor", "patch"]:
             comparison = int(self[key]) - int(other[key])
 
             if comparison > 0:
@@ -232,26 +231,41 @@ class VersionSpecifier(dbt.utils.AttrDict):
             elif comparison < 0:
                 return -1
 
-        equal = ((self.matcher == Matchers.GREATER_THAN_OR_EQUAL and
-                  other.matcher == Matchers.LESS_THAN_OR_EQUAL) or
-                 (self.matcher == Matchers.LESS_THAN_OR_EQUAL and
-                  other.matcher == Matchers.GREATER_THAN_OR_EQUAL))
+        equal = (
+            self.matcher == Matchers.GREATER_THAN_OR_EQUAL
+            and other.matcher == Matchers.LESS_THAN_OR_EQUAL
+        ) or (
+            self.matcher == Matchers.LESS_THAN_OR_EQUAL
+            and other.matcher == Matchers.GREATER_THAN_OR_EQUAL
+        )
         if equal:
             return 0
 
-        lt = ((self.matcher == Matchers.LESS_THAN and
-               other.matcher == Matchers.LESS_THAN_OR_EQUAL) or
-              (other.matcher == Matchers.GREATER_THAN and
-               self.matcher == Matchers.GREATER_THAN_OR_EQUAL) or
-              (self.is_upper_bound and other.is_lower_bound))
+        lt = (
+            (
+                self.matcher == Matchers.LESS_THAN
+                and other.matcher == Matchers.LESS_THAN_OR_EQUAL
+            )
+            or (
+                other.matcher == Matchers.GREATER_THAN
+                and self.matcher == Matchers.GREATER_THAN_OR_EQUAL
+            )
+            or (self.is_upper_bound and other.is_lower_bound)
+        )
         if lt:
             return -1
 
-        gt = ((other.matcher == Matchers.LESS_THAN and
-               self.matcher == Matchers.LESS_THAN_OR_EQUAL) or
-              (self.matcher == Matchers.GREATER_THAN and
-               other.matcher == Matchers.GREATER_THAN_OR_EQUAL) or
-              (self.is_lower_bound and other.is_upper_bound))
+        gt = (
+            (
+                other.matcher == Matchers.LESS_THAN
+                and self.matcher == Matchers.LESS_THAN_OR_EQUAL
+            )
+            or (
+                self.matcher == Matchers.GREATER_THAN
+                and other.matcher == Matchers.GREATER_THAN_OR_EQUAL
+            )
+            or (self.is_lower_bound and other.is_upper_bound)
+        )
         if gt:
             return 1
 
@@ -275,13 +289,14 @@ class VersionSpecifier(dbt.utils.AttrDict):
 
     @property
     def is_lower_bound(self):
-        return self.matcher in [Matchers.GREATER_THAN,
-                                Matchers.GREATER_THAN_OR_EQUAL]
+        return self.matcher in [
+            Matchers.GREATER_THAN,
+            Matchers.GREATER_THAN_OR_EQUAL,
+        ]
 
     @property
     def is_upper_bound(self):
-        return self.matcher in [Matchers.LESS_THAN,
-                                Matchers.LESS_THAN_OR_EQUAL]
+        return self.matcher in [Matchers.LESS_THAN, Matchers.LESS_THAN_OR_EQUAL]
 
     @property
     def is_exact(self):
@@ -289,7 +304,6 @@ class VersionSpecifier(dbt.utils.AttrDict):
 
 
 class UnboundedVersionSpecifier(VersionSpecifier):
-
     def __init__(self, *args, **kwargs):
         super(dbt.utils.AttrDict, self).__init__(*args, **kwargs)
 
@@ -332,15 +346,17 @@ def reduce_versions(*args):
 
         else:
             version_specifiers.append(
-                VersionSpecifier.from_version_string(version))
+                VersionSpecifier.from_version_string(version)
+            )
 
     for version_specifier in version_specifiers:
         if not isinstance(version_specifier, VersionSpecifier):
             raise Exception(version_specifier)
 
     if not version_specifiers:
-        return VersionRange(start=UnboundedVersionSpecifier(),
-                            end=UnboundedVersionSpecifier())
+        return VersionRange(
+            start=UnboundedVersionSpecifier(), end=UnboundedVersionSpecifier()
+        )
 
     try:
         to_return = version_specifiers.pop().to_range()
@@ -349,8 +365,10 @@ def reduce_versions(*args):
             to_return = to_return.reduce(version_specifier.to_range())
     except VersionsNotCompatibleException as e:
         raise VersionsNotCompatibleException(
-            'Could not find a satisfactory version from options: {}'
-            .format([str(a) for a in args]))
+            "Could not find a satisfactory version from options: {}".format(
+                [str(a) for a in args]
+            )
+        )
 
     return to_return
 
@@ -372,9 +390,9 @@ def find_possible_versions(requested_range, available_versions):
     for version_string in available_versions:
         version = VersionSpecifier.from_version_string(version_string)
 
-        if(versions_compatible(version,
-                               requested_range.start,
-                               requested_range.end)):
+        if versions_compatible(
+            version, requested_range.start, requested_range.end
+        ):
             possible_versions.append(version)
 
     sorted_versions = sorted(possible_versions, reverse=True)
@@ -388,10 +406,9 @@ def resolve_to_specific_version(requested_range, available_versions):
     for version_string in available_versions:
         version = VersionSpecifier.from_version_string(version_string)
 
-        if(versions_compatible(version,
-                               requested_range.start,
-                               requested_range.end) and
-           (max_version is None or max_version.compare(version) < 0)):
+        if versions_compatible(
+            version, requested_range.start, requested_range.end
+        ) and (max_version is None or max_version.compare(version) < 0):
             max_version = version
             max_version_string = version_string
 

@@ -15,9 +15,7 @@ import dbt.exceptions
 from dbt.logger import GLOBAL_LOGGER as logger
 
 
-def find_matching(root_path,
-                  relative_paths_to_search,
-                  file_pattern):
+def find_matching(root_path, relative_paths_to_search, file_pattern):
     """
     Given an absolute `root_path`, a list of relative paths to that
     absolute root path (`relative_paths_to_search`), and a `file_pattern`
@@ -36,28 +34,32 @@ def find_matching(root_path,
 
     for relative_path_to_search in relative_paths_to_search:
         absolute_path_to_search = os.path.join(
-            root_path, relative_path_to_search)
+            root_path, relative_path_to_search
+        )
         walk_results = os.walk(absolute_path_to_search)
 
         for current_path, subdirectories, local_files in walk_results:
             for local_file in local_files:
                 absolute_path = os.path.join(current_path, local_file)
                 relative_path = os.path.relpath(
-                    absolute_path, absolute_path_to_search)
+                    absolute_path, absolute_path_to_search
+                )
 
                 if fnmatch.fnmatch(local_file, file_pattern):
-                    matching.append({
-                        'searched_path': relative_path_to_search,
-                        'absolute_path': absolute_path,
-                        'relative_path': relative_path,
-                    })
+                    matching.append(
+                        {
+                            "searched_path": relative_path_to_search,
+                            "absolute_path": absolute_path,
+                            "relative_path": relative_path,
+                        }
+                    )
 
     return matching
 
 
 def load_file_contents(path, strip=True):
-    with open(path, 'rb') as handle:
-        to_return = handle.read().decode('utf-8')
+    with open(path, "rb") as handle:
+        to_return = handle.read().decode("utf-8")
 
     if strip:
         to_return = to_return.strip()
@@ -83,13 +85,13 @@ def make_directory(path):
                 raise e
 
 
-def make_file(path, contents='', overwrite=False):
+def make_file(path, contents="", overwrite=False):
     """
     Make a file at `path` assuming that the directory it resides in already
     exists. The file is saved with contents `contents`
     """
     if overwrite or not os.path.exists(path):
-        with open(path, 'w') as fh:
+        with open(path, "w") as fh:
             fh.write(contents)
         return True
 
@@ -101,7 +103,7 @@ def make_symlink(source, link_path):
     Create a symlink at `link_path` referring to `source`.
     """
     if not supports_symlinks():
-        dbt.exceptions.system_error('create a symbolic link')
+        dbt.exceptions.system_error("create a symbolic link")
 
     return os.symlink(source, link_path)
 
@@ -110,7 +112,7 @@ def supports_symlinks():
     return getattr(os, "symlink", None) is not None
 
 
-def write_file(path, contents=''):
+def write_file(path, contents=""):
     make_directory(os.path.dirname(path))
     dbt.compat.write_file(path, contents)
 
@@ -135,9 +137,8 @@ def resolve_path_from_base(path_to_resolve, base_path):
     resolve it to an absolute path and return.
     """
     return os.path.abspath(
-        os.path.join(
-            base_path,
-            os.path.expanduser(path_to_resolve)))
+        os.path.join(base_path, os.path.expanduser(path_to_resolve))
+    )
 
 
 def rmdir(path):
@@ -147,7 +148,7 @@ def rmdir(path):
     cloned via git) can cause rmtree to throw a PermissionError exception
     """
     logger.debug("DEBUG** Window rmdir sys.platform: {}".format(sys.platform))
-    if sys.platform == 'win32':
+    if sys.platform == "win32":
         onerror = _windows_rmdir_readonly
     else:
         onerror = None
@@ -169,23 +170,21 @@ def path_is_symlink(path):
 
 def open_dir_cmd():
     # https://docs.python.org/2/library/sys.html#sys.platform
-    if sys.platform == 'win32':
-        return 'start'
+    if sys.platform == "win32":
+        return "start"
 
-    elif sys.platform == 'darwin':
-        return 'open'
+    elif sys.platform == "darwin":
+        return "open"
 
     else:
-        return 'xdg-open'
+        return "xdg-open"
 
 
 def run_cmd(cwd, cmd):
-    logger.debug('Executing "{}"'.format(' '.join(cmd)))
+    logger.debug('Executing "{}"'.format(" ".join(cmd)))
     proc = subprocess.Popen(
-        cmd,
-        cwd=cwd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE)
+        cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
 
     out, err = proc.communicate()
 
@@ -197,8 +196,8 @@ def run_cmd(cwd, cmd):
 
 def download(url, path):
     response = requests.get(url)
-    with open(path, 'wb') as handle:
-        for block in response.iter_content(1024*64):
+    with open(path, "wb") as handle:
+        for block in response.iter_content(1024 * 64):
             handle.write(block)
 
 
@@ -216,7 +215,7 @@ def rename(from_path, to_path, force=False):
 
 def untar_package(tar_path, dest_dir, rename_to=None):
     tar_dir_name = None
-    with tarfile.open(tar_path, 'r') as tarball:
+    with tarfile.open(tar_path, "r") as tarball:
         tarball.extractall(dest_dir)
         tar_dir_name = os.path.commonprefix(tarball.getnames())
     if rename_to:

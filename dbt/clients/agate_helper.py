@@ -1,13 +1,15 @@
 
 import agate
 
-DEFAULT_TYPE_TESTER = agate.TypeTester(types=[
-    agate.data_types.Number(),
-    agate.data_types.Date(),
-    agate.data_types.DateTime(),
-    agate.data_types.Boolean(),
-    agate.data_types.Text()
-])
+DEFAULT_TYPE_TESTER = agate.TypeTester(
+    types=[
+        agate.data_types.Number(),
+        agate.data_types.Date(),
+        agate.data_types.DateTime(),
+        agate.data_types.Boolean(),
+        agate.data_types.Text(),
+    ]
+)
 
 
 def table_from_data(data, column_names):

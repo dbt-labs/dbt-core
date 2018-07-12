@@ -8,9 +8,11 @@ from dbt.logger import GLOBAL_LOGGER as logger
 
 from dbt.task.base_task import BaseTask
 
-STARTER_REPO = 'https://github.com/fishtown-analytics/dbt-starter-project.git'
-DOCS_URL = 'https://docs.getdbt.com/docs/configure-your-profile'
-SAMPLE_PROFILES_YML_FILE = 'https://github.com/fishtown-analytics/dbt/blob/master/sample.profiles.yml'  # noqa
+STARTER_REPO = "https://github.com/fishtown-analytics/dbt-starter-project.git"
+DOCS_URL = "https://docs.getdbt.com/docs/configure-your-profile"
+SAMPLE_PROFILES_YML_FILE = (
+    "https://github.com/fishtown-analytics/dbt/blob/master/sample.profiles.yml"
+)  # noqa
 
 ON_COMPLETE_MESSAGE = """
 Your new dbt project "{project_name}" was created! If this is your first time
@@ -56,14 +58,16 @@ default:
       dbname: warehouse
       schema: analytics
   target: dev
-""".format(profiles_sample=SAMPLE_PROFILES_YML_FILE)
+""".format(
+    profiles_sample=SAMPLE_PROFILES_YML_FILE
+)
 
 
 class InitTask(BaseTask):
     def clone_starter_repo(self, project_name):
         dbt.clients.git.clone(
-            STARTER_REPO, '.', project_name,
-            remove_git_dir=True)
+            STARTER_REPO, ".", project_name, remove_git_dir=True
+        )
         dbt.clients.git.remove_remote(project_name)
 
     def create_profiles_dir(self, profiles_dir):
@@ -85,14 +89,14 @@ class InitTask(BaseTask):
             open_cmd=open_cmd,
             project_name=project_name,
             profiles_path=profiles_path,
-            docs_url=DOCS_URL
+            docs_url=DOCS_URL,
         )
 
     def run(self):
         project_dir = self.args.project_name
 
         profiles_dir = dbt.project.default_profiles_dir
-        profiles_file = os.path.join(profiles_dir, 'profiles.yml')
+        profiles_file = os.path.join(profiles_dir, "profiles.yml")
 
         self.create_profiles_dir(profiles_dir)
         self.create_profiles_file(profiles_file)
@@ -101,9 +105,9 @@ class InitTask(BaseTask):
         logger.info(msg.format(profiles_dir))
 
         if os.path.exists(project_dir):
-            raise RuntimeError("directory {} already exists!".format(
-                project_dir
-            ))
+            raise RuntimeError(
+                "directory {} already exists!".format(project_dir)
+            )
 
         self.clone_starter_repo(project_dir)
 

@@ -40,8 +40,8 @@ def to_string(s):
 
 def write_file(path, s):
     if WHICH_PYTHON == 2:
-        with codecs.open(path, 'w', encoding='utf-8') as f:
+        with codecs.open(path, "w", encoding="utf-8") as f:
             return f.write(to_string(s))
     else:
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             return f.write(to_string(s))

@@ -25,23 +25,36 @@ the error persists, open an issue at https://github.com/fishtown-analytics/dbt
 
 def track_model_run(index, num_nodes, run_model_result):
     invocation_id = dbt.tracking.active_user.invocation_id
-    dbt.tracking.track_model_run({
-        "invocation_id": invocation_id,
-        "index": index,
-        "total": num_nodes,
-        "execution_time": run_model_result.execution_time,
-        "run_status": run_model_result.status,
-        "run_skipped": run_model_result.skip,
-        "run_error": None,
-        "model_materialization": dbt.utils.get_materialization(run_model_result.node),  # noqa
-        "model_id": dbt.utils.get_hash(run_model_result.node),
-        "hashed_contents": dbt.utils.get_hashed_contents(run_model_result.node),  # noqa
-    })
+    dbt.tracking.track_model_run(
+        {
+            "invocation_id": invocation_id,
+            "index": index,
+            "total": num_nodes,
+            "execution_time": run_model_result.execution_time,
+            "run_status": run_model_result.status,
+            "run_skipped": run_model_result.skip,
+            "run_error": None,
+            "model_materialization": dbt.utils.get_materialization(
+                run_model_result.node
+            ),  # noqa
+            "model_id": dbt.utils.get_hash(run_model_result.node),
+            "hashed_contents": dbt.utils.get_hashed_contents(
+                run_model_result.node
+            ),  # noqa
+        }
+    )
 
 
 class RunModelResult(object):
-    def __init__(self, node, error=None, skip=False, status=None,
-                 failed=None, execution_time=0):
+    def __init__(
+        self,
+        node,
+        error=None,
+        skip=False,
+        status=None,
+        failed=None,
+        execution_time=0,
+    ):
         self.node = node
         self.error = error
         self.skip = skip
@@ -63,10 +76,19 @@ class RunModelResult(object):
 
 
 class RunOperationResult(RunModelResult):
-    def __init__(self, node, error=None, skip=False, status=None,
-                 failed=None, execution_time=0, returned=None):
-        super(RunOperationResult, self).__init__(node, error, skip, status,
-                                                 failed, execution_time)
+    def __init__(
+        self,
+        node,
+        error=None,
+        skip=False,
+        status=None,
+        failed=None,
+        execution_time=0,
+        returned=None,
+    ):
+        super(RunOperationResult, self).__init__(
+            node, error, skip, status, failed, execution_time
+        )
         self.returned = returned
 
 
@@ -88,19 +110,21 @@ class BaseRunner(object):
 
     @classmethod
     def is_refable(cls, node):
-        return node.get('resource_type') in NodeType.refable()
+        return node.get("resource_type") in NodeType.refable()
 
     @classmethod
     def is_ephemeral(cls, node):
-        return dbt.utils.get_materialization(node) == 'ephemeral'
+        return dbt.utils.get_materialization(node) == "ephemeral"
 
     @classmethod
     def is_ephemeral_model(cls, node):
         return cls.is_refable(node) and cls.is_ephemeral(node)
 
     def safe_run(self, flat_graph):
-        catchable_errors = (dbt.exceptions.CompilationException,
-                            dbt.exceptions.RuntimeException)
+        catchable_errors = (
+            dbt.exceptions.CompilationException,
+            dbt.exceptions.RuntimeException,
+        )
 
         result = RunModelResult(self.node)
         started = time.time()
@@ -120,34 +144,36 @@ class BaseRunner(object):
                 e.node = result.node
 
             result.error = dbt.compat.to_string(e)
-            result.status = 'ERROR'
+            result.status = "ERROR"
 
         except dbt.exceptions.InternalException as e:
-            build_path = self.node.get('build_path')
-            prefix = 'Internal error executing {}'.format(build_path)
+            build_path = self.node.get("build_path")
+            prefix = "Internal error executing {}".format(build_path)
 
             error = "{prefix}\n{error}\n\n{note}".format(
-                         prefix=dbt.ui.printer.red(prefix),
-                         error=str(e).strip(),
-                         note=INTERNAL_ERROR_STRING)
+                prefix=dbt.ui.printer.red(prefix),
+                error=str(e).strip(),
+                note=INTERNAL_ERROR_STRING,
+            )
             logger.debug(error)
 
             result.error = dbt.compat.to_string(e)
-            result.status = 'ERROR'
+            result.status = "ERROR"
 
         except Exception as e:
             prefix = "Unhandled error while executing {filepath}".format(
-                        filepath=self.node.get('build_path'))
+                filepath=self.node.get("build_path")
+            )
 
             error = "{prefix}\n{error}".format(
-                         prefix=dbt.ui.printer.red(prefix),
-                         error=str(e).strip())
+                prefix=dbt.ui.printer.red(prefix), error=str(e).strip()
+            )
 
             logger.debug(error)
             raise e
 
         finally:
-            node_name = self.node.get('name')
+            node_name = self.node.get("name")
             self.adapter.release_connection(self.profile, node_name)
 
         result.execution_time = time.time() - started
@@ -166,12 +192,17 @@ class BaseRunner(object):
         raise NotImplementedException()
 
     def on_skip(self):
-        schema_name = self.node.get('schema')
-        node_name = self.node.get('name')
+        schema_name = self.node.get("schema")
+        node_name = self.node.get("name")
 
         if not self.is_ephemeral_model(self.node):
-            dbt.ui.printer.print_skip_line(self.node, schema_name, node_name,
-                                           self.node_index, self.num_nodes)
+            dbt.ui.printer.print_skip_line(
+                self.node,
+                schema_name,
+                node_name,
+                self.node_index,
+                self.num_nodes,
+            )
 
         node_result = RunModelResult(self.node, skip=True)
         return node_result
@@ -182,9 +213,9 @@ class BaseRunner(object):
     @classmethod
     def get_model_schemas(cls, flat_graph):
         schemas = set()
-        for node in flat_graph['nodes'].values():
+        for node in flat_graph["nodes"].values():
             if cls.is_refable(node) and not cls.is_ephemeral(node):
-                schemas.add(node['schema'])
+                schemas.add(node["schema"])
 
         return schemas
 
@@ -221,8 +252,9 @@ class CompileRunner(BaseRunner):
         return RunModelResult(compiled_node)
 
     def compile(self, flat_graph):
-        return self._compile_node(self.adapter, self.project, self.node,
-                                  flat_graph)
+        return self._compile_node(
+            self.adapter, self.project, self.node, flat_graph
+        )
 
     @classmethod
     def _compile_node(cls, adapter, project, node, flat_graph):
@@ -230,27 +262,30 @@ class CompileRunner(BaseRunner):
         node = compiler.compile_node(node, flat_graph)
         node = cls._inject_runtime_config(adapter, project, node)
 
-        if(node['injected_sql'] is not None and
-           not (dbt.utils.is_type(node, NodeType.Archive))):
-            logger.debug('Writing injected SQL for node "{}"'.format(
-                node['unique_id']))
+        if node["injected_sql"] is not None and not (
+            dbt.utils.is_type(node, NodeType.Archive)
+        ):
+            logger.debug(
+                'Writing injected SQL for node "{}"'.format(node["unique_id"])
+            )
 
             written_path = dbt.writer.write_node(
                 node,
-                project.get('target-path'),
-                'compiled',
-                node['injected_sql'])
+                project.get("target-path"),
+                "compiled",
+                node["injected_sql"],
+            )
 
-            node['build_path'] = written_path
+            node["build_path"] = written_path
 
         return node
 
     @classmethod
     def _inject_runtime_config(cls, adapter, project, node):
-        wrapped_sql = node.get('wrapped_sql')
+        wrapped_sql = node.get("wrapped_sql")
         context = cls._node_context(adapter, project, node)
         sql = dbt.clients.jinja.get_rendered(wrapped_sql, context)
-        node['wrapped_sql'] = sql
+        node["wrapped_sql"] = sql
         return node
 
     @classmethod
@@ -259,18 +294,30 @@ class CompileRunner(BaseRunner):
 
         def call_get_columns_in_table(schema_name, table_name):
             return adapter.get_columns_in_table(
-                profile, project, schema_name,
-                table_name, model_name=node.get('alias'))
+                profile,
+                project,
+                schema_name,
+                table_name,
+                model_name=node.get("alias"),
+            )
 
-        def call_get_missing_columns(from_schema, from_table,
-                                     to_schema, to_table):
+        def call_get_missing_columns(
+            from_schema, from_table, to_schema, to_table
+        ):
             return adapter.get_missing_columns(
-                profile, project, from_schema, from_table,
-                to_schema, to_table, node.get('alias'))
+                profile,
+                project,
+                from_schema,
+                from_table,
+                to_schema,
+                to_table,
+                node.get("alias"),
+            )
 
         def call_already_exists(schema, table):
             return adapter.already_exists(
-                profile, project, schema, table, node.get('alias'))
+                profile, project, schema, table, node.get("alias")
+            )
 
         return {
             "run_started_at": dbt.tracking.active_user.run_started_at,
@@ -285,12 +332,11 @@ class CompileRunner(BaseRunner):
         profile = project.run_environment()
         required_schemas = cls.get_model_schemas(flat_graph)
         existing_schemas = set(adapter.get_existing_schemas(profile, project))
-        for schema in (required_schemas - existing_schemas):
+        for schema in required_schemas - existing_schemas:
             adapter.create_schema(profile, project, schema)
 
 
 class ModelRunner(CompileRunner):
-
     def raise_on_first_error(self):
         return False
 
@@ -298,13 +344,13 @@ class ModelRunner(CompileRunner):
     def run_hooks(cls, project, adapter, flat_graph, hook_type):
         profile = project.run_environment()
 
-        nodes = flat_graph.get('nodes', {}).values()
+        nodes = flat_graph.get("nodes", {}).values()
         hooks = get_nodes_by_tags(nodes, {hook_type}, NodeType.Operation)
 
-        ordered_hooks = sorted(hooks, key=lambda h: h.get('index', len(hooks)))
+        ordered_hooks = sorted(hooks, key=lambda h: h.get("index", len(hooks)))
 
         for i, hook in enumerate(ordered_hooks):
-            model_name = hook.get('name')
+            model_name = hook.get("name")
 
             # This will clear out an open transaction if there is one.
             # on-run-* hooks should run outside of a transaction. This happens
@@ -315,19 +361,20 @@ class ModelRunner(CompileRunner):
             # ensure that a transaction is only created if dbt initiates it.
             adapter.clear_transaction(profile, model_name)
             compiled = cls._compile_node(adapter, project, hook, flat_graph)
-            statement = compiled['wrapped_sql']
+            statement = compiled["wrapped_sql"]
 
-            hook_index = hook.get('index', len(hooks))
+            hook_index = hook.get("index", len(hooks))
             hook_dict = dbt.hooks.get_hook_dict(statement, index=hook_index)
 
             if dbt.flags.STRICT_MODE:
                 dbt.contracts.graph.parsed.Hook(**hook_dict)
 
-            sql = hook_dict.get('sql', '')
+            sql = hook_dict.get("sql", "")
 
             if len(sql.strip()) > 0:
-                adapter.execute_one(profile, sql, model_name=model_name,
-                                    auto_begin=False)
+                adapter.execute_one(
+                    profile, sql, model_name=model_name, auto_begin=False
+                )
 
             adapter.release_connection(profile, model_name)
 
@@ -353,7 +400,7 @@ class ModelRunner(CompileRunner):
 
         existing_schemas = set(adapter.get_existing_schemas(profile, project))
 
-        for schema in (required_schemas - existing_schemas):
+        for schema in required_schemas - existing_schemas:
             adapter.create_schema(profile, project, schema)
 
     @classmethod
@@ -370,12 +417,15 @@ class ModelRunner(CompileRunner):
 
         if execution_time is not None:
             execution = " in {execution_time:0.2f}s".format(
-                execution_time=execution_time)
+                execution_time=execution_time
+            )
 
         dbt.ui.printer.print_timestamped_line("")
         dbt.ui.printer.print_timestamped_line(
-            "Finished running {stat_line}{execution}."
-            .format(stat_line=stat_line, execution=execution))
+            "Finished running {stat_line}{execution}.".format(
+                stat_line=stat_line, execution=execution
+            )
+        )
 
     @classmethod
     def after_run(cls, project, adapter, results, flat_graph):
@@ -387,21 +437,21 @@ class ModelRunner(CompileRunner):
 
     def describe_node(self):
         materialization = dbt.utils.get_materialization(self.node)
-        schema_name = self.node.get('schema')
-        node_name = self.node.get('alias')
+        schema_name = self.node.get("schema")
+        node_name = self.node.get("alias")
         return "{} model {}.{}".format(materialization, schema_name, node_name)
 
     def print_start_line(self):
         description = self.describe_node()
-        dbt.ui.printer.print_start_line(description, self.node_index,
-                                        self.num_nodes)
+        dbt.ui.printer.print_start_line(
+            description, self.node_index, self.num_nodes
+        )
 
     def print_result_line(self, result):
-        schema_name = self.node.get('schema')
-        dbt.ui.printer.print_model_result_line(result,
-                                               schema_name,
-                                               self.node_index,
-                                               self.num_nodes)
+        schema_name = self.node.get("schema")
+        dbt.ui.printer.print_model_result_line(
+            result, schema_name, self.node_index, self.num_nodes
+        )
 
     def before_execute(self):
         self.print_start_line()
@@ -412,59 +462,61 @@ class ModelRunner(CompileRunner):
 
     def execute(self, model, flat_graph):
         context = dbt.context.runtime.generate(
-            model, self.project.cfg, flat_graph)
+            model, self.project.cfg, flat_graph
+        )
 
         materialization_macro = dbt.utils.get_materialization_macro(
             flat_graph,
             dbt.utils.get_materialization(model),
-            self.adapter.type())
+            self.adapter.type(),
+        )
 
         if materialization_macro is None:
-            dbt.exceptions.missing_materialization(
-                model,
-                self.adapter.type())
+            dbt.exceptions.missing_materialization(model, self.adapter.type())
 
         materialization_macro.generator(context)()
 
-        result = context['load_result']('main')
+        result = context["load_result"]("main")
 
         return RunModelResult(model, status=result.status)
 
 
 class TestRunner(CompileRunner):
-
     def raise_on_first_error(self):
         return False
 
     def describe_node(self):
-        node_name = self.node.get('name')
+        node_name = self.node.get("name")
         return "test {}".format(node_name)
 
     def print_result_line(self, result):
-        schema_name = self.node.get('schema')
-        dbt.ui.printer.print_test_result_line(result,
-                                              schema_name,
-                                              self.node_index,
-                                              self.num_nodes)
+        schema_name = self.node.get("schema")
+        dbt.ui.printer.print_test_result_line(
+            result, schema_name, self.node_index, self.num_nodes
+        )
 
     def print_start_line(self):
         description = self.describe_node()
-        dbt.ui.printer.print_start_line(description, self.node_index,
-                                        self.num_nodes)
+        dbt.ui.printer.print_start_line(
+            description, self.node_index, self.num_nodes
+        )
 
     def execute_test(self, test):
         res, table = self.adapter.execute_and_fetch(
             self.profile,
-            test.get('wrapped_sql'),
-            test.get('name'),
-            auto_begin=True)
+            test.get("wrapped_sql"),
+            test.get("name"),
+            auto_begin=True,
+        )
 
         num_rows = len(table.rows)
         if num_rows > 1:
             num_cols = len(table.columns)
             raise RuntimeError(
-                "Bad test {name}: Returned {rows} rows and {cols} cols"
-                .format(name=test.get('name'), rows=num_rows, cols=num_cols))
+                "Bad test {name}: Returned {rows} rows and {cols} cols".format(
+                    name=test.get("name"), rows=num_rows, cols=num_cols
+                )
+            )
 
         return table[0][0]
 
@@ -480,25 +532,26 @@ class TestRunner(CompileRunner):
 
 
 class ArchiveRunner(ModelRunner):
-
     def raise_on_first_error(self):
         return False
 
     def describe_node(self):
-        cfg = self.node.get('config', {})
-        return "archive {source_schema}.{source_table} --> "\
-               "{target_schema}.{target_table}".format(**cfg)
+        cfg = self.node.get("config", {})
+        return (
+            "archive {source_schema}.{source_table} --> "
+            "{target_schema}.{target_table}".format(**cfg)
+        )
 
     def print_result_line(self, result):
-        dbt.ui.printer.print_archive_result_line(result, self.node_index,
-                                                 self.num_nodes)
+        dbt.ui.printer.print_archive_result_line(
+            result, self.node_index, self.num_nodes
+        )
 
 
 class SeedRunner(ModelRunner):
-
     def describe_node(self):
-        schema_name = self.node.get('schema')
-        return "seed file {}.{}".format(schema_name, self.node['alias'])
+        schema_name = self.node.get("schema")
+        return "seed file {}.{}".format(schema_name, self.node["alias"])
 
     @classmethod
     def before_run(cls, project, adapter, flat_graph):
@@ -506,15 +559,15 @@ class SeedRunner(ModelRunner):
 
     def before_execute(self):
         description = self.describe_node()
-        dbt.ui.printer.print_start_line(description, self.node_index,
-                                        self.num_nodes)
+        dbt.ui.printer.print_start_line(
+            description, self.node_index, self.num_nodes
+        )
 
     def compile(self, flat_graph):
         return self.node
 
     def print_result_line(self, result):
-        schema_name = self.node.get('schema')
-        dbt.ui.printer.print_seed_result_line(result,
-                                              schema_name,
-                                              self.node_index,
-                                              self.num_nodes)
+        schema_name = self.node.get("schema")
+        dbt.ui.printer.print_seed_result_line(
+            result, schema_name, self.node_index, self.num_nodes
+        )

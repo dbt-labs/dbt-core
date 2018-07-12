@@ -27,17 +27,16 @@ class RunManager(object):
 
         # TODO validate the number of threads
         if not getattr(self.args, "threads", None):
-            self.threads = profile.get('threads', 1)
+            self.threads = profile.get("threads", 1)
         else:
             self.threads = self.args.threads
 
     def deserialize_graph(self):
         logger.info("Loading dependency graph file.")
 
-        base_target_path = self.project['target-path']
+        base_target_path = self.project["target-path"]
         graph_file = os.path.join(
-            base_target_path,
-            dbt.compilation.graph_file_name
+            base_target_path, dbt.compilation.graph_file_name
         )
 
         return dbt.linker.from_file(graph_file)
@@ -50,14 +49,14 @@ class RunManager(object):
     def get_runners(self, Runner, adapter, node_dependency_list):
         all_nodes = dbt.utils.flatten_nodes(node_dependency_list)
 
-        num_nodes = len([
-            n for n in all_nodes if not Runner.is_ephemeral_model(n)
-        ])
+        num_nodes = len(
+            [n for n in all_nodes if not Runner.is_ephemeral_model(n)]
+        )
 
         node_runners = {}
         i = 0
         for node in all_nodes:
-            uid = node.get('unique_id')
+            uid = node.get("unique_id")
             if Runner.is_ephemeral_model(node):
                 runner = Runner(self.project, adapter, node, 0, 0)
             else:
@@ -68,8 +67,8 @@ class RunManager(object):
         return node_runners
 
     def call_runner(self, data):
-        runner = data['runner']
-        flat_graph = data['flat_graph']
+        runner = data["runner"]
+        flat_graph = data["flat_graph"]
 
         if runner.skip:
             return runner.on_skip()
@@ -91,7 +90,7 @@ class RunManager(object):
     def get_relevant_runners(self, node_runners, node_subset):
         runners = []
         for node in node_subset:
-            unique_id = node.get('unique_id')
+            unique_id = node.get("unique_id")
             if unique_id in node_runners:
                 runners.append(node_runners[unique_id])
         return runners
@@ -101,7 +100,7 @@ class RunManager(object):
         adapter = get_adapter(profile)
 
         num_threads = self.threads
-        target_name = self.project.get_target().get('name')
+        target_name = self.project.get_target().get("name")
 
         text = "Concurrency: {} threads (target='{}')"
         concurrency_line = text.format(num_threads, target_name)
@@ -118,18 +117,15 @@ class RunManager(object):
 
             args_list = []
             for runner in runners:
-                args_list.append({
-                    'flat_graph': flat_graph,
-                    'runner': runner
-                })
+                args_list.append({"flat_graph": flat_graph, "runner": runner})
 
             try:
                 for result in pool.imap_unordered(self.call_runner, args_list):
                     if not Runner.is_ephemeral_model(result.node):
                         node_results.append(result)
 
-                    node_id = result.node.get('unique_id')
-                    flat_graph['nodes'][node_id] = result.node
+                    node_id = result.node.get("unique_id")
+                    flat_graph["nodes"][node_id] = result.node
 
                     if result.errored:
                         for dep_node_id in self.get_dependent(linker, node_id):
@@ -145,9 +141,11 @@ class RunManager(object):
                 adapter = get_adapter(profile)
 
                 if not adapter.is_cancelable():
-                    msg = ("The {} adapter does not support query "
-                           "cancellation. Some queries may still be "
-                           "running!".format(adapter.type()))
+                    msg = (
+                        "The {} adapter does not support query "
+                        "cancellation. Some queries may still be "
+                        "running!".format(adapter.type())
+                    )
 
                     yellow = dbt.ui.printer.COLOR_FG_YELLOW
                     dbt.ui.printer.print_timestamped_line(msg, yellow)
@@ -156,8 +154,9 @@ class RunManager(object):
                 for conn_name in adapter.cancel_open_connections(profile):
                     dbt.ui.printer.print_cancel_line(conn_name)
 
-                dbt.ui.printer.print_run_end_messages(node_results,
-                                                      early_exit=True)
+                dbt.ui.printer.print_run_end_messages(
+                    node_results, early_exit=True
+                )
 
                 pool.join()
                 raise
@@ -185,8 +184,10 @@ class RunManager(object):
 
         flat_nodes = dbt.utils.flatten_nodes(dep_list)
         if len(flat_nodes) == 0:
-            logger.info("WARNING: Nothing to do. Try checking your model "
-                        "configs and model specification args")
+            logger.info(
+                "WARNING: Nothing to do. Try checking your model "
+                "configs and model specification args"
+            )
             return []
         elif Runner.print_header:
             stat_line = dbt.ui.printer.get_counts(flat_nodes)

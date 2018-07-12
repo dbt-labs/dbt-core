@@ -9,10 +9,10 @@ import dbt.exceptions
 
 
 adapters = {
-    'postgres': PostgresAdapter,
-    'redshift': RedshiftAdapter,
-    'snowflake': SnowflakeAdapter,
-    'bigquery': BigQueryAdapter
+    "postgres": PostgresAdapter,
+    "redshift": RedshiftAdapter,
+    "snowflake": SnowflakeAdapter,
+    "bigquery": BigQueryAdapter,
 }
 
 
@@ -30,5 +30,5 @@ def get_adapter_by_name(adapter_name):
 
 
 def get_adapter(profile):
-    adapter_type = profile.get('type', None)
+    adapter_type = profile.get("type", None)
     return get_adapter_by_name(adapter_type)

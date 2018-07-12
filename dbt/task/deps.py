@@ -28,12 +28,11 @@ class Package(object):
         self._cached_metadata = None
 
     def __str__(self):
-        version = getattr(self, 'version', None)
+        version = getattr(self, "version", None)
         if not version:
             return self.name
-        version_str = version[0] \
-            if len(version) == 1 else '<multiple versions>'
-        return '{}@{}'.format(self.name, version_str)
+        version_str = version[0] if len(version) == 1 else "<multiple versions>"
+        return "{}@{}".format(self.name, version_str)
 
     @classmethod
     def version_to_list(cls, version):
@@ -41,8 +40,8 @@ class Package(object):
             return []
         if not isinstance(version, (list, basestring)):
             dbt.exceptions.raise_dependency_error(
-                'version must be list or string, got {}'
-                .format(type(version)))
+                "version must be list or string, got {}".format(type(version))
+            )
         if not isinstance(version, list):
             version = [version]
         return version
@@ -54,8 +53,7 @@ class Package(object):
         try:
             self._resolve_version()
         except dbt.exceptions.VersionsNotCompatibleException as e:
-            new_msg = ('Version error for package {}: {}'
-                       .format(self.name, e))
+            new_msg = "Version error for package {}: {}".format(self.name, e)
             six.raise_from(dbt.exceptions.DependencyException(new_msg), e)
 
     def source_type(self):
@@ -81,7 +79,7 @@ class Package(object):
 
     def get_installation_path(self, project):
         dest_dirname = self.get_project_name(project)
-        return os.path.join(project['modules-path'], dest_dirname)
+        return os.path.join(project["modules-path"], dest_dirname)
 
 
 class RegistryPackage(Package):
@@ -92,13 +90,16 @@ class RegistryPackage(Package):
 
     @classmethod
     def _sanitize_version(cls, version):
-        version = [v if isinstance(v, VersionSpecifier)
-                   else VersionSpecifier.from_version_string(v)
-                   for v in cls.version_to_list(version)]
+        version = [
+            v
+            if isinstance(v, VersionSpecifier)
+            else VersionSpecifier.from_version_string(v)
+            for v in cls.version_to_list(version)
+        ]
         return version or [UnboundedVersionSpecifier()]
 
     def source_type(self):
-        return 'hub'
+        return "hub"
 
     @property
     def version(self):
@@ -135,13 +136,15 @@ class RegistryPackage(Package):
         target = dbt.semver.resolve_to_specific_version(range_, available)
         if not target:
             dbt.exceptions.package_version_not_found(
-                self.package, range_, available)
+                self.package, range_, available
+            )
         self.version = target
 
     def _check_version_pinned(self):
         if len(self.version) != 1:
             dbt.exceptions.raise_dependency_error(
-                'Cannot fetch metadata until the version is pinned.')
+                "Cannot fetch metadata until the version is pinned."
+            )
 
     def _fetch_metadata(self, project):
         version_string = self.version_name()
@@ -151,13 +154,13 @@ class RegistryPackage(Package):
         version_string = self.version_name()
         metadata = self.fetch_metadata(project)
 
-        tar_name = '{}.{}.tar.gz'.format(self.package, version_string)
+        tar_name = "{}.{}.tar.gz".format(self.package, version_string)
         tar_path = os.path.realpath(os.path.join(DOWNLOADS_PATH, tar_name))
         dbt.clients.system.make_directory(os.path.dirname(tar_path))
 
-        download_url = metadata.get('downloads').get('tarball')
+        download_url = metadata.get("downloads").get("tarball")
         dbt.clients.system.download(download_url, tar_path)
-        deps_path = project['modules-path']
+        deps_path = project["modules-path"]
         package_name = self.get_project_name(project)
         dbt.clients.system.untar_package(tar_path, deps_path, package_name)
 
@@ -171,10 +174,10 @@ class GitPackage(Package):
 
     @classmethod
     def _sanitize_version(cls, version):
-        return cls.version_to_list(version) or ['master']
+        return cls.version_to_list(version) or ["master"]
 
     def source_type(self):
-        return 'git'
+        return "git"
 
     @property
     def version(self):
@@ -197,8 +200,9 @@ class GitPackage(Package):
         requested = set(self.version)
         if len(requested) != 1:
             dbt.exceptions.raise_dependency_error(
-                'git dependencies should contain exactly one version. '
-                '{} contains: {}'.format(self.git, requested))
+                "git dependencies should contain exactly one version. "
+                "{} contains: {}".format(self.git, requested)
+            )
         self.version = requested.pop()
 
     def _checkout(self, project):
@@ -208,10 +212,14 @@ class GitPackage(Package):
         the path to the checked out directory."""
         if len(self.version) != 1:
             dbt.exceptions.raise_dependency_error(
-                'Cannot checkout repository until the version is pinned.')
+                "Cannot checkout repository until the version is pinned."
+            )
         dir_ = dbt.clients.git.clone_and_checkout(
-            self.git, DOWNLOADS_PATH, branch=self.version[0],
-            dirname=self._checkout_name)
+            self.git,
+            DOWNLOADS_PATH,
+            branch=self.version[0],
+            dirname=self._checkout_name,
+        )
         return os.path.join(DOWNLOADS_PATH, dir_)
 
     def _fetch_metadata(self, project):
@@ -237,25 +245,25 @@ class LocalPackage(Package):
         return LocalPackage(self.local)
 
     def source_type(self):
-        return 'local'
+        return "local"
 
     def version_name(self):
-        return '<local @ {}>'.format(self.local)
+        return "<local @ {}>".format(self.local)
 
     def nice_version_name(self):
         return self.version_name()
 
     def _fetch_metadata(self, project):
         project_file_path = dbt.clients.system.resolve_path_from_base(
-            self.local,
-            project['project-root'])
+            self.local, project["project-root"]
+        )
 
         return dbt.utils.load_project_with_profile(project, project_file_path)
 
     def install(self, project):
         src_path = dbt.clients.system.resolve_path_from_base(
-            self.local,
-            project['project-root'])
+            self.local, project["project-root"]
+        )
 
         dest_path = self.get_installation_path(project)
 
@@ -268,39 +276,45 @@ class LocalPackage(Package):
                 dbt.clients.system.remove_file(dest_path)
 
         if can_create_symlink:
-            logger.debug('  Creating symlink to local dependency.')
+            logger.debug("  Creating symlink to local dependency.")
             dbt.clients.system.make_symlink(src_path, dest_path)
 
         else:
-            logger.debug('  Symlinks are not available on this '
-                         'OS, copying dependency.')
+            logger.debug(
+                "  Symlinks are not available on this "
+                "OS, copying dependency."
+            )
             shutil.copytree(src_path, dest_path)
 
 
 def _parse_package(dict_):
-    only_1_keys = ['package', 'git', 'local']
+    only_1_keys = ["package", "git", "local"]
     specified = [k for k in only_1_keys if dict_.get(k)]
     if len(specified) > 1:
         dbt.exceptions.raise_dependency_error(
-            'Packages should not contain more than one of {}; '
-            'yours has {} of them - {}'
-            .format(only_1_keys, len(specified), specified))
-    if dict_.get('package'):
-        return RegistryPackage(dict_['package'], dict_.get('version'))
-    if dict_.get('git'):
-        if dict_.get('version'):
-            msg = ("Keyword 'version' specified for git package {}.\nDid "
-                   "you mean 'revision'?".format(dict_.get('git')))
+            "Packages should not contain more than one of {}; "
+            "yours has {} of them - {}".format(
+                only_1_keys, len(specified), specified
+            )
+        )
+    if dict_.get("package"):
+        return RegistryPackage(dict_["package"], dict_.get("version"))
+    if dict_.get("git"):
+        if dict_.get("version"):
+            msg = (
+                "Keyword 'version' specified for git package {}.\nDid "
+                "you mean 'revision'?".format(dict_.get("git"))
+            )
             dbt.exceptions.raise_dependency_error(msg)
-        return GitPackage(dict_['git'], dict_.get('revision'))
-    if dict_.get('local'):
-        return LocalPackage(dict_['local'])
+        return GitPackage(dict_["git"], dict_.get("revision"))
+    if dict_.get("local"):
+        return LocalPackage(dict_["local"])
     dbt.exceptions.raise_dependency_error(
-        'Malformed package definition. Must contain package, git, or local.')
+        "Malformed package definition. Must contain package, git, or local."
+    )
 
 
 class PackageListing(AttrDict):
-
     def incorporate(self, package):
         if not isinstance(package, Package):
             package = _parse_package(package)
@@ -314,8 +328,10 @@ class PackageListing(AttrDict):
         to_return = cls({})
         if not isinstance(parsed_yaml, list):
             dbt.exceptions.raise_dependency_error(
-                'Package definitions must be a list, got: {}'
-                .format(type(parsed_yaml)))
+                "Package definitions must be a list, got: {}".format(
+                    type(parsed_yaml)
+                )
+            )
         for package in parsed_yaml:
             to_return.incorporate(package)
         return to_return
@@ -327,20 +343,20 @@ class PackageListing(AttrDict):
 
 
 def _split_at_branch(repo_spec):
-    parts = repo_spec.split('@')
+    parts = repo_spec.split("@")
     error = RuntimeError(
         "Invalid dep specified: '{}' -- not a repo we can clone".format(
             repo_spec
         )
     )
     repo = None
-    if repo_spec.startswith('git@'):
+    if repo_spec.startswith("git@"):
         if len(parts) == 1:
             raise error
         if len(parts) == 2:
             repo, branch = repo_spec, None
         elif len(parts) == 3:
-            repo, branch = '@'.join(parts[:2]), parts[2]
+            repo, branch = "@".join(parts[:2]), parts[2]
     else:
         if len(parts) == 1:
             repo, branch = parts[0], None
@@ -353,22 +369,19 @@ def _split_at_branch(repo_spec):
 
 def _convert_repo(repo_spec):
     repo, branch = _split_at_branch(repo_spec)
-    return {
-        'git': repo,
-        'revision': branch,
-    }
+    return {"git": repo, "revision": branch}
 
 
 def _read_packages(project_yaml):
-    packages = project_yaml.get('packages', [])
-    repos = project_yaml.get('repositories', [])
+    packages = project_yaml.get("packages", [])
+    repos = project_yaml.get("repositories", [])
     if repos:
         bad_packages = [_convert_repo(r) for r in repos]
         packages += bad_packages
 
         fixed_packages = {"packages": bad_packages}
         recommendation = yaml.dump(fixed_packages, default_flow_style=False)
-        dbt.deprecations.warn('repositories', recommendation=recommendation)
+        dbt.deprecations.warn("repositories", recommendation=recommendation)
     return packages
 
 
@@ -379,30 +392,34 @@ class DepsTask(BaseTask):
             project_name = package.get_project_name(self.project)
             if project_name in seen:
                 dbt.exceptions.raise_dependency_error(
-                    'Found duplicate project {}. This occurs when a dependency'
-                    ' has the same project name as some other dependency.'
-                    .format(project_name))
+                    "Found duplicate project {}. This occurs when a dependency"
+                    " has the same project name as some other dependency.".format(
+                        project_name
+                    )
+                )
             seen.add(project_name)
 
     def track_package_install(self, package_name, source_type, version):
-        version = 'local' if source_type == 'local' else version
+        version = "local" if source_type == "local" else version
 
         h_package_name = dbt.utils.md5(package_name)
         h_version = dbt.utils.md5(version)
 
-        dbt.tracking.track_package_install({
-            "name": h_package_name,
-            "source": source_type,
-            "version": h_version
-        })
+        dbt.tracking.track_package_install(
+            {
+                "name": h_package_name,
+                "source": source_type,
+                "version": h_version,
+            }
+        )
 
     def run(self):
-        dbt.clients.system.make_directory(self.project['modules-path'])
+        dbt.clients.system.make_directory(self.project["modules-path"])
         dbt.clients.system.make_directory(DOWNLOADS_PATH)
 
         packages = _read_packages(self.project)
         if not packages:
-            logger.info('Warning: No packages were found in packages.yml')
+            logger.info("Warning: No packages were found in packages.yml")
             return
 
         pending_deps = PackageListing.create(packages)
@@ -420,11 +437,12 @@ class DepsTask(BaseTask):
         self._check_for_duplicate_project_names(final_deps)
 
         for _, package in final_deps.items():
-            logger.info('Installing %s', package)
+            logger.info("Installing %s", package)
             package.install(self.project)
-            logger.info('  Installed from %s\n', package.nice_version_name())
+            logger.info("  Installed from %s\n", package.nice_version_name())
 
             self.track_package_install(
                 package_name=package.name,
                 source_type=package.source_type(),
-                version=package.version_name())
+                version=package.version_name(),
+            )
