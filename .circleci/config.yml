@@ -10,7 +10,7 @@ jobs:
           POSTGRES_DB: "dbt"
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python-dev python3-dev
+      - run: apt-get update && apt-get install -y python-dev python3-dev postgres
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run: &setupdb
@@ -26,7 +26,7 @@ jobs:
     docker: *py36
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python3-dev
+      - run: apt-get update && apt-get install -y python3-dev postgres
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run: *setupdb
@@ -37,7 +37,7 @@ jobs:
     docker: *py36
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python3-dev
+      - run: apt-get update && apt-get install -y python3-dev postgres
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run:
@@ -47,7 +47,7 @@ jobs:
     docker: *py36
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python3-dev
+      - run: apt-get update && apt-get install -y python3-dev postgres
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run:
@@ -57,7 +57,7 @@ jobs:
     docker: *py36
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python3-dev
+      - run: apt-get update && apt-get install -y python3-dev postgres
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run:
@@ -70,7 +70,7 @@ jobs:
         environment: *pgenv
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python-dev
+      - run: apt-get update && apt-get install -y python-dev postgres
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run: *setupdb
@@ -81,7 +81,7 @@ jobs:
     docker: *py27
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python-dev
+      - run: apt-get update && apt-get install -y python-dev postgres
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run:
@@ -91,7 +91,7 @@ jobs:
     docker: *py27
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python-dev
+      - run: apt-get update && apt-get install -y python-dev postgres
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run:
@@ -101,7 +101,7 @@ jobs:
     docker: *py27
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python-dev
+      - run: apt-get update && apt-get install -y python-dev postgres
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run:
