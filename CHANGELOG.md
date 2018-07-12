@@ -3,6 +3,10 @@
 ### Changes
 
  - Improve consistency of BigQuery list_relations, create shortcut for most materializations ([#835](https://github.com/fishtown-analytics/dbt/pull/835))
+ - Support external BigQuery relations ([#828](https://github.com/fishtown-analytics/dbt/pull/828))
+ - Added tox environments that have the user specify what tests should be run ([#837](https://github.com/fishtown-analytics/dbt/pull/837))
+ - Set the TCP keepalive on redshift ([#826](https://github.com/fishtown-analytics/dbt/pull/826))
+>>>>>>> 40afdf4a76afa67d6509b1ffa1646b746dcb5370
  - Fix the error handling for profiles.yml validation ([#820](https://github.com/fishtown-analytics/dbt/pull/820))
  - Make the `--threads` parameter actually change the number of threads used ([#819](https://github.com/fishtown-analytics/dbt/pull/819))
  - Use Mapping instead of dict as the base class for APIObject ([#756](https://github.com/fishtown-analytics/dbt/pull/756))

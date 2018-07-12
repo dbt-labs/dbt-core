@@ -55,9 +55,9 @@ class BigQueryAdapter(PostgresAdapter):
              'https://www.googleapis.com/auth/drive')
 
     RELATION_TYPES = {
-        'TABLE': 'table',
-        'VIEW': 'view',
-        'EXTERNAL': 'external'
+        'TABLE': BigQueryRelation.Table,
+        'VIEW': BigQueryRelation.View,
+        'EXTERNAL': BigQueryRelation.External
     }
 
     QUERY_TIMEOUT = 300
