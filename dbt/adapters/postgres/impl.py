@@ -217,4 +217,3 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
     @classmethod
     def convert_time_type(cls, agate_table, col_idx):
         return "time"
-
