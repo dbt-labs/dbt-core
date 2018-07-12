@@ -1,9 +1,9 @@
 create table {schema}.seed (
-	id INTEGER,
-	first_name VARCHAR(11),
-	email VARCHAR(31),
-	ip_address VARCHAR(15),
-	updated_at TIMESTAMP WITHOUT TIME ZONE
+	"id" INTEGER,
+	"first_name" VARCHAR(11),
+	"email" VARCHAR(31),
+	"ip_address" VARCHAR(15),
+	"updated_at" TIMESTAMP WITHOUT TIME ZONE
 );
 
 
@@ -14,14 +14,14 @@ VALUES
 
 create table {schema}.seed_config_expected_1 as (
 
-    select *, 'default'::text as c1, 'default'::text as c2, 'was true'::text as some_bool from {schema}.seed
+    select *, 'default'::text as "c1", 'default'::text as "c2", 'was true'::text as "some_bool" from {schema}.seed
 
 );
 
 
 create table {schema}.seed_summary (
-    year timestamp without time zone,
-    count bigint
+    "year" timestamp without time zone,
+    "count" bigint
 );
 
 INSERT INTO {schema}.seed_summary
@@ -29,3 +29,7 @@ INSERT INTO {schema}.seed_summary
 VALUES
     ('2008-01-01 00:00:00',6);
 
+
+create view {schema}.test_view as (
+    select 1 as "id"
+);
