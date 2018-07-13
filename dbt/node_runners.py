@@ -500,10 +500,6 @@ class SeedRunner(ModelRunner):
         schema_name = self.node.get('schema')
         return "seed file {}.{}".format(schema_name, self.node['alias'])
 
-    @classmethod
-    def before_run(cls, project, adapter, flat_graph):
-        cls.create_schemas(project, adapter, flat_graph)
-
     def before_execute(self):
         description = self.describe_node()
         dbt.ui.printer.print_start_line(description, self.node_index,

@@ -34,6 +34,7 @@ class TestBigqueryPrePostRunHooks(DBTIntegrationTest):
     def project_config(self):
         return {
             'macro-paths': ['test/integration/014_hook_tests/macros'],
+            'data-paths': ['test/integration/014_hook_tests/data'],
 
             # The create and drop table statements here validate that these hooks run
             # in the same order that they are defined. Drop before create is an error.
@@ -80,6 +81,16 @@ class TestBigqueryPrePostRunHooks(DBTIntegrationTest):
     @attr(type='bigquery')
     def test_bigquery_pre_and_post_run_hooks(self):
         self.run_dbt(['run'])
+
+        self.check_hooks('start')
+        self.check_hooks('end')
+
+        self.assertTableDoesNotExist("start_hook_order_test")
+        self.assertTableDoesNotExist("end_hook_order_test")
+
+    @attr(type='bigquery')
+    def test_pre_and_post_seed_hooks(self):
+        self.run_dbt(['seed'])
 
         self.check_hooks('start')
         self.check_hooks('end')

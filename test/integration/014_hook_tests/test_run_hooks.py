@@ -31,6 +31,7 @@ class TestPrePostRunHooks(DBTIntegrationTest):
     def project_config(self):
         return {
             'macro-paths': ['test/integration/014_hook_tests/macros'],
+            'data-paths': ['test/integration/014_hook_tests/data'],
 
             # The create and drop table statements here validate that these hooks run
             # in the same order that they are defined. Drop before create is an error.
@@ -88,3 +89,14 @@ class TestPrePostRunHooks(DBTIntegrationTest):
 
         self.assertTableDoesNotExist("start_hook_order_test")
         self.assertTableDoesNotExist("end_hook_order_test")
+
+    @attr(type='postgres')
+    def test_pre_and_post_seed_hooks(self):
+        self.run_dbt(['seed'])
+
+        self.check_hooks('start')
+        self.check_hooks('end')
+
+        self.assertTableDoesNotExist("start_hook_order_test")
+        self.assertTableDoesNotExist("end_hook_order_test")
+
