@@ -5,7 +5,7 @@ PyYAML>=3.11
 psycopg2==2.7.5
 sqlparse==0.2.3
 networkx==1.11
-snowplow-tracker==0.7.2
+minimal-snowplow-tracker==0.0.1
 celery==3.1.23
 snowflake-connector-python>=1.4.9
 colorama==0.3.9
