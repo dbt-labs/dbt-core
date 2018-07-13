@@ -70,7 +70,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'path': 'materializations/helpers.sql',
                 'original_file_path': 'materializations/helpers.sql',
                 'package_name': 'dbt',
-                'root_path': '/usr/src/app/dbt/include/global_project',
+                'root_path': os.path.join(os.getcwd(), 'dbt/include/global_project'),
                 'name': 'column_list',
                 'unique_id': 'macro.dbt.column_list',
                 'tags': [],
@@ -101,7 +101,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             'nodes': {
                 'model.test.model': {
                     'name': 'model',
-                    'root_path': '/usr/src/app',
+                    'root_path': os.getcwd(),
                     'resource_type': 'model',
                     'path': 'model.sql',
                     'original_file_path': model_sql_path,
@@ -126,7 +126,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'seed.test.seed': {
                     'path': 'seed.csv',
                     'name': 'seed',
-                    'root_path': '/usr/src/app',
+                    'root_path': os.getcwd(),
                     'resource_type': 'seed',
                     'raw_sql': '-- csv --',
                     'package_name': 'test',
