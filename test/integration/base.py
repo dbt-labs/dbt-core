@@ -2,6 +2,7 @@ import unittest
 import dbt.main as dbt
 import os, shutil
 import yaml
+import random
 import time
 import json
 
@@ -30,7 +31,7 @@ class FakeArgs(object):
 
 class DBTIntegrationTest(unittest.TestCase):
 
-    prefix = "test{}".format(int(time.time()))
+    prefix = "test{}{:04}".format(int(time.time()), random.randint(0, 9999))
 
     def postgres_profile(self):
         return {
