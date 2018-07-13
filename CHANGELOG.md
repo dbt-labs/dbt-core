@@ -2,6 +2,7 @@
 
 ### Changes
 
+ - Add pre/post hook support for bigquery ([#836](https://github.com/fishtown-analytics/dbt/pull/836))
  - Fix the error handling for profiles.yml validation ([#820](https://github.com/fishtown-analytics/dbt/pull/820))
  - Make the `--threads` parameter actually change the number of threads used ([#819](https://github.com/fishtown-analytics/dbt/pull/819))
  - Use Mapping instead of dict as the base class for APIObject ([#756](https://github.com/fishtown-analytics/dbt/pull/756))
