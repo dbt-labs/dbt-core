@@ -29,7 +29,8 @@ class TestSchemaTests(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test_schema_tests(self):
-        self.run_dbt()
+        results = self.run_dbt()
+        self.assertEqual(len(results), 4)
         test_results = self.run_schema_validations()
 
         for result in test_results:
@@ -71,7 +72,8 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
     @attr(type='postgres')
     def test_malformed_schema_test_wont_brick_run(self):
         # dbt run should work (Despite broken schema test)
-        self.run_dbt()
+        results = self.run_dbt()
+        self.assertEqual(len(results), 1)
 
         ran_tests = self.run_schema_validations()
         self.assertEqual(len(ran_tests), 2)
@@ -114,7 +116,9 @@ class TestCustomSchemaTests(DBTIntegrationTest):
     @attr(type='postgres')
     def test_schema_tests(self):
         self.run_dbt(["deps"])
-        self.run_dbt()
+        results = self.run_dbt()
+        self.assertEqual(len(results), 4)
+
         test_results = self.run_schema_validations()
 
         expected_failures = ['unique', 'every_value_is_blue']

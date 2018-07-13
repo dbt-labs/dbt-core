@@ -17,7 +17,8 @@ class TestGraphSelection(DBTIntegrationTest):
         self.use_default_project()
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
-        self.run_dbt(['run', '--models', 'users'])
+        results = self.run_dbt(['run', '--models', 'users'])
+        self.assertEqual(len(results), 1)
 
         self.assertTablesEqual("seed", "users")
         created_models = self.get_models_in_schema()
@@ -31,7 +32,8 @@ class TestGraphSelection(DBTIntegrationTest):
         self.use_default_project()
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
-        self.run_dbt(['run', '--models', 'users'])
+        results = self.run_dbt(['run', '--models', 'users'])
+        self.assertEqual(len(results),  1)
 
         self.assertTablesEqual("SEED", "users")
         created_models = self.get_models_in_schema()
@@ -46,7 +48,8 @@ class TestGraphSelection(DBTIntegrationTest):
         self.use_default_project()
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
-        self.run_dbt(['run', '--models', 'users+'])
+        results = self.run_dbt(['run', '--models', 'users+'])
+        self.assertEqual(len(results),  2)
 
         self.assertTablesEqual("seed", "users")
         self.assertTablesEqual("summary_expected", "users_rollup")
@@ -60,7 +63,8 @@ class TestGraphSelection(DBTIntegrationTest):
         self.use_default_project()
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
-        self.run_dbt(['run', '--models', 'users+'])
+        results = self.run_dbt(['run', '--models', 'users+'])
+        self.assertEqual(len(results),  2)
 
         self.assertTablesEqual("SEED", "users")
         self.assertTablesEqual("SUMMARY_EXPECTED", "users_rollup")
@@ -75,7 +79,8 @@ class TestGraphSelection(DBTIntegrationTest):
         self.use_default_project()
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
-        self.run_dbt(['run', '--models', '+users_rollup'])
+        results = self.run_dbt(['run', '--models', '+users_rollup'])
+        self.assertEqual(len(results),  2)
 
         self.assertTablesEqual("seed", "users")
         self.assertTablesEqual("summary_expected", "users_rollup")
@@ -89,7 +94,8 @@ class TestGraphSelection(DBTIntegrationTest):
         self.use_default_project()
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
-        self.run_dbt(['run', '--models', '+users_rollup'])
+        results = self.run_dbt(['run', '--models', '+users_rollup'])
+        self.assertEqual(len(results),  2)
 
         self.assertTablesEqual("SEED", "users")
         self.assertTablesEqual("SUMMARY_EXPECTED", "users_rollup")
@@ -104,7 +110,10 @@ class TestGraphSelection(DBTIntegrationTest):
         self.use_default_project()
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
-        self.run_dbt(['run', '--models', '+users_rollup', '--exclude', 'users_rollup'])
+        results = self.run_dbt(
+            ['run', '--models', '+users_rollup', '--exclude', 'users_rollup']
+        )
+        self.assertEqual(len(results),  1)
 
         self.assertTablesEqual("seed", "users")
         created_models = self.get_models_in_schema()
@@ -118,7 +127,10 @@ class TestGraphSelection(DBTIntegrationTest):
         self.use_default_project()
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
-        self.run_dbt(['run', '--models', '+users_rollup', '--exclude', 'users_rollup'])
+        results = self.run_dbt(
+            ['run', '--models', '+users_rollup', '--exclude', 'users_rollup']
+        )
+        self.assertEqual(len(results),  1)
 
         self.assertTablesEqual("SEED", "users")
         created_models = self.get_models_in_schema()
