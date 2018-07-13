@@ -18,6 +18,7 @@ class TestAdapterDDL(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test_sort_and_dist_keys_are_nops_on_postgres(self):
-        self.run_dbt(['run'])
+        results = self.run_dbt(['run'])
+        self.assertEqual(len(results), 1)
 
         self.assertTablesEqual("seed","materialized")
