@@ -113,11 +113,27 @@ workflows:
   test-everything:
     jobs:
       - unit
-      - integration-snowflake-py36
-      - integration-snowflake-py27
-      - integration-postgres-py36
-      - integration-postgres-py27
-      - integration-redshift-py36
-      - integration-redshift-py27
-      - integration-bigquery-py36
-      - integration-bigquery-py27
+      - integration-postgres-py36:
+          requires:
+            - unit
+      - integration-postgres-py27:
+          requires:
+            - unit
+      - integration-redshift-py27:
+          requires:
+            - integration-postgres-py27
+      - integration-bigquery-py27:
+          requires:
+            - integration-postgres-py27
+      - integration-snowflake-py27:
+          requires:
+            - integration-postgres-py27
+      - integration-redshift-py36:
+          requires:
+            - integration-postgres-py36
+      - integration-bigquery-py36:
+          requires:
+            - integration-postgres-py36
+      - integration-snowflake-py36:
+          requires:
+            - integration-postgres-py36
