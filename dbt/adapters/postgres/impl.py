@@ -15,6 +15,8 @@ GET_CATALOG_RESULT_KEY = 'catalog'  # defined in get_catalog() macro
 
 class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
 
+    DEFAULT_TCP_KEEPALIVE = 0  # 0 means to use the default value
+
     @classmethod
     @contextmanager
     def exception_handler(cls, profile, sql, model_name=None,
@@ -67,6 +69,13 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
 
         base_credentials = connection.get('credentials', {})
         credentials = cls.get_credentials(base_credentials.copy())
+        kwargs = {}
+        keepalives_idle = credentials.get('keepalives_idle',
+                                          cls.DEFAULT_TCP_KEEPALIVE)
+        # we don't want to pass 0 along to connect() as postgres will try to
+        # call an invalid setsockopt() call (contrary to the docs).
+        if keepalives_idle:
+            kwargs['keepalives_idle'] = keepalives_idle
 
         try:
             handle = psycopg2.connect(
@@ -75,7 +84,8 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
                 host=credentials.get('host'),
                 password=credentials.get('pass'),
                 port=credentials.get('port'),
-                connect_timeout=10)
+                connect_timeout=10,
+                **kwargs)
 
             result['handle'] = handle
             result['state'] = 'open'

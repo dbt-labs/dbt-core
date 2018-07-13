@@ -9,6 +9,9 @@ drop_lock = multiprocessing.Lock()
 
 
 class RedshiftAdapter(PostgresAdapter):
+
+    DEFAULT_TCP_KEEPALIVE = 240
+
     @classmethod
     def type(cls):
         return 'redshift'
