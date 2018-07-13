@@ -54,6 +54,12 @@ class BigQueryAdapter(PostgresAdapter):
              'https://www.googleapis.com/auth/cloud-platform',
              'https://www.googleapis.com/auth/drive')
 
+    RELATION_TYPES = {
+        'TABLE': BigQueryRelation.Table,
+        'VIEW': BigQueryRelation.View,
+        'EXTERNAL': BigQueryRelation.External
+    }
+
     QUERY_TIMEOUT = 300
 
     @classmethod
@@ -182,24 +188,37 @@ class BigQueryAdapter(PostgresAdapter):
 
         bigquery_dataset = cls.get_dataset(
             profile, project_cfg, schema, model_name)
-        all_tables = client.list_tables(bigquery_dataset)
 
-        relation_types = {
-            'TABLE': 'table',
-            'VIEW': 'view',
-            'EXTERNAL': 'external'
-        }
+        all_tables = client.list_tables(
+            bigquery_dataset,
+            # BigQuery paginates tables by alphabetizing them, and using
+            # the name of the last table on a page as the key for the
+            # next page. If that key table gets dropped before we run
+            # list_relations, then this will 404. So, we avoid this
+            # situation by making the page size sufficiently large.
+            # see: https://github.com/fishtown-analytics/dbt/issues/726
+            # TODO: cache the list of relations up front, and then we
+            #       won't need to do this
+            max_results=100000)
 
-        return [cls.Relation.create(
-            project=credentials.get('project'),
-            schema=schema,
-            identifier=table.table_id,
-            quote_policy={
-                'schema': True,
-                'identifier': True
-            },
-            type=relation_types.get(table.table_type))
-                for table in all_tables]
+        return [cls.bq_table_to_relation(table) for table in all_tables]
+
+    @classmethod
+    def get_relation(cls, profile, project_cfg, schema=None, identifier=None,
+                     relations_list=None, model_name=None):
+        if schema is None and relations_list is None:
+            raise dbt.exceptions.RuntimeException(
+                'get_relation needs either a schema to query, or a list '
+                'of relations to use')
+
+        if relations_list is None and identifier is not None:
+            table = cls.get_bq_table(profile, project_cfg, schema, identifier)
+
+            return cls.bq_table_to_relation(table)
+
+        return super(BigQueryAdapter, cls).get_relation(
+            profile, project_cfg, schema, identifier, relations_list,
+            model_name)
 
     @classmethod
     def drop_relation(cls, profile, project_cfg, relation, model_name=None):
@@ -467,6 +486,37 @@ class BigQueryAdapter(PostgresAdapter):
 
         dataset_ref = client.dataset(dataset_name)
         return google.cloud.bigquery.Dataset(dataset_ref)
+
+    @classmethod
+    def bq_table_to_relation(cls, bq_table):
+        if bq_table is None:
+            return None
+
+        return cls.Relation.create(
+            project=bq_table.project,
+            schema=bq_table.dataset_id,
+            identifier=bq_table.table_id,
+            quote_policy={
+                'schema': True,
+                'identifier': True
+            },
+            type=cls.RELATION_TYPES.get(bq_table.table_type))
+
+    @classmethod
+    def get_bq_table(cls, profile, project_cfg, dataset_name, identifier,
+                     model_name=None):
+        conn = cls.get_connection(profile, model_name)
+        client = conn.get('handle')
+
+        dataset = cls.get_dataset(
+            profile, project_cfg, dataset_name, model_name)
+
+        table_ref = dataset.table(identifier)
+
+        try:
+            return client.get_table(table_ref)
+        except google.cloud.exceptions.NotFound:
+            return None
 
     @classmethod
     def warning_on_hooks(cls, hook_type):
