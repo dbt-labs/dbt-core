@@ -119,6 +119,7 @@
 
       where table_schema != 'information_schema'
         and table_schema not like 'pg_%'
+      order by "column_index"
   {%- endcall -%}
   {# There's no point in returning anything as the jinja macro stuff calls #}
   {# str() on all returns. To get the results, you'll need to use #}
@@ -126,7 +127,6 @@
 {%- endmacro %}
 
 
-{# The only difference between snowflake and postgres is casing... #}
 {% macro snowflake__get_catalog() -%}
   {%- call statement('catalog', fetch_result=True) -%}
     with tables as (
