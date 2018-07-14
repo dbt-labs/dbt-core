@@ -405,6 +405,25 @@ class DBTIntegrationTest(unittest.TestCase):
                 print(e)
                 raise e
 
+    def get_many_table_columns(self, tables, schema):
+        sql = """
+                select table_name, column_name, data_type, character_maximum_length
+                from information_schema.columns
+                where table_schema ilike '{schema_filter}'
+                  and ({table_filter})
+                order by column_name asc"""
+
+
+        table_filters = ["table_name ilike '{}'".format(table.replace('"', '')) for table in tables]
+        table_filters_s = " OR ".join(table_filters)
+
+        sql = sql.format(
+                schema_filter=schema,
+                table_filter=table_filters_s)
+
+        columns = self.run_sql(sql, fetch='all')
+        return sorted(columns, key=lambda x: "{}.{}".format(x[0], x[1]))
+
     def get_table_columns(self, table, schema=None):
         schema = self.unique_schema() if schema is None else schema
         columns = self.adapter.get_columns_in_table(
@@ -415,6 +434,17 @@ class DBTIntegrationTest(unittest.TestCase):
         )
         return sorted(((c.name, c.dtype, c.char_size) for c in columns),
                       key=lambda x: x[0])
+
+    def get_table_columns_as_dict(self, tables, schema=None):
+        col_matrix = self.get_many_table_columns(tables, schema)
+        res = {}
+        for row in col_matrix:
+            table_name = row[0]
+            col_def = row[1:]
+            if table_name not in res:
+                res[table_name] = []
+            res[table_name].append(col_def)
+        return res
 
     def get_models_in_schema(self, schema=None):
         schema = self.unique_schema() if schema is None else schema
@@ -433,8 +463,9 @@ class DBTIntegrationTest(unittest.TestCase):
 
         return {model_name: materialization for (model_name, materialization) in result}
 
-    def _assertTablesEqualSql(self, table_a_schema, table_a, table_b_schema, table_b):
-        columns = self.get_table_columns(table_a, table_a_schema)
+    def _assertTablesEqualSql(self, table_a_schema, table_a, table_b_schema, table_b, columns=None):
+        if columns is None:
+            columns = self.get_table_columns(table_a, table_a_schema)
 
         if self.adapter_type == 'snowflake':
             columns_csv = ", ".join(['"{}"'.format(record[0]) for record in columns])
@@ -487,6 +518,39 @@ class DBTIntegrationTest(unittest.TestCase):
             sql
         )
 
+    def assertManyTablesEqual(self, *args):
+        schema = self.unique_schema()
+
+        all_tables = []
+        for table_equivalencies in args:
+            all_tables += list(table_equivalencies)
+
+        all_cols = self.get_table_columns_as_dict(all_tables, schema)
+
+        for table_equivalencies in args:
+            first_table = table_equivalencies[0]
+            base_result = all_cols[first_table]
+
+            for other_table in table_equivalencies[1:]:
+                other_result = all_cols[other_table]
+
+                self.assertEquals(base_result, other_result)
+
+                self.assertTableRowCountsEqual(first_table, other_table)
+                sql = self._assertTablesEqualSql(schema, first_table,
+                                                 schema, other_table,
+                                                 columns=base_result)
+                result = self.run_sql(sql, fetch='one')
+
+                self.assertEquals(
+                    result[0],
+                    0,
+                    sql
+                )
+
+                self.assertTrue(len(base_result) > 0)
+                self.assertTrue(len(other_result) > 0)
+
     def assertTableRowCountsEqual(self, table_a, table_b,
                                   table_a_schema=None, table_b_schema=None):
         table_a_schema = self.unique_schema() \
@@ -495,23 +559,32 @@ class DBTIntegrationTest(unittest.TestCase):
         table_b_schema = self.unique_schema() \
                          if table_b_schema is None else table_b_schema
 
-        table_a_result = self.run_sql(
-            'SELECT COUNT(*) FROM {}.{}'
-            .format(self.adapter.quote(table_a_schema),
-                    self.adapter.quote(table_a)), fetch='one')
-        table_b_result = self.run_sql(
-            'SELECT COUNT(*) FROM {}.{}'
-            .format(self.adapter.quote(table_b_schema),
-                    self.adapter.quote(table_b)), fetch='one')
+        cmp_query = """
+            with table_a as (
 
-        self.assertEquals(
-            table_a_result[0],
-            table_b_result[0],
-            "Row count of table {} ({}) doesn't match row count of table {} ({})".format(
+                select count(*) as num_rows from {}.{}
+
+            ), table_b as (
+
+                select count(*) as num_rows from {}.{}
+
+            )
+
+            select table_a.num_rows - table_b.num_rows as difference
+            from table_a, table_b
+
+        """.format(self.adapter.quote(table_a_schema),
+                   self.adapter.quote(table_a),
+                   self.adapter.quote(table_b_schema),
+                   self.adapter.quote(table_b))
+
+
+        res = self.run_sql(cmp_query, fetch='one')
+
+        self.assertEquals(int(res[0]), 0, "Row count of table {} doesn't match row count of table {}. ({} rows different)".format(
                 table_a,
-                table_a_result[0],
                 table_b,
-                table_b_result[0]
+                res[0]
             )
         )
 
