@@ -83,8 +83,10 @@ def handle_and_check(args):
     if dbt.config.colorize_output(profile_config):
         dbt.ui.printer.use_colors()
 
-    task, res = run_from_args(parsed)
-    dbt.tracking.flush()
+    try:
+        task, res = run_from_args(parsed)
+    finally:
+        dbt.tracking.flush()
 
     success = task.interpret_results(res)
 
