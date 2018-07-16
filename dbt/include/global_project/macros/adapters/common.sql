@@ -137,7 +137,7 @@
 
       from information_schema.tables
 
-      union
+      union all
 
       select
         table_schema as "table_schema",

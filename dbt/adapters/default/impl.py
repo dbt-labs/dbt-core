@@ -815,6 +815,9 @@ class DefaultAdapter(object):
         results = cls.run_operation(profile, project_cfg, manifest,
                                     GET_CATALOG_OPERATION_NAME,
                                     GET_CATALOG_RESULT_KEY)
-        schemas = cls.get_existing_schemas(profile, project_cfg)
+        schemas = list({
+            node.to_dict()['schema']
+            for node in manifest.nodes.values()
+        })
         results = results.table.where(lambda r: r['table_schema'] in schemas)
         return results
