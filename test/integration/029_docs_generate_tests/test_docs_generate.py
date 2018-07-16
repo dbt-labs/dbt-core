@@ -16,8 +16,8 @@ class TestDocsGenerate(DBTIntegrationTest):
 
     @staticmethod
     def dir(path):
-        return os.path.join('test', 'integration', '029_docs_generate_tests',
-                            path)
+        return os.path.normpath(
+            os.path.join('test/integration/029_docs_generate_tests', path))
 
     @property
     def models(self):
@@ -137,8 +137,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'resource_type': 'seed',
                     'raw_sql': '-- csv --',
                     'package_name': 'test',
-                    'original_file_path': self.dir(os.path.join('seed',
-                                                                'seed.csv')),
+                    'original_file_path': self.dir('seed/seed.csv'),
                     'refs': [],
                     'depends_on': {'nodes': [], 'macros': []},
                     'unique_id': 'seed.test.seed',
@@ -226,7 +225,6 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
         }
         self.verify_catalog(expected_catalog)
-        model_sql_path = self.dir('models/model.sql')
         self.verify_manifest()
 
     @attr(type='snowflake')
