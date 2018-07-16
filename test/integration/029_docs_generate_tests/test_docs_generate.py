@@ -6,6 +6,9 @@ from test.integration.base import DBTIntegrationTest
 
 
 class TestDocsGenerate(DBTIntegrationTest):
+    def setUp(self):
+        super(TestDocsGenerate,self).setUp()
+        self.maxDiff = None
 
     @property
     def schema(self):
