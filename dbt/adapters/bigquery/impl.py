@@ -369,7 +369,7 @@ class BigQueryAdapter(PostgresAdapter):
         query_job = client.query(sql, job_config)
 
         # this blocks until the query has completed
-        with cls.exception_handler(profile, 'create dataset', model_name):
+        with cls.exception_handler(profile, sql, model_name):
             iterator = query_job.result()
 
         if fetch:
@@ -392,10 +392,15 @@ class BigQueryAdapter(PostgresAdapter):
         rows = [dict(row.items()) for row in resp]
         return dbt.clients.agate_helper.table_from_data(rows, column_names)
 
+    # BigQuery doesn't support BEGIN/COMMIT, so stub these out.
+
     @classmethod
     def add_begin_query(cls, profile, name):
-        raise dbt.exceptions.NotImplementedException(
-            '`add_begin_query` is not implemented for this adapter!')
+        pass
+
+    @classmethod
+    def add_commit_query(cls, profile, name):
+        pass
 
     @classmethod
     def create_schema(cls, profile, project_cfg, schema, model_name=None):

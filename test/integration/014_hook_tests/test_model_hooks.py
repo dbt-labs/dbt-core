@@ -64,8 +64,8 @@ MODEL_POST_HOOK = """
 
 
 class TestPrePostModelHooks(DBTIntegrationTest):
-
     def setUp(self):
+        self.adapter_type = 'bigquery'
         DBTIntegrationTest.setUp(self)
 
         self.run_sql_file("test/integration/014_hook_tests/seed_model.sql")
@@ -178,6 +178,8 @@ class TestPrePostModelHooksOnSeeds(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test_hooks_on_seeds(self):
-        self.run_dbt(['seed'])
-        self.run_dbt(['test'])
+        res = self.run_dbt(['seed'])
+        self.assertEqual(len(res), 1, 'Expected exactly one item')
+        res = self.run_dbt(['test'])
+        self.assertEqual(len(res), 1, 'Expected exactly one item')
 
