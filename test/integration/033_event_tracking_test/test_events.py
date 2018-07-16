@@ -493,7 +493,7 @@ class TestEventTrackingUnableToConnect(TestEventTracking):
                         'threads': 4,
                         'host': 'database',
                         'port': 5432,
-                        'user': 'noaccess',
+                        'user': 'BAD',
                         'pass': 'bad_password',
                         'dbname': 'dbt',
                         'schema': self.unique_schema()
