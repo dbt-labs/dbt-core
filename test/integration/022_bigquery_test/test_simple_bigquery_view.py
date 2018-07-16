@@ -30,7 +30,8 @@ class TestSimpleBigQueryRun(DBTIntegrationTest):
         # make sure seed works twice. Full-refresh is a no-op
         self.run_dbt(['seed'])
         self.run_dbt(['seed', '--full-refresh'])
-        self.run_dbt()
+        results = self.run_dbt()
+        self.assertEqual(len(results), 2)
 
         # The 'dupe' model should fail, but all others should pass
         test_results = self.run_dbt(['test'], expect_pass=False)
