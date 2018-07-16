@@ -51,6 +51,8 @@
       {% endif %}
   {% endif %}
 
+  {{ run_hooks(pre_hooks) }}
+
   {#
       Since dbt uses WRITE_TRUNCATE mode for tables, we only need to drop this thing
       if it is not a table. If it _is_ already a table, then we can overwrite it without downtime
@@ -70,5 +72,6 @@
     {% endcall -%}
   {% endif %}
 
+  {{ run_hooks(post_hooks) }}
 
 {% endmaterialization %}

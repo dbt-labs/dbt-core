@@ -2,6 +2,7 @@
 
 ### Changes
 
+ - Add pre/post hook support for bigquery ([#836](https://github.com/fishtown-analytics/dbt/pull/836))
  - Improve consistency of BigQuery list_relations, create shortcut for most materializations ([#835](https://github.com/fishtown-analytics/dbt/pull/835))
  - Support external BigQuery relations ([#828](https://github.com/fishtown-analytics/dbt/pull/828))
  - Added tox environments that have the user specify what tests should be run ([#837](https://github.com/fishtown-analytics/dbt/pull/837))

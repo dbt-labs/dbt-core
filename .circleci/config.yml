@@ -43,6 +43,7 @@ jobs:
       - run:
           name: Run tests
           command: tox -e integration-snowflake-py36
+          no_output_timeout: 1h
   integration-redshift-py36:
     docker: *py36
     steps:
@@ -87,6 +88,7 @@ jobs:
       - run:
           name: Run tests
           command: tox -e integration-snowflake-py27
+          no_output_timeout: 1h
   integration-redshift-py27:
     docker: *py27
     steps:
