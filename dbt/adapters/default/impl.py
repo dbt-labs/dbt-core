@@ -719,7 +719,7 @@ class DefaultAdapter(object):
 
     @classmethod
     def quote(cls, identifier):
-        return '"{}"'.format(identifier.replace('"', '""'))
+        return '"{}"'.format(identifier)
 
     @classmethod
     def quote_schema_and_table(cls, profile, project_cfg,

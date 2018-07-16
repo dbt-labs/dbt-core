@@ -1,15 +1,72 @@
+{#
+    Create SCD Hash SQL fields cross-db
+#}
+
+{% macro archive_scd_hash() %}
+  {{ adapter_macro('archive_scd_hash') }}
+{% endmacro %}
+
+{% macro default__archive_scd_hash() %}
+    md5("dbt_pk" || '|' || "dbt_updated_at")
+{% endmacro %}
+
+{% macro bigquery__archive_scd_hash() %}
+    to_hex(md5(concat(cast(`dbt_pk` as string), '|', cast(`dbt_updated_at` as string))))
+{% endmacro %}
+
+{% macro create_temporary_table(sql, relation) %}
+  {{ return(adapter_macro('create_temporary_table', sql, relation)) }}
+{% endmacro %}
+
+{% macro default__create_temporary_table(sql, relation) %}
+    {% call statement() %}
+        {{ create_table_as(True, relation, sql) }}
+    {% endcall %}
+    {{ return(relation) }}
+{% endmacro %}
+
+{% macro bigquery__create_temporary_table(sql, relation) %}
+    {% set tmp_relation = adapter.create_temporary_table(sql) %}
+    {{ return(tmp_relation) }}
+{% endmacro %}
+
+
+{#
+    Add new columns to the table if applicable
+#}
+{% macro create_column(relation, column) %}
+  {{ adapter_macro('create_column', relation, column) }}
+{% endmacro %}
+
+{% macro default__create_column(relation, column) %}
+    {% call statement() %}
+      alter table {{ relation }} add column "{{ column.name }}" {{ column.data_type }};
+    {% endcall %}
+{% endmacro %}
+
+{% macro bigquery__create_column(relation, column) %}
+  {{ adapter.alter_table_add_column(relation, column) }}
+{% endmacro %}
+
+{#
+    Cross-db compatible archival implementation
+#}
 {% macro archive_select(source_relation, target_relation, unique_key, updated_at) %}
+
+    {% set cols = adapter.get_columns_in_table(source_relation.schema, source_relation.identifier) %}
+
+    {% set timestamp_column = api.Column.create('_', label='timestamp') %}
 
     with current_data as (
 
         select
-            {% for col in adapter.get_columns_in_table(source_relation.schema, source_relation.identifier) %}
-                "{{ col.name }}" {% if not loop.last %},{% endif %}
+            {% for col in cols %}
+                {{ adapter.quote(col.name) }} {% if not loop.last %},{% endif %}
             {% endfor %},
-            {{ updated_at }} as "dbt_updated_at",
-            {{ unique_key }} as "dbt_pk",
-            {{ updated_at }} as "valid_from",
-            null::timestamp as "tmp_valid_to"
+            {{ updated_at }} as {{ adapter.quote('dbt_updated_at') }},
+            {{ unique_key }} as {{ adapter.quote('dbt_pk') }},
+            {{ updated_at }} as {{ adapter.quote('valid_from') }},
+            {{ timestamp_column.literal('null') }} as {{ adapter.quote('tmp_valid_to') }}
         from {{ source_relation }}
 
     ),
@@ -18,12 +75,12 @@
 
         select
             {% for col in adapter.get_columns_in_table(source_relation.schema, source_relation.identifier) %}
-                "{{ col.name }}" {% if not loop.last %},{% endif %}
-            {% endfor %},
-            {{ updated_at }} as "dbt_updated_at",
-            {{ unique_key }} as "dbt_pk",
-            "valid_from",
-            "valid_to" as "tmp_valid_to"
+                {{ adapter.quote(col.name) }},
+            {% endfor %}
+            {{ updated_at }} as {{ adapter.quote('dbt_updated_at') }},
+            {{ unique_key }} as {{ adapter.quote('dbt_pk') }},
+            {{ adapter.quote('valid_from') }},
+            {{ adapter.quote('valid_to') }} as {{ adapter.quote('tmp_valid_to') }}
         from {{ target_relation }}
 
     ),
@@ -32,14 +89,14 @@
 
         select
             current_data.*,
-            null::timestamp as "valid_to"
+            {{ timestamp_column.literal('null') }} as {{ adapter.quote('valid_to') }}
         from current_data
         left outer join archived_data
-          on archived_data."dbt_pk" = current_data."dbt_pk"
-        where archived_data."dbt_pk" is null or (
-          archived_data."dbt_pk" is not null and
-          current_data."dbt_updated_at" > archived_data."dbt_updated_at" and
-          archived_data."tmp_valid_to" is null
+          on archived_data.{{ adapter.quote('dbt_pk') }} = current_data.{{ adapter.quote('dbt_pk') }}
+        where archived_data.{{ adapter.quote('dbt_pk') }} is null or (
+          archived_data.{{ adapter.quote('dbt_pk') }} is not null and
+          current_data.{{ adapter.quote('dbt_updated_at') }} > archived_data.{{ adapter.quote('dbt_updated_at') }} and
+          archived_data.{{ adapter.quote('tmp_valid_to') }} is null
         )
     ),
 
@@ -47,25 +104,25 @@
 
         select
             archived_data.*,
-            current_data."dbt_updated_at" as "valid_to"
+            current_data.{{ adapter.quote('dbt_updated_at') }} as {{ adapter.quote('valid_to') }}
         from current_data
         left outer join archived_data
-          on archived_data."dbt_pk" = current_data."dbt_pk"
-        where archived_data."dbt_pk" is not null
-          and archived_data."dbt_updated_at" < current_data."dbt_updated_at"
-          and archived_data."tmp_valid_to" is null
+          on archived_data.{{ adapter.quote('dbt_pk') }} = current_data.{{ adapter.quote('dbt_pk') }}
+        where archived_data.{{ adapter.quote('dbt_pk') }} is not null
+          and archived_data.{{ adapter.quote('dbt_updated_at') }} < current_data.{{ adapter.quote('dbt_updated_at') }}
+          and archived_data.{{ adapter.quote('tmp_valid_to') }} is null
     ),
 
     merged as (
 
-      select *, 'update' as "change_type" from updates
+      select *, 'update' as {{ adapter.quote('change_type') }} from updates
       union all
-      select *, 'insert' as "change_type" from insertions
+      select *, 'insert' as {{ adapter.quote('change_type') }} from insertions
 
     )
 
     select *,
-        md5("dbt_pk" || '|' || "dbt_updated_at") as "scd_id"
+        {{ archive_scd_hash() }} as {{ adapter.quote('scd_id') }}
     from merged
 
 {% endmacro %}
@@ -78,6 +135,8 @@
 
   {%- set source_schema = config.get('source_schema') -%}
   {%- set source_table = config.get('source_table') -%}
+
+  {{ create_schema(target_schema) }}
 
   {%- set source_relation = adapter.get_relation(
       schema=source_schema,
@@ -103,63 +162,58 @@
   {%- set unique_key = config.get('unique_key') -%}
   {%- set updated_at = config.get('updated_at') -%}
   {%- set dest_columns = source_columns + [
-      column('valid_from', 'timestamp', None),
-      column('valid_to', 'timestamp', None),
-      column('scd_id', 'text', None),
-      column('dbt_updated_at', 'timestamp', None)
+      api.Column.create('valid_from', label='timestamp'),
+      api.Column.create('valid_to', label='timestamp'),
+      api.Column.create('scd_id', label='string'),
+      api.Column.create('dbt_updated_at', label='timestamp'),
   ] -%}
-
-  {% call statement() %}
-    {{ create_schema(target_schema) }}
-  {% endcall %}
 
   {% call statement() %}
     {{ create_archive_table(target_relation, dest_columns) }}
   {% endcall %}
 
-  {% set missing_columns = adapter.get_missing_columns(source_schema, source_table, target_schema, target_table) %}
-  {% set dest_columns = adapter.get_columns_in_table(target_schema, target_table) + missing_columns %}
+  {% set missing_columns = adapter.get_missing_columns(source_relation.schema, source_relation.table,
+                                                       target_relation.schema, target_relation.table) %}
 
-  {% for col in missing_columns %}
-    {% call statement() %}
-      alter table {{ target_relation }}
-      add column "{{ col.name }}" {{ col.data_type }};
-    {% endcall %}
+  {% for column in missing_columns %}
+    {{ log("Creating column " ~ column ~ " in relation " ~ relation) }}
+    {{ create_column(target_relation, column) }}
   {% endfor %}
+
 
   {%- set identifier = model['alias'] -%}
   {%- set tmp_identifier = identifier + '__dbt_archival_tmp' -%}
-  {%- set tmp_relation = api.Relation.create(identifier=tmp_identifier, type='table') -%}
 
-  {% call statement() %}
-    {% set tmp_table_sql -%}
+  {% set tmp_table_sql -%}
 
       with dbt_archive_sbq as (
         {{ archive_select(source_relation, target_relation, unique_key, updated_at) }}
       )
       select * from dbt_archive_sbq
 
-    {%- endset %}
+  {%- endset %}
 
-    {{ dbt.create_table_as(True, tmp_relation, tmp_table_sql) }}
-
-  {% endcall %}
+  {%- set tmp_relation = api.Relation.create(schema=target_schema, identifier=tmp_identifier, type='table') -%}
+  {%- set tmp_relation = create_temporary_table(tmp_table_sql, tmp_relation) -%}
 
   {{ adapter.expand_target_column_types(temp_table=tmp_identifier,
                                         to_schema=target_schema,
                                         to_table=target_table) }}
 
-  {% call statement('main') -%}
-    update {{ target_relation }} set "valid_to" = tmp."valid_to"
+  {% call statement('_') -%}
+    update {{ target_relation }} as dest set {{ adapter.quote('valid_to') }} = tmp.{{ adapter.quote('valid_to') }}
     from {{ tmp_relation }} as tmp
-    where tmp."scd_id" = {{ target_relation }}."scd_id"
-      and "change_type" = 'update';
+    where tmp.{{ adapter.quote('scd_id') }} = dest.{{ adapter.quote('scd_id') }}
+      and {{ adapter.quote('change_type') }} = 'update';
+  {% endcall %}
+
+  {% call statement('main') -%}
 
     insert into {{ target_relation }} (
       {{ column_list(dest_columns) }}
     )
     select {{ column_list(dest_columns) }} from {{ tmp_relation }}
-    where "change_type" = 'insert';
+    where {{ adapter.quote('change_type') }} = 'insert';
   {% endcall %}
 
   {{ adapter.commit() }}

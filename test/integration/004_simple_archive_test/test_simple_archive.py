@@ -3,9 +3,6 @@ from test.integration.base import DBTIntegrationTest
 
 class TestSimpleArchive(DBTIntegrationTest):
 
-    def setUp(self):
-        pass
-
     @property
     def schema(self):
         return "simple_archive_004"
@@ -71,3 +68,53 @@ class TestSimpleArchive(DBTIntegrationTest):
         self.run_dbt(["archive"])
 
         self.assertTablesEqual("ARCHIVE_EXPECTED", "archive_actual")
+
+
+class TestSimpleArchive(DBTIntegrationTest):
+
+    @property
+    def schema(self):
+        return "simple_archive_004"
+
+    @property
+    def models(self):
+        return "test/integration/004_simple_archive_test/models"
+
+    @property
+    def project_config(self):
+        source_table = 'seed'
+
+        return {
+            "archive": [
+                {
+                    "source_schema": self.unique_schema(),
+                    "target_schema": self.unique_schema(),
+                    "tables": [
+                        {
+                            "source_table": 'seed',
+                            "target_table": "archive_actual",
+                            "updated_at": 'updated_at',
+                            "unique_key": "concat(id , '-', first_name)"
+                        }
+                    ]
+                }
+            ]
+        }
+
+    @attr(type='bigquery')
+    def test__bigquery__simple_archive(self):
+        self.use_default_project()
+        self.use_profile('bigquery')
+
+        self.run_sql_file("test/integration/004_simple_archive_test/seed.sql")
+
+        self.run_dbt(["archive"])
+
+        self.assertTablesEqual("archive_expected", "archive_actual")
+
+        self.run_sql_file("test/integration/004_simple_archive_test/invalidate_bigquery.sql")
+        self.run_sql_file("test/integration/004_simple_archive_test/update.sql")
+
+        self.run_dbt(["archive"])
+
+        self.assertTablesEqual("archive_expected", "archive_actual")

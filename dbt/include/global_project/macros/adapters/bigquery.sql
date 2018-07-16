@@ -27,3 +27,7 @@
     {{ sql }}
   );
 {% endmacro %}
+
+{% macro bigquery__create_schema(schema_name) %}
+    {{ adapter.create_schema(schema_name) }}
+{% endmacro %}

@@ -139,3 +139,23 @@ class TestSimpleCopy(DBTIntegrationTest):
             "quoting": {"identifier": True},
         })
         self.run_dbt(["seed"], expect_pass=False)
+
+    @attr(type="bigquery")
+    def test__bigquery__simple_copy(self):
+        self.use_profile("postgres")
+        self.use_default_project({"data-paths": [self.dir("seed-initial")]})
+
+        self.run_dbt(["seed"])
+        self.run_dbt()
+
+        self.assertTablesEqual("seed","view_model")
+        self.assertTablesEqual("seed","incremental")
+        self.assertTablesEqual("seed","materialized")
+
+        self.use_default_project({"data-paths": [self.dir("seed-update")]})
+        self.run_dbt(["seed"])
+        self.run_dbt()
+
+        self.assertTablesEqual("seed","view_model")
+        self.assertTablesEqual("seed","incremental")
+        self.assertTablesEqual("seed","materialized")

@@ -16,6 +16,7 @@ from dbt.contracts.connection import Connection
 from dbt.logger import GLOBAL_LOGGER as logger
 
 import google.auth
+import google.api_core
 import google.oauth2
 import google.cloud.exceptions
 import google.cloud.bigquery
@@ -30,6 +31,7 @@ class BigQueryAdapter(PostgresAdapter):
         # deprecated -- use versions that take relations instead
         "query_for_existing",
         "execute_model",
+        "create_temporary_table",
         "drop",
         "execute",
         "quote_schema_and_table",
@@ -37,6 +39,10 @@ class BigQueryAdapter(PostgresAdapter):
         "already_exists",
         "expand_target_column_types",
         "load_dataframe",
+        "get_missing_columns",
+
+        "create_schema",
+        "alter_table_add_column",
 
         # versions of adapter functions that take / return Relations
         "list_relations",
@@ -188,6 +194,13 @@ class BigQueryAdapter(PostgresAdapter):
 
         bigquery_dataset = cls.get_dataset(
             profile, project_cfg, schema, model_name)
+
+        try:
+            # This will 404 if the dataset does not exist. It's lazily
+            # evaluated, so wrap it in a list to throw _now_
+            all_tables = list(client.list_tables(bigquery_dataset))
+        except google.api_core.exceptions.NotFound as e:
+            all_tables = []
 
         all_tables = client.list_tables(
             bigquery_dataset,
@@ -357,7 +370,7 @@ class BigQueryAdapter(PostgresAdapter):
         return res
 
     @classmethod
-    def execute(cls, profile, sql, model_name=None, fetch=False, **kwargs):
+    def raw_execute(cls, profile, sql, model_name=None, fetch=False, **kwargs):
         conn = cls.get_connection(profile, model_name)
         client = conn.get('handle')
 
@@ -371,6 +384,43 @@ class BigQueryAdapter(PostgresAdapter):
         # this blocks until the query has completed
         with cls.exception_handler(profile, sql, model_name):
             iterator = query_job.result()
+
+        return query_job, iterator
+
+    @classmethod
+    def create_temporary_table(cls, profile, project, sql, model_name=None, **kwargs):
+        query_job, _ = cls.raw_execute(profile, sql, model_name)
+        destination_table = query_job.destination
+
+        return cls.Relation.create(
+            project=destination_table.project,
+            schema=destination_table.dataset_id,
+            identifier=destination_table.table_id,
+            quote_policy={
+                'project': True,
+                'schema': True,
+                'identifier': True
+            },
+            type='table')
+
+    @classmethod
+    def alter_table_add_column(cls, profile, project, relation, column, model_name=None):
+
+        conn = cls.get_connection(profile, model_name)
+        client = conn.get('handle')
+
+        dataset = cls.get_dataset(profile, project, relation.schema, model_name)
+        table_ref = dataset.table(relation.name)
+        table = client.get_table(table_ref)
+
+        new_schema = table.schema + [column.to_bq_schema_object()]
+
+        new_table = google.cloud.bigquery.Table(table_ref, schema=new_schema)
+        client.update_table(new_table, ['schema'])
+
+    @classmethod
+    def execute(cls, profile, sql, model_name=None, fetch=None, **kwargs):
+        iterator, _ = cls.raw_execute(profile, sql, model_name, fetch, **kwargs)
 
         if fetch:
             res = cls.get_table_from_response(iterator)
@@ -410,8 +460,13 @@ class BigQueryAdapter(PostgresAdapter):
         client = conn.get('handle')
 
         dataset = cls.get_dataset(profile, project_cfg, schema, model_name)
-        with cls.exception_handler(profile, 'create dataset', model_name):
-            client.create_dataset(dataset)
+
+        # Emulate 'create schema if not exists ...'
+        try:
+            client.get_dataset(dataset)
+        except google.api_core.exceptions.NotFound:
+            with cls.exception_handler(profile, 'create dataset', model_name):
+                client.create_dataset(dataset)
 
     @classmethod
     def drop_tables_in_schema(cls, profile, project_cfg, dataset):
@@ -468,8 +523,10 @@ class BigQueryAdapter(PostgresAdapter):
 
         columns = []
         for col in table_schema:
+            # BigQuery returns type labels that are not valid type specifiers
+            dtype = cls.Column.translate_type(col.field_type)
             column = cls.Column(
-                col.name, col.field_type, col.fields, col.mode)
+                col.name, dtype, col.fields, col.mode)
             columns.append(column)
 
         return columns
