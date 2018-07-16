@@ -21,7 +21,7 @@ class TestBigqueryDatePartitioning(DBTIntegrationTest):
         self.use_profile('bigquery')
         self.use_default_project()
         results = self.run_dbt()
-        self.assertEqual(len(results), 2)
+        self.assertEqual(len(results), 6)
 
         test_results = self.run_dbt(['test'])
 
