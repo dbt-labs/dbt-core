@@ -469,6 +469,40 @@ class TestEventTrackingCompilationError(TestEventTracking):
 
 
 class TestEventTrackingUnableToConnect(TestEventTracking):
+
+    @property
+    def profile_config(self):
+        return {
+            'config': {
+                'send_anonymous_usage_stats': True
+            },
+            'test': {
+                'outputs': {
+                    'default2': {
+                        'type': 'postgres',
+                        'threads': 4,
+                        'host': 'database',
+                        'port': 5432,
+                        'user': 'root',
+                        'pass': 'password',
+                        'dbname': 'dbt',
+                        'schema': self.unique_schema()
+                    },
+                    'noaccess': {
+                        'type': 'postgres',
+                        'threads': 4,
+                        'host': 'database',
+                        'port': 5432,
+                        'user': 'noaccess',
+                        'pass': 'bad_password',
+                        'dbname': 'dbt',
+                        'schema': self.unique_schema()
+                    }
+                },
+                'target': 'default2'
+            }
+        }
+
     @attr(type="postgres")
     def test__event_tracking_unable_to_connect(self):
         expected_calls = [
