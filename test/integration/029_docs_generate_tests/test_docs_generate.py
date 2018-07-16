@@ -281,3 +281,64 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         self.verify_catalog(expected_catalog)
         self.verify_manifest()
+
+    @attr(type='bigquery')
+    def test__bigquery__run_and_generate(self):
+        self.use_profile('bigquery')
+        self.run_and_generate()
+        my_schema_name = self.unique_schema()
+        expected_cols = [
+            {
+                'name': 'id',
+                'index': 0,
+                'type': 'INTEGER',
+                'comment': None,
+            },
+            {
+                'name': 'first_name',
+                'index': 1,
+                'type': 'STRING',
+                'comment': None,
+            },
+            {
+                'name': 'email',
+                'index': 2,
+                'type': 'STRING',
+                'comment': None,
+            },
+            {
+                'name': 'ip_address',
+                'index': 3,
+                'type': 'STRING',
+                'comment': None,
+            },
+            {
+                'name': 'updated_at',
+                'index': 4,
+                'type': 'DATETIME',
+                'comment': None,
+            },
+        ]
+        expected_catalog = {
+            'model': {
+                'metadata': {
+                    'schema': my_schema_name,
+                    'name': 'model',
+                    'type': 'view',
+                    'comment': None,
+                },
+                'columns': expected_cols,
+            },
+            'seed': {
+                'metadata': {
+                    'schema': my_schema_name,
+                    'name': 'seed',
+                    'type': 'table',
+                    'comment': None,
+                },
+                'columns': expected_cols,
+            },
+        }
+        self.verify_catalog(expected_catalog)
+        model_sql_path = self.dir('models/model.sql')
+        self.verify_manifest()

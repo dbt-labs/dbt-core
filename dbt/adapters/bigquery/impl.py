@@ -613,3 +613,39 @@ class BigQueryAdapter(PostgresAdapter):
                                    to_schema, to_table, model_name=None):
         # This is a no-op on BigQuery
         pass
+
+    @classmethod
+    def get_catalog(cls, profile, project_cfg, manifest):
+        schemas = {node.to_dict()['schema'] for node in manifest.nodes.values()}
+
+        column_names = [
+            'table_schema',
+            'table_name',
+            'table_type',
+            'table_comment',
+            'column_name',
+            'column_index',
+            'column_type',
+            'column_comment',
+        ]
+        columns = []
+
+        for schema_name in schemas:
+            relations = cls.list_relations(profile, project_cfg, schema_name)
+            for relation in relations:
+                cols = cls.get_columns_in_table(profile, project_cfg, schema_name, relation.name)
+                for col_index, col in enumerate(cols):
+                    column_data = [
+                        relation.schema,
+                        relation.name,
+                        relation.type,
+                        None,
+                        col.name,
+                        col_index,
+                        col.data_type,
+                        None,
+                    ]
+                    columns.append(dict(zip(column_names, column_data)))
+
+
+        return dbt.clients.agate_helper.table_from_data(columns, column_names)
