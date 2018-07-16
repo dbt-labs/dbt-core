@@ -492,7 +492,7 @@ class TestEventTrackingUnableToConnect(TestEventTracking):
         ]
 
         self.run_event_test(
-            ["run", "--target", "noaccess"],
+            ["run", "--target", "noaccess", "--models", "example"],
             expected_calls,
             expected_contexts,
             expect_pass=False
