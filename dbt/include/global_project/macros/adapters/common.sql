@@ -136,14 +136,6 @@
           table_type as "table_type"
 
       from information_schema.tables
-
-      union all
-
-      select
-        table_schema as "table_schema",
-        table_name as "table_name",
-        'VIEW' as "table_type"
-      from information_schema.views
       ),
 
       columns as (
