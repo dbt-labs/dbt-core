@@ -2,6 +2,7 @@ import unittest
 import dbt.main as dbt
 import os, shutil
 import yaml
+import random
 import time
 import json
 
@@ -32,7 +33,7 @@ class FakeArgs(object):
 
 class DBTIntegrationTest(unittest.TestCase):
 
-    prefix = "test{}".format(int(time.time()))
+    prefix = "test{}{:04}".format(int(time.time()), random.randint(0, 9999))
 
     def postgres_profile(self):
         return {
@@ -362,13 +363,26 @@ class DBTIntegrationTest(unittest.TestCase):
 
         return to_return
 
+    def run_sql_bigquery(self, sql, fetch):
+        """Run an SQL query on a bigquery adapter. No cursors, transactions,
+        etc. to worry about. If fetch is not 'None', all records are fetched.
+        """
+        adapter = get_adapter(self._profile)
+        fetch = fetch != 'None'
+        _, res = adapter.execute(self._profile, sql, fetch=fetch)
+        return res
+
     def run_sql(self, query, fetch='None'):
         if query.strip() == "":
             return
 
+        sql = self.transform_sql(query)
+        if self.adapter_type == 'bigquery':
+            return self.run_sql_bigquery(sql, fetch)
+
         with self.handle.cursor() as cursor:
             try:
-                cursor.execute(self.transform_sql(query))
+                cursor.execute(sql)
                 self.handle.commit()
                 if fetch == 'one':
                     return cursor.fetchone()
@@ -384,17 +398,14 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def get_table_columns(self, table, schema=None):
         schema = self.unique_schema() if schema is None else schema
-        sql = """
-                select column_name, data_type, character_maximum_length
-                from information_schema.columns
-                where table_name ilike '{}'
-                and table_schema ilike '{}'
-                order by column_name asc"""
-
-        result = self.run_sql(sql.format(table.replace('"', ''), schema),
-                              fetch='all')
-
-        return result
+        columns = self.adapter.get_columns_in_table(
+            self._profile,
+            self.project_config,
+            schema,
+            table
+        )
+        return sorted(((c.name, c.dtype, c.char_size) for c in columns),
+                      key=lambda x: x[0])
 
     def get_models_in_schema(self, schema=None):
         schema = self.unique_schema() if schema is None else schema

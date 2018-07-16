@@ -32,6 +32,9 @@ POSTGRES_CREDENTIALS_CONTRACT = {
         'schema': {
             'type': 'string',
         },
+        'keepalives_idle': {
+            'type': 'integer',
+        },
     },
     'required': ['dbname', 'host', 'user', 'pass', 'port', 'schema'],
 }
@@ -86,6 +89,9 @@ REDSHIFT_CREDENTIALS_CONTRACT = {
             'description': (
                 'If using IAM auth, the ttl for the temporary credentials'
             )
+        },
+        'keepalives_idle': {
+            'type': 'integer',
         },
         'required': ['dbname', 'host', 'user', 'port', 'schema']
     }
