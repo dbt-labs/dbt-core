@@ -16,7 +16,8 @@ class TestDocsGenerate(DBTIntegrationTest):
 
     @staticmethod
     def dir(path):
-        return "test/integration/029_docs_generate_tests/" + path.lstrip("/")
+        return os.path.join('test', 'integration', '029_docs_generate_tests',
+                            path)
 
     @property
     def models(self):
@@ -67,13 +68,16 @@ class TestDocsGenerate(DBTIntegrationTest):
         # Don't compare the sql, just make sure it exists
         self.assertTrue(len(macro['raw_sql']) > 10)
         without_sql = {k: v for k, v in macro.items() if k != 'raw_sql'}
+        # Windows means we can't hard-code this.
+        helpers_path = os.path.join('materializations', 'helpers.sql')
         self.assertEqual(
             without_sql,
             {
-                'path': 'materializations/helpers.sql',
-                'original_file_path': 'materializations/helpers.sql',
+                'path': helpers_path,
+                'original_file_path': helpers_path,
                 'package_name': 'dbt',
-                'root_path': os.path.join(os.getcwd(), 'dbt/include/global_project'),
+                'root_path': os.path.join(os.getcwd(), 'dbt','include',
+                                          'global_project'),
                 'name': 'column_list',
                 'unique_id': 'macro.dbt.column_list',
                 'tags': [],
@@ -133,7 +137,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'resource_type': 'seed',
                     'raw_sql': '-- csv --',
                     'package_name': 'test',
-                    'original_file_path': self.dir('seed/seed.csv'),
+                    'original_file_path': self.dir(os.path.join('seed',
+                                                                'seed.csv')),
                     'refs': [],
                     'depends_on': {'nodes': [], 'macros': []},
                     'unique_id': 'seed.test.seed',
