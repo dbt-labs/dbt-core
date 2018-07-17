@@ -61,7 +61,8 @@ class BaseTestConcurrentTransaction(DBTIntegrationTest):
         self.use_profile("redshift")
 
         # First run the project to make sure the models exist
-        self.run_dbt(args=['run'])
+        results = self.run_dbt(args=['run'])
+        self.assertEqual(len(results), 2)
 
         # Execute long-running queries in threads
         t1 = self.async_select('view_model', 10)
@@ -69,6 +70,7 @@ class BaseTestConcurrentTransaction(DBTIntegrationTest):
 
         # While the queries are executing, re-run the project
         res = self.run_dbt(args=['run', '--threads', '8'])
+        self.assertEqual(len(res), 2)
 
         # Finally, wait for these threads to finish
         t1.join()

@@ -86,7 +86,8 @@ class TestContextVars(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test_env_vars_dev(self):
-        self.run_dbt(['run'])
+        results = self.run_dbt(['run'])
+        self.assertEqual(len(results), 1)
         ctx = self.get_ctx_vars()
 
         self.assertEqual(
@@ -111,7 +112,8 @@ class TestContextVars(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test_env_vars_prod(self):
-        self.run_dbt(['run', '--target', 'prod'])
+        results = self.run_dbt(['run', '--target', 'prod'])
+        self.assertEqual(len(results), 1)
         ctx = self.get_ctx_vars()
 
         self.assertEqual(

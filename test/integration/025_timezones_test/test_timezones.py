@@ -48,7 +48,8 @@ class TestTimezones(DBTIntegrationTest):
     @freeze_time("2017-01-01 03:00:00", tz_offset=0)
     @attr(type='postgres')
     def test_run_started_at(self):
-        self.run_dbt(['run'])
+        results = self.run_dbt(['run'])
+        self.assertEqual(len(results), 1)
         result = self.run_sql(self.query, fetch='all')[0]
         est, utc = result
         self.assertEqual(utc, '2017-01-01 03:00:00+00:00')

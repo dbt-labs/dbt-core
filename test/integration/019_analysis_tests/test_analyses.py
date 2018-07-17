@@ -25,7 +25,8 @@ class TestAnalyses(DBTIntegrationTest):
     @attr(type='postgres')
     def test_analyses(self):
 
-        self.run_dbt(["run"])
+        results = self.run_dbt(["run"])
+        self.assertEqual(len(results), 1)
 
         compiled_analysis_path = os.path.normpath(os.path.join(
             'target/build-analysis',
