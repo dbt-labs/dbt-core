@@ -193,7 +193,7 @@
 
   {%- endset %}
 
-  {%- set tmp_relation = api.Relation.create(schema=target_schema, identifier=tmp_identifier, type='table') -%}
+  {%- set tmp_relation = api.Relation.create(identifier=tmp_identifier, type='table') -%}
   {%- set tmp_relation = create_temporary_table(tmp_table_sql, tmp_relation) -%}
 
   {{ adapter.expand_target_column_types(temp_table=tmp_identifier,

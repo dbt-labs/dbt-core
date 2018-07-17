@@ -33,7 +33,6 @@
 {% endmacro %}
 
 {% macro default__create_schema(schema_name) %}
-  -- TODO : this changed to be wrapped in a statement. is that used anywhere else?
   {% call statement() %}
     create schema if not exists {{ schema_name }};
   {% endcall %}

@@ -580,7 +580,7 @@ class BigQueryAdapter(PostgresAdapter):
         table_ref = dataset.table(identifier)
 
         try:
-            return client.uget_table(table_ref)
+            return client.get_table(table_ref)
         except google.cloud.exceptions.NotFound:
             return None
 
