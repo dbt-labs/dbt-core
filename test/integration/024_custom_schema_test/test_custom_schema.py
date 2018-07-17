@@ -17,7 +17,8 @@ class TestCustomSchema(DBTIntegrationTest):
         self.use_default_project()
         self.run_sql_file("test/integration/024_custom_schema_test/seed.sql")
 
-        self.run_dbt()
+        results = self.run_dbt()
+        self.assertEqual(len(results), 3)
 
         schema = self.unique_schema()
         v2_schema = "{}_custom".format(schema)
@@ -71,7 +72,8 @@ class TestCustomProjectSchemaWithPrefix(DBTIntegrationTest):
         self.use_default_project()
         self.run_sql_file("test/integration/024_custom_schema_test/seed.sql")
 
-        self.run_dbt()
+        results = self.run_dbt()
+        self.assertEqual(len(results), 3)
 
         schema = self.unique_schema()
         v1_schema = "{}_dbt_test".format(schema)
@@ -127,7 +129,8 @@ class TestCustomSchemaWithCustomMacro(DBTIntegrationTest):
         self.use_default_project()
         self.run_sql_file("test/integration/024_custom_schema_test/seed.sql")
 
-        self.run_dbt()
+        results = self.run_dbt()
+        self.assertEqual(len(results), 3)
 
         schema = self.unique_schema()
         v1_schema = "dbt_test_{}_macro".format(schema)

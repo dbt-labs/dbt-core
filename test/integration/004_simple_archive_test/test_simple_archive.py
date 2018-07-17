@@ -44,14 +44,16 @@ class TestSimpleArchive(DBTIntegrationTest):
         self.use_default_project()
         self.run_sql_file("test/integration/004_simple_archive_test/seed.sql")
 
-        self.run_dbt(["archive"])
+        results = self.run_dbt(["archive"])
+        self.assertEqual(len(results),  1)
 
         self.assertTablesEqual("archive_expected","archive_actual")
 
         self.run_sql_file("test/integration/004_simple_archive_test/invalidate_postgres.sql")
         self.run_sql_file("test/integration/004_simple_archive_test/update.sql")
 
-        self.run_dbt(["archive"])
+        results = self.run_dbt(["archive"])
+        self.assertEqual(len(results),  1)
 
         self.assertTablesEqual("archive_expected","archive_actual")
 
@@ -61,13 +63,15 @@ class TestSimpleArchive(DBTIntegrationTest):
         self.use_default_project()
         self.run_sql_file("test/integration/004_simple_archive_test/seed.sql")
 
-        self.run_dbt(["archive"])
+        results = self.run_dbt(["archive"])
+        self.assertEqual(len(results),  1)
 
         self.assertTablesEqual("ARCHIVE_EXPECTED", "archive_actual")
 
         self.run_sql_file("test/integration/004_simple_archive_test/invalidate_snowflake.sql")
         self.run_sql_file("test/integration/004_simple_archive_test/update.sql")
 
-        self.run_dbt(["archive"])
+        results = self.run_dbt(["archive"])
+        self.assertEqual(len(results),  1)
 
         self.assertTablesEqual("ARCHIVE_EXPECTED", "archive_actual")

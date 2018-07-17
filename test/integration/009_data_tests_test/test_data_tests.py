@@ -38,7 +38,8 @@ class TestDataTests(DBTIntegrationTest):
 
         self.run_sql_file("test/integration/009_data_tests_test/seed.sql")
 
-        self.run_dbt()
+        results = self.run_dbt()
+        self.assertEqual(len(results), 1)
         test_results = self.run_data_validations()
 
         for result in test_results:
@@ -66,7 +67,8 @@ class TestDataTests(DBTIntegrationTest):
 
         self.run_sql_file("test/integration/009_data_tests_test/seed.sql")
 
-        self.run_dbt()
+        results = self.run_dbt()
+        self.assertEqual(len(results), 1)
         test_results = self.run_data_validations()
 
         for result in test_results:

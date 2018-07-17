@@ -24,16 +24,20 @@ class TestSimpleCopy(DBTIntegrationTest):
         self.use_profile("postgres")
         self.use_default_project({"data-paths": [self.dir("seed-initial")]})
 
-        self.run_dbt(["seed"])
-        self.run_dbt()
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        results = self.run_dbt()
+        self.assertEqual(len(results),  6)
 
         self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
 
         self.use_default_project({"data-paths": [self.dir("seed-update")]})
-        self.run_dbt(["seed"])
-        self.run_dbt()
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        results = self.run_dbt()
+        self.assertEqual(len(results),  6)
 
         self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed","incremental")
@@ -44,8 +48,10 @@ class TestSimpleCopy(DBTIntegrationTest):
         self.use_profile("postgres")
         self.use_default_project({"data-paths": [self.dir("seed-initial")]})
 
-        self.run_dbt(["seed"])
-        self.run_dbt()
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        results = self.run_dbt()
+        self.assertEqual(len(results),  6)
 
         models = self.get_models_in_schema()
 
@@ -80,8 +86,10 @@ class TestSimpleCopy(DBTIntegrationTest):
             "quoting": {"identifier": True},
         })
 
-        self.run_dbt(["seed"])
-        self.run_dbt()
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        results = self.run_dbt()
+        self.assertEqual(len(results),  6)
 
         self.assertTablesEqual("seed", "view_model")
         self.assertTablesEqual("seed", "incremental")
@@ -91,8 +99,10 @@ class TestSimpleCopy(DBTIntegrationTest):
             "data-paths": [self.dir("seed-update")],
             "quoting": {"identifier": True},
         })
-        self.run_dbt(["seed"])
-        self.run_dbt()
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        results = self.run_dbt()
+        self.assertEqual(len(results),  6)
 
         self.assertTablesEqual("seed", "view_model")
         self.assertTablesEqual("seed", "incremental")
@@ -106,8 +116,10 @@ class TestSimpleCopy(DBTIntegrationTest):
             "quoting": {"identifier": False},
         })
 
-        self.run_dbt(["seed"])
-        self.run_dbt()
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        results = self.run_dbt()
+        self.assertEqual(len(results),  6)
 
         self.assertTablesEqual("SEED", "VIEW_MODEL")
         self.assertTablesEqual("SEED", "INCREMENTAL")
@@ -117,8 +129,10 @@ class TestSimpleCopy(DBTIntegrationTest):
             "data-paths": [self.dir("seed-update")],
             "quoting": {"identifier": False},
         })
-        self.run_dbt(["seed"])
-        self.run_dbt()
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        results = self.run_dbt()
+        self.assertEqual(len(results),  6)
 
         self.assertTablesEqual("SEED", "VIEW_MODEL")
         self.assertTablesEqual("SEED", "INCREMENTAL")
@@ -132,10 +146,11 @@ class TestSimpleCopy(DBTIntegrationTest):
             "quoting": {"identifier": False},
         })
 
-        self.run_dbt(["seed"])
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
 
         self.use_default_project({
             "data-paths": [self.dir("seed-update")],
             "quoting": {"identifier": True},
         })
-        self.run_dbt(["seed"], expect_pass=False)
+        results = self.run_dbt(["seed"], expect_pass=False)

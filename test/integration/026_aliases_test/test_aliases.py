@@ -30,19 +30,22 @@ class TestAliases(DBTIntegrationTest):
     @attr(type='postgres')
     def test__alias_model_name(self):
         self.use_profile('postgres')
-        self.run_dbt(['run'])
+        results = self.run_dbt(['run'])
+        self.assertEqual(len(results), 4)
         self.run_dbt(['test'])
 
     @attr(type='bigquery')
     def test__alias_model_name_bigquery(self):
         self.use_profile('bigquery')
-        self.run_dbt(['run'])
+        results = self.run_dbt(['run'])
+        self.assertEqual(len(results), 4)
         self.run_dbt(['test'])
 
     @attr(type='snowflake')
     def test__alias_model_name_snowflake(self):
         self.use_profile('snowflake')
-        self.run_dbt(['run'])
+        results = self.run_dbt(['run'])
+        self.assertEqual(len(results), 4)
         self.run_dbt(['test'])
 
 class TestAliasErrors(DBTIntegrationTest):
@@ -83,7 +86,8 @@ class TestSameAliasDifferentSchemas(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test__same_alias_succeeds_in_different_schemas(self):
-        self.run_dbt(['run'])
+        results = self.run_dbt(['run'])
+        self.assertEqual(len(results), 3)
         res = self.run_dbt(['test'])
 
         # Make extra sure the tests ran
