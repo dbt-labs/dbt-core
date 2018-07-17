@@ -21,8 +21,10 @@ class TestStatements(DBTIntegrationTest):
         self.use_profile("postgres")
         self.use_default_project({"data-paths": [self.dir("seed")]})
 
-        self.run_dbt(["seed"])
-        self.run_dbt()
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results), 2)
+        results = self.run_dbt()
+        self.assertEqual(len(results), 1)
 
         self.assertTablesEqual("statement_actual","statement_expected")
 
@@ -31,8 +33,10 @@ class TestStatements(DBTIntegrationTest):
         self.use_profile("postgres")
         self.use_default_project({"data-paths": [self.dir("seed")]})
 
-        self.run_dbt(["seed"])
-        self.run_dbt()
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results), 2)
+        results = self.run_dbt()
+        self.assertEqual(len(results), 1)
 
         self.assertTablesEqual("statement_actual","statement_expected")
 
@@ -41,8 +45,10 @@ class TestStatements(DBTIntegrationTest):
         self.use_profile("postgres")
         self.use_default_project({"data-paths": [self.dir("seed")]})
 
-        self.run_dbt(["seed"])
-        self.run_dbt()
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results), 2)
+        results = self.run_dbt()
+        self.assertEqual(len(results), 1)
 
         self.assertTablesEqual("statement_actual","statement_expected")
 

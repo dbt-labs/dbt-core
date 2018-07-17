@@ -83,10 +83,11 @@ class TestDuplicateModelDisabled(DBTIntegrationTest):
     @attr(type="postgres")
     def test_duplicate_model_disabled(self):
         try:
-            self.run_dbt(["run"])
+            results = self.run_dbt(["run"])
         except CompilationException:
             self.fail(
                 "Compilation Exception raised on disabled model")
+        self.assertEqual(len(results), 1)
         query = "select value from {schema}.model" \
                 .format(schema=self.unique_schema())
         result = self.run_sql(query, fetch="one")[0]

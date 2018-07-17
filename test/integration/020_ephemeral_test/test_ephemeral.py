@@ -21,7 +21,8 @@ class TestEphemeral(DBTIntegrationTest):
         self.use_default_project()
         self.run_sql_file("test/integration/020_ephemeral_test/seed.sql")
 
-        self.run_dbt()
+        results = self.run_dbt()
+        self.assertEqual(len(results), 2)
 
         self.assertTablesEqual("seed", "dependent")
         self.assertTablesEqual("seed", "double_dependent")
@@ -32,7 +33,8 @@ class TestEphemeral(DBTIntegrationTest):
         self.use_default_project()
         self.run_sql_file("test/integration/020_ephemeral_test/seed.sql")
 
-        self.run_dbt()
+        results = self.run_dbt()
+        self.assertEqual(len(results), 2)
 
         self.assertTablesEqual("SEED", "dependent")
         self.assertTablesEqual("SEED", "double_dependent")
