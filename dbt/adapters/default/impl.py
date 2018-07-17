@@ -17,6 +17,9 @@ from dbt.utils import filter_null_values
 
 from dbt.adapters.default.relation import DefaultRelation
 
+GET_CATALOG_OPERATION_NAME = 'get_catalog_data'
+GET_CATALOG_RESULT_KEY = 'catalog'  # defined in get_catalog() macro
+
 lock = multiprocessing.Lock()
 connections_in_use = {}
 connections_available = []
@@ -809,5 +812,12 @@ class DefaultAdapter(object):
     ###
     @classmethod
     def get_catalog(cls, profile, project_cfg, manifest):
-        raise dbt.exceptions.NotImplementedException(
-            '`get_catalog` is not implemented for this adapter!')
+        results = cls.run_operation(profile, project_cfg, manifest,
+                                    GET_CATALOG_OPERATION_NAME,
+                                    GET_CATALOG_RESULT_KEY)
+        schemas = list({
+            node.to_dict()['schema']
+            for node in manifest.nodes.values()
+        })
+        results = results.table.where(lambda r: r['table_schema'] in schemas)
+        return results

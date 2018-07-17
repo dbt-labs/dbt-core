@@ -119,8 +119,46 @@
 
       where table_schema != 'information_schema'
         and table_schema not like 'pg_%'
+      order by "column_index"
   {%- endcall -%}
   {# There's no point in returning anything as the jinja macro stuff calls #}
   {# str() on all returns. To get the results, you'll need to use #}
   {# context['load_result']('catalog') #}
+{%- endmacro %}
+
+
+{% macro snowflake__get_catalog() -%}
+  {%- call statement('catalog', fetch_result=True) -%}
+    with tables as (
+      select
+          table_schema as "table_schema",
+          table_name as "table_name",
+          table_type as "table_type"
+
+      from information_schema.tables
+      ),
+
+      columns as (
+
+          select
+              table_schema as "table_schema",
+              table_name as "table_name",
+              null as "table_comment",
+
+              column_name as "column_name",
+              ordinal_position as "column_index",
+              data_type as "column_type",
+              null as "column_comment"
+
+
+          from information_schema.columns
+
+      )
+
+      select *
+      from tables
+      join columns using ("table_schema", "table_name")
+      where "table_schema" != 'INFORMATION_SCHEMA'
+      order by "column_index"
+  {%- endcall -%}
 {%- endmacro %}
