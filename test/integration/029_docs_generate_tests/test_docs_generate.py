@@ -89,7 +89,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         # the manifest should be consistent across DBs for this test
         model_sql_path = self.dir('models/model.sql')
         my_schema_name = self.unique_schema()
-        expected_manifest = {
+        return {
             'nodes': {
                 'model.test.model': {
                     'name': 'model',
@@ -288,7 +288,7 @@ class TestDocsGenerate(DBTIntegrationTest):
 
     @use_profile('bigquery')
     def test__bigquery__run_and_generate(self):
-        self.run_and_generate({'data-paths': [self.dir("seed")]})
+        self.run_and_generate()
         my_schema_name = self.unique_schema()
         expected_cols = [
             {
@@ -317,7 +317,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
             {
                 'name': 'updated_at',
-                'index': 4,
+                'index': 5,
                 'type': 'DATETIME',
                 'comment': None,
             },
@@ -349,10 +349,10 @@ class TestDocsGenerate(DBTIntegrationTest):
     def test__bigquery__nested_models(self):
         self.use_default_project({'source-paths': [self.dir('bq_models')]})
 
-        # actual test
         self.assertEqual(len(self.run_dbt()), 2)
         self.run_dbt(['docs', 'generate'])
 
+        my_schema_name = self.unique_schema()
         expected_cols = [
             {
                 "name": "field_1",
@@ -386,26 +386,96 @@ class TestDocsGenerate(DBTIntegrationTest):
             }
         ]
         catalog = {
-          my_schema_name: {
             "model": {
-              "metadata": {
-                "schema": my_schema_name,
-                "name": "model",
-                "type": "view",
-                "comment": None
-              },
-              "columns": expected_cols
+                "metadata": {
+                    "schema": my_schema_name,
+                    "name": "model",
+                    "type": "view",
+                    "comment": None
+                },
+                "columns": expected_cols
             },
             "seed": {
-              "metadata": {
+                "metadata": {
                 "schema": my_schema_name,
                 "name": "seed",
                 "type": "view",
                 "comment": None
-              },
-              "columns": expected_cols
+                },
+                "columns": expected_cols
             }
-          }
         }
         self.verify_catalog(catalog)
-        self.verify_manifest({})
+        model_sql_path = self.dir('bq_models/model.sql')
+        seed_sql_path = self.dir('bq_models/seed.sql')
+        expected_manifest = {
+            'nodes': {
+               'model.test.model': {
+                    'alias': 'model',
+                    'config': {
+                        'column_types': {},
+                        'enabled': True,
+                        'materialized': 'view',
+                        'post-hook': [],
+                        'pre-hook': [],
+                        'quoting': {},
+                        'vars': {}
+                    },
+                    'depends_on': {
+                        'macros': [],
+                        'nodes': ['model.test.seed']
+                    },
+                    'empty': False,
+                    'fqn': ['test', 'model'],
+                    'name': 'model',
+                    'original_file_path': model_sql_path,
+                    'package_name': 'test',
+                    'path': 'model.sql',
+                    'raw_sql': open(model_sql_path).read().rstrip('\n'),
+                    'refs': [['seed']],
+                    'resource_type': 'model',
+                    'root_path': os.getcwd(),
+                    'schema': my_schema_name,
+                    'tags': [],
+                    'unique_id': 'model.test.model'
+                },
+                'model.test.seed': {
+                    'alias': 'seed',
+                    'config': {
+                        'column_types': {},
+                        'enabled': True,
+                        'materialized': 'view',
+                        'post-hook': [],
+                        'pre-hook': [],
+                        'quoting': {},
+                        'vars': {}
+                    },
+                    'depends_on': {
+                        'macros': [],
+                        'nodes': []
+                    },
+                    'empty': False,
+                    'fqn': ['test', 'seed'],
+                    'name': 'seed',
+                    'original_file_path': seed_sql_path,
+                    'package_name': 'test',
+                    'path': 'seed.sql',
+                    'raw_sql': open(seed_sql_path).read().rstrip('\n'),
+                    'refs': [],
+                    'resource_type': 'model',
+                    'root_path': os.getcwd(),
+                    'schema': my_schema_name,
+                    'tags': [],
+                    'unique_id': 'model.test.seed'
+                }
+            },
+            'child_map': {
+               'model.test.model': [],
+                'model.test.seed': ['model.test.model']
+            },
+            'parent_map': {
+                'model.test.model': ['model.test.seed'],
+                'model.test.seed': []
+            },
+        }
+        self.verify_manifest(expected_manifest)

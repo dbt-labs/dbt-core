@@ -621,7 +621,7 @@ class BigQueryAdapter(PostgresAdapter):
         index, column pairs.
         """
         cols = cls.get_columns_in_table(profile, project_cfg,
-                                        schema_name, relation.name)
+                                        schema_name, table_name)
         for col in cols:
             flattened = col.flatten()
             for subcol in flattened:
