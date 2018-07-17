@@ -24,21 +24,25 @@ class TestSimpleSeed(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test_simple_seed(self):
-        self.run_dbt(["seed"])
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
         self.assertTablesEqual("seed_actual","seed_expected")
 
         # this should truncate the seed_actual table, then re-insert
-        self.run_dbt(["seed"])
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
         self.assertTablesEqual("seed_actual","seed_expected")
 
 
     @attr(type='postgres')
     def test_simple_seed_with_drop(self):
-        self.run_dbt(["seed"])
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
         self.assertTablesEqual("seed_actual","seed_expected")
 
         # this should drop the seed table, then re-create
-        self.run_dbt(["seed", "--drop-existing"])
+        results = self.run_dbt(["seed", "--drop-existing"])
+        self.assertEqual(len(results),  1)
         self.assertTablesEqual("seed_actual","seed_expected")
 
 
@@ -69,11 +73,13 @@ class TestSimpleSeedCustomSchema(DBTIntegrationTest):
     def test_simple_seed_with_schema(self):
         schema_name = "{}_{}".format(self.unique_schema(), 'custom_schema')
 
-        self.run_dbt(["seed"])
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
         self.assertTablesEqual("seed_actual","seed_expected", table_a_schema=schema_name)
 
         # this should truncate the seed_actual table, then re-insert
-        self.run_dbt(["seed"])
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
         self.assertTablesEqual("seed_actual","seed_expected", table_a_schema=schema_name)
 
 
@@ -81,11 +87,13 @@ class TestSimpleSeedCustomSchema(DBTIntegrationTest):
     def test_simple_seed_with_drop_and_schema(self):
         schema_name = "{}_{}".format(self.unique_schema(), 'custom_schema')
 
-        self.run_dbt(["seed"])
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
         self.assertTablesEqual("seed_actual","seed_expected", table_a_schema=schema_name)
 
         # this should drop the seed table, then re-create
-        self.run_dbt(["seed", "--full-refresh"])
+        results = self.run_dbt(["seed", "--full-refresh"])
+        self.assertEqual(len(results),  1)
         self.assertTablesEqual("seed_actual","seed_expected", table_a_schema=schema_name)
 
 
@@ -117,6 +125,7 @@ class TestSimpleSeedDisabled(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test_simple_seed_with_disabled(self):
-        self.run_dbt(["seed"])
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
         self.assertTableDoesExist('seed_enabled')
         self.assertTableDoesNotExist('seed_disabled')

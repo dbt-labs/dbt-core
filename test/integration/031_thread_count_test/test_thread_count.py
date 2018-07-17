@@ -6,7 +6,7 @@ from dbt.project import read_project
 import os
 
 
-class TestDataTests(DBTIntegrationTest):
+class TestThreadCount(DBTIntegrationTest):
 
     @property
     def project_config(self):
@@ -30,4 +30,5 @@ class TestDataTests(DBTIntegrationTest):
     def test_postgres_threading_8x(self):
         self.use_profile('postgres')
 
-        self.run_dbt(args=['run', '--threads', '16'])
+        results = self.run_dbt(args=['run', '--threads', '16'])
+        self.assertTrue(len(results), 20)

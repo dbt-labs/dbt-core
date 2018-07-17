@@ -19,7 +19,8 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
     @attr(type='postgres')
     def test_full_refresh(self):
         # initial full-refresh should have no effect
-        self.run_dbt(['run', '--full-refresh'])
+        results = self.run_dbt(['run', '--full-refresh'])
+        self.assertEqual(len(results), 3)
 
         self.assertTablesEqual("seed","view")
         self.assertTablesEqual("seed","incremental")
@@ -27,12 +28,14 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
 
         # adds one record to the incremental model. full-refresh should truncate then re-run
         self.run_sql_file("test/integration/017_runtime_materialization_tests/invalidate_incremental.sql")
-        self.run_dbt(['run', '--full-refresh'])
+        results = self.run_dbt(['run', '--full-refresh'])
+        self.assertEqual(len(results), 3)
         self.assertTablesEqual("seed","incremental")
 
         self.run_sql_file("test/integration/017_runtime_materialization_tests/update.sql")
 
-        self.run_dbt(['run', '--full-refresh'])
+        results = self.run_dbt(['run', '--full-refresh'])
+        self.assertEqual(len(results), 3)
 
         self.assertTablesEqual("seed","view")
         self.assertTablesEqual("seed","incremental")
@@ -40,7 +43,8 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test_non_destructive(self):
-        self.run_dbt(['run', '--non-destructive'])
+        results = self.run_dbt(['run', '--non-destructive'])
+        self.assertEqual(len(results), 3)
 
         self.assertTablesEqual("seed","view")
         self.assertTablesEqual("seed","incremental")
@@ -49,7 +53,8 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
 
         self.run_sql_file("test/integration/017_runtime_materialization_tests/update.sql")
 
-        self.run_dbt(['run', '--non-destructive'])
+        results = self.run_dbt(['run', '--non-destructive'])
+        self.assertEqual(len(results), 3)
 
         self.assertTableDoesExist('dependent_view')
         self.assertTablesEqual("seed","view")
@@ -58,7 +63,8 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test_full_refresh_and_non_destructive(self):
-        self.run_dbt(['run', '--full-refresh', '--non-destructive'])
+        results = self.run_dbt(['run', '--full-refresh', '--non-destructive'])
+        self.assertEqual(len(results), 3)
 
         self.assertTablesEqual("seed","view")
         self.assertTablesEqual("seed","incremental")
@@ -68,7 +74,8 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
         self.run_sql_file("test/integration/017_runtime_materialization_tests/invalidate_incremental.sql")
         self.run_sql_file("test/integration/017_runtime_materialization_tests/update.sql")
 
-        self.run_dbt(['run', '--full-refresh', '--non-destructive'])
+        results = self.run_dbt(['run', '--full-refresh', '--non-destructive'])
+        self.assertEqual(len(results), 3)
 
         self.assertTableDoesExist('dependent_view')
         self.assertTablesEqual("seed","view")
@@ -80,7 +87,8 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
     def test_delete__dbt_tmp_relation(self):
         # This creates a __dbt_tmp view - make sure it doesn't interfere with the dbt run
         self.run_sql_file("test/integration/017_runtime_materialization_tests/create_view__dbt_tmp.sql")
-        self.run_dbt(['run', '--model', 'view'])
+        results = self.run_dbt(['run', '--model', 'view'])
+        self.assertEqual(len(results), 1)
 
         self.assertTableDoesNotExist('view__model_dbt_tmp')
         self.assertTablesEqual("seed","view")

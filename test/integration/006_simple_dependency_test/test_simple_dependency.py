@@ -26,7 +26,8 @@ class TestSimpleDependency(DBTIntegrationTest):
     @attr(type='postgres')
     def test_simple_dependency(self):
         self.run_dbt(["deps"])
-        self.run_dbt(["run"])
+        results = self.run_dbt(["run"])
+        self.assertEqual(len(results),  4)
 
         self.assertTablesEqual("seed","table_model")
         self.assertTablesEqual("seed","view_model")
@@ -37,7 +38,8 @@ class TestSimpleDependency(DBTIntegrationTest):
         self.run_sql_file("test/integration/006_simple_dependency_test/update.sql")
 
         self.run_dbt(["deps"])
-        self.run_dbt(["run"])
+        results = self.run_dbt(["run"])
+        self.assertEqual(len(results),  4)
 
         self.assertTablesEqual("seed","table_model")
         self.assertTablesEqual("seed","view_model")
@@ -46,7 +48,8 @@ class TestSimpleDependency(DBTIntegrationTest):
     @attr(type='postgres')
     def test_simple_dependency_with_models(self):
         self.run_dbt(["deps"])
-        self.run_dbt(["run", '--models', 'view_model+'])
+        results = self.run_dbt(["run", '--models', 'view_model+'])
+        self.assertEqual(len(results),  2)
 
         self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed_summary","view_summary")
@@ -83,7 +86,8 @@ class TestSimpleDependencyBranch(DBTIntegrationTest):
 
     def deps_run_assert_equality(self):
         self.run_dbt(["deps"])
-        self.run_dbt(["run"])
+        results = self.run_dbt(["run"])
+        self.assertEqual(len(results),  4)
 
         self.assertTablesEqual("seed","table_model")
         self.assertTablesEqual("seed","view_model")

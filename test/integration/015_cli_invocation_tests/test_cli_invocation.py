@@ -19,14 +19,16 @@ class TestCLIInvocation(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test_toplevel_dbt_run(self):
-        self.run_dbt(['run'])
+        results = self.run_dbt(['run'])
+        self.assertEqual(len(results), 1)
         self.assertTablesEqual("seed", "model")
 
     @attr(type='postgres')
     def test_subdir_dbt_run(self):
         os.chdir(os.path.join(self.models, "subdir1"))
 
-        self.run_dbt(['run'])
+        results = self.run_dbt(['run'])
+        self.assertEqual(len(results), 1)
         self.assertTablesEqual("seed", "model")
 
 class TestCLIInvocationWithProfilesDir(DBTIntegrationTest):
@@ -86,7 +88,8 @@ class TestCLIInvocationWithProfilesDir(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test_toplevel_dbt_run_with_profile_dir_arg(self):
-        self.run_dbt(['run', '--profiles-dir', 'dbt-profile'])
+        results = self.run_dbt(['run', '--profiles-dir', 'dbt-profile'])
+        self.assertEqual(len(results), 1)
 
         actual = self.run_sql("select id from {}.model".format(self.custom_schema), fetch='one')
 
