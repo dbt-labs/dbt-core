@@ -404,7 +404,7 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def alter_table_add_columns(cls, profile, project, relation, columns,
-                               model_name=None):
+                                model_name=None):
 
         conn = cls.get_connection(profile, model_name)
         client = conn.get('handle')
