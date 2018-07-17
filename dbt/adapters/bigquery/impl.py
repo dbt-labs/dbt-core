@@ -420,7 +420,7 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def execute(cls, profile, sql, model_name=None, fetch=None, **kwargs):
-        iterator, _ = cls.raw_execute(profile, sql, model_name, fetch, **kwargs)
+        _, iterator = cls.raw_execute(profile, sql, model_name, fetch, **kwargs)
 
         if fetch:
             res = cls.get_table_from_response(iterator)

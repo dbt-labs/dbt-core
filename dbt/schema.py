@@ -6,10 +6,10 @@ import google.cloud.bigquery
 
 class Column(object):
     TYPE_LABELS = {
-        'string': 'text',
-        'timestamp': 'timestamp',
-        'float': 'float',
-        'integer': 'int'
+        'STRING': 'TEXT',
+        'TIMESTAMP': 'TIMESTAMP',
+        'FLOAT': 'FLOAT',
+        'INTEGER': 'INT'
     }
 
     def __init__(self, column, dtype, char_size=None, numeric_size=None):
@@ -20,7 +20,7 @@ class Column(object):
 
     @classmethod
     def translate_type(cls, dtype):
-        return cls.TYPE_LABELS.get(dtype.lower(), dtype)
+        return cls.TYPE_LABELS.get(dtype.upper(), dtype)
 
     @classmethod
     def create(cls, name, label=None, dtype=None):
@@ -102,11 +102,11 @@ class Column(object):
 
 class BigQueryColumn(Column):
     TYPE_LABELS = {
-        'string': 'string',
-        'timestamp': 'timestamp',
-        'float': 'float64',
-        'integer': 'int64',
-        'record': 'record',
+        'STRING': 'STRING',
+        'TIMESTAMP': 'TIMESTAMP',
+        'FLOAT': 'FLOAT64',
+        'INTEGER': 'INT64',
+        'RECORD': 'RECORD',
     }
 
     def __init__(self, column, dtype, fields=None, mode='NULLABLE'):
@@ -166,13 +166,13 @@ class BigQueryColumn(Column):
 
     @property
     def data_type(self):
-        if self.dtype.lower() == 'record':
+        if self.dtype.upper() == 'RECORD':
             subcols = ["{} {}".format(col.name, col.data_type) for col in self.fields]
             res = 'STRUCT<{}>'.format(", ".join(subcols))
         else:
             res = self.dtype
 
-        if self.mode.lower() == 'repeated':
+        if self.mode.upper() == 'REPEATED':
             return 'ARRAY<{}>'.format(res)
         else:
             return res

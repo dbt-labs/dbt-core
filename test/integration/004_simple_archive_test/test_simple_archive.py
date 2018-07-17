@@ -94,7 +94,7 @@ class TestSimpleArchive(DBTIntegrationTest):
                             "source_table": 'seed',
                             "target_table": "archive_actual",
                             "updated_at": 'updated_at',
-                            "unique_key": "concat(id , '-', first_name)"
+                            "unique_key": "concat(cast(id as string) , '-', first_name)"
                         }
                     ]
                 }
@@ -106,15 +106,16 @@ class TestSimpleArchive(DBTIntegrationTest):
         self.use_default_project()
         self.use_profile('bigquery')
 
-        self.run_sql_file("test/integration/004_simple_archive_test/seed.sql")
+        self.run_sql_file("test/integration/004_simple_archive_test/seed_bq.sql")
 
         self.run_dbt(["archive"])
 
         self.assertTablesEqual("archive_expected", "archive_actual")
 
         self.run_sql_file("test/integration/004_simple_archive_test/invalidate_bigquery.sql")
-        self.run_sql_file("test/integration/004_simple_archive_test/update.sql")
+        self.run_sql_file("test/integration/004_simple_archive_test/update_bq.sql")
 
         self.run_dbt(["archive"])
 
         self.assertTablesEqual("archive_expected", "archive_actual")
+

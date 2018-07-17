@@ -2,5 +2,5 @@
 seed_enabled:
     constraints:
         column_type:
-            - {field: id, type: 'FLOAT' }
+            - {field: id, type: 'FLOAT64' }
             - {field: birthday, type: 'STRING' }
