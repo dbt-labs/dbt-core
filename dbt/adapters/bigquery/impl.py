@@ -194,13 +194,6 @@ class BigQueryAdapter(PostgresAdapter):
         bigquery_dataset = cls.get_dataset(
             profile, project_cfg, schema, model_name)
 
-        try:
-            # This will 404 if the dataset does not exist. It's lazily
-            # evaluated, so wrap it in a list to throw _now_
-            all_tables = list(client.list_tables(bigquery_dataset))
-        except google.api_core.exceptions.NotFound as e:
-            all_tables = []
-
         all_tables = client.list_tables(
             bigquery_dataset,
             # BigQuery paginates tables by alphabetizing them, and using
@@ -212,6 +205,15 @@ class BigQueryAdapter(PostgresAdapter):
             # TODO: cache the list of relations up front, and then we
             #       won't need to do this
             max_results=100000)
+
+        # This will 404 if the dataset does not exist. It's lazily
+        # evaluated, so wrap it in a list to throw _now_. This behavior
+        # mirrors the implementation of list_relations for other adapters
+
+        try:
+            all_tables = list(all_tables)
+        except google.api_core.exceptions.NotFound as e:
+            all_tables = []
 
         return [cls.bq_table_to_relation(table) for table in all_tables]
 
@@ -389,19 +391,10 @@ class BigQueryAdapter(PostgresAdapter):
     @classmethod
     def create_temporary_table(cls, profile, project, sql, model_name=None,
                                **kwargs):
-        query_job, _ = cls.raw_execute(profile, sql, model_name)
-        destination_table = query_job.destination
 
-        return cls.Relation.create(
-            project=destination_table.project,
-            schema=destination_table.dataset_id,
-            identifier=destination_table.table_id,
-            quote_policy={
-                'project': True,
-                'schema': True,
-                'identifier': True
-            },
-            type='table')
+        # BQ queries always return a temp table with their results
+        query_job, _ = cls.raw_execute(profile, sql, model_name)
+        return cls.get_bq_table(query_job.destination)
 
     @classmethod
     def alter_table_add_column(cls, profile, project, relation, column,
