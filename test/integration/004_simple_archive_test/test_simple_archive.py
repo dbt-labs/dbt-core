@@ -150,6 +150,9 @@ class TestSimpleArchiveBigquery(DBTIntegrationTest):
         self.assertTrue(len(expected_cols) > 0, "source table does not exist -- bad test")
         self.assertEqual(len(expected_cols), len(archived_cols), "actual and expected column lengths are different")
 
+        expected_cols = sorted(expected_cols, key=lambda x: x.name)
+        archived_cols = sorted(archived_cols, key=lambda x: x.name)
+
         for (expected_col, actual_col) in zip(expected_cols, archived_cols):
             self.assertTrue(expected_col.name is not None)
             self.assertTrue(expected_col.data_type is not None)

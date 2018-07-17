@@ -34,19 +34,22 @@
 {#
     Add new columns to the table if applicable
 #}
-{% macro create_column(relation, column) %}
-  {{ adapter_macro('create_column', relation, column) }}
+{% macro create_columns(relation, columns) %}
+  {{ adapter_macro('create_columns', relation, columns) }}
 {% endmacro %}
 
-{% macro default__create_column(relation, column) %}
+{% macro default__create_columns(relation, columns) %}
+  {% for column in columns %}
     {% call statement() %}
       alter table {{ relation }} add column "{{ column.name }}" {{ column.data_type }};
     {% endcall %}
+  {% endfor %}
 {% endmacro %}
 
-{% macro bigquery__create_column(relation, column) %}
-  {{ adapter.alter_table_add_column(relation, column) }}
+{% macro bigquery__create_columns(relation, columns) %}
+  {{ adapter.alter_table_add_columns(relation, columns) }}
 {% endmacro %}
+
 
 {#
     Cross-db compatible archival implementation
@@ -173,10 +176,7 @@
   {% set missing_columns = adapter.get_missing_columns(source_relation.schema, source_relation.table,
                                                        target_relation.schema, target_relation.table) %}
 
-  {% for column in missing_columns %}
-    {{ log("Creating column " ~ column ~ " in relation " ~ relation) }}
-    {{ create_column(target_relation, column) }}
-  {% endfor %}
+  {{ create_columns(target_relation, missing_columns) }}
 
 
   {%- set identifier = model['alias'] -%}

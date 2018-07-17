@@ -42,7 +42,7 @@ class BigQueryAdapter(PostgresAdapter):
         "get_missing_columns",
 
         "create_schema",
-        "alter_table_add_column",
+        "alter_table_add_columns",
 
         # versions of adapter functions that take / return Relations
         "list_relations",
@@ -403,7 +403,7 @@ class BigQueryAdapter(PostgresAdapter):
             type=BigQueryRelation.Table)
 
     @classmethod
-    def alter_table_add_column(cls, profile, project, relation, column,
+    def alter_table_add_columns(cls, profile, project, relation, columns,
                                model_name=None):
 
         conn = cls.get_connection(profile, model_name)
@@ -415,7 +415,8 @@ class BigQueryAdapter(PostgresAdapter):
         table_ref = dataset.table(relation.name)
         table = client.get_table(table_ref)
 
-        new_schema = table.schema + [column.to_bq_schema_object()]
+        new_columns = [col.to_bq_schema_object() for col in columns]
+        new_schema = table.schema + new_columns
 
         new_table = google.cloud.bigquery.Table(table_ref, schema=new_schema)
         client.update_table(new_table, ['schema'])
