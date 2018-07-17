@@ -346,5 +346,4 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
         }
         self.verify_catalog(expected_catalog)
-        model_sql_path = self.dir('models/model.sql')
         self.verify_manifest()
