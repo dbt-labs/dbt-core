@@ -394,7 +394,17 @@ class BigQueryAdapter(PostgresAdapter):
 
         # BQ queries always return a temp table with their results
         query_job, _ = cls.raw_execute(profile, sql, model_name)
-        return cls.get_bq_table(query_job.destination)
+        bq_table = query_job.destination
+
+        return cls.Relation.create(
+            project=bq_table.project,
+            schema=bq_table.dataset_id,
+            identifier=bq_table.table_id,
+            quote_policy={
+                'schema': True,
+                'identifier': True
+            },
+            type=BigQueryRelation.Table)
 
     @classmethod
     def alter_table_add_column(cls, profile, project, relation, column,
