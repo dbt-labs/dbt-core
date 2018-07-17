@@ -1,8 +1,7 @@
 import json
 import os
 
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 
 class TestDocsGenerate(DBTIntegrationTest):
@@ -12,7 +11,7 @@ class TestDocsGenerate(DBTIntegrationTest):
 
     @property
     def schema(self):
-        return 'simple_dependency_029'
+        return 'docs_generate_029'
 
     @staticmethod
     def dir(path):
@@ -86,21 +85,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             }
         )
 
-    def verify_manifest(self):
-        self.assertTrue(os.path.exists('./target/manifest.json'))
-
-        with open('./target/manifest.json') as fp:
-            manifest = json.load(fp)
-
-        self.assertEqual(
-            set(manifest),
-            {'nodes', 'macros', 'parent_map', 'child_map'}
-        )
-
-        self.verify_manifest_macros(manifest)
-        manifest_without_macros = {
-            k: v for k, v in manifest.items() if k != 'macros'
-        }
+    def expected_seeded_manifest(self):
         # the manifest should be consistent across DBs for this test
         model_sql_path = self.dir('models/model.sql')
         my_schema_name = self.unique_schema()
@@ -164,12 +149,26 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'seed.test.seed': ['model.test.model'],
             },
         }
+
+    def verify_manifest(self, expected_manifest):
+        self.assertTrue(os.path.exists('./target/manifest.json'))
+
+        with open('./target/manifest.json') as fp:
+            manifest = json.load(fp)
+
+        self.assertEqual(
+            set(manifest),
+            {'nodes', 'macros', 'parent_map', 'child_map'}
+        )
+
+        self.verify_manifest_macros(manifest)
+        manifest_without_macros = {
+            k: v for k, v in manifest.items() if k != 'macros'
+        }
         self.assertEqual(manifest_without_macros, expected_manifest)
 
-
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__run_and_generate(self):
-        self.use_profile('postgres')
         self.run_and_generate()
         my_schema_name = self.unique_schema()
         expected_cols = [
@@ -225,11 +224,10 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
         }
         self.verify_catalog(expected_catalog)
-        self.verify_manifest()
+        self.verify_manifest(self.expected_seeded_manifest())
 
-    @attr(type='snowflake')
+    @use_profile('snowflake')
     def test__snowflake__run_and_generate(self):
-        self.use_profile('snowflake')
         self.run_and_generate()
         my_schema_name = self.unique_schema()
         expected_cols = [
@@ -286,35 +284,34 @@ class TestDocsGenerate(DBTIntegrationTest):
         }
 
         self.verify_catalog(expected_catalog)
-        self.verify_manifest()
+        self.verify_manifest(self.expected_seeded_manifest())
 
-    @attr(type='bigquery')
+    @use_profile('bigquery')
     def test__bigquery__run_and_generate(self):
-        self.use_profile('bigquery')
-        self.run_and_generate()
+        self.run_and_generate({'data-paths': [self.dir("seed")]})
         my_schema_name = self.unique_schema()
         expected_cols = [
             {
                 'name': 'id',
-                'index': 0,
+                'index': 1,
                 'type': 'INTEGER',
                 'comment': None,
             },
             {
                 'name': 'first_name',
-                'index': 1,
-                'type': 'STRING',
-                'comment': None,
-            },
-            {
-                'name': 'email',
                 'index': 2,
                 'type': 'STRING',
                 'comment': None,
             },
             {
-                'name': 'ip_address',
+                'name': 'email',
                 'index': 3,
+                'type': 'STRING',
+                'comment': None,
+            },
+            {
+                'name': 'ip_address',
+                'index': 4,
                 'type': 'STRING',
                 'comment': None,
             },
@@ -346,4 +343,69 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
         }
         self.verify_catalog(expected_catalog)
-        self.verify_manifest()
+        self.verify_manifest(self.expected_seeded_manifest())
+
+    @use_profile('bigquery')
+    def test__bigquery__nested_models(self):
+        self.use_default_project({'source-paths': [self.dir('bq_models')]})
+
+        # actual test
+        self.assertEqual(len(self.run_dbt()), 2)
+        self.run_dbt(['docs', 'generate'])
+
+        expected_cols = [
+            {
+                "name": "field_1",
+                "index": 1,
+                "type": "INTEGER",
+                "comment": None
+            },
+            {
+                "name": "field_2",
+                "index": 2,
+                "type": "INTEGER",
+                "comment": None
+            },
+            {
+                "name": "field_3",
+                "index": 3,
+                "type": "INTEGER",
+                "comment": None
+            },
+            {
+                "name": "nested_field.field_4",
+                "index": 4,
+                "type": "INTEGER",
+                "comment": None
+            },
+            {
+                "name": "nested_field.field_5",
+                "index": 5,
+                "type": "INTEGER",
+                "comment": None
+            }
+        ]
+        catalog = {
+          my_schema_name: {
+            "model": {
+              "metadata": {
+                "schema": my_schema_name,
+                "name": "model",
+                "type": "view",
+                "comment": None
+              },
+              "columns": expected_cols
+            },
+            "seed": {
+              "metadata": {
+                "schema": my_schema_name,
+                "name": "seed",
+                "type": "view",
+                "comment": None
+              },
+              "columns": expected_cols
+            }
+          }
+        }
+        self.verify_catalog(catalog)
+        self.verify_manifest({})
