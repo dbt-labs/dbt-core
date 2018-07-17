@@ -615,6 +615,19 @@ class BigQueryAdapter(PostgresAdapter):
         pass
 
     @classmethod
+    def _flat_columns_in_table(cls, profile, project_cfg, schema_name,
+                               table_name):
+        """An iterator over the columns for a given schema and table. Yields
+        index, column pairs.
+        """
+        cols = cls.get_columns_in_table(profile, project_cfg,
+                                        schema_name, relation.name)
+        for col in cols:
+            flattened = col.flatten()
+            for subcol in flattened:
+                yield subcol
+
+    @classmethod
     def get_catalog(cls, profile, project_cfg, manifest):
         schemas = {
             node.to_dict()['schema']
@@ -636,17 +649,21 @@ class BigQueryAdapter(PostgresAdapter):
         for schema_name in schemas:
             relations = cls.list_relations(profile, project_cfg, schema_name)
             for relation in relations:
-                cols = cls.get_columns_in_table(profile, project_cfg,
-                                                schema_name, relation.name)
-                for col_index, col in enumerate(cols):
+                flattened = cls._flat_columns_in_table(
+                    profile,
+                    project_cfg,
+                    schema_name,
+                    relation.name
+                )
+                for index, column in enumerate(flattened, start=1):
                     column_data = (
                         relation.schema,
                         relation.name,
                         relation.type,
                         None,
-                        col.name,
-                        col_index,
-                        col.data_type,
+                        column.name,
+                        index,
+                        column.data_type,
                         None,
                     )
                     columns.append(dict(zip(column_names, column_data)))
