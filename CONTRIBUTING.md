@@ -32,22 +32,23 @@ You will need a GitHub account fully configured with SSH to contribute to dbt. G
 
 ### Getting dbt
 
-Now clone dbt to wherever you'd like. I personally did this:
+Now clone dbt to wherever you'd like. For example:
 
 ```
-mkdir -p ~/src/fishtown/
-cd ~/src/fishtown
+mkdir -p ~/git/
+cd ~/git
 git clone git@github.com:fishtown-analytics/dbt.git
 ```
 
 But it really does not matter where you put it as long as you remember it.
 
 ### Setting up your virtualenv
-This is really a hygiene thing, but I recommend setting up a fresh virtualenv using pyenv-virtualenv:
+
+Set up a fresh virtualenv with pyenv-virtualenv for dbt:
 
 ```
 pyenv virtualenv 3.6.5 dbt36
-cd ~/src/fishtown/dbt
+cd ~/git/dbt
 pyenv local dbt36
 ```
 
@@ -55,6 +56,7 @@ This makes a new virtualenv based on python 3.6.5 named `dbt36`, and tells pyenv
 
 
 ### Installing postgres locally
+
 For testing, and later in the examples in this document, you may want to have `psql` available so you can poke around in the database and see what happened. We recommend that you use [homebrew](https://brew.sh/) for that on macOS, and your package manager on Linux. You can install any version of the postgres client that you'd like. So on macOS, with homebrew setup:
 
 ```
@@ -88,10 +90,10 @@ Our test environment goes like this:
 
 ### Running tests via Docker
 
-The basics should work with basically no further setup. In the terminal, `cd` to the directory where you cloned dbt. So, for example, if you cloned dbt to `~/src/fishtown/dbt`:
+The basics should work with basically no further setup. In the terminal, `cd` to the directory where you cloned dbt. So, for example, if you cloned dbt to `~/git/dbt`:
 
 ```
-cd ~/src/fishtown/dbt
+cd ~/git/dbt
 ```
 
 Then you'll want to make a test.env file. Fortunately, there's a sample which is fine for our purposes:
