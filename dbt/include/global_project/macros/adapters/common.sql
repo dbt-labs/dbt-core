@@ -170,8 +170,8 @@
       select
         table_schema,
         table_name,
+        'LATE BINDING VIEW' as table_type,
         null as table_comment,
-        'view' as table_type,
 
         column_name,
         column_index,
