@@ -189,7 +189,6 @@ class BigQueryAdapter(PostgresAdapter):
     @classmethod
     def list_relations(cls, profile, project_cfg, schema, model_name=None):
         connection = cls.get_connection(profile, model_name)
-        credentials = connection.get('credentials', {})
         client = connection.get('handle')
 
         bigquery_dataset = cls.get_dataset(
@@ -388,7 +387,8 @@ class BigQueryAdapter(PostgresAdapter):
         return query_job, iterator
 
     @classmethod
-    def create_temporary_table(cls, profile, project, sql, model_name=None, **kwargs):
+    def create_temporary_table(cls, profile, project, sql, model_name=None,
+                               **kwargs):
         query_job, _ = cls.raw_execute(profile, sql, model_name)
         destination_table = query_job.destination
 
@@ -404,12 +404,15 @@ class BigQueryAdapter(PostgresAdapter):
             type='table')
 
     @classmethod
-    def alter_table_add_column(cls, profile, project, relation, column, model_name=None):
+    def alter_table_add_column(cls, profile, project, relation, column,
+                               model_name=None):
 
         conn = cls.get_connection(profile, model_name)
         client = conn.get('handle')
 
-        dataset = cls.get_dataset(profile, project, relation.schema, model_name)
+        dataset = cls.get_dataset(profile, project, relation.schema,
+                                  model_name)
+
         table_ref = dataset.table(relation.name)
         table = client.get_table(table_ref)
 
@@ -420,7 +423,8 @@ class BigQueryAdapter(PostgresAdapter):
 
     @classmethod
     def execute(cls, profile, sql, model_name=None, fetch=None, **kwargs):
-        _, iterator = cls.raw_execute(profile, sql, model_name, fetch, **kwargs)
+        _, iterator = cls.raw_execute(profile, sql, model_name, fetch,
+                                      **kwargs)
 
         if fetch:
             res = cls.get_table_from_response(iterator)
@@ -576,7 +580,7 @@ class BigQueryAdapter(PostgresAdapter):
         table_ref = dataset.table(identifier)
 
         try:
-            return client.get_table(table_ref)
+            return client.uget_table(table_ref)
         except google.cloud.exceptions.NotFound:
             return None
 

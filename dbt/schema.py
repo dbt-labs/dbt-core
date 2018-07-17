@@ -25,12 +25,14 @@ class Column(object):
     @classmethod
     def create(cls, name, label=None, dtype=None):
         if label and dtype:
-            dbt.exceptions.raise_compiler_error("Only one of 'label' or "
-                    "'dtype' is allowed, but both were provided")
+            dbt.exceptions.raise_compiler_error(
+                    "Only one of 'label' or 'dtype' is allowed, but both "
+                    "were provided")
 
         elif not label and not dtype:
-            dbt.exceptions.raise_compiler_error("One of 'label' or "
-                    "'dtype' is required, but neither were provided")
+            dbt.exceptions.raise_compiler_error(
+                    "One of 'label' or 'dtype' is required, but neither "
+                    "were provided")
 
         if label:
             column_type = cls.translate_type(label)
@@ -156,26 +158,30 @@ class BigQueryColumn(Column):
         return "cast({} as {})".format(value, self.dtype)
 
     def to_bq_schema_object(self):
-        fields = None
-
+        kwargs = {}
         if len(self.fields) > 0:
             fields = [field.to_bq_schema_object() for field in self.fields]
-            return google.cloud.bigquery.SchemaField(self.name, self.dtype, self.mode, fields=fields)
-        else:
-            return google.cloud.bigquery.SchemaField(self.name, self.dtype, self.mode)
+            kwargs = {"fields": fields}
+
+        return google.cloud.bigquery.SchemaField(self.name, self.dtype,
+                                                 self.mode, **kwargs)
 
     @property
     def data_type(self):
         if self.dtype.upper() == 'RECORD':
-            subcols = ["{} {}".format(col.name, col.data_type) for col in self.fields]
-            res = 'STRUCT<{}>'.format(", ".join(subcols))
+            subcols = [
+                "{} {}".format(col.name, col.data_type) for col in self.fields
+            ]
+            field_type = 'STRUCT<{}>'.format(", ".join(subcols))
+
         else:
-            res = self.dtype
+            field_type = self.dtype
 
         if self.mode.upper() == 'REPEATED':
-            return 'ARRAY<{}>'.format(res)
+            return 'ARRAY<{}>'.format(field_type)
+
         else:
-            return res
+            return field_type
 
     def is_string(self):
         return self.dtype.lower() == 'string'
