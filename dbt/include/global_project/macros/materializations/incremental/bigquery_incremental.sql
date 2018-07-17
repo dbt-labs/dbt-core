@@ -8,7 +8,7 @@
   {%- set full_refresh_mode = (flags.FULL_REFRESH == True) -%}
 
   {% if non_destructive_mode %}
-    {{ log("--non-destructive is not supported on BigQuery, and will be ignored", info=True) }}
+    {{ exceptions.raise_compiler_error("--non-destructive mode is not supported on BigQuery") }}
   {% endif %}
 
   {%- set identifier = model['alias'] -%}

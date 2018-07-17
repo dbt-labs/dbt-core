@@ -23,22 +23,8 @@ class Column(object):
         return cls.TYPE_LABELS.get(dtype.upper(), dtype)
 
     @classmethod
-    def create(cls, name, label=None, dtype=None):
-        if label and dtype:
-            dbt.exceptions.raise_compiler_error(
-                    "Only one of 'label' or 'dtype' is allowed, but both "
-                    "were provided")
-
-        elif not label and not dtype:
-            dbt.exceptions.raise_compiler_error(
-                    "One of 'label' or 'dtype' is required, but neither "
-                    "were provided")
-
-        if label:
-            column_type = cls.translate_type(label)
-        else:
-            column_type = dtype
-
+    def create(cls, name, label_or_dtype):
+        column_type = cls.translate_type(label_or_dtype)
         return cls(name, column_type)
 
     @property

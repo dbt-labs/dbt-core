@@ -206,16 +206,12 @@ class BigQueryAdapter(PostgresAdapter):
             #       won't need to do this
             max_results=100000)
 
-        # This will 404 if the dataset does not exist. It's lazily
-        # evaluated, so wrap it in a list to throw _now_. This behavior
-        # mirrors the implementation of list_relations for other adapters
-
+        # This will 404 if the dataset does not exist. This behavior mirrors
+        # the implementation of list_relations for other adapters
         try:
-            all_tables = list(all_tables)
+            return [cls.bq_table_to_relation(table) for table in all_tables]
         except google.api_core.exceptions.NotFound as e:
-            all_tables = []
-
-        return [cls.bq_table_to_relation(table) for table in all_tables]
+            return []
 
     @classmethod
     def get_relation(cls, profile, project_cfg, schema=None, identifier=None,

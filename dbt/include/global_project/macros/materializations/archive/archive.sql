@@ -51,16 +51,14 @@
 {#
     Cross-db compatible archival implementation
 #}
-{% macro archive_select(source_relation, target_relation, unique_key, updated_at) %}
+{% macro archive_select(source_relation, target_relation, source_columns, unique_key, updated_at) %}
 
-    {% set cols = adapter.get_columns_in_table(source_relation.schema, source_relation.identifier) %}
-
-    {% set timestamp_column = api.Column.create('_', label='timestamp') %}
+    {% set timestamp_column = api.Column.create('_', 'timestamp') %}
 
     with current_data as (
 
         select
-            {% for col in cols %}
+            {% for col in source_columns %}
                 {{ adapter.quote(col.name) }} {% if not loop.last %},{% endif %}
             {% endfor %},
             {{ updated_at }} as {{ adapter.quote('dbt_updated_at') }},
@@ -74,7 +72,7 @@
     archived_data as (
 
         select
-            {% for col in adapter.get_columns_in_table(source_relation.schema, source_relation.identifier) %}
+            {% for col in source_columns %}
                 {{ adapter.quote(col.name) }},
             {% endfor %}
             {{ updated_at }} as {{ adapter.quote('dbt_updated_at') }},
@@ -162,10 +160,10 @@
   {%- set unique_key = config.get('unique_key') -%}
   {%- set updated_at = config.get('updated_at') -%}
   {%- set dest_columns = source_columns + [
-      api.Column.create('valid_from', label='timestamp'),
-      api.Column.create('valid_to', label='timestamp'),
-      api.Column.create('scd_id', label='string'),
-      api.Column.create('dbt_updated_at', label='timestamp'),
+      api.Column.create('valid_from', 'timestamp'),
+      api.Column.create('valid_to', 'timestamp'),
+      api.Column.create('scd_id', 'string'),
+      api.Column.create('dbt_updated_at', 'timestamp'),
   ] -%}
 
   {% call statement() %}
@@ -187,7 +185,7 @@
   {% set tmp_table_sql -%}
 
       with dbt_archive_sbq as (
-        {{ archive_select(source_relation, target_relation, unique_key, updated_at) }}
+        {{ archive_select(source_relation, target_relation, source_columns, unique_key, updated_at) }}
       )
       select * from dbt_archive_sbq
 

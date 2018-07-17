@@ -160,16 +160,21 @@ class TestSimpleCopy(DBTIntegrationTest):
         self.use_profile("postgres")
         self.use_default_project({"data-paths": [self.dir("seed-initial")]})
 
-        self.run_dbt(["seed"])
-        self.run_dbt()
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        results = self.run_dbt()
+        self.assertEqual(len(results),  6)
 
         self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
 
         self.use_default_project({"data-paths": [self.dir("seed-update")]})
-        self.run_dbt(["seed"])
-        self.run_dbt()
+
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        results = self.run_dbt()
+        self.assertEqual(len(results),  6)
 
         self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed","incremental")
