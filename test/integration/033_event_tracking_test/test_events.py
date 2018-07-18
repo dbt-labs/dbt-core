@@ -198,7 +198,11 @@ class TestEventTrackingSuccess(TestEventTracking):
             self.build_context('compile', 'end', result_type='ok')
         ]
 
-        self.run_event_test(["compile"], expected_calls, expected_contexts)
+        self.run_event_test(
+            ["compile", "--vars", "sensitive_thing: abc"],
+            expected_calls,
+            expected_contexts
+        )
 
     @attr(type="postgres")
     def test__event_tracking_deps(self):
