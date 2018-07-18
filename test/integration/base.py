@@ -313,11 +313,6 @@ class DBTIntegrationTest(unittest.TestCase):
             adapter.drop_schema(self._profile, self.project,
                                 self.unique_schema(), '__test')
         else:
-            if self.adapter_type == 'redshift':
-                # in the presence of late-binding views, redshift hangs
-                # indefinitely on DROP SCHEMA if we don't disconnect and
-                # reconnect.
-                self._reconnect()
             schema = self.adapter.quote(self.unique_schema())
             self.run_sql('DROP SCHEMA IF EXISTS {} CASCADE'.format(schema))
             self.handle.close()
