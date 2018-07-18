@@ -483,6 +483,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
         }
         self.verify_manifest(expected_manifest)
+
     @use_profile('redshift')
     def test__redshift__run_and_generate(self):
         self.run_and_generate()
@@ -540,7 +541,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
         }
         self.verify_catalog(expected_catalog)
-        self.verify_manifest(self.expected_manifest())
+        self.verify_manifest(self.expected_seeded_manifest())
 
     @use_profile('redshift')
     def test__redshift__incremental_view(self):

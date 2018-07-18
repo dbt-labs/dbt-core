@@ -289,13 +289,6 @@ class DBTIntegrationTest(unittest.TestCase):
             self.run_sql('DROP SCHEMA IF EXISTS {} CASCADE'.format(schema))
             self.run_sql('CREATE SCHEMA {}'.format(schema))
 
-    def _reconnect(self):
-        """Disconnect and then reconnect. setUp() must be complete!"""
-        self.handle.close()
-        self.adapter.cleanup_connections()
-        connection = self.adapter.acquire_connection(self._profile, '__test')
-        self.handle = connection.get('handle')
-
     def tearDown(self):
         os.remove(DBT_PROFILES)
         os.remove("dbt_project.yml")

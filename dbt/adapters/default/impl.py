@@ -661,15 +661,6 @@ class DefaultAdapter(object):
         return conn_name
 
     @classmethod
-    def clear_all_transactions(cls, profile):
-        for conn_name, transaction in connections_in_use.items():
-            if transaction.get('transaction_open'):
-                print('found open transaction {}, rolling it back'.format(conn_name))
-                cls.rollback(transaction)
-            print('clearing transaction')
-            cls.clear_transaction(profile, conn_name)
-
-    @classmethod
     def execute_one(cls, profile, sql, model_name=None, auto_begin=False):
         cls.get_connection(profile, model_name)
 
