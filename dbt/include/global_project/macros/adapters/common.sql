@@ -29,15 +29,8 @@
 {%- endmacro %}
 
 {% macro create_schema(schema_name) %}
-  {{ adapter_macro('create_schema', schema_name) }}
+  {{ adapter.create_schema(schema_name) }}
 {% endmacro %}
-
-{% macro default__create_schema(schema_name) %}
-  {% call statement() %}
-    create schema if not exists {{ schema_name }};
-  {% endcall %}
-{% endmacro %}
-
 
 {% macro create_table_as(temporary, relation, sql) -%}
   {{ adapter_macro('create_table_as', temporary, relation, sql) }}

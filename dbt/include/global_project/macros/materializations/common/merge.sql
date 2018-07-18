@@ -28,3 +28,11 @@
         ({{ dest_cols_csv }})
 
 {% endmacro %}
+
+{% macro redshift__get_merge_sql(target, source, unique_key, dest_columns) -%}
+    {{ exceptions.raise_compiler_error('get_merge_sql is not implemented for Redshift') }}
+{% endmacro %}
+
+{% macro postgres__get_merge_sql(target, source, unique_key, dest_columns) -%}
+    {{ exceptions.raise_compiler_error('get_merge_sql is not implemented for Postgres') }}
+{% endmacro %}
