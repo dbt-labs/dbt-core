@@ -617,8 +617,8 @@ class BigQueryAdapter(PostgresAdapter):
     @classmethod
     def _flat_columns_in_table(cls, profile, project_cfg, schema_name,
                                table_name):
-        """An iterator over the columns for a given schema and table. Yields
-        index, column pairs.
+        """An iterator over the flattened columns for a given schema and table.
+        Resolves child columns as having the name "parent.child".
         """
         cols = cls.get_columns_in_table(profile, project_cfg,
                                         schema_name, table_name)
