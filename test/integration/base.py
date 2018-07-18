@@ -5,6 +5,9 @@ import yaml
 import random
 import time
 import json
+from functools import wraps
+
+from nose.plugins.attrib import attr
 
 from dbt.adapters.factory import get_adapter
 from dbt.project import Project
@@ -528,3 +531,28 @@ class DBTIntegrationTest(unittest.TestCase):
     def assertEquals(self, *args, **kwargs):
         # assertEquals is deprecated. This makes the warnings less chatty
         self.assertEqual(*args, **kwargs)
+
+
+def use_profile(profile_name):
+    """A decorator to declare a test method as using a particular profile.
+    Handles both setting the nose attr and calling self.use_profile.
+
+    Use like this:
+
+    class TestSomething(DBIntegrationTest):
+        @use_profile('postgres')
+        def test_postgres_thing(self):
+            self.assertEqual(self.adapter_type, 'postgres')
+
+        @use_profile('snowflake')
+        def test_snowflake_thing(self):
+            self.assertEqual(self.adapter_type, 'snowflake')
+    """
+    def outer(wrapped):
+        @attr(type=profile_name)
+        @wraps(wrapped)
+        def func(self, *args, **kwargs):
+            self.use_profile(profile_name)
+            return wrapped(self, *args, **kwargs)
+        return func
+    return outer
