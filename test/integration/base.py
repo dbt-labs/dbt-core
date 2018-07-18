@@ -6,6 +6,8 @@ import random
 import time
 import json
 
+import dbt.flags as flags
+
 from dbt.adapters.factory import get_adapter
 from dbt.project import Project
 
@@ -164,6 +166,7 @@ class DBTIntegrationTest(unittest.TestCase):
             return self.redshift_profile()
 
     def setUp(self):
+        flags.reset()
         self.adapter_type = 'postgres'
 
         # create a dbt_project.yml
