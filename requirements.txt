@@ -1,12 +1,9 @@
-argparse>=1.2.1
 Jinja2>=2.8
-pytz==2017.2
 PyYAML>=3.11
-psycopg2==2.7.5
+psycopg2>=2.7.5,<2.8
 sqlparse==0.2.3
 networkx==1.11
 minimal-snowplow-tracker==0.0.1
-celery==3.1.23
 snowflake-connector-python>=1.4.9
 colorama==0.3.9
 google-cloud-bigquery==0.29.0
