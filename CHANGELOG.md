@@ -28,7 +28,7 @@ TODO
 - Redshift: fix "table dropped by concurrent query" ([#825](https://github.com/fishtown-analytics/dbt/pull/825))
 - Fix the error handling for profiles.yml validation ([#820](https://github.com/fishtown-analytics/dbt/pull/820))
 - Make the `--threads` parameter actually change the number of threads used ([#819](https://github.com/fishtown-analytics/dbt/pull/819))
-- Ensure that numeric precision of a column is not `None`: ([#796](https://github.com/fishtown-analytics/dbt/pull/796))
+- Ensure that numeric precision of a column is not `None` ([#796](https://github.com/fishtown-analytics/dbt/pull/796))
 - Allow for more complex version comparison ([#797](https://github.com/fishtown-analytics/dbt/pull/797))
 
 ### Changes
