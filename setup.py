@@ -45,7 +45,7 @@ setup(
         'networkx==1.11',
         'minimal-snowplow-tracker==0.0.1',
         'snowflake-connector-python>=1.4.9',
-        'requests>=2.18.0',
+        'requests>=2.18.0,<3',
         'colorama==0.3.9',
         'google-cloud-bigquery==0.29.0',
         'agate>=1.6,<2',
