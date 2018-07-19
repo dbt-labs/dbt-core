@@ -357,3 +357,15 @@ def raise_ambiguous_alias(node_1, node_2):
             duped_name,
             node_1['unique_id'], node_1['original_file_path'],
             node_2['unique_id'], node_2['original_file_path']))
+
+
+def raise_patch_targets_not_found(patches):
+    patch_list = '\n\t'.join(
+        '{} (referenced in path {})'.format(p.name, p.path)
+        for p in patches.values()
+    )
+    raise_compiler_error(
+        'dbt could not find models for the following patches:\n\t{}'.format(
+            patch_list
+        )
+    )

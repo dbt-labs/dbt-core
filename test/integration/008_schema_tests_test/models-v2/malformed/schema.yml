@@ -1,0 +1,15 @@
+version: 2
+
+models:
+  - name: table_copy
+      description: "A copy of the table"
+      columns:
+        - name: id
+          description: "The ID"
+          tests:
+            - not_null
+            - unique
+        - name: favorite_color
+          tests:
+            # this is missing a "-" and is malformed
+            accepted_values: { values: ['blue', 'green'] }

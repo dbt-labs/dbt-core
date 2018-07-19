@@ -4,7 +4,6 @@ from test.integration.base import DBTIntegrationTest, FakeArgs
 from dbt.task.test import TestTask
 from dbt.project import read_project
 
-
 class TestSchemaTests(DBTIntegrationTest):
 
     def setUp(self):
@@ -18,7 +17,7 @@ class TestSchemaTests(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/008_schema_tests_test/models-v1/models"
+        return "test/integration/008_schema_tests_test/models-v2/models"
 
     def run_schema_validations(self):
         project = read_project('dbt_project.yml')
@@ -50,7 +49,6 @@ class TestSchemaTests(DBTIntegrationTest):
 
         self.assertEqual(sum(x.status for x in test_results), 5)
 
-
 class TestMalformedSchemaTests(DBTIntegrationTest):
 
     def setUp(self):
@@ -63,7 +61,7 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/008_schema_tests_test/models-v1/malformed"
+        return "test/integration/008_schema_tests_test/models-v2/malformed"
 
     def run_schema_validations(self):
         project = read_project('dbt_project.yml')
@@ -108,7 +106,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/008_schema_tests_test/models-v1/custom"
+        return "test/integration/008_schema_tests_test/models-v2/custom"
 
     def run_schema_validations(self):
         project = read_project('dbt_project.yml')
@@ -124,7 +122,8 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         self.assertEqual(len(results), 4)
 
         test_results = self.run_schema_validations()
-        self.assertEqual(len(test_results), 6)
+        # TODO: support model level tests
+        self.assertEqual(len(test_results), 5)
 
         expected_failures = ['unique', 'every_value_is_blue']
 

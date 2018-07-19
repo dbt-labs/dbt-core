@@ -1,6 +1,8 @@
 from dbt.api import APIObject
 from dbt.utils import deep_merge, timestring
 from dbt.node_types import NodeType
+from dbt.exceptions import raise_duplicate_resource_name, \
+    raise_patch_targets_not_found
 
 import dbt.clients.jinja
 
@@ -63,6 +65,25 @@ CONFIG_CONTRACT = {
         'enabled', 'materialized', 'post-hook', 'pre-hook', 'vars',
         'quoting', 'column_types'
     ]
+}
+
+
+#  Note that description must be present, but may be empty.
+COLUMN_INFO_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'description': 'Information about a single column in a model',
+    'properties': {
+        'name': {
+            'type': 'string',
+            'description': 'The column name',
+        },
+        'description': {
+            'type': 'string',
+            'description': 'A description of the column',
+        },
+    },
+    'required': ['name', 'description'],
 }
 
 
@@ -151,6 +172,20 @@ PARSED_NODE_CONTRACT = deep_merge(
                     'type': 'string',
                 }
             },
+            'description': {
+                'type': 'string',
+                'description': 'A user-supplied description of the model',
+            },
+            'columns': {
+                'type': 'array',
+                'items': COLUMN_INFO_CONTRACT,
+            },
+            'patch_path': {
+                'type': 'string',
+                'description': (
+                    'The path to the patch source if the node was patched'
+                ),
+            },
         },
         'required': UNPARSED_NODE_CONTRACT['required'] + [
             'unique_id', 'fqn', 'schema', 'refs', 'depends_on', 'empty',
@@ -158,6 +193,39 @@ PARSED_NODE_CONTRACT = deep_merge(
         ]
     }
 )
+
+
+# The parsed node update is only the 'patch', not the test. The test became a
+# regular parsed node. Note that description and columns must be present, but
+# may be empty.
+PARSED_NODE_PATCH_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'description': 'A collection of values that can be set on a node',
+    'properties': {
+        'name': {
+            'type': 'string',
+            'description': 'The name of the node this modifies',
+        },
+        'description': {
+            'type': 'string',
+            'description': 'The description of the node to add',
+        },
+        'path': {
+            'type': 'string',
+            'description': 'The original file path the patch came from',
+        },
+        'columns': {
+            'type': 'array',
+            'items': COLUMN_INFO_CONTRACT,
+        }
+    },
+    'required': ['name', 'path', 'description', 'columns'],
+}
+
+
+class ParsedNodePatch(APIObject):
+    SCHEMA = PARSED_NODE_PATCH_CONTRACT
 
 
 PARSED_NODES_CONTRACT = {
@@ -308,6 +376,18 @@ class ParsedNode(APIObject):
         ret['agate_table'] = self.agate_table
         return ret
 
+    def patch(self, patch):
+        """Given a ParsedNodePatch, add the new information to the node."""
+        # explicitly pick out the parts to update so we don't inadvertently
+        # step on the model name or anything
+        self._contents.update({
+            'patch_path': patch.path,
+            'description': patch.description,
+            'columns': patch.columns,
+        })
+        # patches always trigger re-validation
+        self.validate()
+
 
 class ParsedMacro(APIObject):
     SCHEMA = PARSED_MACRO_CONTRACT
@@ -404,6 +484,33 @@ class ParsedManifest(APIObject):
     def find_operation_by_name(self, name, package):
         return self._find_by_name(name, package, 'macros',
                                   [NodeType.Operation])
+
+    def add_nodes(self, new_nodes):
+        """Add the given dict of new nodes to the manifest."""
+        for unique_id, node in new_nodes.items():
+            if unique_id in self.nodes:
+                raise_duplicate_resource_name(node, self.nodes[unique_id])
+            self.nodes[unique_id] = node
+
+    def patch_nodes(self, patches):
+        """Patch nodes with the given dict of patches. Note that this consumes
+        the input!
+        """
+        # because we don't have any mapping from node _names_ to nodes, and we
+        # only have the node name in the patch, we have to iterate over all the
+        # nodes looking for matching names. We could use _find_by_name if we
+        # were ok with doing an O(n*m) search (one nodes scan per patch)
+        for node in self.nodes.values():
+            if node.resource_type != NodeType.Model:
+                continue
+            patch = patches.pop(node.name, None)
+            if not patch:
+                continue
+            node.patch(patch)
+
+        # if we have any left, some references could not be resolved
+        if patches:
+            raise_patch_targets_not_found(patches)
 
     def to_flat_graph(self):
         """Convert the parsed manifest to the 'flat graph' that the compiler
