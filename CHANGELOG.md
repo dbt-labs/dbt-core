@@ -10,12 +10,12 @@ Additionally, a number of bugs have been fixed including intermittent BigQuery 4
 
 We want to extend a big thank you to our outside contributors for this release! You all are amazing.
 
-- @danielchalef (#818)
-- @mjumbewu (#796)
-- @abelsonlive (#800)
-- @jon-rtr (#800)
-- @mturzanska (#797)
-- @cpdean (#780)
+- [@danielchalef](https://github.com/danielchalef) ([#818](https://github.com/fishtown-analytics/dbt/pull/818))
+- [@mjumbewu](https://github.com/mjumbewu) ([#796](https://github.com/fishtown-analytics/dbt/pull/796))
+- [@abelsonlive](https://github.com/abelsonlive) ([#800](https://github.com/fishtown-analytics/dbt/pull/800))
+- [@jon-rtr](https://github.com/jon-rtr) ([#800](https://github.com/fishtown-analytics/dbt/pull/800))
+- [@mturzanska](https://github.com/mturzanska) ([#797](https://github.com/fishtown-analytics/dbt/pull/797))
+- [@cpdean](https://github.com/cpdean) ([#780](https://github.com/fishtown-analytics/dbt/pull/780))
 
 ### Features
 
@@ -48,7 +48,7 @@ We want to extend a big thank you to our outside contributors for this release! 
   - Stop tracking `run_error` in tracking code ([#817](https://github.com/fishtown-analytics/dbt/pull/817))
   - Use Mapping instead of dict as the base class for APIObject ([#756](https://github.com/fishtown-analytics/dbt/pull/756))
   - Split out parsers ([#809](https://github.com/fishtown-analytics/dbt/pull/809))
-  - Fix `__all__` parameter in submodules ([#777](https://github.com/fishtown-analytics/dbt/pull/780))
+  - Fix `__all__` parameter in submodules ([#780](https://github.com/fishtown-analytics/dbt/pull/780))
   - Switch to CircleCI 2.0 ([#843](https://github.com/fishtown-analytics/dbt/pull/843), [#850](https://github.com/fishtown-analytics/dbt/pull/850))
   - Added tox environments that have the user specify what tests should be run ([#837](https://github.com/fishtown-analytics/dbt/pull/837))
 
