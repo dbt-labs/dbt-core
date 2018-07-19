@@ -18,7 +18,7 @@ TODO
 - Model aliases ([#800](https://github.com/fishtown-analytics/dbt/pull/800))
 - Write JSON manifest file to disk during compilation ([#761](https://github.com/fishtown-analytics/dbt/pull/761))
 - Add forward and backward graph edges to the JSON manifest file ([#762](https://github.com/fishtown-analytics/dbt/pull/762))
-- Add a 'dbt docs generate' command to generate a JSON catalog file ([#774](https://github.com/fishtown-analytics/dbt/pull/774) [#808](https://github.com/fishtown-analytics/dbt/pull/808))
+- Add a 'dbt docs generate' command to generate a JSON catalog file ([#774](https://github.com/fishtown-analytics/dbt/pull/774), [#808](https://github.com/fishtown-analytics/dbt/pull/808))
 
 ### Bugfixes
 
