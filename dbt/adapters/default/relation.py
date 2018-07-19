@@ -9,11 +9,13 @@ class DefaultRelation(APIObject):
     Table = "table"
     View = "view"
     CTE = "cte"
+    External = "external"
 
     RelationTypes = [
         Table,
         View,
-        CTE
+        CTE,
+        External,
     ]
 
     DEFAULTS = {
