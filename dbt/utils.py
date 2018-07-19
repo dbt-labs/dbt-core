@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 import hashlib
 import itertools
@@ -460,3 +461,9 @@ def filter_null_values(input):
 
 def add_ephemeral_model_prefix(s):
     return '__dbt__CTE__{}'.format(s)
+
+
+def timestring():
+    """Get the current datetime as an RFC 3339-compliant string"""
+    # isoformat doesn't include the mandatory trailing 'Z' for UTC.
+    return datetime.utcnow().isoformat() + 'Z'

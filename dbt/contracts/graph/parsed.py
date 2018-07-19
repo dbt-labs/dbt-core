@@ -1,5 +1,5 @@
 from dbt.api import APIObject
-from dbt.utils import deep_merge
+from dbt.utils import deep_merge, timestring
 from dbt.node_types import NodeType
 
 import dbt.clients.jinja
@@ -252,6 +252,9 @@ PARSED_MANIFEST_CONTRACT = {
     'properties': {
         'nodes': PARSED_NODES_CONTRACT,
         'macros': PARSED_MACROS_CONTRACT,
+        'generated_at': {
+            'type': 'date-time'
+        }
     },
     'required': ['nodes', 'macros'],
 }
@@ -333,12 +336,16 @@ def build_edges(nodes):
 
 class ParsedManifest(object):
     """The final result of parsing all macros and nodes in a graph."""
-    def __init__(self, nodes, macros):
+    def __init__(self, nodes, macros, generated_at=None):
         """The constructor. nodes and macros are dictionaries mapping unique
-        IDs to ParsedNode and ParsedMacro objects, respectively.
+        IDs to ParsedNode and ParsedMacro objects, respectively. generated_at
+        is a text timestamp in RFC 3339 format.
         """
         self.nodes = nodes
         self.macros = macros
+        if generated_at is None:
+            generated_at = timestring()
+        self.generated_at = generated_at
 
     def serialize(self):
         """Convert the parsed manifest to a nested dict structure that we can
@@ -351,6 +358,7 @@ class ParsedManifest(object):
             'macros': {k: v.serialize() for k, v in self.macros.items()},
             'parent_map': backward_edges,
             'child_map': forward_edges,
+            'generated_at': self.generated_at,
         }
 
     def _find_by_name(self, name, package, subgraph, nodetype):

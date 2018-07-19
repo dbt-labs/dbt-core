@@ -3,6 +3,8 @@ import os
 
 from test.integration.base import DBTIntegrationTest, use_profile
 
+from freezegun import freeze_time
+
 
 class TestDocsGenerate(DBTIntegrationTest):
     def setUp(self):
@@ -51,6 +53,7 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         my_schema_name = self.unique_schema()
         self.assertIn(my_schema_name, catalog)
+        self.assertEqual(catalog['generated_at'], '2017-08-16T10:11:12Z')
         my_schema = catalog[my_schema_name]
         self.assertEqual(expected, my_schema)
 
@@ -152,6 +155,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.model': [],
                 'seed.test.seed': ['model.test.model'],
             },
+            'generated_at': '2017-08-16T10:11:12Z',
         }
 
     def verify_manifest(self, expected_manifest):
@@ -162,7 +166,7 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         self.assertEqual(
             set(manifest),
-            {'nodes', 'macros', 'parent_map', 'child_map'}
+            {'nodes', 'macros', 'parent_map', 'child_map', 'generated_at'}
         )
 
         self.verify_manifest_macros(manifest)
@@ -172,6 +176,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.assertEqual(manifest_without_macros, expected_manifest)
 
     @use_profile('postgres')
+    @freeze_time('2017-08-16T10:11:12Z')
     def test__postgres__run_and_generate(self):
         self.run_and_generate()
         my_schema_name = self.unique_schema()
@@ -231,6 +236,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.verify_manifest(self.expected_seeded_manifest())
 
     @use_profile('snowflake')
+    @freeze_time('2017-08-16T10:11:12Z')
     def test__snowflake__run_and_generate(self):
         self.run_and_generate()
         my_schema_name = self.unique_schema()
@@ -291,6 +297,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.verify_manifest(self.expected_seeded_manifest())
 
     @use_profile('bigquery')
+    @freeze_time('2017-08-16T10:11:12Z')
     def test__bigquery__run_and_generate(self):
         self.run_and_generate()
         my_schema_name = self.unique_schema()
@@ -350,6 +357,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.verify_manifest(self.expected_seeded_manifest())
 
     @use_profile('bigquery')
+    @freeze_time('2017-08-16T10:11:12Z')
     def test__bigquery__nested_models(self):
         self.use_default_project({'source-paths': [self.dir('bq_models')]})
 
@@ -481,6 +489,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.model': ['model.test.seed'],
                 'model.test.seed': []
             },
+            'generated_at': '2017-08-16T10:11:12Z',
         }
         self.verify_manifest(expected_manifest)
 

@@ -115,6 +115,7 @@ class GenerateTask(BaseTask):
             for row in results
         ]
         results = unflatten(results)
+        results['generated_at'] = dbt.utils.timestring()
 
         path = os.path.join(self.project['target-path'], CATALOG_FILENAME)
         write_file(path, json.dumps(results))
