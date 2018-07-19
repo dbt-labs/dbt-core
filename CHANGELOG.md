@@ -23,12 +23,12 @@ TODO
 ### Bugfixes
 
 - BigQuery: fix concurrent relation loads ([#835](https://github.com/fishtown-analytics/dbt/pull/835))
-- BigQuery: Support external relations ([#828](https://github.com/fishtown-analytics/dbt/pull/828))
+- BigQuery: support external relations ([#828](https://github.com/fishtown-analytics/dbt/pull/828))
 - Redshift: set TCP keepalive on connections ([#826](https://github.com/fishtown-analytics/dbt/pull/826))
 - Redshift: fix "table dropped by concurrent query" ([#825](https://github.com/fishtown-analytics/dbt/pull/825))
 - Fix the error handling for profiles.yml validation ([#820](https://github.com/fishtown-analytics/dbt/pull/820))
 - Make the `--threads` parameter actually change the number of threads used ([#819](https://github.com/fishtown-analytics/dbt/pull/819))
-- Ensure that numeric precision of a column is not None: ([#796](https://github.com/fishtown-analytics/dbt/pull/796))
+- Ensure that numeric precision of a column is not `None`: ([#796](https://github.com/fishtown-analytics/dbt/pull/796))
 - Allow for more complex version comparison ([#797](https://github.com/fishtown-analytics/dbt/pull/797))
 
 ### Changes
