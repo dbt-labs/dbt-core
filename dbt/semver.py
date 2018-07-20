@@ -18,7 +18,7 @@ _BASE_VERSION_REGEX = r"""
 """.format(num_no_leading_zeros=_NUM_NO_LEADING_ZEROS)
 
 _VERSION_EXTRA_REGEX = r"""
-(\-
+(\-?
   (?P<prerelease>
     {alpha_no_leading_zeros}(\.{alpha_no_leading_zeros})*))?
 (\+
