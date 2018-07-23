@@ -3,6 +3,7 @@ from test.integration.base import DBTIntegrationTest, FakeArgs
 
 from dbt.task.test import TestTask
 from dbt.project import read_project
+from dbt.exceptions import CompilationException
 
 class TestSchemaTests(DBTIntegrationTest):
 
@@ -73,12 +74,19 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
     @attr(type='postgres')
     def test_malformed_schema_test_wont_brick_run(self):
         # dbt run should work (Despite broken schema test)
-        results = self.run_dbt()
-        self.assertEqual(len(results), 1)
+        results = self.run_dbt(strict=False)
+        self.assertEqual(len(results), 2)
 
+        # in v2, we skip the entire model
         ran_tests = self.run_schema_validations()
-        self.assertEqual(len(ran_tests), 2)
+        self.assertEqual(len(ran_tests), 5)
         self.assertEqual(sum(x.status for x in ran_tests), 0)
+
+    # TODO: re-enable this test when we make --strict actually set strict mode
+    # @attr(type='postgres')
+    # def test_malformed_schema_strict_will_break_run(self):
+    #     with self.assertRaises(CompilationException):
+    #         self.run_dbt(strict=True)
 
 
 class TestCustomSchemaTests(DBTIntegrationTest):
@@ -97,9 +105,9 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         # dbt-integration-project contains a schema.yml file
         # both should work!
         return {
-            "macro-paths": ["test/integration/008_schema_tests_test/macros"],
+            "macro-paths": ["test/integration/008_schema_tests_test/macros-v2"],
             "repositories": [
-                'https://github.com/fishtown-analytics/dbt-utils',
+                'https://github.com/fishtown-analytics/dbt-utils@macros-v2',
                 'https://github.com/fishtown-analytics/dbt-integration-project'
             ]
         }
@@ -122,8 +130,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         self.assertEqual(len(results), 4)
 
         test_results = self.run_schema_validations()
-        # TODO: support model level tests
-        self.assertEqual(len(test_results), 5)
+        self.assertEqual(len(test_results), 6)
 
         expected_failures = ['unique', 'every_value_is_blue']
 

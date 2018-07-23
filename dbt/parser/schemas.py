@@ -90,17 +90,6 @@ def build_test_raw_sql(test_namespace, model_name, test_type, test_args):
     return raw_sql
 
 
-
-# Some tests take the column name as `arg`, while some take it as `field`.
-# This compliates things, so I built a set of all the schema tests that expect
-# `field`. (TODO: probably we could unify this so everyone takes `field`)
-COLUMN_KEY_IS_FIELD = {
-    'relationships',
-    'accepted_values',
-}
-
-
-
 class SchemaParser(BaseParser):
     """This is the original schema parser but with everything in one huge CF of
     a method so I can refactor it more nicely.
@@ -112,6 +101,7 @@ class SchemaParser(BaseParser):
         else:
             return config
 
+    # TODO: real exceptions
     @classmethod
     def _build_v2_test_args(cls, test, name):
         if isinstance(test, basestring):
@@ -126,12 +116,13 @@ class SchemaParser(BaseParser):
                 )
             test_name, test_args = test[0]
         else:
-            raise ValueError('test must be dict or str')
-
-        if test_name in COLUMN_KEY_IS_FIELD:
-            test_args['field'] = name
-        else:
-            test_args['arg'] = name
+            dbt.exceptions.raise_compiler_error(
+                'test must be dict or str, got {} (value {})'.format(
+                    type(test), test
+                )
+            )
+        if name is not None:
+            test_args['column_name'] = name
         return test_name, test_args
 
     @classmethod
@@ -347,9 +338,21 @@ class SchemaParser(BaseParser):
             # sources were supported
             return
 
-
         for model in test_yml['models']:
-            model = UnparsedNodeUpdate(**model)
+            try:
+                model = UnparsedNodeUpdate(**model)
+            except dbt.exceptions.ValidationException as exc:
+                # we don't want to fail the full run, but we do want to fail
+                # parsing this file
+                msg = "Invalid test config given in {} near {}: {}".format(
+                        original_file_path, model, exc
+                )
+                if dbt.flags.STRICT_MODE:
+                    dbt.exceptions.raise_compiler_error(msg, model)
+
+                dbt.utils.compiler_warning(model.get('name'), msg)
+                continue
+
             iterator = cls.parse_model(model, package_name, root_dir,
                                        original_file_path, root_project,
                                        all_projects, macros)
@@ -432,9 +435,13 @@ class SchemaParser(BaseParser):
                     elif result_type == 'test':
                         new_tests[node.unique_id] = node
                     else:
-                        raise ValueError('Got impossible result type {}'.format(result_type))
+                        raise dbt.exceptions.InternalException(
+                            'Got invalid result type {} '.format(result_type)
+                        )
             else:
-                raise ValueError('bad version. TODO: real exception here')
+                dbt.exceptions.raise_compiler_error((
+                    'Got an invalid schema.yml version {} in {}, only 1 and 2 '
+                    'are supported').format(version, original_file_path)
+                )
 
         return new_tests, node_patches
-

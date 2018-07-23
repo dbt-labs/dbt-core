@@ -16,6 +16,5 @@ models:
           - every_value_is_blue
           - rejected_values: { values: ['orange', 'purple'] }
     # passes
-    #dbt_utils.equality:
-    #  - ref('table_copy')
-
+    tests:
+      - dbt_utils.equality: { compare_model: ref('table_copy') }

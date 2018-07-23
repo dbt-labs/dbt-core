@@ -99,7 +99,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         # dbt-integration-project contains a schema.yml file
         # both should work!
         return {
-            "macro-paths": ["test/integration/008_schema_tests_test/macros"],
+            "macro-paths": ["test/integration/008_schema_tests_test/macros-v1"],
             "repositories": [
                 'https://github.com/fishtown-analytics/dbt-utils',
                 'https://github.com/fishtown-analytics/dbt-integration-project'

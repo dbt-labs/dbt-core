@@ -143,6 +143,15 @@ UNPARSED_NODE_UPDATE_CONTRACT = {
             'type': 'array',
             'items': COLUMN_TEST_CONTRACT,
         },
+        'tests': {
+            'type': 'array',
+            'items': {
+                "anyOf": [
+                    {'type': 'string'},
+                    {'type': 'object', 'additionalProperties': True}
+                ],
+            },
+        },
     },
     'required': ['name'],
 }
