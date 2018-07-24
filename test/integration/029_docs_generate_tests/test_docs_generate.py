@@ -1,9 +1,8 @@
 import json
 import os
+from datetime import datetime, timedelta
 
 from test.integration.base import DBTIntegrationTest, use_profile
-
-from freezegun import freeze_time
 
 
 class TestDocsGenerate(DBTIntegrationTest):
@@ -45,6 +44,25 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.assertEqual(len(self.run_dbt()), 1)
         self.run_dbt(['docs', 'generate'])
 
+    def assertRecent(self, timestr):
+        """Given a timestring in '%Y-%m-%dT%H:%M:%SZ' format (ISO8601), assert
+        that it represents a time before now and a time after 24h ago.
+
+        We can't just set the time via freezegun.freeze_time because that
+        breaks SSL, and a lot of these tests use SSL.
+        """
+        now = datetime.utcnow()
+        yesterday = now + timedelta(days=-1)
+        parsed = datetime.strptime(timestr, '%Y-%m-%dT%H:%M:%S.%fZ')
+        self.assertLess(
+            yesterday, parsed,
+            'parsed date {} happened over 24h ago'.format(parsed)
+        )
+        self.assertGreater(
+            now, parsed,
+            'parsed date {} happened in the future'.format(parsed)
+        )
+
     def verify_catalog(self, expected):
         self.assertTrue(os.path.exists('./target/catalog.json'))
 
@@ -53,7 +71,8 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         my_schema_name = self.unique_schema()
         self.assertIn(my_schema_name, catalog)
-        self.assertEqual(catalog['generated_at'], '2017-08-16T10:11:12Z')
+        self.assertIn('generated_at', catalog)
+        self.assertRecent(catalog.pop('generated_at'))
         my_schema = catalog[my_schema_name]
         self.assertEqual(expected, my_schema)
 
@@ -155,7 +174,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.model': [],
                 'seed.test.seed': ['model.test.model'],
             },
-            'generated_at': '2017-08-16T10:11:12Z',
         }
 
     def verify_manifest(self, expected_manifest):
@@ -170,13 +188,13 @@ class TestDocsGenerate(DBTIntegrationTest):
         )
 
         self.verify_manifest_macros(manifest)
-        manifest_without_macros = {
-            k: v for k, v in manifest.items() if k != 'macros'
+        manifest_without_extras = {
+            k: v for k, v in manifest.items()
+            if k not in {'macros', 'generated_at'}
         }
-        self.assertEqual(manifest_without_macros, expected_manifest)
+        self.assertEqual(manifest_without_extras, expected_manifest)
 
     @use_profile('postgres')
-    @freeze_time('2017-08-16T10:11:12Z')
     def test__postgres__run_and_generate(self):
         self.run_and_generate()
         my_schema_name = self.unique_schema()
@@ -236,7 +254,6 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.verify_manifest(self.expected_seeded_manifest())
 
     @use_profile('snowflake')
-    @freeze_time('2017-08-16T10:11:12Z')
     def test__snowflake__run_and_generate(self):
         self.run_and_generate()
         my_schema_name = self.unique_schema()
@@ -297,7 +314,6 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.verify_manifest(self.expected_seeded_manifest())
 
     @use_profile('bigquery')
-    @freeze_time('2017-08-16T10:11:12Z')
     def test__bigquery__run_and_generate(self):
         self.run_and_generate()
         my_schema_name = self.unique_schema()
@@ -357,7 +373,6 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.verify_manifest(self.expected_seeded_manifest())
 
     @use_profile('bigquery')
-    @freeze_time('2017-08-16T10:11:12Z')
     def test__bigquery__nested_models(self):
         self.use_default_project({'source-paths': [self.dir('bq_models')]})
 
@@ -489,7 +504,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.model': ['model.test.seed'],
                 'model.test.seed': []
             },
-            'generated_at': '2017-08-16T10:11:12Z',
         }
         self.verify_manifest(expected_manifest)
 
