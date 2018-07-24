@@ -1,13 +1,15 @@
 import unittest
 
 import os
+import yaml
 
 import dbt.flags
 from dbt.parser import ModelParser, MacroParser, DataTestParser, SchemaParser, ParserUtils
 from dbt.utils import timestring
 
 from dbt.node_types import NodeType
-from dbt.contracts.graph.parsed import ParsedManifest, ParsedNode, ParsedMacro
+from dbt.contracts.graph.parsed import ParsedManifest, ParsedNode, ParsedMacro, ParsedNodePatch
+from dbt.contracts.graph.unparsed import UnparsedNode
 
 def get_os_path(unix_path):
     return os.path.normpath(unix_path)
@@ -1173,174 +1175,268 @@ class ParserTest(unittest.TestCase):
             }
         )
 
-    def test__simple_schema_test(self):
-        tests = [{
-            'name': 'test_one',
-            'resource_type': 'test',
-            'package_name': 'root',
-            'root_path': get_os_path('/usr/src/app'),
-            'original_file_path': 'test_one.yml',
-            'path': 'test_one.yml',
-            'raw_sql': None,
-            'raw_yml': ('{model_one: {constraints: {not_null: [id],'
-                        'unique: [id],'
-                        'accepted_values: [{field: id, values: ["a","b"]}],'
-                        'relationships: [{from: id, to: ref(\'model_two\'), field: id}]' # noqa
-                        '}}}')
-        }]
+    def test__simple_schema_v1_test(self):
+        test_yml = yaml.safe_load(
+            '{model_one: {constraints: {not_null: [id],'
+            'unique: [id],'
+            'accepted_values: [{field: id, values: ["a","b"]}],'
+            'relationships: [{from: id, to: ref(\'model_two\'), field: id}]' # noqa
+            '}}}'
+        )
+        results = list(SchemaParser.parse_v1_test_yml(
+            original_file_path='test_one.yml',
+            test_yml=test_yml,
+            package_name='root',
+            root_project=self.root_project_config,
+            all_projects={
+                'root': self.root_project_config,
+                'snowplow': self.snowplow_project_config
+            },
+            root_dir=get_os_path('/usr/src/app')
+        ))
+        results.sort(key=lambda n: n.name)
 
         not_null_sql = "{{ test_not_null(model=ref('model_one'), arg='id') }}"
         unique_sql = "{{ test_unique(model=ref('model_one'), arg='id') }}"
         accepted_values_sql = "{{ test_accepted_values(model=ref('model_one'), field='id', values=['a', 'b']) }}" # noqa
         relationships_sql = "{{ test_relationships(model=ref('model_one'), field='id', from='id', to=ref('model_two')) }}" # noqa
 
-        self.assertEquals(
-            SchemaParser.parse_schema_tests(
-                tests,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
-            {
-                'test.root.not_null_model_one_id': {
-                    'alias': 'not_null_model_one_id',
-                    'name': 'not_null_model_one_id',
-                    'schema': 'analytics',
-                    'resource_type': 'test',
-                    'unique_id': 'test.root.not_null_model_one_id',
-                    'fqn': ['root', 'schema_test', 'not_null_model_one_id'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'refs': [['model_one']],
-                    'depends_on': {
-                        'nodes': [],
-                        'macros': []
-                    },
-                    'config': self.model_config,
-                    'original_file_path': 'test_one.yml',
-                    'path': get_os_path(
-                        'schema_test/not_null_model_one_id.sql'),
-                    'tags': ['schema'],
-                    'raw_sql': not_null_sql,
+        expected = [
+            ParsedNode(**{
+                'alias': 'accepted_values_model_one_id__a__b',
+                'name': 'accepted_values_model_one_id__a__b',
+                'schema': 'analytics',
+                'resource_type': 'test',
+                'unique_id': 'test.root.accepted_values_model_one_id__a__b', # noqa
+                'fqn': ['root', 'schema_test',
+                        'accepted_values_model_one_id__a__b'],
+                'empty': False,
+                'package_name': 'root',
+                'original_file_path': 'test_one.yml',
+                'root_path': get_os_path('/usr/src/app'),
+                'refs': [['model_one']],
+                'depends_on': {
+                    'nodes': [],
+                    'macros': []
                 },
-                'test.root.unique_model_one_id': {
-                    'alias': 'unique_model_one_id',
-                    'name': 'unique_model_one_id',
-                    'schema': 'analytics',
-                    'resource_type': 'test',
-                    'unique_id': 'test.root.unique_model_one_id',
-                    'fqn': ['root', 'schema_test', 'unique_model_one_id'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'refs': [['model_one']],
-                    'depends_on': {
-                        'nodes': [],
-                        'macros': []
-                    },
-                    'config': self.model_config,
-                    'original_file_path': 'test_one.yml',
-                    'path': get_os_path('schema_test/unique_model_one_id.sql'),
-                    'tags': ['schema'],
-                    'raw_sql': unique_sql,
+                'config': self.model_config,
+                'path': get_os_path(
+                    'schema_test/accepted_values_model_one_id__a__b.sql'),
+                'tags': ['schema'],
+                'raw_sql': accepted_values_sql,
+            }),
+            ParsedNode(**{
+                'alias': 'not_null_model_one_id',
+                'name': 'not_null_model_one_id',
+                'schema': 'analytics',
+                'resource_type': 'test',
+                'unique_id': 'test.root.not_null_model_one_id',
+                'fqn': ['root', 'schema_test', 'not_null_model_one_id'],
+                'empty': False,
+                'package_name': 'root',
+                'root_path': get_os_path('/usr/src/app'),
+                'refs': [['model_one']],
+                'depends_on': {
+                    'nodes': [],
+                    'macros': []
                 },
-                'test.root.accepted_values_model_one_id__a__b': {
-                    'alias': 'accepted_values_model_one_id__a__b',
-                    'name': 'accepted_values_model_one_id__a__b',
-                    'schema': 'analytics',
-                    'resource_type': 'test',
-                    'unique_id': 'test.root.accepted_values_model_one_id__a__b', # noqa
-                    'fqn': ['root', 'schema_test',
-                            'accepted_values_model_one_id__a__b'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'original_file_path': 'test_one.yml',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'refs': [['model_one']],
-                    'depends_on': {
-                        'nodes': [],
-                        'macros': []
-                    },
-                    'config': self.model_config,
-                    'path': get_os_path(
-                        'schema_test/accepted_values_model_one_id__a__b.sql'),
-                    'tags': ['schema'],
-                    'raw_sql': accepted_values_sql,
+                'config': self.model_config,
+                'original_file_path': 'test_one.yml',
+                'path': get_os_path(
+                    'schema_test/not_null_model_one_id.sql'),
+                'tags': ['schema'],
+                'raw_sql': not_null_sql,
+            }),
+            ParsedNode(**{
+                'alias': 'relationships_model_one_id__id__ref_model_two_',
+                'name': 'relationships_model_one_id__id__ref_model_two_',
+                'schema': 'analytics',
+                'resource_type': 'test',
+                'unique_id': 'test.root.relationships_model_one_id__id__ref_model_two_', # noqa
+                'fqn': ['root', 'schema_test',
+                        'relationships_model_one_id__id__ref_model_two_'],
+                'empty': False,
+                'package_name': 'root',
+                'original_file_path': 'test_one.yml',
+                'root_path': get_os_path('/usr/src/app'),
+                'refs': [['model_one'], ['model_two']],
+                'depends_on': {
+                    'nodes': [],
+                    'macros': []
                 },
-                'test.root.relationships_model_one_id__id__ref_model_two_': {
-                    'alias': 'relationships_model_one_id__id__ref_model_two_',
-                    'name': 'relationships_model_one_id__id__ref_model_two_',
-                    'schema': 'analytics',
-                    'resource_type': 'test',
-                    'unique_id': 'test.root.relationships_model_one_id__id__ref_model_two_', # noqa
-                    'fqn': ['root', 'schema_test',
-                            'relationships_model_one_id__id__ref_model_two_'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'original_file_path': 'test_one.yml',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'refs': [['model_one'], ['model_two']],
-                    'depends_on': {
-                        'nodes': [],
-                        'macros': []
-                    },
-                    'config': self.model_config,
-                    'path': get_os_path('schema_test/relationships_model_one_id__id__ref_model_two_.sql'), # noqa
-                    'tags': ['schema'],
-                    'raw_sql': relationships_sql,
-                }
-
-
-            }
+                'config': self.model_config,
+                'path': get_os_path('schema_test/relationships_model_one_id__id__ref_model_two_.sql'), # noqa
+                'tags': ['schema'],
+                'raw_sql': relationships_sql,
+            }),
+            ParsedNode(**{
+                'alias': 'unique_model_one_id',
+                'name': 'unique_model_one_id',
+                'schema': 'analytics',
+                'resource_type': 'test',
+                'unique_id': 'test.root.unique_model_one_id',
+                'fqn': ['root', 'schema_test', 'unique_model_one_id'],
+                'empty': False,
+                'package_name': 'root',
+                'root_path': get_os_path('/usr/src/app'),
+                'refs': [['model_one']],
+                'depends_on': {
+                    'nodes': [],
+                    'macros': []
+                },
+                'config': self.model_config,
+                'original_file_path': 'test_one.yml',
+                'path': get_os_path('schema_test/unique_model_one_id.sql'),
+                'tags': ['schema'],
+                'raw_sql': unique_sql,
+            }),
+        ]
+        self.assertEqual(
+            results,
+            expected,
         )
 
-    def test__schema_test_with_comments(self):
-        tests = [{
-            'name': 'commented_test',
-            'resource_type': 'test',
-            'package_name': 'root',
-            'root_path': get_os_path('/usr/src/app'),
-            'path': 'commented_test.yml',
-            'raw_sql': None,
-            'raw_yml': '''
-model:
-    constraints:
-        relationships:
-#            - {from: customer_id, to: accounts, field: id}
+    def test__simple_schema_v2(self):
+        test_yml = yaml.safe_load(
+            '{models: [{name: model_one, description: "blah blah", columns: ['
+            '{name: id, description: "user ID", tests: [unique, not_null, '
+            '{accepted_values: {values: ["a", "b"]}},'
+            '{relationships: {from: id, to: ref(\'model_two\')}}]'
+            '}], tests: [some_test: { key: value }]}]}'
+        )
+        results = list(SchemaParser.parse_v2_yml(
+            original_file_path='test_one.yml',
+            test_yml=test_yml,
+            package_name='root',
+            root_project=self.root_project_config,
+            all_projects={
+                'root': self.root_project_config,
+                'snowplow': self.snowplow_project_config
+            },
+            root_dir=get_os_path('/usr/src/app')
+        ))
 
-another_model:
-    constraints:
-#       unique:
-#            - id
-'''
-        }]
+        # split this into tests and patches, assert there's nothing else
+        tests = sorted((node for t, node in results if t == 'test'),
+                       key=lambda n: n.name)
+        patches = sorted((node for t, node in results if t == 'patch'),
+                         key=lambda n: n.name)
+        self.assertEqual(len(tests)+len(patches), len(results))
 
-        self.assertEquals(
-            SchemaParser.parse_schema_tests(
-                tests,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
-            {})
+        not_null_sql = "{{ test_not_null(model=ref('model_one'), column_name='id') }}"
+        unique_sql = "{{ test_unique(model=ref('model_one'), column_name='id') }}"
+        accepted_values_sql = "{{ test_accepted_values(model=ref('model_one'), column_name='id', values=['a', 'b']) }}" # noqa
+        relationships_sql = "{{ test_relationships(model=ref('model_one'), column_name='id', from='id', to=ref('model_two')) }}" # noqa
+        some_test_sql = "{{ test_some_test(model=ref('model_one'), key='value') }}"
 
-    def test__empty_schema_test(self):
-        tests = [{
-            'name': 'commented_test',
-            'resource_type': 'test',
-            'package_name': 'root',
-            'root_path': get_os_path('/usr/src/app'),
-            'path': 'commented_test.yml',
-            'raw_sql': None,
-            'raw_yml': ''
-        }]
+        expected_tests = [
+            ParsedNode(
+                alias='accepted_values_model_one_id__a__b',
+                name='accepted_values_model_one_id__a__b',
+                schema='analytics',
+                resource_type='test',
+                unique_id='test.root.accepted_values_model_one_id__a__b',
+                fqn=['root', 'schema_test',
+                        'accepted_values_model_one_id__a__b'],
+                empty=False,
+                package_name='root',
+                original_file_path='test_one.yml',
+                root_path=get_os_path('/usr/src/app'),
+                refs=[['model_one']],
+                depends_on={'nodes': [], 'macros': []},
+                config=self.model_config,
+                path=get_os_path(
+                    'schema_test/accepted_values_model_one_id__a__b.sql'),
+                tags=['schema'],
+                raw_sql=accepted_values_sql
+            ),
+            ParsedNode(
+                alias='not_null_model_one_id',
+                name='not_null_model_one_id',
+                schema='analytics',
+                resource_type='test',
+                unique_id='test.root.not_null_model_one_id',
+                fqn=['root', 'schema_test', 'not_null_model_one_id'],
+                empty=False,
+                package_name='root',
+                root_path=get_os_path('/usr/src/app'),
+                refs=[['model_one']],
+                depends_on={'nodes': [], 'macros': []},
+                config=self.model_config,
+                original_file_path='test_one.yml',
+                path=get_os_path('schema_test/not_null_model_one_id.sql'),
+                tags=['schema'],
+                raw_sql=not_null_sql
+            ),
+            ParsedNode(
+                alias='relationships_model_one_id__id__ref_model_two_',
+                name='relationships_model_one_id__id__ref_model_two_',
+                schema='analytics',
+                resource_type='test',
+                unique_id='test.root.relationships_model_one_id__id__ref_model_two_', # noqa
+                fqn=['root', 'schema_test',
+                        'relationships_model_one_id__id__ref_model_two_'],
+                empty=False,
+                package_name='root',
+                original_file_path='test_one.yml',
+                root_path=get_os_path('/usr/src/app'),
+                refs=[['model_one'], ['model_two']],
+                depends_on={'nodes': [], 'macros': []},
+                config=self.model_config,
+                path=get_os_path('schema_test/relationships_model_one_id__id__ref_model_two_.sql'), # noqa
+                tags=['schema'],
+                raw_sql=relationships_sql
+            ),
+            ParsedNode(
+                alias='some_test_model_one_value',
+                name='some_test_model_one_value',
+                schema='analytics',
+                resource_type='test',
+                unique_id='test.root.some_test_model_one_value',
+                fqn=['root', 'schema_test', 'some_test_model_one_value'],
+                empty=False,
+                package_name='root',
+                original_file_path='test_one.yml',
+                root_path=get_os_path('/usr/src/app'),
+                refs=[['model_one']],
+                depends_on={'nodes': [], 'macros': []},
+                config=self.model_config,
+                path=get_os_path('schema_test/some_test_model_one_value.sql'),
+                tags=['schema'],
+                raw_sql=some_test_sql
+            ),
+            ParsedNode(
+                alias='unique_model_one_id',
+                name='unique_model_one_id',
+                schema='analytics',
+                resource_type='test',
+                unique_id='test.root.unique_model_one_id',
+                fqn=['root', 'schema_test', 'unique_model_one_id'],
+                empty=False,
+                package_name='root',
+                root_path=get_os_path('/usr/src/app'),
+                refs=[['model_one']],
+                depends_on={'nodes': [], 'macros': []},
+                config=self.model_config,
+                original_file_path='test_one.yml',
+                path=get_os_path('schema_test/unique_model_one_id.sql'),
+                tags=['schema'],
+                raw_sql=unique_sql
+            ),
+        ]
+        self.assertEqual(tests, expected_tests)
 
-        self.assertEquals(
-            SchemaParser.parse_schema_tests(
-                tests,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
-            {})
+        expected_patches = [
+            ParsedNodePatch(name='model_one',
+                description='blah blah',
+                path='test_one.yml',
+                columns=[{
+                    'name': 'id',
+                    'description': 'user ID',
+                }],
+            ),
+        ]
+        self.assertEqual(patches, expected_patches)
 
     def test__simple_data_test(self):
         tests = [{
