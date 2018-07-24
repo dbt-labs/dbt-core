@@ -9,6 +9,8 @@ from functools import wraps
 
 from nose.plugins.attrib import attr
 
+import dbt.flags as flags
+
 from dbt.adapters.factory import get_adapter
 from dbt.project import Project
 
@@ -167,6 +169,7 @@ class DBTIntegrationTest(unittest.TestCase):
             return self.redshift_profile()
 
     def setUp(self):
+        flags.reset()
         self.adapter_type = 'postgres'
 
         # create a dbt_project.yml
@@ -365,12 +368,17 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def run_sql_bigquery(self, sql, fetch):
         """Run an SQL query on a bigquery adapter. No cursors, transactions,
-        etc. to worry about. If fetch is not 'None', all records are fetched.
-        """
+        etc. to worry about"""
+
         adapter = get_adapter(self._profile)
-        fetch = fetch != 'None'
-        _, res = adapter.execute(self._profile, sql, fetch=fetch)
-        return res
+        do_fetch = fetch != 'None'
+        _, res = adapter.execute(self._profile, sql, fetch=do_fetch)
+
+        # convert dataframe to matrix-ish repr
+        if fetch == 'one':
+            return res[0]
+        else:
+            return list(res)
 
     def run_sql(self, query, fetch='None'):
         if query.strip() == "":
@@ -432,19 +440,25 @@ class DBTIntegrationTest(unittest.TestCase):
         else:
             columns_csv = ", ".join(['{}'.format(record[0]) for record in columns])
 
+        if self.adapter_type == 'bigquery':
+            except_operator = 'EXCEPT DISTINCT'
+        else:
+            except_operator = 'EXCEPT'
+
         sql = """
             SELECT COUNT(*) FROM (
-                (SELECT {columns} FROM {table_a_schema}.{table_a} EXCEPT
+                (SELECT {columns} FROM {table_a_schema}.{table_a} {except_op}
                  SELECT {columns} FROM {table_b_schema}.{table_b})
                  UNION ALL
-                (SELECT {columns} FROM {table_b_schema}.{table_b} EXCEPT
+                (SELECT {columns} FROM {table_b_schema}.{table_b} {except_op}
                  SELECT {columns} FROM {table_a_schema}.{table_a})
             ) AS a""".format(
                 columns=columns_csv,
                 table_a_schema=self.adapter.quote(table_a_schema),
                 table_b_schema=self.adapter.quote(table_b_schema),
                 table_a=self.adapter.quote(table_a),
-                table_b=self.adapter.quote(table_b)
+                table_b=self.adapter.quote(table_b),
+                except_op=except_operator
             )
 
         return sql

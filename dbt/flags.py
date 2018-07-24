@@ -1,3 +1,11 @@
 STRICT_MODE = False
 NON_DESTRUCTIVE = False
 FULL_REFRESH = False
+
+
+def reset():
+    global STRICT_MODE, NON_DESTRUCTIVE, FULL_REFRESH
+
+    STRICT_MODE = False
+    NON_DESTRUCTIVE = False
+    FULL_REFRESH = False

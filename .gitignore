@@ -68,3 +68,5 @@ target/
 
 # Sublime Text
 *.sublime-*
+
+.python-version
