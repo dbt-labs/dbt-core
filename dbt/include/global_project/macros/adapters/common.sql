@@ -1,5 +1,5 @@
 {% macro adapter_macro(name) -%}
-  {% set original_name = name %}
+{% set original_name = name %}
   {% if '.' in name %}
     {% set package_name, name = name.split(".", 1) %}
   {% else %}
@@ -68,9 +68,8 @@
 
 
 {% macro get_catalog() -%}
-  {{ adapter_macro('get_catalog') }}
+  {{ return(adapter_macro('get_catalog')) }}
 {%- endmacro %}
-
 
 {% macro default__get_catalog() -%}
 
@@ -81,144 +80,3 @@
 
   {{ exceptions.raise_compiler_error(msg) }}
 {% endmacro %}
-
-
-{% macro postgres__get_catalog() -%}
-  {%- call statement('catalog', fetch_result=True) -%}
-    with tables as (
-      select
-          table_schema,
-          table_name,
-          table_type
-
-      from information_schema.tables
-
-      ),
-
-      columns as (
-
-          select
-              table_schema,
-              table_name,
-              null as table_comment,
-
-              column_name,
-              ordinal_position as column_index,
-              data_type as column_type,
-              null as column_comment
-
-
-          from information_schema.columns
-
-      )
-
-      select *
-      from tables
-      join columns using (table_schema, table_name)
-
-      where table_schema != 'information_schema'
-        and table_schema not like 'pg_%'
-      order by "column_index"
-  {%- endcall -%}
-  {# There's no point in returning anything as the jinja macro stuff calls #}
-  {# str() on all returns. To get the results, you'll need to use #}
-  {# context['load_result']('catalog') #}
-{%- endmacro %}
-
-
-{% macro snowflake__get_catalog() -%}
-  {%- call statement('catalog', fetch_result=True) -%}
-    with tables as (
-      select
-          table_schema as "table_schema",
-          table_name as "table_name",
-          table_type as "table_type"
-
-      from information_schema.tables
-      ),
-
-      columns as (
-
-          select
-              table_schema as "table_schema",
-              table_name as "table_name",
-              null as "table_comment",
-
-              column_name as "column_name",
-              ordinal_position as "column_index",
-              data_type as "column_type",
-              null as "column_comment"
-
-
-          from information_schema.columns
-
-      )
-
-      select *
-      from tables
-      join columns using ("table_schema", "table_name")
-      where "table_schema" != 'INFORMATION_SCHEMA'
-      order by "column_index"
-  {%- endcall -%}
-{%- endmacro %}
-
-
-{% macro redshift__get_catalog() -%}
-  {%- call statement('catalog', fetch_result=True) -%}
-    with late_binding as (
-      select
-        table_schema,
-        table_name,
-        'LATE BINDING VIEW' as table_type,
-        null as table_comment,
-
-        column_name,
-        column_index,
-        column_type,
-        null as column_comment
-      from pg_get_late_binding_view_cols()
-        cols(table_schema name, table_name name, column_name name,
-             column_type varchar,
-             column_index int)
-        order by "column_index"
-    ),
-    tables as (
-      select
-          table_schema,
-          table_name,
-          table_type
-
-      from information_schema.tables
-
-    ),
-
-    columns as (
-
-        select
-            table_schema,
-            table_name,
-            null as table_comment,
-
-            column_name,
-            ordinal_position as column_index,
-            data_type as column_type,
-            null as column_comment
-
-
-        from information_schema.columns
-
-    )
-
-    select *
-    from tables
-    join columns using (table_schema, table_name)
-
-    where table_schema != 'information_schema'
-      and table_schema not like 'pg_%'
-
-    union all
-
-    select * from late_binding
-    order by "column_index"
-  {%- endcall -%}
-{%- endmacro %}

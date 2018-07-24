@@ -27,6 +27,48 @@ def get_stripped_prefix(source, prefix):
         if k.startswith(prefix)
     }
 
+def format_stats(stats):
+    """Given a dictionary following this layout:
+
+        {
+            'encoded:label': 'Encoded',
+            'encoded:value': 'Yes',
+            'encoded:description': 'Indicates if the column is encoded',
+            'encoded:include': True,
+
+            'size:label': 'Size',
+            'size:value': 128,
+            'size:description': 'Size of the table in MB',
+            'size:include': True,
+        }
+
+    format_stats will convert the dict into this structure:
+
+        [
+            {
+                'id': 'encoded',
+                'label': 'Encoded',
+                'value': 'Yes',
+                'description': 'Indicates if the column is encoded',
+                'include': True
+            },
+            {
+                'id': 'size',
+                'label': 'Size',
+                'value': 128,
+                'description': 'Size of the table in MB',
+                'include': True
+            }
+        ]
+    """
+    stats_collector = {}
+    for stat_key, stat_value in stats.items():
+        stat_id, stat_field = stat_key.split(":")
+
+        stats_collector.setdefault(stat_id, {"id": stat_id})
+        stats_collector[stat_id][stat_field] = stat_value
+
+    return list(stats_tmp.values())
 
 def unflatten(columns):
     """Given a list of column dictionaries following this layout:
@@ -82,7 +124,15 @@ def unflatten(columns):
 
         if table_name not in schema:
             metadata = get_stripped_prefix(entry, 'table_')
-            schema[table_name] = {'metadata': metadata, 'columns': {}}
+            stats = get_stripped_prefix(entry, 'stats:')
+
+            if stats.get('has_stats:value', False):
+                stats_list = format_stats(stats)
+            else:
+                stats_list = []
+
+            schema[table_name] = {'metadata': metadata, 'stats': stats_list, 'columns': {}}
+
         table = schema[table_name]
 
         column = get_stripped_prefix(entry, 'column_')

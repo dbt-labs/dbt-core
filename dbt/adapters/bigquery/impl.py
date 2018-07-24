@@ -522,13 +522,18 @@ class BigQueryAdapter(PostgresAdapter):
             dataset_ref = client.dataset(schema_name)
             table_ref = dataset_ref.table(table_name)
             table = client.get_table(table_ref)
-            table_schema = table.schema
+            return cls.get_dbt_columns_from_bq_table(table)
+
         except (ValueError, google.cloud.exceptions.NotFound) as e:
             logger.debug("get_columns_in_table error: {}".format(e))
-            table_schema = []
+            return []
+
+    @classmethod
+    def get_dbt_columns_from_bq_table(cls, table):
+        "Translates BQ SchemaField dicts into dbt BigQueryColumn objects"
 
         columns = []
-        for col in table_schema:
+        for col in table.schema:
             # BigQuery returns type labels that are not valid type specifiers
             dtype = cls.Column.translate_type(col.field_type)
             column = cls.Column(
@@ -678,20 +683,20 @@ class BigQueryAdapter(PostgresAdapter):
         pass
 
     @classmethod
-    def _flat_columns_in_table(cls, profile, project_cfg, schema_name,
-                               table_name):
+    def _flat_columns_in_table(cls, table):
         """An iterator over the flattened columns for a given schema and table.
         Resolves child columns as having the name "parent.child".
         """
-        cols = cls.get_columns_in_table(profile, project_cfg,
-                                        schema_name, table_name)
-        for col in cols:
+        for col in cls.get_dbt_columns_from_bq_table(table):
             flattened = col.flatten()
             for subcol in flattened:
                 yield subcol
 
     @classmethod
     def get_catalog(cls, profile, project_cfg, manifest):
+        connection = cls.get_connection(profile, 'catalog')
+        client = connection.get('handle')
+
         schemas = {
             node.to_dict()['schema']
             for node in manifest.nodes.values()
@@ -706,18 +711,25 @@ class BigQueryAdapter(PostgresAdapter):
             'column_index',
             'column_type',
             'column_comment',
+            'stats_num_bytes',
+            'stats_num_rows',
+            'stats_location',
+            'stats_partitioning_type',
         )
         columns = []
 
         for schema_name in schemas:
             relations = cls.list_relations(profile, project_cfg, schema_name)
             for relation in relations:
-                flattened = cls._flat_columns_in_table(
-                    profile,
-                    project_cfg,
-                    schema_name,
-                    relation.name
-                )
+
+                # This relation contains a subset of the info we care about. 
+                # Fetch the full table object here
+                dataset_ref = client.dataset(relation.schema)
+                table_ref = dataset_ref.table(relation.identifier)
+                table = client.get_table(table_ref)
+
+                flattened = cls._flat_columns_in_table(table)
+
                 for index, column in enumerate(flattened, start=1):
                     column_data = (
                         relation.schema,
@@ -728,6 +740,10 @@ class BigQueryAdapter(PostgresAdapter):
                         index,
                         column.data_type,
                         None,
+                        table.num_bytes,
+                        table.num_rows,
+                        table.location,
+                        table.partitioning_type
                     )
                     columns.append(dict(zip(column_names, column_data)))
 

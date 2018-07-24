@@ -121,6 +121,10 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': case('model'),
                     'type': view_type,
                     'comment': None,
+                    'owner': 'root'
+                },
+                'stats': {
+                    'has_stats': False
                 },
                 'columns': expected_cols,
             },
@@ -131,11 +135,14 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': case('seed'),
                     'type': table_type,
                     'comment': None,
+                    'owner': 'root'
+                },
+                'stats': {
+                    'has_stats': False
                 },
                 'columns': expected_cols,
             },
         }
-
 
     def expected_postgres_catalog(self):
         return self._expected_catalog(
@@ -146,9 +153,12 @@ class TestDocsGenerate(DBTIntegrationTest):
             table_type='BASE TABLE'
         )
 
+    def get_role(self):
+        return self.run_sql('select current_role()', fetch='one')[0]
+
     def expected_postgres_references_catalog(self):
         my_schema_name = self.unique_schema()
-
+        role = self.get_role()
         summary_columns = {
             'first_name': {
                 'name': 'first_name',
@@ -171,6 +181,13 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'seed',
                     'type': 'BASE TABLE',
                     'comment': None,
+                    'owner': role,
+                },
+                'stats': {
+                    'has_stats': True,
+                    'row_count': 1,
+                    'clustering_key': None,
+                    'bytes': AnyFloat(),
                 },
                 'columns': {
                     'id': {
@@ -222,6 +239,12 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'view_summary',
                     'type': 'VIEW',
                     'comment': None,
+                },
+                'stats': {
+                    'location': 'US',
+                    'num_bytes': AnyFloat(),
+                    'num_rows': AnyFloat(),
+                    'partitioning_type': None,
                 },
                 'columns': summary_columns,
             },
@@ -288,15 +311,27 @@ class TestDocsGenerate(DBTIntegrationTest):
                     "type": "view",
                     "comment": None
                 },
+                'stats': {
+                    'location': 'US',
+                    'num_bytes': AnyFloat(),
+                    'num_rows': AnyFloat(),
+                    'partitioning_type': None,
+                },
                 "columns": expected_cols
             },
             "model.test.seed": {
                 'unique_id': 'model.test.seed',
                 "metadata": {
-                "schema": my_schema_name,
-                "name": "seed",
-                "type": "view",
-                "comment": None
+                    "schema": my_schema_name,
+                    "name": "seed",
+                    "type": "view",
+                    "comment": None
+                },
+                'stats': {
+                    'location': 'US',
+                    'num_bytes': AnyFloat(),
+                    'num_rows': AnyFloat(),
+                    'partitioning_type': None,
                 },
                 "columns": expected_cols
             }
@@ -321,6 +356,23 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'model',
                     'type': 'LATE BINDING VIEW',
                     'comment': None,
+                    'owner': user,
+                },
+                'stats': {
+                    'has_stats': None,
+                    'diststyle': None,
+                    'empty': None,
+                    'encoded': None,
+                    'max_varchar': None,
+                    'pct_used': None,
+                    'rows': None,
+                    'size': None,
+                    'skew_rows': None,
+                    'skew_sortkey1': None,
+                    'sortkey1': None,
+                    'sortkey_num': None,
+                    'stats_off': None,
+                    'unsorted': None,
                 },
                 'columns': {
                     'id': {
@@ -362,6 +414,23 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'seed',
                     'type': 'BASE TABLE',
                     'comment': None,
+                    'owner': user,
+                },
+                'stats': {
+                    'has_stats': True,
+                    'diststyle': AnyFloat(),
+                    'empty': AnyFloat(),
+                    'encoded': AnyFloat(),
+                    'max_varchar': AnyFloat(),
+                    'pct_used': AnyFloat(),
+                    'rows': AnyFloat(),
+                    'size': AnyFloat(),
+                    'skew_rows': AnyFloat(),
+                    'skew_sortkey1': AnyFloat(),
+                    'sortkey1': AnyFloat(),
+                    'sortkey_num': AnyFloat(),
+                    'stats_off': AnyFloat(),
+                    'unsorted': AnyFloat(),
                 },
                 'columns': {
                     'id': {
