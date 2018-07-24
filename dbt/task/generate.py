@@ -1,7 +1,6 @@
 import json
 import os
 
-from dbt.contracts.graph.parsed import ParsedManifest, ParsedNode, ParsedMacro
 from dbt.adapters.factory import get_adapter
 from dbt.clients.system import write_file
 from dbt.compat import bigint

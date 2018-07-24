@@ -336,15 +336,13 @@ def build_edges(nodes):
 
 class ParsedManifest(object):
     """The final result of parsing all macros and nodes in a graph."""
-    def __init__(self, nodes, macros, generated_at=None):
+    def __init__(self, nodes, macros, generated_at):
         """The constructor. nodes and macros are dictionaries mapping unique
         IDs to ParsedNode and ParsedMacro objects, respectively. generated_at
         is a text timestamp in RFC 3339 format.
         """
         self.nodes = nodes
         self.macros = macros
-        if generated_at is None:
-            generated_at = timestring()
         self.generated_at = generated_at
 
     def serialize(self):
