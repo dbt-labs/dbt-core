@@ -651,6 +651,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     "fqn": ["test", "model"],
                     "tags": [],
                     "config": {
+                        "bind": False,
                         "enabled": True,
                         "materialized": "view",
                         "pre-hook": [],
@@ -692,5 +693,13 @@ class TestDocsGenerate(DBTIntegrationTest):
                     "alias": "seed"
                 },
             },
+            "parent_map": {
+                "model.test.model": ["seed.test.seed"],
+                "seed.test.seed": []
+            },
+            "child_map": {
+                "model.test.model": [],
+                "seed.test.seed": ["model.test.model"]
+            }
         }
         self.verify_manifest(expected_manifest)
