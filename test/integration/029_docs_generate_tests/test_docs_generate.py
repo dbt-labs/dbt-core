@@ -321,7 +321,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             {
                 'name': 'id',
                 'index': 1,
-                'type': 'INTEGER',
+                'type': 'INT64',
                 'comment': None,
             },
             {
@@ -384,31 +384,31 @@ class TestDocsGenerate(DBTIntegrationTest):
             {
                 "name": "field_1",
                 "index": 1,
-                "type": "INTEGER",
+                "type": "INT64",
                 "comment": None
             },
             {
                 "name": "field_2",
                 "index": 2,
-                "type": "INTEGER",
+                "type": "INT64",
                 "comment": None
             },
             {
                 "name": "field_3",
                 "index": 3,
-                "type": "INTEGER",
+                "type": "INT64",
                 "comment": None
             },
             {
                 "name": "nested_field.field_4",
                 "index": 4,
-                "type": "INTEGER",
+                "type": "INT64",
                 "comment": None
             },
             {
                 "name": "nested_field.field_5",
                 "index": 5,
-                "type": "INTEGER",
+                "type": "INT64",
                 "comment": None
             }
         ]
