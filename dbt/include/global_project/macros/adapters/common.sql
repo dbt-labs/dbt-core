@@ -162,3 +162,64 @@
       order by "column_index"
   {%- endcall -%}
 {%- endmacro %}
+
+
+{% macro redshift__get_catalog() -%}
+  {%- call statement('catalog', fetch_result=True) -%}
+    with late_binding as (
+      select
+        table_schema,
+        table_name,
+        'LATE BINDING VIEW' as table_type,
+        null as table_comment,
+
+        column_name,
+        column_index,
+        column_type,
+        null as column_comment
+      from pg_get_late_binding_view_cols()
+        cols(table_schema name, table_name name, column_name name,
+             column_type varchar,
+             column_index int)
+        order by "column_index"
+    ),
+    tables as (
+      select
+          table_schema,
+          table_name,
+          table_type
+
+      from information_schema.tables
+
+    ),
+
+    columns as (
+
+        select
+            table_schema,
+            table_name,
+            null as table_comment,
+
+            column_name,
+            ordinal_position as column_index,
+            data_type as column_type,
+            null as column_comment
+
+
+        from information_schema.columns
+
+    )
+
+    select *
+    from tables
+    join columns using (table_schema, table_name)
+
+    where table_schema != 'information_schema'
+      and table_schema not like 'pg_%'
+
+    union all
+
+    select * from late_binding
+    order by "column_index"
+  {%- endcall -%}
+{%- endmacro %}

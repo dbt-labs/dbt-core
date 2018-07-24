@@ -812,9 +812,12 @@ class DefaultAdapter(object):
     ###
     @classmethod
     def get_catalog(cls, profile, project_cfg, manifest):
-        results = cls.run_operation(profile, project_cfg, manifest,
-                                    GET_CATALOG_OPERATION_NAME,
-                                    GET_CATALOG_RESULT_KEY)
+        try:
+            results = cls.run_operation(profile, project_cfg, manifest,
+                                        GET_CATALOG_OPERATION_NAME,
+                                        GET_CATALOG_RESULT_KEY)
+        finally:
+            cls.release_connection(profile, GET_CATALOG_OPERATION_NAME)
         schemas = list({
             node.to_dict()['schema']
             for node in manifest.nodes.values()

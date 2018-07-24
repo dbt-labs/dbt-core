@@ -33,8 +33,11 @@ class TestDocsGenerate(DBTIntegrationTest):
             }
         }
 
-    def run_and_generate(self):
-        self.use_default_project({"data-paths": [self.dir("seed")]})
+    def run_and_generate(self, extra=None):
+        project = {"data-paths": [self.dir("seed")]}
+        if extra:
+            project.update(extra)
+        self.use_default_project(project)
 
         self.assertEqual(len(self.run_dbt(["seed"])), 1)
         self.assertEqual(len(self.run_dbt()), 1)
@@ -122,7 +125,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'resource_type': 'seed',
                     'raw_sql': '-- csv --',
                     'package_name': 'test',
-                    'original_file_path': self.dir('seed/seed.csv'),
+                    'original_file_path': self.dir(os.path.join('seed',
+                                                                'seed.csv')),
                     'refs': [],
                     'depends_on': {'nodes': [], 'macros': []},
                     'unique_id': 'seed.test.seed',
@@ -477,5 +481,225 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.model': ['model.test.seed'],
                 'model.test.seed': []
             },
+        }
+        self.verify_manifest(expected_manifest)
+
+    @use_profile('redshift')
+    def test__redshift__run_and_generate(self):
+        self.run_and_generate()
+        my_schema_name = self.unique_schema()
+        expected_cols = [
+            {
+                'name': 'id',
+                'index': 1,
+                'type': 'integer',
+                'comment': None,
+            },
+            {
+                'name': 'first_name',
+                'index': 2,
+                'type': 'character varying',
+                'comment': None,
+            },
+            {
+                'name': 'email',
+                'index': 3,
+                'type': 'character varying',
+                'comment': None,
+            },
+            {
+                'name': 'ip_address',
+                'index': 4,
+                'type': 'character varying',
+                'comment': None,
+            },
+            {
+                'name': 'updated_at',
+                'index': 5,
+                'type': 'timestamp without time zone',
+                'comment': None,
+            },
+        ]
+        expected_catalog = {
+            'model': {
+                'metadata': {
+                    'schema': my_schema_name,
+                    'name': 'model',
+                    'type': 'VIEW',
+                    'comment': None,
+                },
+                'columns': expected_cols,
+            },
+            'seed': {
+                'metadata': {
+                    'schema': my_schema_name,
+                    'name': 'seed',
+                    'type': 'BASE TABLE',
+                    'comment': None,
+                },
+                'columns': expected_cols,
+            },
+        }
+        self.verify_catalog(expected_catalog)
+        self.verify_manifest(self.expected_seeded_manifest())
+
+    @use_profile('redshift')
+    def test__redshift__incremental_view(self):
+        self.run_and_generate({'source-paths': [self.dir('rs_models')]})
+        my_schema_name = self.unique_schema()
+        expected_catalog = {
+            'model': {
+                'metadata': {
+                    'schema': my_schema_name,
+                    'name': 'model',
+                    'type': 'LATE BINDING VIEW',
+                    'comment': None,
+                },
+                'columns': [
+                    {
+                        'name': 'id',
+                        'index': 1,
+                        'type': 'integer',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'first_name',
+                        'index': 2,
+                        'type': 'character varying(5)',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'email',
+                        'index': 3,
+                        'type': 'character varying(23)',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'ip_address',
+                        'index': 4,
+                        'type': 'character varying(14)',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'updated_at',
+                        'index': 5,
+                        'type': 'timestamp without time zone',
+                        'comment': None,
+                    },
+                ],
+            },
+            'seed': {
+                'metadata': {
+                    'schema': my_schema_name,
+                    'name': 'seed',
+                    'type': 'BASE TABLE',
+                    'comment': None,
+                },
+                'columns': [
+                    {
+                        'name': 'id',
+                        'index': 1,
+                        'type': 'integer',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'first_name',
+                        'index': 2,
+                        'type': 'character varying',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'email',
+                        'index': 3,
+                        'type': 'character varying',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'ip_address',
+                        'index': 4,
+                        'type': 'character varying',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'updated_at',
+                        'index': 5,
+                        'type': 'timestamp without time zone',
+                        'comment': None,
+                    },
+                ],
+            },
+        }
+        self.verify_catalog(expected_catalog)
+        model_sql_path = self.dir('rs_models/model.sql')
+        expected_manifest = {
+            "nodes": {
+                "model.test.model": {
+                    "name": "model",
+                    "root_path": os.getcwd(),
+                    "resource_type": "model",
+                    "path": "model.sql",
+                    "original_file_path": model_sql_path,
+                    "package_name": "test",
+                    "raw_sql": open(model_sql_path).read().rstrip('\n'),
+                    "refs": [["seed"]],
+                    "depends_on": {
+                        "nodes": ["seed.test.seed"],
+                        "macros": [],
+                    },
+                    "unique_id": "model.test.model",
+                    "empty": False,
+                    "fqn": ["test", "model"],
+                    "tags": [],
+                    "config": {
+                        "bind": False,
+                        "enabled": True,
+                        "materialized": "view",
+                        "pre-hook": [],
+                        "post-hook": [],
+                        "vars": {},
+                        "column_types": {},
+                        "quoting": {},
+                    },
+                    "schema": my_schema_name,
+                    "alias": "model"
+                },
+                "seed.test.seed": {
+                    "path": "seed.csv",
+                    "name": "seed",
+                    "root_path": os.getcwd(),
+                    "resource_type": "seed",
+                    "raw_sql": "-- csv --",
+                    "package_name": "test",
+                    "original_file_path": self.dir("seed/seed.csv"),
+                    "refs": [],
+                    "depends_on": {
+                        "nodes": [],
+                        "macros": [],
+                    },
+                    "unique_id": "seed.test.seed",
+                    "empty": False,
+                    "fqn": ["test", "seed"],
+                    "tags": [],
+                    "config": {
+                        "enabled": True,
+                        "materialized": "seed",
+                        "pre-hook": [],
+                        "post-hook": [],
+                        "vars": {},
+                        "column_types": {},
+                        "quoting": {},
+                    },
+                    "schema": my_schema_name,
+                    "alias": "seed"
+                },
+            },
+            "parent_map": {
+                "model.test.model": ["seed.test.seed"],
+                "seed.test.seed": []
+            },
+            "child_map": {
+                "model.test.model": [],
+                "seed.test.seed": ["model.test.model"]
+            }
         }
         self.verify_manifest(expected_manifest)
