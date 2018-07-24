@@ -242,6 +242,23 @@ PARSED_MACROS_CONTRACT = {
     },
 }
 
+
+NODE_EDGE_MAP = {
+    'type': 'object',
+    'additionalProperties': False,
+    'description': 'A map of node relationships',
+    'patternProperties': {
+        '.*': {
+            'type': 'array',
+            'items': {
+                'type': 'string',
+                'description': 'A node name',
+            }
+        }
+    }
+}
+
+
 PARSED_MANIFEST_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
@@ -253,8 +270,11 @@ PARSED_MANIFEST_CONTRACT = {
         'nodes': PARSED_NODES_CONTRACT,
         'macros': PARSED_MACROS_CONTRACT,
         'generated_at': {
-            'type': 'date-time'
-        }
+            'type': 'string',
+            'format': 'date-time',
+        },
+        'parent_map': NODE_EDGE_MAP,
+        'child_map': NODE_EDGE_MAP,
     },
     'required': ['nodes', 'macros'],
 }
@@ -334,7 +354,8 @@ def build_edges(nodes):
     return forward_edges, backward_edges
 
 
-class ParsedManifest(object):
+class ParsedManifest(APIObject):
+    SCHEMA = PARSED_MANIFEST_CONTRACT
     """The final result of parsing all macros and nodes in a graph."""
     def __init__(self, nodes, macros, generated_at):
         """The constructor. nodes and macros are dictionaries mapping unique
@@ -344,6 +365,8 @@ class ParsedManifest(object):
         self.nodes = nodes
         self.macros = macros
         self.generated_at = generated_at
+        self._contents = {}
+        super(ParsedManifest, self).__init__()
 
     def serialize(self):
         """Convert the parsed manifest to a nested dict structure that we can
