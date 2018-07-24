@@ -33,8 +33,11 @@ class TestDocsGenerate(DBTIntegrationTest):
             }
         }
 
-    def run_and_generate(self):
-        self.use_default_project({"data-paths": [self.dir("seed")]})
+    def run_and_generate(self, extra=None):
+        project = {"data-paths": [self.dir("seed")]}
+        if extra:
+            project.update(extra)
+        self.use_default_project(project)
 
         self.assertEqual(len(self.run_dbt(["seed"])), 1)
         self.assertEqual(len(self.run_dbt()), 1)
@@ -480,3 +483,95 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
         }
         self.verify_manifest(expected_manifest)
+
+    @attr(type='redshift')
+    def test__redshift__incremental_view(self):
+        self.use_profile('redshift')
+        self.run_and_generate({'source-paths': [self.dir('rs_models')]})
+        my_schema_name = self.unique_schema()
+        expected_catalog = {
+            'model': {
+                'metadata': {
+                    'schema': my_schema_name,
+                    'name': 'model',
+                    'type': 'LATE BINDING VIEW',
+                    'comment': None,
+                },
+                'columns': [
+                    {
+                        'name': 'id',
+                        'index': 1,
+                        'type': 'integer',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'first_name',
+                        'index': 2,
+                        'type': 'character varying(5)',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'email',
+                        'index': 3,
+                        'type': 'character varying(23)',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'ip_address',
+                        'index': 4,
+                        'type': 'character varying(14)',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'updated_at',
+                        'index': 5,
+                        'type': 'timestamp without time zone',
+                        'comment': None,
+                    },
+                ],
+            },
+            'seed': {
+                'metadata': {
+                    'schema': my_schema_name,
+                    'name': 'seed',
+                    'type': 'BASE TABLE',
+                    'comment': None,
+                },
+                'columns': [
+                    {
+                        'name': 'id',
+                        'index': 1,
+                        'type': 'integer',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'first_name',
+                        'index': 2,
+                        'type': 'character varying',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'email',
+                        'index': 3,
+                        'type': 'character varying',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'ip_address',
+                        'index': 4,
+                        'type': 'character varying',
+                        'comment': None,
+                    },
+                    {
+                        'name': 'updated_at',
+                        'index': 5,
+                        'type': 'timestamp without time zone',
+                        'comment': None,
+                    },
+                ],
+            },
+        }
+        self.verify_catalog(expected_catalog)
+        # TODO: This is wrong and being wrong means we hang forever.
+        # Merge in when bigquery is fixed
+        # self.verify_manifest()

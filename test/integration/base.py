@@ -289,6 +289,13 @@ class DBTIntegrationTest(unittest.TestCase):
             self.run_sql('DROP SCHEMA IF EXISTS {} CASCADE'.format(schema))
             self.run_sql('CREATE SCHEMA {}'.format(schema))
 
+    def _reconnect(self):
+        """Disconnect and then reconnect. setUp() must be complete!"""
+        self.handle.close()
+        self.adapter.cleanup_connections()
+        connection = self.adapter.acquire_connection(self._profile, '__test')
+        self.handle = connection.get('handle')
+
     def tearDown(self):
         os.remove(DBT_PROFILES)
         os.remove("dbt_project.yml")
@@ -306,6 +313,11 @@ class DBTIntegrationTest(unittest.TestCase):
             adapter.drop_schema(self._profile, self.project,
                                 self.unique_schema(), '__test')
         else:
+            if self.adapter_type == 'redshift':
+                # in the presence of late-binding views, redshift hangs
+                # indefinitely on DROP SCHEMA if we don't disconnect and
+                # reconnect.
+                self._reconnect()
             schema = self.adapter.quote(self.unique_schema())
             self.run_sql('DROP SCHEMA IF EXISTS {} CASCADE'.format(schema))
             self.handle.close()
