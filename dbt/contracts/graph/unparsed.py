@@ -56,7 +56,6 @@ UNPARSED_NODE_CONTRACT = deep_merge(
                     'Name of this node. For models, this is used as the '
                     'identifier in the database.'),
                 'minLength': 1,
-                'maxLength': 127,
             },
             'resource_type': {
                 'enum': [

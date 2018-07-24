@@ -50,6 +50,32 @@
   {{ adapter.alter_table_add_columns(relation, columns) }}
 {% endmacro %}
 
+{#
+    Run the update part of an archive query. Different databases have
+    tricky differences in their `update` semantics. Table projection is
+    not allowed on Redshift/pg, but is effectively required on bq.
+#}
+
+{% macro archive_update(target_relation, tmp_relation) %}
+    {{ adapter_macro('archive_update', target_relation, tmp_relation) }}
+{% endmacro %}
+
+{% macro default__archive_update(target_relation, tmp_relation) %}
+    update {{ target_relation }}
+    set {{ adapter.quote('valid_to') }} = tmp.{{ adapter.quote('valid_to') }}
+    from {{ tmp_relation }} as tmp
+    where tmp.{{ adapter.quote('scd_id') }} = {{ target_relation }}.{{ adapter.quote('scd_id') }}
+      and {{ adapter.quote('change_type') }} = 'update';
+{% endmacro %}
+
+{% macro bigquery__archive_update(target_relation, tmp_relation) %}
+    update {{ target_relation }} as dest
+    set dest.{{ adapter.quote('valid_to') }} = tmp.{{ adapter.quote('valid_to') }}
+    from {{ tmp_relation }} as tmp
+    where tmp.{{ adapter.quote('scd_id') }} = dest.{{ adapter.quote('scd_id') }}
+      and {{ adapter.quote('change_type') }} = 'update';
+{% endmacro %}
+
 
 {#
     Cross-db compatible archival implementation
@@ -199,10 +225,7 @@
                                         to_table=target_table) }}
 
   {% call statement('_') -%}
-    update {{ target_relation }} as dest set {{ adapter.quote('valid_to') }} = tmp.{{ adapter.quote('valid_to') }}
-    from {{ tmp_relation }} as tmp
-    where tmp.{{ adapter.quote('scd_id') }} = dest.{{ adapter.quote('scd_id') }}
-      and {{ adapter.quote('change_type') }} = 'update';
+    {{ archive_update(target_relation, tmp_relation) }}
   {% endcall %}
 
   {% call statement('main') -%}

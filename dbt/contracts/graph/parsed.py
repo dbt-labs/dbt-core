@@ -73,7 +73,6 @@ PARSED_NODE_CONTRACT = deep_merge(
             'unique_id': {
                 'type': 'string',
                 'minLength': 1,
-                'maxLength': 255,
             },
             'fqn': {
                 'type': 'array',
@@ -115,7 +114,6 @@ PARSED_NODE_CONTRACT = deep_merge(
                         'items': {
                             'type': 'string',
                             'minLength': 1,
-                            'maxLength': 255,
                             'description': (
                                 'A node unique ID that this depends on.'
                             )
@@ -126,7 +124,6 @@ PARSED_NODE_CONTRACT = deep_merge(
                         'items': {
                             'type': 'string',
                             'minLength': 1,
-                            'maxLength': 255,
                             'description': (
                                 'A macro unique ID that this depends on.'
                             )
