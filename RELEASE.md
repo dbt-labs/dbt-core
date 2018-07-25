@@ -1,17 +1,23 @@
 ### Release Procedure :shipit:
 
-1. Update changelog
-1. Bumpversion
-1. Merge to master
-  - (on master) git pull origin development
-1. Deploy to pypi
-  - python setup.py sdist upload -r pypi
-1. Deploy to homebrew
+1. Update CHANGELOG.md with the most recent changes
+2. If this is a release candidate, you want to create it off of development. If it's an actual release, you must first merge to master.
+  - `git checkout master`
+  - `git pull origin development`
+3. Bump the version using `bumpversion`:
+  - Dry run first by running `bumpversion --new-version <desired-version> <part>` and checking the diff. If it looks correct, clean up the chanages and move on:
+  - Alpha releases: `bumpversion --commit --tag --new-version 0.10.2a1 num`
+  - Patch releases: `bumpversion --commit --tag --new-version 0.10.2 patch`
+  - Minor releases: `bumpversion --commit --tag --new-version 0.11.0 minor`
+  - Major releases: `bumpversion --commit --tag --new-version 1.0.0 major`
+4. Deploy to pypi
+  - `python setup.py sdist upload -r pypi`
+5. Deploy to homebrew
   - Make a pull request against homebrew-core
-1. Deploy to conda-forge
+6. Deploy to conda-forge
   - Make a pull request against dbt-feedstock
-1. Git release notes (points to changelog)
-1. Post to slack (point to changelog)
+7. Git release notes (points to changelog)
+8. Post to slack (point to changelog)
 
 #### Homebrew Release Process
 

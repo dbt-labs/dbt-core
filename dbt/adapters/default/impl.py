@@ -30,6 +30,7 @@ class DefaultAdapter(object):
         "get_columns_in_table",
         "get_missing_columns",
         "expand_target_column_types",
+        "create_schema",
 
         # deprecated -- use versions that take relations instead
         "already_exists",
@@ -719,7 +720,7 @@ class DefaultAdapter(object):
 
     @classmethod
     def quote(cls, identifier):
-        return '"{}"'.format(identifier.replace('"', '""'))
+        return '"{}"'.format(identifier)
 
     @classmethod
     def quote_schema_and_table(cls, profile, project_cfg,

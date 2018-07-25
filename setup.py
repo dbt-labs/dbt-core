@@ -7,7 +7,7 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 package_name = "dbt"
-package_version = "0.10.1"
+package_version = "0.10.2a3"
 description = """dbt (data build tool) is a command line tool that helps \
 analysts and engineers transform data in their warehouse more effectively"""
 
@@ -39,15 +39,13 @@ setup(
     ],
     install_requires=[
         'Jinja2>=2.8',
-        'pytz==2017.2',
         'PyYAML>=3.11',
-        'psycopg2==2.7.5',
+        'psycopg2>=2.7.5,<2.8',
         'sqlparse==0.2.3',
         'networkx==1.11',
-        'snowplow-tracker==0.7.2',
-        'celery==3.1.23',
+        'minimal-snowplow-tracker==0.0.1',
         'snowflake-connector-python>=1.4.9',
-        'requests>=2.18.0',
+        'requests>=2.18.0,<3',
         'colorama==0.3.9',
         'google-cloud-bigquery==0.29.0',
         'agate>=1.6,<2',
