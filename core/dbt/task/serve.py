@@ -18,7 +18,7 @@ class ServeTask(ConfiguredTask):
         port = self.args.port
         address = "0.0.0.0"
 
-        shutil.copyfile(DOCS_INDEX_FILE_PATH, 'index.html')
+        shutil.copyfile(DOCS_INDEX_FILE_PATH, "index.html")
 
         fire_event(ServingDocsPort(address=address, port=port))
         fire_event(ServingDocsAccessInfo(port=port))
