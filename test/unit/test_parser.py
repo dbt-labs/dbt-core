@@ -4,6 +4,7 @@ import os
 
 import dbt.flags
 from dbt.parser import ModelParser, MacroParser, DataTestParser, SchemaParser, ParserUtils
+from dbt.utils import timestring
 
 from dbt.node_types import NodeType
 from dbt.contracts.graph.parsed import ParsedManifest, ParsedNode, ParsedMacro
@@ -702,6 +703,7 @@ class ParserTest(unittest.TestCase):
         manifest = ParsedManifest(
             nodes={k: ParsedNode(**v) for (k,v) in graph['nodes'].items()},
             macros={k: ParsedMacro(**v) for (k,v) in graph['macros'].items()},
+            generated_at=timestring(),
         )
 
         processed_manifest = ParserUtils.process_refs(manifest, 'root')

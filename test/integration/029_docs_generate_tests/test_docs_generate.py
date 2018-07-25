@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime, timedelta
 
 from test.integration.base import DBTIntegrationTest, use_profile
 
@@ -43,6 +44,25 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.assertEqual(len(self.run_dbt()), 1)
         self.run_dbt(['docs', 'generate'])
 
+    def assertRecent(self, timestr):
+        """Given a timestring in '%Y-%m-%dT%H:%M:%SZ' format (ISO8601), assert
+        that it represents a time before now and a time after 24h ago.
+
+        We can't just set the time via freezegun.freeze_time because that
+        breaks SSL, and a lot of these tests use SSL.
+        """
+        now = datetime.utcnow()
+        yesterday = now + timedelta(days=-1)
+        parsed = datetime.strptime(timestr, '%Y-%m-%dT%H:%M:%S.%fZ')
+        self.assertLess(
+            yesterday, parsed,
+            'parsed date {} happened over 24h ago'.format(parsed)
+        )
+        self.assertGreaterEqual(
+            now, parsed,
+            'parsed date {} happened in the future'.format(parsed)
+        )
+
     def verify_catalog(self, expected):
         self.assertTrue(os.path.exists('./target/catalog.json'))
 
@@ -51,6 +71,8 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         my_schema_name = self.unique_schema()
         self.assertIn(my_schema_name, catalog)
+        self.assertIn('generated_at', catalog)
+        self.assertRecent(catalog.pop('generated_at'))
         my_schema = catalog[my_schema_name]
         self.assertEqual(expected, my_schema)
 
@@ -162,14 +184,15 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         self.assertEqual(
             set(manifest),
-            {'nodes', 'macros', 'parent_map', 'child_map'}
+            {'nodes', 'macros', 'parent_map', 'child_map', 'generated_at'}
         )
 
         self.verify_manifest_macros(manifest)
-        manifest_without_macros = {
-            k: v for k, v in manifest.items() if k != 'macros'
+        manifest_without_extras = {
+            k: v for k, v in manifest.items()
+            if k not in {'macros', 'generated_at'}
         }
-        self.assertEqual(manifest_without_macros, expected_manifest)
+        self.assertEqual(manifest_without_extras, expected_manifest)
 
     @use_profile('postgres')
     def test__postgres__run_and_generate(self):
@@ -298,7 +321,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             {
                 'name': 'id',
                 'index': 1,
-                'type': 'INTEGER',
+                'type': 'INT64',
                 'comment': None,
             },
             {
@@ -361,31 +384,31 @@ class TestDocsGenerate(DBTIntegrationTest):
             {
                 "name": "field_1",
                 "index": 1,
-                "type": "INTEGER",
+                "type": "INT64",
                 "comment": None
             },
             {
                 "name": "field_2",
                 "index": 2,
-                "type": "INTEGER",
+                "type": "INT64",
                 "comment": None
             },
             {
                 "name": "field_3",
                 "index": 3,
-                "type": "INTEGER",
+                "type": "INT64",
                 "comment": None
             },
             {
                 "name": "nested_field.field_4",
                 "index": 4,
-                "type": "INTEGER",
+                "type": "INT64",
                 "comment": None
             },
             {
                 "name": "nested_field.field_5",
                 "index": 5,
-                "type": "INTEGER",
+                "type": "INT64",
                 "comment": None
             }
         ]

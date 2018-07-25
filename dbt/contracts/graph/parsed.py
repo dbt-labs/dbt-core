@@ -1,5 +1,5 @@
 from dbt.api import APIObject
-from dbt.utils import deep_merge
+from dbt.utils import deep_merge, timestring
 from dbt.node_types import NodeType
 
 import dbt.clients.jinja
@@ -242,6 +242,23 @@ PARSED_MACROS_CONTRACT = {
     },
 }
 
+
+NODE_EDGE_MAP = {
+    'type': 'object',
+    'additionalProperties': False,
+    'description': 'A map of node relationships',
+    'patternProperties': {
+        '.*': {
+            'type': 'array',
+            'items': {
+                'type': 'string',
+                'description': 'A node name',
+            }
+        }
+    }
+}
+
+
 PARSED_MANIFEST_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
@@ -252,6 +269,12 @@ PARSED_MANIFEST_CONTRACT = {
     'properties': {
         'nodes': PARSED_NODES_CONTRACT,
         'macros': PARSED_MACROS_CONTRACT,
+        'generated_at': {
+            'type': 'string',
+            'format': 'date-time',
+        },
+        'parent_map': NODE_EDGE_MAP,
+        'child_map': NODE_EDGE_MAP,
     },
     'required': ['nodes', 'macros'],
 }
@@ -331,14 +354,19 @@ def build_edges(nodes):
     return forward_edges, backward_edges
 
 
-class ParsedManifest(object):
+class ParsedManifest(APIObject):
+    SCHEMA = PARSED_MANIFEST_CONTRACT
     """The final result of parsing all macros and nodes in a graph."""
-    def __init__(self, nodes, macros):
+    def __init__(self, nodes, macros, generated_at):
         """The constructor. nodes and macros are dictionaries mapping unique
-        IDs to ParsedNode and ParsedMacro objects, respectively.
+        IDs to ParsedNode and ParsedMacro objects, respectively. generated_at
+        is a text timestamp in RFC 3339 format.
         """
         self.nodes = nodes
         self.macros = macros
+        self.generated_at = generated_at
+        self._contents = {}
+        super(ParsedManifest, self).__init__()
 
     def serialize(self):
         """Convert the parsed manifest to a nested dict structure that we can
@@ -351,6 +379,7 @@ class ParsedManifest(object):
             'macros': {k: v.serialize() for k, v in self.macros.items()},
             'parent_map': backward_edges,
             'child_map': forward_edges,
+            'generated_at': self.generated_at,
         }
 
     def _find_by_name(self, name, package, subgraph, nodetype):
