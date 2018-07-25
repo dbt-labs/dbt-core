@@ -58,7 +58,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             yesterday, parsed,
             'parsed date {} happened over 24h ago'.format(parsed)
         )
-        self.assertGreater(
+        self.assertGreaterEqual(
             now, parsed,
             'parsed date {} happened in the future'.format(parsed)
         )
