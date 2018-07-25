@@ -138,7 +138,31 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'column_types': {},
                     'quoting': {}},
                     'schema': my_schema_name,
-                    'alias': 'model'
+                    'alias': 'model',
+                    'description': 'The test model',
+                    'columns': [
+                        {
+                            'name': 'id',
+                            'description': 'The user ID number',
+                        },
+                        {
+                            'name': 'first_name',
+                            'description': "The user's first name",
+                        },
+                        {
+                            'name': 'email',
+                            'description': "The user's email",
+                        },
+                        {
+                            'name': 'ip_address',
+                            'description': "The user's IP address",
+                        },
+                        {
+                            'name': 'updated_at',
+                            'description': "The last time this user's email was updated",
+                        },
+                    ],
+                    'patch_path': self.dir('models/schema.yml'),
                 },
                 'seed.test.seed': {
                     'path': 'seed.csv',
@@ -464,7 +488,31 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'root_path': os.getcwd(),
                     'schema': my_schema_name,
                     'tags': [],
-                    'unique_id': 'model.test.model'
+                    'unique_id': 'model.test.model',
+                    'columns': [
+                        {
+                            'name': 'field_1',
+                            'description': 'The first field',
+                        },
+                        {
+                            'name': 'field_2',
+                            'description': 'The second field',
+                        },
+                        {
+                            'name': 'field_3',
+                            'description': 'The third field',
+                        },
+                        {
+                            'name': 'nested_field.field_4',
+                            'description': 'The first nested field',
+                        },
+                        {
+                            'name': 'nested_field.field_5',
+                            'description': 'The second nested field',
+                        },
+                    ],
+                    'description': 'The test model',
+                    'patch_path': self.dir('bq_models/schema.yml'),
                 },
                 'model.test.seed': {
                     'alias': 'seed',
@@ -684,7 +732,31 @@ class TestDocsGenerate(DBTIntegrationTest):
                         "quoting": {},
                     },
                     "schema": my_schema_name,
-                    "alias": "model"
+                    "alias": "model",
+                    'description': 'The test model',
+                    'columns': [
+                        {
+                            'name': 'id',
+                            'description': 'The user ID number',
+                        },
+                        {
+                            'name': 'first_name',
+                            'description': "The user's first name",
+                        },
+                        {
+                            'name': 'email',
+                            'description': "The user's email",
+                        },
+                        {
+                            'name': 'ip_address',
+                            'description': "The user's IP address",
+                        },
+                        {
+                            'name': 'updated_at',
+                            'description': "The last time this user's email was updated",
+                        },
+                    ],
+                    'patch_path': self.dir('models/schema.yml'),
                 },
                 "seed.test.seed": {
                     "path": "seed.csv",
