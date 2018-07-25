@@ -139,7 +139,7 @@ Now you'll also need a 'dbt profile' so dbt can tell how to connect to your data
 
 ```
 config:
-    send_anonymous_usage_stats: True
+    send_anonymous_usage_stats: False
     use_colors: True
 
 talk:
