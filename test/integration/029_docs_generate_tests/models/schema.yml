@@ -6,16 +6,11 @@ models:
     columns:
       - name: id
         description: The user ID number
-        tests: []
       - name: first_name
         description: The user's first name
-        tests: []
       - name: email
         description: The user's email
-        tests: []
       - name: ip_address
         description: The user's IP address
-        tests: []
       - name: updated_at
         description: The last time this user's email was updated
-        tests: []

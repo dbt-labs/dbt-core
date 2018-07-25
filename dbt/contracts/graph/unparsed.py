@@ -112,7 +112,7 @@ COLUMN_TEST_CONTRACT = {
             'description': 'The list of tests to perform',
         },
     },
-    'required': ['name', 'tests'],
+    'required': ['name'],
 }
 
 

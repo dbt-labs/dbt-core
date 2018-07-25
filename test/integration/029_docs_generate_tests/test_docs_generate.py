@@ -756,7 +756,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'description': "The last time this user's email was updated",
                         },
                     ],
-                    'patch_path': self.dir('models/schema.yml'),
+                    'patch_path': self.dir('rs_models/schema.yml'),
                 },
                 "seed.test.seed": {
                     "path": "seed.csv",
