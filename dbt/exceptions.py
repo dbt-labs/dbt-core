@@ -131,9 +131,6 @@ class FailedToConnectException(DatabaseException):
     pass
 
 
-from dbt.utils import get_materialization  # noqa
-
-
 def raise_compiler_error(msg, node=None):
     raise CompilationException(msg, node)
 
@@ -218,6 +215,7 @@ def macro_not_found(model, target_macro_id):
 
 
 def materialization_not_available(model, adapter_type):
+    from dbt.utils import get_materialization  # noqa
     materialization = get_materialization(model)
 
     raise_compiler_error(
@@ -227,6 +225,7 @@ def materialization_not_available(model, adapter_type):
 
 
 def missing_materialization(model, adapter_type):
+    from dbt.utils import get_materialization  # noqa
     materialization = get_materialization(model)
 
     valid_types = "'default'"

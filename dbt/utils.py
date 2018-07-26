@@ -115,9 +115,8 @@ def find_operation_by_name(flat_graph, target_name, target_package):
 
 
 def find_docs_by_name(flat_graph, target_name, target_package):
-    # TODO: do docs deserve their own key?
     return find_by_name(flat_graph, target_name, target_package,
-                        'nodes', [NodeType.Documentation])
+                        'docs', [NodeType.Documentation])
 
 
 def find_by_name(flat_graph, target_name, target_package, subgraph,

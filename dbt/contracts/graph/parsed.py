@@ -7,7 +7,7 @@ from dbt.exceptions import raise_duplicate_resource_name, \
 import dbt.clients.jinja
 
 from dbt.contracts.graph.unparsed import UNPARSED_NODE_CONTRACT, \
-    UNPARSED_MACRO_CONTRACT
+    UNPARSED_MACRO_CONTRACT, UNPARSED_DOCUMENTATION_CONTRACT
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -311,6 +311,35 @@ PARSED_MACROS_CONTRACT = {
 }
 
 
+PARSED_DOCUMENTATION_CONTRACT = deep_merge(
+    UNPARSED_DOCUMENTATION_CONTRACT,
+    {
+        'properties': {
+            'unique_id': {
+                'type': 'string',
+                'minLength': 1,
+                'maxLength': 255,
+            },
+        },
+        'required': UNPARSED_DOCUMENTATION_CONTRACT['required'] + [
+            'unique_id',
+        ],
+    }
+)
+
+
+PARSED_DOCUMENTATIONS_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'description': (
+        'A collection of the parsed docs, stored by their uniqe IDs.'
+    ),
+    'patternProperties': {
+        '.*': PARSED_DOCUMENTATION_CONTRACT,
+    },
+}
+
+
 NODE_EDGE_MAP = {
     'type': 'object',
     'additionalProperties': False,
@@ -337,6 +366,7 @@ PARSED_MANIFEST_CONTRACT = {
     'properties': {
         'nodes': PARSED_NODES_CONTRACT,
         'macros': PARSED_MACROS_CONTRACT,
+        'docs': PARSED_DOCUMENTATIONS_CONTRACT,
         'generated_at': {
             'type': 'string',
             'format': 'date-time',
@@ -344,7 +374,7 @@ PARSED_MANIFEST_CONTRACT = {
         'parent_map': NODE_EDGE_MAP,
         'child_map': NODE_EDGE_MAP,
     },
-    'required': ['nodes', 'macros'],
+    'required': ['nodes', 'macros', 'docs'],
 }
 
 
@@ -407,6 +437,10 @@ class ParsedMacro(APIObject):
             self.template, self._contents)
 
 
+class ParsedDocumentation(APIObject):
+    SCHEMA = PARSED_DOCUMENTATION_CONTRACT
+
+
 class ParsedNodes(APIObject):
     SCHEMA = PARSED_NODES_CONTRACT
 
@@ -437,13 +471,14 @@ def build_edges(nodes):
 class ParsedManifest(APIObject):
     SCHEMA = PARSED_MANIFEST_CONTRACT
     """The final result of parsing all macros and nodes in a graph."""
-    def __init__(self, nodes, macros, generated_at):
+    def __init__(self, nodes, macros, docs, generated_at):
         """The constructor. nodes and macros are dictionaries mapping unique
         IDs to ParsedNode and ParsedMacro objects, respectively. generated_at
         is a text timestamp in RFC 3339 format.
         """
         self.nodes = nodes
         self.macros = macros
+        self.docs = docs
         self.generated_at = generated_at
         self._contents = {}
         super(ParsedManifest, self).__init__()
@@ -457,6 +492,7 @@ class ParsedManifest(APIObject):
         return {
             'nodes': {k: v.serialize() for k, v in self.nodes.items()},
             'macros': {k: v.serialize() for k, v in self.macros.items()},
+            'docs': {k: v.serialize() for k, v in self.docs.items()},
             'parent_map': backward_edges,
             'child_map': forward_edges,
             'generated_at': self.generated_at,
@@ -464,13 +500,14 @@ class ParsedManifest(APIObject):
 
     def _find_by_name(self, name, package, subgraph, nodetype):
         """
-
-        Find a node by its given name in the appropraite sugraph.
+        Find a node by its given name in the appropriate sugraph.
         """
         if subgraph == 'nodes':
             search = self.nodes
         elif subgraph == 'macros':
             search = self.macros
+        elif subgraph == 'docs':
+            search = self.docs
         else:
             raise NotImplementedError(
                 'subgraph search for {} not implemented'.format(subgraph)
@@ -532,4 +569,5 @@ class ParsedManifest(APIObject):
         return {
             'nodes': {k: v.to_dict() for k, v in self.nodes.items()},
             'macros': self.macros,
+            'docs': self.docs,
         }
