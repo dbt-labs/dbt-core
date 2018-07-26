@@ -905,7 +905,7 @@ def raise_ambiguous_catalog_match(unique_id, match_1, match_2):
 
 def raise_patch_targets_not_found(patches):
     patch_list = "\n\t".join(
-        'model {} (referenced in path {})'.format(p.name, p.original_file_path)
+        "model {} (referenced in path {})".format(p.name, p.original_file_path)
         for p in patches.values()
     )
     raise_compiler_error(
