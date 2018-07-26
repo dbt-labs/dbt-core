@@ -405,6 +405,42 @@ class ParsedManifest(APIObject):
         return self._find_by_name(name, package, 'macros',
                                   [NodeType.Operation])
 
+    def _filter_subgraph(self, subgraph, predicate):
+        """
+        Given a subgraph of the manifest, and a predicate, filter
+        the subgraph using that predicate. Generates a list of nodes.
+        """
+        to_return = []
+
+        for unique_id, item in subgraph.items():
+            if predicate(item):
+                to_return.append(item)
+
+        return to_return
+
+    def _model_matches_schema_and_table(self, schema, table, model):
+        return (model.schema.lower() == schema.lower() and
+                model.alias.lower() == table.lower())
+
+    def get_unique_id_for_schema_and_table(self, schema, table):
+        """
+        Given a schema and table, find a matching model, and return
+        the unique_id for that model. If more than one matching
+        model is found, raise an exception.
+        """
+        def predicate(model):
+            return self._model_matches_schema_and_table(schema, table, model)
+
+        matching = list(self._filter_subgraph(self.nodes, predicate))
+
+        if not matching:
+            return None
+
+        if len(matching) > 1:
+            return None
+
+        return matching[0].get('unique_id')
+
     def to_flat_graph(self):
         """Convert the parsed manifest to the 'flat graph' that the compiler
         expects.

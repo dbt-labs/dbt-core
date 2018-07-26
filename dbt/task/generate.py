@@ -90,6 +90,19 @@ def unflatten(columns):
     return structured
 
 
+def incorporate_catalog_unique_ids(catalog, manifest):
+    to_return = catalog.copy()
+
+    for schema, tables in to_return.items():
+        for table_name, table_def in tables.items():
+            unique_id = manifest.get_unique_id_for_schema_and_table(
+                schema, table_name)
+
+            table_def['unique_id'] = unique_id
+
+    return to_return
+
+
 class GenerateTask(BaseTask):
     def _get_manifest(self, project):
         compiler = dbt.compilation.Compiler(project)
@@ -113,7 +126,9 @@ class GenerateTask(BaseTask):
             dict(zip(results.column_names, row))
             for row in results
         ]
+
         results = unflatten(results)
+        results = incorporate_catalog_unique_ids(results, manifest)
         results['generated_at'] = dbt.utils.timestring()
 
         path = os.path.join(self.project['target-path'], CATALOG_FILENAME)
