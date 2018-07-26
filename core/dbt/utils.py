@@ -74,7 +74,7 @@ def get_model_name_or_none(model):
 
 
 MACRO_PREFIX = "dbt_macro__"
-DOCS_PREFIX = 'dbt_docs__'
+DOCS_PREFIX = "dbt_docs__"
 
 
 def get_dbt_macro_name(name):

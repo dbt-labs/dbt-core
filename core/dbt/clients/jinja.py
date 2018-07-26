@@ -375,7 +375,7 @@ class MaterializationExtension(jinja2.ext.Extension):
 
 
 class DocumentationExtension(jinja2.ext.Extension):
-    tags = ['docs']
+    tags = ["docs"]
 
     def parse(self, parser):
         node = jinja2.nodes.Macro(lineno=next(parser.stream).lineno)
@@ -384,8 +384,7 @@ class DocumentationExtension(jinja2.ext.Extension):
         node.args = []
         node.defaults = []
         node.name = get_docs_macro_name(docs_name)
-        node.body = parser.parse_statements(('name:enddocs',),
-                                            drop_needle=True)
+        node.body = parser.parse_statements(("name:enddocs",), drop_needle=True)
         return node
 
 
