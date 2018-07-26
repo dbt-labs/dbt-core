@@ -436,9 +436,6 @@ class ParsedManifest(APIObject):
         if not matching:
             return None
 
-        if len(matching) > 1:
-            return None
-
         return matching[0].get('unique_id')
 
     def to_flat_graph(self):
