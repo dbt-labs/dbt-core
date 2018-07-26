@@ -217,6 +217,19 @@ class SeedLoader(ResourceLoader):
             macros=macros)
 
 
+class DocsLoader(ResourceLoader):
+    @classmethod
+    def load_project(cls, root_project, all_projects, project, project_name,
+                     macros):
+        return dbt.parser.DocsParser.load_and_parse(
+            package_name=project_name,
+            root_project=root_project,
+            all_projects=all_projects,
+            root_dir=project.get('project-root'),
+            relative_dirs=project.get('source-paths', []),
+            resource_type=NodeType.Model,
+            macros=macros)
+
 # node loaders
 GraphLoader.register(ModelLoader)
 GraphLoader.register(AnalysisLoader)
