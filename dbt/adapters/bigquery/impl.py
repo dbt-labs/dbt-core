@@ -371,8 +371,7 @@ class BigQueryAdapter(PostgresAdapter):
         conn = cls.get_connection(profile, model_name)
         client = conn.get('handle')
 
-        debug_message = "Fetching data for query {}:\n{}"
-        logger.debug(debug_message.format(model_name, sql))
+        logger.debug('On %s: %s', model_name, sql)
 
         job_config = google.cloud.bigquery.QueryJobConfig()
         job_config.use_legacy_sql = False
