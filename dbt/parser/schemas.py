@@ -101,7 +101,6 @@ class SchemaParser(BaseParser):
         else:
             return config
 
-    # TODO: real exceptions
     @classmethod
     def _build_v2_test_args(cls, test, name):
         if isinstance(test, basestring):
@@ -138,7 +137,8 @@ class SchemaParser(BaseParser):
 
     @classmethod
     def build_unparsed_node(cls, model_name, package_name, test_type,
-                            test_args, root_dir, original_file_path):
+                            test_args, test_namespace, root_dir,
+                            original_file_path):
         """Given a model name (for the model under test), a pacakge name,
         a test type (identifying the test macro to use), arguments dictionary,
         the root directory of the search, and the original file path to the
@@ -146,10 +146,6 @@ class SchemaParser(BaseParser):
         representing the test.
         """
         test_path = os.path.basename(original_file_path)
-        original_test_type = test_type
-        test_namespace, test_type, package_name = cls.calculate_namespace(
-            test_type, package_name
-        )
 
         raw_sql = build_test_raw_sql(test_namespace, model_name, test_type,
                                      test_args)
@@ -173,8 +169,8 @@ class SchemaParser(BaseParser):
         )
 
     @classmethod
-    def build_parsed_node(cls, unparsed, model_name, root_project,
-                          all_projects, macros):
+    def build_parsed_node(cls, unparsed, model_name, test_namespace, test_type,
+                          root_project, all_projects, macros):
         """Given an UnparsedNode with a node type of Test and some extra
         information, build a ParsedNode representing the test.
         """
@@ -183,7 +179,7 @@ class SchemaParser(BaseParser):
 
         source_package = all_projects.get(unparsed.package_name)
         if source_package is None:
-            desc = '"{}" test on model "{}"'.format(original_test_type,
+            desc = '"{}" test on model "{}"'.format(test_type,
                                                     model_name)
             dbt.exceptions.raise_dep_not_found(None, desc, test_namespace)
 
@@ -212,12 +208,21 @@ class SchemaParser(BaseParser):
         """From the various components that are common to both v1 and v2 schema,
         build a ParsedNode representing a test case.
         """
+        original_test_type = test_type
+        test_namespace, test_type, package_name = cls.calculate_namespace(
+            test_type, package_name
+        )
+
+        test_namespace, test_type, package_name = cls.calculate_namespace(
+            test_type, package_name
+        )
 
         unparsed = cls.build_unparsed_node(model_name, package_name, test_type,
-                                           test_args, root_dir,
+                                           test_args, test_namespace, root_dir,
                                            original_file_path)
 
-        parsed = cls.build_parsed_node(unparsed, model_name, root_project,
+        parsed = cls.build_parsed_node(unparsed, model_name, test_namespace,
+                                       original_test_type, root_project,
                                        all_projects, macros)
         return parsed
 
@@ -276,8 +281,8 @@ class SchemaParser(BaseParser):
                     ...
         """
         for model_name, test_spec in test_yml.items():
-            # in v1 we can really only have constraints (right?), so not having
-            # any is a concern
+            # in v1 we can really only have constraints, so not having any is
+            # a concern
             no_tests_warning = (
                 "* WARNING: No constraints found for model '{}' in file {}\n"
             )

@@ -228,7 +228,6 @@ class SeedLoader(ResourceLoader):
 # node loaders
 GraphLoader.register(ModelLoader)
 GraphLoader.register(AnalysisLoader)
-# GraphLoader.register(SchemaTestLoader)
 GraphLoader.register(DataTestLoader)
 GraphLoader.register(RunHookLoader)
 GraphLoader.register(ArchiveLoader)
