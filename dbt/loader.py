@@ -18,10 +18,11 @@ class GraphLoader(object):
         nodes = {}
         for loader in cls._LOADERS:
             nodes.update(loader.load_all(root_project, all_projects, macros))
+        docs = DocumentationLoader.load_all(root_project, all_projects)
 
-        tests, patches = SchemaTestLoader.load_all(root_project, all_projects)
+        tests, patches = SchemaTestLoader.load_all(root_project, all_projects, docs)
 
-        manifest = ParsedManifest(nodes=nodes, macros=macros,
+        manifest = ParsedManifest(nodes=nodes, macros=macros, docs=docs,
                                   generated_at=timestring())
         manifest.add_nodes(tests)
         manifest.patch_nodes(patches)
@@ -226,9 +227,7 @@ class DocumentationLoader(ResourceLoader):
             root_project=root_project,
             all_projects=all_projects,
             root_dir=project.get('project-root'),
-            relative_dirs=project.get('source-paths', []),
-            resource_type=NodeType.Model,
-            macros=macros)
+            relative_dirs=project.get('source-paths', []))
 
 # node loaders
 GraphLoader.register(ModelLoader)

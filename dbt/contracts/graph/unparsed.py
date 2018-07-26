@@ -162,16 +162,10 @@ class UnparsedNodeUpdate(APIObject):
     SCHEMA = UNPARSED_NODE_UPDATE_CONTRACT
 
 
-UNPARSED_DOCUMENTATION_CONTRACT = {
+UNPARSED_DOCUMENTATION_FILE_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
     'properties': {
-        'name': {
-            'type': 'string',
-            'description': (
-                'Name of this node, as referred to by doc() references'
-            ),
-        },
         'package_name': {
             'type': 'string',
         },
@@ -209,11 +203,12 @@ UNPARSED_DOCUMENTATION_CONTRACT = {
         },
     },
     'required': [
-        'name', 'package_name', 'root_path', 'path', 'original_file_path',
+        'package_name', 'root_path', 'path', 'original_file_path',
         'file_contents', 'resource_type'
     ],
 }
 
 
-class UnparsedDocumentation(APIObject):
-    SCHEMA = UNPARSED_DOCUMENTATION_CONTRACT
+class UnparsedDocumentationFile(APIObject):
+    SCHEMA = UNPARSED_DOCUMENTATION_FILE_CONTRACT
+

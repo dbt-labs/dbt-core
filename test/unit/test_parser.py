@@ -705,6 +705,7 @@ class ParserTest(unittest.TestCase):
         manifest = ParsedManifest(
             nodes={k: ParsedNode(**v) for (k,v) in graph['nodes'].items()},
             macros={k: ParsedMacro(**v) for (k,v) in graph['macros'].items()},
+            docs={},
             generated_at=timestring(),
         )
 

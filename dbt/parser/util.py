@@ -42,6 +42,35 @@ class ParserUtils(object):
             None)
 
     @classmethod
+    def resolve_doc(cls, manifest, target_doc_name, target_doc_package,
+                    current_project, node_package):
+        """Resolve the given documentation. This follows the same algorithm as
+        resolve_ref except the is_enabled checks are unnecessary as docs are
+        always enabled.
+        """
+        if target_doc_package is not None:
+            return manifest.find_docs_by_name(target_doc_name,
+                                              target_doc_package)
+
+        candidate_targets = [current_project, node_package, None]
+        target_doc = None
+        for candidate in candidate_targets:
+            target_doc = manifest.find_docs_by_name(target_doc_name, candidate)
+            if target_doc is not None:
+                break
+        return target_doc
+
+    @classmethod
+    def process_docs(cls, manifest, current_project):
+        for _, node in manifest.nodes.items():
+            target_doc = None
+            target_doc_name = None
+            target_doc_package = None
+            # TODO: attach 'docrefs' to ParsedNodePatches when generating the
+            # docs in the schema parser, then make sure they get patched in.
+        raise NotImplementedError('TODO: finish this')
+
+    @classmethod
     def process_refs(cls, manifest, current_project):
         flat_graph = manifest.to_flat_graph()
         for _, node in manifest.nodes.items():
@@ -77,3 +106,4 @@ class ParserUtils(object):
                 flat_graph['nodes'][node['unique_id']] = node
 
         return manifest
+

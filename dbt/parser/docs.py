@@ -1,7 +1,7 @@
 import dbt.exceptions
 from dbt.node_types import NodeType
 from dbt.parser.base import BaseParser
-from dbt.contracts.graph.unparsed import UnparsedDocumentation
+from dbt.contracts.graph.unparsed import UnparsedDocumentationFile
 from dbt.contracts.graph.parsed import ParsedDocumentation
 
 import jinja2.runtime
@@ -9,7 +9,7 @@ import os
 
 class DocumentationParser(BaseParser):
     @classmethod
-    def load(cls, package_name, root_dir, relative_dirs):
+    def load_file(cls, package_name, root_dir, relative_dirs):
         """Load and parse documentation in a lsit of projects. Returns a list
         of ParsedNodes.
         """
@@ -19,8 +19,6 @@ class DocumentationParser(BaseParser):
             root_dir,
             relative_dirs,
             extension)
-
-        result = []
 
         for file_match in file_matches:
             file_contents = dbt.clients.system.load_file_contents(
@@ -35,28 +33,21 @@ class DocumentationParser(BaseParser):
                 file_match.get('searched_path'),
                 path)
 
-            result.append(UnparsedDocumentation(
-                name=name,
+            yield UnparsedDocumentationFile(
                 root_path=root_dir,
                 resource_type=NodeType.Documentation,
                 path=path,
                 original_file_path=original_file_path,
                 package_name=package_name,
                 file_contents=file_contents
-            ))
-
-        return result
+            )
 
     @classmethod
-    def parse_file(cls, all_projects, root_project_config, unparsed_docs):
-        if dbt.flags.STRICT_MODE:
-            dbt.contracts.project.ProjectList(**all_projects)
-
-        context = {}
+    def parse(cls, all_projects, root_project_config, docfile):
         try:
-            template = dbt.clients.jinja.get_template(unparsed_docs.file_contents, {})
+            template = dbt.clients.jinja.get_template(docfile.file_contents, {})
         except dbt.exceptions.CompilationException as e:
-            e.node = unparsed_docs
+            e.node = docfile
             raise
 
         profile = dbt.utils.get_profile_from_project(root_project_config)
@@ -71,33 +62,32 @@ class DocumentationParser(BaseParser):
 
             name = key.replace(dbt.utils.DOCS_PREFIX, '')
 
-            unique_id = cls.get_path(NodeType.Documentation,
-                                     unparsed_docs.package_name,
-                                     name)
-            fqn = cls.get_fqn(unparsed_docs.path,
-                              all_projects[unparsed_docs.package_name])
+            # because docs are in their own graph namespace, node type doesn't
+            # need to be part of the unique ID.
+            unique_id = '{}.{}'.format(docfile.package_name, name)
+            fqn = cls.get_fqn(docfile.path,
+                              all_projects[docfile.package_name])
 
             merged = dbt.utils.deep_merge(
-                unparsed_docs.serialize(),
+                docfile.serialize(),
                 {
                     'name': name,
                     'unique_id': unique_id,
+                    'block_contents': item().strip(),
                 }
             )
             yield ParsedDocumentation(**merged)
 
+
     @classmethod
-    def parse(cls, nodes):
+    def load_and_parse(cls, package_name, root_project, all_projects, root_dir,
+                       relative_dirs):
         to_return = {}
-        for node in nodes:
-            node_path = cls.get_path(node.resource_type, node.package_name,
-                                     node.name)
-            parsed = cls.parse_docs(node_path, node)
-            if node_path in to_return:
-                dbt.exceptions.raise_duplicate_resource_name(
-                        to_return[node_path], node_parsed)
-
-
-
-
-
+        for docfile in cls.load_file(package_name, root_dir, relative_dirs):
+                for parsed in cls.parse(all_projects, root_project_config, doc):
+                    if parsed.unique_id in to_return:
+                        dbt.exceptions.raise_duplicate_resource_name(
+                            to_return[parsed.unique_id], parsed
+                        )
+                    to_return[parsed.unique_id] = parsed
+        return to_return

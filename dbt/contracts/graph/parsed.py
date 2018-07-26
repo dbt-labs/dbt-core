@@ -7,7 +7,7 @@ from dbt.exceptions import raise_duplicate_resource_name, \
 import dbt.clients.jinja
 
 from dbt.contracts.graph.unparsed import UNPARSED_NODE_CONTRACT, \
-    UNPARSED_MACRO_CONTRACT, UNPARSED_DOCUMENTATION_CONTRACT
+    UNPARSED_MACRO_CONTRACT, UNPARSED_DOCUMENTATION_FILE_CONTRACT
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -311,18 +311,33 @@ PARSED_MACROS_CONTRACT = {
 }
 
 
+
+# This is just the file + its ID
 PARSED_DOCUMENTATION_CONTRACT = deep_merge(
-    UNPARSED_DOCUMENTATION_CONTRACT,
+    UNPARSED_DOCUMENTATION_FILE_CONTRACT,
     {
         'properties': {
+            'name': {
+                'type': 'string',
+                'description': (
+                    'Name of this node, as referred to by doc() references'
+                ),
+            },
             'unique_id': {
                 'type': 'string',
                 'minLength': 1,
                 'maxLength': 255,
+                'description': (
+                    'The unique ID of this node as stored in the manifest'
+                ),
+            },
+            'block_contents': {
+                'type': 'string',
+                'description': 'The contents of just the docs block',
             },
         },
-        'required': UNPARSED_DOCUMENTATION_CONTRACT['required'] + [
-            'unique_id',
+        'required': UNPARSED_DOCUMENTATION_FILE_CONTRACT['required'] + [
+            'name', 'unique_id', 'block_contents',
         ],
     }
 )
@@ -506,8 +521,6 @@ class ParsedManifest(APIObject):
             search = self.nodes
         elif subgraph == 'macros':
             search = self.macros
-        elif subgraph == 'docs':
-            search = self.docs
         else:
             raise NotImplementedError(
                 'subgraph search for {} not implemented'.format(subgraph)
@@ -517,6 +530,21 @@ class ParsedManifest(APIObject):
             name,
             package,
             nodetype)
+
+    def find_docs_by_name(self, name, package=None):
+        for unique_id, doc in self.docs.items():
+            parts = unique_id.split('.')
+            if len(parts) != 2:
+                msg = "documentation names cannot contain '.' characters"
+                dbt.exceptions.raise_compiler_error(msg, doc)
+
+            found_package, found_node = node_parts
+
+            if (name == found_node and
+                package in {None, found_package}):
+                return model
+        return None
+
 
     def find_operation_by_name(self, name, package):
         return self._find_by_name(name, package, 'macros',
