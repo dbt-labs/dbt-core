@@ -1429,7 +1429,7 @@ class ParserTest(unittest.TestCase):
         expected_patches = [
             ParsedNodePatch(name='model_one',
                 description='blah blah',
-                path='test_one.yml',
+                original_file_path='test_one.yml',
                 columns=[{
                     'name': 'id',
                     'description': 'user ID',

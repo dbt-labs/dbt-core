@@ -61,7 +61,17 @@ models:
 
 # all of these constraints will fail
     - name: table_failure_summary
-      description: "THe table summary that does not comply with the schema"
+      description: "The table summary that does not comply with the schema"
+      columns:
+        - name: favorite_color
+          description: "The favorite color"
+          tests:
+            - accepted_values: { values: ['red'] }
+            - relationships: { from: favorite_color, to: ref('table_copy') }
+
+# this table is disabled so these tests should be ignored
+    - name: table_disabled
+      description: "A disabled table"
       columns:
         - name: favorite_color
           description: "The favorite color"

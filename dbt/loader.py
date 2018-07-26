@@ -144,13 +144,13 @@ class SchemaTestLoader(ResourceLoader):
             for name, patch in project_patches.items():
                 if name in patches:
                     dbt.exceptions.raise_compiler_error(
-                        'dbt found two patches for the same model named {}. '
-                        'The first patch was specified in {} and the second in'
-                        ' {}. Models and their associated columns may only be '
-                        'described a single time.'.format(
+                        'dbt found two schema.yml entries for the same model '
+                        'named {}. The first patch was specified in {} and '
+                        'the second in {}. Models and their associated '
+                        'columns may only be described a single time.'.format(
                             name,
-                            patch.path,
-                            patches[name].path,
+                            patch.original_file_path,
+                            patches[name].original_file_path,
                         )
                     )
                 patches[name] = patch

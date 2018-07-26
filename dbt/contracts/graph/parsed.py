@@ -211,7 +211,7 @@ PARSED_NODE_PATCH_CONTRACT = {
             'type': 'string',
             'description': 'The description of the node to add',
         },
-        'path': {
+        'original_file_path': {
             'type': 'string',
             'description': (
                 'Relative path to the originating file path for the patch '
@@ -223,7 +223,7 @@ PARSED_NODE_PATCH_CONTRACT = {
             'items': COLUMN_INFO_CONTRACT,
         }
     },
-    'required': ['name', 'path', 'description', 'columns'],
+    'required': ['name', 'original_file_path', 'description', 'columns'],
 }
 
 
@@ -384,7 +384,7 @@ class ParsedNode(APIObject):
         # explicitly pick out the parts to update so we don't inadvertently
         # step on the model name or anything
         self._contents.update({
-            'patch_path': patch.path,
+            'patch_path': patch.original_file_path,
             'description': patch.description,
             'columns': patch.columns,
         })
@@ -511,9 +511,15 @@ class ParsedManifest(APIObject):
                 continue
             node.patch(patch)
 
-        # if we have any left, some references could not be resolved
+        # log debug-level warning about nodes we couldn't find
         if patches:
-            raise_patch_targets_not_found(patches)
+            for patch in patches.values():
+                # since patches aren't nodes, we can't use the existing
+                # target_not_found warning
+                logger.debug((
+                    'WARNING: Found documentation for model "{}" which was '
+                    'not found or is disabled').format(patch.name)
+                )
 
     def to_flat_graph(self):
         """Convert the parsed manifest to the 'flat graph' that the compiler

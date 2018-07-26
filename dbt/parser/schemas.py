@@ -405,7 +405,7 @@ class SchemaParser(BaseParser):
 
         patch = ParsedNodePatch(
             name=model_name,
-            path=path,
+            original_file_path=path,
             description=model.get('description', ''),
             columns=column_info
         )
