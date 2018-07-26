@@ -361,21 +361,29 @@ def raise_ambiguous_alias(node_1, node_2):
 
 def raise_ambiguous_catalog_match(ambiguous_matches):
     """
-    ambiguous matches should be a dict of lists
+    ambiguous matches should be a dict of lists. note that this does
+    not check the length of each match. only call this if you actually want
+    to raise an exception.
 
-    {"unique_id": ["DBT_CMCARTHUR.model_name", "dbt_cmcarthur.model_name"]}
+    {"unique_id": [{...catalog entry...}]}
     """
 
     error_strings = []
 
     for model_name, matches in ambiguous_matches.items():
+        matches_strings = [
+            "{}.{}".format(
+                match.get('metadata', {}).get('schema'),
+                match.get('metadata', {}).get('name'))
+            for match in matches
+        ]
         error_strings.append("- {} (matched to {})".format(
-            ", ".join(matches),
+            ", ".join(matches_strings),
             model_name))
 
     raise_compiler_error(
         'dbt found some ambiguous resources in your warehouse. Since these\n'
-        'resources have similar schemas and tables, dbt will be unable to\n'
+        'resources have similar schemas and tables, dbt is unable to\n'
         'map these resources to models in your project. To fix this,\n'
-        'please delete one of these resources for each item in the list:\n'
+        'please delete one of these resources for each item in the list:\n\n'
         '{}'.format("\n".join(error_strings)))

@@ -121,7 +121,6 @@ def incorporate_catalog_unique_ids(catalog, manifest):
 
 def assert_no_duplicate_unique_ids(catalog):
     unique_id_map = {}
-    duplicates = set()
 
     for schema, tables in catalog.items():
         for table_name, table_def in tables.items():
@@ -133,11 +132,14 @@ def assert_no_duplicate_unique_ids(catalog):
             unique_id_map[unique_id] = \
                 unique_id_map.get(unique_id, []) + [table_def]
 
-            if len(unique_id_map[unique_id]) > 1:
-                duplicates.add(unique_id)
+    duplicates = {
+        k: v for k, v in unique_id_map.items()
+        if len(v) > 1
+    }
 
     if duplicates:
-        dbt.exceptions.raise_ambiguous_catalog_match(duplicates)
+        dbt.exceptions.raise_ambiguous_catalog_match(
+            duplicates)
 
 
 class GenerateTask(BaseTask):
