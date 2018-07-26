@@ -130,13 +130,15 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'empty': False,
                     'fqn': ['test', 'model'],
                     'tags': [],
-                    'config': {'enabled': True,
-                    'materialized': 'view',
-                    'pre-hook': [],
-                    'post-hook': [],
-                    'vars': {},
-                    'column_types': {},
-                    'quoting': {}},
+                    'config': {
+                        'enabled': True,
+                        'materialized': 'view',
+                        'pre-hook': [],
+                        'post-hook': [],
+                        'vars': {},
+                        'column_types': {},
+                        'quoting': {}
+                    },
                     'schema': my_schema_name,
                     'alias': 'model'
                 },
@@ -155,13 +157,15 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'empty': False,
                     'fqn': ['test', 'seed'],
                     'tags': [],
-                    'config': {'enabled': True,
-                    'materialized': 'seed',
-                    'pre-hook': [],
-                    'post-hook': [],
-                    'vars': {},
-                    'column_types': {},
-                    'quoting': {}},
+                    'config': {
+                        'enabled': True,
+                        'materialized': 'seed',
+                        'pre-hook': [],
+                        'post-hook': [],
+                        'vars': {},
+                        'column_types': {},
+                        'quoting': {}
+                    },
                     'schema': my_schema_name,
                     'alias': 'seed'
                 },
@@ -232,6 +236,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         ]
         expected_catalog = {
             'model': {
+                'unique_id': 'model.test.model',
                 'metadata': {
                     'schema': my_schema_name,
                     'name': 'model',
@@ -241,6 +246,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'columns': expected_cols,
             },
             'seed': {
+                'unique_id': 'seed.test.seed',
                 'metadata': {
                     'schema': my_schema_name,
                     'name': 'seed',
