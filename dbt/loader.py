@@ -149,8 +149,8 @@ class SchemaTestLoader(ResourceLoader):
                         ' {}. Models and their associated columns may only be '
                         'described a single time.'.format(
                             name,
-                            patch['original_file_path'],
-                            patches[name]['original_file_path'],
+                            patch.path,
+                            patches[name].path,
                         )
                     )
                 patches[name] = patch

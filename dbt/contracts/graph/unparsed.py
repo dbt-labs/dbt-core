@@ -131,7 +131,6 @@ UNPARSED_NODE_UPDATE_CONTRACT = {
                 'refers to'
             ),
             'minLength': 1,
-            'maxLength': 127,
         },
         'description': {
             'type': 'string',

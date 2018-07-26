@@ -213,7 +213,10 @@ PARSED_NODE_PATCH_CONTRACT = {
         },
         'path': {
             'type': 'string',
-            'description': 'The original file path the patch came from',
+            'description': (
+                'Relative path to the originating file path for the patch '
+                'from the project root'
+            ),
         },
         'columns': {
             'type': 'array',

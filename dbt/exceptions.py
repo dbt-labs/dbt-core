@@ -361,7 +361,7 @@ def raise_ambiguous_alias(node_1, node_2):
 
 def raise_patch_targets_not_found(patches):
     patch_list = '\n\t'.join(
-        '{} (referenced in path {})'.format(p.name, p.path)
+        'model {} (referenced in path {})'.format(p.name, p.path)
         for p in patches.values()
     )
     raise_compiler_error(
