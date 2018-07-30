@@ -20,7 +20,6 @@ from dbt.parser.base import BaseParser
 
 
 def get_nice_schema_test_name(test_type, test_name, args):
-
     flat_args = []
     for arg_name in sorted(args):
         arg_val = args[arg_name]
@@ -315,7 +314,7 @@ class SchemaParser(BaseParser):
 
     @classmethod
     def parse_v2_yml(cls, original_file_path, test_yml, package_name,
-                     root_project, all_projects, root_dir, macros=None):
+                     root_project, all_projects, root_dir, macros):
         """Parse v2 yml contents, yielding both parsed nodes and node patches.
 
         A v2 yml file is laid out like this ('variables' written
@@ -403,10 +402,14 @@ class SchemaParser(BaseParser):
                                   all_projects, macros)
             yield 'test', node
 
+        context = {'docs': dbt.context.parser.docs}
+        description = model.get('description')
+        dbt.clients.jinja.get_rendered(description, context)
+
         patch = ParsedNodePatch(
             name=model_name,
             original_file_path=path,
-            description=model.get('description', ''),
+            description=description,
             columns=column_info
         )
         yield 'patch', patch

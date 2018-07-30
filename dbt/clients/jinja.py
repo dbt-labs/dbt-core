@@ -136,7 +136,6 @@ class DocumentationExtension(jinja2.ext.Extension):
         node.args = []
         node.defaults = []
         node.name = dbt.utils.get_docs_macro_name(docs_name)
-        # TODO: is there more to this?
         node.body = parser.parse_statements(('name:enddocs',),
                                             drop_needle=True)
         return node

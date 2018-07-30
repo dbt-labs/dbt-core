@@ -7,6 +7,7 @@ from dbt.contracts.graph.parsed import ParsedDocumentation
 import jinja2.runtime
 import os
 
+
 class DocumentationParser(BaseParser):
     @classmethod
     def load_file(cls, package_name, root_dir, relative_dirs):
@@ -27,7 +28,6 @@ class DocumentationParser(BaseParser):
             parts = dbt.utils.split_path(file_match.get('relative_path', ''))
             name, _ = os.path.splitext(parts[-1])
 
-            # TODO: this is probably wrong
             path = file_match.get('relative_path')
             original_file_path = os.path.join(
                 file_match.get('searched_path'),
@@ -45,7 +45,8 @@ class DocumentationParser(BaseParser):
     @classmethod
     def parse(cls, all_projects, root_project_config, docfile):
         try:
-            template = dbt.clients.jinja.get_template(docfile.file_contents, {})
+            template = dbt.clients.jinja.get_template(docfile.file_contents,
+                                                      {})
         except dbt.exceptions.CompilationException as e:
             e.node = docfile
             raise
@@ -78,13 +79,12 @@ class DocumentationParser(BaseParser):
             )
             yield ParsedDocumentation(**merged)
 
-
     @classmethod
     def load_and_parse(cls, package_name, root_project, all_projects, root_dir,
                        relative_dirs):
         to_return = {}
         for docfile in cls.load_file(package_name, root_dir, relative_dirs):
-                for parsed in cls.parse(all_projects, root_project_config, doc):
+                for parsed in cls.parse(all_projects, root_project, docfile):
                     if parsed.unique_id in to_return:
                         dbt.exceptions.raise_duplicate_resource_name(
                             to_return[parsed.unique_id], parsed

@@ -102,12 +102,17 @@ class APIObject(Mapping):
         except KeyError:
             return default
 
+    def set(self, key, value):
+        self._contents[key] = value
+
     # most users of APIObject also expect the attributes to be available via
     # dot-notation because the previous implementation assigned to __dict__.
     # we should consider removing this if we fix all uses to have properties.
     def __getattr__(self, name):
-        if name in self._contents:
+        if name != '_contents' and name in self._contents:
             return self._contents[name]
+        elif hasattr(self.__class__, name):
+            return getattr(self.__class__, name)
         raise AttributeError((
             "'{}' object has no attribute '{}'"
         ).format(type(self).__name__, name))

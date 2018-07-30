@@ -100,7 +100,6 @@ class DocumentationParserTest(unittest.TestCase):
                          '/test_root/test_subdir/test_file.md')
         self.assertEqual(result.root_path, '/test_root')
         self.assertEqual(result.resource_type, NodeType.Documentation)
-        # TODO: I'm not super clear on what the value of this fied is here
         self.assertEqual(result.path, 'test_file.md')
 
     def test_parse(self):

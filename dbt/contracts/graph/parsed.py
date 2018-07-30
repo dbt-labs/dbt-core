@@ -87,6 +87,35 @@ COLUMN_INFO_CONTRACT = {
 }
 
 
+# Docrefs are not quite like regular references, as they indicate what they
+# apply to as well as what they are referring to (so the doc package + doc
+# name, but also the column name if relevant). This is because column
+# descriptions are rendered separately from their models.
+DOCREF_CONTRACT = {
+    'type': 'object',
+    'properties': {
+        'documentation_name': {
+            'type': 'string',
+            'description': 'The name of the documentation block referred to',
+        },
+        'documentation_package': {
+            'type': 'string',
+            'description': (
+                'If provided, the documentation package name referred to'
+            ),
+        },
+        'column_name': {
+            'type': 'string',
+            'description': (
+                'If the documentation refers to a column instead of the '
+                'model, the column name should be set'
+            ),
+        },
+    },
+    'required': ['documentation_name', 'documentation_package']
+}
+
+
 PARSED_NODE_CONTRACT = deep_merge(
     UNPARSED_NODE_CONTRACT,
     {
@@ -183,6 +212,10 @@ PARSED_NODE_CONTRACT = deep_merge(
                     'The path to the patch source if the node was patched'
                 ),
             },
+            'docrefs': {
+                'type': 'array',
+                'items': DOCREF_CONTRACT,
+            }
         },
         'required': UNPARSED_NODE_CONTRACT['required'] + [
             'unique_id', 'fqn', 'schema', 'refs', 'depends_on', 'empty',
@@ -218,6 +251,10 @@ PARSED_NODE_PATCH_CONTRACT = {
         'columns': {
             'type': 'array',
             'items': COLUMN_INFO_CONTRACT,
+        },
+        'docrefs': {
+            'type': 'array',
+            'items': DOCREF_CONTRACT,
         }
     },
     'required': ['name', 'original_file_path', 'description', 'columns'],
@@ -309,7 +346,6 @@ PARSED_MACROS_CONTRACT = {
         '.*': PARSED_MACRO_CONTRACT
     },
 }
-
 
 
 # This is just the file + its ID
@@ -540,11 +576,9 @@ class ParsedManifest(APIObject):
 
             found_package, found_node = node_parts
 
-            if (name == found_node and
-                package in {None, found_package}):
+            if (name == found_node and package in {None, found_package}):
                 return model
         return None
-
 
     def find_operation_by_name(self, name, package):
         return self._find_by_name(name, package, 'macros',
@@ -597,5 +631,4 @@ class ParsedManifest(APIObject):
         return {
             'nodes': {k: v.to_dict() for k, v in self.nodes.items()},
             'macros': self.macros,
-            'docs': self.docs,
         }

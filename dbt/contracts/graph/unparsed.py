@@ -194,8 +194,8 @@ UNPARSED_DOCUMENTATION_FILE_CONTRACT = {
                 'markdown.'
             ),
         },
-        # TODO: I would like to remove this, but some graph error handling cares
-        # about it.
+        # TODO: I would like to remove this, but some graph error handling
+        # cares about it.
         'resource_type': {
             'enum': [
                 NodeType.Documentation,
@@ -211,4 +211,3 @@ UNPARSED_DOCUMENTATION_FILE_CONTRACT = {
 
 class UnparsedDocumentationFile(APIObject):
     SCHEMA = UNPARSED_DOCUMENTATION_FILE_CONTRACT
-

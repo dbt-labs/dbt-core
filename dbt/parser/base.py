@@ -126,5 +126,7 @@ class BaseParser(object):
             node['config'][hook_type] = dbt.hooks.get_hooks(node, hook_type)
 
         del node['config_reference']
+        node.setdefault('columns', [])
+        node.setdefault('description', '')
 
         return ParsedNode(**node)

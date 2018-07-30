@@ -1,5 +1,35 @@
 
+import dbt.exceptions
 import dbt.utils
+
+
+def docs(node, manifest, project_cfg, column_name=None):
+    """Return a function that will process `doc()` references in jinja, look
+    them up in the manifest, and return the appropriate block contents.
+    """
+    current_project = project_cfg.get('name')
+
+    def do_docs(*args):
+        if len(args) != 1 and len(args) != 2:
+            dbt.exceptions.doc_invalid_args(node, args)
+        doc_package_name = None
+        doc_name = args[0]
+        if len(args) == 2:
+            doc_package_name = args[1]
+
+        target_doc = ParserUtils.resolve_doc(
+            manifest, doc_name, doc_package_name, current_project
+        )
+
+        if target_doc is None:
+            dbt.exceptions.doc_target_not_found(model, doc_name,
+                                                doc_package_name)
+
+        target_doc_id = target_doc.unique_id
+
+        return target_doc.block_contents
+
+    return do_docs
 
 
 class ParserUtils(object):
@@ -61,14 +91,51 @@ class ParserUtils(object):
         return target_doc
 
     @classmethod
+    def _get_node_column(cls, node, column_name):
+        """Given a ParsedNode, add some fields that might be missing. Return a
+        reference to the dict that refers to the given column, creating it if
+        it doesn't yet exist.
+        """
+        if not hasattr(node, 'columns'):
+            node.set('columns', [])
+        for column in node.columns:
+            if column.name == column_name:
+                break
+        else:
+            column = {}
+            node.columns.append(column)
+        return column
+
+    @classmethod
     def process_docs(cls, manifest, current_project):
         for _, node in manifest.nodes.items():
             target_doc = None
             target_doc_name = None
             target_doc_package = None
-            # TODO: attach 'docrefs' to ParsedNodePatches when generating the
-            # docs in the schema parser, then make sure they get patched in.
-        raise NotImplementedError('TODO: finish this')
+            for docref in node.get('docrefs', []):
+                column_name = docref.get('column_name')
+                if column_name is None:
+                    description = node.get('description', '')
+                else:
+                    column = cls._get_node_column(node, column_name)
+                    description = column.get('description', '')
+                target_doc_name = docref['documentation_name']
+                target_doc_package = docref['documentation_package']
+                context = {
+                    'doc': docs(node, manifest, current_project, column_name),
+                }
+
+                # At this point, target_doc is a ParsedDocumentation, and we
+                # know that our documentation string has a 'docs("...")'
+                # pointing at it. We want to render it.
+                description = dbt.clients.jinja.get_rendered(description,
+                                                             context)
+                # now put it back.
+                if column_name is None:
+                    node.set('description', description)
+                else:
+                    column['description'] = description
+        return manifest
 
     @classmethod
     def process_refs(cls, manifest, current_project):
@@ -106,4 +173,3 @@ class ParserUtils(object):
                 flat_graph['nodes'][node['unique_id']] = node
 
         return manifest
-

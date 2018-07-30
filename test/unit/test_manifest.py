@@ -155,21 +155,22 @@ class ManifestTest(unittest.TestCase):
 
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
     def test__no_nodes(self):
-        manifest = ParsedManifest(nodes={}, macros={},
+        manifest = ParsedManifest(nodes={}, macros={}, docs={},
                                   generated_at=timestring())
         self.assertEqual(
             manifest.serialize(),
             {'nodes': {}, 'macros': {}, 'parent_map': {}, 'child_map': {},
-             'generated_at': '2018-02-14T09:15:13Z'}
+             'generated_at': '2018-02-14T09:15:13Z', 'docs': {}}
         )
 
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
     def test__nested_nodes(self):
         nodes = copy.copy(self.nested_nodes)
-        manifest = ParsedManifest(nodes=nodes, macros={},
+        manifest = ParsedManifest(nodes=nodes, macros={}, docs={},
                                   generated_at=timestring())
         serialized = manifest.serialize()
         self.assertEqual(serialized['generated_at'], '2018-02-14T09:15:13Z')
+        self.assertEqual(serialized['docs'], {})
         parent_map = serialized['parent_map']
         child_map = serialized['child_map']
         # make sure there aren't any extra/missing keys.
@@ -228,7 +229,7 @@ class ManifestTest(unittest.TestCase):
 
     def test__to_flat_graph(self):
         nodes = copy.copy(self.nested_nodes)
-        manifest = ParsedManifest(nodes=nodes, macros={},
+        manifest = ParsedManifest(nodes=nodes, macros={}, docs={},
                                   generated_at=timestring())
         flat_graph = manifest.to_flat_graph()
         flat_nodes = flat_graph['nodes']

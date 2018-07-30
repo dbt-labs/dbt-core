@@ -20,7 +20,7 @@ class GraphLoader(object):
             nodes.update(loader.load_all(root_project, all_projects, macros))
         docs = DocumentationLoader.load_all(root_project, all_projects)
 
-        tests, patches = SchemaTestLoader.load_all(root_project, all_projects, docs)
+        tests, patches = SchemaTestLoader.load_all(root_project, all_projects)
 
         manifest = ParsedManifest(nodes=nodes, macros=macros, docs=docs,
                                   generated_at=timestring())
@@ -28,6 +28,7 @@ class GraphLoader(object):
         manifest.patch_nodes(patches)
 
         manifest = dbt.parser.ParserUtils.process_refs(manifest, root_project)
+        manifest = dbt.parser.ParserUtils.process_docs(manifest, root_project)
         return manifest
 
     @classmethod

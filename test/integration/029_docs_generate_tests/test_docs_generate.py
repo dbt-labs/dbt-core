@@ -187,7 +187,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'column_types': {},
                     'quoting': {}},
                     'schema': my_schema_name,
-                    'alias': 'seed'
+                    'alias': 'seed',
+                    'description': '',
+                    'columns': [],
                 },
             },
             'parent_map': {
@@ -198,6 +200,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.model': [],
                 'seed.test.seed': ['model.test.model'],
             },
+            'docs': {},
         }
 
     def verify_manifest(self, expected_manifest):
@@ -208,7 +211,8 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         self.assertEqual(
             set(manifest),
-            {'nodes', 'macros', 'parent_map', 'child_map', 'generated_at'}
+            {'nodes', 'macros', 'parent_map', 'child_map', 'generated_at',
+             'docs'}
         )
 
         self.verify_manifest_macros(manifest)
@@ -541,7 +545,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'root_path': os.getcwd(),
                     'schema': my_schema_name,
                     'tags': [],
-                    'unique_id': 'model.test.seed'
+                    'unique_id': 'model.test.seed',
+                    'columns': [],
+                    'description': '',
                 }
             },
             'child_map': {
@@ -552,6 +558,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.model': ['model.test.seed'],
                 'model.test.seed': []
             },
+            'docs': {},
         }
         self.verify_manifest(expected_manifest)
 
@@ -785,7 +792,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         "quoting": {},
                     },
                     "schema": my_schema_name,
-                    "alias": "seed"
+                    "alias": "seed",
+                    'columns': [],
+                    'description': '',
                 },
             },
             "parent_map": {
@@ -795,6 +804,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             "child_map": {
                 "model.test.model": [],
                 "seed.test.seed": ["model.test.model"]
-            }
+            },
+            'docs': {},
         }
         self.verify_manifest(expected_manifest)
