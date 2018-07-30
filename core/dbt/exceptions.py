@@ -542,20 +542,18 @@ To fix this, add the following hint to the top of the model "{model_name}":
 
 
 def doc_invalid_args(model, args) -> NoReturn:
-    raise_compiler_error(
-        "doc() takes at most two arguments ({} given)".format(len(args)),
-        model)
+    raise_compiler_error("doc() takes at most two arguments ({} given)".format(len(args)), model)
 
 
 def doc_target_not_found(
     model, target_doc_name: str, target_doc_package: Optional[str]
 ) -> NoReturn:
-    target_package_string = ''
+    target_package_string = ""
 
     if target_doc_package is not None:
         target_package_string = "in package '{}' ".format(target_doc_package)
 
-    msg = (
+    msg = ("Documentation for '{}' depends on doc '{}' {} which was not found").format(
         "Documentation for '{}' depends on doc '{}' {} which was not found"
     ).format(
         model.unique_id,
