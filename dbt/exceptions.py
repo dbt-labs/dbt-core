@@ -369,3 +369,15 @@ def raise_patch_targets_not_found(patches):
             patch_list
         )
     )
+
+
+def raise_duplicate_patch_name(name, patch_1, patch_2):
+    raise_compiler_error(
+        'dbt found two schema.yml entries for the same model named {}. The '
+        'first patch was specified in {} and the second in {}. Models and '
+        'their associated columns may only be described a single time.'.format(
+            name,
+            patch_1,
+            patch_2,
+        )
+    )

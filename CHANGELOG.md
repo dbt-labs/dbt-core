@@ -4,7 +4,7 @@
 
 - Extend catalog and manifest to also support Snowflake, BigQuery, and Redshift
 - Add a 'generated_at' field to both the manifest and the catalog.
-- Verison 2 of schema.yml, which allows users to create table and column comments that end up in the manifest
+- Version 2 of schema.yml, which allows users to create table and column comments that end up in the manifest
 
 ## dbt 0.10.2 (unreleased, codename: Betsy Ross)
 
