@@ -3,7 +3,7 @@ from test.integration.base import DBTIntegrationTest, FakeArgs
 
 from dbt.task.test import TestTask
 from dbt.project import read_project
-
+from dbt.exceptions import CompilationException
 
 class TestSchemaTests(DBTIntegrationTest):
 
@@ -18,7 +18,7 @@ class TestSchemaTests(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/008_schema_tests_test/models-v1/models"
+        return "test/integration/008_schema_tests_test/models-v2/models"
 
     def run_schema_validations(self):
         project = read_project('dbt_project.yml')
@@ -32,6 +32,7 @@ class TestSchemaTests(DBTIntegrationTest):
         results = self.run_dbt()
         self.assertEqual(len(results), 4)
         test_results = self.run_schema_validations()
+        # If the disabled model's tests ran, there would be 19 of these.
         self.assertEqual(len(test_results), 17)
 
         for result in test_results:
@@ -50,7 +51,6 @@ class TestSchemaTests(DBTIntegrationTest):
 
         self.assertEqual(sum(x.status for x in test_results), 5)
 
-
 class TestMalformedSchemaTests(DBTIntegrationTest):
 
     def setUp(self):
@@ -63,7 +63,7 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/008_schema_tests_test/models-v1/malformed"
+        return "test/integration/008_schema_tests_test/models-v2/malformed"
 
     def run_schema_validations(self):
         project = read_project('dbt_project.yml')
@@ -75,12 +75,19 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
     @attr(type='postgres')
     def test_malformed_schema_test_wont_brick_run(self):
         # dbt run should work (Despite broken schema test)
-        results = self.run_dbt()
-        self.assertEqual(len(results), 1)
+        results = self.run_dbt(strict=False)
+        self.assertEqual(len(results), 2)
 
+        # in v2, we skip the entire model
         ran_tests = self.run_schema_validations()
-        self.assertEqual(len(ran_tests), 2)
+        self.assertEqual(len(ran_tests), 5)
         self.assertEqual(sum(x.status for x in ran_tests), 0)
+
+    # TODO: re-enable this test when we make --strict actually set strict mode
+    # @attr(type='postgres')
+    # def test_malformed_schema_strict_will_break_run(self):
+    #     with self.assertRaises(CompilationException):
+    #         self.run_dbt(strict=True)
 
 
 class TestCustomSchemaTests(DBTIntegrationTest):
@@ -99,16 +106,16 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         # dbt-integration-project contains a schema.yml file
         # both should work!
         return {
-            "macro-paths": ["test/integration/008_schema_tests_test/macros-v1"],
+            "macro-paths": ["test/integration/008_schema_tests_test/macros-v2"],
             "repositories": [
-                'https://github.com/fishtown-analytics/dbt-utils',
+                'https://github.com/fishtown-analytics/dbt-utils@macros-v2',
                 'https://github.com/fishtown-analytics/dbt-integration-project'
             ]
         }
 
     @property
     def models(self):
-        return "test/integration/008_schema_tests_test/models-v1/custom"
+        return "test/integration/008_schema_tests_test/models-v2/custom"
 
     def run_schema_validations(self):
         project = read_project('dbt_project.yml')

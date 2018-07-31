@@ -357,3 +357,27 @@ def raise_ambiguous_alias(node_1, node_2):
             duped_name,
             node_1['unique_id'], node_1['original_file_path'],
             node_2['unique_id'], node_2['original_file_path']))
+
+
+def raise_patch_targets_not_found(patches):
+    patch_list = '\n\t'.join(
+        'model {} (referenced in path {})'.format(p.name, p.original_file_path)
+        for p in patches.values()
+    )
+    raise_compiler_error(
+        'dbt could not find models for the following patches:\n\t{}'.format(
+            patch_list
+        )
+    )
+
+
+def raise_duplicate_patch_name(name, patch_1, patch_2):
+    raise_compiler_error(
+        'dbt found two schema.yml entries for the same model named {}. The '
+        'first patch was specified in {} and the second in {}. Models and '
+        'their associated columns may only be described a single time.'.format(
+            name,
+            patch_1,
+            patch_2,
+        )
+    )

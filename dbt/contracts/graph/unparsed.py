@@ -85,3 +85,79 @@ class UnparsedMacro(APIObject):
 
 class UnparsedNode(APIObject):
     SCHEMA = UNPARSED_NODE_CONTRACT
+
+
+COLUMN_TEST_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'properties': {
+        'name': {
+            'type': 'string',
+            'description': 'The name of the column this test is for',
+        },
+        'description': {
+            'type': 'string',
+            'description': 'The description of this test',
+        },
+        'tests': {
+            'type': 'array',
+            'items': {
+                "anyOf": [
+                    # 'not_null', 'unique', ...
+                    {'type': 'string'},
+                    # 'relationships: {...}', 'accepted_values: {...}'
+                    {'type': 'object', 'additionalProperties': True}
+                ],
+            },
+            'description': 'The list of tests to perform',
+        },
+    },
+    'required': ['name'],
+}
+
+
+UNPARSED_NODE_UPDATE_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'description': (
+        'A collection of the unparsed node updates, as provided in the '
+        '"models" section of schema.yml'
+    ),
+    'properties': {
+        'name': {
+            'type': 'string',
+            'description': (
+                'The name of this node, which is the name of the model it'
+                'refers to'
+            ),
+            'minLength': 1,
+        },
+        'description': {
+            'type': 'string',
+            'description': (
+                'The raw string description of the node after parsing the yaml'
+            ),
+        },
+        'columns': {
+            'type': 'array',
+            'items': COLUMN_TEST_CONTRACT,
+        },
+        'tests': {
+            'type': 'array',
+            'items': {
+                "anyOf": [
+                    {'type': 'string'},
+                    {'type': 'object', 'additionalProperties': True}
+                ],
+            },
+        },
+    },
+    'required': ['name'],
+}
+
+
+class UnparsedNodeUpdate(APIObject):
+    """An unparsed node update is the blueprint for tests to be added and nodes
+    to be updated, referencing a certain node (specifically, a Model).
+    """
+    SCHEMA = UNPARSED_NODE_UPDATE_CONTRACT

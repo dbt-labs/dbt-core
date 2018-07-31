@@ -1,0 +1,16 @@
+version: 2
+
+models:
+  - name: model
+    description: "The test model"
+    columns:
+      - name: field_1
+        description: The first field
+      - name: field_2
+        description: The second field
+      - name: field_3
+        description: The third field
+      - name: nested_field.field_4
+        description: The first nested field
+      - name: nested_field.field_5
+        description: The second nested field

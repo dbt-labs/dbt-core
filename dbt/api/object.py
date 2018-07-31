@@ -36,6 +36,12 @@ class APIObject(Mapping):
         self._contents = deep_merge(self.DEFAULTS, kwargs)
         self.validate()
 
+    def __str__(self):
+        return '{}(**{})'.format(self.__class__.__name__, self._contents)
+
+    def __repr__(self):
+        return '{}(**{})'.format(self.__class__.__name__, self._contents)
+
     def incorporate(self, **kwargs):
         """
         Given a list of kwargs, incorporate these arguments

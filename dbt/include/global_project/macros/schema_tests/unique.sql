@@ -1,15 +1,17 @@
 
-{% macro test_unique(model, arg) %}
+{% macro test_unique(model) %}
+
+{% set column_name = kwargs.get('column_name', kwargs.get('arg')) %}
 
 select count(*)
 from (
 
     select
-        {{ arg }}
+        {{ column_name }}
 
     from {{ model }}
-    where {{ arg }} is not null
-    group by {{ arg }}
+    where {{ column_name }} is not null
+    group by {{ column_name }}
     having count(*) > 1
 
 ) validation_errors

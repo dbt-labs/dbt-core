@@ -19,8 +19,13 @@ class GraphLoader(object):
         for loader in cls._LOADERS:
             nodes.update(loader.load_all(root_project, all_projects, macros))
 
+        tests, patches = SchemaTestLoader.load_all(root_project, all_projects)
+
         manifest = ParsedManifest(nodes=nodes, macros=macros,
                                   generated_at=timestring())
+        manifest.add_nodes(tests)
+        manifest.patch_nodes(patches)
+
         manifest = dbt.parser.ParserUtils.process_refs(manifest, root_project)
         return manifest
 
@@ -121,6 +126,27 @@ class AnalysisLoader(ResourceLoader):
 
 
 class SchemaTestLoader(ResourceLoader):
+    @classmethod
+    def load_all(cls, root_project, all_projects, macros=None):
+        tests = {}
+        patches = {}
+        for project_name, project in all_projects.items():
+            project_tests, project_patches = cls.load_project(
+                root_project, all_projects, project, project_name, macros
+            )
+            for unique_id, test in project_tests.items():
+                if unique_id in tests:
+                    dbt.exceptions.raise_duplicate_resource_name(
+                        test, tests[unique_id],
+                    )
+                tests[unique_id] = test
+
+            for name, patch in project_patches.items():
+                if name in patches:
+                    dbt.exceptions.raise_duplicate_patch_name(name, patch,
+                                                              patches[name])
+                patches[name] = patch
+        return tests, patches
 
     @classmethod
     def load_project(cls, root_project, all_projects, project, project_name,
@@ -194,7 +220,6 @@ class SeedLoader(ResourceLoader):
 # node loaders
 GraphLoader.register(ModelLoader)
 GraphLoader.register(AnalysisLoader)
-GraphLoader.register(SchemaTestLoader)
 GraphLoader.register(DataTestLoader)
 GraphLoader.register(RunHookLoader)
 GraphLoader.register(ArchiveLoader)
