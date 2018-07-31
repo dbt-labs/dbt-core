@@ -10,19 +10,21 @@ def docs(node, manifest, project_cfg, column_name=None):
     current_project = project_cfg.get('name')
 
     def do_docs(*args):
-        if len(args) != 1 and len(args) != 2:
+        if len(args) == 1:
+            doc_package_name = None
+            doc_name = args[0]
+        elif len(args) == 2:
+            doc_package_name, doc_name = args
+        else:
             dbt.exceptions.doc_invalid_args(node, args)
-        doc_package_name = None
-        doc_name = args[0]
-        if len(args) == 2:
-            doc_package_name = args[1]
 
         target_doc = ParserUtils.resolve_doc(
-            manifest, doc_name, doc_package_name, current_project
+            manifest, doc_name, doc_package_name, current_project,
+            node.package_name
         )
 
         if target_doc is None:
-            dbt.exceptions.doc_target_not_found(model, doc_name,
+            dbt.exceptions.doc_target_not_found(node, doc_name,
                                                 doc_package_name)
 
         target_doc_id = target_doc.unique_id
@@ -99,10 +101,10 @@ class ParserUtils(object):
         if not hasattr(node, 'columns'):
             node.set('columns', [])
         for column in node.columns:
-            if column.name == column_name:
+            if column.get('name') == column_name:
                 break
         else:
-            column = {}
+            column = {'name': column_name, 'description': ''}
             node.columns.append(column)
         return column
 

@@ -222,11 +222,6 @@ def get_docs_macro_name(docs_name, with_prefix=True):
         return docs_name
 
 
-def get_docs_macro(flat_graph, docs_name):
-    name = get_docs_macro_name(docs_name, with_prefix=False)
-    return find_docs_by_name(flat_graph, name, None)
-
-
 def load_project_with_profile(source_project, project_dir):
     project_filepath = os.path.join(project_dir, 'dbt_project.yml')
     return dbt.project.read_project(

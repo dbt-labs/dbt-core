@@ -163,6 +163,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         },
                     ],
                     'patch_path': self.dir('models/schema.yml'),
+                    'docrefs': [],
                 },
                 'seed.test.seed': {
                     'path': 'seed.csv',
@@ -517,6 +518,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     ],
                     'description': 'The test model',
                     'patch_path': self.dir('bq_models/schema.yml'),
+                    'docrefs': [],
                 },
                 'model.test.seed': {
                     'alias': 'seed',
@@ -764,6 +766,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         },
                     ],
                     'patch_path': self.dir('rs_models/schema.yml'),
+                    'docrefs': [],
                 },
                 "seed.test.seed": {
                     "path": "seed.csv",

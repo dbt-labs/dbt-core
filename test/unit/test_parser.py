@@ -1501,6 +1501,7 @@ class ParserTest(unittest.TestCase):
                     'name': 'id',
                     'description': 'user ID',
                 }],
+                docrefs=[],
             ),
         ]
         self.assertEqual(patches, expected_patches)

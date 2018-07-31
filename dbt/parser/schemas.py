@@ -375,14 +375,19 @@ class SchemaParser(BaseParser):
         This is only used in parsing the v2 schema.
         """
         model_name = model['name']
-
+        docrefs = []
         column_info = []
         for column in model.get('columns', []):
             column_name = column['name']
+            description = column.get('description', '')
             column_info.append({
                 'name': column_name,
-                'description': column.get('description', '')
+                'description': description,
             })
+            context = {
+                'doc': dbt.context.parser.docs(model, docrefs, column_name)
+            }
+            dbt.clients.jinja.get_rendered(description, context)
             for test in column.get('tests', []):
                 test_type, test_args = cls._build_v2_test_args(
                     test, column_name
@@ -402,7 +407,7 @@ class SchemaParser(BaseParser):
                                   all_projects, macros)
             yield 'test', node
 
-        context = {'docs': dbt.context.parser.docs}
+        context = {'doc': dbt.context.parser.docs(model, docrefs)}
         description = model.get('description')
         dbt.clients.jinja.get_rendered(description, context)
 
@@ -410,7 +415,8 @@ class SchemaParser(BaseParser):
             name=model_name,
             original_file_path=path,
             description=description,
-            columns=column_info
+            columns=column_info,
+            docrefs=docrefs
         )
         yield 'patch', patch
 

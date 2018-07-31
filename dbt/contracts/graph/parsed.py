@@ -257,7 +257,8 @@ PARSED_NODE_PATCH_CONTRACT = {
             'items': DOCREF_CONTRACT,
         }
     },
-    'required': ['name', 'original_file_path', 'description', 'columns'],
+    'required': ['name', 'original_file_path', 'description', 'columns',
+                 'docrefs'],
 }
 
 
@@ -465,6 +466,7 @@ class ParsedNode(APIObject):
             'patch_path': patch.original_file_path,
             'description': patch.description,
             'columns': patch.columns,
+            'docrefs': patch.docrefs,
         })
         # patches always trigger re-validation
         self.validate()
@@ -574,10 +576,10 @@ class ParsedManifest(APIObject):
                 msg = "documentation names cannot contain '.' characters"
                 dbt.exceptions.raise_compiler_error(msg, doc)
 
-            found_package, found_node = node_parts
+            found_package, found_node = parts
 
             if (name == found_node and package in {None, found_package}):
-                return model
+                return doc
         return None
 
     def find_operation_by_name(self, name, package):
