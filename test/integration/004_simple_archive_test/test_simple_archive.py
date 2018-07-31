@@ -73,6 +73,24 @@ class TestSimpleArchive(DBTIntegrationTest):
 
         self.assertTablesEqual("ARCHIVE_EXPECTED", "archive_actual")
 
+    @attr(type='redshift')
+    def test__redshift__simple_archive(self):
+        self.use_profile('redshift')
+        self.use_default_project()
+        self.run_sql_file("test/integration/004_simple_archive_test/seed.sql")
+
+        results = self.run_dbt(["archive"])
+        self.assertEqual(len(results),  1)
+
+        self.assertTablesEqual("archive_expected","archive_actual")
+
+        self.run_sql_file("test/integration/004_simple_archive_test/invalidate_postgres.sql")
+        self.run_sql_file("test/integration/004_simple_archive_test/update.sql")
+
+        results = self.run_dbt(["archive"])
+        self.assertEqual(len(results),  1)
+
+        self.assertTablesEqual("archive_expected","archive_actual")
 
 class TestSimpleArchiveBigquery(DBTIntegrationTest):
 

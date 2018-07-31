@@ -10,17 +10,19 @@
     merge into {{ target }} as DEST
     using {{ source }} as SOURCE
 
-    {%- if unique_key -%}
+    {% if unique_key %}
         on SOURCE.{{ unique_key }} = DEST.{{ unique_key }}
-    {%- else -%}
+    {% else %}
         on FALSE
-    {%- endif -%}
+    {% endif %}
 
+    {% if unique_key %}
     when matched then update set
         {% for column in dest_columns -%}
             {{ column.name }} = SOURCE.{{ column.name }}
             {%- if not loop.last %}, {%- endif %}
         {%- endfor %}
+    {% endif %}
 
     when not matched then insert
         ({{ dest_cols_csv }})

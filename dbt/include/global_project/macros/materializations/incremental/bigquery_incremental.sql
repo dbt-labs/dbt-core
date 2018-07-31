@@ -43,6 +43,9 @@
     )
   {%- endset -%}
 
+
+  {{ run_hooks(pre_hooks) }}
+
   -- build model
   {% if force_create or old_relation is none -%}
     {%- call statement('main') -%}
@@ -54,5 +57,7 @@
        {{ get_merge_sql(target_relation, source_sql, unique_key, dest_columns) }}
      {% endcall %}
   {%- endif %}
+
+  {{ run_hooks(post_hooks) }}
 
 {%- endmaterialization %}

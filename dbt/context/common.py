@@ -407,10 +407,22 @@ def generate(model, project_cfg, flat_graph, provider=None):
         "try_or_compiler_error": try_or_compiler_error(model)
     })
 
-    # Operations do not represent database relations, so 'this' does not apply
-    if model.get('resource_type') != NodeType.Operation:
-        context["this"] = get_this_relation(db_wrapper, project_cfg, profile,
-                                            model)
+    # Operations do not represent database relations, so there should be no
+    # 'this' variable in the context for operations. The Operation branch
+    # below should be removed in a future release. The fake relation below
+    # mirrors the historical implementation, without causing errors around
+    # the missing 'alias' attribute for operations
+    #
+    # https://github.com/fishtown-analytics/dbt/issues/878
+    if model.get('resource_type') == NodeType.Operation:
+        this = db_wrapper.adapter.Relation.create(
+                schema=target['schema'],
+                identifier=model['name']
+        )
+    else:
+        this = get_this_relation(db_wrapper, project_cfg, profile, model)
+
+    context["this"] = this
 
     context = _add_tracking(context)
     context = _add_validation(context)

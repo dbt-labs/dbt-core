@@ -4,9 +4,6 @@ from test.integration.base import DBTIntegrationTest
 
 class TestSimpleCopy(DBTIntegrationTest):
 
-    def setUp(self):
-        pass
-
     @property
     def schema(self):
         return "simple_copy_001"
@@ -157,7 +154,7 @@ class TestSimpleCopy(DBTIntegrationTest):
 
     @attr(type="bigquery")
     def test__bigquery__simple_copy(self):
-        self.use_profile("postgres")
+        self.use_profile("bigquery")
         self.use_default_project({"data-paths": [self.dir("seed-initial")]})
 
         results = self.run_dbt(["seed"])
