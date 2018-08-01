@@ -11,7 +11,7 @@ import os
 class DocumentationParser(BaseParser):
     @classmethod
     def load_file(cls, package_name, root_dir, relative_dirs):
-        """Load and parse documentation in a lsit of projects. Returns a list
+        """Load and parse documentation in a list of projects. Returns a list
         of ParsedNodes.
         """
         extension = "[!.#~]*.md"
