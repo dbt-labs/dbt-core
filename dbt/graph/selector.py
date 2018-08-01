@@ -164,9 +164,9 @@ def select_nodes(graph, raw_include_specs, raw_exclude_specs):
 
 
 class NodeSelector(object):
-    def __init__(self, linker, flat_graph):
+    def __init__(self, linker, manifest):
         self.linker = linker
-        self.flat_graph = flat_graph
+        self.manifest = manifest
 
     def get_valid_nodes(self, graph):
         valid = []
@@ -206,13 +206,12 @@ class NodeSelector(object):
         is_ephemeral = get_materialization(node) == 'ephemeral'
         return is_model and is_ephemeral
 
-    def get_ancestor_ephemeral_nodes(self, flat_graph, linked_graph,
-                                     selected_nodes):
+    def get_ancestor_ephemeral_nodes(self, selected_nodes):
 
         node_names = {
-            node: flat_graph['nodes'].get(node).get('name')
+            node: self.manifest.nodes.get(node).name
             for node in selected_nodes
-            if node in flat_graph['nodes']
+            if node in self.manifest.nodes
         }
 
         include_spec = [
@@ -220,11 +219,11 @@ class NodeSelector(object):
             for node in selected_nodes if node in node_names
         ]
 
-        all_ancestors = select_nodes(linked_graph, include_spec, [])
+        all_ancestors = select_nodes(self.linker.graph, include_spec, [])
 
         res = []
         for ancestor in all_ancestors:
-            ancestor_node = flat_graph['nodes'].get(ancestor, None)
+            ancestor_node = self.manifest.nodes.get(ancestor, None)
 
             if ancestor_node and self.is_ephemeral_model(ancestor_node):
                 res.append(ancestor)
@@ -237,11 +236,8 @@ class NodeSelector(object):
         resource_types = query.get('resource_types')
         tags = query.get('tags')
 
-        flat_graph = self.flat_graph
-        graph = self.linker.graph
-
         selected = self.get_selected(include, exclude, resource_types, tags)
-        addins = self.get_ancestor_ephemeral_nodes(flat_graph, graph, selected)
+        addins = self.get_ancestor_ephemeral_nodes(selected)
 
         return selected | addins
 

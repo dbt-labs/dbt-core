@@ -98,7 +98,8 @@ class BaseRunner(object):
     def is_ephemeral_model(cls, node):
         return cls.is_refable(node) and cls.is_ephemeral(node)
 
-    def safe_run(self, flat_graph):
+    def safe_run(self, manifest):
+        flat_graph = manifest.to_flat_graph()
         catchable_errors = (dbt.exceptions.CompilationException,
                             dbt.exceptions.RuntimeException)
 
@@ -108,7 +109,7 @@ class BaseRunner(object):
         try:
             # if we fail here, we still have a compiled node to return
             # this has the benefit of showing a build path for the errant model
-            compiled_node = self.compile(flat_graph)
+            compiled_node = self.compile(manifest)
             result.node = compiled_node
 
             # for ephemeral nodes, we only want to compile, not run
@@ -180,28 +181,28 @@ class BaseRunner(object):
         self.skip = True
 
     @classmethod
-    def get_model_schemas(cls, flat_graph):
+    def get_model_schemas(cls, manifest):
         schemas = set()
-        for node in flat_graph['nodes'].values():
+        for node in manifest.nodes.values():
             if cls.is_refable(node) and not cls.is_ephemeral(node):
                 schemas.add(node['schema'])
 
         return schemas
 
     @classmethod
-    def before_hooks(self, project, adapter, flat_graph):
+    def before_hooks(self, project, adapter, manifest):
         pass
 
     @classmethod
-    def before_run(self, project, adapter, flat_graph):
+    def before_run(self, project, adapter, manifest):
         pass
 
     @classmethod
-    def after_run(self, project, adapter, results, flat_graph):
+    def after_run(self, project, adapter, results, manifest):
         pass
 
     @classmethod
-    def after_hooks(self, project, adapter, results, flat_graph, elapsed):
+    def after_hooks(self, project, adapter, results, manifest, elapsed):
         pass
 
 
@@ -220,12 +221,13 @@ class CompileRunner(BaseRunner):
     def execute(self, compiled_node, flat_graph):
         return RunModelResult(compiled_node)
 
-    def compile(self, flat_graph):
+    def compile(self, manifest):
         return self._compile_node(self.adapter, self.project, self.node,
-                                  flat_graph)
+                                  manifest)
 
     @classmethod
-    def _compile_node(cls, adapter, project, node, flat_graph):
+    def _compile_node(cls, adapter, project, node, manifest):
+        flat_graph = manifest.to_flat_graph()
         compiler = dbt.compilation.Compiler(project)
         node = compiler.compile_node(node, flat_graph)
         node = cls._inject_runtime_config(adapter, project, node)
@@ -281,9 +283,9 @@ class CompileRunner(BaseRunner):
         }
 
     @classmethod
-    def create_schemas(cls, project, adapter, flat_graph):
+    def create_schemas(cls, project, adapter, manifest):
         profile = project.run_environment()
-        required_schemas = cls.get_model_schemas(flat_graph)
+        required_schemas = cls.get_model_schemas(manifest)
         existing_schemas = set(adapter.get_existing_schemas(profile, project))
         for schema in (required_schemas - existing_schemas):
             adapter.create_schema(profile, project, schema)
@@ -295,10 +297,11 @@ class ModelRunner(CompileRunner):
         return False
 
     @classmethod
-    def run_hooks(cls, project, adapter, flat_graph, hook_type):
+    def run_hooks(cls, project, adapter, manifest, hook_type):
+        flat_graph = manifest.to_flat_graph()
         profile = project.run_environment()
 
-        nodes = flat_graph.get('nodes', {}).values()
+        nodes = manifest.nodes.values()
         hooks = get_nodes_by_tags(nodes, {hook_type}, NodeType.Operation)
 
         ordered_hooks = sorted(hooks, key=lambda h: h.get('index', len(hooks)))
@@ -314,7 +317,7 @@ class ModelRunner(CompileRunner):
             # Also, consider configuring psycopg2 (and other adapters?) to
             # ensure that a transaction is only created if dbt initiates it.
             adapter.clear_transaction(profile, model_name)
-            compiled = cls._compile_node(adapter, project, hook, flat_graph)
+            compiled = cls._compile_node(adapter, project, hook, manifest)
             statement = compiled['wrapped_sql']
 
             hook_index = hook.get('index', len(hooks))
@@ -332,18 +335,18 @@ class ModelRunner(CompileRunner):
             adapter.release_connection(profile, model_name)
 
     @classmethod
-    def safe_run_hooks(cls, project, adapter, flat_graph, hook_type):
+    def safe_run_hooks(cls, project, adapter, manifest, hook_type):
         try:
-            cls.run_hooks(project, adapter, flat_graph, hook_type)
+            cls.run_hooks(project, adapter, manifest, hook_type)
 
         except dbt.exceptions.RuntimeException:
             logger.info("Database error while running {}".format(hook_type))
             raise
 
     @classmethod
-    def create_schemas(cls, project, adapter, flat_graph):
+    def create_schemas(cls, project, adapter, manifest):
         profile = project.run_environment()
-        required_schemas = cls.get_model_schemas(flat_graph)
+        required_schemas = cls.get_model_schemas(manifest)
 
         # Snowflake needs to issue a "use {schema}" query, where schema
         # is the one defined in the profile. Create this schema if it
@@ -357,9 +360,9 @@ class ModelRunner(CompileRunner):
             adapter.create_schema(profile, project, schema)
 
     @classmethod
-    def before_run(cls, project, adapter, flat_graph):
-        cls.safe_run_hooks(project, adapter, flat_graph, RunHookType.Start)
-        cls.create_schemas(project, adapter, flat_graph)
+    def before_run(cls, project, adapter, manifest):
+        cls.safe_run_hooks(project, adapter, manifest, RunHookType.Start)
+        cls.create_schemas(project, adapter, manifest)
 
     @classmethod
     def print_results_line(cls, results, execution_time):
@@ -378,11 +381,11 @@ class ModelRunner(CompileRunner):
             .format(stat_line=stat_line, execution=execution))
 
     @classmethod
-    def after_run(cls, project, adapter, results, flat_graph):
-        cls.safe_run_hooks(project, adapter, flat_graph, RunHookType.End)
+    def after_run(cls, project, adapter, results, manifest):
+        cls.safe_run_hooks(project, adapter, manifest, RunHookType.End)
 
     @classmethod
-    def after_hooks(cls, project, adapter, results, flat_graph, elapsed):
+    def after_hooks(cls, project, adapter, results, manifest, elapsed):
         cls.print_results_line(results, elapsed)
 
     def describe_node(self):
@@ -505,7 +508,7 @@ class SeedRunner(ModelRunner):
         dbt.ui.printer.print_start_line(description, self.node_index,
                                         self.num_nodes)
 
-    def compile(self, flat_graph):
+    def compile(self, manifest):
         return self.node
 
     def print_result_line(self, result):

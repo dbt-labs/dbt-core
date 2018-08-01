@@ -222,40 +222,30 @@ class Compiler(object):
         graph_path = os.path.join(self.project['target-path'], filename)
         linker.write_graph(graph_path)
 
-    def link_node(self, linker, node, flat_graph):
-        linker.add_node(node.get('unique_id'))
+    def link_node(self, linker, node, manifest):
+        linker.add_node(node.unique_id)
 
         linker.update_node_data(
-            node.get('unique_id'),
-            node)
+            node.unique_id,
+            node.to_dict())
 
-        for dependency in node.get('depends_on', {}).get('nodes'):
-            if flat_graph.get('nodes').get(dependency):
+        for dependency in node.depends_on.get('nodes'):
+            if manifest.nodes.get(dependency):
                 linker.dependency(
-                    node.get('unique_id'),
-                    (flat_graph.get('nodes')
-                               .get(dependency)
-                               .get('unique_id')))
+                    node.unique_id,
+                    (manifest.nodes.get(dependency).unique_id))
 
             else:
                 dbt.exceptions.dependency_not_found(node, dependency)
 
-    def link_graph(self, linker, flat_graph):
-        linked_graph = {
-            'nodes': {},
-            'macros': flat_graph.get('macros')
-        }
-
-        for name, node in flat_graph.get('nodes').items():
-            self.link_node(linker, node, flat_graph)
-            linked_graph['nodes'][name] = node
+    def link_graph(self, linker, manifest):
+        for node in manifest.nodes.values():
+            self.link_node(linker, node, manifest)
 
         cycle = linker.find_cycles()
 
         if cycle:
             raise RuntimeError("Found a cycle: {}".format(cycle))
-
-        return linked_graph
 
     def get_all_projects(self):
         root_project = self.project.cfg
@@ -271,17 +261,16 @@ class Compiler(object):
 
         return all_projects
 
-    def _check_resource_uniqueness(cls, flat_graph):
-        nodes = flat_graph['nodes']
+    def _check_resource_uniqueness(cls, manifest):
         names_resources = {}
         alias_resources = {}
 
-        for resource, node in nodes.items():
-            if node.get('resource_type') not in NodeType.refable():
+        for resource, node in manifest.nodes.items():
+            if node.resource_type not in NodeType.refable():
                 continue
 
-            name = node['name']
-            alias = "{}.{}".format(node['schema'], node['alias'])
+            name = node.name
+            alias = "{}.{}".format(node.schema, node.alias)
 
             existing_node = names_resources.get(name)
             if existing_node is not None:
@@ -306,20 +295,18 @@ class Compiler(object):
 
         self.write_manifest_file(manifest)
 
-        flat_graph = manifest.to_flat_graph()
+        self._check_resource_uniqueness(manifest)
 
-        self._check_resource_uniqueness(flat_graph)
-
-        linked_graph = self.link_graph(linker, flat_graph)
+        self.link_graph(linker, manifest)
 
         stats = defaultdict(int)
 
         for node_name, node in itertools.chain(
-                linked_graph.get('nodes').items(),
-                linked_graph.get('macros').items()):
-            stats[node.get('resource_type')] += 1
+                manifest.nodes.items(),
+                manifest.macros.items()):
+            stats[node.resource_type] += 1
 
         self.write_graph_file(linker)
         print_compile_stats(stats)
 
-        return linked_graph, linker
+        return manifest, linker
