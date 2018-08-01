@@ -11,8 +11,13 @@
                                                 schema=schema, type='table') -%}
   {%- set intermediate_relation = api.Relation.create(identifier=tmp_identifier,
                                                       schema=schema, type='table') -%}
+
+  /*
+      See ../view/view.sql for more information about this relation.
+  */
   {%- set backup_relation = api.Relation.create(identifier=backup_identifier,
-                                                schema=schema, type='table') -%}
+                                                schema=schema, type=(old_relation.type or 'table')) -%}
+
   {%- set exists_as_table = (old_relation is not none and old_relation.is_table) -%}
   {%- set exists_as_view = (old_relation is not none and old_relation.is_view) -%}
   {%- set create_as_temporary = (exists_as_table and non_destructive_mode) -%}
@@ -64,8 +69,8 @@
   {% if non_destructive_mode -%}
     -- noop
   {%- else -%}
-    {% if exists_as_table %}
-      -- move the existing table out of the way
+    {% if old_relation is not none %}
+      -- move the existing relation out of the way
       {{ adapter.rename_relation(target_relation, backup_relation) }}
     {% endif %}
 
@@ -74,6 +79,8 @@
 
   -- `COMMIT` happens here
   {{ adapter.commit() }}
+
+  -- finally, drop the existing/backup relation after the commit
   {{ drop_relation_if_exists(backup_relation) }}
 
   {{ run_hooks(post_hooks, inside_transaction=False) }}
