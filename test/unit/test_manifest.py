@@ -283,7 +283,8 @@ class MixedManifestTest(unittest.TestCase):
                 compiled=True,
                 compiled_sql='also does not matter',
                 extra_ctes_injected=True,
-                injected_sql=None
+                injected_sql=None,
+                extra_ctes={}
             ),
             'model.root.events': CompiledNode(
                 name='events',
@@ -308,7 +309,8 @@ class MixedManifestTest(unittest.TestCase):
                 compiled=True,
                 compiled_sql='also does not matter',
                 extra_ctes_injected=True,
-                injected_sql='and this also does not matter'
+                injected_sql='and this also does not matter',
+                extra_ctes={}
             ),
             'model.root.dep': ParsedNode(
                 name='dep',
@@ -403,7 +405,7 @@ class MixedManifestTest(unittest.TestCase):
         self.assertEqual(
             manifest.serialize(),
             {'nodes': {}, 'macros': {}, 'parent_map': {}, 'child_map': {},
-             'generated_at': '2018-02-14T09:15:13Z'}
+             'docs': {}, 'generated_at': '2018-02-14T09:15:13Z'}
         )
 
     @freezegun.freeze_time('2018-02-14T09:15:13Z')

@@ -106,31 +106,30 @@ class BaseParser(object):
                                               manifest, config)
 
         dbt.clients.jinja.get_rendered(
-            node.get('raw_sql'), context, node,
+            parsed_node.raw_sql, context, parsed_node.to_shallow_dict(),
             capture_macros=True)
 
         # Clean up any open conns opened by adapter functions that hit the db
         db_wrapper = context['adapter']
         adapter = db_wrapper.adapter
         profile = db_wrapper.profile
-        adapter.release_connection(profile, node.get('name'))
+        adapter.release_connection(profile, parsed_node.name)
 
         # Special macro defined in the global project
         schema_override = config.config.get('schema')
         get_schema = context.get('generate_schema_name',
                                  lambda x: default_schema)
-        node['schema'] = get_schema(schema_override)
-        node['alias'] = config.config.get('alias', default_alias)
+        parsed_node.schema = get_schema(schema_override)
+        parsed_node.alias = config.config.get('alias', default_alias)
 
         # Overwrite node config
-        config_dict = node.get('config', {})
+        config_dict = parsed_node.get('config', {})
         config_dict.update(config.config)
-        node['config'] = config_dict
+        parsed_node.config = config_dict
 
         for hook_type in dbt.hooks.ModelHookType.Both:
-            node['config'][hook_type] = dbt.hooks.get_hooks(node, hook_type)
+            parsed_node.config[hook_type] = dbt.hooks.get_hooks(node, hook_type)
 
-        node.setdefault('columns', [])
-        node.setdefault('description', '')
+        parsed_node.validate()
 
-        return ParsedNode(**node)
+        return parsed_node

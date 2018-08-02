@@ -1,4 +1,4 @@
-from copy import deepcopy
+from copy import copy, deepcopy
 
 from dbt.api import APIObject
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -158,6 +158,11 @@ class CompiledNode(ParsedNode):
         # if we have ctes, we want to preseve order, so deepcopy them.
         ret = super(CompiledNode, self).to_dict()
         ret['extra_ctes'] = deepcopy(self.extra_ctes)
+        return ret
+
+    def to_shallow_dict(self):
+        ret = super(CompiledNode, self).to_shallow_dict()
+        ret['extra_ctes'] = self.extra_ctes
         return ret
 
 

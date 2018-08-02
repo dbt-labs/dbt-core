@@ -5,8 +5,8 @@ from dbt.contracts.graph.parsed import PARSED_NODE_CONTRACT, \
 from dbt.contracts.graph.compiled import COMPILED_NODE_CONTRACT
 from dbt.exceptions import ValidationException
 from dbt.node_types import NodeType
-from dbt.utils import deep_merge
 from dbt.logger import GLOBAL_LOGGER as logger
+import dbt.utils
 
 # We allow either parsed or compiled nodes, as some 'compile()' calls in the
 # runner actually just return the original parsed node they were given.
@@ -258,7 +258,7 @@ class Manifest(APIObject):
         Ideally in the future we won't need to have this method.
         """
         return {
-            'nodes': {k: v.to_dict() for k, v in self.nodes.items()},
+            'nodes': {k: v.to_shallow_dict() for k, v in self.nodes.items()},
             'macros': self.macros,
         }
 

@@ -133,7 +133,7 @@ class ParserUtils(object):
             target_model_name = None
             target_model_package = None
 
-            for ref in node.get('refs', []):
+            for ref in node.refs:
                 if len(ref) == 1:
                     target_model_name = ref[0]
                 elif len(ref) == 2:
@@ -143,7 +143,7 @@ class ParserUtils(object):
                     manifest,
                     target_model_name,
                     target_model_package,
-                    current_project,
+                    current_project.get('name'),
                     node.get('package_name'))
 
                 if target_model is None:

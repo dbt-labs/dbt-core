@@ -163,9 +163,8 @@ class Compiler(object):
         })
         compiled_node = CompiledNode(**data)
 
-        # TODO: make generate() take a real CompiledNode.
         context = dbt.context.runtime.generate(
-            compiled_node.to_dict(), self.project, manifest)
+            compiled_node, self.project, manifest)
 
         compiled_node.compiled_sql = dbt.clients.jinja.get_rendered(
             node.get('raw_sql'),
@@ -225,7 +224,7 @@ class Compiler(object):
             node.unique_id,
             node.to_dict())
 
-        for dependency in node.depends_on.get('nodes'):
+        for dependency in node.depends_on_nodes:
             if manifest.nodes.get(dependency):
                 linker.dependency(
                     node.unique_id,

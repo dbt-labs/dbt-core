@@ -347,7 +347,7 @@ def generate(model, project_cfg, manifest, source_config=None, provider=None):
     or
         dbt.context.runtime.generate
     """
-    flat_graph = manifest.to_flat_graph()
+    model_dict = model.to_shallow_dict()
     if provider is None:
         raise dbt.exceptions.InternalException(
             "Invalid provider given to context: {}".format(provider))
@@ -362,13 +362,13 @@ def generate(model, project_cfg, manifest, source_config=None, provider=None):
     context = {'env': target}
     schema = profile.get('schema', 'public')
 
-    pre_hooks = model.get('config', {}).get('pre-hook')
-    post_hooks = model.get('config', {}).get('post-hook')
+    pre_hooks = model.config.get('pre-hook')
+    post_hooks = model.config.get('post-hook')
 
     relation_type = create_relation(adapter.Relation,
                                     project_cfg.get('quoting'))
 
-    db_wrapper = DatabaseWrapper(model,
+    db_wrapper = DatabaseWrapper(model_dict,
                                  create_adapter(adapter, relation_type),
                                  profile,
                                  project_cfg)
@@ -382,15 +382,15 @@ def generate(model, project_cfg, manifest, source_config=None, provider=None):
             "Column": adapter.Column,
         },
         "column": adapter.Column,
-        "config": provider.Config(model, source_config),
+        "config": provider.Config(model_dict, source_config),
         "env_var": _env_var,
         "exceptions": dbt.exceptions,
         "execute": provider.execute,
         "flags": dbt.flags,
         # TODO: Do we have to leave this in?
-        "graph": flat_graph,
+        "graph": manifest.to_flat_graph(),
         "log": log,
-        "model": model,
+        "model": model_dict,
         "modules": {
             "pytz": pytz,
             "datetime": datetime
@@ -422,7 +422,7 @@ def generate(model, project_cfg, manifest, source_config=None, provider=None):
                 identifier=model.name
         )
     else:
-        this = get_this_relation(db_wrapper, project_cfg, profile, model)
+        this = get_this_relation(db_wrapper, project_cfg, profile, model_dict)
 
     context["this"] = this
 
@@ -434,8 +434,8 @@ def generate(model, project_cfg, manifest, source_config=None, provider=None):
 
     context = _add_macros(context, model, manifest)
 
-    context["write"] = write(model, project_cfg.get('target-path'), 'run')
-    context["render"] = render(context, model)
+    context["write"] = write(model_dict, project_cfg.get('target-path'), 'run')
+    context["render"] = render(context, model_dict)
     context["var"] = Var(model, context=context, overrides=cli_var_overrides)
     context['context'] = context
 

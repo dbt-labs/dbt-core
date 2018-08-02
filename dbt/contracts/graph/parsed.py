@@ -231,7 +231,7 @@ PARSED_NODE_CONTRACT = deep_merge(
         },
         'required': UNPARSED_NODE_CONTRACT['required'] + [
             'unique_id', 'fqn', 'schema', 'refs', 'depends_on', 'empty',
-            'config', 'tags', 'alias',
+            'config', 'tags', 'alias', 'columns', 'description'
         ]
     }
 )
@@ -242,6 +242,8 @@ class ParsedNode(APIObject):
 
     def __init__(self, agate_table=None, **kwargs):
         self.agate_table = agate_table
+        kwargs.setdefault('columns', [])
+        kwargs.setdefault('description', '')
         super(ParsedNode, self).__init__(**kwargs)
 
     @property
@@ -261,6 +263,11 @@ class ParsedNode(APIObject):
         """
         ret = self.serialize()
         # note: not a copy/deep copy.
+        ret['agate_table'] = self.agate_table
+        return ret
+
+    def to_shallow_dict(self):
+        ret = self._contents.copy()
         ret['agate_table'] = self.agate_table
         return ret
 
@@ -287,6 +294,31 @@ class ParsedNode(APIObject):
     @build_path.setter
     def build_path(self, value):
         self._contents['build_path'] = value
+
+    @property
+    def schema(self):
+        return self._contents['schema']
+
+    @schema.setter
+    def schema(self, value):
+        self._contents['schema'] = value
+
+    @property
+    def alias(self):
+        return self._contents['alias']
+
+    @alias.setter
+    def alias(self, value):
+        self._contents['alias'] = value
+
+    @property
+    def config(self):
+        return self._contents['config']
+
+    @config.setter
+    def config(self, value):
+        self._contents['config'] = value
+
 
 
 # The parsed node update is only the 'patch', not the test. The test became a
