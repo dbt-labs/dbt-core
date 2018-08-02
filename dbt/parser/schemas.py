@@ -20,7 +20,6 @@ from dbt.parser.base import BaseParser
 
 
 def get_nice_schema_test_name(test_type, test_name, args):
-
     flat_args = []
     for arg_name in sorted(args):
         arg_val = args[arg_name]
@@ -315,7 +314,7 @@ class SchemaParser(BaseParser):
 
     @classmethod
     def parse_v2_yml(cls, original_file_path, test_yml, package_name,
-                     root_project, all_projects, root_dir, macros=None):
+                     root_project, all_projects, root_dir, macros):
         """Parse v2 yml contents, yielding both parsed nodes and node patches.
 
         A v2 yml file is laid out like this ('variables' written
@@ -376,14 +375,19 @@ class SchemaParser(BaseParser):
         This is only used in parsing the v2 schema.
         """
         model_name = model['name']
-
+        docrefs = []
         column_info = []
         for column in model.get('columns', []):
             column_name = column['name']
+            description = column.get('description', '')
             column_info.append({
                 'name': column_name,
-                'description': column.get('description', '')
+                'description': description,
             })
+            context = {
+                'doc': dbt.context.parser.docs(model, docrefs, column_name)
+            }
+            dbt.clients.jinja.get_rendered(description, context)
             for test in column.get('tests', []):
                 test_type, test_args = cls._build_v2_test_args(
                     test, column_name
@@ -403,11 +407,16 @@ class SchemaParser(BaseParser):
                                   all_projects, macros)
             yield 'test', node
 
+        context = {'doc': dbt.context.parser.docs(model, docrefs)}
+        description = model.get('description', '')
+        dbt.clients.jinja.get_rendered(description, context)
+
         patch = ParsedNodePatch(
             name=model_name,
             original_file_path=path,
-            description=model.get('description', ''),
-            columns=column_info
+            description=description,
+            columns=column_info,
+            docrefs=docrefs
         )
         yield 'patch', patch
 

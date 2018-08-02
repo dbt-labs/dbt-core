@@ -131,9 +131,6 @@ class FailedToConnectException(DatabaseException):
     pass
 
 
-from dbt.utils import get_materialization  # noqa
-
-
 def raise_compiler_error(msg, node=None):
     raise CompilationException(msg, node)
 
@@ -177,6 +174,28 @@ To fix this, add the following hint to the top of the model "{model_name}":
     raise_compiler_error(error_msg, model)
 
 
+def doc_invalid_args(model, args):
+    raise_compiler_error(
+        "doc() takes at most two arguments ({} given)".format(len(args)),
+        model)
+
+
+def doc_target_not_found(model, target_doc_name, target_doc_package):
+    target_package_string = ''
+
+    if target_doc_package is not None:
+        target_package_string = "in package '{}' ".format(target_doc_package)
+
+    msg = (
+        "Documentation for '{}' depends on doc '{}' {} which was not found"
+    ).format(
+        model.get('unique_id'),
+        target_doc_name,
+        target_package_string
+    )
+    raise_compiler_error(msg, model)
+
+
 def get_target_not_found_msg(model, target_model_name, target_model_package):
     target_package_string = ''
 
@@ -218,6 +237,7 @@ def macro_not_found(model, target_macro_id):
 
 
 def materialization_not_available(model, adapter_type):
+    from dbt.utils import get_materialization  # noqa
     materialization = get_materialization(model)
 
     raise_compiler_error(
@@ -227,6 +247,7 @@ def materialization_not_available(model, adapter_type):
 
 
 def missing_materialization(model, adapter_type):
+    from dbt.utils import get_materialization  # noqa
     materialization = get_materialization(model)
 
     valid_types = "'default'"

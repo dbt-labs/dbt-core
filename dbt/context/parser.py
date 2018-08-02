@@ -20,6 +20,31 @@ def ref(db_wrapper, model, project_cfg, profile, flat_graph):
     return ref
 
 
+def docs(unparsed, docrefs, column_name=None):
+
+    def do_docs(*args):
+        if len(args) != 1 and len(args) != 2:
+            dbt.exceptions.doc_invalid_args(unparsed, args)
+        doc_package_name = ''
+        doc_name = args[0]
+        if len(args) == 2:
+            doc_package_name = args[1]
+
+        docref = {
+            'documentation_package': doc_package_name,
+            'documentation_name': doc_name,
+        }
+        if column_name is not None:
+            docref['column_name'] = column_name
+
+        docrefs.append(docref)
+
+        # IDK
+        return True
+
+    return do_docs
+
+
 class Config:
     def __init__(self, model):
         self.model = model

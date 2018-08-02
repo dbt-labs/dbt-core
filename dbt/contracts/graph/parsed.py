@@ -7,7 +7,7 @@ from dbt.exceptions import raise_duplicate_resource_name, \
 import dbt.clients.jinja
 
 from dbt.contracts.graph.unparsed import UNPARSED_NODE_CONTRACT, \
-    UNPARSED_MACRO_CONTRACT
+    UNPARSED_MACRO_CONTRACT, UNPARSED_DOCUMENTATION_FILE_CONTRACT
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -84,6 +84,35 @@ COLUMN_INFO_CONTRACT = {
         },
     },
     'required': ['name', 'description'],
+}
+
+
+# Docrefs are not quite like regular references, as they indicate what they
+# apply to as well as what they are referring to (so the doc package + doc
+# name, but also the column name if relevant). This is because column
+# descriptions are rendered separately from their models.
+DOCREF_CONTRACT = {
+    'type': 'object',
+    'properties': {
+        'documentation_name': {
+            'type': 'string',
+            'description': 'The name of the documentation block referred to',
+        },
+        'documentation_package': {
+            'type': 'string',
+            'description': (
+                'If provided, the documentation package name referred to'
+            ),
+        },
+        'column_name': {
+            'type': 'string',
+            'description': (
+                'If the documentation refers to a column instead of the '
+                'model, the column name should be set'
+            ),
+        },
+    },
+    'required': ['documentation_name', 'documentation_package']
 }
 
 
@@ -183,6 +212,10 @@ PARSED_NODE_CONTRACT = deep_merge(
                     'The path to the patch source if the node was patched'
                 ),
             },
+            'docrefs': {
+                'type': 'array',
+                'items': DOCREF_CONTRACT,
+            }
         },
         'required': UNPARSED_NODE_CONTRACT['required'] + [
             'unique_id', 'fqn', 'schema', 'refs', 'depends_on', 'empty',
@@ -218,9 +251,14 @@ PARSED_NODE_PATCH_CONTRACT = {
         'columns': {
             'type': 'array',
             'items': COLUMN_INFO_CONTRACT,
+        },
+        'docrefs': {
+            'type': 'array',
+            'items': DOCREF_CONTRACT,
         }
     },
-    'required': ['name', 'original_file_path', 'description', 'columns'],
+    'required': ['name', 'original_file_path', 'description', 'columns',
+                 'docrefs'],
 }
 
 
@@ -311,6 +349,49 @@ PARSED_MACROS_CONTRACT = {
 }
 
 
+# This is just the file + its ID
+PARSED_DOCUMENTATION_CONTRACT = deep_merge(
+    UNPARSED_DOCUMENTATION_FILE_CONTRACT,
+    {
+        'properties': {
+            'name': {
+                'type': 'string',
+                'description': (
+                    'Name of this node, as referred to by doc() references'
+                ),
+            },
+            'unique_id': {
+                'type': 'string',
+                'minLength': 1,
+                'maxLength': 255,
+                'description': (
+                    'The unique ID of this node as stored in the manifest'
+                ),
+            },
+            'block_contents': {
+                'type': 'string',
+                'description': 'The contents of just the docs block',
+            },
+        },
+        'required': UNPARSED_DOCUMENTATION_FILE_CONTRACT['required'] + [
+            'name', 'unique_id', 'block_contents',
+        ],
+    }
+)
+
+
+PARSED_DOCUMENTATIONS_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'description': (
+        'A collection of the parsed docs, stored by their uniqe IDs.'
+    ),
+    'patternProperties': {
+        '.*': PARSED_DOCUMENTATION_CONTRACT,
+    },
+}
+
+
 NODE_EDGE_MAP = {
     'type': 'object',
     'additionalProperties': False,
@@ -337,6 +418,7 @@ PARSED_MANIFEST_CONTRACT = {
     'properties': {
         'nodes': PARSED_NODES_CONTRACT,
         'macros': PARSED_MACROS_CONTRACT,
+        'docs': PARSED_DOCUMENTATIONS_CONTRACT,
         'generated_at': {
             'type': 'string',
             'format': 'date-time',
@@ -344,7 +426,7 @@ PARSED_MANIFEST_CONTRACT = {
         'parent_map': NODE_EDGE_MAP,
         'child_map': NODE_EDGE_MAP,
     },
-    'required': ['nodes', 'macros'],
+    'required': ['nodes', 'macros', 'docs'],
 }
 
 
@@ -384,6 +466,7 @@ class ParsedNode(APIObject):
             'patch_path': patch.original_file_path,
             'description': patch.description,
             'columns': patch.columns,
+            'docrefs': patch.docrefs,
         })
         # patches always trigger re-validation
         self.validate()
@@ -405,6 +488,10 @@ class ParsedMacro(APIObject):
         # available in this class. should we just generate this here?
         return dbt.clients.jinja.macro_generator(
             self.template, self._contents)
+
+
+class ParsedDocumentation(APIObject):
+    SCHEMA = PARSED_DOCUMENTATION_CONTRACT
 
 
 class ParsedNodes(APIObject):
@@ -437,13 +524,14 @@ def build_edges(nodes):
 class ParsedManifest(APIObject):
     SCHEMA = PARSED_MANIFEST_CONTRACT
     """The final result of parsing all macros and nodes in a graph."""
-    def __init__(self, nodes, macros, generated_at):
+    def __init__(self, nodes, macros, docs, generated_at):
         """The constructor. nodes and macros are dictionaries mapping unique
         IDs to ParsedNode and ParsedMacro objects, respectively. generated_at
         is a text timestamp in RFC 3339 format.
         """
         self.nodes = nodes
         self.macros = macros
+        self.docs = docs
         self.generated_at = generated_at
         self._contents = {}
         super(ParsedManifest, self).__init__()
@@ -457,6 +545,7 @@ class ParsedManifest(APIObject):
         return {
             'nodes': {k: v.serialize() for k, v in self.nodes.items()},
             'macros': {k: v.serialize() for k, v in self.macros.items()},
+            'docs': {k: v.serialize() for k, v in self.docs.items()},
             'parent_map': backward_edges,
             'child_map': forward_edges,
             'generated_at': self.generated_at,
@@ -464,8 +553,7 @@ class ParsedManifest(APIObject):
 
     def _find_by_name(self, name, package, subgraph, nodetype):
         """
-
-        Find a node by its given name in the appropraite sugraph.
+        Find a node by its given name in the appropriate sugraph.
         """
         if subgraph == 'nodes':
             search = self.nodes
@@ -480,6 +568,19 @@ class ParsedManifest(APIObject):
             name,
             package,
             nodetype)
+
+    def find_docs_by_name(self, name, package=None):
+        for unique_id, doc in self.docs.items():
+            parts = unique_id.split('.')
+            if len(parts) != 2:
+                msg = "documentation names cannot contain '.' characters"
+                dbt.exceptions.raise_compiler_error(msg, doc)
+
+            found_package, found_node = parts
+
+            if (name == found_node and package in {None, found_package}):
+                return doc
+        return None
 
     def find_operation_by_name(self, name, package):
         return self._find_by_name(name, package, 'macros',

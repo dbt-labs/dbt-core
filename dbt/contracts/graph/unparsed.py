@@ -160,3 +160,54 @@ class UnparsedNodeUpdate(APIObject):
     to be updated, referencing a certain node (specifically, a Model).
     """
     SCHEMA = UNPARSED_NODE_UPDATE_CONTRACT
+
+
+UNPARSED_DOCUMENTATION_FILE_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'properties': {
+        'package_name': {
+            'type': 'string',
+        },
+        # filesystem
+        'root_path': {
+            'type': 'string',
+            'description': 'The absolute path to the project root',
+        },
+        'path': {
+            'type': 'string',
+            'description': (
+                'Relative path to the source file from the project root. '
+                'Usually the same as original_file_path, but in some cases '
+                'dbt will generate a path.'),
+        },
+        'original_file_path': {
+            'type': 'string',
+            'description': (
+                'Relative path to the originating file from the project root.'
+                ),
+        },
+        'file_contents': {
+            'type': 'string',
+            'description': (
+                'The raw text provided in the documentation block, presumably '
+                'markdown.'
+            ),
+        },
+        # TODO: I would like to remove this, but some graph error handling
+        # cares about it.
+        'resource_type': {
+            'enum': [
+                NodeType.Documentation,
+            ]
+        },
+    },
+    'required': [
+        'package_name', 'root_path', 'path', 'original_file_path',
+        'file_contents', 'resource_type'
+    ],
+}
+
+
+class UnparsedDocumentationFile(APIObject):
+    SCHEMA = UNPARSED_DOCUMENTATION_FILE_CONTRACT

@@ -89,35 +89,37 @@ class ParserTest(unittest.TestCase):
             'raw_sql': ("select * from events"),
         }]
 
-        self.assertEquals(
+        self.assertEqual(
             ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
-                'model.root.model_one': {
-                    'alias': 'model_one',
-                    'name': 'model_one',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.model_one',
-                    'fqn': ['root', 'model_one'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'original_file_path': 'model_one.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'refs': [],
-                    'depends_on': {
+                'model.root.model_one': ParsedNode(
+                    alias='model_one',
+                    name='model_one',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.root.model_one',
+                    fqn=['root', 'model_one'],
+                    empty=False,
+                    package_name='root',
+                    original_file_path='model_one.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    refs=[],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'config': self.model_config,
-                    'tags': [],
-                    'path': 'model_one.sql',
-                    'raw_sql': self.find_input_by_name(
-                        models, 'model_one').get('raw_sql')
-                }
+                    config=self.model_config,
+                    tags=[],
+                    path='model_one.sql',
+                    raw_sql=self.find_input_by_name(
+                        models, 'model_one').get('raw_sql'),
+                    description='',
+                    columns=[]
+                )
             }
         )
 
@@ -148,35 +150,37 @@ class ParserTest(unittest.TestCase):
             'materialized': 'ephemeral'
         })
 
-        self.assertEquals(
+        self.assertEqual(
             ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
-                'model.root.model_one': {
-                    'alias': 'model_one',
-                    'name': 'model_one',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.model_one',
-                    'fqn': ['root', 'nested', 'path', 'model_one'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'original_file_path': 'nested/path/model_one.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'refs': [],
-                    'depends_on': {
+                'model.root.model_one': ParsedNode(
+                    alias='model_one',
+                    name='model_one',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.root.model_one',
+                    fqn=['root', 'nested', 'path', 'model_one'],
+                    empty=False,
+                    package_name='root',
+                    original_file_path='nested/path/model_one.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    refs=[],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'config': ephemeral_config,
-                    'tags': [],
-                    'path': get_os_path('nested/path/model_one.sql'),
-                    'raw_sql': self.find_input_by_name(
-                        models, 'model_one').get('raw_sql')
-                }
+                    config=ephemeral_config,
+                    tags=[],
+                    path=get_os_path('nested/path/model_one.sql'),
+                    raw_sql=self.find_input_by_name(
+                        models, 'model_one').get('raw_sql'),
+                    description='',
+                    columns=[]
+                )
             }
         )
 
@@ -191,34 +195,36 @@ class ParserTest(unittest.TestCase):
             'raw_sql': (" "),
         }]
 
-        self.assertEquals(
+        self.assertEqual(
             ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config}),
             {
-                'model.root.model_one': {
-                    'alias': 'model_one',
-                    'name': 'model_one',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.model_one',
-                    'fqn': ['root', 'model_one'],
-                    'empty': True,
-                    'package_name': 'root',
-                    'refs': [],
-                    'depends_on': {
+                'model.root.model_one': ParsedNode(
+                    alias='model_one',
+                    name='model_one',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.root.model_one',
+                    fqn=['root', 'model_one'],
+                    empty=True,
+                    package_name='root',
+                    refs=[],
+                    depends_on={
                         'nodes': [],
                         'macros': [],
                     },
-                    'config': self.model_config,
-                    'tags': [],
-                    'path': 'model_one.sql',
-                    'original_file_path': 'model_one.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'raw_sql': self.find_input_by_name(
-                        models, 'model_one').get('raw_sql')
-                }
+                    config=self.model_config,
+                    tags=[],
+                    path='model_one.sql',
+                    original_file_path='model_one.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    raw_sql=self.find_input_by_name(
+                        models, 'model_one').get('raw_sql'),
+                    description='',
+                    columns=[]
+                )
             }
         )
 
@@ -241,57 +247,62 @@ class ParserTest(unittest.TestCase):
             'raw_sql': "select * from {{ref('base')}}"
         }]
 
-        self.assertEquals(
+        self.assertEqual(
             ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
-                'model.root.base': {
-                    'alias': 'base',
-                    'name': 'base',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.base',
-                    'fqn': ['root', 'base'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'refs': [],
-                    'depends_on': {
+                'model.root.base': ParsedNode(
+                    alias='base',
+                    name='base',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.root.base',
+                    fqn=['root', 'base'],
+                    empty=False,
+                    package_name='root',
+                    refs=[],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'config': self.model_config,
-                    'tags': [],
-                    'path': 'base.sql',
-                    'original_file_path': 'base.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'raw_sql': self.find_input_by_name(
-                        models, 'base').get('raw_sql')
-                },
-                'model.root.events_tx': {
-                    'alias': 'events_tx',
-                    'name': 'events_tx',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.events_tx',
-                    'fqn': ['root', 'events_tx'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'refs': [['base']],
-                    'depends_on': {
+                    config=self.model_config,
+                    tags=[],
+                    path='base.sql',
+                    original_file_path='base.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    raw_sql=self.find_input_by_name(
+                        models, 'base').get('raw_sql'),
+                    description='',
+                    columns=[]
+
+                ),
+                'model.root.events_tx': ParsedNode(
+                    alias='events_tx',
+                    name='events_tx',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.root.events_tx',
+                    fqn=['root', 'events_tx'],
+                    empty=False,
+                    package_name='root',
+                    refs=[['base']],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'config': self.model_config,
-                    'tags': [],
-                    'path': 'events_tx.sql',
-                    'original_file_path': 'events_tx.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'raw_sql': self.find_input_by_name(
-                        models, 'events_tx').get('raw_sql')
-                }
+                    config=self.model_config,
+                    tags=[],
+                    path='events_tx.sql',
+                    original_file_path='events_tx.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    raw_sql=self.find_input_by_name(
+                        models, 'events_tx').get('raw_sql'),
+                    description='',
+                    columns=[]
+                )
             }
         )
 
@@ -342,123 +353,133 @@ class ParserTest(unittest.TestCase):
                         "select * from e left join s on s.id = e.sid"),
         }]
 
-        self.assertEquals(
+        self.assertEqual(
             ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
-                'model.root.events': {
-                    'alias': 'events',
-                    'name': 'events',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.events',
-                    'fqn': ['root', 'events'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'refs': [],
-                    'depends_on': {
+                'model.root.events': ParsedNode(
+                    alias='events',
+                    name='events',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.root.events',
+                    fqn=['root', 'events'],
+                    empty=False,
+                    package_name='root',
+                    refs=[],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'config': self.model_config,
-                    'tags': [],
-                    'path': 'events.sql',
-                    'original_file_path': 'events.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'raw_sql': self.find_input_by_name(
-                        models, 'events').get('raw_sql')
-                },
-                'model.root.sessions': {
-                    'alias': 'sessions',
-                    'name': 'sessions',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.sessions',
-                    'fqn': ['root', 'sessions'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'refs': [],
-                    'depends_on': {
+                    config=self.model_config,
+                    tags=[],
+                    path='events.sql',
+                    original_file_path='events.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    raw_sql=self.find_input_by_name(
+                        models, 'events').get('raw_sql'),
+                    description='',
+                    columns=[]
+                ),
+                'model.root.sessions': ParsedNode(
+                    alias='sessions',
+                    name='sessions',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.root.sessions',
+                    fqn=['root', 'sessions'],
+                    empty=False,
+                    package_name='root',
+                    refs=[],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'config': self.model_config,
-                    'tags': [],
-                    'path': 'sessions.sql',
-                    'original_file_path': 'sessions.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'raw_sql': self.find_input_by_name(
-                        models, 'sessions').get('raw_sql')
-                },
-                'model.root.events_tx': {
-                    'alias': 'events_tx',
-                    'name': 'events_tx',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.events_tx',
-                    'fqn': ['root', 'events_tx'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'refs': [['events']],
-                    'depends_on': {
+                    config=self.model_config,
+                    tags=[],
+                    path='sessions.sql',
+                    original_file_path='sessions.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    raw_sql=self.find_input_by_name(
+                        models, 'sessions').get('raw_sql'),
+                    description='',
+                    columns=[],
+                ),
+                'model.root.events_tx': ParsedNode(
+                    alias='events_tx',
+                    name='events_tx',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.root.events_tx',
+                    fqn=['root', 'events_tx'],
+                    empty=False,
+                    package_name='root',
+                    refs=[['events']],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'config': self.model_config,
-                    'tags': [],
-                    'path': 'events_tx.sql',
-                    'original_file_path': 'events_tx.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'raw_sql': self.find_input_by_name(
-                        models, 'events_tx').get('raw_sql')
-                },
-                'model.root.sessions_tx': {
-                    'alias': 'sessions_tx',
-                    'name': 'sessions_tx',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.sessions_tx',
-                    'fqn': ['root', 'sessions_tx'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'refs': [['sessions']],
-                    'depends_on': {
+                    config=self.model_config,
+                    tags=[],
+                    path='events_tx.sql',
+                    original_file_path='events_tx.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    raw_sql=self.find_input_by_name(
+                        models, 'events_tx').get('raw_sql'),
+                    description='',
+                    columns=[]
+                ),
+                'model.root.sessions_tx': ParsedNode(
+                    alias='sessions_tx',
+                    name='sessions_tx',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.root.sessions_tx',
+                    fqn=['root', 'sessions_tx'],
+                    empty=False,
+                    package_name='root',
+                    refs=[['sessions']],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'config': self.model_config,
-                    'tags': [],
-                    'path': 'sessions_tx.sql',
-                    'original_file_path': 'sessions_tx.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'raw_sql': self.find_input_by_name(
-                        models, 'sessions_tx').get('raw_sql')
-                },
-                'model.root.multi': {
-                    'alias': 'multi',
-                    'name': 'multi',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.multi',
-                    'fqn': ['root', 'multi'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'refs': [['sessions_tx'], ['events_tx']],
-                    'depends_on': {
+                    config=self.model_config,
+                    tags=[],
+                    path='sessions_tx.sql',
+                    original_file_path='sessions_tx.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    raw_sql=self.find_input_by_name(
+                        models, 'sessions_tx').get('raw_sql'),
+                    description='',
+                    columns=[]
+                ),
+                'model.root.multi': ParsedNode(
+                    alias='multi',
+                    name='multi',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.root.multi',
+                    fqn=['root', 'multi'],
+                    empty=False,
+                    package_name='root',
+                    refs=[['sessions_tx'], ['events_tx']],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'config': self.model_config,
-                    'tags': [],
-                    'path': 'multi.sql',
-                    'original_file_path': 'multi.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'raw_sql': self.find_input_by_name(
-                        models, 'multi').get('raw_sql')
-                }
+                    config=self.model_config,
+                    tags=[],
+                    path='multi.sql',
+                    original_file_path='multi.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    raw_sql=self.find_input_by_name(
+                        models, 'multi').get('raw_sql'),
+                    description='',
+                    columns=[]
+                ),
             }
         )
 
@@ -511,124 +532,134 @@ class ParserTest(unittest.TestCase):
                         "select * from e left join s on s.id = e.sid"),
         }]
 
-        self.assertEquals(
+        self.assertEqual(
             ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
-                'model.snowplow.events': {
-                    'alias': 'events',
-                    'name': 'events',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.snowplow.events',
-                    'fqn': ['snowplow', 'events'],
-                    'empty': False,
-                    'package_name': 'snowplow',
-                    'refs': [],
-                    'depends_on': {
+                'model.snowplow.events': ParsedNode(
+                    alias='events',
+                    name='events',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.snowplow.events',
+                    fqn=['snowplow', 'events'],
+                    empty=False,
+                    package_name='snowplow',
+                    refs=[],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'config': self.model_config,
-                    'tags': [],
-                    'path': 'events.sql',
-                    'original_file_path': 'events.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'raw_sql': self.find_input_by_name(
-                        models, 'events').get('raw_sql')
-                },
-                'model.snowplow.sessions': {
-                    'alias': 'sessions',
-                    'name': 'sessions',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.snowplow.sessions',
-                    'fqn': ['snowplow', 'sessions'],
-                    'empty': False,
-                    'package_name': 'snowplow',
-                    'refs': [],
-                    'depends_on': {
+                    config=self.model_config,
+                    tags=[],
+                    path='events.sql',
+                    original_file_path='events.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    raw_sql=self.find_input_by_name(
+                        models, 'events').get('raw_sql'),
+                    description='',
+                    columns=[]
+                ),
+                'model.snowplow.sessions': ParsedNode(
+                    alias='sessions',
+                    name='sessions',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.snowplow.sessions',
+                    fqn=['snowplow', 'sessions'],
+                    empty=False,
+                    package_name='snowplow',
+                    refs=[],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'config': self.model_config,
-                    'tags': [],
-                    'path': 'sessions.sql',
-                    'original_file_path': 'sessions.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'raw_sql': self.find_input_by_name(
-                        models, 'sessions').get('raw_sql')
-                },
-                'model.snowplow.events_tx': {
-                    'alias': 'events_tx',
-                    'name': 'events_tx',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.snowplow.events_tx',
-                    'fqn': ['snowplow', 'events_tx'],
-                    'empty': False,
-                    'package_name': 'snowplow',
-                    'refs': [['events']],
-                    'depends_on': {
+                    config=self.model_config,
+                    tags=[],
+                    path='sessions.sql',
+                    original_file_path='sessions.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    raw_sql=self.find_input_by_name(
+                        models, 'sessions').get('raw_sql'),
+                    description='',
+                    columns=[]
+                ),
+                'model.snowplow.events_tx': ParsedNode(
+                    alias='events_tx',
+                    name='events_tx',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.snowplow.events_tx',
+                    fqn=['snowplow', 'events_tx'],
+                    empty=False,
+                    package_name='snowplow',
+                    refs=[['events']],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'config': self.model_config,
-                    'tags': [],
-                    'path': 'events_tx.sql',
-                    'original_file_path': 'events_tx.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'raw_sql': self.find_input_by_name(
-                        models, 'events_tx').get('raw_sql')
-                },
-                'model.snowplow.sessions_tx': {
-                    'alias': 'sessions_tx',
-                    'name': 'sessions_tx',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.snowplow.sessions_tx',
-                    'fqn': ['snowplow', 'sessions_tx'],
-                    'empty': False,
-                    'package_name': 'snowplow',
-                    'refs': [['sessions']],
-                    'depends_on': {
+                    config=self.model_config,
+                    tags=[],
+                    path='events_tx.sql',
+                    original_file_path='events_tx.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    raw_sql=self.find_input_by_name(
+                        models, 'events_tx').get('raw_sql'),
+                    description='',
+                    columns=[]
+                ),
+                'model.snowplow.sessions_tx': ParsedNode(
+                    alias='sessions_tx',
+                    name='sessions_tx',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.snowplow.sessions_tx',
+                    fqn=['snowplow', 'sessions_tx'],
+                    empty=False,
+                    package_name='snowplow',
+                    refs=[['sessions']],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'config': self.model_config,
-                    'tags': [],
-                    'path': 'sessions_tx.sql',
-                    'original_file_path': 'sessions_tx.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'raw_sql': self.find_input_by_name(
-                        models, 'sessions_tx').get('raw_sql')
-                },
-                'model.root.multi': {
-                    'alias': 'multi',
-                    'name': 'multi',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.multi',
-                    'fqn': ['root', 'multi'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'refs': [['snowplow', 'sessions_tx'],
+                    config=self.model_config,
+                    tags=[],
+                    path='sessions_tx.sql',
+                    original_file_path='sessions_tx.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    raw_sql=self.find_input_by_name(
+                        models, 'sessions_tx').get('raw_sql'),
+                    description='',
+                    columns=[]
+                ),
+                'model.root.multi': ParsedNode(
+                    alias='multi',
+                    name='multi',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.root.multi',
+                    fqn=['root', 'multi'],
+                    empty=False,
+                    package_name='root',
+                    refs=[['snowplow', 'sessions_tx'],
                              ['snowplow', 'events_tx']],
-                    'depends_on': {
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'config': self.model_config,
-                    'tags': [],
-                    'path': 'multi.sql',
-                    'original_file_path': 'multi.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'raw_sql': self.find_input_by_name(
-                        models, 'multi').get('raw_sql')
-                }
+                    config=self.model_config,
+                    tags=[],
+                    path='multi.sql',
+                    original_file_path='multi.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    raw_sql=self.find_input_by_name(
+                        models, 'multi').get('raw_sql'),
+                    description='',
+                    columns=[]
+                ),
             }
         )
 
@@ -705,11 +736,12 @@ class ParserTest(unittest.TestCase):
         manifest = ParsedManifest(
             nodes={k: ParsedNode(**v) for (k,v) in graph['nodes'].items()},
             macros={k: ParsedMacro(**v) for (k,v) in graph['macros'].items()},
+            docs={},
             generated_at=timestring(),
         )
 
         processed_manifest = ParserUtils.process_refs(manifest, 'root')
-        self.assertEquals(
+        self.assertEqual(
             processed_manifest.to_flat_graph(),
             {
                 'macros': {},
@@ -800,35 +832,37 @@ class ParserTest(unittest.TestCase):
             'materialized': 'table'
         })
 
-        self.assertEquals(
+        self.assertEqual(
             ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
-                'model.root.model_one': {
-                    'alias': 'model_one',
-                    'name': 'model_one',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.model_one',
-                    'fqn': ['root', 'model_one'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'refs': [],
-                    'depends_on': {
+                'model.root.model_one': ParsedNode(
+                    alias='model_one',
+                    name='model_one',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.root.model_one',
+                    fqn=['root', 'model_one'],
+                    empty=False,
+                    package_name='root',
+                    refs=[],
+                    depends_on={
                         'nodes': [],
                         'macros': [],
                     },
-                    'config': self.model_config,
-                    'tags': [],
-                    'root_path': get_os_path('/usr/src/app'),
-                    'path': 'model_one.sql',
-                    'original_file_path': 'model_one.sql',
-                    'raw_sql': self.find_input_by_name(
-                        models, 'model_one').get('raw_sql')
-                }
+                    config=self.model_config,
+                    tags=[],
+                    root_path=get_os_path('/usr/src/app'),
+                    path='model_one.sql',
+                    original_file_path='model_one.sql',
+                    raw_sql=self.find_input_by_name(
+                        models, 'model_one').get('raw_sql'),
+                    description='',
+                    columns=[]
+                )
             }
         )
 
@@ -883,79 +917,85 @@ class ParserTest(unittest.TestCase):
             'materialized': 'view'
         })
 
-        self.assertEquals(
+        self.assertEqual(
             ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
-                'model.root.table': {
-                    'alias': 'table',
-                    'name': 'table',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.table',
-                    'fqn': ['root', 'table'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'refs': [],
-                    'depends_on': {
+                'model.root.table': ParsedNode(
+                    alias='table',
+                    name='table',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.root.table',
+                    fqn=['root', 'table'],
+                    empty=False,
+                    package_name='root',
+                    refs=[],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'path': 'table.sql',
-                    'original_file_path': 'table.sql',
-                    'config': self.model_config,
-                    'tags': [],
-                    'root_path': get_os_path('/usr/src/app'),
-                    'raw_sql': self.find_input_by_name(
-                        models, 'table').get('raw_sql')
-                },
-                'model.root.ephemeral': {
-                    'alias': 'ephemeral',
-                    'name': 'ephemeral',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.ephemeral',
-                    'fqn': ['root', 'ephemeral'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'refs': [],
-                    'depends_on': {
+                    path='table.sql',
+                    original_file_path='table.sql',
+                    config=self.model_config,
+                    tags=[],
+                    root_path=get_os_path('/usr/src/app'),
+                    raw_sql=self.find_input_by_name(
+                        models, 'table').get('raw_sql'),
+                    description='',
+                    columns=[]
+                ),
+                'model.root.ephemeral': ParsedNode(
+                    alias='ephemeral',
+                    name='ephemeral',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.root.ephemeral',
+                    fqn=['root', 'ephemeral'],
+                    empty=False,
+                    package_name='root',
+                    refs=[],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'path': 'ephemeral.sql',
-                    'original_file_path': 'ephemeral.sql',
-                    'config': ephemeral_config,
-                    'tags': [],
-                    'root_path': get_os_path('/usr/src/app'),
-                    'raw_sql': self.find_input_by_name(
-                        models, 'ephemeral').get('raw_sql')
-                },
-                'model.root.view': {
-                    'alias': 'view',
-                    'name': 'view',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.view',
-                    'fqn': ['root', 'view'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'refs': [],
-                    'depends_on': {
+                    path='ephemeral.sql',
+                    original_file_path='ephemeral.sql',
+                    config=ephemeral_config,
+                    tags=[],
+                    root_path=get_os_path('/usr/src/app'),
+                    raw_sql=self.find_input_by_name(
+                        models, 'ephemeral').get('raw_sql'),
+                    description='',
+                    columns=[]
+                ),
+                'model.root.view': ParsedNode(
+                    alias='view',
+                    name='view',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.root.view',
+                    fqn=['root', 'view'],
+                    empty=False,
+                    package_name='root',
+                    refs=[],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'path': 'view.sql',
-                    'original_file_path': 'view.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'config': view_config,
-                    'tags': [],
-                    'raw_sql': self.find_input_by_name(
-                        models, 'ephemeral').get('raw_sql')
-                }
+                    path='view.sql',
+                    original_file_path='view.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    config=view_config,
+                    tags=[],
+                    raw_sql=self.find_input_by_name(
+                        models, 'ephemeral').get('raw_sql'),
+                    description='',
+                    columns=[]
+                ),
             }
 
         )
@@ -1077,101 +1117,109 @@ class ParserTest(unittest.TestCase):
             'sort': ['timestamp', 'id']
         })
 
-        self.assertEquals(
+        self.assertEqual(
             ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
-                'model.root.table': {
-                    'alias': 'table',
-                    'name': 'table',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.table',
-                    'fqn': ['root', 'table'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'refs': [],
-                    'depends_on': {
+                'model.root.table': ParsedNode(
+                    alias='table',
+                    name='table',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.root.table',
+                    fqn=['root', 'table'],
+                    empty=False,
+                    package_name='root',
+                    refs=[],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'path': 'table.sql',
-                    'original_file_path': 'table.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'config': self.model_config,
-                    'tags': [],
-                    'raw_sql': self.find_input_by_name(
-                        models, 'table').get('raw_sql')
-                },
-                'model.root.ephemeral': {
-                    'alias': 'ephemeral',
-                    'name': 'ephemeral',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.ephemeral',
-                    'fqn': ['root', 'ephemeral'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'refs': [],
-                    'depends_on': {
+                    path='table.sql',
+                    original_file_path='table.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    config=self.model_config,
+                    tags=[],
+                    raw_sql=self.find_input_by_name(
+                        models, 'table').get('raw_sql'),
+                    description='',
+                    columns=[]
+                ),
+                'model.root.ephemeral': ParsedNode(
+                    alias='ephemeral',
+                    name='ephemeral',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.root.ephemeral',
+                    fqn=['root', 'ephemeral'],
+                    empty=False,
+                    package_name='root',
+                    refs=[],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'path': 'ephemeral.sql',
-                    'original_file_path': 'ephemeral.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'config': ephemeral_config,
-                    'tags': [],
-                    'raw_sql': self.find_input_by_name(
-                        models, 'ephemeral').get('raw_sql')
-                },
-                'model.root.view': {
-                    'alias': 'view',
-                    'name': 'view',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.view',
-                    'fqn': ['root', 'view'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'refs': [],
-                    'depends_on': {
+                    path='ephemeral.sql',
+                    original_file_path='ephemeral.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    config=ephemeral_config,
+                    tags=[],
+                    raw_sql=self.find_input_by_name(
+                        models, 'ephemeral').get('raw_sql'),
+                    description='',
+                    columns=[]
+                ),
+                'model.root.view': ParsedNode(
+                    alias='view',
+                    name='view',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.root.view',
+                    fqn=['root', 'view'],
+                    empty=False,
+                    package_name='root',
+                    refs=[],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'path': 'view.sql',
-                    'original_file_path': 'view.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'config': view_config,
-                    'tags': [],
-                    'raw_sql': self.find_input_by_name(
-                        models, 'view').get('raw_sql')
-                },
-                'model.snowplow.multi_sort': {
-                    'alias': 'multi_sort',
-                    'name': 'multi_sort',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.snowplow.multi_sort',
-                    'fqn': ['snowplow', 'views', 'multi_sort'],
-                    'empty': False,
-                    'package_name': 'snowplow',
-                    'refs': [],
-                    'depends_on': {
+                    path='view.sql',
+                    original_file_path='view.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    config=view_config,
+                    tags=[],
+                    raw_sql=self.find_input_by_name(
+                        models, 'view').get('raw_sql'),
+                    description='',
+                    columns=[]
+                ),
+                'model.snowplow.multi_sort': ParsedNode(
+                    alias='multi_sort',
+                    name='multi_sort',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.snowplow.multi_sort',
+                    fqn=['snowplow', 'views', 'multi_sort'],
+                    empty=False,
+                    package_name='snowplow',
+                    refs=[],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'path': get_os_path('views/multi_sort.sql'),
-                    'original_file_path': get_os_path('views/multi_sort.sql'),
-                    'root_path': get_os_path('/usr/src/app'),
-                    'config': multi_sort_config,
-                    'tags': [],
-                    'raw_sql': self.find_input_by_name(
-                        models, 'multi_sort').get('raw_sql')
-                }
+                    path=get_os_path('views/multi_sort.sql'),
+                    original_file_path=get_os_path('views/multi_sort.sql'),
+                    root_path=get_os_path('/usr/src/app'),
+                    config=multi_sort_config,
+                    tags=[],
+                    raw_sql=self.find_input_by_name(
+                        models, 'multi_sort').get('raw_sql'),
+                    description='',
+                    columns=[]
+                ),
             }
         )
 
@@ -1202,94 +1250,102 @@ class ParserTest(unittest.TestCase):
         relationships_sql = "{{ test_relationships(model=ref('model_one'), field='id', from='id', to=ref('model_two')) }}" # noqa
 
         expected = [
-            ParsedNode(**{
-                'alias': 'accepted_values_model_one_id__a__b',
-                'name': 'accepted_values_model_one_id__a__b',
-                'schema': 'analytics',
-                'resource_type': 'test',
-                'unique_id': 'test.root.accepted_values_model_one_id__a__b', # noqa
-                'fqn': ['root', 'schema_test',
+            ParsedNode(
+                alias='accepted_values_model_one_id__a__b',
+                name='accepted_values_model_one_id__a__b',
+                schema='analytics',
+                resource_type='test',
+                unique_id='test.root.accepted_values_model_one_id__a__b', # noqa
+                fqn=['root', 'schema_test',
                         'accepted_values_model_one_id__a__b'],
-                'empty': False,
-                'package_name': 'root',
-                'original_file_path': 'test_one.yml',
-                'root_path': get_os_path('/usr/src/app'),
-                'refs': [['model_one']],
-                'depends_on': {
+                empty=False,
+                package_name='root',
+                original_file_path='test_one.yml',
+                root_path=get_os_path('/usr/src/app'),
+                refs=[['model_one']],
+                depends_on={
                     'nodes': [],
                     'macros': []
                 },
-                'config': self.model_config,
-                'path': get_os_path(
+                config=self.model_config,
+                path=get_os_path(
                     'schema_test/accepted_values_model_one_id__a__b.sql'),
-                'tags': ['schema'],
-                'raw_sql': accepted_values_sql,
-            }),
-            ParsedNode(**{
-                'alias': 'not_null_model_one_id',
-                'name': 'not_null_model_one_id',
-                'schema': 'analytics',
-                'resource_type': 'test',
-                'unique_id': 'test.root.not_null_model_one_id',
-                'fqn': ['root', 'schema_test', 'not_null_model_one_id'],
-                'empty': False,
-                'package_name': 'root',
-                'root_path': get_os_path('/usr/src/app'),
-                'refs': [['model_one']],
-                'depends_on': {
+                tags=['schema'],
+                raw_sql=accepted_values_sql,
+                description='',
+                columns=[]
+            ),
+            ParsedNode(
+                alias='not_null_model_one_id',
+                name='not_null_model_one_id',
+                schema='analytics',
+                resource_type='test',
+                unique_id='test.root.not_null_model_one_id',
+                fqn=['root', 'schema_test', 'not_null_model_one_id'],
+                empty=False,
+                package_name='root',
+                root_path=get_os_path('/usr/src/app'),
+                refs=[['model_one']],
+                depends_on={
                     'nodes': [],
                     'macros': []
                 },
-                'config': self.model_config,
-                'original_file_path': 'test_one.yml',
-                'path': get_os_path(
+                config=self.model_config,
+                original_file_path='test_one.yml',
+                path=get_os_path(
                     'schema_test/not_null_model_one_id.sql'),
-                'tags': ['schema'],
-                'raw_sql': not_null_sql,
-            }),
-            ParsedNode(**{
-                'alias': 'relationships_model_one_id__id__ref_model_two_',
-                'name': 'relationships_model_one_id__id__ref_model_two_',
-                'schema': 'analytics',
-                'resource_type': 'test',
-                'unique_id': 'test.root.relationships_model_one_id__id__ref_model_two_', # noqa
-                'fqn': ['root', 'schema_test',
+                tags=['schema'],
+                raw_sql=not_null_sql,
+                description='',
+                columns=[]
+            ),
+            ParsedNode(
+                alias='relationships_model_one_id__id__ref_model_two_',
+                name='relationships_model_one_id__id__ref_model_two_',
+                schema='analytics',
+                resource_type='test',
+                unique_id='test.root.relationships_model_one_id__id__ref_model_two_', # noqa
+                fqn=['root', 'schema_test',
                         'relationships_model_one_id__id__ref_model_two_'],
-                'empty': False,
-                'package_name': 'root',
-                'original_file_path': 'test_one.yml',
-                'root_path': get_os_path('/usr/src/app'),
-                'refs': [['model_one'], ['model_two']],
-                'depends_on': {
+                empty=False,
+                package_name='root',
+                original_file_path='test_one.yml',
+                root_path=get_os_path('/usr/src/app'),
+                refs=[['model_one'], ['model_two']],
+                depends_on={
                     'nodes': [],
                     'macros': []
                 },
-                'config': self.model_config,
-                'path': get_os_path('schema_test/relationships_model_one_id__id__ref_model_two_.sql'), # noqa
-                'tags': ['schema'],
-                'raw_sql': relationships_sql,
-            }),
-            ParsedNode(**{
-                'alias': 'unique_model_one_id',
-                'name': 'unique_model_one_id',
-                'schema': 'analytics',
-                'resource_type': 'test',
-                'unique_id': 'test.root.unique_model_one_id',
-                'fqn': ['root', 'schema_test', 'unique_model_one_id'],
-                'empty': False,
-                'package_name': 'root',
-                'root_path': get_os_path('/usr/src/app'),
-                'refs': [['model_one']],
-                'depends_on': {
+                config=self.model_config,
+                path=get_os_path('schema_test/relationships_model_one_id__id__ref_model_two_.sql'), # noqa
+                tags=['schema'],
+                raw_sql=relationships_sql,
+                description='',
+                columns=[]
+            ),
+            ParsedNode(
+                alias='unique_model_one_id',
+                name='unique_model_one_id',
+                schema='analytics',
+                resource_type='test',
+                unique_id='test.root.unique_model_one_id',
+                fqn=['root', 'schema_test', 'unique_model_one_id'],
+                empty=False,
+                package_name='root',
+                root_path=get_os_path('/usr/src/app'),
+                refs=[['model_one']],
+                depends_on={
                     'nodes': [],
                     'macros': []
                 },
-                'config': self.model_config,
-                'original_file_path': 'test_one.yml',
-                'path': get_os_path('schema_test/unique_model_one_id.sql'),
-                'tags': ['schema'],
-                'raw_sql': unique_sql,
-            }),
+                config=self.model_config,
+                original_file_path='test_one.yml',
+                path=get_os_path('schema_test/unique_model_one_id.sql'),
+                tags=['schema'],
+                raw_sql=unique_sql,
+                description='',
+                columns=[]
+            ),
         ]
         self.assertEqual(
             results,
@@ -1313,7 +1369,8 @@ class ParserTest(unittest.TestCase):
                 'root': self.root_project_config,
                 'snowplow': self.snowplow_project_config
             },
-            root_dir=get_os_path('/usr/src/app')
+            root_dir=get_os_path('/usr/src/app'),
+            macros=None
         ))
 
         # split this into tests and patches, assert there's nothing else
@@ -1348,7 +1405,9 @@ class ParserTest(unittest.TestCase):
                 path=get_os_path(
                     'schema_test/accepted_values_model_one_id__a__b.sql'),
                 tags=['schema'],
-                raw_sql=accepted_values_sql
+                raw_sql=accepted_values_sql,
+                description='',
+                columns=[]
             ),
             ParsedNode(
                 alias='not_null_model_one_id',
@@ -1366,7 +1425,9 @@ class ParserTest(unittest.TestCase):
                 original_file_path='test_one.yml',
                 path=get_os_path('schema_test/not_null_model_one_id.sql'),
                 tags=['schema'],
-                raw_sql=not_null_sql
+                raw_sql=not_null_sql,
+                description='',
+                columns=[]
             ),
             ParsedNode(
                 alias='relationships_model_one_id__id__ref_model_two_',
@@ -1385,7 +1446,9 @@ class ParserTest(unittest.TestCase):
                 config=self.model_config,
                 path=get_os_path('schema_test/relationships_model_one_id__id__ref_model_two_.sql'), # noqa
                 tags=['schema'],
-                raw_sql=relationships_sql
+                raw_sql=relationships_sql,
+                description='',
+                columns=[]
             ),
             ParsedNode(
                 alias='some_test_model_one_value',
@@ -1403,7 +1466,9 @@ class ParserTest(unittest.TestCase):
                 config=self.model_config,
                 path=get_os_path('schema_test/some_test_model_one_value.sql'),
                 tags=['schema'],
-                raw_sql=some_test_sql
+                raw_sql=some_test_sql,
+                description='',
+                columns=[]
             ),
             ParsedNode(
                 alias='unique_model_one_id',
@@ -1421,7 +1486,9 @@ class ParserTest(unittest.TestCase):
                 original_file_path='test_one.yml',
                 path=get_os_path('schema_test/unique_model_one_id.sql'),
                 tags=['schema'],
-                raw_sql=unique_sql
+                raw_sql=unique_sql,
+                description='',
+                columns=[]
             ),
         ]
         self.assertEqual(tests, expected_tests)
@@ -1434,6 +1501,7 @@ class ParserTest(unittest.TestCase):
                     'name': 'id',
                     'description': 'user ID',
                 }],
+                docrefs=[],
             ),
         ]
         self.assertEqual(patches, expected_patches)
@@ -1449,35 +1517,37 @@ class ParserTest(unittest.TestCase):
             'raw_sql': "select * from {{ref('base')}}"
         }]
 
-        self.assertEquals(
+        self.assertEqual(
             DataTestParser.parse_sql_nodes(
                 tests,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
-                'test.root.no_events': {
-                    'alias': 'no_events',
-                    'name': 'no_events',
-                    'schema': 'analytics',
-                    'resource_type': 'test',
-                    'unique_id': 'test.root.no_events',
-                    'fqn': ['root', 'no_events'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'refs': [['base']],
-                    'depends_on': {
+                'test.root.no_events': ParsedNode(
+                    alias='no_events',
+                    name='no_events',
+                    schema='analytics',
+                    resource_type='test',
+                    unique_id='test.root.no_events',
+                    fqn=['root', 'no_events'],
+                    empty=False,
+                    package_name='root',
+                    refs=[['base']],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'config': self.model_config,
-                    'path': 'no_events.sql',
-                    'original_file_path': 'no_events.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'tags': [],
-                    'raw_sql': self.find_input_by_name(
-                        tests, 'no_events').get('raw_sql')
-                }
+                    config=self.model_config,
+                    path='no_events.sql',
+                    original_file_path='no_events.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    tags=[],
+                    raw_sql=self.find_input_by_name(
+                        tests, 'no_events').get('raw_sql'),
+                    description='',
+                    columns=[]
+                )
             }
         )
 
@@ -1497,7 +1567,7 @@ class ParserTest(unittest.TestCase):
 
         self.assertTrue(callable(result['macro.root.simple'].generator))
 
-        self.assertEquals(
+        self.assertEqual(
             result,
             {
                 'macro.root.simple': {
@@ -1533,7 +1603,7 @@ class ParserTest(unittest.TestCase):
 
         self.assertTrue(callable(result['macro.root.simple'].generator))
 
-        self.assertEquals(
+        self.assertEqual(
             result,
             {
                 'macro.root.simple': {
@@ -1563,35 +1633,37 @@ class ParserTest(unittest.TestCase):
             'raw_sql': ("select *, {{package.simple(1, 2)}} from events"),
         }]
 
-        self.assertEquals(
+        self.assertEqual(
             ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
-                'model.root.model_one': {
-                    'alias': 'model_one',
-                    'name': 'model_one',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.model_one',
-                    'fqn': ['root', 'model_one'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'original_file_path': 'model_one.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'refs': [],
-                    'depends_on': {
+                'model.root.model_one': ParsedNode(
+                    alias='model_one',
+                    name='model_one',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.root.model_one',
+                    fqn=['root', 'model_one'],
+                    empty=False,
+                    package_name='root',
+                    original_file_path='model_one.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    refs=[],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'config': self.model_config,
-                    'tags': [],
-                    'path': 'model_one.sql',
-                    'raw_sql': self.find_input_by_name(
-                        models, 'model_one').get('raw_sql')
-                }
+                    config=self.model_config,
+                    tags=[],
+                    path='model_one.sql',
+                    raw_sql=self.find_input_by_name(
+                        models, 'model_one').get('raw_sql'),
+                    description='',
+                    columns=[]
+                )
             }
         )
 
@@ -1606,34 +1678,36 @@ class ParserTest(unittest.TestCase):
             'raw_sql': ("select *, {{ simple(1, 2) }} from events"),
         }]
 
-        self.assertEquals(
+        self.assertEqual(
             ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
-                'model.root.model_one': {
-                    'alias': 'model_one',
-                    'name': 'model_one',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.model_one',
-                    'fqn': ['root', 'model_one'],
-                    'empty': False,
-                    'package_name': 'root',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'refs': [],
-                    'depends_on': {
+                'model.root.model_one': ParsedNode(
+                    alias='model_one',
+                    name='model_one',
+                    schema='analytics',
+                    resource_type='model',
+                    unique_id='model.root.model_one',
+                    fqn=['root', 'model_one'],
+                    empty=False,
+                    package_name='root',
+                    root_path=get_os_path('/usr/src/app'),
+                    refs=[],
+                    depends_on={
                         'nodes': [],
                         'macros': []
                     },
-                    'config': self.model_config,
-                    'tags': [],
-                    'path': 'model_one.sql',
-                    'original_file_path': 'model_one.sql',
-                    'raw_sql': self.find_input_by_name(
-                        models, 'model_one').get('raw_sql')
-                }
+                    config=self.model_config,
+                    tags=[],
+                    path='model_one.sql',
+                    original_file_path='model_one.sql',
+                    raw_sql=self.find_input_by_name(
+                        models, 'model_one').get('raw_sql'),
+                    description='',
+                    columns=[]
+                )
             }
         )

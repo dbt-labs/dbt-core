@@ -18,15 +18,17 @@ class GraphLoader(object):
         nodes = {}
         for loader in cls._LOADERS:
             nodes.update(loader.load_all(root_project, all_projects, macros))
+        docs = DocumentationLoader.load_all(root_project, all_projects)
 
         tests, patches = SchemaTestLoader.load_all(root_project, all_projects)
 
-        manifest = ParsedManifest(nodes=nodes, macros=macros,
+        manifest = ParsedManifest(nodes=nodes, macros=macros, docs=docs,
                                   generated_at=timestring())
         manifest.add_nodes(tests)
         manifest.patch_nodes(patches)
 
         manifest = dbt.parser.ParserUtils.process_refs(manifest, root_project)
+        manifest = dbt.parser.ParserUtils.process_docs(manifest, root_project)
         return manifest
 
     @classmethod
@@ -216,6 +218,17 @@ class SeedLoader(ResourceLoader):
             relative_dirs=project.get('data-paths', []),
             macros=macros)
 
+
+class DocumentationLoader(ResourceLoader):
+    @classmethod
+    def load_project(cls, root_project, all_projects, project, project_name,
+                     macros):
+        return dbt.parser.DocumentationParser.load_and_parse(
+            package_name=project_name,
+            root_project=root_project,
+            all_projects=all_projects,
+            root_dir=project.get('project-root'),
+            relative_dirs=project.get('docs-paths', []))
 
 # node loaders
 GraphLoader.register(ModelLoader)
