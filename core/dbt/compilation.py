@@ -359,7 +359,7 @@ class Compiler:
         fire_event(CompilingNode(unique_id=node.unique_id))
 
         data = node.to_dict(omit_none=True)
-        data.update({
+        data.update(
             'compiled': False,
             'compiled_sql': None,
             'extra_ctes_injected': False,
