@@ -81,7 +81,6 @@ class BaseParser(object):
         )
         node['fqn'] = fqn
         node['tags'] = tags
-        node['config_reference'] = config
 
         # Set this temporarily. Not the full config yet (as config() hasn't
         # been called from jinja yet). But the Var() call below needs info
@@ -101,8 +100,10 @@ class BaseParser(object):
         # make a manifest with just the macros to get the context
         manifest = Manifest(macros=macros, nodes={}, docs={},
                             generated_at=dbt.utils.timestring())
-        context = dbt.context.parser.generate(node, root_project_config,
-                                              manifest)
+
+        parsed_node = ParsedNode(**node)
+        context = dbt.context.parser.generate(parsed_node, root_project_config,
+                                              manifest, config)
 
         dbt.clients.jinja.get_rendered(
             node.get('raw_sql'), context, node,
@@ -129,7 +130,6 @@ class BaseParser(object):
         for hook_type in dbt.hooks.ModelHookType.Both:
             node['config'][hook_type] = dbt.hooks.get_hooks(node, hook_type)
 
-        del node['config_reference']
         node.setdefault('columns', [])
         node.setdefault('description', '')
 

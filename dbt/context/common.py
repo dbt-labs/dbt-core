@@ -340,7 +340,7 @@ def create_adapter(adapter_type, relation_type):
     return AdapterWithContext
 
 
-def generate(model, project_cfg, manifest, provider=None):
+def generate(model, project_cfg, manifest, source_config=None, provider=None):
     """
     Not meant to be called directly. Call with either:
         dbt.context.parser.generate
@@ -382,7 +382,7 @@ def generate(model, project_cfg, manifest, provider=None):
             "Column": adapter.Column,
         },
         "column": adapter.Column,
-        "config": provider.Config(model),
+        "config": provider.Config(model, source_config),
         "env_var": _env_var,
         "exceptions": dbt.exceptions,
         "execute": provider.execute,

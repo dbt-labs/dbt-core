@@ -61,8 +61,9 @@ def ref(db_wrapper, model, project_cfg, profile, manifest):
 
 
 class Config:
-    def __init__(self, model):
+    def __init__(self, model, source_config=None):
         self.model = model
+        # we never use or get a source config, only the parser cares
 
     def __call__(*args, **kwargs):
         return ''
@@ -95,4 +96,4 @@ class Config:
 
 def generate(model, project_cfg, manifest):
     return dbt.context.common.generate(
-        model, project_cfg, manifest, dbt.context.runtime)
+        model, project_cfg, manifest, None, dbt.context.runtime)
