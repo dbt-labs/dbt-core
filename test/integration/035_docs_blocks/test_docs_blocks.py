@@ -60,6 +60,50 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
         )
         self.assertEqual(len(model_data['columns']), 3)
 
+    @use_profile('postgres')
+    def test_alternative_docs_path(self):
+        self.use_default_project({"docs-paths": [self.dir("docs")]})
+        self.assertEqual(len(self.run_dbt()), 1)
+
+        self.assertTrue(os.path.exists('./target/manifest.json'))
+
+        with open('./target/manifest.json') as fp:
+            manifest = json.load(fp)
+
+        model_data = manifest['nodes']['model.test.model']
+        self.assertEqual(
+            model_data['description'],
+            'Alt text about the model'
+        )
+        self.assertIn(
+            {
+                'name': 'id',
+                'description': 'The user ID number with alternative text'
+            },
+            model_data['columns']
+        )
+        self.assertIn(
+            {
+                'name': 'first_name',
+                'description': "The user's first name",
+            },
+            model_data['columns']
+        )
+
+        self.assertIn(
+            {
+                'name': 'last_name',
+                'description': "The user's last name in this other file",
+            },
+            model_data['columns']
+        )
+        self.assertEqual(len(model_data['columns']), 3)
+
+    @use_profile('postgres')
+    def test_alternative_docs_path_missing(self):
+        self.use_default_project({"docs-paths": [self.dir("not-docs")]})
+        with self.assertRaises(dbt.exceptions.CompilationException):
+            self.run_dbt()
 
 class TestMissingDocsBlocks(DBTIntegrationTest):
     @property
@@ -80,7 +124,7 @@ class TestMissingDocsBlocks(DBTIntegrationTest):
     def test_missing_doc_ref(self):
         # The run should fail since we could not find the docs reference.
         with self.assertRaises(dbt.exceptions.CompilationException):
-            self.run_dbt(expect_pass=False)
+            self.run_dbt()
 
 class TestBadDocsBlocks(DBTIntegrationTest):
     @property
@@ -102,3 +146,5 @@ class TestBadDocsBlocks(DBTIntegrationTest):
         # The run should fail since we could not find the docs reference.
         with self.assertRaises(dbt.exceptions.CompilationException):
             self.run_dbt(expect_pass=False)
+
+

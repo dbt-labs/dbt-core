@@ -228,7 +228,7 @@ class DocumentationLoader(ResourceLoader):
             root_project=root_project,
             all_projects=all_projects,
             root_dir=project.get('project-root'),
-            relative_dirs=project.get('source-paths', []))
+            relative_dirs=project.get('docs-paths', []))
 
 # node loaders
 GraphLoader.register(ModelLoader)

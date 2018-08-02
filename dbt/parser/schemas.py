@@ -408,7 +408,7 @@ class SchemaParser(BaseParser):
             yield 'test', node
 
         context = {'doc': dbt.context.parser.docs(model, docrefs)}
-        description = model.get('description')
+        description = model.get('description', '')
         dbt.clients.jinja.get_rendered(description, context)
 
         patch = ParsedNodePatch(
