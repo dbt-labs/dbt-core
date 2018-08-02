@@ -1,6 +1,7 @@
 
-{% macro test_relationships(model, field, to, from) %}
+{% macro test_relationships(model, to, from) %}
 
+{% set column_name = kwargs.get('column_name', kwargs.get('field')) %}
 
 select count(*)
 from (
@@ -10,7 +11,7 @@ from (
 
     from {{ model }}
     where {{ from }} is not null
-      and {{ from }} not in (select {{ field }}
+      and {{ from }} not in (select {{ column_name }}
                              from {{ to }})
 
 ) validation_errors

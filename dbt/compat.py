@@ -15,6 +15,11 @@ else:
     basestring = str
     bigint = int
 
+if WHICH_PYTHON == 2:
+    from SimpleHTTPServer import SimpleHTTPRequestHandler
+else:
+    from http.server import SimpleHTTPRequestHandler
+
 
 def to_unicode(s):
     if WHICH_PYTHON == 2:

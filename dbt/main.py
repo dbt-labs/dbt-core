@@ -18,6 +18,7 @@ import dbt.task.seed as seed_task
 import dbt.task.test as test_task
 import dbt.task.archive as archive_task
 import dbt.task.generate as generate_task
+import dbt.task.serve as serve_task
 
 import dbt.tracking
 import dbt.config as config
@@ -421,6 +422,10 @@ def parse_args(args):
     generate_sub = docs_subs.add_parser('generate', parents=[base_subparser])
     generate_sub.set_defaults(cls=generate_task.GenerateTask,
                               which='generate')
+
+    serve_sub = docs_subs.add_parser('serve', parents=[base_subparser])
+    serve_sub.set_defaults(cls=serve_task.ServeTask,
+                           which='serve')
 
     sub = subs.add_parser('test', parents=[base_subparser])
     sub.add_argument(

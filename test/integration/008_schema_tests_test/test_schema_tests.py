@@ -18,7 +18,7 @@ class TestSchemaTests(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/008_schema_tests_test/models"
+        return "test/integration/008_schema_tests_test/models-v1/models"
 
     def run_schema_validations(self):
         project = read_project('dbt_project.yml')
@@ -32,6 +32,7 @@ class TestSchemaTests(DBTIntegrationTest):
         results = self.run_dbt()
         self.assertEqual(len(results), 4)
         test_results = self.run_schema_validations()
+        self.assertEqual(len(test_results), 17)
 
         for result in test_results:
             # assert that all deliberately failing tests actually fail
@@ -47,6 +48,8 @@ class TestSchemaTests(DBTIntegrationTest):
                 # status = # of failing rows
                 self.assertEqual(result.status, 0)
 
+        self.assertEqual(sum(x.status for x in test_results), 5)
+
 
 class TestMalformedSchemaTests(DBTIntegrationTest):
 
@@ -60,7 +63,7 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/008_schema_tests_test/models-malformed"
+        return "test/integration/008_schema_tests_test/models-v1/malformed"
 
     def run_schema_validations(self):
         project = read_project('dbt_project.yml')
@@ -77,6 +80,7 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
 
         ran_tests = self.run_schema_validations()
         self.assertEqual(len(ran_tests), 2)
+        self.assertEqual(sum(x.status for x in ran_tests), 0)
 
 
 class TestCustomSchemaTests(DBTIntegrationTest):
@@ -95,7 +99,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         # dbt-integration-project contains a schema.yml file
         # both should work!
         return {
-            "macro-paths": ["test/integration/008_schema_tests_test/macros"],
+            "macro-paths": ["test/integration/008_schema_tests_test/macros-v1"],
             "repositories": [
                 'https://github.com/fishtown-analytics/dbt-utils',
                 'https://github.com/fishtown-analytics/dbt-integration-project'
@@ -104,7 +108,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/008_schema_tests_test/models-custom"
+        return "test/integration/008_schema_tests_test/models-v1/custom"
 
     def run_schema_validations(self):
         project = read_project('dbt_project.yml')
@@ -120,9 +124,11 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         self.assertEqual(len(results), 4)
 
         test_results = self.run_schema_validations()
+        self.assertEqual(len(test_results), 6)
 
         expected_failures = ['unique', 'every_value_is_blue']
 
         for result in test_results:
             if result.errored:
                 self.assertTrue(result.node['name'] in expected_failures)
+        self.assertEqual(sum(x.status for x in test_results), 52)

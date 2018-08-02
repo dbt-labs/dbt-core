@@ -140,7 +140,32 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'quoting': {}
                     },
                     'schema': my_schema_name,
-                    'alias': 'model'
+                    'alias': 'model',
+                    'description': 'The test model',
+                    'columns': [
+                        {
+                            'name': 'id',
+                            'description': 'The user ID number',
+                        },
+                        {
+                            'name': 'first_name',
+                            'description': "The user's first name",
+                        },
+                        {
+                            'name': 'email',
+                            'description': "The user's email",
+                        },
+                        {
+                            'name': 'ip_address',
+                            'description': "The user's IP address",
+                        },
+                        {
+                            'name': 'updated_at',
+                            'description': "The last time this user's email was updated",
+                        },
+                    ],
+                    'patch_path': self.dir('models/schema.yml'),
+                    'docrefs': [],
                 },
                 'seed.test.seed': {
                     'path': 'seed.csv',
@@ -167,7 +192,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'quoting': {}
                     },
                     'schema': my_schema_name,
-                    'alias': 'seed'
+                    'alias': 'seed',
+                    'description': '',
+                    'columns': [],
                 },
             },
             'parent_map': {
@@ -178,6 +205,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.model': [],
                 'seed.test.seed': ['model.test.model'],
             },
+            'docs': {},
         }
 
     def verify_manifest(self, expected_manifest):
@@ -188,7 +216,8 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         self.assertEqual(
             set(manifest),
-            {'nodes', 'macros', 'parent_map', 'child_map', 'generated_at'}
+            {'nodes', 'macros', 'parent_map', 'child_map', 'generated_at',
+             'docs'}
         )
 
         self.verify_manifest_macros(manifest)
@@ -470,7 +499,32 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'root_path': os.getcwd(),
                     'schema': my_schema_name,
                     'tags': [],
-                    'unique_id': 'model.test.model'
+                    'unique_id': 'model.test.model',
+                    'columns': [
+                        {
+                            'name': 'field_1',
+                            'description': 'The first field',
+                        },
+                        {
+                            'name': 'field_2',
+                            'description': 'The second field',
+                        },
+                        {
+                            'name': 'field_3',
+                            'description': 'The third field',
+                        },
+                        {
+                            'name': 'nested_field.field_4',
+                            'description': 'The first nested field',
+                        },
+                        {
+                            'name': 'nested_field.field_5',
+                            'description': 'The second nested field',
+                        },
+                    ],
+                    'description': 'The test model',
+                    'patch_path': self.dir('bq_models/schema.yml'),
+                    'docrefs': [],
                 },
                 'model.test.seed': {
                     'alias': 'seed',
@@ -499,7 +553,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'root_path': os.getcwd(),
                     'schema': my_schema_name,
                     'tags': [],
-                    'unique_id': 'model.test.seed'
+                    'unique_id': 'model.test.seed',
+                    'columns': [],
+                    'description': '',
                 }
             },
             'child_map': {
@@ -510,6 +566,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.model': ['model.test.seed'],
                 'model.test.seed': []
             },
+            'docs': {},
         }
         self.verify_manifest(expected_manifest)
 
@@ -690,7 +747,32 @@ class TestDocsGenerate(DBTIntegrationTest):
                         "quoting": {},
                     },
                     "schema": my_schema_name,
-                    "alias": "model"
+                    "alias": "model",
+                    'description': 'The test model',
+                    'columns': [
+                        {
+                            'name': 'id',
+                            'description': 'The user ID number',
+                        },
+                        {
+                            'name': 'first_name',
+                            'description': "The user's first name",
+                        },
+                        {
+                            'name': 'email',
+                            'description': "The user's email",
+                        },
+                        {
+                            'name': 'ip_address',
+                            'description': "The user's IP address",
+                        },
+                        {
+                            'name': 'updated_at',
+                            'description': "The last time this user's email was updated",
+                        },
+                    ],
+                    'patch_path': self.dir('rs_models/schema.yml'),
+                    'docrefs': [],
                 },
                 "seed.test.seed": {
                     "path": "seed.csv",
@@ -719,7 +801,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         "quoting": {},
                     },
                     "schema": my_schema_name,
-                    "alias": "seed"
+                    "alias": "seed",
+                    'columns': [],
+                    'description': '',
                 },
             },
             "parent_map": {
@@ -729,6 +813,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             "child_map": {
                 "model.test.model": [],
                 "seed.test.seed": ["model.test.model"]
-            }
+            },
+            'docs': {},
         }
         self.verify_manifest(expected_manifest)

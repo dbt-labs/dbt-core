@@ -327,11 +327,12 @@ class DBTIntegrationTest(unittest.TestCase):
     def profile_config(self):
         return {}
 
-    def run_dbt(self, args=None, expect_pass=True):
+    def run_dbt(self, args=None, expect_pass=True, strict=True):
         if args is None:
             args = ["run"]
 
-        args = ["--strict"] + args
+        if strict:
+            args = ["--strict"] + args
         logger.info("Invoking dbt with {}".format(args))
 
         res, success = dbt.handle_and_check(args)

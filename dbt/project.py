@@ -70,6 +70,9 @@ class Project(object):
 
         self.cfg = default_project_cfg.copy()
         self.cfg.update(cfg)
+        # docs paths defaults to the exact value of source-paths
+        if 'docs-paths' not in self.cfg:
+            self.cfg['docs-paths'] = self.cfg['source-paths'][:]
         self.profiles = default_profiles.copy()
         self.profiles.update(profiles)
         self.profiles_dir = profiles_dir
