@@ -211,7 +211,7 @@ class Compiler(object):
     def write_manifest_file(self, manifest):
         """Write the manifest file to disk.
 
-        manifest should be a ParsedManifest.
+        manifest should be a Manifest.
         """
         filename = manifest_file_name
         manifest_path = os.path.join(self.project['target-path'], filename)

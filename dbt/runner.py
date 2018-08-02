@@ -3,6 +3,8 @@ import time
 
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.contracts.graph.parsed import ParsedNode
+from dbt.contracts.graph.any import CompileResultNode
 
 import dbt.clients.jinja
 import dbt.compilation
@@ -128,8 +130,10 @@ class RunManager(object):
                     if not Runner.is_ephemeral_model(result.node):
                         node_results.append(result)
 
-                    node_id = result.node.get('unique_id')
-                    manifest.nodes[node_id] = result.node
+
+                    node = CompileResultNode(**result.node)
+                    node_id = node.unique_id
+                    manifest.nodes[node_id] = node
 
                     if result.errored:
                         for dep_node_id in self.get_dependent(linker, node_id):

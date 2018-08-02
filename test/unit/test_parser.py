@@ -8,7 +8,8 @@ from dbt.parser import ModelParser, MacroParser, DataTestParser, SchemaParser, P
 from dbt.utils import timestring
 
 from dbt.node_types import NodeType
-from dbt.contracts.graph.parsed import ParsedManifest, ParsedNode, ParsedMacro, ParsedNodePatch
+from dbt.contracts.graph.any import Manifest
+from dbt.contracts.graph.parsed import ParsedNode, ParsedMacro, ParsedNodePatch
 from dbt.contracts.graph.unparsed import UnparsedNode
 
 def get_os_path(unix_path):
@@ -733,7 +734,7 @@ class ParserTest(unittest.TestCase):
             }
         }
 
-        manifest = ParsedManifest(
+        manifest = Manifest(
             nodes={k: ParsedNode(**v) for (k,v) in graph['nodes'].items()},
             macros={k: ParsedMacro(**v) for (k,v) in graph['macros'].items()},
             docs={},

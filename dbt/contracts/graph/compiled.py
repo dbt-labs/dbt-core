@@ -3,7 +3,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import deep_merge
 
 from dbt.contracts.graph.parsed import PARSED_NODE_CONTRACT, \
-    PARSED_MACRO_CONTRACT
+    PARSED_MACRO_CONTRACT, ParsedNode
 
 COMPILED_NODE_CONTRACT = deep_merge(
     PARSED_NODE_CONTRACT,
@@ -85,7 +85,7 @@ COMPILED_GRAPH_CONTRACT = {
 }
 
 
-class CompiledNode(APIObject):
+class CompiledNode(ParsedNode):
     SCHEMA = COMPILED_NODE_CONTRACT
 
 
