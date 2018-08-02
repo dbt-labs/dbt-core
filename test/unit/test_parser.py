@@ -768,6 +768,8 @@ class ParserTest(unittest.TestCase):
                         'root_path': get_os_path('/usr/src/app'),
                         'raw_sql': 'does not matter',
                         'agate_table': None,
+                        'columns': [],
+                        'description': '',
                     },
                     'model.root.events': {
                         'name': 'events',
@@ -790,6 +792,8 @@ class ParserTest(unittest.TestCase):
                         'root_path': get_os_path('/usr/src/app'),
                         'raw_sql': 'does not matter',
                         'agate_table': None,
+                        'columns': [],
+                        'description': '',
                     },
                     'model.root.dep': {
                         'name': 'dep',
@@ -812,6 +816,8 @@ class ParserTest(unittest.TestCase):
                         'root_path': get_os_path('/usr/src/app'),
                         'raw_sql': 'does not matter',
                         'agate_table': None,
+                        'columns': [],
+                        'description': '',
                     }
                 }
             }

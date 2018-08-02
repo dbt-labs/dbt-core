@@ -191,7 +191,7 @@ class Manifest(APIObject):
         """
         return self._find_by_name(name, package, 'nodes', NodeType.refable())
 
-    def get_materialization_macro(self, materialization_Name,
+    def get_materialization_macro(self, materialization_name,
                                   adapter_type=None):
         macro_name = dbt.utils.get_materialization_macro_name(
             materialization_name=materialization_name,
