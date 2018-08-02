@@ -800,7 +800,7 @@ class DefaultAdapter(object):
         context = dbt.context.runtime.generate(
             operation,
             project_cfg,
-            manifest.to_flat_graph(),
+            manifest,
         )
 
         operation.generator(context)()

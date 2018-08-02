@@ -12,22 +12,28 @@ from dbt.contracts.graph.unparsed import UNPARSED_NODE_CONTRACT, \
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
-HOOK_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'properties': {
-        'sql': {
-            'type': 'string',
+# TODO: which of these do we _really_ support? or is it both?
+HOOK_CONTRACT = {'anyOf': [
+    {
+        'type': 'object',
+        'additionalProperties': False,
+        'properties': {
+            'sql': {
+                'type': 'string',
+            },
+            'transaction': {
+                'type': 'boolean',
+            },
+            'index': {
+                'type': 'integer',
+            }
         },
-        'transaction': {
-            'type': 'boolean',
-        },
-        'index': {
-            'type': 'integer',
-        }
+        'required': ['sql', 'transaction'],
     },
-    'required': ['sql', 'transaction', 'index'],
-}
+    {
+        'type': 'string',
+    }
+]}
 
 
 CONFIG_CONTRACT = {
@@ -241,7 +247,7 @@ class ParsedNode(APIObject):
     @property
     def depends_on_nodes(self):
         """Return the list of node IDs that this node depends on."""
-        return self._contents['depends_on']['nodes']
+        return self.depends_on['nodes']
 
     def to_dict(self):
         """Similar to 'serialize', but tacks the agate_table attribute in too.
@@ -270,6 +276,17 @@ class ParsedNode(APIObject):
         })
         # patches always trigger re-validation
         self.validate()
+
+    def get_materialization(self):
+        return self.config.get('materialized')
+
+    @property
+    def build_path(self):
+        return self._contents.get('build_path')
+
+    @build_path.setter
+    def build_path(self, value):
+        self._contents['build_path'] = value
 
 
 # The parsed node update is only the 'patch', not the test. The test became a
@@ -375,6 +392,20 @@ PARSED_MACRO_CONTRACT = deep_merge(
 
 class ParsedMacro(APIObject):
     SCHEMA = PARSED_MACRO_CONTRACT
+
+    def __init__(self, template=None, **kwargs):
+        self.template = template
+        super(ParsedMacro, self).__init__(**kwargs)
+
+    @property
+    def generator(self):
+        """
+        Returns a function that can be called to render the macro results.
+        """
+        # TODO: we can generate self.template from the other properties
+        # available in this class. should we just generate this here?
+        return dbt.clients.jinja.macro_generator(
+            self.template, self._contents)
 
 
 # This is just the file + its ID

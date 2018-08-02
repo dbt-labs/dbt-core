@@ -15,11 +15,11 @@ from dbt.linker import Linker
 
 import dbt.compat
 import dbt.context.runtime
-import dbt.contracts.graph.compiled
 import dbt.contracts.project
 import dbt.exceptions
 import dbt.flags
 import dbt.loader
+from dbt.contracts.graph.compiled import CompiledNode, CompiledGraph
 
 from dbt.clients.system import write_file
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -48,43 +48,39 @@ def print_compile_stats(stats):
     logger.info("Found {}".format(stat_line))
 
 
-def prepend_ctes(model, flat_graph):
-    model, _, flat_graph = recursively_prepend_ctes(model, flat_graph)
+def prepend_ctes(model, manifest):
+    model, _, manifest = recursively_prepend_ctes(model, manifest)
 
-    return (model, flat_graph)
+    return (model, manifest)
 
 
-def recursively_prepend_ctes(model, flat_graph):
+def recursively_prepend_ctes(model, manifest):
     if dbt.flags.STRICT_MODE:
-        dbt.contracts.graph.compiled.CompiledNode(**model)
-        dbt.contracts.graph.compiled.CompiledGraph(**flat_graph)
+        # ensure that all the nodes in this manifest are compiled
+        CompiledGraph(**manifest.to_flat_graph())
 
-    model = model.copy()
-    prepend_ctes = OrderedDict()
+    prepended_ctes = OrderedDict()
 
-    if model.get('all_ctes_injected') is True:
-        return (model, model.get('extra_ctes').keys(), flat_graph)
+    for cte_id in model.extra_ctes:
+        cte_to_add = manifest.nodes.get(cte_id)
+        cte_to_add, new_prepended_ctes, manifest = recursively_prepend_ctes(
+            cte_to_add, manifest)
 
-    for cte_id in model.get('extra_ctes', {}):
-        cte_to_add = flat_graph.get('nodes').get(cte_id)
-        cte_to_add, new_prepend_ctes, flat_graph = recursively_prepend_ctes(
-            cte_to_add, flat_graph)
-
-        prepend_ctes.update(new_prepend_ctes)
+        prepended_ctes.update(new_prepended_ctes)
         new_cte_name = '__dbt__CTE__{}'.format(cte_to_add.get('name'))
-        prepend_ctes[cte_id] = ' {} as (\n{}\n)'.format(
+        prepended_ctes[cte_id] = ' {} as (\n{}\n)'.format(
             new_cte_name,
-            cte_to_add.get('compiled_sql'))
+            cte_to_add.compiled_sql)
 
-    model['extra_ctes_injected'] = True
-    model['extra_ctes'] = prepend_ctes
-    model['injected_sql'] = inject_ctes_into_sql(
-        model.get('compiled_sql'),
-        prepend_ctes)
+    model.extra_ctes_injected = True
+    model.extra_ctes = prepended_ctes
+    model.injected_sql = inject_ctes_into_sql(
+        model.compiled_sql,
+        prepended_ctes)
 
-    flat_graph['nodes'][model.get('unique_id')] = model
+    manifest.nodes[model.unique_id] = model
 
-    return (model, prepend_ctes, flat_graph)
+    return (model, prepended_ctes, manifest)
 
 
 def inject_ctes_into_sql(sql, ctes):
@@ -154,44 +150,44 @@ class Compiler(object):
 
         return target_path
 
-    def compile_node(self, node, flat_graph):
+    def compile_node(self, node, manifest):
         logger.debug("Compiling {}".format(node.get('unique_id')))
 
-        compiled_node = node.copy()
-        compiled_node.update({
+        data = node.to_dict()
+        data.update({
             'compiled': False,
             'compiled_sql': None,
             'extra_ctes_injected': False,
             'extra_ctes': OrderedDict(),
             'injected_sql': None,
         })
+        compiled_node = CompiledNode(**data)
 
+        # TODO: make generate() take a real CompiledNode.
         context = dbt.context.runtime.generate(
-            compiled_node, self.project, flat_graph)
+            compiled_node.to_dict(), self.project, manifest)
 
-        compiled_node['compiled_sql'] = dbt.clients.jinja.get_rendered(
+        compiled_node.compiled_sql = dbt.clients.jinja.get_rendered(
             node.get('raw_sql'),
             context,
             node)
 
-        compiled_node['compiled'] = True
+        compiled_node.compiled = True
 
-        injected_node, _ = prepend_ctes(compiled_node, flat_graph)
+        injected_node, _ = prepend_ctes(compiled_node, manifest)
 
-        if compiled_node.get('resource_type') in [NodeType.Test,
-                                                  NodeType.Analysis,
-                                                  NodeType.Operation]:
+        should_wrap = {NodeType.Test, NodeType.Analysis, NodeType.Operation}
+        if injected_node.resource_type in should_wrap:
             # data tests get wrapped in count(*)
             # TODO : move this somewhere more reasonable
-            if 'data' in injected_node['tags'] and \
+            if 'data' in injected_node.tags and \
                is_type(injected_node, NodeType.Test):
-                injected_node['wrapped_sql'] = (
+                injected_node.wrapped_sql = (
                     "select count(*) from (\n{test_sql}\n) sbq").format(
-                        test_sql=injected_node['injected_sql'])
+                        test_sql=injected_node.injected_sql)
             else:
                 # don't wrap schema tests or analyses.
-                injected_node['wrapped_sql'] = injected_node.get(
-                    'injected_sql')
+                injected_node.wrapped_sql = injected_node.injected_sql
 
         elif is_type(injected_node, NodeType.Archive):
             # unfortunately we do everything automagically for
@@ -204,7 +200,7 @@ class Compiler(object):
             pass
 
         else:
-            injected_node['wrapped_sql'] = None
+            injected_node.wrapped_sql = None
 
         return injected_node
 

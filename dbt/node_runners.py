@@ -88,7 +88,7 @@ class BaseRunner(object):
 
     @classmethod
     def is_refable(cls, node):
-        return node.get('resource_type') in NodeType.refable()
+        return node.resource_type in NodeType.refable()
 
     @classmethod
     def is_ephemeral(cls, node):
@@ -99,7 +99,6 @@ class BaseRunner(object):
         return cls.is_refable(node) and cls.is_ephemeral(node)
 
     def safe_run(self, manifest):
-        flat_graph = manifest.to_flat_graph()
         catchable_errors = (dbt.exceptions.CompilationException,
                             dbt.exceptions.RuntimeException)
 
@@ -114,7 +113,7 @@ class BaseRunner(object):
 
             # for ephemeral nodes, we only want to compile, not run
             if not self.is_ephemeral_model(self.node):
-                result = self.run(compiled_node, flat_graph)
+                result = self.run(compiled_node, manifest)
 
         except catchable_errors as e:
             if e.node is None:
@@ -124,7 +123,7 @@ class BaseRunner(object):
             result.status = 'ERROR'
 
         except dbt.exceptions.InternalException as e:
-            build_path = self.node.get('build_path')
+            build_path = self.node.build_path
             prefix = 'Internal error executing {}'.format(build_path)
 
             error = "{prefix}\n{error}\n\n{note}".format(
@@ -138,7 +137,7 @@ class BaseRunner(object):
 
         except Exception as e:
             prefix = "Unhandled error while executing {filepath}".format(
-                        filepath=self.node.get('build_path'))
+                        filepath=self.node.build_path)
 
             error = "{prefix}\n{error}".format(
                          prefix=dbt.ui.printer.red(prefix),
@@ -148,7 +147,7 @@ class BaseRunner(object):
             raise e
 
         finally:
-            node_name = self.node.get('name')
+            node_name = self.node.name
             self.adapter.release_connection(self.profile, node_name)
 
         result.execution_time = time.time() - started
@@ -157,18 +156,18 @@ class BaseRunner(object):
     def before_execute(self):
         raise NotImplementedException()
 
-    def execute(self, compiled_node, flat_graph):
+    def execute(self, compiled_node, manifest):
         raise NotImplementedException()
 
-    def run(self, compiled_node, flat_graph):
-        return self.execute(compiled_node, flat_graph)
+    def run(self, compiled_node, manifest):
+        return self.execute(compiled_node, manifest)
 
     def after_execute(self, result):
         raise NotImplementedException()
 
     def on_skip(self):
-        schema_name = self.node.get('schema')
-        node_name = self.node.get('name')
+        schema_name = self.node.schema
+        node_name = self.node.name
 
         if not self.is_ephemeral_model(self.node):
             dbt.ui.printer.print_skip_line(self.node, schema_name, node_name,
@@ -218,7 +217,7 @@ class CompileRunner(BaseRunner):
     def after_execute(self, result):
         pass
 
-    def execute(self, compiled_node, flat_graph):
+    def execute(self, compiled_node, manifest):
         return RunModelResult(compiled_node)
 
     def compile(self, manifest):
@@ -227,32 +226,31 @@ class CompileRunner(BaseRunner):
 
     @classmethod
     def _compile_node(cls, adapter, project, node, manifest):
-        flat_graph = manifest.to_flat_graph()
         compiler = dbt.compilation.Compiler(project)
-        node = compiler.compile_node(node, flat_graph)
+        node = compiler.compile_node(node, manifest)
         node = cls._inject_runtime_config(adapter, project, node)
 
-        if(node['injected_sql'] is not None and
+        if(node.injected_sql is not None and
            not (dbt.utils.is_type(node, NodeType.Archive))):
             logger.debug('Writing injected SQL for node "{}"'.format(
-                node['unique_id']))
+                node.unique_id))
 
             written_path = dbt.writer.write_node(
                 node,
                 project.get('target-path'),
                 'compiled',
-                node['injected_sql'])
+                node.injected_sql)
 
-            node['build_path'] = written_path
+            node.build_path = written_path
 
         return node
 
     @classmethod
     def _inject_runtime_config(cls, adapter, project, node):
-        wrapped_sql = node.get('wrapped_sql')
+        wrapped_sql = node.wrapped_sql
         context = cls._node_context(adapter, project, node)
         sql = dbt.clients.jinja.get_rendered(wrapped_sql, context)
-        node['wrapped_sql'] = sql
+        node.wrapped_sql = sql
         return node
 
     @classmethod
@@ -262,17 +260,17 @@ class CompileRunner(BaseRunner):
         def call_get_columns_in_table(schema_name, table_name):
             return adapter.get_columns_in_table(
                 profile, project, schema_name,
-                table_name, model_name=node.get('alias'))
+                table_name, model_name=node.alias)
 
         def call_get_missing_columns(from_schema, from_table,
                                      to_schema, to_table):
             return adapter.get_missing_columns(
                 profile, project, from_schema, from_table,
-                to_schema, to_table, node.get('alias'))
+                to_schema, to_table, node.alias)
 
         def call_already_exists(schema, table):
             return adapter.already_exists(
-                profile, project, schema, table, node.get('alias'))
+                profile, project, schema, table, node.alias)
 
         return {
             "run_started_at": dbt.tracking.active_user.run_started_at,
@@ -298,7 +296,6 @@ class ModelRunner(CompileRunner):
 
     @classmethod
     def run_hooks(cls, project, adapter, manifest, hook_type):
-        flat_graph = manifest.to_flat_graph()
         profile = project.run_environment()
 
         nodes = manifest.nodes.values()
@@ -318,7 +315,7 @@ class ModelRunner(CompileRunner):
             # ensure that a transaction is only created if dbt initiates it.
             adapter.clear_transaction(profile, model_name)
             compiled = cls._compile_node(adapter, project, hook, manifest)
-            statement = compiled['wrapped_sql']
+            statement = compiled.wrapped_sql
 
             hook_index = hook.get('index', len(hooks))
             hook_dict = dbt.hooks.get_hook_dict(statement, index=hook_index)
@@ -390,8 +387,8 @@ class ModelRunner(CompileRunner):
 
     def describe_node(self):
         materialization = dbt.utils.get_materialization(self.node)
-        schema_name = self.node.get('schema')
-        node_name = self.node.get('alias')
+        schema_name = self.node.schema
+        node_name = self.node.alias
         return "{} model {}.{}".format(materialization, schema_name, node_name)
 
     def print_start_line(self):
@@ -400,7 +397,7 @@ class ModelRunner(CompileRunner):
                                         self.num_nodes)
 
     def print_result_line(self, result):
-        schema_name = self.node.get('schema')
+        schema_name = self.node.schema
         dbt.ui.printer.print_model_result_line(result,
                                                schema_name,
                                                self.node_index,
@@ -413,13 +410,12 @@ class ModelRunner(CompileRunner):
         track_model_run(self.node_index, self.num_nodes, result)
         self.print_result_line(result)
 
-    def execute(self, model, flat_graph):
+    def execute(self, model, manifest):
         context = dbt.context.runtime.generate(
-            model, self.project.cfg, flat_graph)
+            model.to_dict(), self.project.cfg, manifest)
 
-        materialization_macro = dbt.utils.get_materialization_macro(
-            flat_graph,
-            dbt.utils.get_materialization(model),
+        materialization_macro = manifest.get_materialization_macro(
+            model.get_materialization(),
             self.adapter.type())
 
         if materialization_macro is None:
@@ -440,11 +436,11 @@ class TestRunner(CompileRunner):
         return False
 
     def describe_node(self):
-        node_name = self.node.get('name')
+        node_name = self.node.name
         return "test {}".format(node_name)
 
     def print_result_line(self, result):
-        schema_name = self.node.get('schema')
+        schema_name = self.node.schema
         dbt.ui.printer.print_test_result_line(result,
                                               schema_name,
                                               self.node_index,
@@ -458,8 +454,8 @@ class TestRunner(CompileRunner):
     def execute_test(self, test):
         res, table = self.adapter.execute_and_fetch(
             self.profile,
-            test.get('wrapped_sql'),
-            test.get('name'),
+            test.wrapped_sql,
+            test.name,
             auto_begin=True)
 
         num_rows = len(table.rows)
@@ -474,7 +470,7 @@ class TestRunner(CompileRunner):
     def before_execute(self):
         self.print_start_line()
 
-    def execute(self, test, flat_graph):
+    def execute(self, test, manifest):
         status = self.execute_test(test)
         return RunModelResult(test, status=status)
 
@@ -500,8 +496,8 @@ class ArchiveRunner(ModelRunner):
 class SeedRunner(ModelRunner):
 
     def describe_node(self):
-        schema_name = self.node.get('schema')
-        return "seed file {}.{}".format(schema_name, self.node['alias'])
+        schema_name = self.node.schema
+        return "seed file {}.{}".format(schema_name, self.node.alias)
 
     def before_execute(self):
         description = self.describe_node()
@@ -512,7 +508,7 @@ class SeedRunner(ModelRunner):
         return self.node
 
     def print_result_line(self, result):
-        schema_name = self.node.get('schema')
+        schema_name = self.node.schema
         dbt.ui.printer.print_seed_result_line(result,
                                               schema_name,
                                               self.node_index,

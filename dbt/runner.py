@@ -130,7 +130,6 @@ class RunManager(object):
                     if not Runner.is_ephemeral_model(result.node):
                         node_results.append(result)
 
-
                     node = CompileResultNode(**result.node)
                     node_id = node.unique_id
                     manifest.nodes[node_id] = node

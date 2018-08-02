@@ -99,16 +99,6 @@ def model_immediate_name(model, non_destructive):
         return "{}__dbt_tmp".format(model_name)
 
 
-def find_refable_by_name(flat_graph, target_name, target_package):
-    return find_by_name(flat_graph, target_name, target_package,
-                        'nodes', NodeType.refable())
-
-
-def find_macro_by_name(flat_graph, target_name, target_package):
-    return find_by_name(flat_graph, target_name, target_package,
-                        'macros', [NodeType.Macro])
-
-
 def find_operation_by_name(flat_graph, target_name, target_package):
     return find_by_name(flat_graph, target_name, target_package,
                         'macros', [NodeType.Operation])
@@ -180,39 +170,11 @@ def get_materialization_macro_name(materialization_name, adapter_type=None,
         return name
 
 
-def get_materialization_macro(flat_graph, materialization_name,
-                              adapter_type=None):
-    macro_name = get_materialization_macro_name(materialization_name,
-                                                adapter_type,
-                                                with_prefix=False)
-
-    macro = find_macro_by_name(
-        flat_graph,
-        macro_name,
-        None)
-
-    if adapter_type not in ('default', None) and macro is None:
-        macro_name = get_materialization_macro_name(materialization_name,
-                                                    adapter_type='default',
-                                                    with_prefix=False)
-        macro = find_macro_by_name(
-            flat_graph,
-            macro_name,
-            None)
-
-    return macro
-
-
 def get_operation_macro_name(operation_name, with_prefix=True):
     if with_prefix:
         return get_dbt_operation_name(operation_name)
     else:
         return operation_name
-
-
-def get_operation_macro(flat_graph, operation_name):
-    name = get_operation_macro_name(operation_name, with_prefix=False)
-    return find_operation_by_name(flat_graph, name, None)
 
 
 def get_docs_macro_name(docs_name, with_prefix=True):

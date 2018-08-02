@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 from dbt.api import APIObject
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import deep_merge
@@ -28,20 +30,28 @@ COMPILED_NODE_CONTRACT = deep_merge(
                 ),
                 'type': 'boolean',
             },
-            # TODO: add this back in, and add back to 'required' list
-            # 'extra_ctes': {
-            #     'type': 'array',
-            #     'items': {
-            #         'type': 'string',
-            #     }
-            # },
+            # TODO: properly represent this so we can serialize/deserialize and
+            # preserve order.
+            'extra_ctes': {
+                'type': 'object',
+                'additionalProperties': True,
+                'description': 'The injected CTEs for a model'
+            },
             'injected_sql': {
                 'type': ['string', 'null'],
+                'description': 'The SQL after CTEs have been injected',
+            },
+            'wrapped_sql': {
+                'type': ['string', 'null'],
+                'description': (
+                    'The SQL after it has been wrapped (for tests, '
+                    'operations, and analysis)'
+                ),
             },
         },
         'required': PARSED_NODE_CONTRACT['required'] + [
             'compiled', 'compiled_sql', 'extra_ctes_injected',
-            'injected_sql'
+            'injected_sql', 'extra_ctes'
         ]
     }
 )
@@ -87,6 +97,68 @@ COMPILED_GRAPH_CONTRACT = {
 
 class CompiledNode(ParsedNode):
     SCHEMA = COMPILED_NODE_CONTRACT
+
+    @property
+    def extra_ctes_injected(self):
+        return self._contents.get('extra_ctes_injected')
+
+    @extra_ctes_injected.setter
+    def extra_ctes_injected(self, value):
+        self._contents['extra_ctes_injected'] = value
+
+    @property
+    def extra_ctes(self):
+        return self._contents.get('extra_ctes')
+
+    @extra_ctes.setter
+    def extra_ctes(self, value):
+        self._contents['extra_ctes'] = value
+
+    @property
+    def injected_sql(self):
+        return self._contents.get('injected_sql')
+
+    @injected_sql.setter
+    def injected_sql(self, value):
+        self._contents['injected_sql'] = value
+
+    @property
+    def compiled(self):
+        return self._contents.get('compiled')
+
+    @compiled.setter
+    def compiled(self, value):
+        self._contents['compiled'] = value
+
+    @property
+    def compiled_sql(self):
+        return self._contents.get('compiled_sql')
+
+    @compiled_sql.setter
+    def compiled_sql(self, value):
+        self._contents['compiled_sql'] = value
+
+    @property
+    def injected_sql(self):
+        return self._contents.get('injected_sql')
+
+    @injected_sql.setter
+    def injected_sql(self, value):
+        self._contents['injected_sql'] = value
+
+    @property
+    def wrapped_sql(self):
+        return self._contents.get('wrapped_sql')
+
+    @wrapped_sql.setter
+    def wrapped_sql(self, value):
+        self._contents['wrapped_sql'] = value
+
+    def to_dict(self):
+        # if we have ctes, we want to preseve order, so deepcopy them.
+        ret = super(CompiledNode, self).to_dict()
+        ret['extra_ctes'] = deepcopy(self.extra_ctes)
+        return ret
 
 
 class CompiledGraph(APIObject):

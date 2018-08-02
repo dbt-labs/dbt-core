@@ -27,7 +27,10 @@ class GraphLoader(object):
         manifest.add_nodes(tests)
         manifest.patch_nodes(patches)
 
-        manifest = dbt.parser.ParserUtils.process_refs(manifest, root_project)
+        manifest = dbt.parser.ParserUtils.process_refs(
+            manifest,
+            root_project.get('name')
+        )
         manifest = dbt.parser.ParserUtils.process_docs(manifest, root_project)
         return manifest
 

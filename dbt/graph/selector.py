@@ -3,6 +3,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 
 from dbt.utils import is_enabled, get_materialization, coalesce
 from dbt.node_types import NodeType
+from dbt.contracts.graph.parsed import ParsedNode
 
 SELECTOR_PARENTS = '+'
 SELECTOR_CHILDREN = '+'
@@ -248,7 +249,9 @@ class NodeSelector(object):
 
         concurrent_dependency_list = []
         for level in dependency_list:
-            node_level = [self.linker.get_node(node) for node in level]
+            node_level = [
+                ParsedNode(**self.linker.get_node(node)) for node in level
+            ]
             concurrent_dependency_list.append(node_level)
 
         return concurrent_dependency_list

@@ -6,7 +6,7 @@ import dbt.context.common
 execute = False
 
 
-def ref(db_wrapper, model, project_cfg, profile, flat_graph):
+def ref(db_wrapper, model, project_cfg, profile, manifest):
 
     def ref(*args):
         if len(args) == 1 or len(args) == 2:
@@ -72,6 +72,6 @@ class Config:
         return ''
 
 
-def generate(model, project_cfg, flat_graph):
+def generate(model, project_cfg, manifest):
     return dbt.context.common.generate(
-        model, project_cfg, flat_graph, dbt.context.parser)
+        model, project_cfg, manifest, dbt.context.parser)

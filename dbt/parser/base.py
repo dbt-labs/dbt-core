@@ -11,6 +11,7 @@ import dbt.context.parser
 from dbt.utils import coalesce
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.contracts.graph.parsed import ParsedNode
+from dbt.contracts.graph.any import Manifest
 
 
 class BaseParser(object):
@@ -97,8 +98,11 @@ class BaseParser(object):
         default_alias = node.get('name')
         node['alias'] = default_alias
 
+        # make a manifest with just the macros to get the context
+        manifest = Manifest(macros=macros, nodes={}, docs={},
+                            generated_at=dbt.utils.timestring())
         context = dbt.context.parser.generate(node, root_project_config,
-                                              {"macros": macros})
+                                              manifest)
 
         dbt.clients.jinja.get_rendered(
             node.get('raw_sql'), context, node,

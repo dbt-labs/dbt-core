@@ -72,16 +72,16 @@ class DatabaseWrapper(object):
             self.profile, self.model.get('name'))
 
 
-def _add_macros(context, model, flat_graph):
+def _add_macros(context, model, manifest):
     macros_to_add = {'global': [], 'local': []}
 
-    for unique_id, macro in flat_graph.get('macros', {}).items():
-        if macro.get('resource_type') != NodeType.Macro:
+    for unique_id, macro in manifest.macros.items():
+        if macro.resource_type != NodeType.Macro:
             continue
-        package_name = macro.get('package_name')
+        package_name = macro.package_name
 
         macro_map = {
-            macro.get('name'): macro.generator(context)
+            macro.name: macro.generator(context)
         }
 
         if context.get(package_name) is None:
@@ -340,13 +340,14 @@ def create_adapter(adapter_type, relation_type):
     return AdapterWithContext
 
 
-def generate(model, project_cfg, flat_graph, provider=None):
+def generate(model, project_cfg, manifest, provider=None):
     """
     Not meant to be called directly. Call with either:
         dbt.context.parser.generate
     or
         dbt.context.runtime.generate
     """
+    flat_graph = manifest.to_flat_graph()
     if provider is None:
         raise dbt.exceptions.InternalException(
             "Invalid provider given to context: {}".format(provider))
@@ -386,6 +387,7 @@ def generate(model, project_cfg, flat_graph, provider=None):
         "exceptions": dbt.exceptions,
         "execute": provider.execute,
         "flags": dbt.flags,
+        # TODO: Do we have to leave this in?
         "graph": flat_graph,
         "log": log,
         "model": model,
@@ -396,7 +398,7 @@ def generate(model, project_cfg, flat_graph, provider=None):
         "post_hooks": post_hooks,
         "pre_hooks": pre_hooks,
         "ref": provider.ref(db_wrapper, model, project_cfg,
-                            profile, flat_graph),
+                            profile, manifest),
         "return": _return,
         "schema": model.get('schema', schema),
         "sql": model.get('injected_sql'),
@@ -414,10 +416,10 @@ def generate(model, project_cfg, flat_graph, provider=None):
     # the missing 'alias' attribute for operations
     #
     # https://github.com/fishtown-analytics/dbt/issues/878
-    if model.get('resource_type') == NodeType.Operation:
+    if model.resource_type == NodeType.Operation:
         this = db_wrapper.adapter.Relation.create(
                 schema=target['schema'],
-                identifier=model['name']
+                identifier=model.name
         )
     else:
         this = get_this_relation(db_wrapper, project_cfg, profile, model)
@@ -430,7 +432,7 @@ def generate(model, project_cfg, flat_graph, provider=None):
 
     # we make a copy of the context for each of these ^^
 
-    context = _add_macros(context, model, flat_graph)
+    context = _add_macros(context, model, manifest)
 
     context["write"] = write(model, project_cfg.get('target-path'), 'run')
     context["render"] = render(context, model)
