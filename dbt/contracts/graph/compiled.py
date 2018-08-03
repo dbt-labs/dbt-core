@@ -3,9 +3,12 @@ from copy import copy, deepcopy
 from dbt.api import APIObject
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import deep_merge
-
 from dbt.contracts.graph.parsed import PARSED_NODE_CONTRACT, \
     PARSED_MACRO_CONTRACT, ParsedNode
+
+import dbt.compat
+
+import sqlparse
 
 COMPILED_NODE_CONTRACT = deep_merge(
     PARSED_NODE_CONTRACT,
@@ -95,32 +98,76 @@ COMPILED_GRAPH_CONTRACT = {
 }
 
 
+def _inject_ctes_into_sql(sql, ctes):
+    """
+    `ctes` is a dict of CTEs in the form:
+
+      {
+        "cte_id_1": "__dbt__CTE__ephemeral as (select * from table)",
+        "cte_id_2": "__dbt__CTE__events as (select id, type from events)"
+      }
+
+    Given `sql` like:
+
+      "with internal_cte as (select * from sessions)
+       select * from internal_cte"
+
+    This will spit out:
+
+      "with __dbt__CTE__ephemeral as (select * from table),
+            __dbt__CTE__events as (select id, type from events),
+            with internal_cte as (select * from sessions)
+       select * from internal_cte"
+
+    (Whitespace enhanced for readability.)
+    """
+    if len(ctes) == 0:
+        return sql
+
+    parsed_stmts = sqlparse.parse(sql)
+    parsed = parsed_stmts[0]
+
+    with_stmt = None
+    for token in parsed.tokens:
+        if token.is_keyword and token.normalized == 'WITH':
+            with_stmt = token
+            break
+
+    if with_stmt is None:
+        # no with stmt, add one, and inject CTEs right at the beginning
+        first_token = parsed.token_first()
+        with_stmt = sqlparse.sql.Token(sqlparse.tokens.Keyword, 'with')
+        parsed.insert_before(first_token, with_stmt)
+    else:
+        # stmt exists, add a comma (which will come after injected CTEs)
+        trailing_comma = sqlparse.sql.Token(sqlparse.tokens.Punctuation, ',')
+        parsed.insert_after(with_stmt, trailing_comma)
+
+    parsed.insert_after(
+        with_stmt,
+        sqlparse.sql.Token(sqlparse.tokens.Keyword, ", ".join(ctes.values())))
+
+    return dbt.compat.to_string(parsed)
+
+
 class CompiledNode(ParsedNode):
     SCHEMA = COMPILED_NODE_CONTRACT
+
+    def prepend_ctes(self, prepended_ctes):
+        self._contents['extra_ctes_injected'] = True
+        self._contents['extra_ctes'] = prepended_ctes
+        self._contents['injected_sql'] = _inject_ctes_into_sql(
+            self.compiled_sql,
+            prepended_ctes
+        )
 
     @property
     def extra_ctes_injected(self):
         return self._contents.get('extra_ctes_injected')
 
-    @extra_ctes_injected.setter
-    def extra_ctes_injected(self, value):
-        self._contents['extra_ctes_injected'] = value
-
     @property
     def extra_ctes(self):
         return self._contents.get('extra_ctes')
-
-    @extra_ctes.setter
-    def extra_ctes(self, value):
-        self._contents['extra_ctes'] = value
-
-    @property
-    def injected_sql(self):
-        return self._contents.get('injected_sql')
-
-    @injected_sql.setter
-    def injected_sql(self, value):
-        self._contents['injected_sql'] = value
 
     @property
     def compiled(self):
@@ -131,20 +178,16 @@ class CompiledNode(ParsedNode):
         self._contents['compiled'] = value
 
     @property
+    def injected_sql(self):
+        return self._contents.get('injected_sql')
+
+    @property
     def compiled_sql(self):
         return self._contents.get('compiled_sql')
 
     @compiled_sql.setter
     def compiled_sql(self, value):
         self._contents['compiled_sql'] = value
-
-    @property
-    def injected_sql(self):
-        return self._contents.get('injected_sql')
-
-    @injected_sql.setter
-    def injected_sql(self, value):
-        self._contents['injected_sql'] = value
 
     @property
     def wrapped_sql(self):

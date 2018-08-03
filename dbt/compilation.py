@@ -72,67 +72,11 @@ def recursively_prepend_ctes(model, manifest):
             new_cte_name,
             cte_to_add.compiled_sql)
 
-    model.extra_ctes_injected = True
-    model.extra_ctes = prepended_ctes
-    model.injected_sql = inject_ctes_into_sql(
-        model.compiled_sql,
-        prepended_ctes)
+    model.prepend_ctes(prepended_ctes)
 
     manifest.nodes[model.unique_id] = model
 
     return (model, prepended_ctes, manifest)
-
-
-def inject_ctes_into_sql(sql, ctes):
-    """
-    `ctes` is a dict of CTEs in the form:
-
-      {
-        "cte_id_1": "__dbt__CTE__ephemeral as (select * from table)",
-        "cte_id_2": "__dbt__CTE__events as (select id, type from events)"
-      }
-
-    Given `sql` like:
-
-      "with internal_cte as (select * from sessions)
-       select * from internal_cte"
-
-    This will spit out:
-
-      "with __dbt__CTE__ephemeral as (select * from table),
-            __dbt__CTE__events as (select id, type from events),
-            with internal_cte as (select * from sessions)
-       select * from internal_cte"
-
-    (Whitespace enhanced for readability.)
-    """
-    if len(ctes) == 0:
-        return sql
-
-    parsed_stmts = sqlparse.parse(sql)
-    parsed = parsed_stmts[0]
-
-    with_stmt = None
-    for token in parsed.tokens:
-        if token.is_keyword and token.normalized == 'WITH':
-            with_stmt = token
-            break
-
-    if with_stmt is None:
-        # no with stmt, add one, and inject CTEs right at the beginning
-        first_token = parsed.token_first()
-        with_stmt = sqlparse.sql.Token(sqlparse.tokens.Keyword, 'with')
-        parsed.insert_before(first_token, with_stmt)
-    else:
-        # stmt exists, add a comma (which will come after injected CTEs)
-        trailing_comma = sqlparse.sql.Token(sqlparse.tokens.Punctuation, ',')
-        parsed.insert_after(with_stmt, trailing_comma)
-
-    parsed.insert_after(
-        with_stmt,
-        sqlparse.sql.Token(sqlparse.tokens.Keyword, ", ".join(ctes.values())))
-
-    return dbt.compat.to_string(parsed)
 
 
 class Compiler(object):

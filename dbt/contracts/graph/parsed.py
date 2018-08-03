@@ -13,27 +13,29 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
 # TODO: which of these do we _really_ support? or is it both?
-HOOK_CONTRACT = {'anyOf': [
-    {
-        'type': 'object',
-        'additionalProperties': False,
-        'properties': {
-            'sql': {
-                'type': 'string',
+HOOK_CONTRACT = {
+    'anyOf': [
+        {
+            'type': 'object',
+            'additionalProperties': False,
+            'properties': {
+                'sql': {
+                    'type': 'string',
+                },
+                'transaction': {
+                    'type': 'boolean',
+                },
+                'index': {
+                    'type': 'integer',
+                }
             },
-            'transaction': {
-                'type': 'boolean',
-            },
-            'index': {
-                'type': 'integer',
-            }
+            'required': ['sql', 'transaction'],
         },
-        'required': ['sql', 'transaction'],
-    },
-    {
-        'type': 'string',
-    }
-]}
+        {
+            'type': 'string',
+        },
+    ],
+}
 
 
 CONFIG_CONTRACT = {

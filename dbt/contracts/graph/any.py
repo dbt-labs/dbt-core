@@ -110,11 +110,16 @@ def build_edges(nodes):
 
 class Manifest(APIObject):
     SCHEMA = PARSED_MANIFEST_CONTRACT
-    """The final result of parsing all macros and nodes in a graph."""
+    """The manifest for the full graph, after parsing and during compilation.
+    Nodes may be either ParsedNodes or CompiledNodes or a mix, depending upon
+    the current state of the compiler. Macros will always be ParsedMacros and
+    docs will always be ParsedDocumentations.
+    """
     def __init__(self, nodes, macros, docs, generated_at):
         """The constructor. nodes and macros are dictionaries mapping unique
-        IDs to ParsedNode and ParsedMacro objects, respectively. generated_at
-        is a text timestamp in RFC 3339 format.
+        IDs to ParsedNode/CompiledNode and ParsedMacro objects, respectively.
+        docs is a dictionary mapping unique IDs to ParsedDocumentation objects.
+        generated_at is a text timestamp in RFC 3339 format.
         """
         self.nodes = nodes
         self.macros = macros
