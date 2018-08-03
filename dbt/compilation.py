@@ -55,6 +55,9 @@ def prepend_ctes(model, manifest):
 
 
 def recursively_prepend_ctes(model, manifest):
+    if model.extra_ctes_injected:
+        return (model, model.extra_ctes, manifest)
+
     if dbt.flags.STRICT_MODE:
         # ensure that all the nodes in this manifest are compiled
         CompiledGraph(**manifest.to_flat_graph())
