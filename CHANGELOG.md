@@ -1,4 +1,4 @@
-## dbt 0.10.2 (unreleased, codename: Betsy Ross)
+## dbt 0.10.2 - Betsy Ross (August 3, 2018)
 
 ### Overview
 
@@ -20,11 +20,11 @@ We want to extend a big thank you to our outside contributors for this release! 
 ### Features
 
 - BigQuery
-  - Support incremental models ([#856](https://github.com/fishtown-analytics/dbt/pull/856))
-  - Support archival ([#856](https://github.com/fishtown-analytics/dbt/pull/856))
-  - Add pre/post hook support ([#836](https://github.com/fishtown-analytics/dbt/pull/836))
-- Redshift: IAM Auth ([#818](https://github.com/fishtown-analytics/dbt/pull/818))
-- Model aliases ([#800](https://github.com/fishtown-analytics/dbt/pull/800))
+  - Support incremental models ([#856](https://github.com/fishtown-analytics/dbt/pull/856)) ([docs](https://docs.getdbt.com/docs/configuring-models#section-configuring-incremental-models))
+  - Support archival ([#856](https://github.com/fishtown-analytics/dbt/pull/856)) ([docs](https://docs.getdbt.com/docs/archival))
+  - Add pre/post hook support ([#836](https://github.com/fishtown-analytics/dbt/pull/836)) ([docs](https://docs.getdbt.com/docs/using-hooks))
+- Redshift: IAM Auth ([#818](https://github.com/fishtown-analytics/dbt/pull/818)) ([docs](https://docs.getdbt.com/docs/supported-databases#section-iam-authentication))
+- Model aliases ([#800](https://github.com/fishtown-analytics/dbt/pull/800))([docs](https://docs.getdbt.com/docs/using-custom-aliases))
 - Write JSON manifest file to disk during compilation ([#761](https://github.com/fishtown-analytics/dbt/pull/761))
 - Add forward and backward graph edges to the JSON manifest file ([#762](https://github.com/fishtown-analytics/dbt/pull/762))
 - Add a 'dbt docs generate' command to generate a JSON catalog file ([#774](https://github.com/fishtown-analytics/dbt/pull/774), [#808](https://github.com/fishtown-analytics/dbt/pull/808))
