@@ -1,5 +1,6 @@
 import dbt.compat
 import logging
+import logging.handlers
 import os
 import sys
 
@@ -71,7 +72,7 @@ def initialize_logger(debug_mode=False, path=None):
 
     if debug_mode:
         stdout_handler.setFormatter(
-            logging.Formatter('%(asctime)-18s: %(message)s'))
+            logging.Formatter('%(asctime)-18s (%(threadName)s): %(message)s'))
         stdout_handler.setLevel(logging.DEBUG)
 
     if path is not None:
@@ -90,7 +91,7 @@ def initialize_logger(debug_mode=False, path=None):
         logdir_handler.addFilter(color_filter)
 
         logdir_handler.setFormatter(
-            logging.Formatter('%(asctime)-18s: %(message)s'))
+            logging.Formatter('%(asctime)-18s (%(threadName)s): %(message)s'))
         logdir_handler.setLevel(logging.DEBUG)
 
         logger.addHandler(logdir_handler)

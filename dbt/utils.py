@@ -2,6 +2,7 @@ import os
 import hashlib
 import itertools
 import collections
+import copy
 import functools
 
 import dbt.exceptions
@@ -15,6 +16,7 @@ from dbt.clients import yaml_helper
 
 
 DBTConfigKeys = [
+    'alias',
     'schema',
     'enabled',
     'materialized',
@@ -64,7 +66,7 @@ def get_model_name_or_none(model):
     elif isinstance(model, basestring):
         name = model
     elif isinstance(model, dict):
-        name = model.get('name')
+        name = model['alias']
     else:
         name = model.nice_name
     return name
@@ -86,7 +88,7 @@ def model_immediate_name(model, non_destructive):
     seeds.
     """
 
-    model_name = model.get('name')
+    model_name = model['alias']
     is_incremental = (get_materialization(model) == 'incremental')
     is_seed = is_type(model, 'seed')
 
@@ -106,9 +108,30 @@ def find_macro_by_name(flat_graph, target_name, target_package):
                         'macros', [NodeType.Macro])
 
 
+def find_operation_by_name(flat_graph, target_name, target_package):
+    return find_by_name(flat_graph, target_name, target_package,
+                        'macros', [NodeType.Operation])
+
+
 def find_by_name(flat_graph, target_name, target_package, subgraph,
                  nodetype):
-    for name, model in flat_graph.get(subgraph).items():
+    return find_in_subgraph_by_name(
+        flat_graph.get(subgraph),
+        target_name,
+        target_package,
+        nodetype)
+
+
+def find_in_subgraph_by_name(subgraph, target_name, target_package, nodetype):
+    """Find an entry in a subgraph by name. Any mapping that implements
+    .items() and maps unique id -> something can be used as the subgraph.
+
+    Names are like:
+        '{nodetype}.{target_package}.{target_name}'
+
+    You can use `None` for the package name as a wildcard.
+    """
+    for name, model in subgraph.items():
         node_parts = name.split('.')
         if len(node_parts) != 3:
             node_type = model.get('resource_type', 'node')
@@ -127,10 +150,15 @@ def find_by_name(flat_graph, target_name, target_package, subgraph,
 
 
 MACRO_PREFIX = 'dbt_macro__'
+OPERATION_PREFIX = 'dbt_operation__'
 
 
 def get_dbt_macro_name(name):
     return '{}{}'.format(MACRO_PREFIX, name)
+
+
+def get_dbt_operation_name(name):
+    return '{}{}'.format(OPERATION_PREFIX, name)
 
 
 def get_materialization_macro_name(materialization_name, adapter_type=None,
@@ -169,6 +197,18 @@ def get_materialization_macro(flat_graph, materialization_name,
     return macro
 
 
+def get_operation_macro_name(operation_name, with_prefix=True):
+    if with_prefix:
+        return get_dbt_operation_name(operation_name)
+    else:
+        return operation_name
+
+
+def get_operation_macro(flat_graph, operation_name):
+    name = get_operation_macro_name(operation_name, with_prefix=False)
+    return find_operation_by_name(flat_graph, name, None)
+
+
 def load_project_with_profile(source_project, project_dir):
     project_filepath = os.path.join(project_dir, 'dbt_project.yml')
     return dbt.project.read_project(
@@ -178,33 +218,39 @@ def load_project_with_profile(source_project, project_dir):
         args=source_project.args)
 
 
-def dependency_projects(project):
+def dependencies_for_path(project, module_path):
+    """Given a module path, yield all dependencies in that path."""
     import dbt.project
+    logger.debug("Loading dependency project from {}".format(module_path))
+
+    for obj in os.listdir(module_path):
+        full_obj = os.path.join(module_path, obj)
+
+        if not os.path.isdir(full_obj) or obj.startswith('__'):
+            # exclude non-dirs and dirs that start with __
+            # the latter could be something like __pycache__
+            # for the global dbt modules dir
+            continue
+
+        try:
+            yield load_project_with_profile(project, full_obj)
+        except dbt.project.DbtProjectError as e:
+            logger.info(
+                "Error reading dependency project at {}".format(
+                    full_obj)
+            )
+            logger.info(str(e))
+
+
+def dependency_projects(project):
     module_paths = [
         GLOBAL_DBT_MODULES_PATH,
         os.path.join(project['project-root'], project['modules-path'])
     ]
 
     for module_path in module_paths:
-        logger.debug("Loading dependency project from {}".format(module_path))
-
-        for obj in os.listdir(module_path):
-            full_obj = os.path.join(module_path, obj)
-
-            if not os.path.isdir(full_obj) or obj.startswith('__'):
-                # exclude non-dirs and dirs that start with __
-                # the latter could be something like __pycache__
-                # for the global dbt modules dir
-                continue
-
-            try:
-                yield load_project_with_profile(project, full_obj)
-            except dbt.project.DbtProjectError as e:
-                logger.info(
-                    "Error reading dependency project at {}".format(
-                        full_obj)
-                )
-                logger.info(str(e))
+        for entry in dependencies_for_path(project, module_path):
+            yield entry
 
 
 def split_path(path):
@@ -240,10 +286,10 @@ def deep_merge(*args):
         return None
 
     if len(args) == 1:
-        return args[0]
+        return copy.deepcopy(args[0])
 
     lst = list(args)
-    last = lst.pop(len(lst)-1)
+    last = copy.deepcopy(lst.pop(len(lst)-1))
 
     return _deep_merge(deep_merge(*lst), last)
 
@@ -323,8 +369,8 @@ def get_pseudo_hook_path(hook_name):
 def get_nodes_by_tags(nodes, match_tags, resource_type):
     matched_nodes = []
     for node in nodes:
-        node_tags = node.get('tags', set())
-        if len(node_tags & match_tags):
+        node_tags = node.get('tags', [])
+        if len(set(node_tags) & match_tags):
             matched_nodes.append(node)
     return matched_nodes
 

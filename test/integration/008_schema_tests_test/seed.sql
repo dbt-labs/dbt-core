@@ -3,6 +3,10 @@ create table {schema}.seed (
 	id INTEGER,
 	first_name VARCHAR(11),
 	email VARCHAR(31),
+
+	net_worth NUMERIC(12, 2) DEFAULT '100.00',
+	fav_number NUMERIC DEFAULT '3.14159265',
+
 	ip_address VARCHAR(15),
 	updated_at TIMESTAMP WITHOUT TIME ZONE
 );

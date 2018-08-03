@@ -33,7 +33,8 @@ class TestMacros(DBTIntegrationTest):
     @attr(type='postgres')
     def test_working_macros(self):
         self.run_dbt(["deps"])
-        self.run_dbt(["run"])
+        results = self.run_dbt(["run"])
+        self.assertEqual(len(results), 6)
 
         self.assertTablesEqual("expected_dep_macro", "dep_macro")
         self.assertTablesEqual("expected_local_macro", "local_macro")

@@ -52,6 +52,7 @@ class CompilerTest(unittest.TestCase):
                 'model.root.view': {
                     'name': 'view',
                     'schema': 'analytics',
+                    'alias': 'view',
                     'resource_type': 'model',
                     'unique_id': 'model.root.view',
                     'fqn': ['root_project', 'view'],
@@ -66,7 +67,7 @@ class CompilerTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'view.sql',
                     'original_file_path': 'view.sql',
                     'raw_sql': 'select * from {{ref("ephemeral")}}',
@@ -83,6 +84,7 @@ class CompilerTest(unittest.TestCase):
                 'model.root.ephemeral': {
                     'name': 'ephemeral',
                     'schema': 'analytics',
+                    'alias': 'view',
                     'resource_type': 'model',
                     'unique_id': 'model.root.ephemeral',
                     'fqn': ['root_project', 'ephemeral'],
@@ -95,7 +97,7 @@ class CompilerTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': ephemeral_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'ephemeral.sql',
                     'original_file_path': 'ephemeral.sql',
                     'raw_sql': 'select * from source_table',
@@ -134,6 +136,7 @@ class CompilerTest(unittest.TestCase):
                 'model.root.view': {
                     'name': 'view',
                     'schema': 'analytics',
+                    'alias': 'view',
                     'resource_type': 'model',
                     'unique_id': 'model.root.view',
                     'fqn': ['root_project', 'view'],
@@ -146,7 +149,7 @@ class CompilerTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'view.sql',
                     'original_file_path': 'view.sql',
                     'raw_sql': ('with cte as (select * from something_else) '
@@ -161,6 +164,7 @@ class CompilerTest(unittest.TestCase):
                 'model.root.view_no_cte': {
                     'name': 'view_no_cte',
                     'schema': 'analytics',
+                    'alias': 'view_no_cte',
                     'resource_type': 'model',
                     'unique_id': 'model.root.view_no_cte',
                     'fqn': ['root_project', 'view_no_cte'],
@@ -173,7 +177,7 @@ class CompilerTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'view.sql',
                     'original_file_path': 'view.sql',
                     'raw_sql': 'select * from source_table',
@@ -224,6 +228,7 @@ class CompilerTest(unittest.TestCase):
                 'model.root.view': {
                     'name': 'view',
                     'schema': 'analytics',
+                    'alias': 'view',
                     'resource_type': 'model',
                     'unique_id': 'model.root.view',
                     'fqn': ['root_project', 'view'],
@@ -238,7 +243,7 @@ class CompilerTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'view.sql',
                     'original_file_path': 'view.sql',
                     'raw_sql': 'select * from {{ref("ephemeral")}}',
@@ -253,6 +258,7 @@ class CompilerTest(unittest.TestCase):
                 'model.root.ephemeral': {
                     'name': 'ephemeral',
                     'schema': 'analytics',
+                    'alias': 'ephemeral',
                     'resource_type': 'model',
                     'unique_id': 'model.root.ephemeral',
                     'fqn': ['root_project', 'ephemeral'],
@@ -265,7 +271,7 @@ class CompilerTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': ephemeral_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'ephemeral.sql',
                     'original_file_path': 'ephemeral.sql',
                     'raw_sql': 'select * from source_table',
@@ -310,6 +316,7 @@ class CompilerTest(unittest.TestCase):
                 'model.root.view': {
                     'name': 'view',
                     'schema': 'analytics',
+                    'alias': 'view',
                     'resource_type': 'model',
                     'unique_id': 'model.root.view',
                     'fqn': ['root_project', 'view'],
@@ -324,7 +331,7 @@ class CompilerTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'view.sql',
                     'original_file_path': 'view.sql',
                     'raw_sql': 'select * from {{ref("ephemeral")}}',
@@ -339,6 +346,7 @@ class CompilerTest(unittest.TestCase):
                 'model.root.ephemeral': {
                     'name': 'ephemeral',
                     'schema': 'analytics',
+                    'alias': 'ephemeral',
                     'resource_type': 'model',
                     'unique_id': 'model.root.ephemeral',
                     'fqn': ['root_project', 'ephemeral'],
@@ -351,7 +359,7 @@ class CompilerTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': ephemeral_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'ephemeral.sql',
                     'original_file_path': 'ephemeral.sql',
                     'raw_sql': 'select * from {{ref("ephemeral_level_two")}}',
@@ -366,6 +374,7 @@ class CompilerTest(unittest.TestCase):
                 'model.root.ephemeral_level_two': {
                     'name': 'ephemeral_level_two',
                     'schema': 'analytics',
+                    'alias': 'ephemeral_level_two',
                     'resource_type': 'model',
                     'unique_id': 'model.root.ephemeral_level_two',
                     'fqn': ['root_project', 'ephemeral_level_two'],
@@ -378,7 +387,7 @@ class CompilerTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': ephemeral_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'ephemeral_level_two.sql',
                     'original_file_path': 'ephemeral_level_two.sql',
                     'raw_sql': 'select * from source_table',

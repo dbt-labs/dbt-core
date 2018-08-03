@@ -1,0 +1,13 @@
+
+example:
+    constraints:
+        unique:
+            - id
+
+
+# This fails
+example_2:
+    constraints:
+        unique:
+            - id
+

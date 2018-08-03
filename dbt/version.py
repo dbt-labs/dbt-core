@@ -1,6 +1,6 @@
-import argparse
-import os
 import re
+
+import dbt.semver
 
 try:
     # For Python 3.0 and later
@@ -14,59 +14,59 @@ REMOTE_VERSION_FILE = \
     'master/.bumpversion.cfg'
 
 
-def __parse_version(contents):
-    matches = re.search(r"current_version = ([\.0-9]+)", contents)
+def get_version_string_from_text(contents):
+    matches = re.search(r"current_version = ([\.0-9a-z]+)", contents)
     if matches is None or len(matches.groups()) != 1:
-        return "unknown"
-    else:
-        version = matches.groups()[0]
-        return version
+        return ""
+    version = matches.groups()[0]
+    return version
 
 
-def get_version():
-    return __version__
-
-
-def get_latest_version():
+def get_remote_version_file_contents(url=REMOTE_VERSION_FILE):
     try:
-        f = urlopen(REMOTE_VERSION_FILE)
+        f = urlopen(url)
         contents = f.read()
     except Exception:
         contents = ''
     if hasattr(contents, 'decode'):
         contents = contents.decode('utf-8')
-    return __parse_version(contents)
+    return contents
 
 
-def not_latest():
-    return """Your version of dbt is out of date! You can find instructions
-    for upgrading here:
-
-    https://docs.getdbt.com/docs/installation
-    """
+def get_latest_version():
+    contents = get_remote_version_file_contents()
+    version_string = get_version_string_from_text(contents)
+    return dbt.semver.VersionSpecifier.from_version_string(version_string)
 
 
-def get_version_string():
-    return "installed version: {}\n   latest version: {}".format(
-        installed, latest
-    )
+def get_installed_version():
+    return dbt.semver.VersionSpecifier.from_version_string(__version__)
 
 
 def get_version_information():
-    basic = get_version_string()
+    installed = get_installed_version()
+    latest = get_latest_version()
 
-    if is_latest():
-        basic += '\nUp to date!'
+    installed_s = installed.to_version_string(skip_matcher=True)
+    latest_s = latest.to_version_string(skip_matcher=True)
+
+    version_msg = ("installed version: {}\n"
+                   "   latest version: {}\n\n".format(installed_s, latest_s))
+
+    if installed == latest:
+        return "{}Up to date!".format(version_msg)
+
+    elif installed > latest:
+        return ("{}Your version of dbt is ahead of the latest "
+                "release!".format(version_msg))
+
     else:
-        basic += '\n{}'.format(not_latest())
-
-    return basic
-
-
-def is_latest():
-    return installed == latest
+        return ("{}Your version of dbt is out of date! "
+                "You can find instructions for upgrading here:\n"
+                "https://docs.getdbt.com/docs/installation"
+                .format(version_msg))
 
 
-__version__ = '0.10.1'
-installed = get_version()
+__version__ = '0.10.2rc1'
+installed = get_installed_version()
 latest = get_latest_version()

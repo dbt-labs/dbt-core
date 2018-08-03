@@ -2,12 +2,15 @@ import multiprocessing
 
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
-
+import dbt.exceptions
+import boto3
 
 drop_lock = multiprocessing.Lock()
 
 
 class RedshiftAdapter(PostgresAdapter):
+
+    DEFAULT_TCP_KEEPALIVE = 240
 
     @classmethod
     def type(cls):
@@ -16,6 +19,69 @@ class RedshiftAdapter(PostgresAdapter):
     @classmethod
     def date_function(cls):
         return 'getdate()'
+
+    @classmethod
+    def fetch_cluster_credentials(cls, db_user, db_name, cluster_id,
+                                  duration_s):
+        """Fetches temporary login credentials from AWS. The specified user
+        must already exist in the database, or else an error will occur"""
+        boto_client = boto3.client('redshift')
+
+        try:
+            return boto_client.get_cluster_credentials(
+                DbUser=db_user,
+                DbName=db_name,
+                ClusterIdentifier=cluster_id,
+                DurationSeconds=duration_s,
+                AutoCreate=False)
+
+        except boto_client.exceptions.ClientError as e:
+            raise dbt.exceptions.FailedToConnectException(
+                    "Unable to get temporary Redshift cluster credentials: "
+                    "{}".format(e))
+
+    @classmethod
+    def get_tmp_iam_cluster_credentials(cls, credentials):
+        cluster_id = credentials.get('cluster_id')
+
+        # default via:
+        # boto3.readthedocs.io/en/latest/reference/services/redshift.html
+        iam_duration_s = credentials.get('iam_duration_seconds', 900)
+
+        if not cluster_id:
+            raise dbt.exceptions.FailedToConnectException(
+                    "'cluster_id' must be provided in profile if IAM "
+                    "authentication method selected")
+
+        cluster_creds = cls.fetch_cluster_credentials(
+            credentials.get('user'),
+            credentials.get('dbname'),
+            credentials.get('cluster_id'),
+            iam_duration_s,
+        )
+
+        # replace username and password with temporary redshift credentials
+        return dbt.utils.merge(credentials, {
+            'user': cluster_creds.get('DbUser'),
+            'pass': cluster_creds.get('DbPassword')
+        })
+
+    @classmethod
+    def get_credentials(cls, credentials):
+        method = credentials.get('method')
+
+        # Support missing 'method' for backwards compatibility
+        if method == 'database' or method is None:
+            logger.debug("Connecting to Redshift using 'database' credentials")
+            return credentials
+
+        elif method == 'iam':
+            logger.debug("Connecting to Redshift using 'IAM' credentials")
+            return cls.get_tmp_iam_cluster_credentials(credentials)
+
+        else:
+            raise dbt.exceptions.FailedToConnectException(
+                    "Invalid 'method' in profile: '{}'".format(method))
 
     @classmethod
     def _get_columns_in_table_sql(cls, schema_name, table_name, database):
@@ -27,7 +93,7 @@ class RedshiftAdapter(PostgresAdapter):
             table_schema_filter = '1=1'
         else:
             table_schema_filter = "table_schema = '{schema_name}'".format(
-                    schema_name=schema_name)
+                schema_name=schema_name)
 
         sql = """
             with bound_views as (

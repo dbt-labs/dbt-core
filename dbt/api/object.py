@@ -1,11 +1,12 @@
 import copy
+from collections import Mapping
 from jsonschema import Draft4Validator
 
 from dbt.exceptions import ValidationException
 from dbt.utils import deep_merge
 
 
-class APIObject(dict):
+class APIObject(Mapping):
     """
     A serializable / deserializable object intended for
     use in a future dbt API.
@@ -24,17 +25,15 @@ class APIObject(dict):
 
     DEFAULTS = {}
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, **kwargs):
         """
-        Create and validate an instance. Note that it's
-        not a good idea to override this.
+        Create and validate an instance. Note that if you override this, you
+        will want to do so by modifying kwargs and only then calling
+        super(NewClass, self).__init__(**kwargs).
         """
-        defaults = copy.deepcopy(self.DEFAULTS)
-        settings = copy.deepcopy(kwargs)
-
-        d = deep_merge(defaults, settings)
-        super(APIObject, self).__init__(*args, **d)
-        self.__dict__ = self
+        super(APIObject, self).__init__()
+        # note: deep_merge does a deep copy on its arguments.
+        self._contents = deep_merge(self.DEFAULTS, kwargs)
         self.validate()
 
     def incorporate(self, **kwargs):
@@ -43,15 +42,13 @@ class APIObject(dict):
         into a new copy of this instance, and return the new
         instance after validating.
         """
-        existing = copy.deepcopy(dict(self))
-        updates = copy.deepcopy(kwargs)
-        return type(self)(**deep_merge(existing, updates))
+        return type(self)(**deep_merge(self._contents, kwargs))
 
     def serialize(self):
         """
         Return a dict representation of this object.
         """
-        return dict(self)
+        return copy.deepcopy(self._contents)
 
     @classmethod
     def deserialize(cls, settings):
@@ -69,14 +66,42 @@ class APIObject(dict):
         """
         validator = Draft4Validator(self.SCHEMA)
 
-        errors = []
+        errors = set()  # make errors a set to avoid duplicates
 
         for error in validator.iter_errors(self.serialize()):
-            errors.append('property "{}", {}'.format(
-                ".".join(error.path), error.message))
+            errors.add('.'.join(
+                list(map(str, error.path)) + [error.message]
+            ))
 
         if errors:
-            raise ValidationException(
-                'Invalid arguments passed to "{}" instance: {}'
-                .format(type(self).__name__,
-                        ", ".join(errors)))
+            msg = ('Invalid arguments passed to "{}" instance: {}'.format(
+                type(self).__name__, ', '.join(errors)))
+            raise ValidationException(msg)
+
+    # implement the Mapping protocol:
+    # https://docs.python.org/3/library/collections.abc.html
+    def __getitem__(self, key):
+        return self._contents[key]
+
+    def __iter__(self):
+        return self._contents.__iter__()
+
+    def __len__(self):
+        return self._contents.__len__()
+
+    # implement this because everyone always expects it.
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    # most users of APIObject also expect the attributes to be available via
+    # dot-notation because the previous implementation assigned to __dict__.
+    # we should consider removing this if we fix all uses to have properties.
+    def __getattr__(self, name):
+        if name in self._contents:
+            return self._contents[name]
+        raise AttributeError((
+            "'{}' object has no attribute '{}'"
+        ).format(type(self).__name__, name))

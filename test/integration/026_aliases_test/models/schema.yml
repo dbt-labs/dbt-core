@@ -1,0 +1,20 @@
+
+foo_alias:
+    constraints:
+        expect_value:
+            - {field: 'tablename', value: 'foo'}
+
+ref_foo_alias:
+    constraints:
+        expect_value:
+            - {field: 'tablename', value: 'ref_foo_alias'}
+
+alias_in_project:
+    constraints:
+        expect_value:
+            - {field: 'tablename', value: 'project_alias'}
+
+alias_in_project_with_override:
+    constraints:
+        expect_value:
+            - {field: 'tablename', value: 'override_alias'}

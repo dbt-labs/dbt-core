@@ -9,8 +9,13 @@ import agate
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
+GET_CATALOG_OPERATION_NAME = 'get_catalog_data'
+GET_CATALOG_RESULT_KEY = 'catalog'  # defined in get_catalog() macro
+
 
 class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
+
+    DEFAULT_TCP_KEEPALIVE = 0  # 0 means to use the default value
 
     @classmethod
     @contextmanager
@@ -51,6 +56,10 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         return cursor.statusmessage
 
     @classmethod
+    def get_credentials(cls, credentials):
+        return credentials
+
+    @classmethod
     def open_connection(cls, connection):
         if connection.get('state') == 'open':
             logger.debug('Connection is already open, skipping open.')
@@ -58,15 +67,25 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
 
         result = connection.copy()
 
+        base_credentials = connection.get('credentials', {})
+        credentials = cls.get_credentials(base_credentials.copy())
+        kwargs = {}
+        keepalives_idle = credentials.get('keepalives_idle',
+                                          cls.DEFAULT_TCP_KEEPALIVE)
+        # we don't want to pass 0 along to connect() as postgres will try to
+        # call an invalid setsockopt() call (contrary to the docs).
+        if keepalives_idle:
+            kwargs['keepalives_idle'] = keepalives_idle
+
         try:
-            credentials = connection.get('credentials', {})
             handle = psycopg2.connect(
                 dbname=credentials.get('dbname'),
                 user=credentials.get('user'),
                 host=credentials.get('host'),
                 password=credentials.get('pass'),
                 port=credentials.get('port'),
-                connect_timeout=10)
+                connect_timeout=10,
+                **kwargs)
 
             result['handle'] = handle
             result['state'] = 'open'
@@ -201,3 +220,14 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
     @classmethod
     def convert_time_type(cls, agate_table, col_idx):
         return "time"
+
+    @classmethod
+    def get_catalog(cls, profile, project_cfg, manifest):
+        results = cls.run_operation(profile, project_cfg, manifest,
+                                    GET_CATALOG_OPERATION_NAME,
+                                    GET_CATALOG_RESULT_KEY)
+
+        schemas = cls.get_existing_schemas(profile, project_cfg)
+        results = results.table.where(lambda r: r['table_schema'] in schemas)
+
+        return results

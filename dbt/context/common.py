@@ -1,10 +1,10 @@
 import json
 import os
-import pytz
-import voluptuous
 
 from dbt.adapters.factory import get_adapter
-from dbt.compat import basestring, to_string
+from dbt.compat import basestring
+from dbt.node_types import NodeType
+from dbt.contracts.graph.parsed import ParsedMacro, ParsedNode
 
 import dbt.clients.jinja
 import dbt.clients.agate_helper
@@ -76,10 +76,12 @@ def _add_macros(context, model, flat_graph):
     macros_to_add = {'global': [], 'local': []}
 
     for unique_id, macro in flat_graph.get('macros', {}).items():
+        if macro.get('resource_type') != NodeType.Macro:
+            continue
         package_name = macro.get('package_name')
 
         macro_map = {
-            macro.get('name'): macro.get('generator')(context)
+            macro.get('name'): macro.generator(context)
         }
 
         if context.get(package_name) is None:
@@ -117,9 +119,20 @@ def _add_tracking(context):
 
 
 def _add_validation(context):
+    def validate_any(*args):
+        def inner(value):
+            for arg in args:
+                if isinstance(arg, type) and isinstance(value, arg):
+                    return
+                elif value == arg:
+                    return
+            raise dbt.exceptions.ValidationException(
+                'Expected value "{}" to be one of {}'
+                .format(value, ','.join(map(str, args))))
+        return inner
+
     validation_utils = dbt.utils.AttrDict({
-        'any': voluptuous.Any,
-        'all': voluptuous.All,
+        'any': validate_any,
     })
 
     return dbt.utils.merge(
@@ -191,8 +204,14 @@ class Var(object):
         self.overrides = overrides
 
         if isinstance(model, dict) and model.get('unique_id'):
-            local_vars = model.get('config', {}).get('vars')
+            local_vars = model.get('config', {}).get('vars', {})
             self.model_name = model.get('name')
+        elif isinstance(model, ParsedMacro):
+            local_vars = {}  # macros have no config
+            self.model_name = model.name
+        elif isinstance(model, ParsedNode):
+            local_vars = model.config.get('vars', {})
+            self.model_name = model.name
         else:
             # still used for wrapping
             self.model_name = model.nice_name
@@ -385,9 +404,25 @@ def generate(model, project_cfg, flat_graph, provider=None):
         "fromjson": fromjson,
         "tojson": tojson,
         "target": target,
-        "this": get_this_relation(db_wrapper, project_cfg, profile, model),
         "try_or_compiler_error": try_or_compiler_error(model)
     })
+
+    # Operations do not represent database relations, so there should be no
+    # 'this' variable in the context for operations. The Operation branch
+    # below should be removed in a future release. The fake relation below
+    # mirrors the historical implementation, without causing errors around
+    # the missing 'alias' attribute for operations
+    #
+    # https://github.com/fishtown-analytics/dbt/issues/878
+    if model.get('resource_type') == NodeType.Operation:
+        this = db_wrapper.adapter.Relation.create(
+                schema=target['schema'],
+                identifier=model['name']
+        )
+    else:
+        this = get_this_relation(db_wrapper, project_cfg, profile, model)
+
+    context["this"] = this
 
     context = _add_tracking(context)
     context = _add_validation(context)

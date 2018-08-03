@@ -30,7 +30,8 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
 
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
         self.run_dbt(["deps"])
-        self.run_dbt()
+        results = self.run_dbt()
+        self.assertEqual(len(results), 5)
 
         args = FakeArgs()
         args.models = include

@@ -12,8 +12,19 @@ table_copy:
             - email
 
         accepted_values:
-            - { field: favorite_color, values: ['blue', 'green'] }
+            - field: favorite_color
+              values:
+                  - 'blue'
+                  - 'green'
 
+                  # Include extra (long) options here to ensure that dbt does
+                  # not fail on parsing of really long model names or unique ids
+                  - 'other_long_option_long_option_long_option_1'
+                  - 'other_long_option_long_option_long_option_2'
+                  - 'other_long_option_long_option_long_option_3'
+                  - 'other_long_option_long_option_long_option_4'
+                  - 'other_long_option_long_option_long_option_5'
+                  - 'other_long_option_long_option_long_option_6'
 
 
 table_summary:

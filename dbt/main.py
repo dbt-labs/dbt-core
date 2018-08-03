@@ -17,6 +17,7 @@ import dbt.task.init as init_task
 import dbt.task.seed as seed_task
 import dbt.task.test as test_task
 import dbt.task.archive as archive_task
+import dbt.task.generate as generate_task
 
 import dbt.tracking
 import dbt.config as config
@@ -82,8 +83,10 @@ def handle_and_check(args):
     if dbt.config.colorize_output(profile_config):
         dbt.ui.printer.use_colors()
 
-    task, res = run_from_args(parsed)
-    dbt.tracking.flush()
+    try:
+        task, res = run_from_args(parsed)
+    finally:
+        dbt.tracking.flush()
 
     success = task.interpret_results(res)
 
@@ -146,17 +149,17 @@ def run_from_task(task, proj, parsed_args):
     try:
         result = task.run()
         dbt.tracking.track_invocation_end(
-            project=proj, args=parsed_args, result_type="ok", result=None
+            project=proj, args=parsed_args, result_type="ok"
         )
     except (dbt.exceptions.NotImplementedException,
             dbt.exceptions.FailedToConnectException) as e:
         logger.info('ERROR: {}'.format(e))
         dbt.tracking.track_invocation_end(
-            project=proj, args=parsed_args, result_type="error", result=str(e)
+            project=proj, args=parsed_args, result_type="error"
         )
     except Exception as e:
         dbt.tracking.track_invocation_end(
-            project=proj, args=parsed_args, result_type="error", result=str(e)
+            project=proj, args=parsed_args, result_type="error"
         )
         raise
 
@@ -195,8 +198,7 @@ def invoke_dbt(parsed):
         dbt.tracking.track_invalid_invocation(
             project=proj,
             args=parsed,
-            result_type="invalid_profile",
-            result=str(e))
+            result_type="invalid_profile")
 
         return None
     except project.DbtProfileError as e:
@@ -206,8 +208,7 @@ def invoke_dbt(parsed):
         dbt.tracking.track_invalid_invocation(
             project=proj,
             args=parsed,
-            result_type="invalid_profile",
-            result=str(e))
+            result_type="invalid_profile")
 
         return None
 
@@ -227,8 +228,7 @@ def invoke_dbt(parsed):
             dbt.tracking.track_invalid_invocation(
                 project=proj,
                 args=parsed,
-                result_type="invalid_target",
-                result="target not found")
+                result_type="invalid_target")
 
             return None
 
@@ -413,6 +413,14 @@ def parse_args(args):
         help='Show a sample of the loaded data in the terminal'
     )
     seed_sub.set_defaults(cls=seed_task.SeedTask, which='seed')
+
+    docs_sub = subs.add_parser('docs', parents=[base_subparser])
+    docs_subs = docs_sub.add_subparsers()
+    # it might look like docs_sub is the correct parents entry, but that
+    # will cause weird errors about 'conflicting option strings'.
+    generate_sub = docs_subs.add_parser('generate', parents=[base_subparser])
+    generate_sub.set_defaults(cls=generate_task.GenerateTask,
+                              which='generate')
 
     sub = subs.add_parser('test', parents=[base_subparser])
     sub.add_argument(

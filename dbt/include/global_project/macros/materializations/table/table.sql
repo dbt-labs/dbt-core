@@ -1,6 +1,7 @@
 {% materialization table, default %}
-  {%- set identifier = model['name'] -%}
+  {%- set identifier = model['alias'] -%}
   {%- set tmp_identifier = identifier + '__dbt_tmp' -%}
+  {%- set backup_identifier = identifier + '__dbt_backup' -%}
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
 
   {%- set existing_relations = adapter.list_relations(schema=schema) -%}
@@ -10,15 +11,23 @@
                                                 schema=schema, type='table') -%}
   {%- set intermediate_relation = api.Relation.create(identifier=tmp_identifier,
                                                       schema=schema, type='table') -%}
+
+  /*
+      See ../view/view.sql for more information about this relation.
+  */
+  {%- set backup_relation = api.Relation.create(identifier=backup_identifier,
+                                                schema=schema, type=(old_relation.type or 'table')) -%}
+
   {%- set exists_as_table = (old_relation is not none and old_relation.is_table) -%}
   {%- set exists_as_view = (old_relation is not none and old_relation.is_view) -%}
   {%- set create_as_temporary = (exists_as_table and non_destructive_mode) -%}
 
 
-  -- drop the temp relation if it exists for some reason
+  -- drop the temp relations if they exists for some reason
   {{ adapter.drop_relation(intermediate_relation) }}
+  {{ adapter.drop_relation(backup_relation) }}
 
-  -- setup: if the target relation already exists, truncate or drop it
+  -- setup: if the target relation already exists, truncate or drop it (if it's a view)
   {% if non_destructive_mode -%}
     {% if exists_as_table -%}
       {{ adapter.truncate_relation(old_relation) }}
@@ -60,12 +69,19 @@
   {% if non_destructive_mode -%}
     -- noop
   {%- else -%}
-    {{ drop_relation_if_exists(old_relation) }}
+    {% if old_relation is not none %}
+      -- move the existing relation out of the way
+      {{ adapter.rename_relation(target_relation, backup_relation) }}
+    {% endif %}
+
     {{ adapter.rename_relation(intermediate_relation, target_relation) }}
   {%- endif %}
 
   -- `COMMIT` happens here
   {{ adapter.commit() }}
+
+  -- finally, drop the existing/backup relation after the commit
+  {{ drop_relation_if_exists(backup_relation) }}
 
   {{ run_hooks(post_hooks, inside_transaction=False) }}
 {% endmaterialization %}

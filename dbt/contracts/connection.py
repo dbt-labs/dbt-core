@@ -1,59 +1,224 @@
-from voluptuous import Schema, Required, All, Any, Range, Optional
-
-from dbt.compat import basestring
-from dbt.contracts.common import validate_with
+from dbt.api.object import APIObject
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
+POSTGRES_CREDENTIALS_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'properties': {
+        'dbname': {
+            'type': 'string',
+        },
+        'host': {
+            'type': 'string',
+        },
+        'user': {
+            'type': 'string',
+        },
+        'pass': {
+            'type': 'string',
+        },
+        'port': {
+            'oneOf': [
+                {
+                    'type': 'integer',
+                    'minimum': 0,
+                    'maximum': 65535,
+                },
+                {
+                    'type': 'string'
+                },
+            ],
+        },
+        'schema': {
+            'type': 'string',
+        },
+        'keepalives_idle': {
+            'type': 'integer',
+        },
+    },
+    'required': ['dbname', 'host', 'user', 'pass', 'port', 'schema'],
+}
 
-adapter_types = ['postgres', 'redshift', 'snowflake', 'bigquery']
-connection_contract = Schema({
-    Required('type'): Any(*adapter_types),
-    Required('name'): Any(None, basestring),
-    Required('state'): Any('init', 'open', 'closed', 'fail'),
-    Required('transaction_open'): bool,
-    Required('handle'): Any(None, object),
-    Required('credentials'): object,
-})
+REDSHIFT_CREDENTIALS_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'properties': {
+        'method': {
+            'enum': ['database', 'iam'],
+            'description': (
+                'database: use user/pass creds; iam: use temporary creds'
+            ),
+        },
+        'dbname': {
+            'type': 'string',
+        },
+        'host': {
+            'type': 'string',
+        },
+        'user': {
+            'type': 'string',
+        },
+        'pass': {
+            'type': 'string',
+        },
+        'port': {
+            'oneOf': [
+                {
+                    'type': 'integer',
+                    'minimum': 0,
+                    'maximum': 65535,
+                },
+                {
+                    'type': 'string'
+                },
+            ],
+        },
+        'schema': {
+            'type': 'string',
+        },
+        'cluster_id': {
+            'type': 'string',
+            'description': (
+                'If using IAM auth, the name of the cluster'
+            )
+        },
+        'iam_duration_seconds': {
+            'type': 'integer',
+            'minimum': 900,
+            'maximum': 3600,
+            'description': (
+                'If using IAM auth, the ttl for the temporary credentials'
+            )
+        },
+        'keepalives_idle': {
+            'type': 'integer',
+        },
+        'required': ['dbname', 'host', 'user', 'port', 'schema']
+    }
+}
 
-postgres_credentials_contract = Schema({
-    Required('dbname'): basestring,
-    Required('host'): basestring,
-    Required('user'): basestring,
-    Required('pass'): basestring,
-    Required('port'): Any(All(int, Range(min=0, max=65535)), basestring),
-    Required('schema'): basestring,
-})
+SNOWFLAKE_CREDENTIALS_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'properties': {
+        'account': {
+            'type': 'string',
+        },
+        'user': {
+            'type': 'string',
+        },
+        'password': {
+            'type': 'string',
+        },
+        'database': {
+            'type': 'string',
+        },
+        'schema': {
+            'type': 'string',
+        },
+        'warehouse': {
+            'type': 'string',
+        },
+        'role': {
+            'type': 'string',
+        },
+    },
+    'required': ['account', 'user', 'password', 'database', 'schema'],
+}
 
-snowflake_credentials_contract = Schema({
-    Required('account'): basestring,
-    Required('user'): basestring,
-    Required('password'): basestring,
-    Required('database'): basestring,
-    Required('schema'): basestring,
-    Required('warehouse'): basestring,
-    Optional('role'): basestring,
-})
-
-bigquery_auth_methods = ['oauth', 'service-account', 'service-account-json']
-bigquery_credentials_contract = Schema({
-    Required('method'): Any(*bigquery_auth_methods),
-    Required('project'): basestring,
-    Required('schema'): basestring,
-    Optional('keyfile'): basestring,
-    Optional('keyfile_json'): object,
-    Optional('timeout_seconds'): int,
-})
-
-credentials_mapping = {
-    'postgres': postgres_credentials_contract,
-    'redshift': postgres_credentials_contract,
-    'snowflake': snowflake_credentials_contract,
-    'bigquery': bigquery_credentials_contract,
+BIGQUERY_CREDENTIALS_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'properties': {
+        'method': {
+            'enum': ['oauth', 'service-account', 'service-account-json'],
+        },
+        'project': {
+            'type': 'string',
+        },
+        'schema': {
+            'type': 'string',
+        },
+        'keyfile': {
+            'type': 'string',
+        },
+        'keyfile_json': {
+            'type': 'object',
+        },
+        'timeout_seconds': {
+            'type': 'integer',
+        },
+    },
+    'required': ['method', 'project', 'schema'],
 }
 
 
-def validate_connection(connection):
-    validate_with(connection_contract, connection)
+CONNECTION_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'properties': {
+        'type': {
+            'enum': ['postgres', 'redshift', 'snowflake', 'bigquery'],
+        },
+        'name': {
+            'type': ['null', 'string'],
+        },
+        'state': {
+            'enum': ['init', 'open', 'closed', 'fail'],
+        },
+        'transaction_open': {
+            'type': 'boolean',
+        },
+        'handle': {
+            'type': ['null', 'object'],
+        },
+        'credentials': {
+            'description': (
+                'The credentials object here should match the connection type.'
+            ),
+            'anyOf': [
+                POSTGRES_CREDENTIALS_CONTRACT,
+                REDSHIFT_CREDENTIALS_CONTRACT,
+                SNOWFLAKE_CREDENTIALS_CONTRACT,
+                BIGQUERY_CREDENTIALS_CONTRACT,
+            ],
+        }
+    },
+    'required': [
+        'type', 'name', 'state', 'transaction_open', 'handle', 'credentials'
+    ],
+}
 
-    credentials_contract = credentials_mapping.get(connection.get('type'))
-    validate_with(credentials_contract, connection.get('credentials'))
+
+class PostgresCredentials(APIObject):
+    SCHEMA = POSTGRES_CREDENTIALS_CONTRACT
+
+
+class RedshiftCredentials(APIObject):
+    SCHEMA = REDSHIFT_CREDENTIALS_CONTRACT
+
+
+class SnowflakeCredentials(APIObject):
+    SCHEMA = SNOWFLAKE_CREDENTIALS_CONTRACT
+
+
+class BigQueryCredentials(APIObject):
+    SCHEMA = BIGQUERY_CREDENTIALS_CONTRACT
+
+
+CREDENTIALS_MAPPING = {
+    'postgres': PostgresCredentials,
+    'redshift': RedshiftCredentials,
+    'snowflake': SnowflakeCredentials,
+    'bigquery': BigQueryCredentials,
+}
+
+
+class Connection(APIObject):
+    SCHEMA = CONNECTION_CONTRACT
+
+    def validate(self):
+        super(Connection, self).validate()
+        # make sure our credentials match our adapter type
+        ContractType = CREDENTIALS_MAPPING.get(self.get('type'))
+        ContractType(**self.get('credentials'))

@@ -3,6 +3,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.exceptions import NotImplementedException
 from dbt.utils import get_nodes_by_tags
 from dbt.node_types import NodeType, RunHookType
+from dbt.adapters.factory import get_adapter
 
 import dbt.clients.jinja
 import dbt.context.runtime
@@ -31,7 +32,7 @@ def track_model_run(index, num_nodes, run_model_result):
         "execution_time": run_model_result.execution_time,
         "run_status": run_model_result.status,
         "run_skipped": run_model_result.skip,
-        "run_error": run_model_result.error,
+        "run_error": None,
         "model_materialization": dbt.utils.get_materialization(run_model_result.node),  # noqa
         "model_id": dbt.utils.get_hash(run_model_result.node),
         "hashed_contents": dbt.utils.get_hashed_contents(run_model_result.node),  # noqa
@@ -59,6 +60,14 @@ class RunModelResult(object):
     @property
     def skipped(self):
         return self.skip
+
+
+class RunOperationResult(RunModelResult):
+    def __init__(self, node, error=None, skip=False, status=None,
+                 failed=None, execution_time=0, returned=None):
+        super(RunOperationResult, self).__init__(node, error, skip, status,
+                                                 failed, execution_time)
+        self.returned = returned
 
 
 class BaseRunner(object):
@@ -251,17 +260,17 @@ class CompileRunner(BaseRunner):
         def call_get_columns_in_table(schema_name, table_name):
             return adapter.get_columns_in_table(
                 profile, project, schema_name,
-                table_name, model_name=node.get('name'))
+                table_name, model_name=node.get('alias'))
 
         def call_get_missing_columns(from_schema, from_table,
                                      to_schema, to_table):
             return adapter.get_missing_columns(
                 profile, project, from_schema, from_table,
-                to_schema, to_table, node.get('name'))
+                to_schema, to_table, node.get('alias'))
 
         def call_already_exists(schema, table):
             return adapter.already_exists(
-                profile, project, schema, table, node.get('name'))
+                profile, project, schema, table, node.get('alias'))
 
         return {
             "run_started_at": dbt.tracking.active_user.run_started_at,
@@ -312,13 +321,13 @@ class ModelRunner(CompileRunner):
             hook_dict = dbt.hooks.get_hook_dict(statement, index=hook_index)
 
             if dbt.flags.STRICT_MODE:
-                dbt.contracts.graph.parsed.validate_hook(hook_dict)
+                dbt.contracts.graph.parsed.Hook(**hook_dict)
 
             sql = hook_dict.get('sql', '')
 
             if len(sql.strip()) > 0:
-                adapter.execute_one(profile, sql, model_name=model_name,
-                                    auto_begin=False)
+                adapter.execute(profile, sql, model_name=model_name,
+                                auto_begin=False, fetch=False)
 
             adapter.release_connection(profile, model_name)
 
@@ -379,8 +388,7 @@ class ModelRunner(CompileRunner):
     def describe_node(self):
         materialization = dbt.utils.get_materialization(self.node)
         schema_name = self.node.get('schema')
-        node_name = self.node.get('name')
-
+        node_name = self.node.get('alias')
         return "{} model {}.{}".format(materialization, schema_name, node_name)
 
     def print_start_line(self):
@@ -416,7 +424,7 @@ class ModelRunner(CompileRunner):
                 model,
                 self.adapter.type())
 
-        materialization_macro.get('generator')(context)()
+        materialization_macro.generator(context)()
 
         result = context['load_result']('main')
 
@@ -490,11 +498,7 @@ class SeedRunner(ModelRunner):
 
     def describe_node(self):
         schema_name = self.node.get('schema')
-        return "seed file {}.{}".format(schema_name, self.node["name"])
-
-    @classmethod
-    def before_run(cls, project, adapter, flat_graph):
-        cls.create_schemas(project, adapter, flat_graph)
+        return "seed file {}.{}".format(schema_name, self.node['alias'])
 
     def before_execute(self):
         description = self.describe_node()

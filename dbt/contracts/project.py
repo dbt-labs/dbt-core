@@ -1,18 +1,27 @@
-from voluptuous import Schema, Required, ALLOW_EXTRA
-
-from dbt.contracts.common import validate_with
+from dbt.api.object import APIObject
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
-project_contract = Schema({
-    Required('name'): str
-}, extra=ALLOW_EXTRA)
+PROJECT_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': True,
+    # TODO: Come back and wire the rest of the project config stuff into this.
+    'description': 'The project configuration. This is incomplete.',
+    'properties': {
+        'name': {
+            'type': 'string',
+        }
+    },
+    'required': ['name'],
+}
 
-projects_list_contract = Schema({str: project_contract})
+PROJECTS_LIST_PROJECT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'patternProperties': {
+        '.*': PROJECT_CONTRACT,
+    },
+}
 
 
-def validate(project):
-    validate_with(project_contract, project)
-
-
-def validate_list(projects):
-    validate_with(projects_list_contract, projects)
+class ProjectList(APIObject):
+    SCHEMA = PROJECTS_LIST_PROJECT

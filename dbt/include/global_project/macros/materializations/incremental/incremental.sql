@@ -1,7 +1,6 @@
 {% macro dbt__incremental_delete(target_relation, tmp_relation) -%}
 
   {%- set unique_key = config.require('unique_key') -%}
-  {%- set identifier = model['name'] -%}
 
   delete
   from {{ target_relation }}
@@ -16,8 +15,8 @@
   {%- set sql_where = config.require('sql_where') -%}
   {%- set unique_key = config.get('unique_key') -%}
 
-  {%- set identifier = model['name'] -%}
-  {%- set tmp_identifier = model['name'] + '__dbt_incremental_tmp' -%}
+  {%- set identifier = model['alias'] -%}
+  {%- set tmp_identifier = identifier + '__dbt_incremental_tmp' -%}
 
   {%- set existing_relations = adapter.list_relations(schema=schema) -%}
   {%- set old_relation = adapter.get_relation(relations_list=existing_relations,
@@ -60,10 +59,8 @@
      {%- call statement() -%}
 
        {% set tmp_table_sql -%}
-         with dbt_incr_sbq as (
-           {{ sql }}
-         )
-         select * from dbt_incr_sbq
+         {# We are using a subselect instead of a CTE here to allow PostgreSQL to use indexes. -#}
+         select * from ({{ sql }}) as dbt_incr_sbq
          where ({{ sql_where }})
            or ({{ sql_where }}) is null
        {%- endset %}

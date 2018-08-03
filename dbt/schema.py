@@ -1,12 +1,31 @@
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
+import dbt.exceptions
+
+import google.cloud.bigquery
 
 
 class Column(object):
+    TYPE_LABELS = {
+        'STRING': 'TEXT',
+        'TIMESTAMP': 'TIMESTAMP',
+        'FLOAT': 'FLOAT',
+        'INTEGER': 'INT'
+    }
+
     def __init__(self, column, dtype, char_size=None, numeric_size=None):
         self.column = column
         self.dtype = dtype
         self.char_size = char_size
         self.numeric_size = numeric_size
+
+    @classmethod
+    def translate_type(cls, dtype):
+        return cls.TYPE_LABELS.get(dtype.upper(), dtype)
+
+    @classmethod
+    def create(cls, name, label_or_dtype):
+        column_type = cls.translate_type(label_or_dtype)
+        return cls(name, column_type)
 
     @property
     def name(self):
@@ -49,6 +68,9 @@ class Column(object):
 
         return other_column.string_size() > self.string_size()
 
+    def literal(self, value):
+        return "{}::{}".format(value, self.data_type)
+
     @classmethod
     def string_type(cls, size):
         return "character varying({})".format(size)
@@ -57,27 +79,41 @@ class Column(object):
     def numeric_type(cls, dtype, size):
         # This could be decimal(...), numeric(...), number(...)
         # Just use whatever was fed in here -- don't try to get too clever
-        return "{}({})".format(dtype, size)
+        if size is None:
+            return dtype
+        else:
+            return "{}({})".format(dtype, size)
 
     def __repr__(self):
         return "<Column {} ({})>".format(self.name, self.data_type)
 
 
 class BigQueryColumn(Column):
-    def __init__(self, column, dtype, fields, mode):
+    TYPE_LABELS = {
+        'STRING': 'STRING',
+        'TIMESTAMP': 'TIMESTAMP',
+        'FLOAT': 'FLOAT64',
+        'INTEGER': 'INT64',
+        'RECORD': 'RECORD',
+    }
+
+    def __init__(self, column, dtype, fields=None, mode='NULLABLE'):
         super(BigQueryColumn, self).__init__(column, dtype)
 
-        self.mode = mode
+        if fields is None:
+            fields = []
+
         self.fields = self.wrap_subfields(fields)
+        self.mode = mode
 
     @classmethod
     def wrap_subfields(cls, fields):
-        return [BigQueryColumn.create(field) for field in fields]
+        return [BigQueryColumn.create_from_field(field) for field in fields]
 
     @classmethod
-    def create(cls, field):
-        return BigQueryColumn(field.name, field.field_type, field.fields,
-                              field.mode)
+    def create_from_field(cls, field):
+        return BigQueryColumn(field.name, cls.translate_type(field.field_type),
+                              field.fields, field.mode)
 
     @classmethod
     def _flatten_recursive(cls, col, prefix=None):
@@ -104,9 +140,34 @@ class BigQueryColumn(Column):
     def quoted(self):
         return '`{}`'.format(self.column)
 
+    def literal(self, value):
+        return "cast({} as {})".format(value, self.dtype)
+
+    def to_bq_schema_object(self):
+        kwargs = {}
+        if len(self.fields) > 0:
+            fields = [field.to_bq_schema_object() for field in self.fields]
+            kwargs = {"fields": fields}
+
+        return google.cloud.bigquery.SchemaField(self.name, self.dtype,
+                                                 self.mode, **kwargs)
+
     @property
     def data_type(self):
-        return self.dtype
+        if self.dtype.upper() == 'RECORD':
+            subcols = [
+                "{} {}".format(col.name, col.data_type) for col in self.fields
+            ]
+            field_type = 'STRUCT<{}>'.format(", ".join(subcols))
+
+        else:
+            field_type = self.dtype
+
+        if self.mode.upper() == 'REPEATED':
+            return 'ARRAY<{}>'.format(field_type)
+
+        else:
+            return field_type
 
     def is_string(self):
         return self.dtype.lower() == 'string'

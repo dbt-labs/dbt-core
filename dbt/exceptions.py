@@ -1,5 +1,6 @@
 from dbt.compat import basestring
 from dbt.logger import GLOBAL_LOGGER as logger
+import re
 
 
 class Exception(BaseException):
@@ -164,6 +165,10 @@ This typically happens when ref() is placed within a conditional block.
 To fix this, add the following hint to the top of the model "{model_name}":
 
 -- depends_on: {ref_string}"""
+    # This explicitly references model['name'], instead of model['alias'], for
+    # better error messages. Ex. If models foo_users and bar_users are aliased
+    # to 'users', in their respective schemas, then you would want to see
+    # 'bar_users' in your error messge instead of just 'users'.
     error_msg = base_error_msg.format(
         model_name=model['name'],
         model_path=model['path'],
@@ -336,6 +341,19 @@ def raise_duplicate_resource_name(node_1, node_2):
         'when ref("{}") is used. To fix this,\nchange the name of one of '
         'these resources:\n- {} ({})\n- {} ({})'.format(
             duped_name,
+            duped_name,
+            node_1['unique_id'], node_1['original_file_path'],
+            node_2['unique_id'], node_2['original_file_path']))
+
+
+def raise_ambiguous_alias(node_1, node_2):
+    duped_name = "{}.{}".format(node_1['schema'], node_1['alias'])
+
+    raise_compiler_error(
+        'dbt found two resources with the database representation "{}".\ndbt '
+        'cannot create two resources with identical database representations. '
+        'To fix this,\nchange the "schema" or "alias" configuration of one of '
+        'these resources:\n- {} ({})\n- {} ({})'.format(
             duped_name,
             node_1['unique_id'], node_1['original_file_path'],
             node_2['unique_id'], node_2['original_file_path']))

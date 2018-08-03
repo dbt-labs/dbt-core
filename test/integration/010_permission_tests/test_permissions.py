@@ -41,4 +41,5 @@ class TestPermissions(DBTIntegrationTest):
         self.run_sql('grant usage, create on schema "{}" to noaccess'.format(self.unique_schema()))
         self.run_sql('grant select on all tables in schema "{}" to noaccess'.format(self.unique_schema()))
 
-        self.run_dbt(['run', '--target', 'noaccess'])
+        results = self.run_dbt(['run', '--target', 'noaccess'])
+        self.assertEqual(len(results), 1)

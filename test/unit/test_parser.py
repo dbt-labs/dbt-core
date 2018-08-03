@@ -3,8 +3,10 @@ import unittest
 import os
 
 import dbt.flags
-import dbt.parser
+from dbt.parser import ModelParser, MacroParser, DataTestParser, SchemaParser, ParserUtils
 
+from dbt.node_types import NodeType
+from dbt.contracts.graph.parsed import ParsedManifest, ParsedNode, ParsedMacro
 
 def get_os_path(unix_path):
     return os.path.normpath(unix_path)
@@ -85,13 +87,14 @@ class ParserTest(unittest.TestCase):
         }]
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
                 'model.root.model_one': {
+                    'alias': 'model_one',
                     'name': 'model_one',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -107,7 +110,7 @@ class ParserTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'model_one.sql',
                     'raw_sql': self.find_input_by_name(
                         models, 'model_one').get('raw_sql')
@@ -143,13 +146,14 @@ class ParserTest(unittest.TestCase):
         })
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
                 'model.root.model_one': {
+                    'alias': 'model_one',
                     'name': 'model_one',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -165,7 +169,7 @@ class ParserTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': ephemeral_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': get_os_path('nested/path/model_one.sql'),
                     'raw_sql': self.find_input_by_name(
                         models, 'model_one').get('raw_sql')
@@ -185,12 +189,13 @@ class ParserTest(unittest.TestCase):
         }]
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config}),
             {
                 'model.root.model_one': {
+                    'alias': 'model_one',
                     'name': 'model_one',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -204,7 +209,7 @@ class ParserTest(unittest.TestCase):
                         'macros': [],
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'model_one.sql',
                     'original_file_path': 'model_one.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -234,13 +239,14 @@ class ParserTest(unittest.TestCase):
         }]
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
                 'model.root.base': {
+                    'alias': 'base',
                     'name': 'base',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -254,7 +260,7 @@ class ParserTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'base.sql',
                     'original_file_path': 'base.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -262,6 +268,7 @@ class ParserTest(unittest.TestCase):
                         models, 'base').get('raw_sql')
                 },
                 'model.root.events_tx': {
+                    'alias': 'events_tx',
                     'name': 'events_tx',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -269,13 +276,13 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'events_tx'],
                     'empty': False,
                     'package_name': 'root',
-                    'refs': [('base',)],
+                    'refs': [['base']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'events_tx.sql',
                     'original_file_path': 'events_tx.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -333,13 +340,14 @@ class ParserTest(unittest.TestCase):
         }]
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
                 'model.root.events': {
+                    'alias': 'events',
                     'name': 'events',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -353,7 +361,7 @@ class ParserTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'events.sql',
                     'original_file_path': 'events.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -361,6 +369,7 @@ class ParserTest(unittest.TestCase):
                         models, 'events').get('raw_sql')
                 },
                 'model.root.sessions': {
+                    'alias': 'sessions',
                     'name': 'sessions',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -374,7 +383,7 @@ class ParserTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'sessions.sql',
                     'original_file_path': 'sessions.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -382,6 +391,7 @@ class ParserTest(unittest.TestCase):
                         models, 'sessions').get('raw_sql')
                 },
                 'model.root.events_tx': {
+                    'alias': 'events_tx',
                     'name': 'events_tx',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -389,13 +399,13 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'events_tx'],
                     'empty': False,
                     'package_name': 'root',
-                    'refs': [('events',)],
+                    'refs': [['events']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'events_tx.sql',
                     'original_file_path': 'events_tx.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -403,6 +413,7 @@ class ParserTest(unittest.TestCase):
                         models, 'events_tx').get('raw_sql')
                 },
                 'model.root.sessions_tx': {
+                    'alias': 'sessions_tx',
                     'name': 'sessions_tx',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -410,13 +421,13 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'sessions_tx'],
                     'empty': False,
                     'package_name': 'root',
-                    'refs': [('sessions',)],
+                    'refs': [['sessions']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'sessions_tx.sql',
                     'original_file_path': 'sessions_tx.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -424,6 +435,7 @@ class ParserTest(unittest.TestCase):
                         models, 'sessions_tx').get('raw_sql')
                 },
                 'model.root.multi': {
+                    'alias': 'multi',
                     'name': 'multi',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -431,13 +443,13 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'multi'],
                     'empty': False,
                     'package_name': 'root',
-                    'refs': [('sessions_tx',), ('events_tx',)],
+                    'refs': [['sessions_tx'], ['events_tx']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'multi.sql',
                     'original_file_path': 'multi.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -497,13 +509,14 @@ class ParserTest(unittest.TestCase):
         }]
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
                 'model.snowplow.events': {
+                    'alias': 'events',
                     'name': 'events',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -517,7 +530,7 @@ class ParserTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'events.sql',
                     'original_file_path': 'events.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -525,6 +538,7 @@ class ParserTest(unittest.TestCase):
                         models, 'events').get('raw_sql')
                 },
                 'model.snowplow.sessions': {
+                    'alias': 'sessions',
                     'name': 'sessions',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -538,7 +552,7 @@ class ParserTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'sessions.sql',
                     'original_file_path': 'sessions.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -546,6 +560,7 @@ class ParserTest(unittest.TestCase):
                         models, 'sessions').get('raw_sql')
                 },
                 'model.snowplow.events_tx': {
+                    'alias': 'events_tx',
                     'name': 'events_tx',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -553,13 +568,13 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['snowplow', 'events_tx'],
                     'empty': False,
                     'package_name': 'snowplow',
-                    'refs': [('events',)],
+                    'refs': [['events']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'events_tx.sql',
                     'original_file_path': 'events_tx.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -567,6 +582,7 @@ class ParserTest(unittest.TestCase):
                         models, 'events_tx').get('raw_sql')
                 },
                 'model.snowplow.sessions_tx': {
+                    'alias': 'sessions_tx',
                     'name': 'sessions_tx',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -574,13 +590,13 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['snowplow', 'sessions_tx'],
                     'empty': False,
                     'package_name': 'snowplow',
-                    'refs': [('sessions',)],
+                    'refs': [['sessions']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'sessions_tx.sql',
                     'original_file_path': 'sessions_tx.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -588,6 +604,7 @@ class ParserTest(unittest.TestCase):
                         models, 'sessions_tx').get('raw_sql')
                 },
                 'model.root.multi': {
+                    'alias': 'multi',
                     'name': 'multi',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -595,14 +612,14 @@ class ParserTest(unittest.TestCase):
                     'fqn': ['root', 'multi'],
                     'empty': False,
                     'package_name': 'root',
-                    'refs': [('snowplow', 'sessions_tx'),
-                             ('snowplow', 'events_tx')],
+                    'refs': [['snowplow', 'sessions_tx'],
+                             ['snowplow', 'events_tx']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'multi.sql',
                     'original_file_path': 'multi.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -618,6 +635,7 @@ class ParserTest(unittest.TestCase):
             'nodes': {
                 'model.snowplow.events': {
                     'name': 'events',
+                    'alias': 'events',
                     'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.snowplow.events',
@@ -630,7 +648,7 @@ class ParserTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.disabled_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'events.sql',
                     'original_file_path': 'events.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -638,6 +656,7 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.root.events': {
                     'name': 'events',
+                    'alias': 'events',
                     'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.events',
@@ -650,7 +669,7 @@ class ParserTest(unittest.TestCase):
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'events.sql',
                     'original_file_path': 'events.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -658,19 +677,20 @@ class ParserTest(unittest.TestCase):
                 },
                 'model.root.dep': {
                     'name': 'dep',
+                    'alias': 'dep',
                     'schema': 'analytics',
                     'resource_type': 'model',
                     'unique_id': 'model.root.dep',
                     'fqn': ['root', 'dep'],
                     'empty': False,
                     'package_name': 'root',
-                    'refs': [('events',)],
+                    'refs': [['events']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'multi.sql',
                     'original_file_path': 'multi.sql',
                     'root_path': get_os_path('/usr/src/app'),
@@ -679,13 +699,20 @@ class ParserTest(unittest.TestCase):
             }
         }
 
+        manifest = ParsedManifest(
+            nodes={k: ParsedNode(**v) for (k,v) in graph['nodes'].items()},
+            macros={k: ParsedMacro(**v) for (k,v) in graph['macros'].items()},
+        )
+
+        processed_manifest = ParserUtils.process_refs(manifest, 'root')
         self.assertEquals(
-            dbt.parser.process_refs(graph, 'root'),
+            processed_manifest.to_flat_graph(),
             {
                 'macros': {},
                 'nodes': {
                     'model.snowplow.events': {
                         'name': 'events',
+                        'alias': 'events',
                         'schema': 'analytics',
                         'resource_type': 'model',
                         'unique_id': 'model.snowplow.events',
@@ -698,14 +725,16 @@ class ParserTest(unittest.TestCase):
                             'macros': []
                         },
                         'config': self.disabled_config,
-                        'tags': set(),
+                        'tags': [],
                         'path': 'events.sql',
                         'original_file_path': 'events.sql',
                         'root_path': get_os_path('/usr/src/app'),
-                        'raw_sql': 'does not matter'
+                        'raw_sql': 'does not matter',
+                        'agate_table': None,
                     },
                     'model.root.events': {
                         'name': 'events',
+                        'alias': 'events',
                         'schema': 'analytics',
                         'resource_type': 'model',
                         'unique_id': 'model.root.events',
@@ -718,31 +747,34 @@ class ParserTest(unittest.TestCase):
                             'macros': []
                         },
                         'config': self.model_config,
-                        'tags': set(),
+                        'tags': [],
                         'path': 'events.sql',
                         'original_file_path': 'events.sql',
                         'root_path': get_os_path('/usr/src/app'),
-                        'raw_sql': 'does not matter'
+                        'raw_sql': 'does not matter',
+                        'agate_table': None,
                     },
                     'model.root.dep': {
                         'name': 'dep',
+                        'alias': 'dep',
                         'schema': 'analytics',
                         'resource_type': 'model',
                         'unique_id': 'model.root.dep',
                         'fqn': ['root', 'dep'],
                         'empty': False,
                         'package_name': 'root',
-                        'refs': [('events',)],
+                        'refs': [['events']],
                         'depends_on': {
                             'nodes': ['model.root.events'],
                             'macros': []
                         },
                         'config': self.model_config,
-                        'tags': set(),
+                        'tags': [],
                         'path': 'multi.sql',
                         'original_file_path': 'multi.sql',
                         'root_path': get_os_path('/usr/src/app'),
-                        'raw_sql': 'does not matter'
+                        'raw_sql': 'does not matter',
+                        'agate_table': None,
                     }
                 }
             }
@@ -765,13 +797,14 @@ class ParserTest(unittest.TestCase):
         })
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
                 'model.root.model_one': {
+                    'alias': 'model_one',
                     'name': 'model_one',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -785,7 +818,7 @@ class ParserTest(unittest.TestCase):
                         'macros': [],
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'root_path': get_os_path('/usr/src/app'),
                     'path': 'model_one.sql',
                     'original_file_path': 'model_one.sql',
@@ -847,13 +880,14 @@ class ParserTest(unittest.TestCase):
         })
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
                 'model.root.table': {
+                    'alias': 'table',
                     'name': 'table',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -869,12 +903,13 @@ class ParserTest(unittest.TestCase):
                     'path': 'table.sql',
                     'original_file_path': 'table.sql',
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'root_path': get_os_path('/usr/src/app'),
                     'raw_sql': self.find_input_by_name(
                         models, 'table').get('raw_sql')
                 },
                 'model.root.ephemeral': {
+                    'alias': 'ephemeral',
                     'name': 'ephemeral',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -890,12 +925,13 @@ class ParserTest(unittest.TestCase):
                     'path': 'ephemeral.sql',
                     'original_file_path': 'ephemeral.sql',
                     'config': ephemeral_config,
-                    'tags': set(),
+                    'tags': [],
                     'root_path': get_os_path('/usr/src/app'),
                     'raw_sql': self.find_input_by_name(
                         models, 'ephemeral').get('raw_sql')
                 },
                 'model.root.view': {
+                    'alias': 'view',
                     'name': 'view',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -912,7 +948,7 @@ class ParserTest(unittest.TestCase):
                     'original_file_path': 'view.sql',
                     'root_path': get_os_path('/usr/src/app'),
                     'config': view_config,
-                    'tags': set(),
+                    'tags': [],
                     'raw_sql': self.find_input_by_name(
                         models, 'ephemeral').get('raw_sql')
                 }
@@ -1038,13 +1074,14 @@ class ParserTest(unittest.TestCase):
         })
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
                 'model.root.table': {
+                    'alias': 'table',
                     'name': 'table',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -1061,11 +1098,12 @@ class ParserTest(unittest.TestCase):
                     'original_file_path': 'table.sql',
                     'root_path': get_os_path('/usr/src/app'),
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'raw_sql': self.find_input_by_name(
                         models, 'table').get('raw_sql')
                 },
                 'model.root.ephemeral': {
+                    'alias': 'ephemeral',
                     'name': 'ephemeral',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -1082,11 +1120,12 @@ class ParserTest(unittest.TestCase):
                     'original_file_path': 'ephemeral.sql',
                     'root_path': get_os_path('/usr/src/app'),
                     'config': ephemeral_config,
-                    'tags': set(),
+                    'tags': [],
                     'raw_sql': self.find_input_by_name(
                         models, 'ephemeral').get('raw_sql')
                 },
                 'model.root.view': {
+                    'alias': 'view',
                     'name': 'view',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -1103,11 +1142,12 @@ class ParserTest(unittest.TestCase):
                     'original_file_path': 'view.sql',
                     'root_path': get_os_path('/usr/src/app'),
                     'config': view_config,
-                    'tags': set(),
+                    'tags': [],
                     'raw_sql': self.find_input_by_name(
                         models, 'view').get('raw_sql')
                 },
                 'model.snowplow.multi_sort': {
+                    'alias': 'multi_sort',
                     'name': 'multi_sort',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -1124,7 +1164,7 @@ class ParserTest(unittest.TestCase):
                     'original_file_path': get_os_path('views/multi_sort.sql'),
                     'root_path': get_os_path('/usr/src/app'),
                     'config': multi_sort_config,
-                    'tags': set(),
+                    'tags': [],
                     'raw_sql': self.find_input_by_name(
                         models, 'multi_sort').get('raw_sql')
                 }
@@ -1153,13 +1193,14 @@ class ParserTest(unittest.TestCase):
         relationships_sql = "{{ test_relationships(model=ref('model_one'), field='id', from='id', to=ref('model_two')) }}" # noqa
 
         self.assertEquals(
-            dbt.parser.parse_schema_tests(
+            SchemaParser.parse_schema_tests(
                 tests,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
                 'test.root.not_null_model_one_id': {
+                    'alias': 'not_null_model_one_id',
                     'name': 'not_null_model_one_id',
                     'schema': 'analytics',
                     'resource_type': 'test',
@@ -1168,7 +1209,7 @@ class ParserTest(unittest.TestCase):
                     'empty': False,
                     'package_name': 'root',
                     'root_path': get_os_path('/usr/src/app'),
-                    'refs': [('model_one',)],
+                    'refs': [['model_one']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -1177,10 +1218,11 @@ class ParserTest(unittest.TestCase):
                     'original_file_path': 'test_one.yml',
                     'path': get_os_path(
                         'schema_test/not_null_model_one_id.sql'),
-                    'tags': set(['schema']),
+                    'tags': ['schema'],
                     'raw_sql': not_null_sql,
                 },
                 'test.root.unique_model_one_id': {
+                    'alias': 'unique_model_one_id',
                     'name': 'unique_model_one_id',
                     'schema': 'analytics',
                     'resource_type': 'test',
@@ -1189,7 +1231,7 @@ class ParserTest(unittest.TestCase):
                     'empty': False,
                     'package_name': 'root',
                     'root_path': get_os_path('/usr/src/app'),
-                    'refs': [('model_one',)],
+                    'refs': [['model_one']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -1197,10 +1239,11 @@ class ParserTest(unittest.TestCase):
                     'config': self.model_config,
                     'original_file_path': 'test_one.yml',
                     'path': get_os_path('schema_test/unique_model_one_id.sql'),
-                    'tags': set(['schema']),
+                    'tags': ['schema'],
                     'raw_sql': unique_sql,
                 },
                 'test.root.accepted_values_model_one_id__a__b': {
+                    'alias': 'accepted_values_model_one_id__a__b',
                     'name': 'accepted_values_model_one_id__a__b',
                     'schema': 'analytics',
                     'resource_type': 'test',
@@ -1211,7 +1254,7 @@ class ParserTest(unittest.TestCase):
                     'package_name': 'root',
                     'original_file_path': 'test_one.yml',
                     'root_path': get_os_path('/usr/src/app'),
-                    'refs': [('model_one',)],
+                    'refs': [['model_one']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -1219,10 +1262,11 @@ class ParserTest(unittest.TestCase):
                     'config': self.model_config,
                     'path': get_os_path(
                         'schema_test/accepted_values_model_one_id__a__b.sql'),
-                    'tags': set(['schema']),
+                    'tags': ['schema'],
                     'raw_sql': accepted_values_sql,
                 },
                 'test.root.relationships_model_one_id__id__ref_model_two_': {
+                    'alias': 'relationships_model_one_id__id__ref_model_two_',
                     'name': 'relationships_model_one_id__id__ref_model_two_',
                     'schema': 'analytics',
                     'resource_type': 'test',
@@ -1233,14 +1277,14 @@ class ParserTest(unittest.TestCase):
                     'package_name': 'root',
                     'original_file_path': 'test_one.yml',
                     'root_path': get_os_path('/usr/src/app'),
-                    'refs': [('model_one',), ('model_two',)],
+                    'refs': [['model_one'], ['model_two']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
                     },
                     'config': self.model_config,
                     'path': get_os_path('schema_test/relationships_model_one_id__id__ref_model_two_.sql'), # noqa
-                    'tags': set(['schema']),
+                    'tags': ['schema'],
                     'raw_sql': relationships_sql,
                 }
 
@@ -1270,7 +1314,7 @@ another_model:
         }]
 
         self.assertEquals(
-            dbt.parser.parse_schema_tests(
+            SchemaParser.parse_schema_tests(
                 tests,
                 self.root_project_config,
                 {'root': self.root_project_config,
@@ -1289,7 +1333,7 @@ another_model:
         }]
 
         self.assertEquals(
-            dbt.parser.parse_schema_tests(
+            SchemaParser.parse_schema_tests(
                 tests,
                 self.root_project_config,
                 {'root': self.root_project_config,
@@ -1308,13 +1352,14 @@ another_model:
         }]
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            DataTestParser.parse_sql_nodes(
                 tests,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
                 'test.root.no_events': {
+                    'alias': 'no_events',
                     'name': 'no_events',
                     'schema': 'analytics',
                     'resource_type': 'test',
@@ -1322,7 +1367,7 @@ another_model:
                     'fqn': ['root', 'no_events'],
                     'empty': False,
                     'package_name': 'root',
-                    'refs': [('base',)],
+                    'refs': [['base']],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -1331,7 +1376,7 @@ another_model:
                     'path': 'no_events.sql',
                     'original_file_path': 'no_events.sql',
                     'root_path': get_os_path('/usr/src/app'),
-                    'tags': set(),
+                    'tags': [],
                     'raw_sql': self.find_input_by_name(
                         tests, 'no_events').get('raw_sql')
                 }
@@ -1345,15 +1390,14 @@ another_model:
 {% endmacro %}
 """
 
-        result = dbt.parser.parse_macro_file(
+        result = MacroParser.parse_macro_file(
             macro_file_path='simple_macro.sql',
             macro_file_contents=macro_file_contents,
             root_path=get_os_path('/usr/src/app'),
-            package_name='root')
+            package_name='root',
+            resource_type=NodeType.Macro)
 
-        self.assertTrue(callable(result['macro.root.simple']['generator']))
-
-        del result['macro.root.simple']['generator']
+        self.assertTrue(callable(result['macro.root.simple'].generator))
 
         self.assertEquals(
             result,
@@ -1368,7 +1412,7 @@ another_model:
                     },
                     'original_file_path': 'simple_macro.sql',
                     'root_path': get_os_path('/usr/src/app'),
-                    'tags': set(),
+                    'tags': [],
                     'path': 'simple_macro.sql',
                     'raw_sql': macro_file_contents,
                 }
@@ -1382,15 +1426,14 @@ another_model:
 {% endmacro %}
 """
 
-        result = dbt.parser.parse_macro_file(
+        result = MacroParser.parse_macro_file(
             macro_file_path='simple_macro.sql',
             macro_file_contents=macro_file_contents,
             root_path=get_os_path('/usr/src/app'),
-            package_name='root')
+            package_name='root',
+            resource_type=NodeType.Macro)
 
-        self.assertTrue(callable(result['macro.root.simple']['generator']))
-
-        del result['macro.root.simple']['generator']
+        self.assertTrue(callable(result['macro.root.simple'].generator))
 
         self.assertEquals(
             result,
@@ -1405,7 +1448,7 @@ another_model:
                     },
                     'original_file_path': 'simple_macro.sql',
                     'root_path': get_os_path('/usr/src/app'),
-                    'tags': set(),
+                    'tags': [],
                     'path': 'simple_macro.sql',
                     'raw_sql': macro_file_contents,
                 }
@@ -1423,13 +1466,14 @@ another_model:
         }]
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
                 'model.root.model_one': {
+                    'alias': 'model_one',
                     'name': 'model_one',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -1445,7 +1489,7 @@ another_model:
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'model_one.sql',
                     'raw_sql': self.find_input_by_name(
                         models, 'model_one').get('raw_sql')
@@ -1465,13 +1509,14 @@ another_model:
         }]
 
         self.assertEquals(
-            dbt.parser.parse_sql_nodes(
+            ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
             {
                 'model.root.model_one': {
+                    'alias': 'model_one',
                     'name': 'model_one',
                     'schema': 'analytics',
                     'resource_type': 'model',
@@ -1486,7 +1531,7 @@ another_model:
                         'macros': []
                     },
                     'config': self.model_config,
-                    'tags': set(),
+                    'tags': [],
                     'path': 'model_one.sql',
                     'original_file_path': 'model_one.sql',
                     'raw_sql': self.find_input_by_name(

@@ -36,7 +36,8 @@ class TestSimpleDependencyWithConfigs(BaseTestSimpleDependencyWithConfigs):
     @attr(type='postgres')
     def test_simple_dependency(self):
         self.run_dbt(["deps"])
-        self.run_dbt(["run"])
+        results = self.run_dbt(["run"])
+        self.assertEqual(len(results),  5)
 
         self.assertTablesEqual('seed_config_expected_1',"config")
         self.assertTablesEqual("seed","table_model")
@@ -70,7 +71,8 @@ class TestSimpleDependencyWithOverriddenConfigs(BaseTestSimpleDependencyWithConf
     @attr(type='postgres')
     def test_simple_dependency(self):
         self.run_dbt(["deps"])
-        self.run_dbt(["run"])
+        results = self.run_dbt(["run"])
+        self.assertEqual(len(results),  5)
 
         self.assertTablesEqual('seed_config_expected_2',"config")
         self.assertTablesEqual("seed","table_model")
@@ -108,7 +110,8 @@ class TestSimpleDependencyWithModelSpecificOverriddenConfigs(BaseTestSimpleDepen
         self.use_default_project()
 
         self.run_dbt(["deps"])
-        self.run_dbt(["run"])
+        results = self.run_dbt(["run"])
+        self.assertEqual(len(results),  5)
 
         self.assertTablesEqual('seed_config_expected_3',"config")
         self.assertTablesEqual("seed","table_model")
@@ -153,7 +156,8 @@ class TestSimpleDependencyWithModelSpecificOverriddenConfigsAndMaterializations(
     @attr(type='postgres')
     def test_simple_dependency(self):
         self.run_dbt(["deps"])
-        self.run_dbt(["run"])
+        results = self.run_dbt(["run"])
+        self.assertEqual(len(results),  3)
 
         self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed","incremental")
