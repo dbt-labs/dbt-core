@@ -566,8 +566,8 @@ class ManifestStateCheck(dbtClassMixin):
 
 @dataclass
 class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
-    """The manifest for the full graph, after parsing and during compilation.
-    """
+    """The manifest for the full graph, after parsing and during compilation."""
+
     # These attributes are both positional and by keyword. If an attribute
     # is added it must all be added in the __reduce_ex__ method in the
     # args tuple in the right position.
