@@ -2,7 +2,7 @@ from dbt.api import APIObject
 from dbt.contracts.graph.unparsed import UNPARSED_NODE_CONTRACT
 from dbt.contracts.graph.parsed import PARSED_NODE_CONTRACT, \
     PARSED_MACRO_CONTRACT, PARSED_DOCUMENTATION_CONTRACT, ParsedNode
-from dbt.contracts.graph.compiled import COMPILED_NODE_CONTRACT
+from dbt.contracts.graph.compiled import COMPILED_NODE_CONTRACT, CompiledNode
 from dbt.exceptions import ValidationException
 from dbt.node_types import NodeType
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -89,7 +89,7 @@ PARSED_MANIFEST_CONTRACT = {
 }
 
 
-class CompileResultNode(ParsedNode):
+class CompileResultNode(CompiledNode):
     SCHEMA = COMPILE_RESULT_NODE_CONTRACT
 
 
@@ -271,17 +271,3 @@ class Manifest(APIObject):
         raise AttributeError("'{}' object has no attribute '{}'".format(
             type(self).__name__, name)
         )
-
-
-def pick_best_node_type(data):
-    """Try to pick the 'best' node type by picking the most specific one.
-
-    This isn't pretty but it'll do for now in our crazy mixed-up world
-    """
-    for cls in (CompiledNode, ParsedNode, UnparsedNode):
-        try:
-            return cls(**data)
-        except ValidationException:
-            pass
-    # trigger the worst exception we can.
-    CompiledNode(**data)
