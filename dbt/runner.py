@@ -4,7 +4,7 @@ import time
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.contracts.graph.parsed import ParsedNode
-from dbt.contracts.graph.any import CompileResultNode
+from dbt.contracts.graph.manifest import CompileResultNode
 
 import dbt.clients.jinja
 import dbt.compilation

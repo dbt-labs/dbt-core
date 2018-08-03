@@ -4,7 +4,7 @@ import copy
 import os
 
 import dbt.flags
-from dbt.contracts.graph.any import Manifest
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedNode
 from dbt.contracts.graph.compiled import CompiledNode
 from dbt.utils import timestring

@@ -1,7 +1,7 @@
 import dbt.exceptions
 
 from dbt.node_types import NodeType
-from dbt.contracts.graph.any import Manifest
+from dbt.contracts.graph.manifest import Manifest
 from dbt.utils import timestring
 
 import dbt.parser

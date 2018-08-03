@@ -8,7 +8,7 @@ from dbt.parser import ModelParser, MacroParser, DataTestParser, SchemaParser, P
 from dbt.utils import timestring
 
 from dbt.node_types import NodeType
-from dbt.contracts.graph.any import Manifest
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedNode, ParsedMacro, ParsedNodePatch
 from dbt.contracts.graph.unparsed import UnparsedNode
 

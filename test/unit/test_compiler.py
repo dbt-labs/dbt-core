@@ -5,7 +5,7 @@ import os
 import dbt.flags
 import dbt.compilation
 from collections import OrderedDict
-from dbt.contracts.graph.any import Manifest
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.compiled import CompiledNode
 
 class CompilerTest(unittest.TestCase):

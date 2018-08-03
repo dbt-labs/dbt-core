@@ -11,7 +11,7 @@ import dbt.context.parser
 from dbt.utils import coalesce
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.contracts.graph.parsed import ParsedNode
-from dbt.contracts.graph.any import Manifest
+from dbt.contracts.graph.manifest import Manifest
 
 
 class BaseParser(object):
