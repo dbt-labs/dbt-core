@@ -90,7 +90,7 @@ def _add_macros(context, model, manifest):
         context.get(package_name, {}) \
                .update(macro_map)
 
-        if package_name == model.get('package_name'):
+        if package_name == model.package_name:
             macros_to_add['local'].append(macro_map)
         elif package_name == dbt.include.GLOBAL_PROJECT_NAME:
             macros_to_add['global'].append(macro_map)
@@ -340,14 +340,9 @@ def create_adapter(adapter_type, relation_type):
     return AdapterWithContext
 
 
-def generate(model, project_cfg, manifest, source_config=None, provider=None):
-    """
-    Not meant to be called directly. Call with either:
-        dbt.context.parser.generate
-    or
-        dbt.context.runtime.generate
-    """
-    model_dict = model.to_shallow_dict()
+def generate_base(model, model_dict, project_cfg, manifest, source_config,
+                  provider):
+    """Generate the common aspects of the config dict."""
     if provider is None:
         raise dbt.exceptions.InternalException(
             "Invalid provider given to context: {}".format(provider))
@@ -362,8 +357,8 @@ def generate(model, project_cfg, manifest, source_config=None, provider=None):
     context = {'env': target}
     schema = profile.get('schema', 'public')
 
-    pre_hooks = model.config.get('pre-hook')
-    post_hooks = model.config.get('post-hook')
+    pre_hooks = None
+    post_hooks = None
 
     relation_type = create_relation(adapter.Relation,
                                     project_cfg.get('quoting'))
@@ -372,9 +367,6 @@ def generate(model, project_cfg, manifest, source_config=None, provider=None):
                                  create_adapter(adapter, relation_type),
                                  profile,
                                  project_cfg)
-
-    cli_var_overrides = project_cfg.get('cli_vars', {})
-
     context = dbt.utils.merge(context, {
         "adapter": db_wrapper,
         "api": {
@@ -400,8 +392,8 @@ def generate(model, project_cfg, manifest, source_config=None, provider=None):
         "ref": provider.ref(db_wrapper, model, project_cfg,
                             profile, manifest),
         "return": _return,
-        "schema": model.get('schema', schema),
-        "sql": model.get('injected_sql'),
+        "schema": schema,
+        "sql": None,
         "sql_now": adapter.date_function(),
         "fromjson": fromjson,
         "tojson": tojson,
@@ -425,6 +417,11 @@ def generate(model, project_cfg, manifest, source_config=None, provider=None):
         this = get_this_relation(db_wrapper, project_cfg, profile, model_dict)
 
     context["this"] = this
+    return context
+
+
+def modify_generated_context(context, model, model_dict, project_cfg, manifest):
+    cli_var_overrides = project_cfg.get('cli_vars', {})
 
     context = _add_tracking(context)
     context = _add_validation(context)
@@ -440,3 +437,44 @@ def generate(model, project_cfg, manifest, source_config=None, provider=None):
     context['context'] = context
 
     return context
+
+
+def generate_operation_macro(model, project_cfg, manifest, provider):
+    """This is an ugly hack to support the fact that the `docs generate`
+    operation ends up in here, and macros are not nodes.
+    """
+    model_dict = model.serialize()
+    context = generate_base(model, model_dict, project_cfg, manifest,
+                            None, provider)
+
+    return modify_generated_context(context, model, model_dict, project_cfg,
+                                    manifest)
+
+
+def generate_model(model, project_cfg, manifest, source_config, provider):
+    model_dict = model.to_dict()
+    context = generate_base(model, model_dict, project_cfg, manifest,
+                            source_config, provider)
+    # overwrite schema if we have it, and hooks + sql
+    context.update({
+        'schema': model.get('schema', context['schema']),
+        'pre_hooks': model.config.get('pre-hook'),
+        'post_hooks': model.config.get('post-hook'),
+        'sql': model.get('injected_sql'),
+    })
+
+    return modify_generated_context(context, model, model_dict, project_cfg,
+                                    manifest)
+
+def generate(model, project_cfg, manifest, source_config=None, provider=None):
+    """
+    Not meant to be called directly. Call with either:
+        dbt.context.parser.generate
+    or
+        dbt.context.runtime.generate
+    """
+    if isinstance(model, ParsedMacro):
+        return generate_operation_macro(model, project_cfg, manifest, provider)
+    else:
+        return generate_model(model, project_cfg, manifest, source_config,
+                              provider)
