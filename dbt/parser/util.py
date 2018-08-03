@@ -143,7 +143,7 @@ class ParserUtils(object):
                     manifest,
                     target_model_name,
                     target_model_package,
-                    current_project.get('name'),
+                    current_project,
                     node.get('package_name'))
 
                 if target_model is None:
