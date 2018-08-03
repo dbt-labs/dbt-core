@@ -420,7 +420,8 @@ def generate_base(model, model_dict, project_cfg, manifest, source_config,
     return context
 
 
-def modify_generated_context(context, model, model_dict, project_cfg, manifest):
+def modify_generated_context(context, model, model_dict, project_cfg,
+                             manifest):
     cli_var_overrides = project_cfg.get('cli_vars', {})
 
     context = _add_tracking(context)
@@ -465,6 +466,7 @@ def generate_model(model, project_cfg, manifest, source_config, provider):
 
     return modify_generated_context(context, model, model_dict, project_cfg,
                                     manifest)
+
 
 def generate(model, project_cfg, manifest, source_config=None, provider=None):
     """

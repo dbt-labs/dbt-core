@@ -320,7 +320,6 @@ class ParsedNode(APIObject):
         self._contents['config'] = value
 
 
-
 # The parsed node update is only the 'patch', not the test. The test became a
 # regular parsed node. Note that description and columns must be present, but
 # may be empty.
