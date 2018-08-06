@@ -1,0 +1,13 @@
+version: 2
+
+models:
+  - name: ephemeral_summary
+    description: "{{ doc('ephemeral_summary') }}"
+    columns: &summary_columns
+      - name: first_name
+        description: "{{ doc('summary_first_name') }}"
+      - name: ct
+        description: "{{ doc('summary_count') }}"
+  - name: view_summary
+    description: "{{ doc('view_summary') }}"
+    columns: *summary_columns
