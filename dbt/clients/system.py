@@ -11,6 +11,7 @@ import stat
 
 import dbt.compat
 import dbt.exceptions
+import dbt.utils
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -119,7 +120,7 @@ def write_file(path, contents=''):
 
 def write_json(path, data):
     make_directory(os.path.dirname(path))
-    dbt.compat.write_json(path, data)
+    dbt.compat.write_json(path, data, cls=dbt.utils.JSONEncoder)
     return True
 
 

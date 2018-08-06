@@ -56,6 +56,6 @@ def write_file(path, s):
         return fp.write(to_string(s))
 
 
-def write_json(path, data):
+def write_json(path, data, **kwargs):
     with _open(path, 'w') as fp:
-        json.dump(data, fp)
+        json.dump(data, fp, **kwargs)

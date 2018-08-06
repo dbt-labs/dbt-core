@@ -110,7 +110,7 @@ EXECUTION_RESULT_CONTRACT = {
             ),
         }
     },
-    'required': ['results', 'manifest', 'generated_at'],
+    'required': ['results', 'generated_at', 'elapsed_time'],
 }
 
 
@@ -123,4 +123,3 @@ class ExecutionResult(APIObject):
             'generated_at': self.generated_at,
             'elapsed_time': self.elapsed_time,
         }
-
