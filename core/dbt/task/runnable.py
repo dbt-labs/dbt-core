@@ -56,7 +56,7 @@ from dbt import flags
 import dbt.utils
 from dbt.ui import warning_tag
 
-RESULT_FILE_NAME = 'run_results.json'
+RESULT_FILE_NAME = "run_results.json"
 MANIFEST_FILE_NAME = "manifest.json"
 RUNNING_STATE = DbtProcessState("running")
 
