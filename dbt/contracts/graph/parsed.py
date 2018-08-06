@@ -12,21 +12,29 @@ from dbt.contracts.graph.unparsed import UNPARSED_NODE_CONTRACT, \
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
+# TODO: which of these do we _really_ support? or is it both?
 HOOK_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'properties': {
-        'sql': {
+    'anyOf': [
+        {
+            'type': 'object',
+            'additionalProperties': False,
+            'properties': {
+                'sql': {
+                    'type': 'string',
+                },
+                'transaction': {
+                    'type': 'boolean',
+                },
+                'index': {
+                    'type': 'integer',
+                }
+            },
+            'required': ['sql', 'transaction'],
+        },
+        {
             'type': 'string',
         },
-        'transaction': {
-            'type': 'boolean',
-        },
-        'index': {
-            'type': 'integer',
-        }
-    },
-    'required': ['sql', 'transaction', 'index'],
+    ],
 }
 
 
@@ -215,14 +223,103 @@ PARSED_NODE_CONTRACT = deep_merge(
             'docrefs': {
                 'type': 'array',
                 'items': DOCREF_CONTRACT,
-            }
+            },
+            'build_path': {
+                'type': 'string',
+                'description': (
+                    'In seeds, the path to the source file used during build.'
+                ),
+            },
         },
         'required': UNPARSED_NODE_CONTRACT['required'] + [
             'unique_id', 'fqn', 'schema', 'refs', 'depends_on', 'empty',
-            'config', 'tags', 'alias',
+            'config', 'tags', 'alias', 'columns', 'description'
         ]
     }
 )
+
+
+class ParsedNode(APIObject):
+    SCHEMA = PARSED_NODE_CONTRACT
+
+    def __init__(self, agate_table=None, **kwargs):
+        self.agate_table = agate_table
+        kwargs.setdefault('columns', [])
+        kwargs.setdefault('description', '')
+        super(ParsedNode, self).__init__(**kwargs)
+
+    @property
+    def depends_on_nodes(self):
+        """Return the list of node IDs that this node depends on."""
+        return self.depends_on['nodes']
+
+    def to_dict(self):
+        """Similar to 'serialize', but tacks the agate_table attribute in too.
+        Why we need this:
+            - networkx demands that the attr_dict it gets (the node) be a dict
+                or subclass and does not respect the abstract Mapping class
+            - many jinja things access the agate_table attribute (member) of
+                the node dict.
+            - the nodes are passed around between those two contexts in a way
+                that I don't quite have clear enough yet.
+        """
+        ret = self.serialize()
+        # note: not a copy/deep copy.
+        ret['agate_table'] = self.agate_table
+        return ret
+
+    def to_shallow_dict(self):
+        ret = self._contents.copy()
+        ret['agate_table'] = self.agate_table
+        return ret
+
+    def patch(self, patch):
+        """Given a ParsedNodePatch, add the new information to the node."""
+        # explicitly pick out the parts to update so we don't inadvertently
+        # step on the model name or anything
+        self._contents.update({
+            'patch_path': patch.original_file_path,
+            'description': patch.description,
+            'columns': patch.columns,
+            'docrefs': patch.docrefs,
+        })
+        # patches always trigger re-validation
+        self.validate()
+
+    def get_materialization(self):
+        return self.config.get('materialized')
+
+    @property
+    def build_path(self):
+        return self._contents.get('build_path')
+
+    @build_path.setter
+    def build_path(self, value):
+        self._contents['build_path'] = value
+
+    @property
+    def schema(self):
+        return self._contents['schema']
+
+    @schema.setter
+    def schema(self, value):
+        self._contents['schema'] = value
+
+    @property
+    def alias(self):
+        return self._contents['alias']
+
+    @alias.setter
+    def alias(self, value):
+        self._contents['alias'] = value
+
+    @property
+    def config(self):
+        return self._contents['config']
+
+    @config.setter
+    def config(self, value):
+        self._contents['config'] = value
 
 
 # The parsed node update is only the 'patch', not the test. The test became a
@@ -264,18 +361,6 @@ PARSED_NODE_PATCH_CONTRACT = {
 
 class ParsedNodePatch(APIObject):
     SCHEMA = PARSED_NODE_PATCH_CONTRACT
-
-
-PARSED_NODES_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': (
-        'A collection of the parsed nodes, stored by their unique IDs.'
-    ),
-    'patternProperties': {
-        '.*': PARSED_NODE_CONTRACT
-    },
-}
 
 
 PARSED_MACRO_CONTRACT = deep_merge(
@@ -337,16 +422,23 @@ PARSED_MACRO_CONTRACT = deep_merge(
     }
 )
 
-PARSED_MACROS_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': (
-        'A collection of the parsed macros, stored by their unique IDs.'
-    ),
-    'patternProperties': {
-        '.*': PARSED_MACRO_CONTRACT
-    },
-}
+
+class ParsedMacro(APIObject):
+    SCHEMA = PARSED_MACRO_CONTRACT
+
+    def __init__(self, template=None, **kwargs):
+        self.template = template
+        super(ParsedMacro, self).__init__(**kwargs)
+
+    @property
+    def generator(self):
+        """
+        Returns a function that can be called to render the macro results.
+        """
+        # TODO: we can generate self.template from the other properties
+        # available in this class. should we just generate this here?
+        return dbt.clients.jinja.macro_generator(
+            self.template, self._contents)
 
 
 # This is just the file + its ID
@@ -380,18 +472,6 @@ PARSED_DOCUMENTATION_CONTRACT = deep_merge(
 )
 
 
-PARSED_DOCUMENTATIONS_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': (
-        'A collection of the parsed docs, stored by their uniqe IDs.'
-    ),
-    'patternProperties': {
-        '.*': PARSED_DOCUMENTATION_CONTRACT,
-    },
-}
-
-
 NODE_EDGE_MAP = {
     'type': 'object',
     'additionalProperties': False,
@@ -408,229 +488,9 @@ NODE_EDGE_MAP = {
 }
 
 
-PARSED_MANIFEST_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': (
-        'The full parsed manifest of the graph, with both the required nodes'
-        ' and required macros.'
-    ),
-    'properties': {
-        'nodes': PARSED_NODES_CONTRACT,
-        'macros': PARSED_MACROS_CONTRACT,
-        'docs': PARSED_DOCUMENTATIONS_CONTRACT,
-        'generated_at': {
-            'type': 'string',
-            'format': 'date-time',
-        },
-        'parent_map': NODE_EDGE_MAP,
-        'child_map': NODE_EDGE_MAP,
-    },
-    'required': ['nodes', 'macros', 'docs'],
-}
-
-
-class ParsedNode(APIObject):
-    SCHEMA = PARSED_NODE_CONTRACT
-
-    def __init__(self, agate_table=None, **kwargs):
-        self.agate_table = agate_table
-        super(ParsedNode, self).__init__(**kwargs)
-
-    @property
-    def depends_on_nodes(self):
-        """Return the list of node IDs that this node depends on."""
-        return self._contents['depends_on']['nodes']
-
-    def to_dict(self):
-        """Similar to 'serialize', but tacks the agate_table attribute in too.
-
-        Why we need this:
-            - networkx demands that the attr_dict it gets (the node) be a dict
-                or subclass and does not respect the abstract Mapping class
-            - many jinja things access the agate_table attribute (member) of
-                the node dict.
-            - the nodes are passed around between those two contexts in a way
-                that I don't quite have clear enough yet.
-        """
-        ret = self.serialize()
-        # note: not a copy/deep copy.
-        ret['agate_table'] = self.agate_table
-        return ret
-
-    def patch(self, patch):
-        """Given a ParsedNodePatch, add the new information to the node."""
-        # explicitly pick out the parts to update so we don't inadvertently
-        # step on the model name or anything
-        self._contents.update({
-            'patch_path': patch.original_file_path,
-            'description': patch.description,
-            'columns': patch.columns,
-            'docrefs': patch.docrefs,
-        })
-        # patches always trigger re-validation
-        self.validate()
-
-
-class ParsedMacro(APIObject):
-    SCHEMA = PARSED_MACRO_CONTRACT
-
-    def __init__(self, template=None, **kwargs):
-        self.template = template
-        super(ParsedMacro, self).__init__(**kwargs)
-
-    @property
-    def generator(self):
-        """
-        Returns a function that can be called to render the macro results.
-        """
-        # TODO: we can generate self.template from the other properties
-        # available in this class. should we just generate this here?
-        return dbt.clients.jinja.macro_generator(
-            self.template, self._contents)
-
-
 class ParsedDocumentation(APIObject):
     SCHEMA = PARSED_DOCUMENTATION_CONTRACT
 
 
-class ParsedNodes(APIObject):
-    SCHEMA = PARSED_NODES_CONTRACT
-
-
 class Hook(APIObject):
     SCHEMA = HOOK_CONTRACT
-
-
-class ParsedMacros(APIObject):
-    SCHEMA = PARSED_MACROS_CONTRACT
-
-
-def build_edges(nodes):
-    """Build the forward and backward edges on the given list of ParsedNodes
-    and return them as two separate dictionaries, each mapping unique IDs to
-    lists of edges.
-    """
-    backward_edges = {}
-    # pre-populate the forward edge dict for simplicity
-    forward_edges = {node.unique_id: [] for node in nodes}
-    for node in nodes:
-        backward_edges[node.unique_id] = node.depends_on_nodes[:]
-        for unique_id in node.depends_on_nodes:
-            forward_edges[unique_id].append(node.unique_id)
-    return forward_edges, backward_edges
-
-
-class ParsedManifest(APIObject):
-    SCHEMA = PARSED_MANIFEST_CONTRACT
-    """The final result of parsing all macros and nodes in a graph."""
-    def __init__(self, nodes, macros, docs, generated_at):
-        """The constructor. nodes and macros are dictionaries mapping unique
-        IDs to ParsedNode and ParsedMacro objects, respectively. generated_at
-        is a text timestamp in RFC 3339 format.
-        """
-        self.nodes = nodes
-        self.macros = macros
-        self.docs = docs
-        self.generated_at = generated_at
-        self._contents = {}
-        super(ParsedManifest, self).__init__()
-
-    def serialize(self):
-        """Convert the parsed manifest to a nested dict structure that we can
-        safely serialize to JSON.
-        """
-        forward_edges, backward_edges = build_edges(self.nodes.values())
-
-        return {
-            'nodes': {k: v.serialize() for k, v in self.nodes.items()},
-            'macros': {k: v.serialize() for k, v in self.macros.items()},
-            'docs': {k: v.serialize() for k, v in self.docs.items()},
-            'parent_map': backward_edges,
-            'child_map': forward_edges,
-            'generated_at': self.generated_at,
-        }
-
-    def _find_by_name(self, name, package, subgraph, nodetype):
-        """
-        Find a node by its given name in the appropriate sugraph.
-        """
-        if subgraph == 'nodes':
-            search = self.nodes
-        elif subgraph == 'macros':
-            search = self.macros
-        else:
-            raise NotImplementedError(
-                'subgraph search for {} not implemented'.format(subgraph)
-            )
-        return dbt.utils.find_in_subgraph_by_name(
-            search,
-            name,
-            package,
-            nodetype)
-
-    def find_docs_by_name(self, name, package=None):
-        for unique_id, doc in self.docs.items():
-            parts = unique_id.split('.')
-            if len(parts) != 2:
-                msg = "documentation names cannot contain '.' characters"
-                dbt.exceptions.raise_compiler_error(msg, doc)
-
-            found_package, found_node = parts
-
-            if (name == found_node and package in {None, found_package}):
-                return doc
-        return None
-
-    def find_operation_by_name(self, name, package):
-        return self._find_by_name(name, package, 'macros',
-                                  [NodeType.Operation])
-
-    def add_nodes(self, new_nodes):
-        """Add the given dict of new nodes to the manifest."""
-        for unique_id, node in new_nodes.items():
-            if unique_id in self.nodes:
-                raise_duplicate_resource_name(node, self.nodes[unique_id])
-            self.nodes[unique_id] = node
-
-    def patch_nodes(self, patches):
-        """Patch nodes with the given dict of patches. Note that this consumes
-        the input!
-        """
-        # because we don't have any mapping from node _names_ to nodes, and we
-        # only have the node name in the patch, we have to iterate over all the
-        # nodes looking for matching names. We could use _find_by_name if we
-        # were ok with doing an O(n*m) search (one nodes scan per patch)
-        for node in self.nodes.values():
-            if node.resource_type != NodeType.Model:
-                continue
-            patch = patches.pop(node.name, None)
-            if not patch:
-                continue
-            node.patch(patch)
-
-        # log debug-level warning about nodes we couldn't find
-        if patches:
-            for patch in patches.values():
-                # since patches aren't nodes, we can't use the existing
-                # target_not_found warning
-                logger.debug((
-                    'WARNING: Found documentation for model "{}" which was '
-                    'not found or is disabled').format(patch.name)
-                )
-
-    def to_flat_graph(self):
-        """Convert the parsed manifest to the 'flat graph' that the compiler
-        expects.
-
-        Kind of hacky note: everything in the code is happy to deal with
-        macros as ParsedMacro objects (in fact, it's been changed to require
-        that), so those can just be returned without any work. Nodes sadly
-        require a lot of work on the compiler side.
-
-        Ideally in the future we won't need to have this method.
-        """
-        return {
-            'nodes': {k: v.to_dict() for k, v in self.nodes.items()},
-            'macros': self.macros,
-        }

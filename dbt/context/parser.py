@@ -6,11 +6,11 @@ import dbt.context.common
 execute = False
 
 
-def ref(db_wrapper, model, project_cfg, profile, flat_graph):
+def ref(db_wrapper, model, project_cfg, profile, manifest):
 
     def ref(*args):
         if len(args) == 1 or len(args) == 2:
-            model['refs'].append(list(args))
+            model.refs.append(list(args))
 
         else:
             dbt.exceptions.ref_invalid_args(model, args)
@@ -46,8 +46,9 @@ def docs(unparsed, docrefs, column_name=None):
 
 
 class Config:
-    def __init__(self, model):
+    def __init__(self, model, source_config):
         self.model = model
+        self.source_config = source_config
 
     def __call__(self, *args, **kwargs):
         if len(args) == 1 and len(kwargs) == 0:
@@ -59,7 +60,7 @@ class Config:
                 "Invalid inline model config",
                 self.model)
 
-        self.model['config_reference'].update_in_model_config(opts)
+        self.source_config.update_in_model_config(opts)
         return ''
 
     def set(self, name, value):
@@ -72,6 +73,6 @@ class Config:
         return ''
 
 
-def generate(model, project_cfg, flat_graph):
+def generate(model, project_cfg, manifest, source_config):
     return dbt.context.common.generate(
-        model, project_cfg, flat_graph, dbt.context.parser)
+        model, project_cfg, manifest, source_config, dbt.context.parser)
