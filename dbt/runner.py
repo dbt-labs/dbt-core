@@ -5,6 +5,7 @@ from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.contracts.graph.parsed import ParsedNode
 from dbt.contracts.graph.manifest import CompileResultNode
+from dbt.contracts.results import ExecutionResult
 
 import dbt.clients.jinja
 import dbt.compilation
@@ -13,10 +14,15 @@ import dbt.linker
 import dbt.tracking
 import dbt.model
 import dbt.ui.printer
+import dbt.utils
+from dbt.clients.system import write_json
 
 import dbt.graph.selector
 
 from multiprocessing.dummy import Pool as ThreadPool
+
+
+RESULT_FILE_NAME = 'run_results.json'
 
 
 class RunManager(object):
@@ -170,6 +176,10 @@ class RunManager(object):
 
         return node_results
 
+    def write_results(self, execution_result):
+        filepath = os.path.join(self.project['target-path'], RESULT_FILE_NAME)
+        write_json(filepath, execution_result.serialize())
+
     def compile(self, project):
         compiler = dbt.compilation.Compiler(project)
         compiler.initialize()
@@ -217,6 +227,13 @@ class RunManager(object):
 
         finally:
             adapter.cleanup_connections()
+
+        result = ExecutionResult(
+            results=res,
+            elapsed_time=elapsed,
+            generated_at=dbt.utils.timestring(),
+        )
+        self.write_results(result)
 
         return res
 

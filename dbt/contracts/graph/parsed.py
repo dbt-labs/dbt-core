@@ -1,5 +1,5 @@
 from dbt.api import APIObject
-from dbt.utils import deep_merge, timestring
+from dbt.utils import deep_merge
 from dbt.node_types import NodeType
 from dbt.exceptions import raise_duplicate_resource_name, \
     raise_patch_targets_not_found

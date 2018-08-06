@@ -1,4 +1,5 @@
 import codecs
+import json
 
 WHICH_PYTHON = None
 
@@ -43,10 +44,18 @@ def to_string(s):
             return str(s)
 
 
-def write_file(path, s):
+def _open(path, mode):
     if WHICH_PYTHON == 2:
-        with codecs.open(path, 'w', encoding='utf-8') as f:
-            return f.write(to_string(s))
+        return codecs.open(path, mode, encoding='utf-8')
     else:
-        with open(path, 'w') as f:
-            return f.write(to_string(s))
+        return open(path, 'w')
+
+
+def write_file(path, s):
+    with _open(path, 'w') as fp:
+        return fp.write(to_string(s))
+
+
+def write_json(path, data):
+    with _open(path, 'w') as fp:
+        json.dump(data, fp)

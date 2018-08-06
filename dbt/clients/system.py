@@ -117,6 +117,12 @@ def write_file(path, contents=''):
     return True
 
 
+def write_json(path, data):
+    make_directory(os.path.dirname(path))
+    dbt.compat.write_json(path, data)
+    return True
+
+
 def _windows_rmdir_readonly(func, path, exc):
     exception_val = exc[1]
     if exception_val.errno == errno.EACCES:
