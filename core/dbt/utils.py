@@ -322,6 +322,7 @@ class JSONEncoder(json.JSONEncoder):
     handles `Decimal`s. and `Undefined`s. Decimals can lose precision because
     they get converted to floats. Undefined's are serialized to an empty string
     """
+
     def default(self, obj):
         if isinstance(obj, DECIMALS):
             return float(obj)
