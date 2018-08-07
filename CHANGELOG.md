@@ -6,6 +6,7 @@
 - Add a 'generated_at' field to both the manifest and the catalog. ([#887](https://github.com/fishtown-analytics/dbt/pull/877))
 - Version 2 of schema.yml, which allows users to create table and column comments that end up in the manifest ([#880](https://github.com/fishtown-analytics/dbt/pull/880))
 - Add `docs` blocks that users can put into `.md` files and `doc()` value for schema v2 description fields ([#888](https://github.com/fishtown-analytics/dbt/pull/888))
+- Write out a 'run_results.json' after dbt invocations. ([#904](https://github.com/fishtown-analytics/dbt/pull/904))
 
 ## dbt 0.10.2 - Betsy Ross (August 3, 2018)
 
