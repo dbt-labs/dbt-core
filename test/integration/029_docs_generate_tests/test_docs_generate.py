@@ -326,6 +326,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         ]
         expected_catalog = {
             'MODEL': {
+                'unique_id': 'model.test.model',
                 'metadata': {
                     'schema': my_schema_name,
                     'name': 'MODEL',
@@ -335,6 +336,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'columns': expected_cols,
             },
             'SEED': {
+                'unique_id': 'seed.test.seed',
                 'metadata': {
                     'schema': my_schema_name,
                     'name': 'SEED',
@@ -386,6 +388,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         ]
         expected_catalog = {
             'model': {
+                'unique_id': 'model.test.model',
                 'metadata': {
                     'schema': my_schema_name,
                     'name': 'model',
@@ -395,6 +398,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'columns': expected_cols,
             },
             'seed': {
+                'unique_id': 'seed.test.seed',
                 'metadata': {
                     'schema': my_schema_name,
                     'name': 'seed',
@@ -449,6 +453,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         ]
         catalog = {
             "model": {
+                'unique_id': 'model.test.model',
                 "metadata": {
                     "schema": my_schema_name,
                     "name": "model",
@@ -458,11 +463,12 @@ class TestDocsGenerate(DBTIntegrationTest):
                 "columns": expected_cols
             },
             "seed": {
+                'unique_id': 'model.test.seed',
                 "metadata": {
-                "schema": my_schema_name,
-                "name": "seed",
-                "type": "view",
-                "comment": None
+                    "schema": my_schema_name,
+                    "name": "seed",
+                    "type": "view",
+                    "comment": None
                 },
                 "columns": expected_cols
             }
@@ -559,7 +565,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 }
             },
             'child_map': {
-               'model.test.model': [],
+                'model.test.model': [],
                 'model.test.seed': ['model.test.model']
             },
             'parent_map': {
@@ -608,6 +614,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         ]
         expected_catalog = {
             'model': {
+                'unique_id': 'model.test.model',
                 'metadata': {
                     'schema': my_schema_name,
                     'name': 'model',
@@ -617,6 +624,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'columns': expected_cols,
             },
             'seed': {
+                'unique_id': 'model.test.seed',
                 'metadata': {
                     'schema': my_schema_name,
                     'name': 'seed',
@@ -635,6 +643,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         my_schema_name = self.unique_schema()
         expected_catalog = {
             'model': {
+                'unique_id': 'model.test.model',
                 'metadata': {
                     'schema': my_schema_name,
                     'name': 'model',
@@ -675,6 +684,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 ],
             },
             'seed': {
+                'unique_id': 'seed.test.seed',
                 'metadata': {
                     'schema': my_schema_name,
                     'name': 'seed',
