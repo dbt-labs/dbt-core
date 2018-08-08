@@ -104,7 +104,9 @@ class GenerateTask(BaseTask):
         return manifest
 
     def run(self):
-        shutil.copyfile(DOCS_INDEX_FILE_PATH, 'index.html')
+        shutil.copyfile(
+            DOCS_INDEX_FILE_PATH,
+            os.path.join(self.project['target-path'], 'index.html'))
 
         manifest = self._get_manifest(self.project)
         profile = self.project.run_environment()
