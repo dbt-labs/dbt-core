@@ -44,18 +44,10 @@ def to_string(s):
             return str(s)
 
 
-def _open(path, mode):
-    if WHICH_PYTHON == 2:
-        return codecs.open(path, mode, encoding='utf-8')
-    else:
-        return open(path, 'w')
-
-
 def write_file(path, s):
-    with _open(path, 'w') as fp:
-        return fp.write(to_string(s))
-
-
-def write_json(path, data, **kwargs):
-    with _open(path, 'w') as fp:
-        json.dump(data, fp, **kwargs)
+    if WHICH_PYTHON == 2:
+        with codecs.open(path, 'w', encoding='utf-8') as f:
+            return f.write(to_string(s))
+    else:
+        with open(path, 'w') as f:
+            return f.write(to_string(s))

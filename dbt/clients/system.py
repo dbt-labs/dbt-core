@@ -1,5 +1,6 @@
 import errno
 import fnmatch
+import json
 import os
 import os.path
 import shutil
@@ -119,9 +120,7 @@ def write_file(path, contents=''):
 
 
 def write_json(path, data):
-    make_directory(os.path.dirname(path))
-    dbt.compat.write_json(path, data, cls=dbt.utils.JSONEncoder)
-    return True
+    return write_file(path, json.dumps(data, cls=dbt.utils.JSONEncoder))
 
 
 def _windows_rmdir_readonly(func, path, exc):
