@@ -624,7 +624,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'columns': expected_cols,
             },
             'seed': {
-                'unique_id': 'model.test.seed',
+                'unique_id': 'seed.test.seed',
                 'metadata': {
                     'schema': my_schema_name,
                     'name': 'seed',
