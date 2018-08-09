@@ -9,6 +9,7 @@ from dbt.include import DOCS_INDEX_FILE_PATH
 import dbt.ui.printer
 import dbt.utils
 import dbt.compilation
+import dbt.exceptions
 
 from dbt.task.base_task import BaseTask
 
@@ -92,6 +93,57 @@ def unflatten(columns):
     return structured
 
 
+def incorporate_catalog_unique_ids(catalog, manifest):
+    to_return = catalog.copy()
+
+    for schema, tables in to_return.items():
+        for table_name, table_def in tables.items():
+            unique_id = manifest.get_unique_id_for_schema_and_table(
+                schema, table_name)
+
+            if unique_id is None:
+                warning = (
+                    '{}: dbt found the relation {}.{} in your warehouse, '
+                    'but could not find a matching model in your project. '
+                    'This can happen when you delete a model from your '
+                    'project without deleting it from your warehouse.'
+                ).format(
+                    dbt.ui.printer.yellow('WARNING'),
+                    schema,
+                    table_name
+                )
+
+                dbt.ui.printer.print_timestamped_line(
+                    dbt.ui.printer.yellow(warning))
+
+            table_def['unique_id'] = unique_id
+
+    return to_return
+
+
+def assert_no_duplicate_unique_ids(catalog):
+    unique_id_map = {}
+
+    for schema, tables in catalog.items():
+        for table_name, table_def in tables.items():
+            unique_id = table_def.get('unique_id')
+
+            if not unique_id:
+                continue
+
+            unique_id_map[unique_id] = \
+                unique_id_map.get(unique_id, []) + [table_def]
+
+    duplicates = {
+        k: v for k, v in unique_id_map.items()
+        if len(v) > 1
+    }
+
+    if duplicates:
+        dbt.exceptions.raise_ambiguous_catalog_match(
+            duplicates)
+
+
 class GenerateTask(BaseTask):
     def _get_manifest(self, project):
         compiler = dbt.compilation.Compiler(project)
@@ -119,7 +171,12 @@ class GenerateTask(BaseTask):
             dict(zip(results.column_names, row))
             for row in results
         ]
+
         results = unflatten(results)
+        results = incorporate_catalog_unique_ids(results, manifest)
+
+        assert_no_duplicate_unique_ids(results)
+
         results['generated_at'] = dbt.utils.timestring()
 
         path = os.path.join(self.project['target-path'], CATALOG_FILENAME)
