@@ -155,7 +155,8 @@ class Project(object):
 
     def compile_and_update_target(self):
         target = self.cfg['target']
-        self.cfg['outputs'][target].update(self.run_environment())
+        run_env = self.run_environment()
+        self.cfg['outputs'][target].update(run_env)
 
     def run_environment(self):
         target_name = self.cfg['target']
@@ -163,9 +164,17 @@ class Project(object):
             target_cfg = self.cfg['outputs'][target_name]
             return self.compile_target(target_cfg)
         else:
-            raise DbtProfileError(
-                    "'target' config was not found in profile entry for "
-                    "'{}'".format(target_name), self)
+
+            outputs = self.cfg.get('outputs', {}).keys()
+            output_names = [" - {}".format(output) for output in outputs]
+
+            msg = ("The profile '{}' does not have a target named '{}'. The "
+                   "valid target names for this profile are:\n{}".format(
+                        self.profile_to_load,
+                        target_name,
+                        "\n".join(output_names)))
+
+            raise DbtProfileError(msg, self)
 
     def get_target(self):
         ctx = self.context().get('env').copy()
