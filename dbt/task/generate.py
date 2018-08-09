@@ -95,54 +95,25 @@ def unflatten(columns):
 
 
 def incorporate_catalog_unique_ids(catalog, manifest):
-    to_return = catalog.copy()
+    nodes = {}
 
-    for schema, tables in to_return.items():
+    for schema, tables in catalog.items():
         for table_name, table_def in tables.items():
             unique_id = manifest.get_unique_id_for_schema_and_table(
                 schema, table_name)
 
-            if unique_id is None:
-                warning = (
-                    '{}: dbt found the relation {}.{} in your warehouse, '
-                    'but could not find a matching model in your project. '
-                    'This can happen when you delete a model from your '
-                    'project without deleting it from your warehouse.'
-                ).format(
-                    dbt.ui.printer.yellow('WARNING'),
-                    schema,
-                    table_name
-                )
-
-                dbt.ui.printer.print_timestamped_line(
-                    dbt.ui.printer.yellow(warning))
-
-            table_def['unique_id'] = unique_id
-
-    return to_return
-
-
-def assert_no_duplicate_unique_ids(catalog):
-    unique_id_map = {}
-
-    for schema, tables in catalog.items():
-        for table_name, table_def in tables.items():
-            unique_id = table_def.get('unique_id')
-
             if not unique_id:
                 continue
 
-            unique_id_map[unique_id] = \
-                unique_id_map.get(unique_id, []) + [table_def]
+            elif unique_id in nodes:
+                dbt.exceptions.raise_ambiguous_catalog_match(
+                    unique_id, nodes[unique_id], table_def)
 
-    duplicates = {
-        k: v for k, v in unique_id_map.items()
-        if len(v) > 1
-    }
+            else:
+                table_def['unique_id'] = unique_id
+                nodes[unique_id] = table_def
 
-    if duplicates:
-        dbt.exceptions.raise_ambiguous_catalog_match(
-            duplicates)
+    return nodes
 
 
 class GenerateTask(BaseTask):
@@ -173,12 +144,11 @@ class GenerateTask(BaseTask):
             for row in results
         ]
 
-        results = unflatten(results)
-        results = incorporate_catalog_unique_ids(results, manifest)
-
-        assert_no_duplicate_unique_ids(results)
-
-        results['generated_at'] = dbt.utils.timestring()
+        nested_results = unflatten(results)
+        results = {
+            'nodes': incorporate_catalog_unique_ids(nested_results, manifest),
+            'generated_at': dbt.utils.timestring(),
+        }
 
         path = os.path.join(self.project['target-path'], CATALOG_FILENAME)
         write_json(path, results)
