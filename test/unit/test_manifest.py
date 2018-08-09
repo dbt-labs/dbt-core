@@ -1,16 +1,18 @@
 import unittest
+import mock
 
 import copy
 import os
 
 import dbt.flags
+from dbt import tracking
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedNode
 from dbt.contracts.graph.compiled import CompiledNode
 from dbt.utils import timestring
 import freezegun
 
-class ParsedManifestTest(unittest.TestCase):
+class ManifestTest(unittest.TestCase):
     def setUp(self):
         dbt.flags.STRICT_MODE = True
 
@@ -161,8 +163,19 @@ class ParsedManifestTest(unittest.TestCase):
                             generated_at=timestring())
         self.assertEqual(
             manifest.serialize(),
-            {'nodes': {}, 'macros': {}, 'parent_map': {}, 'child_map': {},
-             'generated_at': '2018-02-14T09:15:13Z', 'docs': {}}
+            {
+                'nodes': {},
+                'macros': {},
+                'parent_map': {},
+                'child_map': {},
+                'generated_at': '2018-02-14T09:15:13Z',
+                'docs': {},
+                'metadata': {
+                    'project_id': None,
+                    'user_id': None,
+                    'send_anonymous_usage_stats': None,
+                },
+            }
         )
 
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
@@ -241,6 +254,57 @@ class ParsedManifestTest(unittest.TestCase):
         expected_keys = set(ParsedNode.SCHEMA['required']) | {'agate_table'}
         for node in flat_nodes.values():
             self.assertEqual(set(node), expected_keys)
+
+    @mock.patch.object(tracking, 'active_user')
+    def test_get_metadata(self, mock_user):
+        mock_user.id = 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf'
+        mock_user.do_not_track = True
+        project = mock.MagicMock()
+        # md5 of 'test'
+        project.hashed_name.return_value = '098f6bcd4621d373cade4e832627b4f6'
+        self.assertEqual(
+            Manifest.get_metadata(project),
+            {
+                'project_id': '098f6bcd4621d373cade4e832627b4f6',
+                'user_id': 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf',
+                'send_anonymous_usage_stats': False,
+            }
+        )
+
+    @mock.patch.object(tracking, 'active_user')
+    @freezegun.freeze_time('2018-02-14T09:15:13Z')
+    def test_no_nodes_with_metadata(self, mock_user):
+        mock_user.id = 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf'
+        mock_user.do_not_track = True
+        project = mock.MagicMock()
+        # md5 of 'test'
+        project.hashed_name.return_value = '098f6bcd4621d373cade4e832627b4f6'
+        manifest = Manifest(nodes={}, macros={}, docs={},
+                            generated_at=timestring(), project=project)
+        metadata = {
+            'project_id': '098f6bcd4621d373cade4e832627b4f6',
+            'user_id': 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf',
+            'send_anonymous_usage_stats': False,
+        }
+        self.assertEqual(
+            manifest.serialize(),
+            {
+                'nodes': {},
+                'macros': {},
+                'parent_map': {},
+                'child_map': {},
+                'generated_at': '2018-02-14T09:15:13Z',
+                'docs': {},
+                'metadata': {
+                    'project_id': '098f6bcd4621d373cade4e832627b4f6',
+                    'user_id': 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf',
+                    'send_anonymous_usage_stats': False,
+                },
+            }
+        )
+
+
+
 
 
 class MixedManifestTest(unittest.TestCase):
@@ -404,8 +468,19 @@ class MixedManifestTest(unittest.TestCase):
                             generated_at=timestring())
         self.assertEqual(
             manifest.serialize(),
-            {'nodes': {}, 'macros': {}, 'parent_map': {}, 'child_map': {},
-             'docs': {}, 'generated_at': '2018-02-14T09:15:13Z'}
+            {
+                'nodes': {},
+                'macros': {},
+                'parent_map': {},
+                'child_map': {},
+                'generated_at': '2018-02-14T09:15:13Z',
+                'docs': {},
+                'metadata': {
+                    'project_id': None,
+                    'user_id': None,
+                    'send_anonymous_usage_stats': None,
+                },
+            }
         )
 
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
