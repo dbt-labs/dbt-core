@@ -891,15 +891,16 @@ def raise_ambiguous_catalog_match(unique_id, match_1, match_2):
         )
 
     raise_compiler_error(
-        'dbt found two relations in your warehouse with similar database '
-        'identifiers. dbt\nis unable to determine which of these relations '
+        "dbt found two relations in your warehouse with similar database "
+        "identifiers. dbt\nis unable to determine which of these relations "
         'was created by the model "{unique_id}".\nIn order for dbt to '
-        'correctly generate the catalog, one of the following relations must '
-        'be deleted or renamed:\n\n - {match_1_s}\n - {match_2_s}'.format(
+        "correctly generate the catalog, one of the following relations must "
+        "be deleted or renamed:\n\n - {match_1_s}\n - {match_2_s}".format(
             unique_id=unique_id,
             match_1_s=get_match_string(match_1),
             match_2_s=get_match_string(match_2),
-        ))
+        )
+    )
 
 
 def raise_patch_targets_not_found(patches):
