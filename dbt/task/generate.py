@@ -1,9 +1,11 @@
 import json
 import os
+import shutil
 
 from dbt.adapters.factory import get_adapter
 from dbt.clients.system import write_file
 from dbt.compat import bigint
+from dbt.include import DOCS_INDEX_FILE_PATH
 import dbt.ui.printer
 import dbt.utils
 import dbt.compilation
@@ -102,6 +104,10 @@ class GenerateTask(BaseTask):
         return manifest
 
     def run(self):
+        shutil.copyfile(
+            DOCS_INDEX_FILE_PATH,
+            os.path.join(self.project['target-path'], 'index.html'))
+
         manifest = self._get_manifest(self.project)
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
