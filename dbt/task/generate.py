@@ -53,14 +53,14 @@ def unflatten(columns):
                         'type': 'BASE TABLE',
                         'schema': 'test_schema',
                     },
-                    'columns': [
-                        {
+                    'columns': {
+                        "id": {
                             'type': 'integer',
                             'comment': None,
                             'index': bigint(1),
                             'name': 'id'
                         }
-                    ]
+                    }
                 }
             }
         }
@@ -82,14 +82,15 @@ def unflatten(columns):
 
         if table_name not in schema:
             metadata = get_stripped_prefix(entry, 'table_')
-            schema[table_name] = {'metadata': metadata, 'columns': []}
+            schema[table_name] = {'metadata': metadata, 'columns': {}}
         table = schema[table_name]
 
         column = get_stripped_prefix(entry, 'column_')
+
         # the index should really never be that big so it's ok to end up
         # serializing this to JSON (2^53 is the max safe value there)
         column['index'] = bigint(column['index'])
-        table['columns'].append(column)
+        table['columns'][column['name']] = column
     return structured
 
 

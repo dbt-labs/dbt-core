@@ -36,27 +36,27 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
             model_data['description'],
             'My model is just a copy of the seed'
         )
-        self.assertIn(
+        self.assertEqual(
             {
                 'name': 'id',
                 'description': 'The user ID number'
             },
-            model_data['columns']
+            model_data['columns']['id']
         )
-        self.assertIn(
+        self.assertEqual(
             {
                 'name': 'first_name',
                 'description': "The user's first name",
             },
-            model_data['columns']
+            model_data['columns']['first_name']
         )
 
-        self.assertIn(
+        self.assertEqual(
             {
                 'name': 'last_name',
                 'description': "The user's last name",
             },
-            model_data['columns']
+            model_data['columns']['last_name']
         )
         self.assertEqual(len(model_data['columns']), 3)
 
@@ -75,27 +75,27 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
             model_data['description'],
             'Alt text about the model'
         )
-        self.assertIn(
+        self.assertEqual(
             {
                 'name': 'id',
                 'description': 'The user ID number with alternative text'
             },
-            model_data['columns']
+            model_data['columns']['id']
         )
-        self.assertIn(
+        self.assertEqual(
             {
                 'name': 'first_name',
                 'description': "The user's first name",
             },
-            model_data['columns']
+            model_data['columns']['first_name']
         )
 
-        self.assertIn(
+        self.assertEqual(
             {
                 'name': 'last_name',
                 'description': "The user's last name in this other file",
             },
-            model_data['columns']
+            model_data['columns']['last_name']
         )
         self.assertEqual(len(model_data['columns']), 3)
 

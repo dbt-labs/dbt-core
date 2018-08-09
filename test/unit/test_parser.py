@@ -119,7 +119,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'model_one').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 )
             }
         )
@@ -180,7 +180,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'model_one').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 )
             }
         )
@@ -224,7 +224,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'model_one').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 )
             }
         )
@@ -277,7 +277,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'base').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
 
                 ),
                 'model.root.events_tx': ParsedNode(
@@ -302,7 +302,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'events_tx').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 )
             }
         )
@@ -383,7 +383,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'events').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 ),
                 'model.root.sessions': ParsedNode(
                     alias='sessions',
@@ -407,7 +407,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'sessions').get('raw_sql'),
                     description='',
-                    columns=[],
+                    columns={},
                 ),
                 'model.root.events_tx': ParsedNode(
                     alias='events_tx',
@@ -431,7 +431,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'events_tx').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 ),
                 'model.root.sessions_tx': ParsedNode(
                     alias='sessions_tx',
@@ -455,7 +455,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'sessions_tx').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 ),
                 'model.root.multi': ParsedNode(
                     alias='multi',
@@ -479,7 +479,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'multi').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 ),
             }
         )
@@ -562,7 +562,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'events').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 ),
                 'model.snowplow.sessions': ParsedNode(
                     alias='sessions',
@@ -586,7 +586,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'sessions').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 ),
                 'model.snowplow.events_tx': ParsedNode(
                     alias='events_tx',
@@ -610,7 +610,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'events_tx').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 ),
                 'model.snowplow.sessions_tx': ParsedNode(
                     alias='sessions_tx',
@@ -634,7 +634,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'sessions_tx').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 ),
                 'model.root.multi': ParsedNode(
                     alias='multi',
@@ -659,7 +659,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'multi').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 ),
             }
         )
@@ -768,7 +768,7 @@ class ParserTest(unittest.TestCase):
                         'root_path': get_os_path('/usr/src/app'),
                         'raw_sql': 'does not matter',
                         'agate_table': None,
-                        'columns': [],
+                        'columns': {},
                         'description': '',
                     },
                     'model.root.events': {
@@ -792,7 +792,7 @@ class ParserTest(unittest.TestCase):
                         'root_path': get_os_path('/usr/src/app'),
                         'raw_sql': 'does not matter',
                         'agate_table': None,
-                        'columns': [],
+                        'columns': {},
                         'description': '',
                     },
                     'model.root.dep': {
@@ -816,7 +816,7 @@ class ParserTest(unittest.TestCase):
                         'root_path': get_os_path('/usr/src/app'),
                         'raw_sql': 'does not matter',
                         'agate_table': None,
-                        'columns': [],
+                        'columns': {},
                         'description': '',
                     }
                 }
@@ -868,7 +868,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'model_one').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 )
             }
         )
@@ -953,7 +953,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'table').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 ),
                 'model.root.ephemeral': ParsedNode(
                     alias='ephemeral',
@@ -977,7 +977,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'ephemeral').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 ),
                 'model.root.view': ParsedNode(
                     alias='view',
@@ -1001,7 +1001,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'ephemeral').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 ),
             }
 
@@ -1153,7 +1153,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'table').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 ),
                 'model.root.ephemeral': ParsedNode(
                     alias='ephemeral',
@@ -1177,7 +1177,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'ephemeral').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 ),
                 'model.root.view': ParsedNode(
                     alias='view',
@@ -1201,7 +1201,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'view').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 ),
                 'model.snowplow.multi_sort': ParsedNode(
                     alias='multi_sort',
@@ -1225,7 +1225,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'multi_sort').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 ),
             }
         )
@@ -1280,7 +1280,7 @@ class ParserTest(unittest.TestCase):
                 tags=['schema'],
                 raw_sql=accepted_values_sql,
                 description='',
-                columns=[]
+                columns={}
             ),
             ParsedNode(
                 alias='not_null_model_one_id',
@@ -1304,7 +1304,7 @@ class ParserTest(unittest.TestCase):
                 tags=['schema'],
                 raw_sql=not_null_sql,
                 description='',
-                columns=[]
+                columns={}
             ),
             ParsedNode(
                 alias='relationships_model_one_id__id__ref_model_two_',
@@ -1328,7 +1328,7 @@ class ParserTest(unittest.TestCase):
                 tags=['schema'],
                 raw_sql=relationships_sql,
                 description='',
-                columns=[]
+                columns={}
             ),
             ParsedNode(
                 alias='unique_model_one_id',
@@ -1351,7 +1351,7 @@ class ParserTest(unittest.TestCase):
                 tags=['schema'],
                 raw_sql=unique_sql,
                 description='',
-                columns=[]
+                columns={}
             ),
         ]
         self.assertEqual(
@@ -1414,7 +1414,7 @@ class ParserTest(unittest.TestCase):
                 tags=['schema'],
                 raw_sql=accepted_values_sql,
                 description='',
-                columns=[]
+                columns={}
             ),
             ParsedNode(
                 alias='not_null_model_one_id',
@@ -1434,7 +1434,7 @@ class ParserTest(unittest.TestCase):
                 tags=['schema'],
                 raw_sql=not_null_sql,
                 description='',
-                columns=[]
+                columns={}
             ),
             ParsedNode(
                 alias='relationships_model_one_id__id__ref_model_two_',
@@ -1455,7 +1455,7 @@ class ParserTest(unittest.TestCase):
                 tags=['schema'],
                 raw_sql=relationships_sql,
                 description='',
-                columns=[]
+                columns={}
             ),
             ParsedNode(
                 alias='some_test_model_one_value',
@@ -1475,7 +1475,7 @@ class ParserTest(unittest.TestCase):
                 tags=['schema'],
                 raw_sql=some_test_sql,
                 description='',
-                columns=[]
+                columns={}
             ),
             ParsedNode(
                 alias='unique_model_one_id',
@@ -1495,7 +1495,7 @@ class ParserTest(unittest.TestCase):
                 tags=['schema'],
                 raw_sql=unique_sql,
                 description='',
-                columns=[]
+                columns={}
             ),
         ]
         self.assertEqual(tests, expected_tests)
@@ -1504,10 +1504,11 @@ class ParserTest(unittest.TestCase):
             ParsedNodePatch(name='model_one',
                 description='blah blah',
                 original_file_path='test_one.yml',
-                columns=[{
+                columns={
+                    'id': {
                     'name': 'id',
                     'description': 'user ID',
-                }],
+                }},
                 docrefs=[],
             ),
         ]
@@ -1553,7 +1554,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         tests, 'no_events').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 )
             }
         )
@@ -1669,7 +1670,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'model_one').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 )
             }
         )
@@ -1714,7 +1715,7 @@ class ParserTest(unittest.TestCase):
                     raw_sql=self.find_input_by_name(
                         models, 'model_one').get('raw_sql'),
                     description='',
-                    columns=[]
+                    columns={}
                 )
             }
         )
