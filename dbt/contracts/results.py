@@ -25,7 +25,7 @@ RUN_MODEL_RESULT_CONTRACT = {
             'description': 'On tests, true if the test failed',
         },
         'status': {
-            'type': ['string', 'null', 'number'],
+            'type': ['string', 'null', 'number', 'boolean'],
             'description': 'The status result of the node execution',
         },
         'execution_time': {
