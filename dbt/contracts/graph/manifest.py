@@ -6,6 +6,7 @@ from dbt.contracts.graph.compiled import COMPILED_NODE_CONTRACT, CompiledNode
 from dbt.exceptions import ValidationException
 from dbt.node_types import NodeType
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt import tracking
 import dbt.utils
 
 # We allow either parsed or compiled nodes, as some 'compile()' calls in the
@@ -87,8 +88,42 @@ PARSED_MANIFEST_CONTRACT = {
         },
         'parent_map': NODE_EDGE_MAP,
         'child_map': NODE_EDGE_MAP,
+        'metadata': {
+            'type': 'object',
+            'additionalProperties': False,
+            'properties': {
+                'project_id': {
+                    'type': ('string', 'null'),
+                    'description': (
+                        'The anonymized ID of the project. Persists as long '
+                        'as the project name stays the same.'
+                    ),
+                    'pattern': '[0-9a-f]{32}',
+                },
+                'user_id': {
+                    'type': ('string', 'null'),
+                    'description': (
+                        'The user ID assigned by dbt. Persists per-user as '
+                        'long as the user cookie file remains in place.'
+                    ),
+                    'pattern': (
+                        '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-'
+                        '[0-9a-f]{12}'
+                    ),
+                },
+                'send_anonymous_usage_stats': {
+                    'type': ('boolean', 'null'),
+                    'description': (
+                        'Whether or not to send anonymized usage statistics.'
+                    ),
+                },
+            },
+            'required': [
+                'project_id', 'user_id', 'send_anonymous_usage_stats',
+            ],
+        },
     },
-    'required': ['nodes', 'macros', 'docs', 'generated_at'],
+    'required': ['nodes', 'macros', 'docs', 'generated_at', 'metadata'],
 }
 
 
@@ -118,18 +153,38 @@ class Manifest(APIObject):
     the current state of the compiler. Macros will always be ParsedMacros and
     docs will always be ParsedDocumentations.
     """
-    def __init__(self, nodes, macros, docs, generated_at):
+    def __init__(self, nodes, macros, docs, generated_at, project=None):
         """The constructor. nodes and macros are dictionaries mapping unique
         IDs to ParsedNode/CompiledNode and ParsedMacro objects, respectively.
         docs is a dictionary mapping unique IDs to ParsedDocumentation objects.
         generated_at is a text timestamp in RFC 3339 format.
         """
+        metadata = self.get_metadata(project)
         self.nodes = nodes
         self.macros = macros
         self.docs = docs
         self.generated_at = generated_at
-        self._contents = {}
+        self.metadata = metadata
         super(Manifest, self).__init__()
+
+    @staticmethod
+    def get_metadata(project):
+        project_id = None
+        user_id = None
+        send_anonymous_usage_stats = None
+
+        if project is not None:
+            project_id = project.hashed_name()
+
+        if tracking.active_user is not None:
+            user_id = tracking.active_user.id
+            send_anonymous_usage_stats = not tracking.active_user.do_not_track
+
+        return {
+            'project_id': project_id,
+            'user_id': user_id,
+            'send_anonymous_usage_stats': send_anonymous_usage_stats,
+        }
 
     def serialize(self):
         """Convert the parsed manifest to a nested dict structure that we can
@@ -144,6 +199,7 @@ class Manifest(APIObject):
             'parent_map': backward_edges,
             'child_map': forward_edges,
             'generated_at': self.generated_at,
+            'metadata': self.metadata,
         }
 
     def _find_by_name(self, name, package, subgraph, nodetype):
