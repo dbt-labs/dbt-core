@@ -77,40 +77,40 @@ class TestDocsGenerate(DBTIntegrationTest):
             case = lambda x: x
 
         my_schema_name = self.unique_schema()
-        expected_cols = [
-            {
+        expected_cols = {
+            'id': {
                 'name': case('id'),
                 'index': 1,
                 'type': id_type,
                 'comment': None,
             },
-            {
+            'first_name': {
                 'name': case('first_name'),
                 'index': 2,
                 'type': text_type,
                 'comment': None,
             },
-            {
+            'email': {
                 'name': case('email'),
                 'index': 3,
                 'type': text_type,
                 'comment': None,
             },
-            {
+            'ip_address': {
                 'name': case('ip_address'),
                 'index': 4,
                 'type': text_type,
                 'comment': None,
             },
-            {
+            'updated_at': {
                 'name': case('updated_at'),
                 'index': 5,
                 'type': time_type,
                 'comment': None,
             },
-        ]
+        }
         return {
-            case('model'): {
+            'model.test.model': {
                 'unique_id': 'model.test.model',
                 'metadata': {
                     'schema': my_schema_name,
@@ -120,7 +120,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'columns': expected_cols,
             },
-            case('seed'): {
+            'seed.test.seed': {
                 'unique_id': 'seed.test.seed',
                 'metadata': {
                     'schema': my_schema_name,
@@ -145,22 +145,22 @@ class TestDocsGenerate(DBTIntegrationTest):
     def expected_postgres_references_catalog(self):
         my_schema_name = self.unique_schema()
 
-        summary_columns = [
-            {
+        summary_columns = {
+            'first_name': {
                 'name': 'first_name',
                 'index': 1,
                 'type': 'text',
                 'comment': None,
             },
-            {
+            'ct': {
                 'name': 'ct',
                 'index': 2,
                 'type': 'bigint',
                 'comment': None,
             },
-        ]
+        }
         return {
-            'seed': {
+            'seed.test.seed': {
                 'unique_id': 'seed.test.seed',
                 'metadata': {
                     'schema': my_schema_name,
@@ -168,40 +168,40 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'type': 'BASE TABLE',
                     'comment': None,
                 },
-                'columns': [
-                    {
+                'columns': {
+                    'id': {
                         'name': 'id',
                         'index': 1,
                         'type': 'integer',
                         'comment': None,
                     },
-                    {
+                    'first_name': {
                         'name': 'first_name',
                         'index': 2,
                         'type': 'text',
                         'comment': None,
                     },
-                    {
+                    'email': {
                         'name': 'email',
                         'index': 3,
                         'type': 'text',
                         'comment': None,
                     },
-                    {
+                    'ip_address': {
                         'name': 'ip_address',
                         'index': 4,
                         'type': 'text',
                         'comment': None,
                     },
-                    {
+                    'updated_at': {
                         'name': 'updated_at',
                         'index': 5,
                         'type': 'timestamp without time zone',
                         'comment': None,
                     },
-                ],
+                },
             },
-            'ephemeral_summary': {
+            'model.test.ephemeral_summary': {
                 'unique_id': 'model.test.ephemeral_summary',
                 'metadata': {
                     'schema': my_schema_name,
@@ -211,7 +211,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'columns': summary_columns,
             },
-            'view_summary': {
+            'model.test.view_summary': {
                 'unique_id': 'model.test.view_summary',
                 'metadata': {
                     'schema': my_schema_name,
@@ -243,40 +243,40 @@ class TestDocsGenerate(DBTIntegrationTest):
 
     def expected_bigquery_nested_catalog(self):
         my_schema_name = self.unique_schema()
-        expected_cols = [
-            {
+        expected_cols = {
+            'field_1': {
                 "name": "field_1",
                 "index": 1,
                 "type": "INT64",
                 "comment": None
             },
-            {
+            'field_2': {
                 "name": "field_2",
                 "index": 2,
                 "type": "INT64",
                 "comment": None
             },
-            {
+            'field_3': {
                 "name": "field_3",
                 "index": 3,
                 "type": "INT64",
                 "comment": None
             },
-            {
+            'nested_field': {
                 "name": "nested_field.field_4",
                 "index": 4,
                 "type": "INT64",
                 "comment": None
             },
-            {
+            'nested_field': {
                 "name": "nested_field.field_5",
                 "index": 5,
                 "type": "INT64",
                 "comment": None
             }
-        ]
+        }
         return {
-            "model": {
+            "model.test.model": {
                 'unique_id': 'model.test.model',
                 "metadata": {
                     "schema": my_schema_name,
@@ -286,7 +286,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 "columns": expected_cols
             },
-            "seed": {
+            "model.test.seed": {
                 'unique_id': 'model.test.seed',
                 "metadata": {
                 "schema": my_schema_name,
@@ -310,7 +310,7 @@ class TestDocsGenerate(DBTIntegrationTest):
     def expected_redshift_incremental_catalog(self):
         my_schema_name = self.unique_schema()
         return {
-            'model': {
+            'model.test.model': {
                 'unique_id': 'model.test.model',
                 'metadata': {
                     'schema': my_schema_name,
@@ -318,40 +318,40 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'type': 'LATE BINDING VIEW',
                     'comment': None,
                 },
-                'columns': [
-                    {
+                'columns': {
+                    'id': {
                         'name': 'id',
                         'index': 1,
                         'type': 'integer',
                         'comment': None,
                     },
-                    {
+                    'first_name': {
                         'name': 'first_name',
                         'index': 2,
                         'type': 'character varying(5)',
                         'comment': None,
                     },
-                    {
+                    'email': {
                         'name': 'email',
                         'index': 3,
                         'type': 'character varying(23)',
                         'comment': None,
                     },
-                    {
+                    'ip_address': {
                         'name': 'ip_address',
                         'index': 4,
                         'type': 'character varying(14)',
                         'comment': None,
                     },
-                    {
+                    'updated_at': {
                         'name': 'updated_at',
                         'index': 5,
                         'type': 'timestamp without time zone',
                         'comment': None,
                     },
-                ],
+                },
             },
-            'seed': {
+            'seed.test.seed': {
                 'unique_id': 'seed.test.seed',
                 'metadata': {
                     'schema': my_schema_name,
@@ -359,38 +359,38 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'type': 'BASE TABLE',
                     'comment': None,
                 },
-                'columns': [
-                    {
+                'columns': {
+                    'id': {
                         'name': 'id',
                         'index': 1,
                         'type': 'integer',
                         'comment': None,
                     },
-                    {
+                    'first_name': {
                         'name': 'first_name',
                         'index': 2,
                         'type': 'character varying',
                         'comment': None,
                     },
-                    {
+                    'email': {
                         'name': 'email',
                         'index': 3,
                         'type': 'character varying',
                         'comment': None,
                     },
-                    {
+                    'ip_address': {
                         'name': 'ip_address',
                         'index': 4,
                         'type': 'character varying',
                         'comment': None,
                     },
-                    {
+                    'updated_at': {
                         'name': 'updated_at',
                         'index': 5,
                         'type': 'timestamp without time zone',
                         'comment': None,
                     },
-                ],
+                },
             },
         }
 
@@ -400,15 +400,13 @@ class TestDocsGenerate(DBTIntegrationTest):
         with open('./target/catalog.json') as fp:
             catalog = json.load(fp)
 
-        my_schema_name = self.unique_schema()
-        self.assertIn(my_schema_name, catalog)
         self.assertIn('generated_at', catalog)
         self.assertBetween(
             catalog.pop('generated_at'),
             start=self.generate_start_time,
         )
-        my_schema = catalog[my_schema_name]
-        self.assertEqual(expected, my_schema)
+        actual = catalog['nodes']
+        self.assertEqual(expected, actual)
 
     def verify_manifest_macros(self, manifest):
         # just test a known global macro to avoid having to update this every
@@ -476,28 +474,28 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'schema': my_schema_name,
                     'alias': 'model',
                     'description': 'The test model',
-                    'columns': [
-                        {
+                    'columns': {
+                        'id': {
                             'name': 'id',
                             'description': 'The user ID number',
                         },
-                        {
+                        'first_name': {
                             'name': 'first_name',
                             'description': "The user's first name",
                         },
-                        {
+                        'email': {
                             'name': 'email',
                             'description': "The user's email",
                         },
-                        {
+                        'ip_address': {
                             'name': 'ip_address',
                             'description': "The user's IP address",
                         },
-                        {
+                        'updated_at': {
                             'name': 'updated_at',
                             'description': "The last time this user's email was updated",
                         },
-                    ],
+                    },
                     'patch_path': self.dir('models/schema.yml'),
                     'docrefs': [],
                 },
@@ -528,7 +526,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'schema': my_schema_name,
                     'alias': 'seed',
                     'description': '',
-                    'columns': [],
+                    'columns': {},
                 },
             },
             'parent_map': {
@@ -550,7 +548,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             'nodes': {
                 'model.test.ephemeral_copy': {
                     'alias': 'ephemeral_copy',
-                    'columns': [],
+                    'columns': {},
                     'config': {
                         'column_types': {},
                         'enabled': True,
@@ -581,16 +579,16 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'model.test.ephemeral_summary': {
                     'alias': 'ephemeral_summary',
-                    'columns': [
-                        {
+                    'columns': {
+                        'first_name': {
                             'description': 'The first name being summarized',
                             'name': 'first_name'
                         },
-                        {
+                        'ct': {
                             'description': 'The number of instances of the first name',
                             'name': 'ct'
                         },
-                    ],
+                    },
                     'config': {
                         'column_types': {},
                         'enabled': True,
@@ -643,16 +641,16 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unique_id': 'model.test.ephemeral_summary'},
                 'model.test.view_summary': {
                     'alias': 'view_summary',
-                    'columns': [
-                        {
+                    'columns': {
+                        'first_name': {
                             'description': 'The first name being summarized',
                             'name': 'first_name'
                         },
-                        {
+                        'ct': {
                             'description': 'The number of instances of the first name',
                             'name': 'ct'
                         },
-                    ],
+                    },
                     'config': {
                         'column_types': {},
                         'enabled': True,
@@ -704,7 +702,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'seed.test.seed': {
                     'alias': 'seed',
-                    'columns': [],
+                    'columns': {},
                     'config': {
                         'column_types': {},
                         'enabled': True,
@@ -830,28 +828,28 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'schema': my_schema_name,
                     'tags': [],
                     'unique_id': 'model.test.model',
-                    'columns': [
-                        {
+                    'columns': {
+                        'field_1': {
                             'name': 'field_1',
                             'description': 'The first field',
                         },
-                        {
+                        'field_2': {
                             'name': 'field_2',
                             'description': 'The second field',
                         },
-                        {
+                        'field_3': {
                             'name': 'field_3',
                             'description': 'The third field',
                         },
-                        {
+                        'nested_field.field_4': {
                             'name': 'nested_field.field_4',
                             'description': 'The first nested field',
                         },
-                        {
+                        'nested_field.field_5': {
                             'name': 'nested_field.field_5',
                             'description': 'The second nested field',
                         },
-                    ],
+                    },
                     'description': 'The test model',
                     'patch_path': self.dir('bq_models/schema.yml'),
                     'docrefs': [],
@@ -884,7 +882,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'schema': my_schema_name,
                     'tags': [],
                     'unique_id': 'model.test.seed',
-                    'columns': [],
+                    'columns': {},
                     'description': '',
                 }
             },
@@ -934,28 +932,28 @@ class TestDocsGenerate(DBTIntegrationTest):
                     "schema": my_schema_name,
                     "alias": "model",
                     'description': 'The test model',
-                    'columns': [
-                        {
+                    'columns': {
+                        'id': {
                             'name': 'id',
                             'description': 'The user ID number',
                         },
-                        {
+                        'first_name': {
                             'name': 'first_name',
                             'description': "The user's first name",
                         },
-                        {
+                        'email': {
                             'name': 'email',
                             'description': "The user's email",
                         },
-                        {
+                        'ip_address': {
                             'name': 'ip_address',
                             'description': "The user's IP address",
                         },
-                        {
+                        'updated_at': {
                             'name': 'updated_at',
                             'description': "The last time this user's email was updated",
                         },
-                    ],
+                    },
                     'patch_path': self.dir('rs_models/schema.yml'),
                     'docrefs': [],
                 },
@@ -987,7 +985,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     },
                     "schema": my_schema_name,
                     "alias": "seed",
-                    'columns': [],
+                    'columns': {},
                     'description': '',
                 },
             },
@@ -1053,13 +1051,13 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'build_path': os.path.normpath(
                         'target/compiled/test/model.sql'
                     ),
-                    'columns': [
-                        {'description': 'The user ID number', 'name': 'id'},
-                        {'description': "The user's first name", 'name': 'first_name'},
-                        {'description': "The user's email", 'name': 'email'},
-                        {'description': "The user's IP address", 'name': 'ip_address'},
-                        {'description': "The last time this user's email was updated", 'name': 'updated_at'}
-                    ],
+                    'columns': {
+                        'id': {'description': 'The user ID number', 'name': 'id'},
+                        'first_name': {'description': "The user's first name", 'name': 'first_name'},
+                        'email': {'description': "The user's email", 'name': 'email'},
+                        'ip_address': {'description': "The user's IP address", 'name': 'ip_address'},
+                        'updated_at': {'description': "The last time this user's email was updated", 'name': 'updated_at'}
+                    },
                     'compiled': True,
                     'compiled_sql': compiled_sql,
                     'config': {
@@ -1133,16 +1131,16 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'build_path': os.path.normpath(
                         'target/compiled/test/ephemeral_summary.sql'
                     ),
-                    'columns': [
-                        {
+                    'columns': {
+                        'first_name': {
                             'description': 'The first name being summarized',
                             'name': 'first_name'
                         },
-                        {
+                        'ct': {
                             'description': 'The number of instances of the first name',
                             'name': 'ct'
                         },
-                    ],
+                    },
                     'compiled': True,
                     'compiled_sql': ephemeral_compiled_sql,
                     'config': {
@@ -1216,16 +1214,16 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'target/compiled/test/view_summary.sql'
                     ),
                     'alias': 'view_summary',
-                    'columns': [
-                        {
+                    'columns': {
+                        'first_name': {
                             'description': 'The first name being summarized',
                             'name': 'first_name'
                         },
-                        {
+                        'ct': {
                             'description': 'The number of instances of the first name',
                             'name': 'ct'
                         },
-                    ],
+                    },
                     'compiled': True,
                     'compiled_sql': view_compiled_sql,
                     'config': {
