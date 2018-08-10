@@ -21,7 +21,7 @@ import dbt.flags
 import dbt.loader
 from dbt.contracts.graph.compiled import CompiledNode, CompiledGraph
 
-from dbt.clients.system import write_file
+from dbt.clients.system import write_json
 from dbt.logger import GLOBAL_LOGGER as logger
 
 graph_file_name = 'graph.gpickle'
@@ -90,13 +90,6 @@ class Compiler(object):
         dbt.clients.system.make_directory(self.project['target-path'])
         dbt.clients.system.make_directory(self.project['modules-path'])
 
-    def __write(self, build_filepath, payload):
-        target_path = os.path.join(self.project['target-path'], build_filepath)
-
-        write_file(target_path, payload)
-
-        return target_path
-
     def compile_node(self, node, manifest):
         logger.debug("Compiling {}".format(node.get('unique_id')))
 
@@ -157,7 +150,7 @@ class Compiler(object):
         """
         filename = manifest_file_name
         manifest_path = os.path.join(self.project['target-path'], filename)
-        write_file(manifest_path, json.dumps(manifest.serialize()))
+        write_json(manifest_path, manifest.serialize())
 
     def write_graph_file(self, linker):
         filename = graph_file_name

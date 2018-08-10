@@ -1,7 +1,9 @@
 from datetime import datetime
+from decimal import Decimal
 import os
 import hashlib
 import itertools
+import json
 import collections
 import copy
 import functools
@@ -441,3 +443,14 @@ def timestring():
     """Get the current datetime as an RFC 3339-compliant string"""
     # isoformat doesn't include the mandatory trailing 'Z' for UTC.
     return datetime.utcnow().isoformat() + 'Z'
+
+
+class JSONEncoder(json.JSONEncoder):
+    """A 'custom' json encoder that does normal json encoder things, but also
+    handles `Decimal`s. Naturally, this can lose precision because they get
+    converted to floats.
+    """
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return super(JSONEncoder, self).default(obj)

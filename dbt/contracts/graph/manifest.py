@@ -81,11 +81,14 @@ PARSED_MANIFEST_CONTRACT = {
         'generated_at': {
             'type': 'string',
             'format': 'date-time',
+            'description': (
+                'The time at which the manifest was generated'
+            ),
         },
         'parent_map': NODE_EDGE_MAP,
         'child_map': NODE_EDGE_MAP,
     },
-    'required': ['nodes', 'macros', 'docs'],
+    'required': ['nodes', 'macros', 'docs', 'generated_at'],
 }
 
 
