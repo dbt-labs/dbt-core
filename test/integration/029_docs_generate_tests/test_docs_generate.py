@@ -262,13 +262,13 @@ class TestDocsGenerate(DBTIntegrationTest):
                 "type": "INT64",
                 "comment": None
             },
-            'nested_field': {
+            'nested_field.field_4': {
                 "name": "nested_field.field_4",
                 "index": 4,
                 "type": "INT64",
                 "comment": None
             },
-            'nested_field': {
+            'nested_field.field_5': {
                 "name": "nested_field.field_5",
                 "index": 5,
                 "type": "INT64",
