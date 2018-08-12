@@ -78,31 +78,31 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         my_schema_name = self.unique_schema()
         expected_cols = {
-            'id': {
+            case('id'): {
                 'name': case('id'),
                 'index': 1,
                 'type': id_type,
                 'comment': None,
             },
-            'first_name': {
+            case('first_name'): {
                 'name': case('first_name'),
                 'index': 2,
                 'type': text_type,
                 'comment': None,
             },
-            'email': {
+            case('email'): {
                 'name': case('email'),
                 'index': 3,
                 'type': text_type,
                 'comment': None,
             },
-            'ip_address': {
+            case('ip_address'): {
                 'name': case('ip_address'),
                 'index': 4,
                 'type': text_type,
                 'comment': None,
             },
-            'updated_at': {
+            case('updated_at'): {
                 'name': case('updated_at'),
                 'index': 5,
                 'type': time_type,
