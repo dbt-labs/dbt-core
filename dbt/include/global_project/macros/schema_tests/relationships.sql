@@ -11,8 +11,11 @@ from (
 
     from {{ model }}
     where {{ from }} is not null
-      and {{ from }} not in (select {{ column_name }}
-                             from {{ to }})
+      and {{ from }} not in (
+        select {{ column_name }}
+        from {{ to }}
+        where {{ column_name }} is not null
+      )
 
 ) validation_errors
 
