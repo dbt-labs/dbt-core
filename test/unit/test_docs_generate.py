@@ -13,7 +13,7 @@ class GenerateTest(unittest.TestCase):
         self.maxDiff = None
 
     def test__unflatten_empty(self):
-        columns = []
+        columns = {}
         expected = {}
         result = generate.unflatten(columns)
         self.assertEqual(result, expected)
@@ -39,14 +39,14 @@ class GenerateTest(unittest.TestCase):
                         'type': 'BASE TABLE',
                         'schema': 'test_schema',
                     },
-                    'columns': [
-                        {
+                    'columns': {
+                        'id': {
                             'type': 'integer',
                             'comment': None,
                             'index': bigint(1),
                             'name': 'id'
                         }
-                    ]
+                    }
                 }
             }
         }
@@ -126,20 +126,20 @@ class GenerateTest(unittest.TestCase):
                         'type': 'BASE TABLE',
                         'schema': 'test_schema',
                     },
-                    'columns': [
-                        {
+                    'columns': {
+                        'id': {
                             'type': 'integer',
                             'comment': None,
                             'index': bigint(1),
                             'name': 'id'
                         },
-                        {
+                        'name': {
                             'type': 'text',
                             'comment': None,
                             'index': Decimal('2'),
                             'name': 'name',
                         }
-                    ],
+                    },
                 },
                 'other_test_table': {
                     'metadata': {
@@ -148,20 +148,20 @@ class GenerateTest(unittest.TestCase):
                         'type': 'BASE TABLE',
                         'schema': 'test_schema',
                     },
-                    'columns': [
-                        {
+                    'columns': {
+                        'id': {
                             'type': 'integer',
                             'comment': None,
                             'index': bigint(1),
                             'name': 'id'
                         },
-                        {
+                        'email': {
                             'type': 'character varying',
                             'comment': None,
                             'index': Decimal('2'),
                             'name': 'email',
                         }
-                    ]
+                    }
                 }
             },
             'other_test_schema': {
@@ -172,20 +172,20 @@ class GenerateTest(unittest.TestCase):
                         'type': 'BASE TABLE',
                         'schema': 'other_test_schema',
                     },
-                    'columns': [
-                        {
+                    'columns': {
+                        'id': {
                             'type': 'integer',
                             'comment': None,
                             'index': bigint(1),
                             'name': 'id'
                         },
-                        {
+                        'name': {
                             'type': 'text',
                             'comment': None,
                             'index': Decimal('2'),
                             'name': 'name',
                         }
-                    ],
+                    },
                 },
             }
         }

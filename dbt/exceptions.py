@@ -380,34 +380,23 @@ def raise_ambiguous_alias(node_1, node_2):
             node_2['unique_id'], node_2['original_file_path']))
 
 
-def raise_ambiguous_catalog_match(ambiguous_matches):
-    """
-    ambiguous matches should be a dict of lists. note that this does
-    not check the length of each match. only call this if you actually want
-    to raise an exception.
+def raise_ambiguous_catalog_match(unique_id, match_1, match_2):
 
-    {"unique_id": [{...catalog entry...}]}
-    """
-
-    error_strings = []
-
-    for model_name, matches in ambiguous_matches.items():
-        matches_strings = [
-            "{}.{}".format(
+    def get_match_string(match):
+        return "{}.{}".format(
                 match.get('metadata', {}).get('schema'),
                 match.get('metadata', {}).get('name'))
-            for match in matches
-        ]
-        error_strings.append("- {} (matched to {})".format(
-            ", ".join(matches_strings),
-            model_name))
 
     raise_compiler_error(
-        'dbt found some ambiguous resources in your warehouse. Since these\n'
-        'resources have similar schemas and tables, dbt is unable to\n'
-        'map these resources to models in your project. To fix this,\n'
-        'please delete one of these resources for each item in the list:\n\n'
-        '{}'.format("\n".join(error_strings)))
+        'dbt found two relations in your warehouse with similar database '
+        'identifiers. dbt\nis unable to determine which of these relations '
+        'was created by the model "{unique_id}".\nIn order for dbt to '
+        'correctly generate the catalog, one of the following relations must '
+        'be deleted or renamed:\n\n - {match_1_s}\n - {match_2_s}'.format(
+            unique_id=unique_id,
+            match_1_s=get_match_string(match_1),
+            match_2_s=get_match_string(match_2),
+        ))
 
 
 def raise_patch_targets_not_found(patches):

@@ -211,8 +211,10 @@ PARSED_NODE_CONTRACT = deep_merge(
                 'description': 'A user-supplied description of the model',
             },
             'columns': {
-                'type': 'array',
-                'items': COLUMN_INFO_CONTRACT,
+                'type': 'object',
+                'properties': {
+                    '.*': COLUMN_INFO_CONTRACT,
+                }
             },
             'patch_path': {
                 'type': 'string',
@@ -244,7 +246,7 @@ class ParsedNode(APIObject):
 
     def __init__(self, agate_table=None, **kwargs):
         self.agate_table = agate_table
-        kwargs.setdefault('columns', [])
+        kwargs.setdefault('columns', {})
         kwargs.setdefault('description', '')
         super(ParsedNode, self).__init__(**kwargs)
 
@@ -346,8 +348,10 @@ PARSED_NODE_PATCH_CONTRACT = {
             ),
         },
         'columns': {
-            'type': 'array',
-            'items': COLUMN_INFO_CONTRACT,
+            'type': 'object',
+            'properties': {
+                '.*': COLUMN_INFO_CONTRACT,
+            }
         },
         'docrefs': {
             'type': 'array',

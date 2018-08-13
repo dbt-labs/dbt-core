@@ -376,14 +376,14 @@ class SchemaParser(BaseParser):
         """
         model_name = model['name']
         docrefs = []
-        column_info = []
+        column_info = {}
         for column in model.get('columns', []):
             column_name = column['name']
             description = column.get('description', '')
-            column_info.append({
+            column_info[column_name] = {
                 'name': column_name,
                 'description': description,
-            })
+            }
             context = {
                 'doc': dbt.context.parser.docs(model, docrefs, column_name)
             }

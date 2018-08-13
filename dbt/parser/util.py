@@ -86,13 +86,14 @@ class ParserUtils(object):
         it doesn't yet exist.
         """
         if not hasattr(node, 'columns'):
-            node.set('columns', [])
-        for column in node.columns:
-            if column.get('name') == column_name:
-                break
+            node.set('columns', {})
+
+        if column_name in node.columns:
+            column = node.columns[column_name]
         else:
             column = {'name': column_name, 'description': ''}
-            node.columns.append(column)
+            node.columns[column_name] = column
+
         return column
 
     @classmethod
