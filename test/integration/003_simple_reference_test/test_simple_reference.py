@@ -62,15 +62,10 @@ class TestSimpleReference(DBTIntegrationTest):
         self.assertEqual(len(results),  7)
 
         # Copies should match
-        self.assertTablesEqual("SEED", "incremental_copy")
-        self.assertTablesEqual("SEED", "materialized_copy")
-        self.assertTablesEqual("SEED", "view_copy")
-
-        # Summaries should match
-        self.assertTablesEqual("SUMMARY_EXPECTED", "incremental_summary")
-        self.assertTablesEqual("SUMMARY_EXPECTED", "materialized_summary")
-        self.assertTablesEqual("SUMMARY_EXPECTED", "view_summary")
-        self.assertTablesEqual("SUMMARY_EXPECTED", "ephemeral_summary")
+        self.assertManyTablesEqual(
+            ["SEED", "incremental_copy", "materialized_copy", "view_copy"],
+            ["SUMMARY_EXPECTED", "incremental_summary", "materialized_summary", "view_summary", "ephemeral_summary"]
+        )
 
         self.run_sql_file(
             "test/integration/003_simple_reference_test/update.sql")
@@ -78,16 +73,10 @@ class TestSimpleReference(DBTIntegrationTest):
         results = self.run_dbt()
         self.assertEqual(len(results),  7)
 
-        # Copies should match
-        self.assertTablesEqual("SEED", "incremental_copy")
-        self.assertTablesEqual("SEED", "materialized_copy")
-        self.assertTablesEqual("SEED", "view_copy")
-
-        # Summaries should match
-        self.assertTablesEqual("SUMMARY_EXPECTED", "incremental_summary")
-        self.assertTablesEqual("SUMMARY_EXPECTED", "materialized_summary")
-        self.assertTablesEqual("SUMMARY_EXPECTED", "view_summary")
-        self.assertTablesEqual("SUMMARY_EXPECTED", "ephemeral_summary")
+        self.assertManyTablesEqual(
+            ["SEED", "incremental_copy", "materialized_copy", "view_copy"],
+            ["SUMMARY_EXPECTED", "incremental_summary", "materialized_summary", "view_summary", "ephemeral_summary"]
+        )
 
     @attr(type='postgres')
     def test__postgres__simple_reference_with_models(self):
@@ -181,11 +170,10 @@ class TestSimpleReference(DBTIntegrationTest):
         self.assertEqual(len(results),  3)
 
         # Copies should match
-        self.assertTablesEqual("SEED", "materialized_copy")
-
-        # Summaries should match
-        self.assertTablesEqual("SUMMARY_EXPECTED", "materialized_summary")
-        self.assertTablesEqual("SUMMARY_EXPECTED", "ephemeral_summary")
+        self.assertManyTablesEqual(
+            ["SEED", "materialized_copy"],
+            ["SUMMARY_EXPECTED", "materialized_summary", "ephemeral_summary"]
+        )
 
         created_models = self.get_models_in_schema()
 
