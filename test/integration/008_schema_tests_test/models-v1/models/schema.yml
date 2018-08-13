@@ -34,7 +34,7 @@ table_summary:
             - count
 
         unique:
-            - favorite_color 
+            - favorite_color
 
         accepted_values:
             - { field: favorite_color, values: ['blue', 'green'] }
@@ -64,3 +64,10 @@ table_failure_summary:
 
         relationships:
             - { from: favorite_color, to: ref('table_copy'), field: favorite_color }
+
+
+# all of these constraints will fail
+table_failure_null_relation:
+    constraints:
+        relationships:
+            - { from: id, to: ref('table_failure_copy'), field: id }

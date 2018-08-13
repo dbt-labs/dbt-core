@@ -78,3 +78,12 @@ models:
           tests:
             - accepted_values: { values: ['red'] }
             - relationships: { from: favorite_color, to: ref('table_copy') }
+
+# all of these constraints will fail
+    - name: table_failure_null_relation
+      description: "A table with a null value where it should be a foreign key"
+      columns:
+        - name: id
+          description: "The user ID"
+          tests:
+            - relationships: { from: id, to: ref('table_failure_copy') }
