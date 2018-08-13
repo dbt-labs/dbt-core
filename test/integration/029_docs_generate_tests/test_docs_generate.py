@@ -540,6 +540,11 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'seed.test.seed': ['model.test.model'],
             },
             'docs': {},
+            'metadata': {
+                'project_id': '098f6bcd4621d373cade4e832627b4f6',
+                'user_id': None,
+                'send_anonymous_usage_stats': False,
+            },
         }
 
     def expected_postgres_references_manifest(self):
@@ -794,6 +799,11 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.view_summary': ['model.test.ephemeral_summary'],
                 'seed.test.seed': [],
             },
+            'metadata': {
+                'project_id': '098f6bcd4621d373cade4e832627b4f6',
+                'user_id': None,
+                'send_anonymous_usage_stats': False,
+            },
         }
 
     def expected_bigquery_nested_manifest(self):
@@ -897,6 +907,11 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.seed': []
             },
             'docs': {},
+            'metadata': {
+                'project_id': '098f6bcd4621d373cade4e832627b4f6',
+                'user_id': None,
+                'send_anonymous_usage_stats': False,
+            },
         }
 
     def expected_redshift_incremental_view_manifest(self):
@@ -1000,6 +1015,11 @@ class TestDocsGenerate(DBTIntegrationTest):
                 "seed.test.seed": ["model.test.model"]
             },
             'docs': {},
+            'metadata': {
+                'project_id': '098f6bcd4621d373cade4e832627b4f6',
+                'user_id': None,
+                'send_anonymous_usage_stats': False,
+            },
         }
 
     def verify_manifest(self, expected_manifest):
@@ -1011,7 +1031,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.assertEqual(
             set(manifest),
             {'nodes', 'macros', 'parent_map', 'child_map', 'generated_at',
-             'docs'}
+             'docs', 'metadata'}
         )
 
         self.verify_manifest_macros(manifest)

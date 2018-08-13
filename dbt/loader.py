@@ -12,7 +12,8 @@ class GraphLoader(object):
     _LOADERS = []
 
     @classmethod
-    def load_all(cls, root_project, all_projects):
+    def load_all(cls, project_obj, all_projects):
+        root_project = project_obj.cfg
         macros = MacroLoader.load_all(root_project, all_projects)
         macros.update(OperationLoader.load_all(root_project, all_projects))
         nodes = {}
@@ -23,7 +24,7 @@ class GraphLoader(object):
         tests, patches = SchemaTestLoader.load_all(root_project, all_projects)
 
         manifest = Manifest(nodes=nodes, macros=macros, docs=docs,
-                            generated_at=timestring())
+                            generated_at=timestring(), project=project_obj)
         manifest.add_nodes(tests)
         manifest.patch_nodes(patches)
 

@@ -145,14 +145,13 @@ def assert_no_duplicate_unique_ids(catalog):
 
 
 class GenerateTask(BaseTask):
-    def _get_manifest(self, project):
-        compiler = dbt.compilation.Compiler(project)
+    def _get_manifest(self):
+        compiler = dbt.compilation.Compiler(self.project)
         compiler.initialize()
 
-        root_project = project.cfg
         all_projects = compiler.get_all_projects()
 
-        manifest = dbt.loader.GraphLoader.load_all(root_project, all_projects)
+        manifest = dbt.loader.GraphLoader.load_all(self.project, all_projects)
         return manifest
 
     def run(self):
@@ -160,7 +159,7 @@ class GenerateTask(BaseTask):
             DOCS_INDEX_FILE_PATH,
             os.path.join(self.project['target-path'], 'index.html'))
 
-        manifest = self._get_manifest(self.project)
+        manifest = self._get_manifest()
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
 

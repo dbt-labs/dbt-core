@@ -223,10 +223,9 @@ class Compiler(object):
     def compile(self):
         linker = Linker()
 
-        root_project = self.project.cfg
         all_projects = self.get_all_projects()
 
-        manifest = dbt.loader.GraphLoader.load_all(root_project, all_projects)
+        manifest = dbt.loader.GraphLoader.load_all(self.project, all_projects)
 
         self.write_manifest_file(manifest)
 
