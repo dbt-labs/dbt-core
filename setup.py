@@ -48,7 +48,7 @@ setup(
         'snowflake-connector-python>=1.4.9',
         'requests>=2.18.0,<3',
         'colorama==0.3.9',
-        'google-cloud-bigquery==0.29.0',
+        'google-cloud-bigquery>=1.0.0,<2',
         'agate>=1.6,<2',
         'jsonschema==2.6.0',
         'boto3>=1.6.23'
