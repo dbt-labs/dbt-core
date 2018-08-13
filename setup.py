@@ -22,6 +22,7 @@ setup(
     packages=find_packages(),
     package_data={
         'dbt': [
+            'include/index.html',
             'include/global_project/dbt_project.yml',
             'include/global_project/macros/*.sql',
             'include/global_project/macros/**/*.sql',
