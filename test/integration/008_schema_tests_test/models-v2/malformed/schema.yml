@@ -25,7 +25,7 @@ models:
           - not_null
           - unique
           - accepted_values: { values: ['blue', 'green'] }
-          - relationships: { from: favorite_color, to: ref('table_copy') }
+          - relationships: { field: favorite_color, to: ref('table_copy') }
       - name: count
         description: "The number of responses for this favorite color"
         tests:
