@@ -93,6 +93,15 @@ class SchemaParser(BaseParser):
     """This is the original schema parser but with everything in one huge CF of
     a method so I can refactor it more nicely.
     """
+    @staticmethod
+    def check_v2_missing_version(path, test_yml):
+        """Given the loaded yaml from a file, return True if it looks like the
+        file is probably a v2 schema.yml with a missing `version: 2`.
+        """
+        # in v1, it's Dict[str, dict] instead of Dict[str, list]
+        if 'models' in test_yml and isinstance(test_yml['models'], list):
+            dbt.exceptions.raise_incorrect_version(path)
+
     @classmethod
     def _build_v1_test_args(cls, config):
         if isinstance(config, (basestring, int, float, bool)):
@@ -285,6 +294,15 @@ class SchemaParser(BaseParser):
             no_tests_warning = (
                 "* WARNING: No constraints found for model '{}' in file {}\n"
             )
+            if not isinstance(test_spec, dict):
+                msg = (
+                    "Invalid test config given in {} near {} (expected a dict)"
+                ).format(original_file_path, test_spec)
+                if dbt.flags.STRICT_MODE:
+                    dbt.exceptions.raise_compiler_error(msg)
+                dbt.utils.compiler_warning(model_name, msg)
+                continue
+
             if test_spec is None or test_spec.get('constraints') is None:
                 logger.warning(no_tests_warning.format(model_name,
                                original_file_path))
@@ -343,6 +361,14 @@ class SchemaParser(BaseParser):
             return
 
         for model in test_yml['models']:
+            if not isinstance(model, dict):
+                msg = (
+                    "Invalid test config given in {} near {} (expected a dict)"
+                ).format(original_file_path, model)
+                if dbt.flags.STRICT_MODE:
+                    dbt.exceptions.raise_compiler_error(msg, model)
+                dbt.utils.compiler_warning(model_name, msg)
+                continue
             try:
                 model = UnparsedNodeUpdate(**model)
             except dbt.exceptions.ValidationException as exc:
@@ -433,6 +459,7 @@ class SchemaParser(BaseParser):
         for original_file_path, test_yml in iterator:
             version = test_yml.get('version', 1)
             if version == 1:
+                cls.check_v2_missing_version(original_file_path, test_yml)
                 new_tests.update(
                     (t.get('unique_id'), t)
                     for t in cls.parse_v1_test_yml(

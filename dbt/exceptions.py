@@ -421,3 +421,11 @@ def raise_duplicate_patch_name(name, patch_1, patch_2):
             patch_2,
         )
     )
+
+
+def raise_incorrect_version(path):
+    raise_compiler_error(
+        'Found a probable v2 schema file at {} without a version field, '
+        'invalid format for v1. See documentation at: '
+        'https://docs.getdbt.com/v0.11/docs/schemayml-files'.format(path)
+    )
