@@ -1,20 +1,20 @@
 
-{% macro test_relationships(model, to, from) %}
+{% macro test_relationships(model, to, field) %}
 
-{% set column_name = kwargs.get('column_name', kwargs.get('field')) %}
+{% set column_name = kwargs.get('column_name', kwargs.get('from')) %}
 
 select count(*)
 from (
 
     select
-        {{ from }} as id
+        {{ column_name }} as id
 
     from {{ model }}
-    where {{ from }} is not null
-      and {{ from }} not in (
-        select {{ column_name }}
+    where {{ column_name }} is not null
+      and {{ column_name }} not in (
+        select {{ field }}
         from {{ to }}
-        where {{ column_name }} is not null
+        where {{ field }} is not null
       )
 
 ) validation_errors
