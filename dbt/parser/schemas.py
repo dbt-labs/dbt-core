@@ -169,7 +169,7 @@ class SchemaParser(BaseParser):
 
     @classmethod
     def build_parsed_node(cls, unparsed, model_name, test_namespace, test_type,
-                          root_project, all_projects, macros):
+                          root_project, all_projects, macros, column_name):
         """Given an UnparsedNode with a node type of Test and some extra
         information, build a ParsedNode representing the test.
         """
@@ -198,12 +198,13 @@ class SchemaParser(BaseParser):
                               tags=['schema'],
                               fqn_extra=None,
                               fqn=fqn_override,
-                              macros=macros)
+                              macros=macros,
+                              column_name=column_name)
 
     @classmethod
     def build_node(cls, model_name, package_name, test_type, test_args,
                    root_dir, original_file_path, root_project, all_projects,
-                   macros):
+                   macros, column_name=None):
         """From the various components that are common to both v1 and v2 schema,
         build a ParsedNode representing a test case.
         """
@@ -222,7 +223,7 @@ class SchemaParser(BaseParser):
 
         parsed = cls.build_parsed_node(unparsed, model_name, test_namespace,
                                        original_test_type, root_project,
-                                       all_projects, macros)
+                                       all_projects, macros, column_name)
         return parsed
 
     @classmethod
@@ -394,7 +395,7 @@ class SchemaParser(BaseParser):
                 )
                 node = cls.build_node(
                     model_name, package_name, test_type, test_args, root_dir,
-                    path, root_project, all_projects, macros
+                    path, root_project, all_projects, macros, column_name
                 )
                 yield 'test', node
 

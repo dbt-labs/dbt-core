@@ -232,6 +232,13 @@ PARSED_NODE_CONTRACT = deep_merge(
                     'In seeds, the path to the source file used during build.'
                 ),
             },
+            'column_name': {
+                'type': 'string',
+                'description': (
+                    'In tests parsed from a v2 schema, the column the test is '
+                    'associated with (if there is one)'
+                )
+            },
         },
         'required': UNPARSED_NODE_CONTRACT['required'] + [
             'unique_id', 'fqn', 'schema', 'refs', 'depends_on', 'empty',
