@@ -1414,7 +1414,8 @@ class ParserTest(unittest.TestCase):
                 tags=['schema'],
                 raw_sql=accepted_values_sql,
                 description='',
-                columns={}
+                columns={},
+                column_name='id'
             ),
             ParsedNode(
                 alias='not_null_model_one_id',
@@ -1434,7 +1435,8 @@ class ParserTest(unittest.TestCase):
                 tags=['schema'],
                 raw_sql=not_null_sql,
                 description='',
-                columns={}
+                columns={},
+                column_name='id'
             ),
             ParsedNode(
                 alias='relationships_model_one_id__id__ref_model_two_',
@@ -1455,7 +1457,8 @@ class ParserTest(unittest.TestCase):
                 tags=['schema'],
                 raw_sql=relationships_sql,
                 description='',
-                columns={}
+                columns={},
+                column_name='id'
             ),
             ParsedNode(
                 alias='some_test_model_one_value',
@@ -1495,10 +1498,12 @@ class ParserTest(unittest.TestCase):
                 tags=['schema'],
                 raw_sql=unique_sql,
                 description='',
-                columns={}
+                columns={},
+                column_name='id'
             ),
         ]
-        self.assertEqual(tests, expected_tests)
+        for test, expected in zip(tests, expected_tests):
+            self.assertEqual(test, expected)
 
         expected_patches = [
             ParsedNodePatch(name='model_one',
@@ -1512,7 +1517,8 @@ class ParserTest(unittest.TestCase):
                 docrefs=[],
             ),
         ]
-        self.assertEqual(patches, expected_patches)
+        for patch, expected in zip(patches, expected_patches):
+            self.assertEqual(patch, expected)
 
     def test__simple_data_test(self):
         tests = [{
