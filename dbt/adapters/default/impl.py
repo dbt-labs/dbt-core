@@ -34,6 +34,7 @@ class DefaultAdapter(object):
         "get_missing_columns",
         "expand_target_column_types",
         "create_schema",
+        "quote_as_configured",
 
         # deprecated -- use versions that take relations instead
         "already_exists",
@@ -726,10 +727,18 @@ class DefaultAdapter(object):
         return '"{}"'.format(identifier)
 
     @classmethod
-    def quote_schema_and_table(cls, profile, project_cfg,
-                               schema, table, model_name=None):
-        return '{}.{}'.format(cls.quote(schema),
-                              cls.quote(table))
+    def quote_as_configured(cls, profile, project_cfg, identifier, quote_key,
+                            model_name=None):
+        """Quote or do not quote the given identifer as configured in the
+        project config for the quote key.
+
+        The quote key should be one of 'database' (on bigquery, 'profile'),
+        'identifier', or 'schema', or it will be treated as if you set `True`.
+        """
+        if project_cfg.get('quoting', {}).get(quote_key, True):
+            return cls.quote(identifier)
+        else:
+            return identifier
 
     @classmethod
     def convert_text_type(cls, agate_table, col_idx):
