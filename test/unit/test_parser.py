@@ -1,9 +1,11 @@
 import unittest
+import mock
 
 import os
 import yaml
 
 import dbt.flags
+import dbt.parser
 from dbt.parser import ModelParser, MacroParser, DataTestParser, SchemaParser, ParserUtils
 from dbt.utils import timestring
 
@@ -1513,6 +1515,28 @@ class ParserTest(unittest.TestCase):
             ),
         ]
         self.assertEqual(patches, expected_patches)
+
+    @mock.patch.object(SchemaParser, 'find_schema_yml')
+    @mock.patch.object(dbt.parser.schemas, 'logger')
+    def test__schema_v2_as_v1(self, mock_logger, find_schema_yml):
+        test_yml = yaml.safe_load(
+            '{models: [{name: model_one, description: "blah blah", columns: ['
+            '{name: id, description: "user ID", tests: [unique, not_null, '
+            '{accepted_values: {values: ["a", "b"]}},'
+            '{relationships: {from: id, to: ref(\'model_two\')}}]'
+            '}], tests: [some_test: { key: value }]}]}'
+        )
+        find_schema_yml.return_value = [('/some/path/schema.yml', test_yml)]
+        root_project = {}
+        all_projects = {}
+        root_dir = '/some/path'
+        relative_dirs = ['a', 'b']
+        with self.assertRaises(dbt.exceptions.CompilationException) as cm:
+            dbt.parser.schemas.SchemaParser.load_and_parse(
+                'test', root_project, all_projects, root_dir, relative_dirs
+            )
+            self.assertIn('https://docs.getdbt.com/v0.11/docs/schemayml-files',
+                          str(cm.exception))
 
     def test__simple_data_test(self):
         tests = [{
