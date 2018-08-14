@@ -1096,7 +1096,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'description': 'The test model',
                     'docrefs': [],
                     'empty': False,
-                    'extra_ctes': {},
+                    'extra_ctes': [],
                     'extra_ctes_injected': True,
                     'fqn': ['test', 'model'],
                     'injected_sql': compiled_sql,
@@ -1196,9 +1196,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                         }
                     ],
                     'empty': False,
-                    'extra_ctes': {
-                        'model.test.ephemeral_copy': cte_sql,
-                    },
+                    'extra_ctes': [
+                        {'id': 'model.test.ephemeral_copy', 'sql': cte_sql},
+                    ],
                     'extra_ctes_injected': True,
                     'fqn': ['test', 'ephemeral_summary'],
                     'injected_sql': ephemeral_injected_sql,
@@ -1280,7 +1280,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         }
                     ],
                     'empty': False,
-                    'extra_ctes': {},
+                    'extra_ctes': [],
                     'extra_ctes_injected': True,
                     'fqn': ['test', 'view_summary'],
                     'injected_sql': view_compiled_sql,
