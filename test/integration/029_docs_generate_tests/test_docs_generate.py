@@ -628,9 +628,9 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
             'child_map': {
                 'model.test.model': [
-                    'test.test.unique_model_id',
                     'test.test.not_null_model_id',
                     'test.test.test_nothing_model_',
+                    'test.test.unique_model_id',
                 ],
                 'seed.test.seed': ['model.test.model'],
                 'test.test.not_null_model_id': [],
