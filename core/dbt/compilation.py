@@ -363,7 +363,7 @@ class Compiler:
             {
                 "compiled": False,
                 "compiled_sql": None,
-            'extra_ctes': [],
+                "extra_ctes_injected": False,
                 "extra_ctes": [],
             }
         )
