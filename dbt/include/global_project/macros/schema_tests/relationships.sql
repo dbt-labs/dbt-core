@@ -5,18 +5,13 @@
 
 select count(*)
 from (
-
     select
-        {{ column_name }} as id
-
-    from {{ model }}
-    where {{ column_name }} is not null
-      and {{ column_name }} not in (
-        select {{ field }}
-        from {{ to }}
-        where {{ field }} is not null
-      )
-
+        model.{{ column_name }} as id
+    from {{ model }} model
+    left join {{ to }} target on target.{{ field }} = model.{{ column_name }}
+    where
+       model.{{ column_name }} is not null and
+       target.{{ field }} is null
 ) validation_errors
 
 {% endmacro %}
