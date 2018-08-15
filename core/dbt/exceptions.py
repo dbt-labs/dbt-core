@@ -243,7 +243,7 @@ class JSONValidationException(ValidationException):
     def __init__(self, typename, errors):
         self.typename = typename
         self.errors = errors
-        self.errors_message = ', '.join(errors)
+        self.errors_message = ", ".join(errors)
         msg = 'Invalid arguments passed to "{}" instance: {}'.format(
             self.typename, self.errors_message
         )
