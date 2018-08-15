@@ -106,6 +106,20 @@ class ValidationException(RuntimeException):
     pass
 
 
+class JSONValidationException(ValidationException):
+    def __init__(self, typename, errors):
+        self.typename = typename
+        self.errors = errors
+        self.errors_message = ', '.join(errors)
+        msg = ('Invalid arguments passed to "{}" instance: {}'.format(
+                self.typename, self.errors_message))
+        super(JSONValidationException, self).__init__(msg)
+
+    def __reduce__(self):
+        # see https://stackoverflow.com/a/36342588 for why this is necessary
+        return (JSONValidationException, (self.typename, self.errors))
+
+
 class ParsingException(Exception):
     pass
 

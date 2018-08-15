@@ -346,11 +346,11 @@ class SchemaParser(BaseParser):
         for model in test_yml['models']:
             try:
                 model = UnparsedNodeUpdate(**model)
-            except dbt.exceptions.ValidationException as exc:
+            except dbt.exceptions.JSONValidationException as exc:
                 # we don't want to fail the full run, but we do want to fail
                 # parsing this file
-                msg = "Invalid test config given in {} near {}: {}".format(
-                        original_file_path, model, exc
+                msg = "Invalid test config given in {}: {}".format(
+                        original_file_path, exc.errors_message
                 )
                 if dbt.flags.STRICT_MODE:
                     dbt.exceptions.raise_compiler_error(msg, model)
