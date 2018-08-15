@@ -12,6 +12,7 @@ import dbt.compilation
 import dbt.exceptions
 
 from dbt.task.base_task import BaseTask
+from dbt.task.compile import CompileTask
 
 
 CATALOG_FILENAME = 'catalog.json'
@@ -116,7 +117,7 @@ def incorporate_catalog_unique_ids(catalog, manifest):
     return nodes
 
 
-class GenerateTask(BaseTask):
+class GenerateTask(CompileTask):
     def _get_manifest(self):
         compiler = dbt.compilation.Compiler(self.project)
         compiler.initialize()
@@ -127,6 +128,15 @@ class GenerateTask(BaseTask):
         return manifest
 
     def run(self):
+        compile_results = None
+        if self.args.compile:
+            compile_results = super(GenerateTask, self).run()
+            if any(r.errored for r in compile_results):
+                dbt.ui.printer.print_timestamped_line(
+                    'compile failed, cannot generate docs'
+                )
+                return
+
         shutil.copyfile(
             DOCS_INDEX_FILE_PATH,
             os.path.join(self.project['target-path'], 'index.html'))
@@ -155,5 +165,15 @@ class GenerateTask(BaseTask):
         dbt.ui.printer.print_timestamped_line(
             'Catalog written to {}'.format(os.path.abspath(path))
         )
+        # now that we've serialized the data we can add compile_results in to
+        # make interpret_results happy.
+        results['compile_results'] = compile_results
 
         return results
+
+    def interpret_results(self, results):
+        compile_results = results.get('compile_results')
+        if compile_results is None:
+            return True
+
+        return super(GenerateTask, self).interpret_results(compile_results)

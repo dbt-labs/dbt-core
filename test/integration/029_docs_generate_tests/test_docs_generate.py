@@ -49,8 +49,9 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.use_default_project(project)
 
         self.assertEqual(len(self.run_dbt(["seed"])), seed_count)
-        self.run_start_time = datetime.utcnow()
         self.assertEqual(len(self.run_dbt()), model_count)
+        os.remove(os.path.normpath('target/manifest.json'))
+        os.remove(os.path.normpath('target/run_results.json'))
         self.generate_start_time = datetime.utcnow()
         self.run_dbt(['docs', 'generate'])
 
@@ -1039,8 +1040,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         }
         self.assertBetween(
             manifest['generated_at'],
-            start=self.run_start_time,
-            end=self.generate_start_time
+            start=self.generate_start_time
         )
         self.assertEqual(manifest_without_extras, expected_manifest)
 
@@ -1060,6 +1060,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             compiled_sql = '\n\nselect * from `{}`.`{}`.seed'.format(
                 self._profile['project'], schema
             )
+        status = None
 
         return [
             {
@@ -1116,7 +1117,51 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'skip': False,
                 'status': status,
-            }
+            },
+            {
+                'error': None,
+                'execution_time': AnyFloat(),
+                'fail': None,
+                'node': {
+                    'alias': 'seed',
+                    'build_path': os.path.normpath(
+                        'target/compiled/test/seed.csv'
+                    ),
+                    'columns': {},
+                    'compiled': True,
+                    'compiled_sql': '-- csv --',
+                    'config': {
+                        'column_types': {},
+                        'enabled': True,
+                        'materialized': 'seed',
+                        'post-hook': [],
+                        'pre-hook': [],
+                        'quoting': {},
+                        'vars': {},
+                    },
+                    'depends_on': {'macros': [], 'nodes': []},
+                    'description': '',
+                    'empty': False,
+                    'extra_ctes': [],
+                    'extra_ctes_injected': True,
+                    'fqn': ['test', 'seed'],
+                    'injected_sql': '-- csv --',
+                    'name': 'seed',
+                    'original_file_path': self.dir('seed/seed.csv'),
+                    'package_name': 'test',
+                    'path': 'seed.csv',
+                    'raw_sql': '-- csv --',
+                    'refs': [],
+                    'resource_type': 'seed',
+                    'root_path': os.getcwd(),
+                    'schema': schema,
+                    'tags': [],
+                    'unique_id': 'seed.test.seed',
+                    'wrapped_sql': 'None'
+                },
+                'skip': False,
+                'status': None,
+            },
         ]
 
     def expected_postgres_references_run_results(self):
@@ -1222,7 +1267,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'wrapped_sql': 'None',
                 },
                 'skip': False,
-                'status': 'SELECT 1',
+                'status': None,
             },
             {
                 'error': None,
@@ -1303,7 +1348,51 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'wrapped_sql': 'None',
                 },
                 'skip': False,
-                'status': 'CREATE VIEW',
+                'status': None,
+            },
+            {
+                'error': None,
+                'execution_time': AnyFloat(),
+                'fail': None,
+                'node': {
+                    'alias': 'seed',
+                    'build_path': os.path.normpath(
+                        'target/compiled/test/seed.csv'
+                    ),
+                    'columns': {},
+                    'compiled': True,
+                    'compiled_sql': '-- csv --',
+                    'config': {
+                        'column_types': {},
+                        'enabled': True,
+                        'materialized': 'seed',
+                        'post-hook': [],
+                        'pre-hook': [],
+                        'quoting': {},
+                        'vars': {},
+                    },
+                    'depends_on': {'macros': [], 'nodes': []},
+                    'description': '',
+                    'empty': False,
+                    'extra_ctes': [],
+                    'extra_ctes_injected': True,
+                    'fqn': ['test', 'seed'],
+                    'injected_sql': '-- csv --',
+                    'name': 'seed',
+                    'original_file_path': self.dir('seed/seed.csv'),
+                    'package_name': 'test',
+                    'path': 'seed.csv',
+                    'raw_sql': '-- csv --',
+                    'refs': [],
+                    'resource_type': 'seed',
+                    'root_path': os.getcwd(),
+                    'schema': my_schema_name,
+                    'tags': [],
+                    'unique_id': 'seed.test.seed',
+                    'wrapped_sql': 'None'
+                },
+                'skip': False,
+                'status': None,
             },
         ]
 
@@ -1315,8 +1404,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.assertIn('elapsed_time', run_result)
         self.assertBetween(
             run_result['generated_at'],
-            start=self.run_start_time,
-            end=self.generate_start_time
+            start=self.generate_start_time
         )
         self.assertGreater(run_result['elapsed_time'], 0)
         self.assertTrue(
@@ -1324,6 +1412,8 @@ class TestDocsGenerate(DBTIntegrationTest):
             "run_result['elapsed_time'] is of type {}, expected float".format(
                 str(type(run_result['elapsed_time'])))
         )
+        # sort the results so we can make reasonable assertions
+        run_result['results'].sort(key=lambda r: r['node']['unique_id'])
         self.assertEqual(run_result['results'], expected_run_results)
 
     @use_profile('postgres')
@@ -1364,8 +1454,9 @@ class TestDocsGenerate(DBTIntegrationTest):
     def test__bigquery__nested_models(self):
         self.use_default_project({'source-paths': [self.dir('bq_models')]})
 
-        self.run_start_time = datetime.utcnow()
         self.assertEqual(len(self.run_dbt()), 2)
+        os.remove(os.path.normpath('target/manifest.json'))
+        os.remove(os.path.normpath('target/run_results.json'))
         self.generate_start_time = datetime.utcnow()
         self.run_dbt(['docs', 'generate'])
 
