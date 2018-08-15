@@ -70,7 +70,7 @@ UNPARSED_NODE_CONTRACT = deep_merge(
                     # we need this if parse_node is going to handle archives.
                     NodeType.Archive,
                 ]
-            }
+            },
         },
         'required': UNPARSED_BASE_CONTRACT['required'] + [
             'resource_type', 'name']

@@ -41,11 +41,13 @@ class BaseParser(object):
     def parse_node(cls, node, node_path, root_project_config,
                    package_project_config, all_projects,
                    tags=None, fqn_extra=None, fqn=None, macros=None,
-                   agate_table=None, archive_config=None):
+                   agate_table=None, archive_config=None, column_name=None):
         """Parse a node, given an UnparsedNode and any other required information.
 
         agate_table should be set if the node came from a seed file.
         archive_config should be set if the node is an Archive node.
+        column_name should be set if the node is a Test node associated with a
+        particular column.
         """
         logger.debug("Parsing {}".format(node_path))
 
@@ -96,6 +98,10 @@ class BaseParser(object):
         node['schema'] = default_schema
         default_alias = node.get('name')
         node['alias'] = default_alias
+
+        # if there's a column, it should end up part of the ParsedNode
+        if column_name is not None:
+            node['column_name'] = column_name
 
         # make a manifest with just the macros to get the context
         manifest = Manifest(macros=macros, nodes={}, docs={},
