@@ -313,12 +313,11 @@ class SchemaParser(BaseParser):
                     continue
 
                 if not isinstance(configs, (list, tuple)):
-
                     dbt.utils.compiler_warning(
                         model_name,
-                        "Invalid test config given in {} near {}".format(
-                            original_file_path,
-                            configs))
+                        "Invalid test config given in {}".format(
+                            original_file_path)
+                    )
                     continue
 
                 for config in configs:
@@ -374,8 +373,8 @@ class SchemaParser(BaseParser):
             except dbt.exceptions.ValidationException as exc:
                 # we don't want to fail the full run, but we do want to fail
                 # parsing this file
-                msg = "Invalid test config given in {} near {}: {}".format(
-                        original_file_path, model, exc
+                msg = "Invalid test config given in {}: {}".format(
+                        original_file_path, exc
                 )
                 if dbt.flags.STRICT_MODE:
                     dbt.exceptions.raise_compiler_error(msg, model)
