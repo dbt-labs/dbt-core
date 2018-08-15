@@ -48,6 +48,19 @@ def print_compile_stats(stats):
     logger.info("Found {}".format(stat_line))
 
 
+def _add_prepended_cte(prepended_ctes, new_cte):
+    for dct in prepended_ctes:
+        if dct['id'] == new_cte['id']:
+            dct['sql'] = new_cte['sql']
+            return
+    prepended_ctes.append(new_cte)
+
+
+def _extend_prepended_ctes(prepended_ctes, new_prepended_ctes):
+    for new_cte in new_prepended_ctes:
+        _add_prepended_cte(prepended_ctes, new_cte)
+
+
 def prepend_ctes(model, manifest):
     model, _, manifest = recursively_prepend_ctes(model, manifest)
 
@@ -62,18 +75,18 @@ def recursively_prepend_ctes(model, manifest):
         # ensure that all the nodes in this manifest are compiled
         CompiledGraph(**manifest.to_flat_graph())
 
-    prepended_ctes = OrderedDict()
+    prepended_ctes = []
 
-    for cte_id in model.extra_ctes:
+    for cte in model.extra_ctes:
+        cte_id = cte['id']
         cte_to_add = manifest.nodes.get(cte_id)
         cte_to_add, new_prepended_ctes, manifest = recursively_prepend_ctes(
             cte_to_add, manifest)
 
-        prepended_ctes.update(new_prepended_ctes)
+        _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
         new_cte_name = '__dbt__CTE__{}'.format(cte_to_add.get('name'))
-        prepended_ctes[cte_id] = ' {} as (\n{}\n)'.format(
-            new_cte_name,
-            cte_to_add.compiled_sql)
+        sql = ' {} as (\n{}\n)'.format(new_cte_name, cte_to_add.compiled_sql)
+        _add_prepended_cte(prepended_ctes, {'id': cte_id, 'sql': sql})
 
     model.prepend_ctes(prepended_ctes)
 
@@ -98,7 +111,7 @@ class Compiler(object):
             'compiled': False,
             'compiled_sql': None,
             'extra_ctes_injected': False,
-            'extra_ctes': OrderedDict(),
+            'extra_ctes': [],
             'injected_sql': None,
         })
         compiled_node = CompiledNode(**data)

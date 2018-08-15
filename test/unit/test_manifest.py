@@ -348,7 +348,7 @@ class MixedManifestTest(unittest.TestCase):
                 compiled_sql='also does not matter',
                 extra_ctes_injected=True,
                 injected_sql=None,
-                extra_ctes={}
+                extra_ctes=[]
             ),
             'model.root.events': CompiledNode(
                 name='events',
@@ -374,7 +374,7 @@ class MixedManifestTest(unittest.TestCase):
                 compiled_sql='also does not matter',
                 extra_ctes_injected=True,
                 injected_sql='and this also does not matter',
-                extra_ctes={}
+                extra_ctes=[]
             ),
             'model.root.dep': ParsedNode(
                 name='dep',

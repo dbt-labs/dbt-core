@@ -49,7 +49,7 @@ def ref(db_wrapper, model, project_cfg, profile, manifest):
         is_ephemeral = (get_materialization(target_model) == 'ephemeral')
 
         if is_ephemeral:
-            model['extra_ctes'][target_model_id] = None
+            model.set_cte(target_model_id, None)
             return adapter.Relation.create(
                 type=adapter.Relation.CTE,
                 identifier=add_ephemeral_model_prefix(

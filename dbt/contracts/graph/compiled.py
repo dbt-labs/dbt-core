@@ -10,6 +10,25 @@ import dbt.compat
 
 import sqlparse
 
+INJECTED_CTE_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'description': 'A single entry in the CTEs list',
+    'properties': {
+        'id': {
+            'type': 'string',
+            'description': 'The id of the CTE',
+        },
+        'sql': {
+            'type': ['string', 'null'],
+            'description': 'The compiled SQL of the CTE',
+            'additionalProperties': True,
+        },
+    },
+    'required': ['id', 'sql'],
+}
+
+
 COMPILED_NODE_CONTRACT = deep_merge(
     PARSED_NODE_CONTRACT,
     {
@@ -33,12 +52,10 @@ COMPILED_NODE_CONTRACT = deep_merge(
                 ),
                 'type': 'boolean',
             },
-            # TODO: properly represent this so we can serialize/deserialize and
-            # preserve order.
             'extra_ctes': {
-                'type': 'object',
-                'additionalProperties': True,
-                'description': 'The injected CTEs for a model'
+                'type': 'array',
+                'description': 'The injected CTEs for a model',
+                'items': INJECTED_CTE_CONTRACT,
             },
             'injected_sql': {
                 'type': ['string', 'null'],
@@ -143,9 +160,11 @@ def _inject_ctes_into_sql(sql, ctes):
         trailing_comma = sqlparse.sql.Token(sqlparse.tokens.Punctuation, ',')
         parsed.insert_after(with_stmt, trailing_comma)
 
-    parsed.insert_after(
-        with_stmt,
-        sqlparse.sql.Token(sqlparse.tokens.Keyword, ", ".join(ctes.values())))
+    token = sqlparse.sql.Token(
+        sqlparse.tokens.Keyword,
+        ", ".join(c['sql'] for c in ctes)
+    )
+    parsed.insert_after(with_stmt, token)
 
     return dbt.compat.to_string(parsed)
 
@@ -160,6 +179,7 @@ class CompiledNode(ParsedNode):
             self.compiled_sql,
             prepended_ctes
         )
+        self.validate()
 
     @property
     def extra_ctes_injected(self):
@@ -197,16 +217,18 @@ class CompiledNode(ParsedNode):
     def wrapped_sql(self, value):
         self._contents['wrapped_sql'] = value
 
-    def to_dict(self):
-        # if we have ctes, we want to preseve order, so deepcopy them.
-        ret = super(CompiledNode, self).to_dict()
-        ret['extra_ctes'] = deepcopy(self.extra_ctes)
-        return ret
-
-    def to_shallow_dict(self):
-        ret = super(CompiledNode, self).to_shallow_dict()
-        ret['extra_ctes'] = self.extra_ctes
-        return ret
+    def set_cte(self, cte_id, sql):
+        """This is the equivalent of what self.extra_ctes[cte_id] = sql would
+        do if extra_ctes were an OrderedDict
+        """
+        for cte in self.extra_ctes:
+            if cte['id'] == cte_id:
+                cte['sql'] = sql
+                break
+        else:
+            self.extra_ctes.append(
+                {'id': cte_id, 'sql': sql}
+            )
 
 
 class CompiledGraph(APIObject):
