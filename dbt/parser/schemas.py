@@ -367,7 +367,7 @@ class SchemaParser(BaseParser):
                 ).format(original_file_path, model)
                 if dbt.flags.STRICT_MODE:
                     dbt.exceptions.raise_compiler_error(msg, model)
-                dbt.utils.compiler_warning(model_name, msg)
+                dbt.utils.compiler_warning(model, msg)
                 continue
             try:
                 model = UnparsedNodeUpdate(**model)
