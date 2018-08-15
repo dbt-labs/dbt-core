@@ -33,13 +33,13 @@ models:
     - name: table_summary
       description: "The summary table"
       columns:
-        - name: favorite_color
+        - name: favorite_color_copy
           description: "The favorite color"
           tests:
             - not_null
             - unique
             - accepted_values: { values: ['blue', 'green'] }
-            - relationships: { from: favorite_color, to: ref('table_copy') }
+            - relationships: { field: favorite_color, to: ref('table_copy') }
         - name: count
           description: "The number of responses for this favorite color"
           tests:
@@ -67,7 +67,7 @@ models:
           description: "The favorite color"
           tests:
             - accepted_values: { values: ['red'] }
-            - relationships: { from: favorite_color, to: ref('table_copy') }
+            - relationships: { field: favorite_color, to: ref('table_copy') }
 
 # this table is disabled so these tests should be ignored
     - name: table_disabled
@@ -77,4 +77,13 @@ models:
           description: "The favorite color"
           tests:
             - accepted_values: { values: ['red'] }
-            - relationships: { from: favorite_color, to: ref('table_copy') }
+            - relationships: { field: favorite_color, to: ref('table_copy') }
+
+# all of these constraints will fail
+    - name: table_failure_null_relation
+      description: "A table with a null value where it should be a foreign key"
+      columns:
+        - name: id
+          description: "The user ID"
+          tests:
+            - relationships: { field: id, to: ref('table_failure_copy') }
