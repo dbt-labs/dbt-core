@@ -135,9 +135,7 @@ def _sort_values(dct):
     """Given a dictionary, sort each value. This makes output deterministic,
     which helps for tests.
     """
-    for v in dct.values():
-        v.sort()
-    return dct
+    return {k: sorted(v) for k, v in dct.items()}
 
 
 def build_edges(nodes):
