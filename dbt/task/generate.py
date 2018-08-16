@@ -135,7 +135,7 @@ class GenerateTask(CompileTask):
                 dbt.ui.printer.print_timestamped_line(
                     'compile failed, cannot generate docs'
                 )
-                return
+                return {'compile_results': compile_results}
 
         shutil.copyfile(
             DOCS_INDEX_FILE_PATH,
