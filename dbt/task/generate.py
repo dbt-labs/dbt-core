@@ -27,6 +27,7 @@ def get_stripped_prefix(source, prefix):
         if k.startswith(prefix)
     }
 
+
 def format_stats(stats):
     """Given a dictionary following this layout:
 
@@ -69,6 +70,7 @@ def format_stats(stats):
         stats_collector[stat_id][stat_field] = stat_value
 
     return list(stats_tmp.values())
+
 
 def unflatten(columns):
     """Given a list of column dictionaries following this layout:
@@ -131,7 +133,11 @@ def unflatten(columns):
             else:
                 stats_list = []
 
-            schema[table_name] = {'metadata': metadata, 'stats': stats_list, 'columns': {}}
+            schema[table_name] = {
+                'metadata': metadata,
+                'stats': stats_list,
+                'columns': {}
+            }
 
         table = schema[table_name]
 

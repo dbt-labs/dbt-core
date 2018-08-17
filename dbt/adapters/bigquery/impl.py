@@ -722,7 +722,7 @@ class BigQueryAdapter(PostgresAdapter):
             relations = cls.list_relations(profile, project_cfg, schema_name)
             for relation in relations:
 
-                # This relation contains a subset of the info we care about. 
+                # This relation contains a subset of the info we care about.
                 # Fetch the full table object here
                 dataset_ref = client.dataset(relation.schema)
                 table_ref = dataset_ref.table(relation.identifier)

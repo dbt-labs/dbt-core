@@ -45,8 +45,9 @@ class GenerateTest(unittest.TestCase):
                             'comment': None,
                             'index': bigint(1),
                             'name': 'id'
-                        }
-                    }
+                        },
+                    },
+                    'stats': [],
                 }
             }
         }
@@ -140,6 +141,7 @@ class GenerateTest(unittest.TestCase):
                             'name': 'name',
                         }
                     },
+                    'stats': [],
                 },
                 'other_test_table': {
                     'metadata': {
@@ -161,8 +163,9 @@ class GenerateTest(unittest.TestCase):
                             'index': Decimal('2'),
                             'name': 'email',
                         }
-                    }
-                }
+                    },
+                    'stats': [],
+                },
             },
             'other_test_schema': {
                 'test_table': {
@@ -186,6 +189,7 @@ class GenerateTest(unittest.TestCase):
                             'name': 'name',
                         }
                     },
+                    'stats': [],
                 },
             }
         }
