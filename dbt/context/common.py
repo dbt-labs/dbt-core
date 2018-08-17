@@ -305,11 +305,8 @@ def _return(value):
 
 
 def get_this_relation(db_wrapper, project_cfg, profile, model):
-    table_name = dbt.utils.model_immediate_name(
-            model, dbt.flags.NON_DESTRUCTIVE)
-
     return db_wrapper.adapter.Relation.create_from_node(
-        profile, model, table_name=table_name)
+        profile, model)
 
 
 def create_relation(relation_type, quoting_config):

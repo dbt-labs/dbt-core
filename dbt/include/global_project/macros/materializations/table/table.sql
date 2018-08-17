@@ -63,8 +63,6 @@
     {%- endif -%}
   {%- endcall %}
 
-  {{ run_hooks(post_hooks, inside_transaction=True) }}
-
   -- cleanup
   {% if non_destructive_mode -%}
     -- noop
@@ -76,6 +74,8 @@
 
     {{ adapter.rename_relation(intermediate_relation, target_relation) }}
   {%- endif %}
+
+  {{ run_hooks(post_hooks, inside_transaction=True) }}
 
   -- `COMMIT` happens here
   {{ adapter.commit() }}

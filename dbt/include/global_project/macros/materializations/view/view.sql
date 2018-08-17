@@ -61,8 +61,6 @@
     {%- endcall %}
   {%- endif %}
 
-  {{ run_hooks(post_hooks, inside_transaction=True) }}
-
   -- cleanup
   {% if not should_ignore -%}
     -- move the existing view out of the way
@@ -71,6 +69,8 @@
     {% endif %}
     {{ adapter.rename_relation(intermediate_relation, target_relation) }}
   {%- endif %}
+
+  {{ run_hooks(post_hooks, inside_transaction=True) }}
 
   {#
       -- Don't commit in non-destructive mode _unless_ there are in-transaction hooks
