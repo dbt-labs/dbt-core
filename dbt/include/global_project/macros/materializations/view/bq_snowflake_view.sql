@@ -41,7 +41,7 @@
   {%- if old_relation is not none and old_relation.is_table -%}
     {%- if flags.FULL_REFRESH and not non_destructive_mode -%}
       {{ adapter.drop_relation(old_relation) }}
-    {%- else if error_on_clobber_table -%}
+    {%- elif error_on_clobber_table -%}
       {{ exceptions.relation_wrong_type(old_relation, 'view') }}
     {%- endif -%}
   {%- endif -%}
