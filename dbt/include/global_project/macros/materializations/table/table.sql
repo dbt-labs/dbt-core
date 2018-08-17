@@ -69,7 +69,21 @@
   {%- else -%}
     {% if old_relation is not none %}
       -- move the existing relation out of the way
-      {{ adapter.rename_relation(target_relation, backup_relation) }}
+      {# /*
+         If this is a _view_ on _snowflake_ AND the contract of the _view_ was broken
+         by a change to a parent model, then this can throw when `alter table rename` runs, eg:
+               View definition for <relation> declared 1 column(s), but view query produces 2 column(s)
+
+         Instead, drop this view to avoid this potential error. Note: This won't work on Redshift,
+         as dropping inside the transaction will lead to a "table dropped by concurrent transaction"
+         error. In the future, Snowflake should use `create or replace table` syntax to obviate this code
+      */ #}
+      {% if adapter.type() == 'snowflake' and old_relation.type == 'view' %}
+        {{ log("Dropping relation " ~ old_relation ~ " because it is a view and this model is a table.") }}
+        {{ drop_relation_if_exists(old_relation) }}
+      {% else %}
+        {{ adapter.rename_relation(target_relation, backup_relation) }}
+      {% endif %}
     {% endif %}
 
     {{ adapter.rename_relation(intermediate_relation, target_relation) }}
