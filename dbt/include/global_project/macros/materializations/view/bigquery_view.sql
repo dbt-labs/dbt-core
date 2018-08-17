@@ -14,13 +14,14 @@
 
   {{ run_hooks(pre_hooks) }}
 
-  -- drop if exists
-  {%- if old_relation is not none -%}
-    {%- if old_relation.is_table and not flags.FULL_REFRESH -%}
+  -- If there's a table with the same name and we weren't told to full refresh,
+  -- that's an error. If we were told to full refresh, drop it.
+  {%- if old_relation is not none and old_relation.is_table -%}
+    {%- if flags.FULL_REFRESH and not non_destructive_mode -%}
+      {{ adapter.drop_relation(old_relation) }}
+    {%- else -%}
       {{ exceptions.relation_wrong_type(old_relation, 'view') }}
     {%- endif -%}
-
-    {{ adapter.drop_relation(old_relation) }}
   {%- endif -%}
 
   -- build model
