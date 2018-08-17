@@ -1,5 +1,4 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest, FakeArgs
+from test.integration.base import DBTIntegrationTest, FakeArgs, use_profile
 
 
 class TestSimpleBigQueryRun(DBTIntegrationTest):
@@ -23,9 +22,8 @@ class TestSimpleBigQueryRun(DBTIntegrationTest):
     def profile_config(self):
         return self.bigquery_profile()
 
-    @attr(type='bigquery')
+    @use_profile('bigquery')
     def test__bigquery_simple_run(self):
-        self.use_profile('bigquery')
         self.use_default_project()
         # make sure seed works twice. Full-refresh is a no-op
         self.run_dbt(['seed'])
@@ -33,6 +31,30 @@ class TestSimpleBigQueryRun(DBTIntegrationTest):
         results = self.run_dbt()
         self.assertEqual(len(results), 2)
 
+        # The 'dupe' model should fail, but all others should pass
+        test_results = self.run_dbt(['test'], expect_pass=False)
+
+        for result in test_results:
+            if 'dupe' in result.node.get('name'):
+                self.assertFalse(result.errored)
+                self.assertFalse(result.skipped)
+                self.assertTrue(result.status > 0)
+
+            # assert that actual tests pass
+            else:
+                self.assertFalse(result.errored)
+                self.assertFalse(result.skipped)
+                # status = # of failing rows
+                self.assertEqual(result.status, 0)
+
+    @use_profile('bigquery')
+    def test__bigquery_exists_non_destructive(self):
+        self.use_default_project()
+        self.run_dbt(['seed'])
+        # first run dbt. this should work
+        self.assertEqual(len(self.run_dbt()), 2)
+        # then run dbt with --non-destructive. The view should still exist.
+        self.run_dbt(['run', '--non-destructive'])
         # The 'dupe' model should fail, but all others should pass
         test_results = self.run_dbt(['test'], expect_pass=False)
 
