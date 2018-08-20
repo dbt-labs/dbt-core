@@ -129,8 +129,8 @@ class SnowflakeAdapter(PostgresAdapter):
             schema=_schema,
             identifier=name,
             quote_policy={
+                'identifier': True,
                 'schema': True,
-                'identifier': True
             },
             type=relation_type_lookup.get(type))
                 for (name, _schema, type) in results]
@@ -222,11 +222,11 @@ class SnowflakeAdapter(PostgresAdapter):
     @classmethod
     def _make_match_kwargs(cls, project_cfg, schema, identifier):
         if identifier is not None and \
-           project_cfg.get('quoting', {}).get('identifier', True) is False:
+           project_cfg.get('quoting', {}).get('identifier', False) is False:
             identifier = identifier.upper()
 
         if schema is not None and \
-           project_cfg.get('quoting', {}).get('schema', True) is False:
+           project_cfg.get('quoting', {}).get('schema', False) is False:
             schema = schema.upper()
 
         return filter_null_values({'identifier': identifier,
