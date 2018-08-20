@@ -170,7 +170,7 @@ def format_stats(stats: PrimitiveDict) -> StatsDict:
         description="Indicates whether there are statistics for this table",
         include=False,
     )
-    stats_collector['has_stats'] = has_stats
+    stats_collector["has_stats"] = has_stats
     return stats_collector
 
 
