@@ -126,11 +126,11 @@ def unflatten(columns):
         if table_name not in schema:
             metadata = get_stripped_prefix(entry, 'table_')
             stats = get_stripped_prefix(entry, 'stats:')
-            stats_list = format_stats(stats)
+            stats_dict = format_stats(stats)
 
             schema[table_name] = {
                 'metadata': metadata,
-                'stats': stats_list,
+                'stats': stats_dict,
                 'columns': {}
             }
 

@@ -14,6 +14,11 @@ class AnyFloat(object):
         return isinstance(other, float)
 
 
+class AnyInt(object):
+    def __eq__(self, other):
+        return isinstance(other, int)
+
+
 class TestDocsGenerate(DBTIntegrationTest):
     def setUp(self):
         super(TestDocsGenerate,self).setUp()
@@ -84,6 +89,108 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'description': 'Indicates whether there are statistics for this table',
                 'include': False,
             },
+        }
+
+    def _redshift_stats(self):
+        return {
+            "has_stats": {
+              "id": "has_stats",
+              "label": "Has Stats?",
+              "value": True,
+              "description": "Indicates whether there are statistics for this table",
+              "include": False
+            },
+            "encoded": {
+              "id": "encoded",
+              "label": "Encoded",
+              "value": "Y",
+              "description": "Indicates whether any column in the table has compression encoding defined.",
+              "include": True
+            },
+            "diststyle": {
+              "id": "diststyle",
+              "label": "Dist Style",
+              "value": "EVEN",
+              "description": "Distribution style or distribution key column, if key distribution is defined.",
+              "include": True
+            },
+            "sortkey1": {
+              "id": "sortkey1",
+              "label": "Sort Key 1",
+              "value": None,
+              "description": "First column in the sort key.",
+              "include": False
+            },
+            "max_varchar": {
+              "id": "max_varchar",
+              "label": "Max Varchar",
+              "value": AnyInt(),
+              "description": "Size of the largest column that uses a VARCHAR data type.",
+              "include": True
+            },
+            "sortkey1_enc": {
+              "id": "sortkey1_enc",
+              "label": "Sort Key 1 Encoding",
+              "value": None,
+              "description": "Compression encoding of the first column in the sort key.",
+              "include": False
+            },
+            "sortkey_num": {
+              "id": "sortkey_num",
+              "label": "# Sort Keys",
+              "value": False,
+              "description": "Number of columns defined as sort keys.",
+              "include": False
+            },
+            "size": {
+              "id": "size",
+              "label": "Approximate Size",
+              "value": AnyFloat(),
+              "description": "Approximate size of the table, calculated from a count of 1MB blocks",
+              "include": True
+            },
+            "pct_used": {
+              "id": "pct_used",
+              "label": "Disk Utilization",
+              "value": AnyFloat(),
+              "description": "Percent of available space that is used by the table.",
+              "include": True
+            },
+            "unsorted": {
+              "id": "unsorted",
+              "label": "Unsorted %",
+              "value": None,
+              "description": "Percent of unsorted rows in the table.",
+              "include": False
+            },
+            "stats_off": {
+              "id": "stats_off",
+              "label": "Stats Off",
+              "value": AnyFloat(),
+              "description": "Number that indicates how stale the table's statistics are; 0 is current, 100 is out of date.",
+              "include": True
+            },
+            "rows": {
+              "id": "rows",
+              "label": "Approximate Row Count",
+              "value": 1,
+              "description": "Approximate number of rows in the table. This value includes rows marked for deletion, but not yet vacuumed.",
+              "include": True
+            },
+            "skew_sortkey1": {
+              "id": "skew_sortkey1",
+              "label": "Sort Key Skew",
+              "value": None,
+              "description": "Ratio of the size of the largest non-sort key column to the size of the first column of the sort key.",
+              "include": False
+            },
+            "skew_rows": {
+              "id": "skew_rows",
+              "label": "Skew Rows",
+              "value": None,
+              "description": "Ratio of the number of rows in the slice with the most rows to the number of rows in the slice with the fewest rows.",
+              "include": False
+            }
         }
 
     def _bigquery_stats(self):
@@ -202,12 +309,13 @@ class TestDocsGenerate(DBTIntegrationTest):
         )
 
     def get_role(self):
-        # TODO(jeb): Do we need a query for this? `select current_role()` fails
-        if self.adapter_type == 'postgres':
-            return 'root'
+        if self.adapter_type in {'postgres', 'redshift'}:
+            profile = self.get_profile(self.adapter_type)
+            target_name = profile['test']['target']
+            return profile['test']['outputs'][target_name]['user']
         elif self.adapter_type == 'bigquery':
             return None
-        else:
+        else:  # snowflake
             return self.run_sql('select current_role()', fetch='one')[0]
 
     def expected_postgres_references_catalog(self):
@@ -237,14 +345,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'comment': None,
                     'owner': role,
                 },
-                'stats': {
-                    'has_stats': {
-                        'id': 'has_stats',
-                        'label': 'Has Stats?',
-                        'value': False,
-                        'include': False,
-                    },
-                },
+                'stats': self._postgres_stats(),
                 'columns': {
                     'id': {
                         'name': 'id',
@@ -287,14 +388,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'comment': None,
                     'owner': role,
                 },
-                'stats': {
-                    'has_stats': {
-                        'id': 'has_stats',
-                        'label': 'Has Stats?',
-                        'value': False,
-                        'include': False,
-                    },
-                },
+                'stats': self._postgres_stats(),
                 'columns': summary_columns,
             },
             'model.test.view_summary': {
@@ -306,14 +400,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'comment': None,
                     'owner': role,
                 },
-                'stats': {
-                    'has_stats': {
-                        'id': 'has_stats',
-                        'label': 'Has Stats?',
-                        'value': False,
-                        'include': False,
-                    },
-                },
+                'stats': self._postgres_stats(),
                 'columns': summary_columns,
             },
         }
