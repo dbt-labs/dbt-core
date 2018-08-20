@@ -233,8 +233,6 @@ def invoke_dbt(parsed):
 
             return None
 
-    proj.log_warnings()
-
     flags.NON_DESTRUCTIVE = getattr(proj.args, 'non_destructive', False)
 
     arg_drop_existing = getattr(proj.args, 'drop_existing', False)
