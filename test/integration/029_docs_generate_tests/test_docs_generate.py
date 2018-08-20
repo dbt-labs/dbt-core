@@ -152,6 +152,31 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
         }
 
+    def _snowflake_stats(self):
+        return {
+            'has_stats': {
+                'id': 'has_stats',
+                'label': 'Has Stats?',
+                'value': True,
+                'description': 'Indicates whether there are statistics for this table',
+                'include': False,
+            },
+            'bytes': {
+                'id': 'bytes',
+                'label': 'Approximate Size',
+                'value': AnyFloat(),
+                'description': 'Approximate size of the table as reported by Snowflake',
+                'include': True,
+            },
+            'row_count': {
+                'id': 'row_count',
+                'label': 'Row Count',
+                'value': True,
+                'description': 'An approximate count of rows in this table',
+                'include': True,
+            },
+        }
+
     def _bigquery_stats(self):
         return {
             'has_stats': {
@@ -374,7 +399,8 @@ class TestDocsGenerate(DBTIntegrationTest):
             time_type='TIMESTAMP_NTZ',
             view_type='VIEW',
             table_type='BASE TABLE',
-            model_stats={},
+            model_stats=self._no_stats(),
+            seed_stats=self._snowflake_stats(),
             case=lambda x: x.upper())
 
     def expected_bigquery_catalog(self):
