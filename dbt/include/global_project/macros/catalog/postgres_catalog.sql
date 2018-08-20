@@ -32,6 +32,7 @@
             table_type,
             'Has Stats?' as "stats:has_stats:label",
             false as "stats:has_stats:value",
+            'Indicates whether there are statistics for this table' as "stats:has_stats:description",
             false as "stats:has_stats:include"
 
         from information_schema.tables

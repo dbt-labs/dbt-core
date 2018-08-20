@@ -103,6 +103,7 @@
 
         'Has Stats?' as "stats:has_stats:label",
         true as "stats:has_stats:value",
+        'Indicates whether there are statistics for this table' as "stats:has_stats:description",
         false as "stats:has_stats:include",
 
         'Encoded'::text as "stats:encoded:label",
@@ -125,7 +126,7 @@
         'Size of the largest column that uses a VARCHAR data type.'::text as "stats:max_varchar:description",
         true as "stats:max_varchar:include",
 
-        -- exclude this, as the data is strangely returned with null-byte characters    
+        -- exclude this, as the data is strangely returned with null-byte characters
         'Sort Key 1 Encoding' as "stats:sortkey1_enc:label",
         sortkey1_enc as "stats:sortkey1_enc:value",
         'Compression encoding of the first column in the sort key.' as "stats:sortkey1_enc:description",
