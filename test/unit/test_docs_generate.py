@@ -47,7 +47,7 @@ class GenerateTest(unittest.TestCase):
                             'name': 'id'
                         },
                     },
-                    'stats': [],
+                    'stats': {},
                 }
             }
         }
@@ -141,7 +141,7 @@ class GenerateTest(unittest.TestCase):
                             'name': 'name',
                         }
                     },
-                    'stats': [],
+                    'stats': {},
                 },
                 'other_test_table': {
                     'metadata': {
@@ -164,7 +164,7 @@ class GenerateTest(unittest.TestCase):
                             'name': 'email',
                         }
                     },
-                    'stats': [],
+                    'stats': {},
                 },
             },
             'other_test_schema': {
@@ -189,7 +189,7 @@ class GenerateTest(unittest.TestCase):
                             'name': 'name',
                         }
                     },
-                    'stats': [],
+                    'stats': {},
                 },
             }
         }

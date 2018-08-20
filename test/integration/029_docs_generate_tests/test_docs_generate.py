@@ -75,12 +75,23 @@ class TestDocsGenerate(DBTIntegrationTest):
                 end.strftime(DATEFMT))
         )
 
+    def _postgres_stats(self):
+        return {
+            'has_stats': {
+                'id': 'has_stats',
+                'label': 'Has Stats?',
+                'value': False,
+                'include': False,
+            },
+        }
+
     def _expected_catalog(self, id_type, text_type, time_type, view_type,
-                          table_type, case=None):
+                          table_type, stats, case=None):
         if case is None:
             case = lambda x: x
 
         my_schema_name = self.unique_schema()
+        role = self.get_role()
         expected_cols = {
             case('id'): {
                 'name': case('id'),
@@ -121,11 +132,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': case('model'),
                     'type': view_type,
                     'comment': None,
-                    'owner': 'root'
+                    'owner': self.get_role(),
                 },
-                'stats': {
-                    'has_stats': False
-                },
+                'stats': stats,
                 'columns': expected_cols,
             },
             'seed.test.seed': {
@@ -135,11 +144,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': case('seed'),
                     'type': table_type,
                     'comment': None,
-                    'owner': 'root'
+                    'owner': self.get_role(),
                 },
-                'stats': {
-                    'has_stats': False
-                },
+                'stats': stats,
                 'columns': expected_cols,
             },
         }
@@ -150,11 +157,16 @@ class TestDocsGenerate(DBTIntegrationTest):
             text_type='text',
             time_type='timestamp without time zone',
             view_type='VIEW',
-            table_type='BASE TABLE'
+            table_type='BASE TABLE',
+            stats=self._postgres_stats()
         )
 
     def get_role(self):
-        return self.run_sql('select current_role()', fetch='one')[0]
+        # TODO(jeb): Do we need a query for this? `select current_role()` fails
+        if self.adapter_type == 'postgres':
+            return 'root'
+        else:
+            return self.run_sql('select current_role()', fetch='one')[0]
 
     def expected_postgres_references_catalog(self):
         my_schema_name = self.unique_schema()
@@ -184,10 +196,12 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'owner': role,
                 },
                 'stats': {
-                    'has_stats': True,
-                    'row_count': 1,
-                    'clustering_key': None,
-                    'bytes': AnyFloat(),
+                    'has_stats': {
+                        'id': 'has_stats',
+                        'label': 'Has Stats?',
+                        'value': False,
+                        'include': False,
+                    },
                 },
                 'columns': {
                     'id': {
@@ -229,6 +243,15 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'ephemeral_summary',
                     'type': 'BASE TABLE',
                     'comment': None,
+                    'owner': role,
+                },
+                'stats': {
+                    'has_stats': {
+                        'id': 'has_stats',
+                        'label': 'Has Stats?',
+                        'value': False,
+                        'include': False,
+                    },
                 },
                 'columns': summary_columns,
             },
@@ -239,12 +262,15 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'view_summary',
                     'type': 'VIEW',
                     'comment': None,
+                    'owner': role,
                 },
                 'stats': {
-                    'location': 'US',
-                    'num_bytes': AnyFloat(),
-                    'num_rows': AnyFloat(),
-                    'partitioning_type': None,
+                    'has_stats': {
+                        'id': 'has_stats',
+                        'label': 'Has Stats?',
+                        'value': False,
+                        'include': False,
+                    },
                 },
                 'columns': summary_columns,
             },
@@ -257,6 +283,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             time_type='TIMESTAMP_NTZ',
             view_type='VIEW',
             table_type='BASE TABLE',
+            stats={},
             case=lambda x: x.upper())
 
     def expected_bigquery_catalog(self):
@@ -265,7 +292,8 @@ class TestDocsGenerate(DBTIntegrationTest):
             text_type='STRING',
             time_type='DATETIME',
             view_type='view',
-            table_type='table'
+            table_type='table',
+            stats={},
         )
 
     def expected_bigquery_nested_catalog(self):
@@ -343,11 +371,13 @@ class TestDocsGenerate(DBTIntegrationTest):
             text_type='character varying',
             time_type='timestamp without time zone',
             view_type='VIEW',
-            table_type='BASE TABLE'
+            table_type='BASE TABLE',
+            stats={}
         )
 
     def expected_redshift_incremental_catalog(self):
         my_schema_name = self.unique_schema()
+        role = self.get_role()
         return {
             'model.test.model': {
                 'unique_id': 'model.test.model',
@@ -356,7 +386,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'model',
                     'type': 'LATE BINDING VIEW',
                     'comment': None,
-                    'owner': user,
+                    'owner': role,
                 },
                 'stats': {
                     'has_stats': None,
@@ -414,7 +444,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'seed',
                     'type': 'BASE TABLE',
                     'comment': None,
-                    'owner': user,
+                    'owner': role,
                 },
                 'stats': {
                     'has_stats': True,
