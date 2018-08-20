@@ -1,4 +1,23 @@
 
+{% macro handle_existing_table(full_refresh, non_destructive_mode, old_relation) %}
+    {{ adapter_macro("dbt.handle_existing_table", full_refresh, non_destructive_mode, old_relation) }}
+{% endmacro %}
+
+{% macro default__handle_existing_table(full_refresh, non_destructive_mode, old_relation) %}
+    {%- if not non_destructive_mode -%}
+      {{ adapter.drop_relation(old_relation) }}
+    {%- endif -%}
+{% endmacro %}
+
+{% macro bigquery__handle_existing_table(full_refresh, non_destructive_mode, old_relation) %}
+    {%- if full_refresh and not non_destructive_mode -%}
+      {{ adapter.drop_relation(old_relation) }}
+    {%- else -%}
+      {{ exceptions.relation_wrong_type(old_relation, 'view') }}
+    {%- endif -%}
+{% endmacro %}
+
+
 {# /*
        Core materialization implementation. BigQuery and Snowflake are similar
        because both can use `create or replace view` where the resulting view schema
@@ -11,8 +30,7 @@
     */
 #}
 
-
-{% macro impl_view_materialization(error_on_clobber_table=False, run_outside_transaction_hooks=True) %}
+{% macro impl_view_materialization(run_outside_transaction_hooks=True) %}
   {%- set identifier = model['alias'] -%}
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
 
@@ -37,13 +55,10 @@
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
   -- If there's a table with the same name and we weren't told to full refresh,
-  -- that's an error. If we were told to full refresh, drop it.
+  -- that's an error. If we were told to full refresh, drop it. This behavior differs
+  -- for Snowflake and BigQuery, so multiple dispatch is used.
   {%- if old_relation is not none and old_relation.is_table -%}
-    {%- if flags.FULL_REFRESH and not non_destructive_mode -%}
-      {{ adapter.drop_relation(old_relation) }}
-    {%- elif error_on_clobber_table -%}
-      {{ exceptions.relation_wrong_type(old_relation, 'view') }}
-    {%- endif -%}
+    {{ handle_existing_table(flags.FULL_REFRESH, non_destructive_mode, old_relation) }}
   {%- endif -%}
 
   -- build model
@@ -75,7 +90,7 @@
 {% endmacro %}
 
 {% materialization view, adapter='bigquery' -%}
-    {{ impl_view_materialization(error_on_clobber_table=True, run_outside_transaction_hooks=False) }}
+    {{ impl_view_materialization(run_outside_transaction_hooks=False) }}
 {%- endmaterialization %}
 
 {% materialization view, adapter='snowflake' -%}
