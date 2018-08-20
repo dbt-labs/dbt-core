@@ -81,7 +81,47 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'id': 'has_stats',
                 'label': 'Has Stats?',
                 'value': False,
+                'description': 'Indicates whether there are statistics for this table',
                 'include': False,
+            },
+        }
+
+    def _bigquery_stats(self):
+        return {
+            'has_stats': {
+                'id': 'has_stats',
+                'label': 'Has Stats?',
+                'value': True,
+                'description': 'Indicates whether there are statistics for this table',
+                'include': False,
+            },
+            'num_bytes': {
+                'id': 'num_bytes',
+                'label': 'Number of bytes',
+                'value': AnyFloat(),
+                'description': 'The number of bytes this table consumes',
+                'include': True,
+            },
+            'num_rows': {
+                'id': 'num_rows',
+                'label': 'Number of rows',
+                'value': AnyFloat(),
+                'description': 'The number of rows in this table',
+                'include': True,
+            },
+            'location': {
+                'id': 'location',
+                'label': 'Location',
+                'value': 'US',
+                'description':  'The geographic location of this table',
+                'include': True,
+            },
+            'partitioning_type': {
+                'id': 'partitioning_type',
+                'label': 'Partitioning Type',
+                'value': None,
+                'description': 'The partitioning type used for this table',
+                'include': True,
             },
         }
 
@@ -165,6 +205,8 @@ class TestDocsGenerate(DBTIntegrationTest):
         # TODO(jeb): Do we need a query for this? `select current_role()` fails
         if self.adapter_type == 'postgres':
             return 'root'
+        elif self.adapter_type == 'bigquery':
+            return None
         else:
             return self.run_sql('select current_role()', fetch='one')[0]
 
@@ -293,11 +335,12 @@ class TestDocsGenerate(DBTIntegrationTest):
             time_type='DATETIME',
             view_type='view',
             table_type='table',
-            stats={},
+            stats=self._bigquery_stats()
         )
 
     def expected_bigquery_nested_catalog(self):
         my_schema_name = self.unique_schema()
+        role = self.get_role()
         expected_cols = {
             'field_1': {
                 "name": "field_1",
@@ -337,14 +380,10 @@ class TestDocsGenerate(DBTIntegrationTest):
                     "schema": my_schema_name,
                     "name": "model",
                     "type": "view",
+                    "owner": role,
                     "comment": None
                 },
-                'stats': {
-                    'location': 'US',
-                    'num_bytes': AnyFloat(),
-                    'num_rows': AnyFloat(),
-                    'partitioning_type': None,
-                },
+                'stats': self._bigquery_stats(),
                 "columns": expected_cols
             },
             "model.test.seed": {
@@ -353,14 +392,10 @@ class TestDocsGenerate(DBTIntegrationTest):
                     "schema": my_schema_name,
                     "name": "seed",
                     "type": "view",
+                    "owner": role,
                     "comment": None
                 },
-                'stats': {
-                    'location': 'US',
-                    'num_bytes': AnyFloat(),
-                    'num_rows': AnyFloat(),
-                    'partitioning_type': None,
-                },
+                'stats': self._bigquery_stats(),
                 "columns": expected_cols
             }
         }

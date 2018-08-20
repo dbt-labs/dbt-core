@@ -1,7 +1,6 @@
 from __future__ import absolute_import
 
 from contextlib import contextmanager
-from itertools import product
 
 import dbt.compat
 import dbt.deprecations
@@ -702,8 +701,9 @@ class BigQueryAdapter(PostgresAdapter):
         stats = ('has_stats', 'num_bytes', 'num_rows', 'location',
                  'partitioning_type')
         stat_components = ('label', 'value', 'description', 'include')
-        for stat_id, stat_component in product(stats, stat_components):
-            columns.append('stats:{}:{}'.format(stat_id, stat_component))
+        for stat_id in stats:
+            for stat_component in stat_components:
+                columns.append('stats:{}:{}'.format(stat_id, stat_component))
         return tuple(columns)
 
     @classmethod
@@ -712,19 +712,21 @@ class BigQueryAdapter(PostgresAdapter):
         column names/values.
         """
         column_names = cls._get_stats_column_names()
+        # cast num_bytes/num_rows to str before they get to agate, or else
+        # agate will incorrectly decide they are booleans.
         column_values = (
-            'Has stats?',
+            'Has Stats?',
             True,
             'Indicates whether there are statistics for this table',
             False,
 
             'Number of bytes',
-            table.num_bytes,
+            str(table.num_bytes),
             'The number of bytes this table consumes',
             True,
 
             'Number of rows',
-            table.num_rows,
+            str(table.num_rows),
             'The number of rows in this table',
             True,
 
@@ -755,6 +757,8 @@ class BigQueryAdapter(PostgresAdapter):
             'table_name',
             'table_type',
             'table_comment',
+            # does not exist in bigquery, but included for consistency
+            'table_owner',
             'column_name',
             'column_index',
             'column_type',
@@ -781,6 +785,7 @@ class BigQueryAdapter(PostgresAdapter):
                         relation.name,
                         relation.type,
                         None,
+                        None,
                         column.name,
                         index,
                         column.data_type,
@@ -788,6 +793,7 @@ class BigQueryAdapter(PostgresAdapter):
                     )
                     column_dict = dict(zip(column_names, column_data))
                     column_dict.update(cls._get_stats_columns(table))
+
                     columns.append(column_dict)
 
         return dbt.clients.agate_helper.table_from_data(columns, all_names)
