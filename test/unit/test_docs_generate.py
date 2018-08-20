@@ -47,7 +47,15 @@ class GenerateTest(unittest.TestCase):
                             'name': 'id'
                         },
                     },
-                    'stats': {},
+                    'stats': {
+                        'has_stats': {
+                            'id': 'has_stats',
+                            'label': 'Has Stats?',
+                            'value': False,
+                            'description': 'Indicates whether there are statistics for this table',
+                            'include': False,
+                        },
+                    },
                 }
             }
         }
@@ -141,7 +149,15 @@ class GenerateTest(unittest.TestCase):
                             'name': 'name',
                         }
                     },
-                    'stats': {},
+                    'stats': {
+                        'has_stats': {
+                            'id': 'has_stats',
+                            'label': 'Has Stats?',
+                            'value': False,
+                            'description': 'Indicates whether there are statistics for this table',
+                            'include': False,
+                        },
+                    },
                 },
                 'other_test_table': {
                     'metadata': {
@@ -164,7 +180,15 @@ class GenerateTest(unittest.TestCase):
                             'name': 'email',
                         }
                     },
-                    'stats': {},
+                    'stats': {
+                        'has_stats': {
+                            'id': 'has_stats',
+                            'label': 'Has Stats?',
+                            'value': False,
+                            'description': 'Indicates whether there are statistics for this table',
+                            'include': False,
+                        },
+                    },
                 },
             },
             'other_test_schema': {
@@ -189,7 +213,15 @@ class GenerateTest(unittest.TestCase):
                             'name': 'name',
                         }
                     },
-                    'stats': {},
+                    'stats': {
+                        'has_stats': {
+                            'id': 'has_stats',
+                            'label': 'Has Stats?',
+                            'value': False,
+                            'description': 'Indicates whether there are statistics for this table',
+                            'include': False,
+                        },
+                    },
                 },
             }
         }
