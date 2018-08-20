@@ -101,11 +101,6 @@
     select
         "schema" || '.' || "table" as table_id,
 
-        'Has Stats?' as "stats:has_stats:label",
-        true as "stats:has_stats:value",
-        'Indicates whether there are statistics for this table' as "stats:has_stats:description",
-        false as "stats:has_stats:include",
-
         'Encoded'::text as "stats:encoded:label",
         encoded as "stats:encoded:value",
         'Indicates whether any column in the table has compression encoding defined.'::text as "stats:encoded:description",

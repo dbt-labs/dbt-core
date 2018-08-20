@@ -13,11 +13,6 @@
             -- note: this is the _role_ that owns the table
             table_owner as "table_owner",
 
-            'Has Stats?' as "stats:has_stats:label",
-            true as "stats:has_stats:value",
-            'Indicates whether there are statistics for this table' as "stats:has_stats:description",
-            false as "stats:has_stats:include",
-
             'Clustering Key' as "stats:clustering_key:label",
             clustering_key as "stats:clustering_key:value",
             'The key used to cluster this table' as "stats:clustering_key:description",

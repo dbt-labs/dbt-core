@@ -698,8 +698,7 @@ class BigQueryAdapter(PostgresAdapter):
         columns of data.
         """
         columns = []
-        stats = ('has_stats', 'num_bytes', 'num_rows', 'location',
-                 'partitioning_type')
+        stats = ('num_bytes', 'num_rows', 'location', 'partitioning_type')
         stat_components = ('label', 'value', 'description', 'include')
         for stat_id in stats:
             for stat_component in stat_components:
@@ -715,11 +714,6 @@ class BigQueryAdapter(PostgresAdapter):
         # cast num_bytes/num_rows to str before they get to agate, or else
         # agate will incorrectly decide they are booleans.
         column_values = (
-            'Has Stats?',
-            True,
-            'Indicates whether there are statistics for this table',
-            False,
-
             'Number of bytes',
             str(table.num_bytes),
             'The number of bytes this table consumes',

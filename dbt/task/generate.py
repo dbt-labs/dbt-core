@@ -68,6 +68,23 @@ def format_stats(stats):
 
         stats_collector.setdefault(stat_id, {"id": stat_id})
         stats_collector[stat_id][stat_field] = stat_value
+
+    # strip out all the stats we don't want
+    stats_collector = {
+        stat_id: stats
+        for stat_id, stats in stats_collector.items()
+        if stats.get('include', False)
+    }
+
+    # we always have a 'has_stats' field, it's never included
+    has_stats = {
+        'id': 'has_stats',
+        'label': 'Has Stats?',
+        'value': len(stats_collector) > 0,
+        'description': 'Indicates whether there are statistics for this table',
+        'include': False,
+    }
+    stats_collector['has_stats'] = has_stats
     return stats_collector
 
 
