@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 from contextlib import contextmanager
+from itertools import product
 
 import dbt.compat
 import dbt.deprecations
@@ -693,6 +694,53 @@ class BigQueryAdapter(PostgresAdapter):
                 yield subcol
 
     @classmethod
+    def _get_stats_column_names(cls):
+        """Construct a tuple of the column names for stats. Each stat has 4
+        columns of data.
+        """
+        columns = []
+        stats = ('has_stats', 'num_bytes', 'num_rows', 'location',
+                 'partitioning_type')
+        stat_components = ('label', 'value', 'description', 'include')
+        for stat_id, stat_component in product(stats, stat_components):
+            columns.append('stats:{}:{}'.format(stat_id, stat_component))
+        return tuple(columns)
+
+    @classmethod
+    def _get_stats_columns(cls, table):
+        """Given a table, return an iterator of key/value pairs for stats
+        column names/values.
+        """
+        column_names = cls._get_stats_column_names()
+        column_values = (
+            'Has stats?',
+            True,
+            'Indicates whether there are statistics for this table',
+            False,
+
+            'Number of bytes',
+            table.num_bytes,
+            'The number of bytes this table consumes',
+            True,
+
+            'Number of rows',
+            table.num_rows,
+            'The number of rows in this table',
+            True,
+
+            'Location',
+            table.location,
+            'The geographic location of this table',
+            True,
+
+            'Partitioning Type',
+            table.partitioning_type,
+            'The partitioning type used for this table',
+            True,
+        )
+        return zip(column_names, column_values)
+
+    @classmethod
     def get_catalog(cls, profile, project_cfg, manifest):
         connection = cls.get_connection(profile, 'catalog')
         client = connection.get('handle')
@@ -711,11 +759,8 @@ class BigQueryAdapter(PostgresAdapter):
             'column_index',
             'column_type',
             'column_comment',
-            'stats_num_bytes',
-            'stats_num_rows',
-            'stats_location',
-            'stats_partitioning_type',
         )
+        all_names = column_names + cls._get_stats_column_names()
         columns = []
 
         for schema_name in schemas:
@@ -740,11 +785,9 @@ class BigQueryAdapter(PostgresAdapter):
                         index,
                         column.data_type,
                         None,
-                        table.num_bytes,
-                        table.num_rows,
-                        table.location,
-                        table.partitioning_type
                     )
-                    columns.append(dict(zip(column_names, column_data)))
+                    column_dict = dict(zip(column_names, column_data))
+                    column_dict.update(cls._get_stats_columns(table))
+                    columns.append(column_dict)
 
-        return dbt.clients.agate_helper.table_from_data(columns, column_names)
+        return dbt.clients.agate_helper.table_from_data(columns, all_names)
