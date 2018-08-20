@@ -45,22 +45,22 @@ def format_stats(stats):
 
     format_stats will convert the dict into this structure:
 
-        [
-            {
+        {
+            'encoded': {
                 'id': 'encoded',
                 'label': 'Encoded',
                 'value': 'Yes',
                 'description': 'Indicates if the column is encoded',
                 'include': True
             },
-            {
+            'size': {
                 'id': 'size',
                 'label': 'Size',
                 'value': 128,
                 'description': 'Size of the table in MB',
                 'include': True
             }
-        ]
+        }
     """
     stats_collector = {}
     for stat_key, stat_value in stats.items():
@@ -68,8 +68,7 @@ def format_stats(stats):
 
         stats_collector.setdefault(stat_id, {"id": stat_id})
         stats_collector[stat_id][stat_field] = stat_value
-
-    return list(stats_tmp.values())
+    return stats_collector
 
 
 def unflatten(columns):
@@ -127,11 +126,7 @@ def unflatten(columns):
         if table_name not in schema:
             metadata = get_stripped_prefix(entry, 'table_')
             stats = get_stripped_prefix(entry, 'stats:')
-
-            if stats.get('has_stats:value', False):
-                stats_list = format_stats(stats)
-            else:
-                stats_list = []
+            stats_list = format_stats(stats)
 
             schema[table_name] = {
                 'metadata': metadata,
