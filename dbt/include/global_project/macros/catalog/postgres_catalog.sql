@@ -30,7 +30,9 @@
             table_schema,
             table_name,
             table_type,
-            false as stats_has_stats
+            'Has Stats?' as "stats:has_stats:label",
+            false as "stats:has_stats:value",
+            false as "stats:has_stats:include"
 
         from information_schema.tables
 
