@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 import json
+from numbers import Integral
 import os
 from datetime import datetime, timedelta
 
@@ -16,7 +17,7 @@ class AnyFloat(object):
 
 class AnyInt(object):
     def __eq__(self, other):
-        return isinstance(other, int)
+        return isinstance(other, Integral)
 
 
 class TestDocsGenerate(DBTIntegrationTest):
@@ -80,7 +81,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 end.strftime(DATEFMT))
         )
 
-    def _postgres_stats(self):
+    def _no_stats(self):
         return {
             'has_stats': {
                 'id': 'has_stats',
@@ -114,33 +115,12 @@ class TestDocsGenerate(DBTIntegrationTest):
               "description": "Distribution style or distribution key column, if key distribution is defined.",
               "include": True
             },
-            "sortkey1": {
-              "id": "sortkey1",
-              "label": "Sort Key 1",
-              "value": None,
-              "description": "First column in the sort key.",
-              "include": False
-            },
             "max_varchar": {
               "id": "max_varchar",
               "label": "Max Varchar",
-              "value": AnyInt(),
+              "value": AnyFloat(),
               "description": "Size of the largest column that uses a VARCHAR data type.",
               "include": True
-            },
-            "sortkey1_enc": {
-              "id": "sortkey1_enc",
-              "label": "Sort Key 1 Encoding",
-              "value": None,
-              "description": "Compression encoding of the first column in the sort key.",
-              "include": False
-            },
-            "sortkey_num": {
-              "id": "sortkey_num",
-              "label": "# Sort Keys",
-              "value": False,
-              "description": "Number of columns defined as sort keys.",
-              "include": False
             },
             "size": {
               "id": "size",
@@ -156,13 +136,6 @@ class TestDocsGenerate(DBTIntegrationTest):
               "description": "Percent of available space that is used by the table.",
               "include": True
             },
-            "unsorted": {
-              "id": "unsorted",
-              "label": "Unsorted %",
-              "value": None,
-              "description": "Percent of unsorted rows in the table.",
-              "include": False
-            },
             "stats_off": {
               "id": "stats_off",
               "label": "Stats Off",
@@ -173,24 +146,10 @@ class TestDocsGenerate(DBTIntegrationTest):
             "rows": {
               "id": "rows",
               "label": "Approximate Row Count",
-              "value": 1,
+              "value": AnyFloat(),
               "description": "Approximate number of rows in the table. This value includes rows marked for deletion, but not yet vacuumed.",
               "include": True
             },
-            "skew_sortkey1": {
-              "id": "skew_sortkey1",
-              "label": "Sort Key Skew",
-              "value": None,
-              "description": "Ratio of the size of the largest non-sort key column to the size of the first column of the sort key.",
-              "include": False
-            },
-            "skew_rows": {
-              "id": "skew_rows",
-              "label": "Skew Rows",
-              "value": None,
-              "description": "Ratio of the number of rows in the slice with the most rows to the number of rows in the slice with the fewest rows.",
-              "include": False
-            }
         }
 
     def _bigquery_stats(self):
@@ -233,9 +192,11 @@ class TestDocsGenerate(DBTIntegrationTest):
         }
 
     def _expected_catalog(self, id_type, text_type, time_type, view_type,
-                          table_type, stats, case=None):
+                          table_type, model_stats, seed_stats=None, case=None):
         if case is None:
             case = lambda x: x
+        if seed_stats is None:
+            seed_stats = model_stats
 
         my_schema_name = self.unique_schema()
         role = self.get_role()
@@ -281,7 +242,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'comment': None,
                     'owner': self.get_role(),
                 },
-                'stats': stats,
+                'stats': model_stats,
                 'columns': expected_cols,
             },
             'seed.test.seed': {
@@ -293,7 +254,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'comment': None,
                     'owner': self.get_role(),
                 },
-                'stats': stats,
+                'stats': seed_stats,
                 'columns': expected_cols,
             },
         }
@@ -305,7 +266,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             time_type='timestamp without time zone',
             view_type='VIEW',
             table_type='BASE TABLE',
-            stats=self._postgres_stats()
+            model_stats=self._no_stats()
         )
 
     def get_role(self):
@@ -321,6 +282,7 @@ class TestDocsGenerate(DBTIntegrationTest):
     def expected_postgres_references_catalog(self):
         my_schema_name = self.unique_schema()
         role = self.get_role()
+        stats = self._no_stats()
         summary_columns = {
             'first_name': {
                 'name': 'first_name',
@@ -345,7 +307,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'comment': None,
                     'owner': role,
                 },
-                'stats': self._postgres_stats(),
+                'stats': stats,
                 'columns': {
                     'id': {
                         'name': 'id',
@@ -388,7 +350,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'comment': None,
                     'owner': role,
                 },
-                'stats': self._postgres_stats(),
+                'stats': stats,
                 'columns': summary_columns,
             },
             'model.test.view_summary': {
@@ -400,7 +362,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'comment': None,
                     'owner': role,
                 },
-                'stats': self._postgres_stats(),
+                'stats': stats,
                 'columns': summary_columns,
             },
         }
@@ -412,7 +374,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             time_type='TIMESTAMP_NTZ',
             view_type='VIEW',
             table_type='BASE TABLE',
-            stats={},
+            model_stats={},
             case=lambda x: x.upper())
 
     def expected_bigquery_catalog(self):
@@ -422,12 +384,13 @@ class TestDocsGenerate(DBTIntegrationTest):
             time_type='DATETIME',
             view_type='view',
             table_type='table',
-            stats=self._bigquery_stats()
+            model_stats=self._bigquery_stats()
         )
 
     def expected_bigquery_nested_catalog(self):
         my_schema_name = self.unique_schema()
         role = self.get_role()
+        stats = self._bigquery_stats()
         expected_cols = {
             'field_1': {
                 "name": "field_1",
@@ -470,7 +433,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     "owner": role,
                     "comment": None
                 },
-                'stats': self._bigquery_stats(),
+                'stats': stats,
                 "columns": expected_cols
             },
             "model.test.seed": {
@@ -482,7 +445,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     "owner": role,
                     "comment": None
                 },
-                'stats': self._bigquery_stats(),
+                'stats': stats,
                 "columns": expected_cols
             }
         }
@@ -494,7 +457,8 @@ class TestDocsGenerate(DBTIntegrationTest):
             time_type='timestamp without time zone',
             view_type='VIEW',
             table_type='BASE TABLE',
-            stats={}
+            model_stats=self._no_stats(),
+            seed_stats=self._redshift_stats(),
         )
 
     def expected_redshift_incremental_catalog(self):
@@ -510,22 +474,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'comment': None,
                     'owner': role,
                 },
-                'stats': {
-                    'has_stats': None,
-                    'diststyle': None,
-                    'empty': None,
-                    'encoded': None,
-                    'max_varchar': None,
-                    'pct_used': None,
-                    'rows': None,
-                    'size': None,
-                    'skew_rows': None,
-                    'skew_sortkey1': None,
-                    'sortkey1': None,
-                    'sortkey_num': None,
-                    'stats_off': None,
-                    'unsorted': None,
-                },
+                # incremental views have no stats
+                'stats': self._no_stats(),
                 'columns': {
                     'id': {
                         'name': 'id',
@@ -568,22 +518,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'comment': None,
                     'owner': role,
                 },
-                'stats': {
-                    'has_stats': True,
-                    'diststyle': AnyFloat(),
-                    'empty': AnyFloat(),
-                    'encoded': AnyFloat(),
-                    'max_varchar': AnyFloat(),
-                    'pct_used': AnyFloat(),
-                    'rows': AnyFloat(),
-                    'size': AnyFloat(),
-                    'skew_rows': AnyFloat(),
-                    'skew_sortkey1': AnyFloat(),
-                    'sortkey1': AnyFloat(),
-                    'sortkey_num': AnyFloat(),
-                    'stats_off': AnyFloat(),
-                    'unsorted': AnyFloat(),
-                },
+                'stats': self._redshift_stats(),
                 'columns': {
                     'id': {
                         'name': 'id',
