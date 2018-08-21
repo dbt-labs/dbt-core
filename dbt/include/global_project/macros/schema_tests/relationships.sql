@@ -1,19 +1,18 @@
 
-{% macro test_relationships(model, to, from) %}
+{% macro test_relationships(model, to, field) %}
 
-{% set column_name = kwargs.get('column_name', kwargs.get('field')) %}
+{% set column_name = kwargs.get('column_name', kwargs.get('from')) %}
+
 
 select count(*)
 from (
-
-    select
-        {{ from }} as id
-
-    from {{ model }}
-    where {{ from }} is not null
-      and {{ from }} not in (select {{ column_name }}
-                             from {{ to }})
-
-) validation_errors
+    select {{ column_name }} as id from {{ model }}
+) as child
+left join (
+    select {{ field }} as id from {{ to }}
+) as parent on parent.id = child.id
+where child.id is not null
+  and parent.id is null
 
 {% endmacro %}
+

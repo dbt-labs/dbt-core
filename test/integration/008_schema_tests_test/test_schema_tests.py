@@ -30,25 +30,31 @@ class TestSchemaTests(DBTIntegrationTest):
     @attr(type='postgres')
     def test_schema_tests(self):
         results = self.run_dbt()
-        self.assertEqual(len(results), 4)
+        self.assertEqual(len(results), 5)
         test_results = self.run_schema_validations()
-        self.assertEqual(len(test_results), 17)
+        self.assertEqual(len(test_results), 18)
 
         for result in test_results:
             # assert that all deliberately failing tests actually fail
             if 'failure' in result.node.get('name'):
                 self.assertFalse(result.errored)
                 self.assertFalse(result.skipped)
-                self.assertTrue(result.status > 0)
+                self.assertTrue(
+                    result.status > 0,
+                    'test {} did not fail'.format(result.node.get('name'))
+                )
 
             # assert that actual tests pass
             else:
                 self.assertFalse(result.errored)
                 self.assertFalse(result.skipped)
                 # status = # of failing rows
-                self.assertEqual(result.status, 0)
+                self.assertEqual(
+                    result.status, 0,
+                    'test {} failed'.format(result.node.get('name'))
+                )
 
-        self.assertEqual(sum(x.status for x in test_results), 5)
+        self.assertEqual(sum(x.status for x in test_results), 6)
 
 
 class TestMalformedSchemaTests(DBTIntegrationTest):

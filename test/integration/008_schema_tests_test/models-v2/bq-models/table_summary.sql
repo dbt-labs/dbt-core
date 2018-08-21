@@ -5,5 +5,5 @@
 }}
 
 select favorite_color as favorite_color_copy, count(*) as count
-from {{ ref('table_copy') }}
+from {{ ref('ephemeral_copy') }}
 group by 1
