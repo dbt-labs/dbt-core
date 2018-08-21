@@ -562,8 +562,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'tags': ['schema'],
                     'unique_id': 'test.test.not_null_model_id'
                 },
-                'test.test.test_nothing_model_': {
-                    'alias': 'test_nothing_model_',
+                'test.test.nothing_model_': {
+                    'alias': 'nothing_model_',
                     'columns': {},
                     'config': {
                         'column_types': {},
@@ -577,18 +577,18 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'depends_on': {'macros': [], 'nodes': ['model.test.model']},
                     'description': '',
                     'empty': False,
-                    'fqn': ['test', 'schema_test', 'test_nothing_model_'],
-                    'name': 'test_nothing_model_',
+                    'fqn': ['test', 'schema_test', 'nothing_model_'],
+                    'name': 'nothing_model_',
                     'original_file_path': self.dir('models/schema.yml'),
                     'package_name': 'test',
-                    'path': os.path.normpath('schema_test/test_nothing_model_.sql'),
-                    'raw_sql': "{{ test_test_nothing(model=ref('model'), ) }}",
+                    'path': os.path.normpath('schema_test/nothing_model_.sql'),
+                    'raw_sql': "{{ test_nothing(model=ref('model'), ) }}",
                     'refs': [['model']],
                     'resource_type': 'test',
                     'root_path': os.getcwd(),
                     'schema': my_schema_name,
                     'tags': ['schema'],
-                    'unique_id': 'test.test.test_nothing_model_'
+                    'unique_id': 'test.test.nothing_model_'
                 },
                 'test.test.unique_model_id': {
                     'alias': 'unique_model_id',
@@ -624,18 +624,18 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.model': ['seed.test.seed'],
                 'seed.test.seed': [],
                 'test.test.not_null_model_id': ['model.test.model'],
-                'test.test.test_nothing_model_': ['model.test.model'],
+                'test.test.nothing_model_': ['model.test.model'],
                 'test.test.unique_model_id': ['model.test.model'],
             },
             'child_map': {
                 'model.test.model': [
                     'test.test.not_null_model_id',
-                    'test.test.test_nothing_model_',
+                    'test.test.nothing_model_',
                     'test.test.unique_model_id',
                 ],
                 'seed.test.seed': ['model.test.model'],
                 'test.test.not_null_model_id': [],
-                'test.test.test_nothing_model_': [],
+                'test.test.nothing_model_': [],
                 'test.test.unique_model_id': [],
             },
             'docs': {},
