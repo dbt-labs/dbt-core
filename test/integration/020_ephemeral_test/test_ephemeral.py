@@ -38,5 +38,5 @@ class TestEphemeral(DBTIntegrationTest):
         self.assertEqual(len(results), 3)
 
         self.assertManyTablesEqual(
-            ["SEED", "dependent", "double_dependent", "super_dependent"]
+            ["SEED", "DEPENDENT", "DOUBLE_DEPENDENT", "SUPER_DEPENDENT"]
         )
