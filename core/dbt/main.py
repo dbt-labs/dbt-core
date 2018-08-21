@@ -546,13 +546,13 @@ def _build_docs_generate_subparser(subparsers, base_subparser):
     # it might look like docs_sub is the correct parents entry, but that
     # will cause weird errors about 'conflicting option strings'.
     generate_sub = subparsers.add_parser("generate", parents=[base_subparser])
-    generate_sub.set_defaults(cls=generate_task.GenerateTask,
+    generate_sub.set_defaults(
         cls=generate_task.GenerateTask, which="generate", rpc_method="docs.generate"
     )
     generate_sub.add_argument(
-        '--no-compile',
-        action='store_false',
-        dest='compile',
+        "--no-compile",
+        action="store_false",
+        dest="compile",
         help="""
         Do not run "dbt compile" as part of docs generation
         """,
