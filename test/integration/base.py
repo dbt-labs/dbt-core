@@ -224,14 +224,8 @@ class DBTIntegrationTest(unittest.TestCase):
         self._profile_config = profile_config
         self.project = project
 
-        if self.adapter_type == 'bigquery':
-            schema_name = self.unique_schema()
-            adapter.drop_schema(profile, project, schema_name, '__test')
-            adapter.create_schema(profile, project, schema_name, '__test')
-        else:
-            schema = self.adapter.quote(self.unique_schema())
-            self.run_sql('DROP SCHEMA IF EXISTS {} CASCADE'.format(schema))
-            self.run_sql('CREATE SCHEMA {}'.format(schema))
+        self._drop_schema()
+        self._create_schema()
 
     def use_default_project(self, overrides=None):
         # create a dbt_project.yml
@@ -282,15 +276,16 @@ class DBTIntegrationTest(unittest.TestCase):
         self._profile_config = profile_config
         self._profile = profile
 
-        if self.adapter_type == 'bigquery':
-            adapter.drop_schema(profile, self.project,
-                                self.unique_schema(), '__test')
-            adapter.create_schema(profile, self.project,
-                                  self.unique_schema(), '__test')
-        else:
-            schema = self.adapter.quote(self.unique_schema())
-            self.run_sql('DROP SCHEMA IF EXISTS {} CASCADE'.format(schema))
-            self.run_sql('CREATE SCHEMA {}'.format(schema))
+        self._drop_schema()
+        self._create_schema()
+
+    def quote_as_configured(self, value, quote_key):
+        # we need this because some tests explicitly skip setUp - but they are
+        # all ok with default values here.
+        project = getattr(self, 'project', {})
+        return self.adapter.quote_as_configured(
+            self._profile, project, value, quote_key
+        )
 
     def tearDown(self):
         os.remove(DBT_PROFILES)
@@ -305,19 +300,40 @@ class DBTIntegrationTest(unittest.TestCase):
 
         adapter = get_adapter(self._profile)
 
-        if self.adapter_type == 'bigquery':
-            adapter.drop_schema(self._profile, self.project,
-                                self.unique_schema(), '__test')
-        else:
-            schema = self.adapter.quote(self.unique_schema())
-            self.run_sql('DROP SCHEMA IF EXISTS {} CASCADE'.format(schema))
-            self.handle.close()
+        self._drop_schema()
 
         # hack for BQ -- TODO
         if hasattr(self.handle, 'close'):
             self.handle.close()
 
         adapter.cleanup_connections()
+
+    def _create_schema(self):
+
+        if self.adapter_type == 'bigquery':
+            adapter.create_schema(profile, project, self.unique_schema(), '__test')
+        else:
+            schema = self.quote_as_configured(self.unique_schema(), 'schema')
+            self.run_sql('CREATE SCHEMA {}'.format(schema))
+            self._created_schema = schema
+
+    def _drop_schema(self):
+        if self.adapter_type == 'bigquery':
+            adapter.drop_schema(self._profile, self.project,
+                                self.unique_schema(), '__test')
+        else:
+            had_existing = False
+            try:
+                schema = self._created_schema
+                had_existing = True
+            except AttributeError:
+                # we never created it, we think. This can be wrong if a test creates
+                # its own schemas that don't match the configured quoting strategy
+                schema = self.quote_as_configured(self.unique_schema(), 'schema')
+            self.run_sql('DROP SCHEMA IF EXISTS {} CASCADE'.format(schema))
+            if had_existing:
+                # avoid repeatedly deleting the wrong schema
+                del self._created_schema
 
     @property
     def project_config(self):
@@ -486,10 +502,10 @@ class DBTIntegrationTest(unittest.TestCase):
                  SELECT {columns} FROM {table_a_schema}.{table_a})
             ) AS a""".format(
                 columns=columns_csv,
-                table_a_schema=self.adapter.quote(table_a_schema),
-                table_b_schema=self.adapter.quote(table_b_schema),
-                table_a=self.adapter.quote(table_a),
-                table_b=self.adapter.quote(table_b),
+                table_a_schema=self.quote_as_configured(table_a_schema, 'schema'),
+                table_b_schema=self.quote_as_configured(table_b_schema, 'schema'),
+                table_a=self.quote_as_configured(table_a, 'identifier'),
+                table_b=self.quote_as_configured(table_b, 'identifier'),
                 except_op=except_operator
             )
 
@@ -573,10 +589,10 @@ class DBTIntegrationTest(unittest.TestCase):
             select table_a.num_rows - table_b.num_rows as difference
             from table_a, table_b
 
-        """.format(self.adapter.quote(table_a_schema),
-                   self.adapter.quote(table_a),
-                   self.adapter.quote(table_b_schema),
-                   self.adapter.quote(table_b))
+        """.format(self.quote_as_configured(table_a_schema, 'schema'),
+                   self.quote_as_configured(table_a, 'identifier'),
+                   self.quote_as_configured(table_b_schema, 'schema'),
+                   self.quote_as_configured(table_b, 'identifier'))
 
 
         res = self.run_sql(cmp_query, fetch='one')
