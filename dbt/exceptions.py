@@ -444,6 +444,6 @@ def raise_incorrect_version(path):
         '1 schemas, but this file looks like a version 2 schema. If this is '
         'the case, you can fix this error by adding `version: 2` to the top '
         'of the file.\n\nOtherwise, please consult the documentation for more '
-        'information on schema.yml syntax: '
+        'information on schema.yml syntax:\n\n'
         'https://docs.getdbt.com/v0.11/docs/schemayml-files'.format(path)
     )

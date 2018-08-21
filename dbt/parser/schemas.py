@@ -301,7 +301,8 @@ class SchemaParser(BaseParser):
                 ).format(original_file_path, test_spec)
                 if dbt.flags.STRICT_MODE:
                     dbt.exceptions.raise_compiler_error(msg)
-                dbt.utils.compiler_warning(model_name, msg)
+                dbt.utils.compiler_warning(model_name, msg,
+                                           resource_type='test')
                 continue
 
             if test_spec is None or test_spec.get('constraints') is None:
