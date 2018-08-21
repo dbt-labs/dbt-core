@@ -131,6 +131,13 @@ class CompileResultNode(CompiledNode):
     SCHEMA = COMPILE_RESULT_NODE_CONTRACT
 
 
+def _sort_values(dct):
+    """Given a dictionary, sort each value. This makes output deterministic,
+    which helps for tests.
+    """
+    return {k: sorted(v) for k, v in dct.items()}
+
+
 def build_edges(nodes):
     """Build the forward and backward edges on the given list of ParsedNodes
     and return them as two separate dictionaries, each mapping unique IDs to
@@ -143,7 +150,7 @@ def build_edges(nodes):
         backward_edges[node.unique_id] = node.depends_on_nodes[:]
         for unique_id in node.depends_on_nodes:
             forward_edges[unique_id].append(node.unique_id)
-    return forward_edges, backward_edges
+    return _sort_values(forward_edges), _sort_values(backward_edges)
 
 
 class Manifest(APIObject):

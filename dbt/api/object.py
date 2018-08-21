@@ -2,7 +2,7 @@ import copy
 from collections import Mapping
 from jsonschema import Draft4Validator
 
-from dbt.exceptions import ValidationException
+from dbt.exceptions import JSONValidationException
 from dbt.utils import deep_merge
 
 
@@ -80,9 +80,7 @@ class APIObject(Mapping):
             ))
 
         if errors:
-            msg = ('Invalid arguments passed to "{}" instance: {}'.format(
-                type(self).__name__, ', '.join(errors)))
-            raise ValidationException(msg)
+            raise JSONValidationException(type(self).__name__, errors)
 
     # implement the Mapping protocol:
     # https://docs.python.org/3/library/collections.abc.html
