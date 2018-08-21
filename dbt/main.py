@@ -355,21 +355,7 @@ def parse_args(args):
     compile_sub = subs.add_parser('compile', parents=[base_subparser])
     compile_sub.set_defaults(cls=compile_task.CompileTask, which='compile')
 
-    docs_sub = subs.add_parser('docs', parents=[base_subparser])
-    docs_subs = docs_sub.add_subparsers()
-    # it might look like docs_sub is the correct parents entry, but that
-    # will cause weird errors about 'conflicting option strings'.
-    generate_sub = docs_subs.add_parser('generate', parents=[base_subparser])
-    generate_sub.set_defaults(cls=generate_task.GenerateTask,
-                              which='generate')
-    generate_sub.add_argument(
-        '--no-compile',
-        action='store_false',
-        dest='compile',
-        help='Do not run "dbt compile" as part of docs generation'
-    )
-
-    for sub in [run_sub, compile_sub, generate_sub]:
+    for sub in [run_sub, compile_sub]:
         sub.add_argument(
             '--models',
             required=False,
@@ -428,6 +414,14 @@ def parse_args(args):
         help='Show a sample of the loaded data in the terminal'
     )
     seed_sub.set_defaults(cls=seed_task.SeedTask, which='seed')
+
+    docs_sub = subs.add_parser('docs', parents=[base_subparser])
+    docs_subs = docs_sub.add_subparsers()
+    # it might look like docs_sub is the correct parents entry, but that
+    # will cause weird errors about 'conflicting option strings'.
+    generate_sub = docs_subs.add_parser('generate', parents=[base_subparser])
+    generate_sub.set_defaults(cls=generate_task.GenerateTask,
+                              which='generate')
 
     serve_sub = docs_subs.add_parser('serve', parents=[base_subparser])
     serve_sub.set_defaults(cls=serve_task.ServeTask,
