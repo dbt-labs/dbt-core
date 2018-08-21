@@ -298,7 +298,7 @@ class DBTIntegrationTest(unittest.TestCase):
         except:
             os.rename("dbt_modules", "dbt_modules-{}".format(time.time()))
 
-        adapter = get_adapter(self._profile)
+        self.adapter = get_adapter(self._profile)
 
         self._drop_schema()
 
@@ -306,12 +306,12 @@ class DBTIntegrationTest(unittest.TestCase):
         if hasattr(self.handle, 'close'):
             self.handle.close()
 
-        adapter.cleanup_connections()
+        self.adapter.cleanup_connections()
 
     def _create_schema(self):
 
         if self.adapter_type == 'bigquery':
-            adapter.create_schema(profile, project, self.unique_schema(), '__test')
+            self.adapter.create_schema(profile, project, self.unique_schema(), '__test')
         else:
             schema = self.quote_as_configured(self.unique_schema(), 'schema')
             self.run_sql('CREATE SCHEMA {}'.format(schema))
@@ -319,8 +319,8 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def _drop_schema(self):
         if self.adapter_type == 'bigquery':
-            adapter.drop_schema(self._profile, self.project,
-                                self.unique_schema(), '__test')
+            self.adapter.drop_schema(self._profile, self.project,
+                                     self.unique_schema(), '__test')
         else:
             had_existing = False
             try:

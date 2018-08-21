@@ -26,6 +26,7 @@ connections_available = []
 
 
 class DefaultAdapter(object):
+    DEFAULT_QUOTE = True
 
     requires = {}
 
@@ -364,16 +365,14 @@ class DefaultAdapter(object):
     ###
     @classmethod
     def get_create_schema_sql(cls, project_cfg, schema):
-        if project_cfg.get('quoting', {}).get('schema', True):
-            schema = cls.quote(schema)
+        schema = cls._quote_as_configured(project_cfg, schema, 'schema')
 
         return ('create schema if not exists {schema}'
                 .format(schema=schema))
 
     @classmethod
     def get_drop_schema_sql(cls, project_cfg, schema):
-        if project_cfg.get('quoting', {}).get('schema', True):
-            schema = cls.quote(schema)
+        schema = cls._quote_as_configured(project_cfg, schema, 'schema')
 
         return ('drop schema if exists {schema} cascade'
                 .format(schema=schema))
@@ -727,6 +726,16 @@ class DefaultAdapter(object):
         return '"{}"'.format(identifier)
 
     @classmethod
+    def _quote_as_configured(cls, project_cfg, identifier, quote_key):
+        """This is the actual implementation of quote_as_configured, without
+        the extra arguments needed for use inside materialization code.
+        """
+        if project_cfg.get('quoting', {}).get(quote_key, cls.DEFAULT_QUOTE):
+            return cls.quote(identifier)
+        else:
+            return identifier
+
+    @classmethod
     def quote_as_configured(cls, profile, project_cfg, identifier, quote_key,
                             model_name=None):
         """Quote or do not quote the given identifer as configured in the
@@ -735,10 +744,7 @@ class DefaultAdapter(object):
         The quote key should be one of 'database' (on bigquery, 'profile'),
         'identifier', or 'schema', or it will be treated as if you set `True`.
         """
-        if project_cfg.get('quoting', {}).get(quote_key, True):
-            return cls.quote(identifier)
-        else:
-            return identifier
+        return cls._quote_as_configured(project_cfg, identifier, quote_key)
 
     @classmethod
     def convert_text_type(cls, agate_table, col_idx):
