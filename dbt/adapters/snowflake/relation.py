@@ -9,8 +9,8 @@ class SnowflakeRelation(DefaultRelation):
         'quote_character': '"',
         'quote_policy': {
             'database': True,
-            'schema': True,
-            'identifier': True,
+            'schema': False,
+            'identifier': False,
         },
         'include_policy': {
             'database': False,

@@ -248,23 +248,6 @@ class Project(object):
         except dbt.exceptions.ValidationException as e:
             raise DbtProjectError(str(e), self)
 
-    def log_warnings(self):
-        target_cfg = self.run_environment()
-        db_type = target_cfg.get('type')
-
-        if db_type == 'snowflake' and self.cfg \
-                                          .get('quoting', {}) \
-                                          .get('identifier') is None:
-            msg = dbt.ui.printer.yellow(
-                'You are using Snowflake, but you did not specify a '
-                'quoting strategy for your identifiers.\nQuoting '
-                'behavior for Snowflake will change in a future release, '
-                'so it is recommended that you define this explicitly.\n\n'
-                'For more information, see: {}\n'
-            )
-
-            logger.warn(msg.format(dbt.links.SnowflakeQuotingDocs))
-
     def hashed_name(self):
         if self.cfg.get("name", None) is None:
             return None
