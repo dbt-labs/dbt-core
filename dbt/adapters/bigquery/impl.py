@@ -706,7 +706,7 @@ class BigQueryAdapter(PostgresAdapter):
         return tuple(columns)
 
     @classmethod
-    def _get_stats_columns(cls, table):
+    def _get_stats_columns(cls, table, relation_type):
         """Given a table, return an iterator of key/value pairs for stats
         column names/values.
         """
@@ -717,12 +717,12 @@ class BigQueryAdapter(PostgresAdapter):
             'Number of bytes',
             str(table.num_bytes),
             'The number of bytes this table consumes',
-            True,
+            relation_type == 'table',
 
             'Number of rows',
             str(table.num_rows),
             'The number of rows in this table',
-            True,
+            relation_type == 'table',
 
             'Location',
             table.location,
@@ -732,7 +732,7 @@ class BigQueryAdapter(PostgresAdapter):
             'Partitioning Type',
             table.partitioning_type,
             'The partitioning type used for this table',
-            True,
+            relation_type == 'table',
         )
         return zip(column_names, column_values)
 
@@ -786,7 +786,8 @@ class BigQueryAdapter(PostgresAdapter):
                         None,
                     )
                     column_dict = dict(zip(column_names, column_data))
-                    column_dict.update(cls._get_stats_columns(table))
+                    column_dict.update(cls._get_stats_columns(table,
+                                                              relation.type))
 
                     columns.append(column_dict)
 

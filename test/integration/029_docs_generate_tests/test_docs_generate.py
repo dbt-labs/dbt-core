@@ -177,28 +177,14 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
         }
 
-    def _bigquery_stats(self):
-        return {
+    def _bigquery_stats(self, is_table):
+        stats = {
             'has_stats': {
                 'id': 'has_stats',
                 'label': 'Has Stats?',
                 'value': True,
                 'description': 'Indicates whether there are statistics for this table',
                 'include': False,
-            },
-            'num_bytes': {
-                'id': 'num_bytes',
-                'label': 'Number of bytes',
-                'value': AnyFloat(),
-                'description': 'The number of bytes this table consumes',
-                'include': True,
-            },
-            'num_rows': {
-                'id': 'num_rows',
-                'label': 'Number of rows',
-                'value': AnyFloat(),
-                'description': 'The number of rows in this table',
-                'include': True,
             },
             'location': {
                 'id': 'location',
@@ -207,14 +193,32 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'description':  'The geographic location of this table',
                 'include': True,
             },
-            'partitioning_type': {
-                'id': 'partitioning_type',
-                'label': 'Partitioning Type',
-                'value': None,
-                'description': 'The partitioning type used for this table',
-                'include': True,
-            },
         }
+        if is_table:
+            stats.update({
+                'num_bytes': {
+                    'id': 'num_bytes',
+                    'label': 'Number of bytes',
+                    'value': AnyFloat(),
+                    'description': 'The number of bytes this table consumes',
+                    'include': True,
+                },
+                'num_rows': {
+                    'id': 'num_rows',
+                    'label': 'Number of rows',
+                    'value': AnyFloat(),
+                    'description': 'The number of rows in this table',
+                    'include': True,
+                },
+                'partitioning_type': {
+                    'id': 'partitioning_type',
+                    'label': 'Partitioning Type',
+                    'value': None,
+                    'description': 'The partitioning type used for this table',
+                    'include': True,
+                },
+            })
+        return stats
 
     def _expected_catalog(self, id_type, text_type, time_type, view_type,
                           table_type, model_stats, seed_stats=None, case=None):
@@ -410,13 +414,14 @@ class TestDocsGenerate(DBTIntegrationTest):
             time_type='DATETIME',
             view_type='view',
             table_type='table',
-            model_stats=self._bigquery_stats()
+            model_stats=self._bigquery_stats(False),
+            seed_stats=self._bigquery_stats(True),
         )
 
     def expected_bigquery_nested_catalog(self):
         my_schema_name = self.unique_schema()
         role = self.get_role()
-        stats = self._bigquery_stats()
+        stats = self._bigquery_stats(False)
         expected_cols = {
             'field_1': {
                 "name": "field_1",
