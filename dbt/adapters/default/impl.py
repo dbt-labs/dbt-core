@@ -831,9 +831,9 @@ class DefaultAdapter(object):
             cls.release_connection(profile, GET_CATALOG_OPERATION_NAME)
 
         schemas = list({
-            node.to_dict()['schema']
+            node.schema.lower()
             for node in manifest.nodes.values()
         })
 
-        results = table.where(lambda r: r['table_schema'] in schemas)
+        results = table.where(lambda r: r['table_schema'].lower() in schemas)
         return results
