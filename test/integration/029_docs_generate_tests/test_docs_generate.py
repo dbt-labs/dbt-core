@@ -2,6 +2,7 @@ from __future__ import unicode_literals
 import json
 import os
 from datetime import datetime, timedelta
+from mock import ANY
 
 from test.integration.base import DBTIntegrationTest, use_profile
 
@@ -637,7 +638,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'test.test.test_nothing_model_': [],
                 'test.test.unique_model_id': [],
             },
-            'docs': {},
+            'docs': {
+                'dbt.__overview__': ANY
+            },
             'metadata': {
                 'project_id': '098f6bcd4621d373cade4e832627b4f6',
                 'user_id': None,
@@ -835,6 +838,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 }
             },
             'docs': {
+                'dbt.__overview__': ANY,
                 'test.ephemeral_summary': {
                     'block_contents': (
                         'A summmary table of the ephemeral copy of the seed data'
@@ -1004,7 +1008,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.model': ['model.test.seed'],
                 'model.test.seed': []
             },
-            'docs': {},
+            'docs': {
+                'dbt.__overview__': ANY,
+            },
             'metadata': {
                 'project_id': '098f6bcd4621d373cade4e832627b4f6',
                 'user_id': None,
@@ -1112,7 +1118,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                 "model.test.model": [],
                 "seed.test.seed": ["model.test.model"]
             },
-            'docs': {},
+            'docs': {
+                'dbt.__overview__': ANY,
+            },
             'metadata': {
                 'project_id': '098f6bcd4621d373cade4e832627b4f6',
                 'user_id': None,
@@ -1129,7 +1137,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.assertEqual(
             set(manifest),
             {'nodes', 'macros', 'parent_map', 'child_map', 'generated_at',
-             'docs', 'metadata'}
+             'docs', 'metadata', 'docs'}
         )
 
         self.verify_manifest_macros(manifest)
