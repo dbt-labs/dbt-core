@@ -30,7 +30,7 @@ class TestStatements(DBTIntegrationTest):
 
     @attr(type="snowflake")
     def test_snowflake_statements(self):
-        self.use_profile("postgres")
+        self.use_profile("snowflake")
         self.use_default_project({"data-paths": [self.dir("seed")]})
 
         results = self.run_dbt(["seed"])

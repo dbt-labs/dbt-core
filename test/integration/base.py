@@ -437,7 +437,16 @@ class DBTIntegrationTest(unittest.TestCase):
                 table_filter=table_filters_s)
 
         columns = self.run_sql(sql, fetch='all')
-        return sorted(columns, key=lambda x: "{}.{}".format(x[0], x[1]))
+        return sorted(map(self.filter_many_columns, columns),
+                      key=lambda x: "{}.{}".format(x[0], x[1]))
+
+    def filter_many_columns(self, column):
+        table_name, column_name, data_type, char_size = column
+        # in snowflake, all varchar widths are created equal
+        if self.adapter_type == 'snowflake':
+            if char_size and char_size < 16777216:
+                char_size = 16777216
+        return (table_name, column_name, data_type, char_size)
 
     def get_table_columns(self, table, schema=None):
         schema = self.unique_schema() if schema is None else schema
