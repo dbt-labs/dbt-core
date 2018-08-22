@@ -1154,7 +1154,7 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         if self.adapter_type == 'snowflake':
             status = 'SUCCESS 1'
-
+            compiled_sql = compiled_sql.replace('"', '')
         if self.adapter_type == 'bigquery':
             status = 'OK'
             compiled_sql = '\n\nselect * from `{}`.`{}`.seed'.format(

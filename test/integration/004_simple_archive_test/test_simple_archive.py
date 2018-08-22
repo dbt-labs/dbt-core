@@ -63,7 +63,7 @@ class TestSimpleArchive(DBTIntegrationTest):
         results = self.run_dbt(["archive"])
         self.assertEqual(len(results),  1)
 
-        self.assertTablesEqual("ARCHIVE_EXPECTED", "archive_actual")
+        self.assertTablesEqual("ARCHIVE_EXPECTED", "ARCHIVE_ACTUAL")
 
         self.run_sql_file("test/integration/004_simple_archive_test/invalidate_snowflake.sql")
         self.run_sql_file("test/integration/004_simple_archive_test/update.sql")
@@ -71,7 +71,7 @@ class TestSimpleArchive(DBTIntegrationTest):
         results = self.run_dbt(["archive"])
         self.assertEqual(len(results),  1)
 
-        self.assertTablesEqual("ARCHIVE_EXPECTED", "archive_actual")
+        self.assertTablesEqual("ARCHIVE_EXPECTED", "ARCHIVE_ACTUAL")
 
     @attr(type='redshift')
     def test__redshift__simple_archive(self):
