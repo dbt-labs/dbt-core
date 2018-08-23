@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 import json
+from numbers import Integral
 import os
 from datetime import datetime, timedelta
 
@@ -85,12 +86,154 @@ class TestDocsGenerate(DBTIntegrationTest):
                 end.strftime(DATEFMT))
         )
 
+    def _no_stats(self):
+        return {
+            'has_stats': {
+                'id': 'has_stats',
+                'label': 'Has Stats?',
+                'value': False,
+                'description': 'Indicates whether there are statistics for this table',
+                'include': False,
+            },
+        }
+
+    def _redshift_stats(self):
+        return {
+            "has_stats": {
+              "id": "has_stats",
+              "label": "Has Stats?",
+              "value": True,
+              "description": "Indicates whether there are statistics for this table",
+              "include": False
+            },
+            "encoded": {
+              "id": "encoded",
+              "label": "Encoded",
+              "value": "Y",
+              "description": "Indicates whether any column in the table has compression encoding defined.",
+              "include": True
+            },
+            "diststyle": {
+              "id": "diststyle",
+              "label": "Dist Style",
+              "value": "EVEN",
+              "description": "Distribution style or distribution key column, if key distribution is defined.",
+              "include": True
+            },
+            "max_varchar": {
+              "id": "max_varchar",
+              "label": "Max Varchar",
+              "value": AnyFloat(),
+              "description": "Size of the largest column that uses a VARCHAR data type.",
+              "include": True
+            },
+            "size": {
+              "id": "size",
+              "label": "Approximate Size",
+              "value": AnyFloat(),
+              "description": "Approximate size of the table, calculated from a count of 1MB blocks",
+              "include": True
+            },
+            "pct_used": {
+              "id": "pct_used",
+              "label": "Disk Utilization",
+              "value": AnyFloat(),
+              "description": "Percent of available space that is used by the table.",
+              "include": True
+            },
+            "stats_off": {
+              "id": "stats_off",
+              "label": "Stats Off",
+              "value": AnyFloat(),
+              "description": "Number that indicates how stale the table's statistics are; 0 is current, 100 is out of date.",
+              "include": True
+            },
+            "rows": {
+              "id": "rows",
+              "label": "Approximate Row Count",
+              "value": AnyFloat(),
+              "description": "Approximate number of rows in the table. This value includes rows marked for deletion, but not yet vacuumed.",
+              "include": True
+            },
+        }
+
+    def _snowflake_stats(self):
+        return {
+            'has_stats': {
+                'id': 'has_stats',
+                'label': 'Has Stats?',
+                'value': True,
+                'description': 'Indicates whether there are statistics for this table',
+                'include': False,
+            },
+            'bytes': {
+                'id': 'bytes',
+                'label': 'Approximate Size',
+                'value': AnyFloat(),
+                'description': 'Approximate size of the table as reported by Snowflake',
+                'include': True,
+            },
+            'row_count': {
+                'id': 'row_count',
+                'label': 'Row Count',
+                'value': True,
+                'description': 'An approximate count of rows in this table',
+                'include': True,
+            },
+        }
+
+    def _bigquery_stats(self, is_table):
+        stats = {
+            'has_stats': {
+                'id': 'has_stats',
+                'label': 'Has Stats?',
+                'value': True,
+                'description': 'Indicates whether there are statistics for this table',
+                'include': False,
+            },
+            'location': {
+                'id': 'location',
+                'label': 'Location',
+                'value': 'US',
+                'description':  'The geographic location of this table',
+                'include': True,
+            },
+        }
+        if is_table:
+            stats.update({
+                'num_bytes': {
+                    'id': 'num_bytes',
+                    'label': 'Number of bytes',
+                    'value': AnyFloat(),
+                    'description': 'The number of bytes this table consumes',
+                    'include': True,
+                },
+                'num_rows': {
+                    'id': 'num_rows',
+                    'label': 'Number of rows',
+                    'value': AnyFloat(),
+                    'description': 'The number of rows in this table',
+                    'include': True,
+                },
+                'partitioning_type': {
+                    'id': 'partitioning_type',
+                    'label': 'Partitioning Type',
+                    'value': None,
+                    'description': 'The partitioning type used for this table',
+                    'include': True,
+                },
+            })
+        return stats
+
     def _expected_catalog(self, id_type, text_type, time_type, view_type,
-                          table_type, case=None):
+                          table_type, model_stats, seed_stats=None, case=None):
         if case is None:
             case = lambda x: x
+        if seed_stats is None:
+            seed_stats = model_stats
 
         my_schema_name = self.unique_schema()
+        role = self.get_role()
         expected_cols = {
             case('id'): {
                 'name': case('id'),
@@ -131,7 +274,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': case('model'),
                     'type': view_type,
                     'comment': None,
+                    'owner': self.get_role(),
                 },
+                'stats': model_stats,
                 'columns': expected_cols,
             },
             'seed.test.seed': {
@@ -141,11 +286,12 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': case('seed'),
                     'type': table_type,
                     'comment': None,
+                    'owner': self.get_role(),
                 },
+                'stats': seed_stats,
                 'columns': expected_cols,
             },
         }
-
 
     def expected_postgres_catalog(self):
         return self._expected_catalog(
@@ -153,12 +299,24 @@ class TestDocsGenerate(DBTIntegrationTest):
             text_type='text',
             time_type='timestamp without time zone',
             view_type='VIEW',
-            table_type='BASE TABLE'
+            table_type='BASE TABLE',
+            model_stats=self._no_stats()
         )
+
+    def get_role(self):
+        if self.adapter_type in {'postgres', 'redshift'}:
+            profile = self.get_profile(self.adapter_type)
+            target_name = profile['test']['target']
+            return profile['test']['outputs'][target_name]['user']
+        elif self.adapter_type == 'bigquery':
+            return None
+        else:  # snowflake
+            return self.run_sql('select current_role()', fetch='one')[0]
 
     def expected_postgres_references_catalog(self):
         my_schema_name = self.unique_schema()
-
+        role = self.get_role()
+        stats = self._no_stats()
         summary_columns = {
             'first_name': {
                 'name': 'first_name',
@@ -181,7 +339,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'seed',
                     'type': 'BASE TABLE',
                     'comment': None,
+                    'owner': role,
                 },
+                'stats': stats,
                 'columns': {
                     'id': {
                         'name': 'id',
@@ -222,7 +382,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'ephemeral_summary',
                     'type': 'BASE TABLE',
                     'comment': None,
+                    'owner': role,
                 },
+                'stats': stats,
                 'columns': summary_columns,
             },
             'model.test.view_summary': {
@@ -232,7 +394,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'view_summary',
                     'type': 'VIEW',
                     'comment': None,
+                    'owner': role,
                 },
+                'stats': stats,
                 'columns': summary_columns,
             },
         }
@@ -244,6 +408,8 @@ class TestDocsGenerate(DBTIntegrationTest):
             time_type='TIMESTAMP_NTZ',
             view_type='VIEW',
             table_type='BASE TABLE',
+            model_stats=self._no_stats(),
+            seed_stats=self._snowflake_stats(),
             case=lambda x: x.upper())
 
     def expected_bigquery_catalog(self):
@@ -252,11 +418,15 @@ class TestDocsGenerate(DBTIntegrationTest):
             text_type='STRING',
             time_type='DATETIME',
             view_type='view',
-            table_type='table'
+            table_type='table',
+            model_stats=self._bigquery_stats(False),
+            seed_stats=self._bigquery_stats(True),
         )
 
     def expected_bigquery_nested_catalog(self):
         my_schema_name = self.unique_schema()
+        role = self.get_role()
+        stats = self._bigquery_stats(False)
         expected_cols = {
             'field_1': {
                 "name": "field_1",
@@ -296,18 +466,22 @@ class TestDocsGenerate(DBTIntegrationTest):
                     "schema": my_schema_name,
                     "name": "model",
                     "type": "view",
+                    "owner": role,
                     "comment": None
                 },
+                'stats': stats,
                 "columns": expected_cols
             },
             "model.test.seed": {
                 'unique_id': 'model.test.seed',
                 "metadata": {
-                "schema": my_schema_name,
-                "name": "seed",
-                "type": "view",
-                "comment": None
+                    "schema": my_schema_name,
+                    "name": "seed",
+                    "type": "view",
+                    "owner": role,
+                    "comment": None
                 },
+                'stats': stats,
                 "columns": expected_cols
             }
         }
@@ -318,11 +492,14 @@ class TestDocsGenerate(DBTIntegrationTest):
             text_type='character varying',
             time_type='timestamp without time zone',
             view_type='VIEW',
-            table_type='BASE TABLE'
+            table_type='BASE TABLE',
+            model_stats=self._no_stats(),
+            seed_stats=self._redshift_stats(),
         )
 
     def expected_redshift_incremental_catalog(self):
         my_schema_name = self.unique_schema()
+        role = self.get_role()
         return {
             'model.test.model': {
                 'unique_id': 'model.test.model',
@@ -331,7 +508,10 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'model',
                     'type': 'LATE BINDING VIEW',
                     'comment': None,
+                    'owner': role,
                 },
+                # incremental views have no stats
+                'stats': self._no_stats(),
                 'columns': {
                     'id': {
                         'name': 'id',
@@ -372,7 +552,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'seed',
                     'type': 'BASE TABLE',
                     'comment': None,
+                    'owner': role,
                 },
+                'stats': self._redshift_stats(),
                 'columns': {
                     'id': {
                         'name': 'id',
