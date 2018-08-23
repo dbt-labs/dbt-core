@@ -24,6 +24,7 @@ setup(
         'dbt': [
             'include/index.html',
             'include/global_project/dbt_project.yml',
+            'include/global_project/docs/*.md',
             'include/global_project/macros/*.sql',
             'include/global_project/macros/**/*.sql',
             'include/global_project/macros/**/**/*.sql',
