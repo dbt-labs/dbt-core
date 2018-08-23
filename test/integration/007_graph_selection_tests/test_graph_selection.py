@@ -35,11 +35,11 @@ class TestGraphSelection(DBTIntegrationTest):
         results = self.run_dbt(['run', '--models', 'users'])
         self.assertEqual(len(results),  1)
 
-        self.assertTablesEqual("SEED", "users")
+        self.assertTablesEqual("SEED", "USERS")
         created_models = self.get_models_in_schema()
-        self.assertFalse('users_rollup' in created_models)
-        self.assertFalse('base_users' in created_models)
-        self.assertFalse('emails' in created_models)
+        self.assertFalse('USERS_ROLLUP' in created_models)
+        self.assertFalse('BASE_USERS' in created_models)
+        self.assertFalse('EMAILS' in created_models)
 
 
     @attr(type='postgres')
@@ -67,12 +67,12 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertEqual(len(results),  2)
 
         self.assertManyTablesEqual(
-            ["SEED", "users"],
-            ["SUMMARY_EXPECTED", "users_rollup"]
+            ["SEED", "USERS"],
+            ["SUMMARY_EXPECTED", "USERS_ROLLUP"]
         )
         created_models = self.get_models_in_schema()
-        self.assertFalse('base_users' in created_models)
-        self.assertFalse('emails' in created_models)
+        self.assertFalse('BASE_USERS' in created_models)
+        self.assertFalse('EMAILS' in created_models)
 
 
     @attr(type='postgres')
@@ -100,13 +100,13 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertEqual(len(results),  2)
 
         self.assertManyTablesEqual(
-            ["SEED", "users"],
-            ["SUMMARY_EXPECTED", "users_rollup"]
+            ["SEED", "USERS"],
+            ["SUMMARY_EXPECTED", "USERS_ROLLUP"]
         )
 
         created_models = self.get_models_in_schema()
-        self.assertFalse('base_users' in created_models)
-        self.assertFalse('emails' in created_models)
+        self.assertFalse('BASE_USERS' in created_models)
+        self.assertFalse('EMAILS' in created_models)
 
 
     @attr(type='postgres')
@@ -137,8 +137,8 @@ class TestGraphSelection(DBTIntegrationTest):
         )
         self.assertEqual(len(results),  1)
 
-        self.assertManyTablesEqual(["SEED", "users"])
+        self.assertManyTablesEqual(["SEED", "USERS"])
         created_models = self.get_models_in_schema()
-        self.assertFalse('base_users' in created_models)
-        self.assertFalse('users_rollup' in created_models)
-        self.assertFalse('emails' in created_models)
+        self.assertFalse('BASE_USERS' in created_models)
+        self.assertFalse('USERS_ROLLUP' in created_models)
+        self.assertFalse('EMAILS' in created_models)

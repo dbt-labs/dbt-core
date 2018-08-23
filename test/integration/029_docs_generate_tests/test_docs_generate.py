@@ -1,3 +1,4 @@
+from __future__ import unicode_literals
 import json
 import os
 from datetime import datetime, timedelta
@@ -43,7 +44,10 @@ class TestDocsGenerate(DBTIntegrationTest):
         }
 
     def run_and_generate(self, extra=None, seed_count=1, model_count=1):
-        project = {"data-paths": [self.dir("seed")]}
+        project = {
+            "data-paths": [self.dir("seed")],
+            'macro-paths': [self.dir('macros')]
+        }
         if extra:
             project.update(extra)
         self.use_default_project(project)
@@ -528,14 +532,110 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'description': '',
                     'columns': {},
                 },
+                'test.test.not_null_model_id': {
+                    'alias': 'not_null_model_id',
+                    'column_name': 'id',
+                    'columns': {},
+                    'config': {
+                        'column_types': {},
+                        'enabled': True,
+                        'materialized': 'view',
+                        'post-hook': [],
+                        'pre-hook': [],
+                        'quoting': {},
+                        'vars': {}
+                    },
+                    'depends_on': {'macros': [], 'nodes': ['model.test.model']},
+                    'description': '',
+                    'empty': False,
+                    'fqn': ['test', 'schema_test', 'not_null_model_id'],
+                    'name': 'not_null_model_id',
+                    'original_file_path': self.dir('models/schema.yml'),
+                    'package_name': 'test',
+                    'path': os.path.normpath('schema_test/not_null_model_id.sql'),
+                    'raw_sql': "{{ test_not_null(model=ref('model'), column_name='id') }}",
+                    'refs': [['model']],
+                    'resource_type': 'test',
+                    'root_path': os.getcwd(),
+                    'schema': my_schema_name,
+                    'tags': ['schema'],
+                    'unique_id': 'test.test.not_null_model_id'
+                },
+                'test.test.test_nothing_model_': {
+                    'alias': 'test_nothing_model_',
+                    'columns': {},
+                    'config': {
+                        'column_types': {},
+                        'enabled': True,
+                        'materialized': 'view',
+                        'post-hook': [],
+                        'pre-hook': [],
+                        'quoting': {},
+                        'vars': {}
+                    },
+                    'depends_on': {'macros': [], 'nodes': ['model.test.model']},
+                    'description': '',
+                    'empty': False,
+                    'fqn': ['test', 'schema_test', 'test_nothing_model_'],
+                    'name': 'test_nothing_model_',
+                    'original_file_path': self.dir('models/schema.yml'),
+                    'package_name': 'test',
+                    'path': os.path.normpath('schema_test/test_nothing_model_.sql'),
+                    'raw_sql': "{{ test_test_nothing(model=ref('model'), ) }}",
+                    'refs': [['model']],
+                    'resource_type': 'test',
+                    'root_path': os.getcwd(),
+                    'schema': my_schema_name,
+                    'tags': ['schema'],
+                    'unique_id': 'test.test.test_nothing_model_'
+                },
+                'test.test.unique_model_id': {
+                    'alias': 'unique_model_id',
+                    'column_name': 'id',
+                    'columns': {},
+                    'config': {
+                        'column_types': {},
+                        'enabled': True,
+                        'materialized': 'view',
+                        'post-hook': [],
+                        'pre-hook': [],
+                        'quoting': {},
+                        'vars': {}
+                    },
+                    'depends_on': {'macros': [], 'nodes': ['model.test.model']},
+                    'description': '',
+                    'empty': False,
+                    'fqn': ['test', 'schema_test', 'unique_model_id'],
+                    'name': 'unique_model_id',
+                    'original_file_path': self.dir('models/schema.yml'),
+                    'package_name': 'test',
+                    'path': os.path.normpath('schema_test/unique_model_id.sql'),
+                    'raw_sql': "{{ test_unique(model=ref('model'), column_name='id') }}",
+                    'refs': [['model']],
+                    'resource_type': 'test',
+                    'root_path': os.getcwd(),
+                    'schema': my_schema_name,
+                    'tags': ['schema'],
+                    'unique_id': 'test.test.unique_model_id'
+                },
             },
             'parent_map': {
                 'model.test.model': ['seed.test.seed'],
                 'seed.test.seed': [],
+                'test.test.not_null_model_id': ['model.test.model'],
+                'test.test.test_nothing_model_': ['model.test.model'],
+                'test.test.unique_model_id': ['model.test.model'],
             },
             'child_map': {
-                'model.test.model': [],
+                'model.test.model': [
+                    'test.test.not_null_model_id',
+                    'test.test.test_nothing_model_',
+                    'test.test.unique_model_id',
+                ],
                 'seed.test.seed': ['model.test.model'],
+                'test.test.not_null_model_id': [],
+                'test.test.test_nothing_model_': [],
+                'test.test.unique_model_id': [],
             },
             'docs': {},
             'metadata': {
@@ -1054,7 +1154,7 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         if self.adapter_type == 'snowflake':
             status = 'SUCCESS 1'
-
+            compiled_sql = compiled_sql.replace('"', '')
         if self.adapter_type == 'bigquery':
             status = 'OK'
             compiled_sql = '\n\nselect * from `{}`.`{}`.seed'.format(

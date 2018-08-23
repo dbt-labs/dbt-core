@@ -75,11 +75,11 @@ def get_model_name_or_none(model):
     return name
 
 
-def compiler_warning(model, msg):
+def compiler_warning(model, msg, resource_type='model'):
     name = get_model_name_or_none(model)
     logger.info(
-        "* Compilation warning while compiling model {}:\n* {}\n"
-        .format(name, msg)
+        "* Compilation warning while compiling {} {}:\n* {}\n"
+        .format(resource_type, name, msg)
     )
 
 

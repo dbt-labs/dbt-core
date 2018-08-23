@@ -56,13 +56,13 @@ class TestSimpleCopy(DBTIntegrationTest):
         self.run_dbt(["seed"])
         self.run_dbt()
 
-        self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized"])
+        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED"])
 
         self.use_default_project({"data-paths": [self.dir("seed-update")]})
         self.run_dbt(["seed"])
         self.run_dbt()
 
-        self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized"])
+        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED"])
 
     @use_profile("snowflake")
     def test__snowflake__simple_copy__quoting_on(self):
@@ -180,13 +180,13 @@ class TestSimpleCopyLowercasedSchema(DBTIntegrationTest):
         self.run_dbt(["seed"])
         self.run_dbt()
 
-        self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized"])
+        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED"])
 
         self.use_default_project({"data-paths": [self.dir("seed-update")]})
         self.run_dbt(["seed"])
         self.run_dbt()
 
-        self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized"])
+        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED"])
 
     @use_profile("snowflake")
     def test__snowflake__seed__quoting_switch_schema(self):
