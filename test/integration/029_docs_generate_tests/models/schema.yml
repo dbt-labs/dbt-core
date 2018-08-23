@@ -18,4 +18,4 @@ models:
       - name: updated_at
         description: The last time this user's email was updated
     tests:
-      - test.test_nothing
+      - test.nothing

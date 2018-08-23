@@ -4,6 +4,7 @@ import os
 from datetime import datetime, timedelta
 
 from test.integration.base import DBTIntegrationTest, use_profile
+from dbt.compat import basestring
 
 DATEFMT = '%Y-%m-%dT%H:%M:%S.%fZ'
 
@@ -12,6 +13,14 @@ class AnyFloat(object):
     """
     def __eq__(self, other):
         return isinstance(other, float)
+
+
+class AnyStringWith(object):
+    def __init__(self, contains):
+        self.contains = contains
+
+    def __eq__(self, other):
+        return isinstance(other, basestring) and self.contains in other
 
 
 class TestDocsGenerate(DBTIntegrationTest):
@@ -53,8 +62,9 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.use_default_project(project)
 
         self.assertEqual(len(self.run_dbt(["seed"])), seed_count)
-        self.run_start_time = datetime.utcnow()
         self.assertEqual(len(self.run_dbt()), model_count)
+        os.remove(os.path.normpath('target/manifest.json'))
+        os.remove(os.path.normpath('target/run_results.json'))
         self.generate_start_time = datetime.utcnow()
         self.run_dbt(['docs', 'generate'])
 
@@ -561,8 +571,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'tags': ['schema'],
                     'unique_id': 'test.test.not_null_model_id'
                 },
-                'test.test.test_nothing_model_': {
-                    'alias': 'test_nothing_model_',
+                'test.test.nothing_model_': {
+                    'alias': 'nothing_model_',
                     'columns': {},
                     'config': {
                         'column_types': {},
@@ -576,18 +586,18 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'depends_on': {'macros': [], 'nodes': ['model.test.model']},
                     'description': '',
                     'empty': False,
-                    'fqn': ['test', 'schema_test', 'test_nothing_model_'],
-                    'name': 'test_nothing_model_',
+                    'fqn': ['test', 'schema_test', 'nothing_model_'],
+                    'name': 'nothing_model_',
                     'original_file_path': self.dir('models/schema.yml'),
                     'package_name': 'test',
-                    'path': os.path.normpath('schema_test/test_nothing_model_.sql'),
-                    'raw_sql': "{{ test_test_nothing(model=ref('model'), ) }}",
+                    'path': os.path.normpath('schema_test/nothing_model_.sql'),
+                    'raw_sql': "{{ test_nothing(model=ref('model'), ) }}",
                     'refs': [['model']],
                     'resource_type': 'test',
                     'root_path': os.getcwd(),
                     'schema': my_schema_name,
                     'tags': ['schema'],
-                    'unique_id': 'test.test.test_nothing_model_'
+                    'unique_id': 'test.test.nothing_model_'
                 },
                 'test.test.unique_model_id': {
                     'alias': 'unique_model_id',
@@ -616,25 +626,25 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'root_path': os.getcwd(),
                     'schema': my_schema_name,
                     'tags': ['schema'],
-                    'unique_id': 'test.test.unique_model_id'
+                    'unique_id': 'test.test.unique_model_id',
                 },
             },
             'parent_map': {
                 'model.test.model': ['seed.test.seed'],
                 'seed.test.seed': [],
                 'test.test.not_null_model_id': ['model.test.model'],
-                'test.test.test_nothing_model_': ['model.test.model'],
+                'test.test.nothing_model_': ['model.test.model'],
                 'test.test.unique_model_id': ['model.test.model'],
             },
             'child_map': {
                 'model.test.model': [
                     'test.test.not_null_model_id',
-                    'test.test.test_nothing_model_',
+                    'test.test.nothing_model_',
                     'test.test.unique_model_id',
                 ],
                 'seed.test.seed': ['model.test.model'],
                 'test.test.not_null_model_id': [],
-                'test.test.test_nothing_model_': [],
+                'test.test.nothing_model_': [],
                 'test.test.unique_model_id': [],
             },
             'docs': {},
@@ -832,7 +842,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'schema': my_schema_name,
                     'tags': [],
                     'unique_id': 'seed.test.seed'
-                }
+                },
             },
             'docs': {
                 'test.ephemeral_summary': {
@@ -1139,8 +1149,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         }
         self.assertBetween(
             manifest['generated_at'],
-            start=self.run_start_time,
-            end=self.generate_start_time
+            start=self.generate_start_time
         )
         self.assertEqual(manifest_without_extras, expected_manifest)
 
@@ -1160,6 +1169,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             compiled_sql = '\n\nselect * from `{}`.`{}`.seed'.format(
                 self._profile['project'], schema
             )
+        status = None
 
         return [
             {
@@ -1216,7 +1226,179 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'skip': False,
                 'status': status,
-            }
+            },
+            {
+                'error': None,
+                'execution_time': AnyFloat(),
+                'fail': None,
+                'node': {
+                    'alias': 'seed',
+                    'build_path': os.path.normpath(
+                        'target/compiled/test/seed.csv'
+                    ),
+                    'columns': {},
+                    'compiled': True,
+                    'compiled_sql': '-- csv --',
+                    'config': {
+                        'column_types': {},
+                        'enabled': True,
+                        'materialized': 'seed',
+                        'post-hook': [],
+                        'pre-hook': [],
+                        'quoting': {},
+                        'vars': {},
+                    },
+                    'depends_on': {'macros': [], 'nodes': []},
+                    'description': '',
+                    'empty': False,
+                    'extra_ctes': [],
+                    'extra_ctes_injected': True,
+                    'fqn': ['test', 'seed'],
+                    'injected_sql': '-- csv --',
+                    'name': 'seed',
+                    'original_file_path': self.dir('seed/seed.csv'),
+                    'package_name': 'test',
+                    'path': 'seed.csv',
+                    'raw_sql': '-- csv --',
+                    'refs': [],
+                    'resource_type': 'seed',
+                    'root_path': os.getcwd(),
+                    'schema': schema,
+                    'tags': [],
+                    'unique_id': 'seed.test.seed',
+                    'wrapped_sql': 'None'
+                },
+                'skip': False,
+                'status': None,
+            },
+            {
+                'error': None,
+                'execution_time': AnyFloat(),
+                'fail': None,
+                'node': {
+                    'alias': 'not_null_model_id',
+                     'build_path': os.path.normpath('target/compiled/test/schema_test/not_null_model_id.sql'),
+                     'column_name': 'id',
+                     'columns': {},
+                     'compiled': True,
+                     'compiled_sql': AnyStringWith('id is null'),
+                     'config': {
+                        'column_types': {},
+                        'enabled': True,
+                        'materialized': 'view',
+                        'post-hook': [],
+                        'pre-hook': [],
+                        'quoting': {},
+                        'vars': {}
+                    },
+                    'depends_on': {'macros': [], 'nodes': ['model.test.model']},
+                    'description': '',
+                    'empty': False,
+                    'extra_ctes': [],
+                    'extra_ctes_injected': True,
+                    'fqn': ['test', 'schema_test', 'not_null_model_id'],
+                    'injected_sql': AnyStringWith('id is null'),
+                    'name': 'not_null_model_id',
+                    'original_file_path': self.dir('models/schema.yml'),
+                    'package_name': 'test',
+                    'path': os.path.normpath('schema_test/not_null_model_id.sql'),
+                    'raw_sql': "{{ test_not_null(model=ref('model'), column_name='id') }}",
+                    'refs': [['model']],
+                    'resource_type': 'test',
+                    'root_path': os.getcwd(),
+                    'schema': schema,
+                    'tags': ['schema'],
+                    'unique_id': 'test.test.not_null_model_id',
+                    'wrapped_sql': AnyStringWith('id is null')
+                },
+                'skip': False,
+                'status': None,
+            },
+            {
+                'error': None,
+                'execution_time': AnyFloat(),
+                'fail': None,
+                'node': {
+                    'alias': 'nothing_model_',
+                    'build_path': os.path.normpath('target/compiled/test/schema_test/nothing_model_.sql'),
+                    'columns': {},
+                    'compiled': True,
+                    'compiled_sql': AnyStringWith('select 0'),
+                    'config': {
+                        'column_types': {},
+                        'enabled': True,
+                        'materialized': 'view',
+                        'post-hook': [],
+                        'pre-hook': [],
+                        'quoting': {},
+                        'vars': {}
+                    },
+                    'depends_on': {'macros': [], 'nodes': ['model.test.model']},
+                    'description': '',
+                    'empty': False,
+                    'extra_ctes': [],
+                    'extra_ctes_injected': True,
+                    'fqn': ['test', 'schema_test', 'nothing_model_'],
+                    'injected_sql':  AnyStringWith('select 0'),
+                    'name': 'nothing_model_',
+                    'original_file_path': self.dir('models/schema.yml'),
+                    'package_name': 'test',
+                    'path': os.path.normpath('schema_test/nothing_model_.sql'),
+                    'raw_sql': "{{ test_nothing(model=ref('model'), ) }}",
+                    'refs': [['model']],
+                    'resource_type': 'test',
+                    'root_path': os.getcwd(),
+                    'schema': schema,
+                    'tags': ['schema'],
+                    'unique_id': 'test.test.nothing_model_',
+                    'wrapped_sql':  AnyStringWith('select 0'),
+                },
+                'skip': False,
+                'status': None
+            },
+            {
+                'error': None,
+                'execution_time': AnyFloat(),
+                'fail': None,
+                'node': {
+                    'alias': 'unique_model_id',
+                    'build_path': os.path.normpath('target/compiled/test/schema_test/unique_model_id.sql'),
+                    'column_name': 'id',
+                    'columns': {},
+                    'compiled': True,
+                    'compiled_sql': AnyStringWith('count(*)'),
+                    'config': {
+                        'column_types': {},
+                        'enabled': True,
+                        'materialized': 'view',
+                        'post-hook': [],
+                        'pre-hook': [],
+                        'quoting': {},
+                        'vars': {},
+                    },
+                    'depends_on': {'macros': [], 'nodes': ['model.test.model']},
+                    'description': '',
+                    'empty': False,
+                    'extra_ctes': [],
+                    'extra_ctes_injected': True,
+                    'fqn': ['test', 'schema_test', 'unique_model_id'],
+                    'injected_sql': AnyStringWith('count(*)'),
+                    'name': 'unique_model_id',
+                    'original_file_path': self.dir('models/schema.yml'),
+                    'package_name': 'test',
+                    'path': os.path.normpath('schema_test/unique_model_id.sql'),
+                    'raw_sql': "{{ test_unique(model=ref('model'), column_name='id') }}",
+                    'refs': [['model']],
+                    'resource_type': 'test',
+                    'root_path': os.getcwd(),
+                    'schema': schema,
+                    'tags': ['schema'],
+                    'unique_id': 'test.test.unique_model_id',
+                    'wrapped_sql': AnyStringWith('count(*)')
+                },
+                'skip': False,
+                'status': None,
+            },
         ]
 
     def expected_postgres_references_run_results(self):
@@ -1322,7 +1504,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'wrapped_sql': 'None',
                 },
                 'skip': False,
-                'status': 'SELECT 1',
+                'status': None,
             },
             {
                 'error': None,
@@ -1403,7 +1585,51 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'wrapped_sql': 'None',
                 },
                 'skip': False,
-                'status': 'CREATE VIEW',
+                'status': None,
+            },
+            {
+                'error': None,
+                'execution_time': AnyFloat(),
+                'fail': None,
+                'node': {
+                    'alias': 'seed',
+                    'build_path': os.path.normpath(
+                        'target/compiled/test/seed.csv'
+                    ),
+                    'columns': {},
+                    'compiled': True,
+                    'compiled_sql': '-- csv --',
+                    'config': {
+                        'column_types': {},
+                        'enabled': True,
+                        'materialized': 'seed',
+                        'post-hook': [],
+                        'pre-hook': [],
+                        'quoting': {},
+                        'vars': {},
+                    },
+                    'depends_on': {'macros': [], 'nodes': []},
+                    'description': '',
+                    'empty': False,
+                    'extra_ctes': [],
+                    'extra_ctes_injected': True,
+                    'fqn': ['test', 'seed'],
+                    'injected_sql': '-- csv --',
+                    'name': 'seed',
+                    'original_file_path': self.dir('seed/seed.csv'),
+                    'package_name': 'test',
+                    'path': 'seed.csv',
+                    'raw_sql': '-- csv --',
+                    'refs': [],
+                    'resource_type': 'seed',
+                    'root_path': os.getcwd(),
+                    'schema': my_schema_name,
+                    'tags': [],
+                    'unique_id': 'seed.test.seed',
+                    'wrapped_sql': 'None'
+                },
+                'skip': False,
+                'status': None,
             },
         ]
 
@@ -1415,8 +1641,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.assertIn('elapsed_time', run_result)
         self.assertBetween(
             run_result['generated_at'],
-            start=self.run_start_time,
-            end=self.generate_start_time
+            start=self.generate_start_time
         )
         self.assertGreater(run_result['elapsed_time'], 0)
         self.assertTrue(
@@ -1424,6 +1649,8 @@ class TestDocsGenerate(DBTIntegrationTest):
             "run_result['elapsed_time'] is of type {}, expected float".format(
                 str(type(run_result['elapsed_time'])))
         )
+        # sort the results so we can make reasonable assertions
+        run_result['results'].sort(key=lambda r: r['node']['unique_id'])
         self.assertEqual(run_result['results'], expected_run_results)
 
     @use_profile('postgres')
@@ -1464,8 +1691,9 @@ class TestDocsGenerate(DBTIntegrationTest):
     def test__bigquery__nested_models(self):
         self.use_default_project({'source-paths': [self.dir('bq_models')]})
 
-        self.run_start_time = datetime.utcnow()
         self.assertEqual(len(self.run_dbt()), 2)
+        os.remove(os.path.normpath('target/manifest.json'))
+        os.remove(os.path.normpath('target/run_results.json'))
         self.generate_start_time = datetime.utcnow()
         self.run_dbt(['docs', 'generate'])
 
