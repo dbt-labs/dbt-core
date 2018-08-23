@@ -18,7 +18,6 @@ from dbt.utils import filter_null_values
 from dbt.adapters.default.relation import DefaultRelation
 
 GET_CATALOG_OPERATION_NAME = 'get_catalog_data'
-GET_CATALOG_RESULT_KEY = 'catalog'  # defined in get_catalog() macro
 
 lock = multiprocessing.Lock()
 connections_in_use = {}
@@ -799,8 +798,7 @@ class DefaultAdapter(object):
     # Operations involving the manifest
     ###
     @classmethod
-    def run_operation(cls, profile, project_cfg, manifest, operation_name,
-                      result_key):
+    def run_operation(cls, profile, project_cfg, manifest, operation_name):
         """Look the operation identified by operation_name up in the manifest
         and run it.
 
@@ -818,9 +816,7 @@ class DefaultAdapter(object):
             manifest,
         )
 
-        operation.generator(context)()
-
-        result = context['load_result'](result_key)
+        result = operation.generator(context)()
         return result
 
     ###
@@ -829,14 +825,15 @@ class DefaultAdapter(object):
     @classmethod
     def get_catalog(cls, profile, project_cfg, manifest):
         try:
-            results = cls.run_operation(profile, project_cfg, manifest,
-                                        GET_CATALOG_OPERATION_NAME,
-                                        GET_CATALOG_RESULT_KEY)
+            table = cls.run_operation(profile, project_cfg, manifest,
+                                      GET_CATALOG_OPERATION_NAME)
         finally:
             cls.release_connection(profile, GET_CATALOG_OPERATION_NAME)
+
         schemas = list({
-            node.to_dict()['schema']
+            node.schema.lower()
             for node in manifest.nodes.values()
         })
-        results = results.table.where(lambda r: r['table_schema'] in schemas)
+
+        results = table.where(lambda r: r['table_schema'].lower() in schemas)
         return results
