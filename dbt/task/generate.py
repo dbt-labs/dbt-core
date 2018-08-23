@@ -12,6 +12,7 @@ import dbt.compilation
 import dbt.exceptions
 
 from dbt.task.base_task import BaseTask
+from dbt.task.compile import CompileTask
 
 
 CATALOG_FILENAME = 'catalog.json'
@@ -26,6 +27,66 @@ def get_stripped_prefix(source, prefix):
         k[cut:]: v for k, v in source.items()
         if k.startswith(prefix)
     }
+
+
+def format_stats(stats):
+    """Given a dictionary following this layout:
+
+        {
+            'encoded:label': 'Encoded',
+            'encoded:value': 'Yes',
+            'encoded:description': 'Indicates if the column is encoded',
+            'encoded:include': True,
+
+            'size:label': 'Size',
+            'size:value': 128,
+            'size:description': 'Size of the table in MB',
+            'size:include': True,
+        }
+
+    format_stats will convert the dict into this structure:
+
+        {
+            'encoded': {
+                'id': 'encoded',
+                'label': 'Encoded',
+                'value': 'Yes',
+                'description': 'Indicates if the column is encoded',
+                'include': True
+            },
+            'size': {
+                'id': 'size',
+                'label': 'Size',
+                'value': 128,
+                'description': 'Size of the table in MB',
+                'include': True
+            }
+        }
+    """
+    stats_collector = {}
+    for stat_key, stat_value in stats.items():
+        stat_id, stat_field = stat_key.split(":")
+
+        stats_collector.setdefault(stat_id, {"id": stat_id})
+        stats_collector[stat_id][stat_field] = stat_value
+
+    # strip out all the stats we don't want
+    stats_collector = {
+        stat_id: stats
+        for stat_id, stats in stats_collector.items()
+        if stats.get('include', False)
+    }
+
+    # we always have a 'has_stats' field, it's never included
+    has_stats = {
+        'id': 'has_stats',
+        'label': 'Has Stats?',
+        'value': len(stats_collector) > 0,
+        'description': 'Indicates whether there are statistics for this table',
+        'include': False,
+    }
+    stats_collector['has_stats'] = has_stats
+    return stats_collector
 
 
 def unflatten(columns):
@@ -82,7 +143,15 @@ def unflatten(columns):
 
         if table_name not in schema:
             metadata = get_stripped_prefix(entry, 'table_')
-            schema[table_name] = {'metadata': metadata, 'columns': {}}
+            stats = get_stripped_prefix(entry, 'stats:')
+            stats_dict = format_stats(stats)
+
+            schema[table_name] = {
+                'metadata': metadata,
+                'stats': stats_dict,
+                'columns': {}
+            }
+
         table = schema[table_name]
 
         column = get_stripped_prefix(entry, 'column_')
@@ -116,7 +185,7 @@ def incorporate_catalog_unique_ids(catalog, manifest):
     return nodes
 
 
-class GenerateTask(BaseTask):
+class GenerateTask(CompileTask):
     def _get_manifest(self):
         compiler = dbt.compilation.Compiler(self.project)
         compiler.initialize()
@@ -127,6 +196,15 @@ class GenerateTask(BaseTask):
         return manifest
 
     def run(self):
+        compile_results = None
+        if self.args.compile:
+            compile_results = super(GenerateTask, self).run()
+            if any(r.errored for r in compile_results):
+                dbt.ui.printer.print_timestamped_line(
+                    'compile failed, cannot generate docs'
+                )
+                return {'compile_results': compile_results}
+
         shutil.copyfile(
             DOCS_INDEX_FILE_PATH,
             os.path.join(self.project['target-path'], 'index.html'))
@@ -155,5 +233,15 @@ class GenerateTask(BaseTask):
         dbt.ui.printer.print_timestamped_line(
             'Catalog written to {}'.format(os.path.abspath(path))
         )
+        # now that we've serialized the data we can add compile_results in to
+        # make interpret_results happy.
+        results['compile_results'] = compile_results
 
         return results
+
+    def interpret_results(self, results):
+        compile_results = results.get('compile_results')
+        if compile_results is None:
+            return True
+
+        return super(GenerateTask, self).interpret_results(compile_results)
