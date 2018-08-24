@@ -2,11 +2,14 @@
 
 from argparse import ArgumentParser
 import logging
+import re
 import sys
 import yaml
 
 LOGGER = logging.getLogger('upgrade_dbt_schema')
 LOGFILE = 'upgrade_dbt_schema_tests_v1_to_v2.txt'
+
+COLUMN_NAME_PAT = re.compile(r'\A[a-zA-Z0-9_]+\Z')
 
 # compatibility nonsense
 try:
@@ -149,11 +152,11 @@ class ModelTestBuilder(object):
         column = self.get_column(column_name)
         column['tests'].append(test_name)
 
-    def handle_simple_column(self, test_values, test_name):
+    def handle_simple_column(self, test_name, test_values):
         for column_name in test_values:
             self.add_test(column_name, test_name)
 
-    def handle_complex_column(self, test_values, test_name):
+    def handle_complex_column(self, test_name, test_values):
         """'complex' columns are lists of dicts, where each dict has a single
         key (the test name) and the value of that key is a dict of test values.
         """
@@ -172,6 +175,9 @@ class ModelTestBuilder(object):
 
             self.add_test(column_name, value)
 
+    def handle_unknown_test(self, test_name, test_values):
+        raise NotImplementedError('TODO...')
+
     def populate_test(self, test_name, test_values):
         # if test_values isn't a list, this is not an ok schema
         if not isinstance(test_values, list):
@@ -182,13 +188,15 @@ class ModelTestBuilder(object):
                 )
             )
         if test_name in self.SIMPLE_COLUMN_TESTS:
-            self.handle_simple_column(test_values, test_name)
+            self.handle_simple_column(test_name, test_values)
         elif test_name in self.COMPLEX_COLUMN_TESTS:
-            # import ipdb;ipdb.set_trace()
-            self.handle_complex_column(test_values, test_name)
+            self.handle_complex_column(test_name, test_values)
         else:
-            ## TODO: implement...
-            raise ValueError('cannot handle any other tests')
+            if all(COLUMN_NAME_PAT.match(v) for v in test_values):
+                # looks like a simple test to me
+                self.handle_simple_column(test_name, test_values)
+            else:
+                self.handle_unknown_test(test_name, test_values)
 
     def populate_from_constraints(self, constraints):
         for test_name, test_values in constraints.items():
@@ -241,6 +249,9 @@ foo:
         accepted_values:
             - { field: favorite_color, values: ['blue', 'green'] }
             - { field: likes_puppies, values: ['yes'] }
+        simple_custom:
+            - id
+            - favorite_color
 
 bar:
     constraints:
@@ -275,22 +286,32 @@ class TestConvert(unittest.TestCase):
                 'columns': [
                     {
                         'name': 'email',
-                        'tests': ['not_null', 'unique'],
+                        'tests': [
+                            'not_null',
+                            'unique',
+                        ],
                     },
                     {
                         'name': 'favorite_color',
                         'tests': [
                             {'accepted_values': {'values': ['blue', 'green']}},
-                            'not_null'
+                            'not_null',
+                            'simple_custom',
                         ],
                     },
                     {
                         'name': 'id',
-                        'tests': ['not_null', 'unique'],
+                        'tests': [
+                            'not_null',
+                            'simple_custom',
+                            'unique',
+                        ],
                     },
                     {
                         'name': 'likes_puppies',
-                        'tests': [{'accepted_values': {'values': ['yes']}}]
+                        'tests': [
+                            {'accepted_values': {'values': ['yes']}},
+                        ]
                     },
                 ],
             },
