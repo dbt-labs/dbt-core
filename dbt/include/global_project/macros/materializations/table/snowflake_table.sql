@@ -1,4 +1,4 @@
-{% materialization table, default %}
+{% materialization table, adapter='snowflake' %}
   {%- set identifier = model['alias'] -%}
   {%- set tmp_identifier = identifier + '__dbt_tmp' -%}
   {%- set backup_identifier = identifier + '__dbt_backup' -%}
@@ -68,7 +68,14 @@
     -- noop
   {%- else -%}
     {% if old_relation is not none %}
+      {% if old_relation.type == 'view' %}
+        {#-- This is the primary difference between Snowflake and Redshift. Renaming this view
+          -- would cause an error if the view has become invalid due to upstream schema changes #}
+        {{ log("Dropping relation " ~ old_relation ~ " because it is a view and this model is a table.") }}
+        {{ drop_relation_if_exists(old_relation) }}
+      {% else %}
         {{ adapter.rename_relation(target_relation, backup_relation) }}
+      {% endif %}
     {% endif %}
 
     {{ adapter.rename_relation(intermediate_relation, target_relation) }}
