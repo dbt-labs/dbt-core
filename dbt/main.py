@@ -72,6 +72,9 @@ def handle(args):
 
 def handle_and_check(args):
     parsed = parse_args(args)
+    if parsed.version:
+        print(dbt.version.get_version_information())
+        return None, True
 
     # this needs to happen after args are parsed so we can determine the
     # correct profiles.yml file
@@ -258,8 +261,7 @@ def parse_args(args):
 
     p.add_argument(
         '--version',
-        action='version',
-        version=dbt.version.get_version_information(),
+        action='store_true',
         help="Show version information")
 
     p.add_argument(
