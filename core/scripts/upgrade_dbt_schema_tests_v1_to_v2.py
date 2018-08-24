@@ -7,8 +7,8 @@ import re
 import sys
 import yaml
 
-LOGGER = logging.getLogger('upgrade_dbt_schema')
-LOGFILE = 'upgrade_dbt_schema_tests_v1_to_v2.txt'
+LOGGER = logging.getLogger("upgrade_dbt_schema")
+LOGFILE = "upgrade_dbt_schema_tests_v1_to_v2.txt"
 
 COLUMN_NAME_PAT = re.compile(r'\A[a-zA-Z0-9_]+\Z')
 
@@ -45,12 +45,12 @@ def setup_logging(filename):
 
 
 def parse_args(args):
-    parser = ArgumentParser(description='dbt schema converter')
+    parser = ArgumentParser(description="dbt schema converter")
     parser.add_argument(
-        '--logfile-path',
-        dest='logfile_path',
-        help='The path to write the logfile to',
-        default=LOGFILE
+        "--logfile-path",
+        dest="logfile_path",
+        help="The path to write the logfile to",
+        default=LOGFILE,
     )
     parser.add_argument(
         '--no-backup',
@@ -60,7 +60,7 @@ def parse_args(args):
     )
     parser.add_argument(
         '--apply',
-        action='store_true',
+        action="store_true",
         help=('if set, apply changes instead of just logging about found '
               'schema.yml files')
     )
@@ -173,7 +173,7 @@ def convert_file(path, backup, write, extra_complex_tests):
     with open(path) as fp:
         initial = yaml.safe_load(fp)
 
-    version = initial.get('version', 1)
+    version = initial.get("version", 1)
     # the isinstance check is to handle the case of models named 'version'
     if version == 2:
         msg = '{} - already v2, no need to update'.format(path)
@@ -214,8 +214,8 @@ def main(args=None):
         handle(parsed)
     except OperationalError as exc:
         LOGGER.error(exc.message)
-    except:
-        LOGGER.exception('Fatal error during conversion attempt')
+    except:  # noqa: E722
+        LOGGER.exception("Fatal error during conversion attempt")
     else:
         LOGGER.info('successfully converted files in {}'.format(
             parsed.search_directory
@@ -231,19 +231,19 @@ def sort_keyfunc(item):
 
 def sorted_column_list(column_dict):
     columns = []
-    for column in sorted(column_dict.values(), key=lambda c: c['name']):
+    for column in sorted(column_dict.values(), key=lambda c: c["name"]):
         # make the unit tests a lot nicer.
-        column['tests'].sort(key=sort_keyfunc)
+        column["tests"].sort(key=sort_keyfunc)
         columns.append(CustomSortedColumnsSchema(**column))
     return columns
 
 
 class ModelTestBuilder:
-    SIMPLE_COLUMN_TESTS = {'unique', 'not_null'}
+    SIMPLE_COLUMN_TESTS = {"unique", "not_null"}
     # map test name -> the key that indicates column name
     COMPLEX_COLUMN_TESTS = {
-        'relationships': 'from',
-        'accepted_values': 'field',
+        "relationships": "from",
+        "accepted_values": "field",
     }
 
     def __init__(self, model_name, extra_complex_tests=None):
@@ -260,13 +260,13 @@ class ModelTestBuilder:
     def get_column(self, column_name):
         if column_name in self.columns:
             return self.columns[column_name]
-        column = {'name': column_name, 'tests': []}
+        column = {"name": column_name, "tests": []}
         self.columns[column_name] = column
         return column
 
     def add_column_test(self, column_name, test_name):
         column = self.get_column(column_name)
-        column['tests'].append(test_name)
+        column["tests"].append(test_name)
 
     def add_table_test(self, test_name, test_value):
         if not isinstance(test_value, dict):
@@ -290,8 +290,9 @@ class ModelTestBuilder:
         for dct in test_values:
             if column_key not in dct:
                 raise OperationalError(
-                    'got an invalid {} test in model {}, no "{}" value in {}'
-                    .format(test_name, self.model_name, column_key, dct)
+                    'got an invalid {} test in model {}, no "{}" value in {}'.format(
+                        test_name, self.model_name, column_key, dct
+                    )
                 )
             column_name = dct[column_key]
             # for syntax nice-ness reasons, we define these tests as single-key
@@ -342,23 +343,24 @@ class ModelTestBuilder:
             self.populate_test(test_name, test_values)
 
     def generate_model_dict(self):
-        model = {'name': self.model_name}
+        model = {"name": self.model_name}
         if self.model_tests:
-            model['tests'] = self.model_tests
+            model["tests"] = self.model_tests
 
         if self.columns:
-            model['columns'] = sorted_column_list(self.columns)
+            model["columns"] = sorted_column_list(self.columns)
         return CustomSortedModelsSchema(**model)
+
 
 def convert_schema(initial, extra_complex_tests):
     models = []
 
     for model_name, model_data in initial.items():
-        if 'constraints' not in model_data:
+        if "constraints" not in model_data:
             # don't care about this model
             continue
         builder = ModelTestBuilder(model_name, extra_complex_tests)
-        builder.populate_from_constraints(model_data['constraints'])
+        builder.populate_from_constraints(model_data["constraints"])
         model = builder.generate_model_dict()
         models.append(model)
 
@@ -400,8 +402,7 @@ for cls in (CustomSortedRootSchema, CustomSortedModelsSchema, CustomSortedColumn
     yaml.add_representer(cls, cls.representer)
 
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
 
 else:
