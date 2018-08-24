@@ -67,8 +67,10 @@ def backup_file(src, dst, overwrite):
             'backup file at {} already exists and --overwrite was not passed'
             .format(dst)
         )
+    LOGGER.debug('backing up file at {} to {}'.format(src, dst))
     with open(src, 'rb'), open(dst, 'wb') as ifp, ofp:
         ofp.write(ifp.read())
+    LOGGER.debug('backup successful')
 
 
 def handle(parsed):
@@ -79,6 +81,7 @@ def handle(parsed):
         backup_file(parsed.output_path, parsed.backup_path, parsed.overwrite)
     if not os.path.exists(parsed.input_path):
         LOGGER.error('input file at {} does not exist!'.format(parsed.input_path))
+    LOGGER.info('loading input file at {}'.format(parsed_args.input_path))
     with open(parsed_args.input_path) as fp:
         initial = yaml.safe_load(fp)
     version = initial.get('version', 1)
@@ -91,8 +94,18 @@ def handle(parsed):
         LOGGER.error('output file at {} already exists, and --overwrite was not passed')
         return
     new_file = convert_schema(initial)
+    LOGGER.debug(
+        'writing converted schema to output file at {}'.format(
+            parsed.output_path
+        )
+    )
     with open(parsed.output_path, 'w') as fp:
         yaml.safe_dump(new_file, fp)
+    LOGGER.info(
+        'successfully wrote v2 schema.yml file to {}'.format(
+            parsed.output_path
+        )
+    )
 
 
 def main(args=None):
@@ -123,7 +136,7 @@ def sort_keyfunc(item):
 def sorted_column_list(column_dict):
     columns = []
     for column in sorted(column_dict.values(), key=lambda c: c['name']):
-        # make the unit tests a lot nicer. This is horrible, sorry.
+        # make the unit tests a lot nicer.
         column['tests'].sort(key=sort_keyfunc)
         columns.append(column)
     return columns
@@ -154,6 +167,11 @@ class ModelTestBuilder(object):
 
     def handle_simple_column(self, test_name, test_values):
         for column_name in test_values:
+            LOGGER.info(
+                'found a {} test for model {}, column {}'.format(
+                    test_name, self.model_name, column_name
+                )
+            )
             self.add_test(column_name, test_name)
 
     def handle_complex_column(self, test_name, test_values):
@@ -172,14 +190,17 @@ class ModelTestBuilder(object):
             # dicts where the key is the test name.
             test_value = {k: v for k, v in dct.items() if k != column_key}
             value = {test_name: test_value}
-
+            LOGGER.info(
+                'found a test for model {}, column {} - arguments: {}'.format(
+                    self.model_name, column_name, test_value
+                )
+            )
             self.add_test(column_name, value)
 
     def handle_unknown_test(self, test_name, test_values):
         raise NotImplementedError('TODO...')
 
     def populate_test(self, test_name, test_values):
-        # if test_values isn't a list, this is not an ok schema
         if not isinstance(test_values, list):
             raise OperationalError(
                 'Expected type "list" for test values in constraints '
@@ -193,9 +214,19 @@ class ModelTestBuilder(object):
             self.handle_complex_column(test_name, test_values)
         else:
             if all(COLUMN_NAME_PAT.match(v) for v in test_values):
-                # looks like a simple test to me
+                # looks like a simple test to me!
+                LOGGER.debug(
+                    'Found custom test named {}, inferred that it only takes '
+                    'columns as arguments'.format(test_name)
+                )
                 self.handle_simple_column(test_name, test_values)
             else:
+                LOGGER.warning(
+                    'Found a custom test named {} that appears to take extra '
+                    'arguments. Converting it to a model-level test'.format(
+                        test_name
+                    )
+                )
                 self.handle_unknown_test(test_name, test_values)
 
     def populate_from_constraints(self, constraints):
