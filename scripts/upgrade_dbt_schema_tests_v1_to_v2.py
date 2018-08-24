@@ -98,7 +98,10 @@ def handle(parsed):
                     .format(version))
         return
     if os.path.exists(parsed.output_path) and not parsed.overwrite:
-        LOGGER.error('output file at {} already exists, and --overwrite was not passed')
+        LOGGER.error(
+            'output file at {} already exists, and --overwrite was not passed'
+            .format(parsed.output_path)
+        )
         return
     new_file = convert_schema(initial)
     LOGGER.debug(
