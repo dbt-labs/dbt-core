@@ -10,7 +10,7 @@ import yaml
 LOGGER = logging.getLogger("upgrade_dbt_schema")
 LOGFILE = "upgrade_dbt_schema_tests_v1_to_v2.txt"
 
-COLUMN_NAME_PAT = re.compile(r'\A[a-zA-Z0-9_]+\Z')
+COLUMN_NAME_PAT = re.compile(r"\A[a-zA-Z0-9_]+\Z")
 
 # compatibility nonsense
 try:
