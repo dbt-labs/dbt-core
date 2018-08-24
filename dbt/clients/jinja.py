@@ -126,6 +126,21 @@ class OperationExtension(jinja2.ext.Extension):
         return node
 
 
+class DocumentationExtension(jinja2.ext.Extension):
+    tags = ['docs']
+
+    def parse(self, parser):
+        node = jinja2.nodes.Macro(lineno=next(parser.stream).lineno)
+        docs_name = parser.parse_assign_target(name_only=True).name
+
+        node.args = []
+        node.defaults = []
+        node.name = dbt.utils.get_docs_macro_name(docs_name)
+        node.body = parser.parse_statements(('name:enddocs',),
+                                            drop_needle=True)
+        return node
+
+
 def create_macro_capture_env(node):
 
     class ParserMacroCapture(jinja2.Undefined):
@@ -169,6 +184,7 @@ def get_template(string, ctx, node=None, capture_macros=False):
 
         args['extensions'].append(MaterializationExtension)
         args['extensions'].append(OperationExtension)
+        args['extensions'].append(DocumentationExtension)
 
         env = MacroFuzzEnvironment(**args)
 

@@ -70,6 +70,9 @@ class Project(object):
 
         self.cfg = default_project_cfg.copy()
         self.cfg.update(cfg)
+        # docs paths defaults to the exact value of source-paths
+        if 'docs-paths' not in self.cfg:
+            self.cfg['docs-paths'] = self.cfg['source-paths'][:]
         self.profiles = default_profiles.copy()
         self.profiles.update(profiles)
         self.profiles_dir = profiles_dir
@@ -244,23 +247,6 @@ class Project(object):
             CredentialsValidator(**target_cfg)
         except dbt.exceptions.ValidationException as e:
             raise DbtProjectError(str(e), self)
-
-    def log_warnings(self):
-        target_cfg = self.run_environment()
-        db_type = target_cfg.get('type')
-
-        if db_type == 'snowflake' and self.cfg \
-                                          .get('quoting', {}) \
-                                          .get('identifier') is None:
-            msg = dbt.ui.printer.yellow(
-                'You are using Snowflake, but you did not specify a '
-                'quoting strategy for your identifiers.\nQuoting '
-                'behavior for Snowflake will change in a future release, '
-                'so it is recommended that you define this explicitly.\n\n'
-                'For more information, see: {}\n'
-            )
-
-            logger.warn(msg.format(dbt.links.SnowflakeQuotingDocs))
 
     def hashed_name(self):
         if self.cfg.get("name", None) is None:

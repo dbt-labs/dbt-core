@@ -1,10 +1,12 @@
 
-{% macro test_accepted_values(model, field, values) %}
+{% macro test_accepted_values(model, values) %}
+
+{% set column_name = kwargs.get('column_name', kwargs.get('field')) %}
 
 with all_values as (
 
     select distinct
-        {{ field }} as value_field
+        {{ column_name }} as value_field
 
     from {{ model }}
 

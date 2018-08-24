@@ -1,4 +1,5 @@
 import codecs
+import json
 
 WHICH_PYTHON = None
 
@@ -14,6 +15,11 @@ if WHICH_PYTHON == 2:
 else:
     basestring = str
     bigint = int
+
+if WHICH_PYTHON == 2:
+    from SimpleHTTPServer import SimpleHTTPRequestHandler
+else:
+    from http.server import SimpleHTTPRequestHandler
 
 
 def to_unicode(s):

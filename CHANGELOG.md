@@ -1,3 +1,13 @@
+## dbt 0.11.0 (unreleased, codename: Isaac Asimov)
+
+### Features
+
+- Extend catalog and manifest to also support Snowflake, BigQuery, and Redshift, in addition to existing Postgres support ([#866](https://github.com/fishtown-analytics/dbt/pull/866), [#857](https://github.com/fishtown-analytics/dbt/pull/857), [#849](https://github.com/fishtown-analytics/dbt/pull/849))
+- Add a 'generated_at' field to both the manifest and the catalog. ([#887](https://github.com/fishtown-analytics/dbt/pull/877))
+- Version 2 of schema.yml, which allows users to create table and column comments that end up in the manifest ([#880](https://github.com/fishtown-analytics/dbt/pull/880))
+- Add `docs` blocks that users can put into `.md` files and `doc()` value for schema v2 description fields ([#888](https://github.com/fishtown-analytics/dbt/pull/888))
+- Write out a 'run_results.json' after dbt invocations. ([#904](https://github.com/fishtown-analytics/dbt/pull/904))
+- Type inference for interpreting CSV data is now less aggressive ([#905](https://github.com/fishtown-analytics/dbt/pull/905))
 ## dbt 0.10.2 - Betsy Ross (August 3, 2018)
 
 ### Overview

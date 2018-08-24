@@ -18,6 +18,7 @@ import dbt.task.seed as seed_task
 import dbt.task.test as test_task
 import dbt.task.archive as archive_task
 import dbt.task.generate as generate_task
+import dbt.task.serve as serve_task
 
 import dbt.tracking
 import dbt.config as config
@@ -232,8 +233,6 @@ def invoke_dbt(parsed):
 
             return None
 
-    proj.log_warnings()
-
     flags.NON_DESTRUCTIVE = getattr(proj.args, 'non_destructive', False)
 
     arg_drop_existing = getattr(proj.args, 'drop_existing', False)
@@ -354,7 +353,21 @@ def parse_args(args):
     compile_sub = subs.add_parser('compile', parents=[base_subparser])
     compile_sub.set_defaults(cls=compile_task.CompileTask, which='compile')
 
-    for sub in [run_sub, compile_sub]:
+    docs_sub = subs.add_parser('docs', parents=[base_subparser])
+    docs_subs = docs_sub.add_subparsers()
+    # it might look like docs_sub is the correct parents entry, but that
+    # will cause weird errors about 'conflicting option strings'.
+    generate_sub = docs_subs.add_parser('generate', parents=[base_subparser])
+    generate_sub.set_defaults(cls=generate_task.GenerateTask,
+                              which='generate')
+    generate_sub.add_argument(
+        '--no-compile',
+        action='store_false',
+        dest='compile',
+        help='Do not run "dbt compile" as part of docs generation'
+    )
+
+    for sub in [run_sub, compile_sub, generate_sub]:
         sub.add_argument(
             '--models',
             required=False,
@@ -414,13 +427,9 @@ def parse_args(args):
     )
     seed_sub.set_defaults(cls=seed_task.SeedTask, which='seed')
 
-    docs_sub = subs.add_parser('docs', parents=[base_subparser])
-    docs_subs = docs_sub.add_subparsers()
-    # it might look like docs_sub is the correct parents entry, but that
-    # will cause weird errors about 'conflicting option strings'.
-    generate_sub = docs_subs.add_parser('generate', parents=[base_subparser])
-    generate_sub.set_defaults(cls=generate_task.GenerateTask,
-                              which='generate')
+    serve_sub = docs_subs.add_parser('serve', parents=[base_subparser])
+    serve_sub.set_defaults(cls=serve_task.ServeTask,
+                           which='serve')
 
     sub = subs.add_parser('test', parents=[base_subparser])
     sub.add_argument(

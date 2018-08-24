@@ -62,15 +62,10 @@ class TestSimpleReference(DBTIntegrationTest):
         self.assertEqual(len(results),  7)
 
         # Copies should match
-        self.assertTablesEqual("SEED", "incremental_copy")
-        self.assertTablesEqual("SEED", "materialized_copy")
-        self.assertTablesEqual("SEED", "view_copy")
-
-        # Summaries should match
-        self.assertTablesEqual("SUMMARY_EXPECTED", "incremental_summary")
-        self.assertTablesEqual("SUMMARY_EXPECTED", "materialized_summary")
-        self.assertTablesEqual("SUMMARY_EXPECTED", "view_summary")
-        self.assertTablesEqual("SUMMARY_EXPECTED", "ephemeral_summary")
+        self.assertManyTablesEqual(
+            ["SEED", "INCREMENTAL_COPY", "MATERIALIZED_COPY", "VIEW_COPY"],
+            ["SUMMARY_EXPECTED", "INCREMENTAL_SUMMARY", "MATERIALIZED_SUMMARY", "VIEW_SUMMARY", "EPHEMERAL_SUMMARY"]
+        )
 
         self.run_sql_file(
             "test/integration/003_simple_reference_test/update.sql")
@@ -78,16 +73,10 @@ class TestSimpleReference(DBTIntegrationTest):
         results = self.run_dbt()
         self.assertEqual(len(results),  7)
 
-        # Copies should match
-        self.assertTablesEqual("SEED", "incremental_copy")
-        self.assertTablesEqual("SEED", "materialized_copy")
-        self.assertTablesEqual("SEED", "view_copy")
-
-        # Summaries should match
-        self.assertTablesEqual("SUMMARY_EXPECTED", "incremental_summary")
-        self.assertTablesEqual("SUMMARY_EXPECTED", "materialized_summary")
-        self.assertTablesEqual("SUMMARY_EXPECTED", "view_summary")
-        self.assertTablesEqual("SUMMARY_EXPECTED", "ephemeral_summary")
+        self.assertManyTablesEqual(
+            ["SEED", "INCREMENTAL_COPY", "MATERIALIZED_COPY", "VIEW_COPY"],
+            ["SUMMARY_EXPECTED", "INCREMENTAL_SUMMARY", "MATERIALIZED_SUMMARY", "VIEW_SUMMARY", "EPHEMERAL_SUMMARY"]
+        )
 
     @attr(type='postgres')
     def test__postgres__simple_reference_with_models(self):
@@ -161,10 +150,10 @@ class TestSimpleReference(DBTIntegrationTest):
         self.assertEqual(len(results),  1)
 
         # Copies should match
-        self.assertTablesEqual("SEED", "materialized_copy")
+        self.assertTablesEqual("SEED", "MATERIALIZED_COPY")
 
         created_models = self.get_models_in_schema()
-        self.assertTrue('materialized_copy' in created_models)
+        self.assertTrue('MATERIALIZED_COPY' in created_models)
 
     @attr(type='snowflake')
     def test__snowflake__simple_reference_with_models_and_children(self):
@@ -181,26 +170,25 @@ class TestSimpleReference(DBTIntegrationTest):
         self.assertEqual(len(results),  3)
 
         # Copies should match
-        self.assertTablesEqual("SEED", "materialized_copy")
-
-        # Summaries should match
-        self.assertTablesEqual("SUMMARY_EXPECTED", "materialized_summary")
-        self.assertTablesEqual("SUMMARY_EXPECTED", "ephemeral_summary")
+        self.assertManyTablesEqual(
+            ["SEED", "MATERIALIZED_COPY"],
+            ["SUMMARY_EXPECTED", "MATERIALIZED_SUMMARY", "EPHEMERAL_SUMMARY"]
+        )
 
         created_models = self.get_models_in_schema()
 
-        self.assertFalse('incremental_copy' in created_models)
-        self.assertFalse('incremental_summary' in created_models)
-        self.assertFalse('view_copy' in created_models)
-        self.assertFalse('view_summary' in created_models)
+        self.assertFalse('INCREMENTAL_COPY' in created_models)
+        self.assertFalse('INCREMENTAL_SUMMARY' in created_models)
+        self.assertFalse('VIEW_COPY' in created_models)
+        self.assertFalse('VIEW_SUMMARY' in created_models)
 
         # make sure this wasn't errantly materialized
-        self.assertFalse('ephemeral_copy' in created_models)
+        self.assertFalse('EPHEMERAL_COPY' in created_models)
 
-        self.assertTrue('materialized_copy' in created_models)
-        self.assertTrue('materialized_summary' in created_models)
-        self.assertEqual(created_models['materialized_copy'], 'table')
-        self.assertEqual(created_models['materialized_summary'], 'table')
+        self.assertTrue('MATERIALIZED_COPY' in created_models)
+        self.assertTrue('MATERIALIZED_SUMMARY' in created_models)
+        self.assertEqual(created_models['MATERIALIZED_COPY'], 'table')
+        self.assertEqual(created_models['MATERIALIZED_SUMMARY'], 'table')
 
-        self.assertTrue('ephemeral_summary' in created_models)
-        self.assertEqual(created_models['ephemeral_summary'], 'table')
+        self.assertTrue('EPHEMERAL_SUMMARY' in created_models)
+        self.assertEqual(created_models['EPHEMERAL_SUMMARY'], 'table')

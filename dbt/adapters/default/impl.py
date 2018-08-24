@@ -17,12 +17,15 @@ from dbt.utils import filter_null_values
 
 from dbt.adapters.default.relation import DefaultRelation
 
+GET_CATALOG_OPERATION_NAME = 'get_catalog_data'
+
 lock = multiprocessing.Lock()
 connections_in_use = {}
 connections_available = []
 
 
 class DefaultAdapter(object):
+    DEFAULT_QUOTE = True
 
     requires = {}
 
@@ -31,6 +34,7 @@ class DefaultAdapter(object):
         "get_missing_columns",
         "expand_target_column_types",
         "create_schema",
+        "quote_as_configured",
 
         # deprecated -- use versions that take relations instead
         "already_exists",
@@ -360,16 +364,14 @@ class DefaultAdapter(object):
     ###
     @classmethod
     def get_create_schema_sql(cls, project_cfg, schema):
-        if project_cfg.get('quoting', {}).get('schema', True):
-            schema = cls.quote(schema)
+        schema = cls._quote_as_configured(project_cfg, schema, 'schema')
 
         return ('create schema if not exists {schema}'
                 .format(schema=schema))
 
     @classmethod
     def get_drop_schema_sql(cls, project_cfg, schema):
-        if project_cfg.get('quoting', {}).get('schema', True):
-            schema = cls.quote(schema)
+        schema = cls._quote_as_configured(project_cfg, schema, 'schema')
 
         return ('drop schema if exists {schema} cascade'
                 .format(schema=schema))
@@ -723,10 +725,25 @@ class DefaultAdapter(object):
         return '"{}"'.format(identifier)
 
     @classmethod
-    def quote_schema_and_table(cls, profile, project_cfg,
-                               schema, table, model_name=None):
-        return '{}.{}'.format(cls.quote(schema),
-                              cls.quote(table))
+    def _quote_as_configured(cls, project_cfg, identifier, quote_key):
+        """This is the actual implementation of quote_as_configured, without
+        the extra arguments needed for use inside materialization code.
+        """
+        if project_cfg.get('quoting', {}).get(quote_key, cls.DEFAULT_QUOTE):
+            return cls.quote(identifier)
+        else:
+            return identifier
+
+    @classmethod
+    def quote_as_configured(cls, profile, project_cfg, identifier, quote_key,
+                            model_name=None):
+        """Quote or do not quote the given identifer as configured in the
+        project config for the quote key.
+
+        The quote key should be one of 'database' (on bigquery, 'profile'),
+        'identifier', or 'schema', or it will be treated as if you set `True`.
+        """
+        return cls._quote_as_configured(project_cfg, identifier, quote_key)
 
     @classmethod
     def convert_text_type(cls, agate_table, col_idx):
@@ -781,8 +798,7 @@ class DefaultAdapter(object):
     # Operations involving the manifest
     ###
     @classmethod
-    def run_operation(cls, profile, project_cfg, manifest, operation_name,
-                      result_key):
+    def run_operation(cls, profile, project_cfg, manifest, operation_name):
         """Look the operation identified by operation_name up in the manifest
         and run it.
 
@@ -797,12 +813,10 @@ class DefaultAdapter(object):
         context = dbt.context.runtime.generate(
             operation,
             project_cfg,
-            manifest.to_flat_graph(),
+            manifest,
         )
 
-        operation.generator(context)()
-
-        result = context['load_result'](result_key)
+        result = operation.generator(context)()
         return result
 
     ###
@@ -810,5 +824,16 @@ class DefaultAdapter(object):
     ###
     @classmethod
     def get_catalog(cls, profile, project_cfg, manifest):
-        raise dbt.exceptions.NotImplementedException(
-            '`get_catalog` is not implemented for this adapter!')
+        try:
+            table = cls.run_operation(profile, project_cfg, manifest,
+                                      GET_CATALOG_OPERATION_NAME)
+        finally:
+            cls.release_connection(profile, GET_CATALOG_OPERATION_NAME)
+
+        schemas = list({
+            node.schema.lower()
+            for node in manifest.nodes.values()
+        })
+
+        results = table.where(lambda r: r['table_schema'].lower() in schemas)
+        return results

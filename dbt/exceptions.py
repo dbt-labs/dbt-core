@@ -106,6 +106,20 @@ class ValidationException(RuntimeException):
     pass
 
 
+class JSONValidationException(ValidationException):
+    def __init__(self, typename, errors):
+        self.typename = typename
+        self.errors = errors
+        self.errors_message = ', '.join(errors)
+        msg = ('Invalid arguments passed to "{}" instance: {}'.format(
+                self.typename, self.errors_message))
+        super(JSONValidationException, self).__init__(msg)
+
+    def __reduce__(self):
+        # see https://stackoverflow.com/a/36342588 for why this is necessary
+        return (JSONValidationException, (self.typename, self.errors))
+
+
 class ParsingException(Exception):
     pass
 
@@ -129,9 +143,6 @@ class NotImplementedException(Exception):
 
 class FailedToConnectException(DatabaseException):
     pass
-
-
-from dbt.utils import get_materialization  # noqa
 
 
 def raise_compiler_error(msg, node=None):
@@ -177,6 +188,28 @@ To fix this, add the following hint to the top of the model "{model_name}":
     raise_compiler_error(error_msg, model)
 
 
+def doc_invalid_args(model, args):
+    raise_compiler_error(
+        "doc() takes at most two arguments ({} given)".format(len(args)),
+        model)
+
+
+def doc_target_not_found(model, target_doc_name, target_doc_package):
+    target_package_string = ''
+
+    if target_doc_package is not None:
+        target_package_string = "in package '{}' ".format(target_doc_package)
+
+    msg = (
+        "Documentation for '{}' depends on doc '{}' {} which was not found"
+    ).format(
+        model.get('unique_id'),
+        target_doc_name,
+        target_package_string
+    )
+    raise_compiler_error(msg, model)
+
+
 def get_target_not_found_msg(model, target_model_name, target_model_package):
     target_package_string = ''
 
@@ -218,6 +251,7 @@ def macro_not_found(model, target_macro_id):
 
 
 def materialization_not_available(model, adapter_type):
+    from dbt.utils import get_materialization  # noqa
     materialization = get_materialization(model)
 
     raise_compiler_error(
@@ -227,6 +261,7 @@ def materialization_not_available(model, adapter_type):
 
 
 def missing_materialization(model, adapter_type):
+    from dbt.utils import get_materialization  # noqa
     materialization = get_materialization(model)
 
     valid_types = "'default'"
@@ -357,3 +392,58 @@ def raise_ambiguous_alias(node_1, node_2):
             duped_name,
             node_1['unique_id'], node_1['original_file_path'],
             node_2['unique_id'], node_2['original_file_path']))
+
+
+def raise_ambiguous_catalog_match(unique_id, match_1, match_2):
+
+    def get_match_string(match):
+        return "{}.{}".format(
+                match.get('metadata', {}).get('schema'),
+                match.get('metadata', {}).get('name'))
+
+    raise_compiler_error(
+        'dbt found two relations in your warehouse with similar database '
+        'identifiers. dbt\nis unable to determine which of these relations '
+        'was created by the model "{unique_id}".\nIn order for dbt to '
+        'correctly generate the catalog, one of the following relations must '
+        'be deleted or renamed:\n\n - {match_1_s}\n - {match_2_s}'.format(
+            unique_id=unique_id,
+            match_1_s=get_match_string(match_1),
+            match_2_s=get_match_string(match_2),
+        ))
+
+
+def raise_patch_targets_not_found(patches):
+    patch_list = '\n\t'.join(
+        'model {} (referenced in path {})'.format(p.name, p.original_file_path)
+        for p in patches.values()
+    )
+    raise_compiler_error(
+        'dbt could not find models for the following patches:\n\t{}'.format(
+            patch_list
+        )
+    )
+
+
+def raise_duplicate_patch_name(name, patch_1, patch_2):
+    raise_compiler_error(
+        'dbt found two schema.yml entries for the same model named {}. The '
+        'first patch was specified in {} and the second in {}. Models and '
+        'their associated columns may only be described a single time.'.format(
+            name,
+            patch_1,
+            patch_2,
+        )
+    )
+
+
+def raise_incorrect_version(path):
+    raise_compiler_error(
+        'The schema file at {} does not contain a version specifier. dbt '
+        'assumes that schema.yml files without version specifiers are version '
+        '1 schemas, but this file looks like a version 2 schema. If this is '
+        'the case, you can fix this error by adding `version: 2` to the top '
+        'of the file.\n\nOtherwise, please consult the documentation for more '
+        'information on schema.yml syntax:\n\n'
+        'https://docs.getdbt.com/v0.11/docs/schemayml-files'.format(path)
+    )

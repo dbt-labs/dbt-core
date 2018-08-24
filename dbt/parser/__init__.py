@@ -2,6 +2,7 @@
 from .analysis import AnalysisParser
 from .archives import ArchiveParser
 from .data_test import DataTestParser
+from .docs import DocumentationParser
 from .hooks import HookParser
 from .macros import MacroParser
 from .models import ModelParser
@@ -14,6 +15,7 @@ __all__ = [
     'AnalysisParser',
     'ArchiveParser',
     'DataTestParser',
+    'DocumentationParser',
     'HookParser',
     'MacroParser',
     'ModelParser',

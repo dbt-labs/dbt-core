@@ -11,6 +11,7 @@ import dbt.context.parser
 from dbt.utils import coalesce
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.contracts.graph.parsed import ParsedNode
+from dbt.contracts.graph.manifest import Manifest
 
 
 class BaseParser(object):
@@ -40,11 +41,13 @@ class BaseParser(object):
     def parse_node(cls, node, node_path, root_project_config,
                    package_project_config, all_projects,
                    tags=None, fqn_extra=None, fqn=None, macros=None,
-                   agate_table=None, archive_config=None):
+                   agate_table=None, archive_config=None, column_name=None):
         """Parse a node, given an UnparsedNode and any other required information.
 
         agate_table should be set if the node came from a seed file.
         archive_config should be set if the node is an Archive node.
+        column_name should be set if the node is a Test node associated with a
+        particular column.
         """
         logger.debug("Parsing {}".format(node_path))
 
@@ -80,7 +83,6 @@ class BaseParser(object):
         )
         node['fqn'] = fqn
         node['tags'] = tags
-        node['config_reference'] = config
 
         # Set this temporarily. Not the full config yet (as config() hasn't
         # been called from jinja yet). But the Var() call below needs info
@@ -97,34 +99,44 @@ class BaseParser(object):
         default_alias = node.get('name')
         node['alias'] = default_alias
 
-        context = dbt.context.parser.generate(node, root_project_config,
-                                              {"macros": macros})
+        # if there's a column, it should end up part of the ParsedNode
+        if column_name is not None:
+            node['column_name'] = column_name
+
+        # make a manifest with just the macros to get the context
+        manifest = Manifest(macros=macros, nodes={}, docs={},
+                            generated_at=dbt.utils.timestring())
+
+        parsed_node = ParsedNode(**node)
+        context = dbt.context.parser.generate(parsed_node, root_project_config,
+                                              manifest, config)
 
         dbt.clients.jinja.get_rendered(
-            node.get('raw_sql'), context, node,
+            parsed_node.raw_sql, context, parsed_node.to_shallow_dict(),
             capture_macros=True)
 
         # Clean up any open conns opened by adapter functions that hit the db
         db_wrapper = context['adapter']
         adapter = db_wrapper.adapter
         profile = db_wrapper.profile
-        adapter.release_connection(profile, node.get('name'))
+        adapter.release_connection(profile, parsed_node.name)
 
         # Special macro defined in the global project
         schema_override = config.config.get('schema')
         get_schema = context.get('generate_schema_name',
                                  lambda x: default_schema)
-        node['schema'] = get_schema(schema_override)
-        node['alias'] = config.config.get('alias', default_alias)
+        parsed_node.schema = get_schema(schema_override)
+        parsed_node.alias = config.config.get('alias', default_alias)
 
         # Overwrite node config
-        config_dict = node.get('config', {})
+        config_dict = parsed_node.get('config', {})
         config_dict.update(config.config)
-        node['config'] = config_dict
+        parsed_node.config = config_dict
 
         for hook_type in dbt.hooks.ModelHookType.Both:
-            node['config'][hook_type] = dbt.hooks.get_hooks(node, hook_type)
+            parsed_node.config[hook_type] = dbt.hooks.get_hooks(node,
+                                                                hook_type)
 
-        del node['config_reference']
+        parsed_node.validate()
 
-        return ParsedNode(**node)
+        return parsed_node

@@ -30,7 +30,7 @@ class TestStatements(DBTIntegrationTest):
 
     @attr(type="snowflake")
     def test_snowflake_statements(self):
-        self.use_profile("postgres")
+        self.use_profile("snowflake")
         self.use_default_project({"data-paths": [self.dir("seed")]})
 
         results = self.run_dbt(["seed"])
@@ -38,7 +38,7 @@ class TestStatements(DBTIntegrationTest):
         results = self.run_dbt()
         self.assertEqual(len(results), 1)
 
-        self.assertTablesEqual("statement_actual","statement_expected")
+        self.assertManyTablesEqual(["STATEMENT_ACTUAL", "STATEMENT_EXPECTED"])
 
     @attr(type="bigquery")
     def test_bigquery_statements(self):

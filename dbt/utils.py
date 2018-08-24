@@ -1,6 +1,9 @@
+from datetime import datetime
+from decimal import Decimal
 import os
 import hashlib
 import itertools
+import json
 import collections
 import copy
 import functools
@@ -72,40 +75,12 @@ def get_model_name_or_none(model):
     return name
 
 
-def compiler_warning(model, msg):
+def compiler_warning(model, msg, resource_type='model'):
     name = get_model_name_or_none(model)
     logger.info(
-        "* Compilation warning while compiling model {}:\n* {}\n"
-        .format(name, msg)
+        "* Compilation warning while compiling {} {}:\n* {}\n"
+        .format(resource_type, name, msg)
     )
-
-
-def model_immediate_name(model, non_destructive):
-    """
-    Returns the name of the model relation within the transaction. This is
-    useful for referencing the model in pre or post hooks. Non-destructive
-    models aren't created with temp suffixes, nor are incremental models or
-    seeds.
-    """
-
-    model_name = model['alias']
-    is_incremental = (get_materialization(model) == 'incremental')
-    is_seed = is_type(model, 'seed')
-
-    if non_destructive or is_incremental or is_seed:
-        return model_name
-    else:
-        return "{}__dbt_tmp".format(model_name)
-
-
-def find_refable_by_name(flat_graph, target_name, target_package):
-    return find_by_name(flat_graph, target_name, target_package,
-                        'nodes', NodeType.refable())
-
-
-def find_macro_by_name(flat_graph, target_name, target_package):
-    return find_by_name(flat_graph, target_name, target_package,
-                        'macros', [NodeType.Macro])
 
 
 def find_operation_by_name(flat_graph, target_name, target_package):
@@ -151,6 +126,7 @@ def find_in_subgraph_by_name(subgraph, target_name, target_package, nodetype):
 
 MACRO_PREFIX = 'dbt_macro__'
 OPERATION_PREFIX = 'dbt_operation__'
+DOCS_PREFIX = 'dbt_docs__'
 
 
 def get_dbt_macro_name(name):
@@ -159,6 +135,10 @@ def get_dbt_macro_name(name):
 
 def get_dbt_operation_name(name):
     return '{}{}'.format(OPERATION_PREFIX, name)
+
+
+def get_dbt_docs_name(name):
+    return '{}{}'.format(DOCS_PREFIX, name)
 
 
 def get_materialization_macro_name(materialization_name, adapter_type=None,
@@ -174,29 +154,6 @@ def get_materialization_macro_name(materialization_name, adapter_type=None,
         return name
 
 
-def get_materialization_macro(flat_graph, materialization_name,
-                              adapter_type=None):
-    macro_name = get_materialization_macro_name(materialization_name,
-                                                adapter_type,
-                                                with_prefix=False)
-
-    macro = find_macro_by_name(
-        flat_graph,
-        macro_name,
-        None)
-
-    if adapter_type not in ('default', None) and macro is None:
-        macro_name = get_materialization_macro_name(materialization_name,
-                                                    adapter_type='default',
-                                                    with_prefix=False)
-        macro = find_macro_by_name(
-            flat_graph,
-            macro_name,
-            None)
-
-    return macro
-
-
 def get_operation_macro_name(operation_name, with_prefix=True):
     if with_prefix:
         return get_dbt_operation_name(operation_name)
@@ -204,9 +161,11 @@ def get_operation_macro_name(operation_name, with_prefix=True):
         return operation_name
 
 
-def get_operation_macro(flat_graph, operation_name):
-    name = get_operation_macro_name(operation_name, with_prefix=False)
-    return find_operation_by_name(flat_graph, name, None)
+def get_docs_macro_name(docs_name, with_prefix=True):
+    if with_prefix:
+        return get_dbt_docs_name(docs_name)
+    else:
+        return docs_name
 
 
 def load_project_with_profile(source_project, project_dir):
@@ -460,3 +419,20 @@ def filter_null_values(input):
 
 def add_ephemeral_model_prefix(s):
     return '__dbt__CTE__{}'.format(s)
+
+
+def timestring():
+    """Get the current datetime as an RFC 3339-compliant string"""
+    # isoformat doesn't include the mandatory trailing 'Z' for UTC.
+    return datetime.utcnow().isoformat() + 'Z'
+
+
+class JSONEncoder(json.JSONEncoder):
+    """A 'custom' json encoder that does normal json encoder things, but also
+    handles `Decimal`s. Naturally, this can lose precision because they get
+    converted to floats.
+    """
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return super(JSONEncoder, self).default(obj)

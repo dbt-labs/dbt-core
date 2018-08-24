@@ -11,7 +11,7 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 execute = True
 
 
-def ref(db_wrapper, model, project_cfg, profile, flat_graph):
+def ref(db_wrapper, model, project_cfg, profile, manifest):
     current_project = project_cfg.get('name')
     adapter = db_wrapper.adapter
 
@@ -27,7 +27,7 @@ def ref(db_wrapper, model, project_cfg, profile, flat_graph):
             dbt.exceptions.ref_invalid_args(model, args)
 
         target_model = dbt.parser.ParserUtils.resolve_ref(
-            flat_graph,
+            manifest,
             target_model_name,
             target_model_package,
             current_project,
@@ -49,7 +49,7 @@ def ref(db_wrapper, model, project_cfg, profile, flat_graph):
         is_ephemeral = (get_materialization(target_model) == 'ephemeral')
 
         if is_ephemeral:
-            model['extra_ctes'][target_model_id] = None
+            model.set_cte(target_model_id, None)
             return adapter.Relation.create(
                 type=adapter.Relation.CTE,
                 identifier=add_ephemeral_model_prefix(
@@ -61,8 +61,9 @@ def ref(db_wrapper, model, project_cfg, profile, flat_graph):
 
 
 class Config:
-    def __init__(self, model):
+    def __init__(self, model, source_config=None):
         self.model = model
+        # we never use or get a source config, only the parser cares
 
     def __call__(*args, **kwargs):
         return ''
@@ -93,6 +94,6 @@ class Config:
         return to_return
 
 
-def generate(model, project_cfg, flat_graph):
+def generate(model, project_cfg, manifest):
     return dbt.context.common.generate(
-        model, project_cfg, flat_graph, dbt.context.runtime)
+        model, project_cfg, manifest, None, dbt.context.runtime)

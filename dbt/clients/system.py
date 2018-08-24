@@ -1,5 +1,6 @@
 import errno
 import fnmatch
+import json
 import os
 import os.path
 import shutil
@@ -11,6 +12,7 @@ import stat
 
 import dbt.compat
 import dbt.exceptions
+import dbt.utils
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -115,6 +117,10 @@ def write_file(path, contents=''):
     dbt.compat.write_file(path, contents)
 
     return True
+
+
+def write_json(path, data):
+    return write_file(path, json.dumps(data, cls=dbt.utils.JSONEncoder))
 
 
 def _windows_rmdir_readonly(func, path, exc):

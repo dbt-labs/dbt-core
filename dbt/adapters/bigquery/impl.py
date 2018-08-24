@@ -522,13 +522,18 @@ class BigQueryAdapter(PostgresAdapter):
             dataset_ref = client.dataset(schema_name)
             table_ref = dataset_ref.table(table_name)
             table = client.get_table(table_ref)
-            table_schema = table.schema
+            return cls.get_dbt_columns_from_bq_table(table)
+
         except (ValueError, google.cloud.exceptions.NotFound) as e:
             logger.debug("get_columns_in_table error: {}".format(e))
-            table_schema = []
+            return []
+
+    @classmethod
+    def get_dbt_columns_from_bq_table(cls, table):
+        "Translates BQ SchemaField dicts into dbt BigQueryColumn objects"
 
         columns = []
-        for col in table_schema:
+        for col in table.schema:
             # BigQuery returns type labels that are not valid type specifiers
             dtype = cls.Column.translate_type(col.field_type)
             column = cls.Column(
@@ -676,3 +681,114 @@ class BigQueryAdapter(PostgresAdapter):
                                    to_schema, to_table, model_name=None):
         # This is a no-op on BigQuery
         pass
+
+    @classmethod
+    def _flat_columns_in_table(cls, table):
+        """An iterator over the flattened columns for a given schema and table.
+        Resolves child columns as having the name "parent.child".
+        """
+        for col in cls.get_dbt_columns_from_bq_table(table):
+            flattened = col.flatten()
+            for subcol in flattened:
+                yield subcol
+
+    @classmethod
+    def _get_stats_column_names(cls):
+        """Construct a tuple of the column names for stats. Each stat has 4
+        columns of data.
+        """
+        columns = []
+        stats = ('num_bytes', 'num_rows', 'location', 'partitioning_type')
+        stat_components = ('label', 'value', 'description', 'include')
+        for stat_id in stats:
+            for stat_component in stat_components:
+                columns.append('stats:{}:{}'.format(stat_id, stat_component))
+        return tuple(columns)
+
+    @classmethod
+    def _get_stats_columns(cls, table, relation_type):
+        """Given a table, return an iterator of key/value pairs for stats
+        column names/values.
+        """
+        column_names = cls._get_stats_column_names()
+        # cast num_bytes/num_rows to str before they get to agate, or else
+        # agate will incorrectly decide they are booleans.
+        column_values = (
+            'Number of bytes',
+            str(table.num_bytes),
+            'The number of bytes this table consumes',
+            relation_type == 'table',
+
+            'Number of rows',
+            str(table.num_rows),
+            'The number of rows in this table',
+            relation_type == 'table',
+
+            'Location',
+            table.location,
+            'The geographic location of this table',
+            True,
+
+            'Partitioning Type',
+            table.partitioning_type,
+            'The partitioning type used for this table',
+            relation_type == 'table',
+        )
+        return zip(column_names, column_values)
+
+    @classmethod
+    def get_catalog(cls, profile, project_cfg, manifest):
+        connection = cls.get_connection(profile, 'catalog')
+        client = connection.get('handle')
+
+        schemas = {
+            node.to_dict()['schema']
+            for node in manifest.nodes.values()
+        }
+
+        column_names = (
+            'table_schema',
+            'table_name',
+            'table_type',
+            'table_comment',
+            # does not exist in bigquery, but included for consistency
+            'table_owner',
+            'column_name',
+            'column_index',
+            'column_type',
+            'column_comment',
+        )
+        all_names = column_names + cls._get_stats_column_names()
+        columns = []
+
+        for schema_name in schemas:
+            relations = cls.list_relations(profile, project_cfg, schema_name)
+            for relation in relations:
+
+                # This relation contains a subset of the info we care about.
+                # Fetch the full table object here
+                dataset_ref = client.dataset(relation.schema)
+                table_ref = dataset_ref.table(relation.identifier)
+                table = client.get_table(table_ref)
+
+                flattened = cls._flat_columns_in_table(table)
+
+                for index, column in enumerate(flattened, start=1):
+                    column_data = (
+                        relation.schema,
+                        relation.name,
+                        relation.type,
+                        None,
+                        None,
+                        column.name,
+                        index,
+                        column.data_type,
+                        None,
+                    )
+                    column_dict = dict(zip(column_names, column_data))
+                    column_dict.update(cls._get_stats_columns(table,
+                                                              relation.type))
+
+                    columns.append(column_dict)
+
+        return dbt.clients.agate_helper.table_from_data(columns, all_names)

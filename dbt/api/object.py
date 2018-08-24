@@ -2,7 +2,7 @@ import copy
 from collections import Mapping
 from jsonschema import Draft4Validator
 
-from dbt.exceptions import ValidationException
+from dbt.exceptions import JSONValidationException
 from dbt.utils import deep_merge
 
 
@@ -35,6 +35,12 @@ class APIObject(Mapping):
         # note: deep_merge does a deep copy on its arguments.
         self._contents = deep_merge(self.DEFAULTS, kwargs)
         self.validate()
+
+    def __str__(self):
+        return '{}(**{})'.format(self.__class__.__name__, self._contents)
+
+    def __repr__(self):
+        return '{}(**{})'.format(self.__class__.__name__, self._contents)
 
     def incorporate(self, **kwargs):
         """
@@ -74,9 +80,7 @@ class APIObject(Mapping):
             ))
 
         if errors:
-            msg = ('Invalid arguments passed to "{}" instance: {}'.format(
-                type(self).__name__, ', '.join(errors)))
-            raise ValidationException(msg)
+            raise JSONValidationException(type(self).__name__, errors)
 
     # implement the Mapping protocol:
     # https://docs.python.org/3/library/collections.abc.html
@@ -96,12 +100,17 @@ class APIObject(Mapping):
         except KeyError:
             return default
 
+    def set(self, key, value):
+        self._contents[key] = value
+
     # most users of APIObject also expect the attributes to be available via
     # dot-notation because the previous implementation assigned to __dict__.
     # we should consider removing this if we fix all uses to have properties.
     def __getattr__(self, name):
-        if name in self._contents:
+        if name != '_contents' and name in self._contents:
             return self._contents[name]
+        elif hasattr(self.__class__, name):
+            return getattr(self.__class__, name)
         raise AttributeError((
             "'{}' object has no attribute '{}'"
         ).format(type(self).__name__, name))

@@ -1,5 +1,5 @@
 {% macro adapter_macro(name) -%}
-  {% set original_name = name %}
+{% set original_name = name %}
   {% if '.' in name %}
     {% set package_name, name = name.split(".", 1) %}
   {% else %}
@@ -68,9 +68,8 @@
 
 
 {% macro get_catalog() -%}
-  {{ adapter_macro('get_catalog') }}
+  {{ return(adapter_macro('get_catalog')) }}
 {%- endmacro %}
-
 
 {% macro default__get_catalog() -%}
 
@@ -81,45 +80,3 @@
 
   {{ exceptions.raise_compiler_error(msg) }}
 {% endmacro %}
-
-
-{% macro postgres__get_catalog() -%}
-  {%- call statement('catalog', fetch_result=True) -%}
-    with tables as (
-      select
-          table_schema,
-          table_name,
-          table_type
-
-      from information_schema.tables
-
-      ),
-
-      columns as (
-
-          select
-              table_schema,
-              table_name,
-              null as table_comment,
-
-              column_name,
-              ordinal_position as column_index,
-              data_type as column_type,
-              null as column_comment
-
-
-          from information_schema.columns
-
-      )
-
-      select *
-      from tables
-      join columns using (table_schema, table_name)
-
-      where table_schema != 'information_schema'
-        and table_schema not like 'pg_%'
-  {%- endcall -%}
-  {# There's no point in returning anything as the jinja macro stuff calls #}
-  {# str() on all returns. To get the results, you'll need to use #}
-  {# context['load_result']('catalog') #}
-{%- endmacro %}

@@ -63,19 +63,18 @@
     {%- endif -%}
   {%- endcall %}
 
-  {{ run_hooks(post_hooks, inside_transaction=True) }}
-
   -- cleanup
   {% if non_destructive_mode -%}
     -- noop
   {%- else -%}
     {% if old_relation is not none %}
-      -- move the existing relation out of the way
-      {{ adapter.rename_relation(target_relation, backup_relation) }}
+        {{ adapter.rename_relation(target_relation, backup_relation) }}
     {% endif %}
 
     {{ adapter.rename_relation(intermediate_relation, target_relation) }}
   {%- endif %}
+
+  {{ run_hooks(post_hooks, inside_transaction=True) }}
 
   -- `COMMIT` happens here
   {{ adapter.commit() }}

@@ -92,11 +92,11 @@ class TestContextVars(DBTIntegrationTest):
 
         self.assertEqual(
             ctx['this'],
-            '"{}"."context__dbt_tmp"'.format(self.unique_schema()))
+            '"{}"."context"'.format(self.unique_schema()))
 
         self.assertEqual(ctx['this.name'], 'context')
         self.assertEqual(ctx['this.schema'], self.unique_schema())
-        self.assertEqual(ctx['this.table'], 'context__dbt_tmp')
+        self.assertEqual(ctx['this.table'], 'context')
 
         self.assertEqual(ctx['target.dbname'], 'dbt')
         self.assertEqual(ctx['target.host'], 'database')
@@ -118,11 +118,11 @@ class TestContextVars(DBTIntegrationTest):
 
         self.assertEqual(
             ctx['this'],
-            '"{}"."context__dbt_tmp"'.format(self.unique_schema()))
+            '"{}"."context"'.format(self.unique_schema()))
 
         self.assertEqual(ctx['this.name'], 'context')
         self.assertEqual(ctx['this.schema'], self.unique_schema())
-        self.assertEqual(ctx['this.table'], 'context__dbt_tmp')
+        self.assertEqual(ctx['this.table'], 'context')
 
         self.assertEqual(ctx['target.dbname'], 'dbt')
         self.assertEqual(ctx['target.host'], 'database')

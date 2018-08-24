@@ -3,6 +3,9 @@ import time
 
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.contracts.graph.parsed import ParsedNode
+from dbt.contracts.graph.manifest import CompileResultNode
+from dbt.contracts.results import ExecutionResult
 
 import dbt.clients.jinja
 import dbt.compilation
@@ -11,10 +14,15 @@ import dbt.linker
 import dbt.tracking
 import dbt.model
 import dbt.ui.printer
+import dbt.utils
+from dbt.clients.system import write_json
 
 import dbt.graph.selector
 
 from multiprocessing.dummy import Pool as ThreadPool
+
+
+RESULT_FILE_NAME = 'run_results.json'
 
 
 class RunManager(object):
@@ -69,7 +77,7 @@ class RunManager(object):
 
     def call_runner(self, data):
         runner = data['runner']
-        flat_graph = data['flat_graph']
+        manifest = data['manifest']
 
         if runner.skip:
             return runner.on_skip()
@@ -78,7 +86,7 @@ class RunManager(object):
         if not runner.is_ephemeral_model(runner.node):
             runner.before_execute()
 
-        result = runner.safe_run(flat_graph)
+        result = runner.safe_run(manifest)
 
         if not runner.is_ephemeral_model(runner.node):
             runner.after_execute(result)
@@ -96,7 +104,7 @@ class RunManager(object):
                 runners.append(node_runners[unique_id])
         return runners
 
-    def execute_nodes(self, linker, Runner, flat_graph, node_dependency_list):
+    def execute_nodes(self, linker, Runner, manifest, node_dependency_list):
         profile = self.project.run_environment()
         adapter = get_adapter(profile)
 
@@ -108,7 +116,7 @@ class RunManager(object):
         dbt.ui.printer.print_timestamped_line(concurrency_line)
         dbt.ui.printer.print_timestamped_line("")
 
-        schemas = list(Runner.get_model_schemas(flat_graph))
+        schemas = list(Runner.get_model_schemas(manifest))
         node_runners = self.get_runners(Runner, adapter, node_dependency_list)
 
         pool = ThreadPool(num_threads)
@@ -119,7 +127,7 @@ class RunManager(object):
             args_list = []
             for runner in runners:
                 args_list.append({
-                    'flat_graph': flat_graph,
+                    'manifest': manifest,
                     'runner': runner
                 })
 
@@ -128,8 +136,9 @@ class RunManager(object):
                     if not Runner.is_ephemeral_model(result.node):
                         node_results.append(result)
 
-                    node_id = result.node.get('unique_id')
-                    flat_graph['nodes'][node_id] = result.node
+                    node = CompileResultNode(**result.node)
+                    node_id = node.unique_id
+                    manifest.nodes[node_id] = node
 
                     if result.errored:
                         for dep_node_id in self.get_dependent(linker, node_id):
@@ -167,16 +176,27 @@ class RunManager(object):
 
         return node_results
 
+    def write_results(self, execution_result):
+        filepath = os.path.join(self.project['target-path'], RESULT_FILE_NAME)
+        write_json(filepath, execution_result.serialize())
+
     def compile(self, project):
         compiler = dbt.compilation.Compiler(project)
         compiler.initialize()
-        (flat_graph, linker) = compiler.compile()
-        return (flat_graph, linker)
+        return compiler.compile()
 
     def run_from_graph(self, Selector, Runner, query):
-        flat_graph, linker = self.compile(self.project)
+        """
+        Run dbt for the query, based on the graph.
+        Selector is a type (not instance!) derived from
+            dbt.graph.selector.NodeSelector
+        Runner is a type (not instance!) derived from
+            dbt.node_runners.BaseRunner
 
-        selector = Selector(linker, flat_graph)
+        """
+        manifest, linker = self.compile(self.project)
+
+        selector = Selector(linker, manifest)
         selected_nodes = selector.select(query)
         dep_list = selector.as_node_list(selected_nodes)
 
@@ -197,16 +217,23 @@ class RunManager(object):
             logger.info("")
 
         try:
-            Runner.before_hooks(self.project, adapter, flat_graph)
+            Runner.before_hooks(self.project, adapter, manifest)
             started = time.time()
-            Runner.before_run(self.project, adapter, flat_graph)
-            res = self.execute_nodes(linker, Runner, flat_graph, dep_list)
-            Runner.after_run(self.project, adapter, res, flat_graph)
+            Runner.before_run(self.project, adapter, manifest)
+            res = self.execute_nodes(linker, Runner, manifest, dep_list)
+            Runner.after_run(self.project, adapter, res, manifest)
             elapsed = time.time() - started
-            Runner.after_hooks(self.project, adapter, res, flat_graph, elapsed)
+            Runner.after_hooks(self.project, adapter, res, manifest, elapsed)
 
         finally:
             adapter.cleanup_connections()
+
+        result = ExecutionResult(
+            results=res,
+            elapsed_time=elapsed,
+            generated_at=dbt.utils.timestring(),
+        )
+        self.write_results(result)
 
         return res
 

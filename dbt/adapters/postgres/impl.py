@@ -9,9 +9,6 @@ import agate
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
-GET_CATALOG_OPERATION_NAME = 'get_catalog_data'
-GET_CATALOG_RESULT_KEY = 'catalog'  # defined in get_catalog() macro
-
 
 class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
 
@@ -220,14 +217,3 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
     @classmethod
     def convert_time_type(cls, agate_table, col_idx):
         return "time"
-
-    @classmethod
-    def get_catalog(cls, profile, project_cfg, manifest):
-        results = cls.run_operation(profile, project_cfg, manifest,
-                                    GET_CATALOG_OPERATION_NAME,
-                                    GET_CATALOG_RESULT_KEY)
-
-        schemas = cls.get_existing_schemas(profile, project_cfg)
-        results = results.table.where(lambda r: r['table_schema'] in schemas)
-
-        return results
