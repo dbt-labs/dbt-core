@@ -2,6 +2,7 @@
 
 from argparse import ArgumentParser
 import logging
+import os
 import re
 import sys
 import yaml
@@ -22,8 +23,14 @@ class OperationalError(Exception):
     pass
 
 
-def setup_loging(filename):
-    logging.basicConfig(filename=filename, level=logging.DEBUG)
+def setup_logging(filename):
+    LOGGER.setLevel(logging.DEBUG)
+    file_handler = logging.FileHandler(filename=filename)
+    file_handler.setLevel(logging.DEBUG)
+    stderr_handler = logging.StreamHandler()
+    stderr_handler.setLevel(logging.WARNING)
+    LOGGER.addHandler(file_handler)
+    LOGGER.addHandler(stderr_handler)
 
 
 def parse_args(args):
@@ -48,7 +55,7 @@ def parse_args(args):
     )
     parser.add_argument('--output-path', dest='output_path', default=None)
     parser.add_argument('--backup-path', dest='backup_path', default=None)
-    parser.add_argument('input-path', dest='input_path')
+    parser.add_argument('input_path')
     parsed = parser.parse_args()
     if parsed.in_place:
         parsed.overwrite = True
@@ -81,8 +88,8 @@ def handle(parsed):
         backup_file(parsed.output_path, parsed.backup_path, parsed.overwrite)
     if not os.path.exists(parsed.input_path):
         LOGGER.error('input file at {} does not exist!'.format(parsed.input_path))
-    LOGGER.info('loading input file at {}'.format(parsed_args.input_path))
-    with open(parsed_args.input_path) as fp:
+    LOGGER.info('loading input file at {}'.format(parsed.input_path))
+    with open(parsed.input_path) as fp:
         initial = yaml.safe_load(fp)
     version = initial.get('version', 1)
     # the isinstance check is to handle the case of models named 'version'
@@ -90,7 +97,7 @@ def handle(parsed):
         LOGGER.error('input file is not a v1 yaml file (reports as {})'
                     .format(version))
         return
-    if os.path.exists(output_path) and not overwrite:
+    if os.path.exists(parsed.output_path) and not parsed.overwrite:
         LOGGER.error('output file at {} already exists, and --overwrite was not passed')
         return
     new_file = convert_schema(initial)
@@ -289,7 +296,6 @@ bar:
         not_null:
             - id
 '''
-
 
 
 
