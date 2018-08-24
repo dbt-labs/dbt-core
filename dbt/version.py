@@ -69,4 +69,3 @@ def get_version_information():
 
 __version__ = '0.10.2'
 installed = get_installed_version()
-latest = get_latest_version()
