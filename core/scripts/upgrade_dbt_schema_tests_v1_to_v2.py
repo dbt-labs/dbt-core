@@ -87,10 +87,10 @@ def backup_file(src, dst):
     if not os.path.exists(src):
         LOGGER.debug("no file at {} - nothing to back up".format(src))
         return
-    LOGGER.debug('backing up file at {} to {}'.format(src, dst))
+    LOGGER.debug("backing up file at {} to {}".format(src, dst))
     with open(src, "rb") as ifp, open(dst, "wb") as ofp:
         ofp.write(ifp.read())
-    LOGGER.debug('backup successful')
+    LOGGER.debug("backup successful")
 
 
 def validate_and_mutate_args(parsed):
@@ -278,7 +278,7 @@ class ModelTestBuilder:
     def handle_simple_column_test(self, test_name, test_values):
         for column_name in test_values:
             LOGGER.info(
-                'found a {} test for model {}, column {}'.format(
+                "found a {} test for model {}, column {}".format(
                     test_name, self.model_name, column_name
                 )
             )
@@ -302,7 +302,7 @@ class ModelTestBuilder:
             test_value = {k: v for k, v in dct.items() if k != column_key}
             value = {test_name: test_value}
             LOGGER.info(
-                'found a test for model {}, column {} - arguments: {}'.format(
+                "found a test for model {}, column {} - arguments: {}".format(
                     self.model_name, column_name, test_value
                 )
             )
