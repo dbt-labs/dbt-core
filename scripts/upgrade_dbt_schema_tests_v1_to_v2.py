@@ -26,7 +26,9 @@ def is_column_name(value):
 
 
 class OperationalError(Exception):
-    pass
+    def __init__(self, message):
+        self.message = message
+        super(OperationalError, self).__init__(message)
 
 
 def setup_logging(filename):
@@ -59,10 +61,37 @@ def parse_args(args):
         help=('if set, overwrite the input file and generate a ".bak" file '
               'instead of generating a ".new" file')
     )
-    parser.add_argument('--output-path', dest='output_path', default=None)
-    parser.add_argument('--backup-path', dest='backup_path', default=None)
+    parser.add_argument(
+        '--output-path',
+        dest='output_path',
+        default=None,
+        help='The path to write the output file to. Defaults to input_path + '
+             '".new" unless the --in-place argument is used'
+    )
+    parser.add_argument(
+        '--backup-path',
+        dest='backup_path',
+        default=None,
+        help='The path to write the backup file to. Defaults to output path + '
+             '".bak". Not used if the output file does not yet exist.'
+    )
+    parser.add_argument(
+        '--complex-test',
+        dest='extra_complex_tests',
+        action='append',
+        help='extra "complex" tests, as key:value pairs, where key is the '
+             'test name and value is the test key that contains the column '
+             'name.'
+    )
+    parser.add_argument(
+        '--complex-test-file',
+        dest='extra_complex_tests_file',
+        default=None,
+        help='The path to an optional yaml file of key/value pairs that does '
+             'the same as --complex-test.'
+    )
     parser.add_argument('input_path')
-    parsed = parser.parse_args()
+    parsed = parser.parse_args(args)
     if parsed.in_place:
         parsed.overwrite = True
     if parsed.output_path is None:
@@ -71,22 +100,30 @@ def parse_args(args):
             parsed.backup_path = parsed.input_path + '.bak'
         else:
             parsed.output_path = parsed.input_path + '.new'
+    if parsed.overwrite and parsed.backup_path is None:
+        parsed.backup_path = parsed.output_path + '.bak'
     return parsed
 
 
 def backup_file(src, dst, overwrite):
+    if not os.path.exists(src):
+        LOGGER.debug('no file at {} - nothing to back up'.format(src))
+        return
     if not overwrite and os.path.exists(dst):
         raise OperationalError(
             'backup file at {} already exists and --overwrite was not passed'
             .format(dst)
         )
     LOGGER.debug('backing up file at {} to {}'.format(src, dst))
-    with open(src, 'rb'), open(dst, 'wb') as ifp, ofp:
+    with open(src, 'rb') as ifp, open(dst, 'wb') as ofp:
         ofp.write(ifp.read())
     LOGGER.debug('backup successful')
 
 
-def validate_args(parsed):
+def validate_and_mutate_args(parsed):
+    """Validate arguments, raising OperationalError on bad args. Also convert
+    the complex tests from 'key:value' -> {'key': 'value'}.
+    """
     if not os.path.exists(parsed.input_path):
         raise OperationalError(
             'input file at {} does not exist!'.format(parsed.input_path)
@@ -97,18 +134,38 @@ def validate_args(parsed):
             'output file at {} already exists, and --overwrite was not passed'
             .format(parsed.output_path)
         )
-        return
 
 
+    complex_tests = {}
+    if parsed.extra_complex_tests_file:
+        if not os.path.exists(parsed.extra_complex_tests_file):
+            raise OperationalError(
+                'complex tests definition file at {} does not exist'
+                .format(parsed.extra_complex_tests_file)
+            )
+        with open(parsed.extra_complex_tests_file) as fp:
+            extra_tests = yaml.safe_load(fp)
+        if not isinstance(extra_tests, dict):
+            raise OperationalError(
+                'complex tests definition file at {} is not a yaml mapping'
+                .format(parsed.extra_complex_tests_file)
+            )
+        complex_tests.update(extra_tests)
+    if parsed.extra_complex_tests:
+        for tst in parsed.extra_complex_tests:
+            pair = tst.split(':', 1)
+            if len(pair) != 2:
+                raise OperationalError('Invalid complex test "{}"'.format(tst))
+            complex_tests[pair[0]] = pair[1]
+    parsed.extra_complex_tests = complex_tests
 
 
 def handle(parsed):
     """Try to handle the schema conversion. On failure, raise OperationalError
     and let the caller handle it.
     """
-    validate_args(parsed)
-    if parsed.backup_path:
-        backup_file(parsed.output_path, parsed.backup_path, parsed.overwrite)
+    validate_and_mutate_args(parsed)
+    backup_file(parsed.output_path, parsed.backup_path, parsed.overwrite)
 
     LOGGER.info('loading input file at {}'.format(parsed.input_path))
 
@@ -122,7 +179,7 @@ def handle(parsed):
             'input file is not a v1 yaml file (reports as {})'.format(version)
         )
 
-    new_file = convert_schema(initial)
+    new_file = convert_schema(initial, parsed.extra_complex_tests)
 
     LOGGER.debug(
         'writing converted schema to output file at {}'.format(
@@ -181,10 +238,16 @@ class ModelTestBuilder(object):
         'relationships': 'from',
         'accepted_values': 'field',
     }
-    def __init__(self, model_name):
+    def __init__(self, model_name, extra_complex_tests=None):
         self.model_name = model_name
         self.columns = {}
         self.model_tests = []
+        self._simple_column_tests = self.SIMPLE_COLUMN_TESTS.copy()
+        # overwrite with ours last so we always win.
+        self._complex_column_tests = {}
+        if extra_complex_tests:
+            self._complex_column_tests.update(extra_complex_tests)
+        self._complex_column_tests.update(self.COMPLEX_COLUMN_TESTS)
 
     def get_column(self, column_name):
         if column_name in self.columns:
@@ -213,7 +276,7 @@ class ModelTestBuilder(object):
         """'complex' columns are lists of dicts, where each dict has a single
         key (the test name) and the value of that key is a dict of test values.
         """
-        column_key = self.COMPLEX_COLUMN_TESTS[test_name]
+        column_key = self._complex_column_tests[test_name]
         for dct in test_values:
             if column_key not in dct:
                 raise OperationalError(
@@ -244,9 +307,9 @@ class ModelTestBuilder(object):
                     test_name, model_name, type(test_values)
                 )
             )
-        if test_name in self.SIMPLE_COLUMN_TESTS:
+        if test_name in self._simple_column_tests:
             self.handle_simple_column(test_name, test_values)
-        elif test_name in self.COMPLEX_COLUMN_TESTS:
+        elif test_name in self._complex_column_tests:
             self.handle_complex_column(test_name, test_values)
         else:
             if all(is_column_name(v) for v in test_values):
@@ -279,14 +342,14 @@ class ModelTestBuilder(object):
         return model
 
 
-def convert_schema(initial):
+def convert_schema(initial, extra_complex_tests):
     models = []
 
     for model_name, model_data in initial.items():
         if 'constraints' not in model_data:
             # don't care about this model
             continue
-        builder = ModelTestBuilder(model_name)
+        builder = ModelTestBuilder(model_name, extra_complex_tests)
         builder.populate_from_constraints(model_data['constraints'])
         model = builder.generate_model_dict()
         models.append(model)
@@ -301,6 +364,7 @@ def convert_schema(initial):
 if __name__ == '__main__':
     main()
 
+import mock
 import unittest
 
 SAMPLE_SCHEMA = '''
@@ -319,6 +383,8 @@ foo:
         simple_custom:
             - id
             - favorite_color
+        known_complex_custom:
+            - { field: likes_puppies, arg1: test }
         # becomes a table-level test
         complex_custom:
             - { field: favorite_color, arg1: test, arg2: ref('bar') }
@@ -335,7 +401,8 @@ class TestConvert(unittest.TestCase):
     maxDiff = None
     def test_convert(self):
         input_schema = yaml.safe_load(SAMPLE_SCHEMA)
-        output_schema = convert_schema(input_schema)
+        output_schema = convert_schema(input_schema,
+                                       {'known_complex_custom': 'field'})
         self.assertEqual(output_schema['version'], 2)
         sorted_models = sorted(output_schema['models'], key=lambda x: x['name'])
         expected = [
@@ -380,6 +447,7 @@ class TestConvert(unittest.TestCase):
                         'name': 'likes_puppies',
                         'tests': [
                             {'accepted_values': {'values': ['yes']}},
+                            {'known_complex_custom': {'arg1': 'test'}},
                         ]
                     },
                 ],
@@ -394,3 +462,34 @@ class TestConvert(unittest.TestCase):
         ]
         self.assertEqual(sorted_models, expected)
 
+    def test_parse_validate_and_mutate_args_simple(self):
+        args = ['my-input.yml']
+        parsed = parse_args(args)
+        self.assertEqual(parsed.input_path, 'my-input.yml')
+        self.assertEqual(parsed.output_path, 'my-input.yml.new')
+        self.assertEqual(parsed.backup_path, None)
+        with self.assertRaises(OperationalError):
+            validate_and_mutate_args(parsed)
+        with mock.patch('os.path.exists') as exists:
+            exists.side_effect = lambda x: x.endswith('.yml')
+            validate_and_mutate_args(parsed)
+        # validate will mutate this to be a dict
+        self.assertEqual(parsed.extra_complex_tests, {})
+
+    def test_parse_validate_and_mutate_args_extra_tests(self):
+        args = [
+            '--complex-test', 'known_complex_custom:field',
+            '--complex-test', 'other_complex_custom:column',
+            'my-input.yml'
+        ]
+        parsed = parse_args(args)
+        with mock.patch('os.path.exists') as exists:
+            exists.side_effect = lambda x: x.endswith('.yml')
+            validate_and_mutate_args(parsed)
+            self.assertEqual(
+                parsed.extra_complex_tests,
+                {
+                    'known_complex_custom': 'field',
+                    'other_complex_custom': 'column'
+                }
+            )
