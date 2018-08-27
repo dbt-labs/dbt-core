@@ -50,18 +50,17 @@ class DBTVersion(argparse.Action):
     except it just calls dbt.version.get_version_information().
     """
 
-    def __init__(self,
-                 option_strings,
-                 version=None,
-                 dest=argparse.SUPPRESS,
-                 default=argparse.SUPPRESS,
-                 help="show program's version number and exit"):
+    def __init__(
+        self,
+        option_strings,
+        version=None,
+        dest=argparse.SUPPRESS,
+        default=argparse.SUPPRESS,
+        help="show program's version number and exit",
+    ):
         super().__init__(
-            option_strings=option_strings,
-            dest=dest,
-            default=default,
-            nargs=0,
-            help=help)
+            option_strings=option_strings, dest=dest, default=default, nargs=0, help=help
+        )
 
     def __call__(self, parser, namespace, values, option_string=None):
         formatter = argparse.RawTextHelpFormatter(prog=parser.prog)
@@ -72,7 +71,7 @@ class DBTVersion(argparse.Action):
 class DBTArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.register('action', 'dbtversion', DBTVersion)
+        self.register("action", "dbtversion", DBTVersion)
 
     def add_optional_argument_inverse(
         self,
