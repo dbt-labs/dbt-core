@@ -183,9 +183,7 @@ def convert_file(path, backup, write, extra_complex_tests):
         LOGGER.info(msg)
         return
     elif version != 1 and isinstance(version, int):
-        raise OperationalError(
-            'input file is not a v1 yaml file (reports as {})'.format(version)
-        )
+        raise OperationalError("input file is not a v1 yaml file (reports as {})".format(version))
 
     new_file = convert_schema(initial, extra_complex_tests)
 
