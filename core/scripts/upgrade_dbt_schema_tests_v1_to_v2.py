@@ -188,9 +188,7 @@ def convert_file(path, backup, write, extra_complex_tests):
     new_file = convert_schema(initial, extra_complex_tests)
 
     if write:
-        LOGGER.debug(
-            'writing converted schema to output file at {}'.format(path)
-        )
+        LOGGER.debug("writing converted schema to output file at {}".format(path))
         if backup:
             backup_file(path, path + ".backup")
 
