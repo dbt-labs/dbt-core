@@ -64,19 +64,19 @@ def parse_args(args):
         help=("if set, apply changes instead of just logging about found " "schema.yml files"),
     )
     parser.add_argument(
-        '--complex-test',
-        dest='extra_complex_tests',
-        action='append',
+        "--complex-test",
+        dest="extra_complex_tests",
+        action="append",
         help='extra "complex" tests, as key:value pairs, where key is the '
-             'test name and value is the test key that contains the column '
-             'name.'
+        "test name and value is the test key that contains the column "
+        "name.",
     )
     parser.add_argument(
-        '--complex-test-file',
-        dest='extra_complex_tests_file',
+        "--complex-test-file",
+        dest="extra_complex_tests_file",
         default=None,
-        help='The path to an optional yaml file of key/value pairs that does '
-             'the same as --complex-test.'
+        help="The path to an optional yaml file of key/value pairs that does "
+        "the same as --complex-test.",
     )
     parser.add_argument("search_directory")
     parsed = parser.parse_args(args)
@@ -85,10 +85,10 @@ def parse_args(args):
 
 def backup_file(src, dst):
     if not os.path.exists(src):
-        LOGGER.debug('no file at {} - nothing to back up'.format(src))
+        LOGGER.debug("no file at {} - nothing to back up".format(src))
         return
     LOGGER.debug('backing up file at {} to {}'.format(src, dst))
-    with open(src, 'rb') as ifp, open(dst, 'wb') as ofp:
+    with open(src, "rb") as ifp, open(dst, "wb") as ofp:
         ofp.write(ifp.read())
     LOGGER.debug('backup successful')
 
@@ -107,21 +107,23 @@ def validate_and_mutate_args(parsed):
     if parsed.extra_complex_tests_file:
         if not os.path.exists(parsed.extra_complex_tests_file):
             raise OperationalError(
-                'complex tests definition file at {} does not exist'
-                .format(parsed.extra_complex_tests_file)
+                "complex tests definition file at {} does not exist".format(
+                    parsed.extra_complex_tests_file
+                )
             )
         with open(parsed.extra_complex_tests_file) as fp:
             extra_tests = yaml.safe_load(fp)
         if not isinstance(extra_tests, dict):
             raise OperationalError(
-                'complex tests definition file at {} is not a yaml mapping'
-                .format(parsed.extra_complex_tests_file)
+                "complex tests definition file at {} is not a yaml mapping".format(
+                    parsed.extra_complex_tests_file
+                )
             )
         complex_tests.update(extra_tests)
 
     if parsed.extra_complex_tests:
         for tst in parsed.extra_complex_tests:
-            pair = tst.split(':', 1)
+            pair = tst.split(":", 1)
             if len(pair) != 2:
                 raise OperationalError('Invalid complex test "{}"'.format(tst))
             complex_tests[pair[0]] = pair[1]
