@@ -519,8 +519,5 @@ else:
                 validate_and_mutate_args(parsed)
                 self.assertEqual(
                     parsed.extra_complex_tests,
-                    {
-                        'known_complex_custom': 'field',
-                        'other_complex_custom': 'column'
-                    }
+                    {"known_complex_custom": "field", "other_complex_custom": "column"},
                 )
