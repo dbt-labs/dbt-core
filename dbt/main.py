@@ -34,6 +34,34 @@ For more information on configuring profiles, please consult the dbt docs:
 https://docs.getdbt.com/docs/configure-your-profile
 """
 
+class DBTVersion(argparse.Action):
+    """This is very very similar to the builtin argparse._Version action,
+    except it just calls dbt.version.get_version_information().
+    """
+    def __init__(self,
+                 option_strings,
+                 version=None,
+                 dest=argparse.SUPPRESS,
+                 default=argparse.SUPPRESS,
+                 help="show program's version number and exit"):
+        super(DBTVersion, self).__init__(
+            option_strings=option_strings,
+            dest=dest,
+            default=default,
+            nargs=0,
+            help=help)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        formatter = parser._get_formatter()
+        formatter.add_text(dbt.version.get_version_information())
+        parser.exit(message=formatter.format_help())
+
+
+class DBTArgumentParser(argparse.ArgumentParser):
+    def __init__(self, *args, **kwargs):
+        super(DBTArgumentParser, self).__init__(*args, **kwargs)
+        self.register('action', 'dbtversion', DBTVersion)
+
 
 def main(args=None):
     if args is None:
@@ -72,9 +100,6 @@ def handle(args):
 
 def handle_and_check(args):
     parsed = parse_args(args)
-    if parsed.version:
-        print(dbt.version.get_version_information())
-        return None, True
 
     # this needs to happen after args are parsed so we can determine the
     # correct profiles.yml file
@@ -255,13 +280,13 @@ def invoke_dbt(parsed):
 
 
 def parse_args(args):
-    p = argparse.ArgumentParser(
+    p = DBTArgumentParser(
         prog='dbt: data build tool',
         formatter_class=argparse.RawTextHelpFormatter)
 
     p.add_argument(
         '--version',
-        action='store_true',
+        action='dbtversion',
         help="Show version information")
 
     p.add_argument(
