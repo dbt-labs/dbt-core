@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-
+from __future__ import print_function
 from argparse import ArgumentParser
 import logging
 import os
@@ -33,10 +33,13 @@ class OperationalError(Exception):
 
 def setup_logging(filename):
     LOGGER.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(levelname)s: %(asctime)s: %(message)s')
     file_handler = logging.FileHandler(filename=filename)
     file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(formatter)
     stderr_handler = logging.StreamHandler()
     stderr_handler.setLevel(logging.WARNING)
+    stderr_handler.setFormatter(formatter)
     LOGGER.addHandler(file_handler)
     LOGGER.addHandler(stderr_handler)
 
@@ -50,30 +53,16 @@ def parse_args(args):
         default=LOGFILE
     )
     parser.add_argument(
-        '--overwrite',
+        '--no-backup',
+        action='store_false',
+        dest='backup',
+        help='if set, do not generate ".backup" files.'
+    )
+    parser.add_argument(
+        '--apply',
         action='store_true',
-        help='if set, overwrite any existing file'
-    )
-    parser.add_argument(
-        '--in-place',
-        action='store_true',
-        dest='in_place',
-        help=('if set, overwrite the input file and generate a ".bak" file '
-              'instead of generating a ".new" file')
-    )
-    parser.add_argument(
-        '--output-path',
-        dest='output_path',
-        default=None,
-        help='The path to write the output file to. Defaults to input_path + '
-             '".new" unless the --in-place argument is used'
-    )
-    parser.add_argument(
-        '--backup-path',
-        dest='backup_path',
-        default=None,
-        help='The path to write the backup file to. Defaults to output path + '
-             '".bak". Not used if the output file does not yet exist.'
+        help=('if set, apply changes instead of just logging about found '
+              'schema.yml files')
     )
     parser.add_argument(
         '--complex-test',
@@ -90,30 +79,15 @@ def parse_args(args):
         help='The path to an optional yaml file of key/value pairs that does '
              'the same as --complex-test.'
     )
-    parser.add_argument('input_path')
+    parser.add_argument('search_directory')
     parsed = parser.parse_args(args)
-    if parsed.in_place:
-        parsed.overwrite = True
-    if parsed.output_path is None:
-        if parsed.in_place:
-            parsed.output_path = parsed.input_path
-            parsed.backup_path = parsed.input_path + '.bak'
-        else:
-            parsed.output_path = parsed.input_path + '.new'
-    if parsed.overwrite and parsed.backup_path is None:
-        parsed.backup_path = parsed.output_path + '.bak'
     return parsed
 
 
-def backup_file(src, dst, overwrite):
+def backup_file(src, dst):
     if not os.path.exists(src):
         LOGGER.debug('no file at {} - nothing to back up'.format(src))
         return
-    if not overwrite and os.path.exists(dst):
-        raise OperationalError(
-            'backup file at {} already exists and --overwrite was not passed'
-            .format(dst)
-        )
     LOGGER.debug('backing up file at {} to {}'.format(src, dst))
     with open(src, 'rb') as ifp, open(dst, 'wb') as ofp:
         ofp.write(ifp.read())
@@ -124,15 +98,9 @@ def validate_and_mutate_args(parsed):
     """Validate arguments, raising OperationalError on bad args. Also convert
     the complex tests from 'key:value' -> {'key': 'value'}.
     """
-    if not os.path.exists(parsed.input_path):
+    if not os.path.exists(parsed.search_directory):
         raise OperationalError(
-            'input file at {} does not exist!'.format(parsed.input_path)
-        )
-
-    if os.path.exists(parsed.output_path) and not parsed.overwrite:
-        raise OperationalError(
-            'output file at {} already exists, and --overwrite was not passed'
-            .format(parsed.output_path)
+            'input directory at {} does not exist!'.format(parsed.search_directory)
         )
 
     complex_tests = {}
@@ -167,36 +135,73 @@ def handle(parsed):
     and let the caller handle it.
     """
     validate_and_mutate_args(parsed)
-    backup_file(parsed.output_path, parsed.backup_path, parsed.overwrite)
+    with open(os.path.join(parsed.search_directory, 'dbt_project.yml')) as fp:
+        project = yaml.safe_load(fp)
+    source_dirs = project.get('source-paths', ['models'])
+    if parsed.apply:
+        print('converting the following files to the v2 spec:')
+    else:
+        print('would convert the following files to the v2 spec:')
+    for source_dir in source_dirs:
+        search_path = os.path.join(parsed.search_directory, source_dir)
+        convert_project(search_path, parsed.backup, parsed.apply,
+                        parsed.extra_complex_tests)
+    if not parsed.apply:
+        print('Run with --apply to write these changes. Files with an error '
+              'will not be converted.')
 
-    LOGGER.info('loading input file at {}'.format(parsed.input_path))
 
-    with open(parsed.input_path) as fp:
+def find_all_yaml(path):
+    for root, _, files in os.walk(path):
+        for filename in files:
+            if filename.endswith('.yml'):
+                yield os.path.join(root, filename)
+
+
+def convert_project(path, backup, write, extra_complex_tests):
+    for filepath in find_all_yaml(path):
+        try:
+            convert_file(filepath, backup, write, extra_complex_tests)
+        except OperationalError as exc:
+            print('{} - could not convert: {}'.format(filepath, exc.message))
+            LOGGER.error(exc.message)
+
+
+def convert_file(path, backup, write, extra_complex_tests):
+    LOGGER.info('loading input file at {}'.format(path))
+
+    with open(path) as fp:
         initial = yaml.safe_load(fp)
 
     version = initial.get('version', 1)
     # the isinstance check is to handle the case of models named 'version'
-    if version != 1 and isinstance(version, int):
+    if version == 2:
+        msg = '{} - already v2, no need to update'.format(path)
+        print(msg)
+        LOGGER.info(msg)
+        return
+    elif version != 1 and isinstance(version, int):
         raise OperationalError(
             'input file is not a v1 yaml file (reports as {})'.format(version)
         )
 
-    new_file = convert_schema(initial, parsed.extra_complex_tests)
+    new_file = convert_schema(initial, extra_complex_tests)
 
-    LOGGER.debug(
-        'writing converted schema to output file at {}'.format(
-            parsed.output_path
+    if write:
+        LOGGER.debug(
+            'writing converted schema to output file at {}'.format(path)
         )
-    )
+        if backup:
+            backup_file(path, path+'.backup')
+        with open(path, 'w') as fp:
+            yaml.safe_dump(new_file, fp)
 
-    with open(parsed.output_path, 'w') as fp:
-        yaml.safe_dump(new_file, fp)
+        print('{} - UPDATED'.format(path))
+        LOGGER.info('successfully wrote v2 schema.yml file to {}'.format(path))
+    else:
+        print('{} - Not updated (dry run)'.format(path))
+        LOGGER.info('would have written v2 schema.yml file to {}'.format(path))
 
-    LOGGER.info(
-        'successfully wrote v2 schema.yml file to {}'.format(
-            parsed.output_path
-        )
-    )
 
 
 def main(args=None):
@@ -212,8 +217,8 @@ def main(args=None):
     except:
         LOGGER.exception('Fatal error during conversion attempt')
     else:
-        LOGGER.info('successfully converted existing {} to {}'.format(
-            parsed.input_path, parsed.output_path
+        LOGGER.info('successfully converted files in {}'.format(
+            parsed.search_directory
         ))
 
 
@@ -266,7 +271,7 @@ class ModelTestBuilder(object):
     def add_table_test(self, test_name, test_value):
         self.model_tests.append({test_name: test_value})
 
-    def handle_simple_column(self, test_name, test_values):
+    def handle_simple_column_test(self, test_name, test_values):
         for column_name in test_values:
             LOGGER.info(
                 'found a {} test for model {}, column {}'.format(
@@ -275,7 +280,7 @@ class ModelTestBuilder(object):
             )
             self.add_column_test(column_name, test_name)
 
-    def handle_complex_column(self, test_name, test_values):
+    def handle_complex_column_test(self, test_name, test_values):
         """'complex' columns are lists of dicts, where each dict has a single
         key (the test name) and the value of that key is a dict of test values.
         """
@@ -299,37 +304,36 @@ class ModelTestBuilder(object):
             self.add_column_test(column_name, value)
 
     def handle_unknown_test(self, test_name, test_values):
-        for test_value in test_values:
-            self.add_table_test(test_name, test_value)
+        if all(map(is_column_name, test_values)):
+            LOGGER.debug(
+                'Found custom test named {}, inferred that it only takes '
+                'columns as arguments'.format(test_name)
+            )
+            self.handle_simple_column_test(test_name, test_values)
+        else:
+            LOGGER.warning(
+                'Found a custom test named {} that appears to take extra '
+                'arguments. Converting it to a model-level test'.format(
+                    test_name
+                )
+            )
+            for test_value in test_values:
+                self.add_table_test(test_name, test_value)
 
     def populate_test(self, test_name, test_values):
         if not isinstance(test_values, list):
             raise OperationalError(
                 'Expected type "list" for test values in constraints '
                 'under test {} inside model {}, got "{}"'.format(
-                    test_name, model_name, type(test_values)
+                    test_name, self.model_name, type(test_values)
                 )
             )
         if test_name in self._simple_column_tests:
-            self.handle_simple_column(test_name, test_values)
+            self.handle_simple_column_test(test_name, test_values)
         elif test_name in self._complex_column_tests:
-            self.handle_complex_column(test_name, test_values)
+            self.handle_complex_column_test(test_name, test_values)
         else:
-            if all(is_column_name(v) for v in test_values):
-                # looks like a simple test to me!
-                LOGGER.debug(
-                    'Found custom test named {}, inferred that it only takes '
-                    'columns as arguments'.format(test_name)
-                )
-                self.handle_simple_column(test_name, test_values)
-            else:
-                LOGGER.warning(
-                    'Found a custom test named {} that appears to take extra '
-                    'arguments. Converting it to a model-level test'.format(
-                        test_name
-                    )
-                )
-                self.handle_unknown_test(test_name, test_values)
+            self.handle_unknown_test(test_name, test_values)
 
     def populate_from_constraints(self, constraints):
         for test_name, test_values in constraints.items():
@@ -471,15 +475,13 @@ else:
             self.assertEqual(sorted_models, expected)
 
         def test_parse_validate_and_mutate_args_simple(self):
-            args = ['my-input.yml']
+            args = ['my-input']
             parsed = parse_args(args)
-            self.assertEqual(parsed.input_path, 'my-input.yml')
-            self.assertEqual(parsed.output_path, 'my-input.yml.new')
-            self.assertEqual(parsed.backup_path, None)
+            self.assertEqual(parsed.search_directory, 'my-input')
             with self.assertRaises(OperationalError):
                 validate_and_mutate_args(parsed)
             with mock.patch('os.path.exists') as exists:
-                exists.side_effect = lambda x: x.endswith('.yml')
+                exists.return_value = True
                 validate_and_mutate_args(parsed)
             # validate will mutate this to be a dict
             self.assertEqual(parsed.extra_complex_tests, {})
@@ -488,11 +490,11 @@ else:
             args = [
                 '--complex-test', 'known_complex_custom:field',
                 '--complex-test', 'other_complex_custom:column',
-                'my-input.yml'
+                'my-input'
             ]
             parsed = parse_args(args)
             with mock.patch('os.path.exists') as exists:
-                exists.side_effect = lambda x: x.endswith('.yml')
+                exists.return_value = True
                 validate_and_mutate_args(parsed)
                 self.assertEqual(
                     parsed.extra_complex_tests,
