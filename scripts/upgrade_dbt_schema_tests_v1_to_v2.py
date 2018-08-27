@@ -19,6 +19,12 @@ except NameError:
     basestring = str
 
 
+def is_column_name(value):
+    if not isinstance(value, basestring):
+        return False
+    return COLUMN_NAME_PAT.match(value) is not None
+
+
 class OperationalError(Exception):
     pass
 
@@ -187,9 +193,12 @@ class ModelTestBuilder(object):
         self.columns[column_name] = column
         return column
 
-    def add_test(self, column_name, test_name):
+    def add_column_test(self, column_name, test_name):
         column = self.get_column(column_name)
         column['tests'].append(test_name)
+
+    def add_table_test(self, test_name, test_value):
+        self.model_tests.append({test_name: test_value})
 
     def handle_simple_column(self, test_name, test_values):
         for column_name in test_values:
@@ -198,7 +207,7 @@ class ModelTestBuilder(object):
                     test_name, self.model_name, column_name
                 )
             )
-            self.add_test(column_name, test_name)
+            self.add_column_test(column_name, test_name)
 
     def handle_complex_column(self, test_name, test_values):
         """'complex' columns are lists of dicts, where each dict has a single
@@ -221,10 +230,11 @@ class ModelTestBuilder(object):
                     self.model_name, column_name, test_value
                 )
             )
-            self.add_test(column_name, value)
+            self.add_column_test(column_name, value)
 
     def handle_unknown_test(self, test_name, test_values):
-        raise NotImplementedError('TODO...')
+        for test_value in test_values:
+            self.add_table_test(test_name, test_value)
 
     def populate_test(self, test_name, test_values):
         if not isinstance(test_values, list):
@@ -239,7 +249,7 @@ class ModelTestBuilder(object):
         elif test_name in self.COMPLEX_COLUMN_TESTS:
             self.handle_complex_column(test_name, test_values)
         else:
-            if all(COLUMN_NAME_PAT.match(v) for v in test_values):
+            if all(is_column_name(v) for v in test_values):
                 # looks like a simple test to me!
                 LOGGER.debug(
                     'Found custom test named {}, inferred that it only takes '
@@ -309,6 +319,9 @@ foo:
         simple_custom:
             - id
             - favorite_color
+        # becomes a table-level test
+        complex_custom:
+            - { field: favorite_color, arg1: test, arg2: ref('bar') }
 
 bar:
     constraints:
@@ -369,6 +382,13 @@ class TestConvert(unittest.TestCase):
                             {'accepted_values': {'values': ['yes']}},
                         ]
                     },
+                ],
+                'tests': [
+                    {'complex_custom': {
+                        'field': 'favorite_color',
+                        'arg1': 'test',
+                        'arg2': "ref('bar')"
+                    }},
                 ],
             },
         ]
