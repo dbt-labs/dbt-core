@@ -80,37 +80,53 @@ def backup_file(src, dst, overwrite):
     LOGGER.debug('backup successful')
 
 
-def handle(parsed):
-    """Try to handle the schema conversion. On failure, raise OperationalError
-    and let the caller handle it.
-    """
-    if parsed.backup_path:
-        backup_file(parsed.output_path, parsed.backup_path, parsed.overwrite)
+def validate_args(parsed):
     if not os.path.exists(parsed.input_path):
-        LOGGER.error('input file at {} does not exist!'.format(parsed.input_path))
-    LOGGER.info('loading input file at {}'.format(parsed.input_path))
-    with open(parsed.input_path) as fp:
-        initial = yaml.safe_load(fp)
-    version = initial.get('version', 1)
-    # the isinstance check is to handle the case of models named 'version'
-    if version != 1 and isinstance(version, int):
-        LOGGER.error('input file is not a v1 yaml file (reports as {})'
-                    .format(version))
-        return
+        raise OperationalError(
+            'input file at {} does not exist!'.format(parsed.input_path)
+        )
+
     if os.path.exists(parsed.output_path) and not parsed.overwrite:
-        LOGGER.error(
+        raise OperationalError(
             'output file at {} already exists, and --overwrite was not passed'
             .format(parsed.output_path)
         )
         return
+
+
+
+
+def handle(parsed):
+    """Try to handle the schema conversion. On failure, raise OperationalError
+    and let the caller handle it.
+    """
+    validate_args(parsed)
+    if parsed.backup_path:
+        backup_file(parsed.output_path, parsed.backup_path, parsed.overwrite)
+
+    LOGGER.info('loading input file at {}'.format(parsed.input_path))
+
+    with open(parsed.input_path) as fp:
+        initial = yaml.safe_load(fp)
+
+    version = initial.get('version', 1)
+    # the isinstance check is to handle the case of models named 'version'
+    if version != 1 and isinstance(version, int):
+        raise OperationalError(
+            'input file is not a v1 yaml file (reports as {})'.format(version)
+        )
+
     new_file = convert_schema(initial)
+
     LOGGER.debug(
         'writing converted schema to output file at {}'.format(
             parsed.output_path
         )
     )
+
     with open(parsed.output_path, 'w') as fp:
         yaml.safe_dump(new_file, fp)
+
     LOGGER.info(
         'successfully wrote v2 schema.yml file to {}'.format(
             parsed.output_path
