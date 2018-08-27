@@ -43,7 +43,7 @@ def get_version_information():
 
     installed_s = installed.to_version_string(skip_matcher=True)
     if latest is None:
-        latest_s = 'unknown'
+        latest_s = "unknown"
     else:
         latest_s = latest.to_version_string(skip_matcher=True)
 
@@ -78,7 +78,7 @@ def get_version_information():
         )
 
     if latest is None:
-        return ("{}The latest version of dbt could not be determined!\n"
+        return (
                 "Make sure that the following URL is accessible:\n{}\n\n{}"
             "Make sure that the following URL is accessible:\n{}\n\n{}".format(
                 version_msg, PYPI_VERSION_URL, plugin_version_msg
