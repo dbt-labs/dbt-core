@@ -215,9 +215,7 @@ def main(args=None):
     except:  # noqa: E722
         LOGGER.exception("Fatal error during conversion attempt")
     else:
-        LOGGER.info('successfully converted files in {}'.format(
-            parsed.search_directory
-        ))
+        LOGGER.info("successfully converted files in {}".format(parsed.search_directory))
 
 
 def sort_keyfunc(item):
