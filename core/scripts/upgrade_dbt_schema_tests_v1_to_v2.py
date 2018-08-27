@@ -407,7 +407,7 @@ else:
     import mock  # noqa
     import unittest  # noqa
 
-    SAMPLE_SCHEMA = '''
+    SAMPLE_SCHEMA = """
     foo:
         constraints:
             not_null:
@@ -433,7 +433,7 @@ else:
         constraints:
             not_null:
                 - id
-    '''
+    """
 
     EXPECTED_OBJECT_OUTPUT = [
         {"name": "bar", "columns": [{"name": "id", "tests": ["not_null"]}]},
@@ -488,11 +488,9 @@ else:
 
         def test_convert(self):
             input_schema = yaml.safe_load(SAMPLE_SCHEMA)
-            output_schema = convert_schema(input_schema,
-                                           {'known_complex_custom': 'field'})
-            self.assertEqual(output_schema['version'], 2)
-            sorted_models = sorted(output_schema['models'],
-                                   key=lambda x: x['name'])
+            output_schema = convert_schema(input_schema, {"known_complex_custom": "field"})
+            self.assertEqual(output_schema["version"], 2)
+            sorted_models = sorted(output_schema["models"], key=lambda x: x["name"])
             self.assertEqual(sorted_models, EXPECTED_OBJECT_OUTPUT)
 
         def test_parse_validate_and_mutate_args_simple(self):
@@ -501,7 +499,7 @@ else:
             self.assertEqual(parsed.search_directory, "my-input")
             with self.assertRaises(OperationalError):
                 validate_and_mutate_args(parsed)
-            with mock.patch('os.path.exists') as exists:
+            with mock.patch("os.path.exists") as exists:
                 exists.return_value = True
                 validate_and_mutate_args(parsed)
             # validate will mutate this to be a dict
@@ -509,14 +507,14 @@ else:
 
         def test_parse_validate_and_mutate_args_extra_tests(self):
             args = [
-                '--complex-test', 'known_complex_custom:field',
-                '--complex-test', 'other_complex_custom:column',
+                "--complex-test",
+                "known_complex_custom:field",
                 "--complex-test",
                 "other_complex_custom:column",
                 "my-input",
             ]
             parsed = parse_args(args)
-            with mock.patch('os.path.exists') as exists:
+            with mock.patch("os.path.exists") as exists:
                 exists.return_value = True
                 validate_and_mutate_args(parsed)
                 self.assertEqual(
