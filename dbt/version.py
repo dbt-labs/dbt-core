@@ -35,6 +35,8 @@ def get_remote_version_file_contents(url=REMOTE_VERSION_FILE):
 
 def get_latest_version():
     contents = get_remote_version_file_contents()
+    if contents == '':
+        return None
     version_string = get_version_string_from_text(contents)
     return dbt.semver.VersionSpecifier.from_version_string(version_string)
 
@@ -48,10 +50,18 @@ def get_version_information():
     latest = get_latest_version()
 
     installed_s = installed.to_version_string(skip_matcher=True)
-    latest_s = latest.to_version_string(skip_matcher=True)
+    if latest is None:
+        latest_s = 'unknown'
+    else:
+        latest_s = latest.to_version_string(skip_matcher=True)
 
     version_msg = ("installed version: {}\n"
                    "   latest version: {}\n\n".format(installed_s, latest_s))
+
+    if latest is None:
+        return ("{}The latest version of dbt could not be determined!\n"
+                "Make sure that the following URL is accessible:\n{}"
+                .format(version_msg, REMOTE_VERSION_FILE))
 
     if installed == latest:
         return "{}Up to date!".format(version_msg)
