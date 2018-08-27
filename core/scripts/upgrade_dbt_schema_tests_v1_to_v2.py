@@ -33,7 +33,7 @@ class OperationalError(Exception):
 
 def setup_logging(filename):
     LOGGER.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(levelname)s: %(asctime)s: %(message)s')
+    formatter = logging.Formatter("%(levelname)s: %(asctime)s: %(message)s")
     file_handler = logging.FileHandler(filename=filename)
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(formatter)
@@ -53,16 +53,15 @@ def parse_args(args):
         default=LOGFILE,
     )
     parser.add_argument(
-        '--no-backup',
-        action='store_false',
-        dest='backup',
-        help='if set, do not generate ".backup" files.'
+        "--no-backup",
+        action="store_false",
+        dest="backup",
+        help='if set, do not generate ".backup" files.',
     )
     parser.add_argument(
-        '--apply',
+        "--apply",
         action="store_true",
-        help=('if set, apply changes instead of just logging about found '
-              'schema.yml files')
+        help=("if set, apply changes instead of just logging about found " "schema.yml files"),
     )
     parser.add_argument(
         '--complex-test',
@@ -79,7 +78,7 @@ def parse_args(args):
         help='The path to an optional yaml file of key/value pairs that does '
              'the same as --complex-test.'
     )
-    parser.add_argument('search_directory')
+    parser.add_argument("search_directory")
     parsed = parser.parse_args(args)
     return parsed
 
@@ -100,7 +99,7 @@ def validate_and_mutate_args(parsed):
     """
     if not os.path.exists(parsed.search_directory):
         raise OperationalError(
-            'input directory at {} does not exist!'.format(parsed.search_directory)
+            "input directory at {} does not exist!".format(parsed.search_directory)
         )
 
     complex_tests = {}
@@ -135,26 +134,27 @@ def handle(parsed):
     and let the caller handle it.
     """
     validate_and_mutate_args(parsed)
-    with open(os.path.join(parsed.search_directory, 'dbt_project.yml')) as fp:
+    with open(os.path.join(parsed.search_directory, "dbt_project.yml")) as fp:
         project = yaml.safe_load(fp)
     model_dirs = project.get("model-paths", ["models"])
     if parsed.apply:
-        print('converting the following files to the v2 spec:')
+        print("converting the following files to the v2 spec:")
     else:
-        print('would convert the following files to the v2 spec:')
+        print("would convert the following files to the v2 spec:")
     for model_dir in model_dirs:
         search_path = os.path.join(parsed.search_directory, model_dir)
-        convert_project(search_path, parsed.backup, parsed.apply,
-                        parsed.extra_complex_tests)
+        convert_project(search_path, parsed.backup, parsed.apply, parsed.extra_complex_tests)
     if not parsed.apply:
-        print('Run with --apply to write these changes. Files with an error '
-              'will not be converted.')
+        print(
+            "Run with --apply to write these changes. Files with an error "
+            "will not be converted."
+        )
 
 
 def find_all_yaml(path):
     for root, _, files in os.walk(path):
         for filename in files:
-            if filename.endswith('.yml'):
+            if filename.endswith(".yml"):
                 yield os.path.join(root, filename)
 
 
@@ -163,12 +163,12 @@ def convert_project(path, backup, write, extra_complex_tests):
         try:
             convert_file(filepath, backup, write, extra_complex_tests)
         except OperationalError as exc:
-            print('{} - could not convert: {}'.format(filepath, exc.message))
+            print("{} - could not convert: {}".format(filepath, exc.message))
             LOGGER.error(exc.message)
 
 
 def convert_file(path, backup, write, extra_complex_tests):
-    LOGGER.info('loading input file at {}'.format(path))
+    LOGGER.info("loading input file at {}".format(path))
 
     with open(path) as fp:
         initial = yaml.safe_load(fp)
@@ -176,7 +176,7 @@ def convert_file(path, backup, write, extra_complex_tests):
     version = initial.get("version", 1)
     # the isinstance check is to handle the case of models named 'version'
     if version == 2:
-        msg = '{} - already v2, no need to update'.format(path)
+        msg = "{} - already v2, no need to update".format(path)
         print(msg)
         LOGGER.info(msg)
         return
@@ -192,16 +192,16 @@ def convert_file(path, backup, write, extra_complex_tests):
             'writing converted schema to output file at {}'.format(path)
         )
         if backup:
-            backup_file(path, path+'.backup')
+            backup_file(path, path + ".backup")
 
-        with open(path, 'w') as fp:
+        with open(path, "w") as fp:
             yaml.dump(new_file, fp, default_flow_style=False, indent=2)
 
-        print('{} - UPDATED'.format(path))
-        LOGGER.info('successfully wrote v2 schema.yml file to {}'.format(path))
+        print("{} - UPDATED".format(path))
+        LOGGER.info("successfully wrote v2 schema.yml file to {}".format(path))
     else:
-        print('{} - Not updated (dry run)'.format(path))
-        LOGGER.info('would have written v2 schema.yml file to {}'.format(path))
+        print("{} - Not updated (dry run)".format(path))
+        LOGGER.info("would have written v2 schema.yml file to {}".format(path))
 
 
 def main(args=None):
@@ -309,16 +309,14 @@ class ModelTestBuilder:
     def handle_unknown_test(self, test_name, test_values):
         if all(map(is_column_name, test_values)):
             LOGGER.debug(
-                'Found custom test named {}, inferred that it only takes '
-                'columns as arguments'.format(test_name)
+                "Found custom test named {}, inferred that it only takes "
+                "columns as arguments".format(test_name)
             )
             self.handle_simple_column_test(test_name, test_values)
         else:
             LOGGER.warning(
-                'Found a custom test named {} that appears to take extra '
-                'arguments. Converting it to a model-level test'.format(
-                    test_name
-                )
+                "Found a custom test named {} that appears to take extra "
+                "arguments. Converting it to a model-level test".format(test_name)
             )
             for test_value in test_values:
                 self.add_table_test(test_name, test_value)
@@ -509,9 +507,9 @@ else:
             self.assertEqual(sorted_models, EXPECTED_OBJECT_OUTPUT)
 
         def test_parse_validate_and_mutate_args_simple(self):
-            args = ['my-input']
+            args = ["my-input"]
             parsed = parse_args(args)
-            self.assertEqual(parsed.search_directory, 'my-input')
+            self.assertEqual(parsed.search_directory, "my-input")
             with self.assertRaises(OperationalError):
                 validate_and_mutate_args(parsed)
             with mock.patch('os.path.exists') as exists:
@@ -524,7 +522,9 @@ else:
             args = [
                 '--complex-test', 'known_complex_custom:field',
                 '--complex-test', 'other_complex_custom:column',
-                'my-input'
+                "--complex-test",
+                "other_complex_custom:column",
+                "my-input",
             ]
             parsed = parse_args(args)
             with mock.patch('os.path.exists') as exists:
