@@ -135,8 +135,8 @@ def validate_and_mutate_args(parsed):
             .format(parsed.output_path)
         )
 
-
     complex_tests = {}
+
     if parsed.extra_complex_tests_file:
         if not os.path.exists(parsed.extra_complex_tests_file):
             raise OperationalError(
@@ -151,12 +151,14 @@ def validate_and_mutate_args(parsed):
                 .format(parsed.extra_complex_tests_file)
             )
         complex_tests.update(extra_tests)
+
     if parsed.extra_complex_tests:
         for tst in parsed.extra_complex_tests:
             pair = tst.split(':', 1)
             if len(pair) != 2:
                 raise OperationalError('Invalid complex test "{}"'.format(tst))
             complex_tests[pair[0]] = pair[1]
+
     parsed.extra_complex_tests = complex_tests
 
 
@@ -238,6 +240,7 @@ class ModelTestBuilder(object):
         'relationships': 'from',
         'accepted_values': 'field',
     }
+
     def __init__(self, model_name, extra_complex_tests=None):
         self.model_name = model_name
         self.columns = {}
@@ -360,136 +363,141 @@ def convert_schema(initial, extra_complex_tests):
     }
 
 
-
 if __name__ == '__main__':
     main()
 
-import mock
-import unittest
+else:
+    # a cute trick so we only import/run these things under nose.
 
-SAMPLE_SCHEMA = '''
-foo:
-    constraints:
-        not_null:
-            - id
-            - email
-            - favorite_color
-        unique:
-            - id
-            - email
-        accepted_values:
-            - { field: favorite_color, values: ['blue', 'green'] }
-            - { field: likes_puppies, values: ['yes'] }
-        simple_custom:
-            - id
-            - favorite_color
-        known_complex_custom:
-            - { field: likes_puppies, arg1: test }
-        # becomes a table-level test
-        complex_custom:
-            - { field: favorite_color, arg1: test, arg2: ref('bar') }
+    import mock  # noqa
+    import unittest  # noqa
 
-bar:
-    constraints:
-        not_null:
-            - id
-'''
+    SAMPLE_SCHEMA = '''
+    foo:
+        constraints:
+            not_null:
+                - id
+                - email
+                - favorite_color
+            unique:
+                - id
+                - email
+            accepted_values:
+                - { field: favorite_color, values: ['blue', 'green'] }
+                - { field: likes_puppies, values: ['yes'] }
+            simple_custom:
+                - id
+                - favorite_color
+            known_complex_custom:
+                - { field: likes_puppies, arg1: test }
+            # becomes a table-level test
+            complex_custom:
+                - { field: favorite_color, arg1: test, arg2: ref('bar') }
+
+    bar:
+        constraints:
+            not_null:
+                - id
+    '''
 
 
+    class TestConvert(unittest.TestCase):
+        maxDiff = None
 
-class TestConvert(unittest.TestCase):
-    maxDiff = None
-    def test_convert(self):
-        input_schema = yaml.safe_load(SAMPLE_SCHEMA)
-        output_schema = convert_schema(input_schema,
-                                       {'known_complex_custom': 'field'})
-        self.assertEqual(output_schema['version'], 2)
-        sorted_models = sorted(output_schema['models'], key=lambda x: x['name'])
-        expected = [
-            {
-                'name': 'bar',
-                'columns': [
-                    {
-                        'name': 'id',
-                        'tests': [
-                            'not_null'
-                        ]
-                    }
-                ]
-            },
-            {
-                'name': 'foo',
-                'columns': [
-                    {
-                        'name': 'email',
-                        'tests': [
-                            'not_null',
-                            'unique',
-                        ],
-                    },
-                    {
-                        'name': 'favorite_color',
-                        'tests': [
-                            {'accepted_values': {'values': ['blue', 'green']}},
-                            'not_null',
-                            'simple_custom',
-                        ],
-                    },
-                    {
-                        'name': 'id',
-                        'tests': [
-                            'not_null',
-                            'simple_custom',
-                            'unique',
-                        ],
-                    },
-                    {
-                        'name': 'likes_puppies',
-                        'tests': [
-                            {'accepted_values': {'values': ['yes']}},
-                            {'known_complex_custom': {'arg1': 'test'}},
-                        ]
-                    },
-                ],
-                'tests': [
-                    {'complex_custom': {
-                        'field': 'favorite_color',
-                        'arg1': 'test',
-                        'arg2': "ref('bar')"
-                    }},
-                ],
-            },
-        ]
-        self.assertEqual(sorted_models, expected)
-
-    def test_parse_validate_and_mutate_args_simple(self):
-        args = ['my-input.yml']
-        parsed = parse_args(args)
-        self.assertEqual(parsed.input_path, 'my-input.yml')
-        self.assertEqual(parsed.output_path, 'my-input.yml.new')
-        self.assertEqual(parsed.backup_path, None)
-        with self.assertRaises(OperationalError):
-            validate_and_mutate_args(parsed)
-        with mock.patch('os.path.exists') as exists:
-            exists.side_effect = lambda x: x.endswith('.yml')
-            validate_and_mutate_args(parsed)
-        # validate will mutate this to be a dict
-        self.assertEqual(parsed.extra_complex_tests, {})
-
-    def test_parse_validate_and_mutate_args_extra_tests(self):
-        args = [
-            '--complex-test', 'known_complex_custom:field',
-            '--complex-test', 'other_complex_custom:column',
-            'my-input.yml'
-        ]
-        parsed = parse_args(args)
-        with mock.patch('os.path.exists') as exists:
-            exists.side_effect = lambda x: x.endswith('.yml')
-            validate_and_mutate_args(parsed)
-            self.assertEqual(
-                parsed.extra_complex_tests,
+        def test_convert(self):
+            input_schema = yaml.safe_load(SAMPLE_SCHEMA)
+            output_schema = convert_schema(input_schema,
+                                           {'known_complex_custom': 'field'})
+            self.assertEqual(output_schema['version'], 2)
+            sorted_models = sorted(output_schema['models'],
+                                   key=lambda x: x['name'])
+            expected = [
                 {
-                    'known_complex_custom': 'field',
-                    'other_complex_custom': 'column'
-                }
-            )
+                    'name': 'bar',
+                    'columns': [
+                        {
+                            'name': 'id',
+                            'tests': [
+                                'not_null'
+                            ]
+                        }
+                    ]
+                },
+                {
+                    'name': 'foo',
+                    'columns': [
+                        {
+                            'name': 'email',
+                            'tests': [
+                                'not_null',
+                                'unique',
+                            ],
+                        },
+                        {
+                            'name': 'favorite_color',
+                            'tests': [
+                                {'accepted_values': {
+                                    'values': ['blue', 'green']}
+                                },
+                                'not_null',
+                                'simple_custom',
+                            ],
+                        },
+                        {
+                            'name': 'id',
+                            'tests': [
+                                'not_null',
+                                'simple_custom',
+                                'unique',
+                            ],
+                        },
+                        {
+                            'name': 'likes_puppies',
+                            'tests': [
+                                {'accepted_values': {'values': ['yes']}},
+                                {'known_complex_custom': {'arg1': 'test'}},
+                            ]
+                        },
+                    ],
+                    'tests': [
+                        {'complex_custom': {
+                            'field': 'favorite_color',
+                            'arg1': 'test',
+                            'arg2': "ref('bar')"
+                        }},
+                    ],
+                },
+            ]
+            self.assertEqual(sorted_models, expected)
+
+        def test_parse_validate_and_mutate_args_simple(self):
+            args = ['my-input.yml']
+            parsed = parse_args(args)
+            self.assertEqual(parsed.input_path, 'my-input.yml')
+            self.assertEqual(parsed.output_path, 'my-input.yml.new')
+            self.assertEqual(parsed.backup_path, None)
+            with self.assertRaises(OperationalError):
+                validate_and_mutate_args(parsed)
+            with mock.patch('os.path.exists') as exists:
+                exists.side_effect = lambda x: x.endswith('.yml')
+                validate_and_mutate_args(parsed)
+            # validate will mutate this to be a dict
+            self.assertEqual(parsed.extra_complex_tests, {})
+
+        def test_parse_validate_and_mutate_args_extra_tests(self):
+            args = [
+                '--complex-test', 'known_complex_custom:field',
+                '--complex-test', 'other_complex_custom:column',
+                'my-input.yml'
+            ]
+            parsed = parse_args(args)
+            with mock.patch('os.path.exists') as exists:
+                exists.side_effect = lambda x: x.endswith('.yml')
+                validate_and_mutate_args(parsed)
+                self.assertEqual(
+                    parsed.extra_complex_tests,
+                    {
+                        'known_complex_custom': 'field',
+                        'other_complex_custom': 'column'
+                    }
+                )
