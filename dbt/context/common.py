@@ -236,10 +236,9 @@ class Var(object):
         raw = self.local_vars[var_name]
         if raw is None:
             pretty_vars = self.pretty_dict(self.local_vars)
-            model_name = dbt.utils.get_model_name_or_none(self.model)
             dbt.exceptions.raise_compiler_error(
                 self.NoneVarError.format(
-                    var_name, model_name, pretty_vars
+                    var_name, self.model_name, pretty_vars
                 ),
                 self.model
             )
