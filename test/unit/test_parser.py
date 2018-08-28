@@ -1544,6 +1544,26 @@ class ParserTest(unittest.TestCase):
             self.assertIn('https://docs.getdbt.com/v0.11/docs/schemayml-files',
                           str(cm.exception))
 
+    @mock.patch.object(SchemaParser, 'build_node')
+    @mock.patch.object(SchemaParser, 'find_schema_yml')
+    @mock.patch.object(dbt.parser.schemas, 'logger')
+    def test__schema_v1_version_model(self, mock_logger, find_schema_yml, build_node):
+        test_yml = yaml.safe_load(
+            '{model_one: {constraints: {not_null: [id],'
+            'unique: [id],'
+            'accepted_values: [{field: id, values: ["a","b"]}],'
+            'relationships: [{from: id, to: ref(\'model_two\'), field: id}]' # noqa
+            '}}, version: {constraints: {not_null: [id]}}}'
+        )
+        find_schema_yml.return_value = [('/some/path/schema.yml', test_yml)]
+        root_project = {}
+        all_projects = {}
+        root_dir = '/some/path'
+        relative_dirs = ['a', 'b']
+        dbt.parser.schemas.SchemaParser.load_and_parse(
+            'test', root_project, all_projects, root_dir, relative_dirs
+        )
+
     def test__simple_data_test(self):
         tests = [{
             'name': 'no_events',
