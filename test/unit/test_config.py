@@ -9,6 +9,43 @@ if os.name == 'nt':
 else:
     TMPDIR = '/tmp'
 
+model_config = {
+    'my_package_name': {
+        'enabled': True,
+        'adwords': {
+            'adwords_ads': {
+                'materialized': 'table',
+                'enabled': True,
+                'schema': 'analytics'
+            }
+        },
+        'snowplow': {
+            'snowplow_sessions': {
+                'sort': 'timestamp',
+                'materialized': 'incremental',
+                'dist': 'user_id',
+                'sql_where': 'created_at > (select max(created_at) from {{ this }})',
+                'unique_key': 'id'
+            },
+            'base': {
+                'snowplow_events': {
+                    'sort': ['timestamp', 'userid'],
+                    'materialized': 'table',
+                    'sort_type': 'interleaved',
+                    'dist': 'userid'
+                }
+            }
+        }
+    }
+}
+
+model_fqns = [
+    ['my_package_name', 'snowplow', 'snowplow_sessions'],
+    ['my_package_name', 'snowplow', 'base', 'snowplow_events'],
+    ['my_package_name', 'adwords', 'adwords_ads']
+]
+
+
 class ConfigTest(unittest.TestCase):
 
     def set_up_empty_config(self):
@@ -64,3 +101,19 @@ class ConfigTest(unittest.TestCase):
         self.set_up_config_options(use_colors=True)
         config = dbt.config.read_config(TMPDIR)
         self.assertTrue(dbt.config.colorize_output(config))
+
+    def test__no_unused_resource_config_paths(self):
+        resource_config = {'models': model_config}
+        resource_config_paths = dbt.config.get_project_resource_config_paths(
+            resource_config)
+        resource_fqns = {'models': model_fqns}
+        self.assertTrue(len(dbt.config.get_unused_resource_config_paths(
+            resource_config_paths, resource_fqns)) == 0)
+
+    def test__unused_resource_config_paths(self):
+        resource_config = {'models': model_config['my_package_name']}
+        resource_config_paths = dbt.config.get_project_resource_config_paths(
+            resource_config)
+        resource_fqns = {'models': model_fqns}
+        self.assertFalse(len(dbt.config.get_unused_resource_config_paths(
+            resource_config_paths, resource_fqns)) == 0)
