@@ -83,9 +83,10 @@ def get_project_resource_config_paths(project):
 
 
 def is_config_used(config_path, fqns):
-    for fqn in fqns:
-        if len(config_path) <= len(fqn) and fqn[:len(config_path)] == config_path:
-            return True
+    if fqns:
+        for fqn in fqns:
+            if len(config_path) <= len(fqn) and fqn[:len(config_path)] == config_path:
+                return True
     return False
 
 
@@ -93,7 +94,7 @@ def get_unused_resource_config_paths(resource_config_paths, resource_fqns):
     unused_resource_config_paths = []
     for resource_type, config_paths in resource_config_paths.items():
         for config_path in config_paths:
-            if not is_config_used(config_path, resource_fqns[resource_type]):
+            if not is_config_used(config_path, resource_fqns.get(resource_type)):
                 unused_resource_config_paths.append(
                     [resource_type] + config_path)
     return unused_resource_config_paths
