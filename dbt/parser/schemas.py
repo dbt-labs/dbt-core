@@ -459,7 +459,9 @@ class SchemaParser(BaseParser):
 
         for original_file_path, test_yml in iterator:
             version = test_yml.get('version', 1)
-            if version == 1:
+            # the version will not be an int if it's a v1 model that has a
+            # model named 'version'.
+            if version == 1 or not isinstance(version, int):
                 cls.check_v2_missing_version(original_file_path, test_yml)
                 new_tests.update(
                     (t.get('unique_id'), t)

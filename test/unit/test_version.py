@@ -1,7 +1,9 @@
 from mock import patch, MagicMock
 import unittest
 
+import dbt.main
 import dbt.version
+import sys
 
 
 class VersionTest(unittest.TestCase):
@@ -87,3 +89,23 @@ class VersionTest(unittest.TestCase):
         assert installed_version < latest_version
         self.assertMultiLineEqual(version_information,
                                   expected_version_information)
+
+    # suppress having version info printed to the screen during tests.
+    @patch('sys.stderr')
+    def test_dbt_version_flag(self, stderr):
+        dbt.version.get_remote_version_file_contents = MagicMock(
+            return_value="""
+                [bumpversion]
+                current_version = 0.10.1
+                commit = True
+                tag = True
+
+                [bumpversion:file:setup.py]
+
+                [bumpversion:file:dbt/version.py]
+            """)
+
+        with self.assertRaises(SystemExit) as exc:
+            dbt.main.handle_and_check(['--version'])
+        self.assertEqual(exc.exception.code, 0)
+
