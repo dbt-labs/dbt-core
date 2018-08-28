@@ -34,6 +34,7 @@ For more information on configuring profiles, please consult the dbt docs:
 https://docs.getdbt.com/docs/configure-your-profile
 """
 
+
 class DBTVersion(argparse.Action):
     """This is very very similar to the builtin argparse._Version action,
     except it just calls dbt.version.get_version_information().
