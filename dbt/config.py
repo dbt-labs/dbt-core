@@ -76,9 +76,8 @@ def get_config_paths(config, path=None, paths=None):
 def get_project_resource_config_paths(project):
     resource_config_paths = {}
     for resource_type in ['models', 'seeds']:
-        if resource_type in project:
-            resource_config_paths[resource_type] = get_config_paths(
-                project[resource_type])
+        resource_config_paths[resource_type] = get_config_paths(
+            project[resource_type])
     return resource_config_paths
 
 

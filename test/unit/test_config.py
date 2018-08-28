@@ -103,7 +103,7 @@ class ConfigTest(unittest.TestCase):
         self.assertTrue(dbt.config.colorize_output(config))
 
     def test__no_unused_resource_config_paths(self):
-        resource_config = {'models': model_config}
+        resource_config = {'models': model_config, 'seeds': {}}
         resource_config_paths = dbt.config.get_project_resource_config_paths(
             resource_config)
         resource_fqns = {'models': model_fqns}
@@ -111,7 +111,7 @@ class ConfigTest(unittest.TestCase):
             resource_config_paths, resource_fqns)) == 0)
 
     def test__unused_resource_config_paths(self):
-        resource_config = {'models': model_config['my_package_name']}
+        resource_config = {'models': model_config['my_package_name'], 'seeds': {}}
         resource_config_paths = dbt.config.get_project_resource_config_paths(
             resource_config)
         resource_fqns = {'models': model_fqns}
