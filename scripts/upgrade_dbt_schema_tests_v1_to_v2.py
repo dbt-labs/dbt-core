@@ -194,7 +194,7 @@ def convert_file(path, backup, write, extra_complex_tests):
         if backup:
             backup_file(path, path+'.backup')
         with open(path, 'w') as fp:
-            yaml.safe_dump(new_file, fp)
+            yaml.safe_dump(new_file, fp, default_flow_style=False)
 
         print('{} - UPDATED'.format(path))
         LOGGER.info('successfully wrote v2 schema.yml file to {}'.format(path))
