@@ -52,6 +52,6 @@ setup(
         'google-cloud-bigquery>=1.0.0,<2',
         'agate>=1.6,<2',
         'jsonschema==2.6.0',
-        'boto3>=1.6.23'
+        'boto3>=1.6.23,<1.8.0'
     ]
 )
