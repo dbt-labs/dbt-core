@@ -193,15 +193,15 @@ def convert_file(path, backup, write, extra_complex_tests):
         )
         if backup:
             backup_file(path, path+'.backup')
+
         with open(path, 'w') as fp:
-            yaml.safe_dump(new_file, fp, default_flow_style=False)
+            yaml.dump(new_file, fp, default_flow_style=False, indent=2)
 
         print('{} - UPDATED'.format(path))
         LOGGER.info('successfully wrote v2 schema.yml file to {}'.format(path))
     else:
         print('{} - Not updated (dry run)'.format(path))
         LOGGER.info('would have written v2 schema.yml file to {}'.format(path))
-
 
 
 def main(args=None):
@@ -234,7 +234,7 @@ def sorted_column_list(column_dict):
     for column in sorted(column_dict.values(), key=lambda c: c['name']):
         # make the unit tests a lot nicer.
         column['tests'].sort(key=sort_keyfunc)
-        columns.append(column)
+        columns.append(CustomSortedColumnsSchema(**column))
     return columns
 
 
@@ -346,8 +346,7 @@ class ModelTestBuilder(object):
 
         if self.columns:
             model['columns'] = sorted_column_list(self.columns)
-        return model
-
+        return CustomSortedModelsSchema(**model)
 
 def convert_schema(initial, extra_complex_tests):
     models = []
@@ -361,10 +360,43 @@ def convert_schema(initial, extra_complex_tests):
         model = builder.generate_model_dict()
         models.append(model)
 
-    return {
-        'version': 2,
-        'models': models,
-    }
+    return CustomSortedRootSchema(version=2, models=models)
+
+
+class CustomSortedSchema(dict):
+    ITEMS_ORDER = NotImplemented
+
+    @classmethod
+    def _items_keyfunc(cls, items):
+        key = items[0]
+        if key not in cls.ITEMS_ORDER:
+            return len(cls.ITEMS_ORDER)
+        else:
+            return cls.ITEMS_ORDER.index(key)
+
+    @staticmethod
+    def representer(self, data):
+        """Note that 'self' here is NOT an instance of CustomSortedSchema, but
+        of some yaml thing.
+        """
+        parent_iter = data.items()
+        good_iter = sorted(parent_iter, key=data._items_keyfunc)
+        return self.represent_mapping('tag:yaml.org,2002:map', good_iter)
+
+
+class CustomSortedRootSchema(CustomSortedSchema):
+    ITEMS_ORDER = ['version', 'models']
+
+class CustomSortedModelsSchema(CustomSortedSchema):
+    ITEMS_ORDER = ['name', 'columns', 'tests']
+
+class CustomSortedColumnsSchema(CustomSortedSchema):
+    ITEMS_ORDER = ['name', 'tests']
+
+
+for cls in (CustomSortedRootSchema, CustomSortedModelsSchema, CustomSortedColumnsSchema):
+    yaml.add_representer(cls, cls.representer)
+
 
 
 if __name__ == '__main__':
@@ -404,7 +436,63 @@ else:
                 - id
     '''
 
-
+    EXPECTED_OBJECT_OUTPUT = [
+        {
+            'name': 'bar',
+            'columns': [
+                {
+                    'name': 'id',
+                    'tests': [
+                        'not_null'
+                    ]
+                }
+            ]
+        },
+        {
+            'name': 'foo',
+            'columns': [
+                {
+                    'name': 'email',
+                    'tests': [
+                        'not_null',
+                        'unique',
+                    ],
+                },
+                {
+                    'name': 'favorite_color',
+                    'tests': [
+                        {'accepted_values': {
+                            'values': ['blue', 'green']}
+                        },
+                        'not_null',
+                        'simple_custom',
+                    ],
+                },
+                {
+                    'name': 'id',
+                    'tests': [
+                        'not_null',
+                        'simple_custom',
+                        'unique',
+                    ],
+                },
+                {
+                    'name': 'likes_puppies',
+                    'tests': [
+                        {'accepted_values': {'values': ['yes']}},
+                        {'known_complex_custom': {'arg1': 'test'}},
+                    ]
+                },
+            ],
+            'tests': [
+                {'complex_custom': {
+                    'field': 'favorite_color',
+                    'arg1': 'test',
+                    'arg2': "ref('bar')"
+                }},
+            ],
+        },
+    ]
     class TestConvert(unittest.TestCase):
         maxDiff = None
 
@@ -415,64 +503,10 @@ else:
             self.assertEqual(output_schema['version'], 2)
             sorted_models = sorted(output_schema['models'],
                                    key=lambda x: x['name'])
-            expected = [
-                {
-                    'name': 'bar',
-                    'columns': [
-                        {
-                            'name': 'id',
-                            'tests': [
-                                'not_null'
-                            ]
-                        }
-                    ]
-                },
-                {
-                    'name': 'foo',
-                    'columns': [
-                        {
-                            'name': 'email',
-                            'tests': [
-                                'not_null',
-                                'unique',
-                            ],
-                        },
-                        {
-                            'name': 'favorite_color',
-                            'tests': [
-                                {'accepted_values': {
-                                    'values': ['blue', 'green']}
-                                },
-                                'not_null',
-                                'simple_custom',
-                            ],
-                        },
-                        {
-                            'name': 'id',
-                            'tests': [
-                                'not_null',
-                                'simple_custom',
-                                'unique',
-                            ],
-                        },
-                        {
-                            'name': 'likes_puppies',
-                            'tests': [
-                                {'accepted_values': {'values': ['yes']}},
-                                {'known_complex_custom': {'arg1': 'test'}},
-                            ]
-                        },
-                    ],
-                    'tests': [
-                        {'complex_custom': {
-                            'field': 'favorite_color',
-                            'arg1': 'test',
-                            'arg2': "ref('bar')"
-                        }},
-                    ],
-                },
-            ]
-            self.assertEqual(sorted_models, expected)
+            self.assertEqual(sorted_models, EXPECTED_OBJECT_OUTPUT)
+
+        def test_dump(self):
+            EXPECTED_OBJECT_OUTPUT
 
         def test_parse_validate_and_mutate_args_simple(self):
             args = ['my-input']
