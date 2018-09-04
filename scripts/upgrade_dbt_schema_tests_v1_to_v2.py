@@ -269,6 +269,8 @@ class ModelTestBuilder(object):
         column['tests'].append(test_name)
 
     def add_table_test(self, test_name, test_value):
+        if not isinstance(test_value, dict):
+            test_value = {'arg': test_value}
         self.model_tests.append({test_name: test_value})
 
     def handle_simple_column_test(self, test_name, test_values):
