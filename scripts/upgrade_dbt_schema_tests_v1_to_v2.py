@@ -507,9 +507,6 @@ else:
                                    key=lambda x: x['name'])
             self.assertEqual(sorted_models, EXPECTED_OBJECT_OUTPUT)
 
-        def test_dump(self):
-            EXPECTED_OBJECT_OUTPUT
-
         def test_parse_validate_and_mutate_args_simple(self):
             args = ['my-input']
             parsed = parse_args(args)
