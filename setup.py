@@ -7,7 +7,7 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 package_name = "dbt"
-package_version = "0.11.0a1"
+package_version = "0.11.0a2"
 description = """dbt (data build tool) is a command line tool that helps \
 analysts and engineers transform data in their warehouse more effectively"""
 
@@ -52,6 +52,6 @@ setup(
         'google-cloud-bigquery>=1.0.0,<2',
         'agate>=1.6,<2',
         'jsonschema==2.6.0',
-        'boto3>=1.6.23'
+        'boto3>=1.6.23,<1.8.0'
     ]
 )
