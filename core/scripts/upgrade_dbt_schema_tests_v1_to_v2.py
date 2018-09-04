@@ -379,17 +379,19 @@ class CustomSortedSchema(dict):
         """
         parent_iter = data.items()
         good_iter = sorted(parent_iter, key=data._items_keyfunc)
-        return self.represent_mapping('tag:yaml.org,2002:map', good_iter)
+        return self.represent_mapping("tag:yaml.org,2002:map", good_iter)
 
 
 class CustomSortedRootSchema(CustomSortedSchema):
-    ITEMS_ORDER = ['version', 'models']
+    ITEMS_ORDER = ["version", "models"]
+
 
 class CustomSortedModelsSchema(CustomSortedSchema):
-    ITEMS_ORDER = ['name', 'columns', 'tests']
+    ITEMS_ORDER = ["name", "columns", "tests"]
+
 
 class CustomSortedColumnsSchema(CustomSortedSchema):
-    ITEMS_ORDER = ['name', 'tests']
+    ITEMS_ORDER = ["name", "tests"]
 
 
 for cls in (CustomSortedRootSchema, CustomSortedModelsSchema, CustomSortedColumnsSchema):
@@ -434,62 +436,53 @@ else:
     '''
 
     EXPECTED_OBJECT_OUTPUT = [
+        {"name": "bar", "columns": [{"name": "id", "tests": ["not_null"]}]},
         {
-            'name': 'bar',
-            'columns': [
+            "name": "foo",
+            "columns": [
                 {
-                    'name': 'id',
-                    'tests': [
-                        'not_null'
-                    ]
-                }
-            ]
-        },
-        {
-            'name': 'foo',
-            'columns': [
-                {
-                    'name': 'email',
-                    'tests': [
-                        'not_null',
-                        'unique',
+                    "name": "email",
+                    "tests": [
+                        "not_null",
+                        "unique",
                     ],
                 },
                 {
-                    'name': 'favorite_color',
-                    'tests': [
-                        {'accepted_values': {
-                            'values': ['blue', 'green']}
-                        },
-                        'not_null',
-                        'simple_custom',
+                    "name": "favorite_color",
+                    "tests": [
+                        {"accepted_values": {"values": ["blue", "green"]}},
+                        "not_null",
+                        "simple_custom",
                     ],
                 },
                 {
-                    'name': 'id',
-                    'tests': [
-                        'not_null',
-                        'simple_custom',
-                        'unique',
+                    "name": "id",
+                    "tests": [
+                        "not_null",
+                        "simple_custom",
+                        "unique",
                     ],
                 },
                 {
-                    'name': 'likes_puppies',
-                    'tests': [
-                        {'accepted_values': {'values': ['yes']}},
-                        {'known_complex_custom': {'arg1': 'test'}},
-                    ]
+                    "name": "likes_puppies",
+                    "tests": [
+                        {"accepted_values": {"values": ["yes"]}},
+                        {"known_complex_custom": {"arg1": "test"}},
+                    ],
                 },
             ],
-            'tests': [
-                {'complex_custom': {
-                    'field': 'favorite_color',
-                    'arg1': 'test',
-                    'arg2': "ref('bar')"
-                }},
+            "tests": [
+                {
+                    "complex_custom": {
+                        "field": "favorite_color",
+                        "arg1": "test",
+                        "arg2": "ref('bar')",
+                    }
+                },
             ],
         },
     ]
+
     class TestConvert(unittest.TestCase):
         maxDiff = None
 
