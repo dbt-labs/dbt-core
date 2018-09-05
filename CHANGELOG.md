@@ -2,7 +2,7 @@
 
 ### Overview
 
-This release adds support for auto-generated dbt documentation, adds a new syntax for `schema.yml` files, and fixes a number of minor bugs. With the exception of planned changes to Snowflake's default quoting strategy, this release should not contain any breaking changes. Check out the [blog post](...) for more information about this release.
+This release adds support for auto-generated dbt documentation, adds a new syntax for `schema.yml` files, and fixes a number of minor bugs. With the exception of planned changes to Snowflake's default quoting strategy, this release should not contain any breaking changes. Check out the [blog post](https://blog.fishtownanalytics.com/using-dbt-docs-fae6137da3c3) for more information about this release.
 
 ### Breaking Changes
 - Change default Snowflake quoting strategy to "unquoted" ([docs](https://docs.getdbt.com/v0.11/docs/configuring-quoting)) ([#824](https://github.com/fishtown-analytics/dbt/issues/824))
