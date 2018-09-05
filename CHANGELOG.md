@@ -1,4 +1,4 @@
-## dbt 0.11.0 (unreleased, codename: Isaac Asimov)
+## dbt 0.11.0 - Isaac Asimov (September 6, 2018)
 
 ### Overview
 
