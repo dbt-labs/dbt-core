@@ -112,7 +112,11 @@
         true as "stats:diststyle:include",
 
         'Sort Key 1' as "stats:sortkey1:label",
-        sortkey1 as "stats:sortkey1:value",
+        -- handle 0xFF byte in response for interleaved sort styles
+        case
+            when sortkey1 like 'INTERLEAVED%' then 'INTERLEAVED'::text
+            else sortkey1
+        end as "stats:sortkey1:value",
         'First column in the sort key.'::text as "stats:sortkey1:description",
         (sortkey1 is not null) as "stats:sortkey1:include",
 
@@ -149,7 +153,7 @@
 
         'Stats Off' as "stats:stats_off:label",
         stats_off as "stats:stats_off:value",
-        'Number that indicates how stale the table\'s statistics are; 0 is current, 100 is out of date.'::text as "stats:stats_off:description",
+        'Number that indicates how stale the table statistics are; 0 is current, 100 is out of date.'::text as "stats:stats_off:description",
         true as "stats:stats_off:include",
 
         'Approximate Row Count' as "stats:rows:label",
