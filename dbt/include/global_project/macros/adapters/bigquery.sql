@@ -11,11 +11,27 @@
 {%- endmacro -%}
 
 
+{% macro cluster_by(raw_cluster_by) %}
+  {%- if raw_cluster_by is none -%}
+    {{ return('') }}
+  {% endif %}
+
+  {% set cluster_by_clause %}
+    cluster by {{ raw_cluster_by }}
+  {%- endset -%}
+
+  {{ return(cluster_by_clause) }}
+
+{%- endmacro -%}
+
+
 {% macro bigquery__create_table_as(temporary, relation, sql) -%}
   {%- set raw_partition_by = config.get('partition_by', none) -%}
+  {%- set raw_cluster_by = config.get('cluster_by', none) -%}
 
   create or replace table {{ relation }}
   {{ partition_by(raw_partition_by) }}
+  {{ cluster_by(raw_cluster_by) }}
   as (
     {{ sql }}
   );
