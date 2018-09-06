@@ -784,7 +784,8 @@ class BigQueryAdapter(PostgresAdapter):
                 table = client.get_table(table_ref)
 
                 flattened = cls._flat_columns_in_table(table)
-                relation_stats = dict(cls._get_stats_columns(table, relation.type))
+                relation_stats = dict(cls._get_stats_columns(table,
+                                                             relation.type))
 
                 for index, column in enumerate(flattened, start=1):
                     column_data = (
