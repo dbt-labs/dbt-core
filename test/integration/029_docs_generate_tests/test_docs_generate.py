@@ -183,7 +183,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
         }
 
-    def _bigquery_stats(self, is_table):
+    def _bigquery_stats(self, is_table, partition=None, cluster=None):
         stats = {
             'has_stats': {
                 'id': 'has_stats',
@@ -219,8 +219,15 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'partitioning_type': {
                     'id': 'partitioning_type',
                     'label': 'Partitioning Type',
-                    'value': None,
+                    'value': partition,
                     'description': 'The partitioning type used for this table',
+                    'include': True,
+                },
+                'clustering_fields': {
+                    'id': 'clustering_fields',
+                    'label': 'Clustering Fields',
+                    'value': cluster,
+                    'description': 'The clustering fields for this table',
                     'include': True,
                 },
             })
@@ -424,11 +431,48 @@ class TestDocsGenerate(DBTIntegrationTest):
             seed_stats=self._bigquery_stats(True),
         )
 
-    def expected_bigquery_nested_catalog(self):
+    @staticmethod
+    def _clustered_bigquery_columns(update_type):
+        return {
+            'id': {
+                'comment': None,
+                'index': 1,
+                'name': 'id',
+                'type': 'INT64',
+            },
+            'first_name': {
+                'comment': None,
+                'index': 2,
+                'name': 'first_name',
+                'type': 'STRING',
+            },
+            'email': {
+                'comment': None,
+                'index': 3,
+                'name': 'email',
+                'type': 'STRING',
+            },
+            'ip_address': {
+                'comment': None,
+                'index': 4,
+                'name': 'ip_address',
+                'type': 'STRING',
+            },
+            'updated_at': {
+                'comment': None,
+                'index': 5,
+                'name': 'updated_at',
+                'type': update_type,
+            },
+        }
+
+    def expected_bigquery_complex_catalog(self):
         my_schema_name = self.unique_schema()
         role = self.get_role()
-        stats = self._bigquery_stats(False)
-        expected_cols = {
+        table_stats = self._bigquery_stats(True)
+        clustering_stats = self._bigquery_stats(True, partition='DAY',
+                                                cluster='first_name')
+        nesting_columns = {
             'field_1': {
                 "name": "field_1",
                 "index": 1,
@@ -460,30 +504,55 @@ class TestDocsGenerate(DBTIntegrationTest):
                 "comment": None
             }
         }
+
         return {
-            "model.test.model": {
-                'unique_id': 'model.test.model',
-                "metadata": {
-                    "schema": my_schema_name,
-                    "name": "model",
-                    "type": "view",
-                    "owner": role,
-                    "comment": None
+            'model.test.clustered': {
+                'unique_id': 'model.test.clustered',
+                'metadata': {
+                    'comment': None,
+                    'name': 'clustered',
+                    'owner': None,
+                    'schema': my_schema_name,
+                    'type': 'table'
                 },
-                'stats': stats,
-                "columns": expected_cols
+                'stats': clustering_stats,
+                'columns': self._clustered_bigquery_columns('DATE'),
             },
-            "model.test.seed": {
-                'unique_id': 'model.test.seed',
+            'seed.test.seed': {
+                'unique_id': 'seed.test.seed',
+                'metadata': {
+                    'comment': None,
+                    'name': 'seed',
+                    'owner': None,
+                    'schema': my_schema_name,
+                    'type': 'table',
+                },
+                'stats': table_stats,
+                'columns': self._clustered_bigquery_columns('DATETIME'),
+            },
+            "model.test.nested_view": {
+                'unique_id': 'model.test.nested_view',
                 "metadata": {
                     "schema": my_schema_name,
-                    "name": "seed",
+                    "name": "nested_view",
                     "type": "view",
                     "owner": role,
                     "comment": None
                 },
-                'stats': stats,
-                "columns": expected_cols
+                'stats': self._bigquery_stats(False),
+                "columns": nesting_columns,
+            },
+            "model.test.nested_table": {
+                'unique_id': 'model.test.nested_table',
+                "metadata": {
+                    "schema": my_schema_name,
+                    "name": "nested_table",
+                    "type": "table",
+                    "owner": role,
+                    "comment": None
+                },
+                'stats': table_stats,
+                "columns": nesting_columns,
             }
         }
 
@@ -1100,14 +1169,68 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
         }
 
-    def expected_bigquery_nested_manifest(self):
-        model_sql_path = self.dir('bq_models/model.sql')
-        seed_sql_path = self.dir('bq_models/seed.sql')
+    def expected_bigquery_complex_manifest(self):
+        nested_view_sql_path = self.dir('bq_models/nested_view.sql')
+        nested_table_sql_path = self.dir('bq_models/nested_table.sql')
+        clustered_sql_path = self.dir('bq_models/clustered.sql')
         my_schema_name = self.unique_schema()
         return {
             'nodes': {
-               'model.test.model': {
-                    'alias': 'model',
+                'model.test.clustered': {
+                    'alias': 'clustered',
+                    'config': {
+                        'cluster_by': 'first_name',
+                        'column_types': {},
+                        'enabled': True,
+                        'materialized': 'table',
+                        'partition_by': 'updated_at',
+                        'post-hook': [],
+                        'pre-hook': [],
+                        'quoting': {},
+                        'vars': {}
+                    },
+                    'depends_on': {'macros': [], 'nodes': ['seed.test.seed']},
+                    'empty': False,
+                    'fqn': ['test', 'clustered'],
+                    'name': 'clustered',
+                    'original_file_path': clustered_sql_path,
+                    'package_name': 'test',
+                    'path': 'clustered.sql',
+                    'raw_sql': open(clustered_sql_path).read().rstrip('\n'),
+                    'refs': [['seed']],
+                    'resource_type': 'model',
+                    'root_path': os.getcwd(),
+                    'schema': my_schema_name,
+                    'tags': [],
+                    'unique_id': 'model.test.clustered',
+                    'columns': {
+                        'email': {
+                            'description': "The user's email",
+                            'name': 'email'
+                        },
+                        'first_name': {
+                            'description': "The user's name",
+                            'name': 'first_name'
+                        },
+                        'id': {
+                            'description': 'The user id',
+                            'name': 'id'
+                        },
+                        'ip_address': {
+                            'description': "The user's IP address",
+                            'name': 'ip_address'
+                        },
+                        'updated_at': {
+                            'description': 'When the user was updated',
+                            'name': 'updated_at'
+                        },
+                    },
+                    'description': 'A clustered and partitioned copy of the test model',
+                    'patch_path': self.dir('bq_models/schema.yml'),
+                    'docrefs': [],
+                },
+                'model.test.nested_view': {
+                    'alias': 'nested_view',
                     'config': {
                         'column_types': {},
                         'enabled': True,
@@ -1119,21 +1242,21 @@ class TestDocsGenerate(DBTIntegrationTest):
                     },
                     'depends_on': {
                         'macros': [],
-                        'nodes': ['model.test.seed']
+                        'nodes': ['model.test.nested_table']
                     },
                     'empty': False,
-                    'fqn': ['test', 'model'],
-                    'name': 'model',
-                    'original_file_path': model_sql_path,
+                    'fqn': ['test', 'nested_view'],
+                    'name': 'nested_view',
+                    'original_file_path': nested_view_sql_path,
                     'package_name': 'test',
-                    'path': 'model.sql',
-                    'raw_sql': open(model_sql_path).read().rstrip('\n'),
-                    'refs': [['seed']],
+                    'path': 'nested_view.sql',
+                    'raw_sql': open(nested_view_sql_path).read().rstrip('\n'),
+                    'refs': [['nested_table']],
                     'resource_type': 'model',
                     'root_path': os.getcwd(),
                     'schema': my_schema_name,
                     'tags': [],
-                    'unique_id': 'model.test.model',
+                    'unique_id': 'model.test.nested_view',
                     'columns': {
                         'field_1': {
                             'name': 'field_1',
@@ -1160,12 +1283,12 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'patch_path': self.dir('bq_models/schema.yml'),
                     'docrefs': [],
                 },
-                'model.test.seed': {
-                    'alias': 'seed',
+                'model.test.nested_table': {
+                    'alias': 'nested_table',
                     'config': {
                         'column_types': {},
                         'enabled': True,
-                        'materialized': 'view',
+                        'materialized': 'table',
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
@@ -1176,29 +1299,64 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'nodes': []
                     },
                     'empty': False,
-                    'fqn': ['test', 'seed'],
-                    'name': 'seed',
-                    'original_file_path': seed_sql_path,
+                    'fqn': ['test', 'nested_table'],
+                    'name': 'nested_table',
+                    'original_file_path': nested_table_sql_path,
                     'package_name': 'test',
-                    'path': 'seed.sql',
-                    'raw_sql': open(seed_sql_path).read().rstrip('\n'),
+                    'path': 'nested_table.sql',
+                    'raw_sql': open(nested_table_sql_path).read().rstrip('\n'),
                     'refs': [],
                     'resource_type': 'model',
                     'root_path': os.getcwd(),
                     'schema': my_schema_name,
                     'tags': [],
-                    'unique_id': 'model.test.seed',
+                    'unique_id': 'model.test.nested_table',
                     'columns': {},
                     'description': '',
-                }
+                },
+                'seed.test.seed': {
+                    'path': 'seed.csv',
+                    'name': 'seed',
+                    'root_path': os.getcwd(),
+                    'resource_type': 'seed',
+                    'raw_sql': '-- csv --',
+                    'package_name': 'test',
+                    'original_file_path': self.dir('seed/seed.csv'),
+                    'refs': [],
+                    'depends_on': {
+                        'nodes': [],
+                        'macros': [],
+                    },
+                    'unique_id': 'seed.test.seed',
+                    'empty': False,
+                    'fqn': ['test', 'seed'],
+                    'tags': [],
+                    'config': {
+                        'enabled': True,
+                        'materialized': 'seed',
+                        'pre-hook': [],
+                        'post-hook': [],
+                        'vars': {},
+                        'column_types': {},
+                        'quoting': {},
+                    },
+                    'schema': my_schema_name,
+                    'alias': 'seed',
+                    'columns': {},
+                    'description': '',
+                },
             },
             'child_map': {
-                'model.test.model': [],
-                'model.test.seed': ['model.test.model']
+                'model.test.clustered': [],
+                'model.test.nested_table': ['model.test.nested_view'],
+                'model.test.nested_view': [],
+                'seed.test.seed': ['model.test.clustered']
             },
             'parent_map': {
-                'model.test.model': ['model.test.seed'],
-                'model.test.seed': []
+                'model.test.clustered': ['seed.test.seed'],
+                'seed.test.seed': [],
+                'model.test.nested_table': [],
+                'model.test.nested_view': ['model.test.nested_table'],
             },
             'docs': {
                 'dbt.__overview__': ANY,
@@ -1878,17 +2036,14 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.verify_run_results(self.expected_run_results())
 
     @use_profile('bigquery')
-    def test__bigquery__nested_models(self):
-        self.use_default_project({'source-paths': [self.dir('bq_models')]})
+    def test__bigquery__complex_models(self):
+        self.run_and_generate(
+            extra={'source-paths': [self.dir('bq_models')]},
+            model_count=3
+        )
 
-        self.assertEqual(len(self.run_dbt()), 2)
-        os.remove(os.path.normpath('target/manifest.json'))
-        os.remove(os.path.normpath('target/run_results.json'))
-        self.generate_start_time = datetime.utcnow()
-        self.run_dbt(['docs', 'generate'])
-
-        self.verify_catalog(self.expected_bigquery_nested_catalog())
-        self.verify_manifest(self.expected_bigquery_nested_manifest())
+        self.verify_catalog(self.expected_bigquery_complex_catalog())
+        self.verify_manifest(self.expected_bigquery_complex_manifest())
 
     @use_profile('redshift')
     def test__redshift__run_and_generate(self):
