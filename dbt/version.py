@@ -77,5 +77,5 @@ def get_version_information():
                 .format(version_msg))
 
 
-__version__ = '0.11.0rc2'
+__version__ = '0.11.0'
 installed = get_installed_version()
