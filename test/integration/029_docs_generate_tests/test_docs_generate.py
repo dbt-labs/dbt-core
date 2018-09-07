@@ -146,7 +146,7 @@ class TestDocsGenerate(DBTIntegrationTest):
               "id": "stats_off",
               "label": "Stats Off",
               "value": AnyFloat(),
-              "description": "Number that indicates how stale the table's statistics are; 0 is current, 100 is out of date.",
+              "description": "Number that indicates how stale the table statistics are; 0 is current, 100 is out of date.",
               "include": True
             },
             "rows": {
