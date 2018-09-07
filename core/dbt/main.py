@@ -679,7 +679,7 @@ def _build_seed_subparser(subparsers, base_subparser):
 def _build_docs_serve_subparser(subparsers, base_subparser):
     serve_sub = subparsers.add_parser("serve", parents=[base_subparser])
     serve_sub.add_argument(
-        '--port',
+        "--port",
         default=8080,
         type=int,
         help="""
