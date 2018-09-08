@@ -28,6 +28,7 @@ default_project_cfg = {
     'outputs': {'default': {}},
     'target': 'default',
     'models': {},
+    'seeds': {},
     'quoting': {},
     'profile': None,
     'packages': [],
