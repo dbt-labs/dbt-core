@@ -38,9 +38,6 @@
   {# partitions: iterate over each partition, running a separate query in a for-loop #}
   {%- set partitions = config.get('partitions') -%}
 
-  {# partition_by: run a single query, specifying a date column to partition by #}
-  {%- set partition_by = config.get('partition_by', []) -%}
-
   {% if partitions %}
       {% if partitions is number or partitions is string %}
         {% set partitions = [(partitions | string)] %}

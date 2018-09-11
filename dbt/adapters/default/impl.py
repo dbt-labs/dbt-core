@@ -24,6 +24,24 @@ connections_in_use = {}
 connections_available = []
 
 
+def _filter_schemas(manifest):
+    """Return a function that takes a row and decides if the row should be
+    included in the catalog output.
+    """
+    schemas = frozenset({
+        node.schema.lower()
+        for node in manifest.nodes.values()
+    })
+
+    def test(row):
+        # the schema may be present but None
+        table_schema = row.get('table_schema')
+        if table_schema is None:
+            return False
+        return table_schema.lower() in schemas
+    return test
+
+
 class DefaultAdapter(object):
     DEFAULT_QUOTE = True
 
@@ -848,10 +866,5 @@ class DefaultAdapter(object):
         finally:
             cls.release_connection(profile, GET_CATALOG_OPERATION_NAME)
 
-        schemas = list({
-            node.schema.lower()
-            for node in manifest.nodes.values()
-        })
-
-        results = table.where(lambda r: r['table_schema'].lower() in schemas)
+        results = table.where(_filter_schemas(manifest))
         return results
