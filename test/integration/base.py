@@ -15,6 +15,8 @@ from dbt.adapters.factory import get_adapter
 from dbt.config import RuntimeConfig
 
 from dbt.logger import GLOBAL_LOGGER as logger
+import logging
+import warnings
 
 
 DBT_CONFIG_DIR = os.path.abspath(
@@ -40,19 +42,19 @@ class TestArgs(object):
 
 
 def _profile_from_test_name(test_name):
-    adapters_in_name =  sum(x in test_name for x in
-                            ('postgres', 'snowflake', 'redshift', 'bigquery'))
+    adapter_names = ('postgres', 'snowflake', 'redshift', 'bigquery')
+    adapters_in_name =  sum(x in test_name for x in adapter_names)
     if adapters_in_name > 1:
         raise ValueError('test names must only have 1 profile choice embedded')
 
-    if 'snowflake' in test_name:
-        return 'snowflake'
-    elif 'redshift' in test_name:
-        return 'redshift'
-    elif 'bigquery' in test_name:
-        return 'bigquery'
-    else:
-        return 'postgres'
+    for adapter_name in adapter_names:
+        if adapter_name in test_name:
+            return adapter_name
+
+    warnings.warn(
+        'could not find adapter name in test name {}'.format(test_name)
+    )
+    return 'postgres'
 
 
 class DBTIntegrationTest(unittest.TestCase):
@@ -201,6 +203,8 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def setUp(self):
         flags.reset()
+        # disable capturing warnings
+        logging.captureWarnings(False)
         self._clean_files()
 
         self.use_profile(self._pick_profile())
