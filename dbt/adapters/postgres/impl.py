@@ -125,7 +125,11 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         4. Rename the new column to existing column
         """
 
-        relation = cls.Relation.create(schema=schema, identifier=table)
+        relation = cls.Relation.create(
+            schema=schema,
+            identifier=table,
+            quote_policy=cls._quote_policy(project)
+        )
 
         opts = {
             "relation": relation,
