@@ -21,12 +21,14 @@ import dbt.task.generate as generate_task
 import dbt.task.serve as serve_task
 
 import dbt.tracking
-import dbt.config as config
 import dbt.ui.printer
 import dbt.compat
 import dbt.deprecations
 
 from dbt.utils import ExitCodes
+from dbt.config import Project, RuntimeConfig, DbtProjectError, \
+    DbtProfileError, DEFAULT_PROFILES_DIR, read_config, \
+    send_anonymous_usage_stats, colorize_output, read_profiles
 
 
 PROFILES_HELP_MESSAGE = """
@@ -108,13 +110,13 @@ def handle_and_check(args):
 
     # this needs to happen after args are parsed so we can determine the
     # correct profiles.yml file
-    profile_config = config.read_config(parsed.profiles_dir)
-    if not config.send_anonymous_usage_stats(profile_config):
+    profile_config = read_config(parsed.profiles_dir)
+    if not send_anonymous_usage_stats(profile_config):
         dbt.tracking.do_not_track()
     else:
         dbt.tracking.initialize_tracking()
 
-    if dbt.config.colorize_output(profile_config):
+    if colorize_output(profile_config):
         dbt.ui.printer.use_colors()
 
     try:
@@ -207,16 +209,16 @@ def invoke_dbt(parsed):
     try:
         if parsed.which == 'deps':
             # deps doesn't need a profile, so don't require one.
-            cfg = config.Project.from_current_directory()
+            cfg = Project.from_current_directory()
         elif parsed.which != 'debug':
             # for debug, we will attempt to load the various configurations as
             # part of the task, so just leave cfg=None.
-            cfg = config.RuntimeConfig.from_args(parsed)
-    except config.DbtProjectError as e:
+            cfg = RuntimeConfig.from_args(parsed)
+    except DbtProjectError as e:
         logger.info("Encountered an error while reading the project:")
         logger.info(dbt.compat.to_string(e))
 
-        all_profiles = config.read_profiles(parsed.profiles_dir).keys()
+        all_profiles = read_profiles(parsed.profiles_dir).keys()
 
         if len(all_profiles) > 0:
             logger.info("Defined profiles:")
@@ -234,7 +236,7 @@ def invoke_dbt(parsed):
             result_type=e.result_type)
 
         return None
-    except config.DbtProfileError as e:
+    except DbtProfileError as e:
         logger.info("Encountered an error while reading profiles:")
         logger.info("  ERROR {}".format(str(e)))
 
@@ -293,11 +295,11 @@ def parse_args(args):
 
     base_subparser.add_argument(
         '--profiles-dir',
-        default=config.DEFAULT_PROFILES_DIR,
+        default=DEFAULT_PROFILES_DIR,
         type=str,
         help="""
         Which directory to look in for the profiles.yml file. Default = {}
-        """.format(config.DEFAULT_PROFILES_DIR)
+        """.format(DEFAULT_PROFILES_DIR)
     )
 
     base_subparser.add_argument(
