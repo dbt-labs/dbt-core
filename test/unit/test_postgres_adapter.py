@@ -7,6 +7,7 @@ import dbt.adapters
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.exceptions import ValidationException
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
+import agate
 
 
 class TestPostgresAdapter(unittest.TestCase):
@@ -79,3 +80,31 @@ class TestPostgresAdapter(unittest.TestCase):
             port=5432,
             connect_timeout=10)
 
+    @mock.patch.object(PostgresAdapter, 'run_operation')
+    def test_get_catalog_various_schemas(self, mock_run):
+        column_names = ['table_schema', 'table_name']
+        rows = [
+            ('foo', 'bar'),
+            ('FOO', 'baz'),
+            (None, 'bar'),
+            ('quux', 'bar'),
+            ('skip', 'bar')
+        ]
+        mock_run.return_value = agate.Table(rows=rows,
+                                            column_names=column_names)
+
+        # we should accept the lowercase matching 'foo's only.
+        mock_nodes = [
+            mock.MagicMock(spec_set=['schema'], schema='foo')
+            for k in range(2)
+        ]
+        mock_nodes.append(mock.MagicMock(spec_set=['schema'], schema='quux'))
+        nodes = {str(idx): n for idx, n in enumerate(mock_nodes)}
+        # give manifest the dict it wants
+        mock_manifest = mock.MagicMock(spec_set=['nodes'], nodes=nodes)
+
+        catalog = PostgresAdapter.get_catalog({}, {}, mock_manifest)
+        self.assertEqual(
+            set(map(tuple, catalog)),
+            {('foo', 'bar'), ('FOO', 'baz'), ('quux', 'bar')}
+        )
