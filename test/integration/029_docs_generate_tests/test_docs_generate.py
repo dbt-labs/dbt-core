@@ -1179,7 +1179,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.clustered': {
                     'alias': 'clustered',
                     'config': {
-                        'cluster_by': 'first_name',
+                        'cluster_by': ['first_name'],
                         'column_types': {},
                         'enabled': True,
                         'materialized': 'table',

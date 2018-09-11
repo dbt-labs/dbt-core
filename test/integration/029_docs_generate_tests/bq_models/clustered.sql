@@ -2,7 +2,7 @@
     config(
         materialized='table',
         partition_by='updated_at',
-        cluster_by='first_name'
+        cluster_by=['first_name']
     )
 }}
 

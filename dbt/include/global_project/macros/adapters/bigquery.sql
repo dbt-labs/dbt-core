@@ -12,15 +12,18 @@
 
 
 {% macro cluster_by(raw_cluster_by) %}
-  {%- if raw_cluster_by is none -%}
-    {{ return('') }}
+  {%- if raw_cluster_by is not none -%}
+  cluster by (
+  {%- if raw_cluster_by is string -%}
+    {% set raw_cluster_by = [raw_cluster_by] %}
+  {%- endif -%}
+  {%- for cluster in raw_cluster_by -%}
+    {{ cluster }}
+    {%- if not loop.last -%},{%- endif -%}
+  {%- endfor -%}
+  )
+
   {% endif %}
-
-  {% set cluster_by_clause %}
-    cluster by {{ raw_cluster_by }}
-  {%- endset -%}
-
-  {{ return(cluster_by_clause) }}
 
 {%- endmacro -%}
 
