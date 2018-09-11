@@ -32,7 +32,7 @@ def get_hook_dict(hook, index):
 
 
 def get_hooks(model, hook_key):
-    hooks = model.get('config', {}).get(hook_key, [])
+    hooks = model.config.get(hook_key, [])
 
     if not isinstance(hooks, (list, tuple)):
         hooks = [hooks]

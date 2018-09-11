@@ -456,6 +456,12 @@ def parse_args(args):
     seed_sub.set_defaults(cls=seed_task.SeedTask, which='seed')
 
     serve_sub = docs_subs.add_parser('serve', parents=[base_subparser])
+    serve_sub.add_argument(
+        '--port',
+        default=8080,
+        type=int,
+        help='Specify the port number for the docs server.'
+    )
     serve_sub.set_defaults(cls=serve_task.ServeTask,
                            which='serve')
 

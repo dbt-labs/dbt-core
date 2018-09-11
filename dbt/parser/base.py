@@ -134,7 +134,7 @@ class BaseParser(object):
         parsed_node.config = config_dict
 
         for hook_type in dbt.hooks.ModelHookType.Both:
-            parsed_node.config[hook_type] = dbt.hooks.get_hooks(node,
+            parsed_node.config[hook_type] = dbt.hooks.get_hooks(parsed_node,
                                                                 hook_type)
 
         parsed_node.validate()
