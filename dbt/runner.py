@@ -32,7 +32,7 @@ class RunManager(object):
     def deserialize_graph(self):
         logger.info("Loading dependency graph file.")
 
-        base_target_path = self.project.target_path
+        base_target_path = self.config.target_path
         graph_file = os.path.join(
             base_target_path,
             dbt.compilation.graph_file_name
