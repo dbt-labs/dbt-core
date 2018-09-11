@@ -248,7 +248,8 @@ class Project(object):
         return pprint.pformat(cfg)
 
     def __eq__(self, other):
-        if not isinstance(other, self.__class__):
+        if not (isinstance(other, self.__class__) and
+                isinstance(self, other.__class__)):
             return False
         return self.to_project_config(with_packages=True) == \
             other.to_project_config(with_packages=True)
@@ -360,7 +361,9 @@ class Profile(object):
         return pprint.pformat(self.to_profile_info())
 
     def __eq__(self, other):
-        if not isinstance(other, self.__class__):
+        if not (isinstance(other, self.__class__) and
+                isinstance(self, other.__class__)):
+            return False
             return False
         return self.to_profile_info() == other.to_profile_info()
 
