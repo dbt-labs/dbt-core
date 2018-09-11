@@ -14,13 +14,15 @@ class ServeTask(RunnableTask):
     def run(self):
         os.chdir(self.project['target-path'])
 
-        port = 8080
+        port = self.args.port
 
         shutil.copyfile(DOCS_INDEX_FILE_PATH, 'index.html')
 
         logger.info("Serving docs at 0.0.0.0:{}".format(port))
         logger.info(
-            "To access from your browser, navigate to http://localhost:8080.")
+            "To access from your browser, navigate to http://localhost:{}."
+            .format(port)
+        )
         logger.info("Press Ctrl+C to exit.\n\n")
 
         httpd = TCPServer(
@@ -29,7 +31,7 @@ class ServeTask(RunnableTask):
         )
 
         try:
-            webbrowser.open_new_tab('http://127.0.0.1:8080')
+            webbrowser.open_new_tab('http://127.0.0.1:{}'.format(port))
         except webbrowser.Error as e:
             pass
 
