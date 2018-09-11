@@ -4,12 +4,12 @@ import agate
 DEFAULT_TYPE_TESTER = agate.TypeTester(types=[
     agate.data_types.Boolean(true_values=('true',),
                              false_values=('false',),
-                             null_values=('null',)),
-    agate.data_types.Number(null_values=('null',)),
-    agate.data_types.TimeDelta(null_values=('null',)),
-    agate.data_types.Date(null_values=('null',)),
-    agate.data_types.DateTime(null_values=('null',)),
-    agate.data_types.Text(null_values=('null',))
+                             null_values=('null', '')),
+    agate.data_types.Number(null_values=('null', '')),
+    agate.data_types.TimeDelta(null_values=('null', '')),
+    agate.data_types.Date(null_values=('null', '')),
+    agate.data_types.DateTime(null_values=('null', '')),
+    agate.data_types.Text(null_values=('null', ''))
 ])
 
 
