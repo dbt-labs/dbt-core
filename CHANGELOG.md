@@ -1,3 +1,19 @@
+## Lucretia Mott (Unreleased)
+
+### Features
+
+- dbt
+  - Add `--port` parameter to dbt docs serve ([#987](https://github.com/fishtown-analytics/dbt/pull/987))
+
+### Fixes
+
+- dbt
+  - Fix hooks in model configs not running ([#985](https://github.com/fishtown-analytics/dbt/pull/985))
+  - Fix integration test on redshift catalog generation ([#977](https://github.com/fishtown-analytics/dbt/pull/977))
+- dbt-docs
+  - Fix for non-existent column in schema.yml ([#3](https://github.com/fishtown-analytics/dbt-docs/pull/3))
+  - Fixes for missing tests in docs UI when columns are upcased ([#2](https://github.com/fishtown-analytics/dbt-docs/pull/2))
+
 ## dbt 0.11.0 - Isaac Asimov (September 6, 2018)
 
 ### Overview
