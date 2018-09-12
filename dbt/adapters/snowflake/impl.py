@@ -221,6 +221,15 @@ class SnowflakeAdapter(PostgresAdapter):
         return connection, cursor
 
     @classmethod
+    def _filter_table(cls, table, manifest):
+        # On snowflake, users can set QUOTED_IDENTIFIERS_IGNORE_CASE, so force
+        # the column names to their lowercased forms.
+        lowered = table.rename(
+            column_names=[c.lower() for c in table.column_names]
+        )
+        return super(SnowflakeAdapter, cls)._filter_table(lowered, manifest)
+
+    @classmethod
     def _make_match_kwargs(cls, project_cfg, schema, identifier):
         if identifier is not None and \
            project_cfg.get('quoting', {}).get('identifier', False) is False:

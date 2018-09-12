@@ -34,8 +34,15 @@ def _filter_schemas(manifest):
     })
 
     def test(row):
-        # the schema may be present but None
-        table_schema = row.get('table_schema')
+        if 'table_schema' not in row.keys():
+            # this means the get catalog operation is somehow not well formed!
+            raise dbt.exceptions.InternalException(
+                'Got a row without "table_schema" column, columns: {}'
+                .format(row.keys())
+            )
+        # the schema may be present but None, which is not an error and should
+        # be filtered out
+        table_schema = row['table_schema']
         if table_schema is None:
             return False
         return table_schema.lower() in schemas
@@ -841,6 +848,10 @@ class DefaultAdapter(object):
     # Abstract methods involving the manifest
     ###
     @classmethod
+    def _filter_table(cls, table, manifest):
+        return table.where(_filter_schemas(manifest))
+
+    @classmethod
     def get_catalog(cls, profile, project_cfg, manifest):
         try:
             table = cls.run_operation(profile, project_cfg, manifest,
@@ -848,5 +859,5 @@ class DefaultAdapter(object):
         finally:
             cls.release_connection(profile, GET_CATALOG_OPERATION_NAME)
 
-        results = table.where(_filter_schemas(manifest))
+        results = cls._filter_table(table, manifest)
         return results
