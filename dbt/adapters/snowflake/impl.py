@@ -18,8 +18,6 @@ from dbt.utils import filter_null_values
 
 
 class SnowflakeAdapter(PostgresAdapter):
-    DEFAULT_QUOTE = False
-
     Relation = SnowflakeRelation
 
     @classmethod

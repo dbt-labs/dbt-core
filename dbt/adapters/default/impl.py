@@ -43,8 +43,6 @@ def _filter_schemas(manifest):
 
 
 class DefaultAdapter(object):
-    DEFAULT_QUOTE = True
-
     requires = {}
 
     context_functions = [
@@ -149,14 +147,6 @@ class DefaultAdapter(object):
         raise dbt.exceptions.NotImplementedException(
             '`cancel_connection` is not implemented for this adapter!')
 
-    @classmethod
-    def _quote_policy(cls, project_cfg):
-        quoting_cfg = project_cfg.get('quoting', {})
-        for quote_key in ('database', 'schema', 'identifier'):
-            if quote_key not in quoting_cfg:
-                quoting_cfg[quote_key] = cls.DEFAULT_QUOTE
-        return quoting_cfg
-
     ###
     # FUNCTIONS THAT SHOULD BE ABSTRACT
     ###
@@ -181,7 +171,7 @@ class DefaultAdapter(object):
             schema=schema,
             identifier=identifier,
             type=relation_type,
-            quote_policy=cls._quote_policy(project_cfg))
+            quote_policy=project_cfg.get('quoting', {}))
 
         return cls.drop_relation(profile, project_cfg, relation, model_name)
 
@@ -203,7 +193,7 @@ class DefaultAdapter(object):
             schema=schema,
             identifier=table,
             type='table',
-            quote_policy=cls._quote_policy(project_cfg))
+            quote_policy=project_cfg.get('quoting', {}))
 
         return cls.truncate_relation(profile, project_cfg,
                                      relation, model_name)
@@ -218,7 +208,7 @@ class DefaultAdapter(object):
     @classmethod
     def rename(cls, profile, project_cfg, schema,
                from_name, to_name, model_name=None):
-        quote_policy = cls._quote_policy(project_cfg)
+        quote_policy = project_cfg.get('quoting', {})
         from_relation = cls.Relation.create(
             schema=schema,
             identifier=from_name,
@@ -765,7 +755,8 @@ class DefaultAdapter(object):
         """This is the actual implementation of quote_as_configured, without
         the extra arguments needed for use inside materialization code.
         """
-        if project_cfg.get('quoting', {}).get(quote_key, cls.DEFAULT_QUOTE):
+        default = cls.Relation.DEFAULTS['quote_policy'].get(quote_key)
+        if project_cfg.get('quoting', {}).get(quote_key, default):
             return cls.quote(identifier)
         else:
             return identifier

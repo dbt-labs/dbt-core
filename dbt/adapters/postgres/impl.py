@@ -128,7 +128,7 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         relation = cls.Relation.create(
             schema=schema,
             identifier=table,
-            quote_policy=cls._quote_policy(project)
+            quote_policy=project.get('quoting', {})
         )
 
         opts = {
