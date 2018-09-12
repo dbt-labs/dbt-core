@@ -152,7 +152,7 @@ class DefaultAdapter(object):
     @classmethod
     def _quote_policy(cls, project_cfg):
         quoting_cfg = project_cfg.get('quoting', {})
-        for quote_key in ('dtabase', 'schema', 'identifier'):
+        for quote_key in ('database', 'schema', 'identifier'):
             if quote_key not in quoting_cfg:
                 quoting_cfg[quote_key] = cls.DEFAULT_QUOTE
         return quoting_cfg
