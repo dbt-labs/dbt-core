@@ -3,10 +3,11 @@ import json
 from numbers import Integral
 import os
 from datetime import datetime, timedelta
-from mock import ANY
+from mock import ANY, patch
 
 from test.integration.base import DBTIntegrationTest, use_profile
 from dbt.compat import basestring
+from dbt.adapters.snowflake import impl as snowflake_impl
 
 DATEFMT = '%Y-%m-%dT%H:%M:%S.%fZ'
 
@@ -177,7 +178,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             'row_count': {
                 'id': 'row_count',
                 'label': 'Row Count',
-                'value': True,
+                'value': 1.0,
                 'description': 'An approximate count of rows in this table',
                 'include': True,
             },
@@ -1501,23 +1502,26 @@ class TestDocsGenerate(DBTIntegrationTest):
         )
         self.assertEqual(manifest_without_extras, expected_manifest)
 
-    def expected_run_results(self):
+    def _quote(self, value):
+        quote_char = '`' if self.adapter_type == 'bigquery' else '"'
+        return '{0}{1}{0}'.format(quote_char, value)
+
+    def expected_run_results(self, quote_schema=True, quote_model=False):
         """
         The expected results of this run.
         """
         schema = self.unique_schema()
-        compiled_sql = '\n\nselect * from "{}".seed'.format(schema)
-        status = 'CREATE VIEW'
 
-        if self.adapter_type == 'snowflake':
-            status = 'SUCCESS 1'
-            compiled_sql = compiled_sql.replace('"', '')
+        compiled_schema = self._quote(schema) if quote_schema else schema
+        compiled_seed = self._quote('seed') if quote_model else 'seed'
+
         if self.adapter_type == 'bigquery':
-            status = 'OK'
-            compiled_sql = '\n\nselect * from `{}`.`{}`.seed'.format(
-                self._profile['project'], schema
+            compiled_sql = '\n\nselect * from `{}`.{}.{}'.format(
+                self._profile['project'], compiled_schema, compiled_seed
             )
-        status = None
+        else:
+            compiled_sql = '\n\nselect * from {}.{}'.format(compiled_schema,
+                                                            compiled_seed)
 
         return [
             {
@@ -1573,7 +1577,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'wrapped_sql': 'None'
                 },
                 'skip': False,
-                'status': status,
+                'status': None,
             },
             {
                 'error': None,
@@ -2025,7 +2029,26 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         self.verify_catalog(self.expected_snowflake_catalog())
         self.verify_manifest(self.expected_seeded_manifest())
-        self.verify_run_results(self.expected_run_results())
+        self.verify_run_results(self.expected_run_results(quote_schema=False, quote_model=False))
+
+    @use_profile('snowflake')
+    def test__snowflake__run_and_generate_ignore_quoting_parameter(self):
+        old_connect = snowflake_impl.snowflake.connector.connect
+        def connect(*args, **kwargs):
+            kwargs['session_parameters'] = {
+                'QUOTED_IDENTIFIERS_IGNORE_CASE':True
+            }
+            return old_connect(*args, **kwargs)
+        with patch.object(snowflake_impl.snowflake.connector, 'connect', connect):
+            self.run_and_generate({
+                'quoting': {
+                    'identifier': True,
+                }
+            })
+
+        self.verify_catalog(self.expected_snowflake_catalog())
+        self.verify_manifest(self.expected_seeded_manifest())
+        self.verify_run_results(self.expected_run_results(quote_schema=False, quote_model=True))
 
     @use_profile('bigquery')
     def test__bigquery__run_and_generate(self):
