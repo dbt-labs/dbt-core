@@ -220,9 +220,7 @@ class GenerateTask(CompileTask):
         else:
             self.manifest = ManifestLoader.get_full_manifest(self.config)
 
-        shutil.copyfile(
-            DOCS_INDEX_FILE_PATH,
-            os.path.join(self.config.target_path, 'index.html'))
+        shutil.copyfile(DOCS_INDEX_FILE_PATH, os.path.join(self.config.target_path, "index.html"))
 
         for asset_path in self.config.asset_paths:
             to_asset_path = os.path.join(self.config.target_path, asset_path)
