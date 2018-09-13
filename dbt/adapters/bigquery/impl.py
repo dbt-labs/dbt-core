@@ -504,7 +504,7 @@ class BigQueryAdapter(PostgresAdapter):
         client = conn.get('handle')
 
         with cls.exception_handler(profile, 'list dataset', model_name):
-            all_datasets = client.list_datasets()
+            all_datasets = client.list_datasets(include_all=True)
             return [ds.dataset_id for ds in all_datasets]
 
     @classmethod
@@ -549,7 +549,7 @@ class BigQueryAdapter(PostgresAdapter):
         client = conn.get('handle')
 
         with cls.exception_handler(profile, 'get dataset', model_name):
-            all_datasets = client.list_datasets()
+            all_datasets = client.list_datasets(include_all=True)
             return any([ds.dataset_id == schema for ds in all_datasets])
 
     @classmethod
