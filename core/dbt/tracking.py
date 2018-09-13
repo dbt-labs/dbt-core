@@ -360,9 +360,7 @@ def track_deprecation_warn(options):
     )
 
 
-def track_invocation_end(
-        config=None, args=None, result_type=None
-):
+def track_invocation_end(config=None, args=None, result_type=None):
     user = active_user
     context = [
         get_invocation_end_context(user, config, args, result_type),
