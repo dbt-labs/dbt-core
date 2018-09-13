@@ -976,8 +976,9 @@ def raise_invalid_schema_yml_version(path, issue):
 
 def raise_unrecognized_credentials_type(typename, supported_types):
     raise_compiler_error(
-        'Unrecognized credentials type "{}" - supported types are ({})'
-        .format(typename, ', '.join('"{}"'.format(t) for t in supported_types))
+        'Unrecognized credentials type "{}" - supported types are ({})'.format(
+            typename, ", ".join('"{}"'.format(t) for t in supported_types)
+        )
     )
 
 
