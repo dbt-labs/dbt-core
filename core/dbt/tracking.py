@@ -377,12 +377,7 @@ def track_invalid_invocation(config=None, args=None, result_type=None):
     assert active_user is not None, "Cannot track invalid invocations when active user is None"
 
     user = active_user
-    invocation_context = get_invocation_invalid_context(
-        user,
-        config,
-        args,
-        result_type
-    )
+    invocation_context = get_invocation_invalid_context(user, config, args, result_type)
 
     context = [
         invocation_context,
