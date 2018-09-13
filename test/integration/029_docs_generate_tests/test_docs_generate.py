@@ -45,11 +45,18 @@ class TestDocsGenerate(DBTIntegrationTest):
         return self.dir("models")
 
     @property
+    def packages_config(self):
+        return {
+            'packages': [
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                },
+            ],
+        }
+
+    @property
     def project_config(self):
         return {
-            'repositories': [
-                'https://github.com/fishtown-analytics/dbt-integration-project'
-            ],
             'quoting': {
                 'identifier': False
             }
@@ -1516,8 +1523,9 @@ class TestDocsGenerate(DBTIntegrationTest):
         compiled_seed = self._quote('seed') if quote_model else 'seed'
 
         if self.adapter_type == 'bigquery':
-            compiled_sql = '\n\nselect * from `{}`.{}.{}'.format(
-                self._profile['project'], compiled_schema, compiled_seed
+            status = 'OK'
+            compiled_sql = '\n\nselect * from `{}`.`{}`.seed'.format(
+                self.config.credentials.project, schema
             )
         else:
             compiled_sql = '\n\nselect * from {}.{}'.format(compiled_schema,

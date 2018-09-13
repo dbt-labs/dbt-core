@@ -10,26 +10,34 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from psycopg2 import extensions as psycopg2_extensions
 import agate
 
+from dbt.config import Profile
+
 
 class TestPostgresAdapter(unittest.TestCase):
 
     def setUp(self):
         flags.STRICT_MODE = True
 
-        self.profile = {
-            'dbname': 'postgres',
-            'user': 'root',
-            'host': 'database',
-            'pass': 'password',
-            'port': 5432,
-            'schema': 'public'
-        }
+        self.profile = Profile.from_raw_profile_info({
+            'outputs': {
+                'test': {
+                    'type': 'postgres',
+                    'dbname': 'postgres',
+                    'user': 'root',
+                    'host': 'database',
+                    'pass': 'password',
+                    'port': 5432,
+                    'schema': 'public'
+                }
+            },
+            'target': 'test'
+        }, 'test')
 
     def test_acquire_connection_validations(self):
         try:
             connection = PostgresAdapter.acquire_connection(self.profile,
                                                             'dummy')
-            self.assertEquals(connection.get('type'), 'postgres')
+            self.assertEquals(connection.type, 'postgres')
         except ValidationException as e:
             self.fail('got ValidationException: {}'.format(str(e)))
         except BaseException as e:
@@ -39,8 +47,8 @@ class TestPostgresAdapter(unittest.TestCase):
     def test_acquire_connection(self):
         connection = PostgresAdapter.acquire_connection(self.profile, 'dummy')
 
-        self.assertEquals(connection.get('state'), 'open')
-        self.assertNotEquals(connection.get('handle'), None)
+        self.assertEquals(connection.state, 'open')
+        self.assertNotEquals(connection.handle, None)
 
     @mock.patch('dbt.adapters.postgres.impl.psycopg2')
     def test_default_keepalive(self, psycopg2):
@@ -56,7 +64,8 @@ class TestPostgresAdapter(unittest.TestCase):
 
     @mock.patch('dbt.adapters.postgres.impl.psycopg2')
     def test_changed_keepalive(self, psycopg2):
-        self.profile['keepalives_idle'] = 256
+        credentials = self.profile.credentials.incorporate(keepalives_idle=256)
+        self.profile.credentials = credentials
         connection = PostgresAdapter.acquire_connection(self.profile, 'dummy')
 
         psycopg2.connect.assert_called_once_with(
@@ -70,7 +79,8 @@ class TestPostgresAdapter(unittest.TestCase):
 
     @mock.patch('dbt.adapters.postgres.impl.psycopg2')
     def test_set_zero_keepalive(self, psycopg2):
-        self.profile['keepalives_idle'] = 0
+        credentials = self.profile.credentials.incorporate(keepalives_idle=0)
+        self.profile.credentials = credentials
         connection = PostgresAdapter.acquire_connection(self.profile, 'dummy')
 
         psycopg2.connect.assert_called_once_with(

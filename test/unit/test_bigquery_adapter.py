@@ -1,8 +1,9 @@
 import unittest
-from mock import patch
+from mock import patch, MagicMock
 
 import dbt.flags as flags
 
+from dbt.contracts.connection import BigQueryCredentials
 from dbt.adapters.bigquery import BigQueryAdapter
 from dbt.adapters.bigquery.relation import BigQueryRelation
 import dbt.exceptions
@@ -15,20 +16,28 @@ class TestBigQueryAdapter(unittest.TestCase):
     def setUp(self):
         flags.STRICT_MODE = True
 
-        self.oauth_profile = {
-            "type": "bigquery",
-            "method": "oauth",
-            "project": 'dbt-unit-000000',
-            "schema": "dummy_schema",
-        }
 
-        self.service_account_profile = {
-            "type": "bigquery",
-            "method": "service-account",
-            "project": 'dbt-unit-000000',
-            "schema": "dummy_schema",
-            "keyfile": "/tmp/dummy-service-account.json",
-        }
+        self.oauth_credentials = BigQueryCredentials(
+            method='oauth',
+            project='dbt-unit-000000',
+            schema='dummy_schema'
+        )
+        self.oauth_profile = MagicMock(
+            credentials=self.oauth_credentials,
+            threads=1
+        )
+
+        self.service_account_credentials = BigQueryCredentials(
+            method='service-account',
+            project='dbt-unit-000000',
+            schema='dummy_schema',
+            keyfile='/tmp/dummy-service-account.json'
+        )
+        self.service_account_profile = MagicMock(
+            credentials=self.service_account_credentials,
+            threads=1
+        )
+
 
     @patch('dbt.adapters.bigquery.BigQueryAdapter.open_connection', return_value=fake_conn)
     def test_acquire_connection_oauth_validations(self, mock_open_connection):

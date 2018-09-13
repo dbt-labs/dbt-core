@@ -5,9 +5,6 @@ from test.integration.base import DBTIntegrationTest
 
 class TestSimpleCycle(DBTIntegrationTest):
 
-    def setUp(self):
-        DBTIntegrationTest.setUp(self)
-
     @property
     def schema(self):
         return "cycles_simple_025"
@@ -24,9 +21,6 @@ class TestSimpleCycle(DBTIntegrationTest):
             self.run_dbt(["run"])
 
 class TestComplexCycle(DBTIntegrationTest):
-
-    def setUp(self):
-        DBTIntegrationTest.setUp(self)
 
     @property
     def schema(self):

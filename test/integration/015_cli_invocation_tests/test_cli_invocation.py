@@ -70,7 +70,7 @@ class TestCLIInvocationWithProfilesDir(DBTIntegrationTest):
                         'schema': self.custom_schema
                     },
                 },
-                'run-target': 'default'
+                'target': 'default',
             }
         }
 

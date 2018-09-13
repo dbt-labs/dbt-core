@@ -1,4 +1,5 @@
-from dbt.logger import initialize_logger, GLOBAL_LOGGER as logger
+from dbt.logger import initialize_logger, GLOBAL_LOGGER as logger, \
+    initialized as logger_initialized
 
 import argparse
 import os.path
@@ -7,7 +8,6 @@ import traceback
 
 import dbt.version
 import dbt.flags as flags
-import dbt.project as project
 import dbt.task.run as run_task
 import dbt.task.compile as compile_task
 import dbt.task.debug as debug_task
@@ -27,6 +27,7 @@ import dbt.compat
 import dbt.deprecations
 
 from dbt.utils import ExitCodes
+
 
 PROFILES_HELP_MESSAGE = """
 For more information on configuring profiles, please consult the dbt docs:
@@ -87,7 +88,10 @@ def main(args=None):
         logger.info("Encountered an error:")
         logger.info(str(e))
 
-        logger.debug(traceback.format_exc())
+        if logger_initialized:
+            logger.debug(traceback.format_exc())
+        else:
+            logger.error(traceback.format_exc())
         exit_code = ExitCodes.UnhandledError
 
     sys.exit(exit_code)
@@ -138,7 +142,7 @@ def get_nearest_project_dir():
 
 def run_from_args(parsed):
     task = None
-    proj = None
+    cfg = None
 
     if parsed.which == 'init':
         # bypass looking for a project file if we're running `dbt init`
@@ -157,39 +161,39 @@ def run_from_args(parsed):
         if res is None:
             raise RuntimeError("Could not run dbt")
         else:
-            task, proj = res
+            task, cfg = res
 
     log_path = None
 
-    if proj is not None:
-        log_path = proj.get('log-path', 'logs')
+    if cfg is not None:
+        log_path = cfg.log_path
 
     initialize_logger(parsed.debug, log_path)
     logger.debug("Tracking: {}".format(dbt.tracking.active_user.state()))
 
-    dbt.tracking.track_invocation_start(project=proj, args=parsed)
+    dbt.tracking.track_invocation_start(config=cfg, args=parsed)
 
-    results = run_from_task(task, proj, parsed)
+    results = run_from_task(task, cfg, parsed)
 
     return task, results
 
 
-def run_from_task(task, proj, parsed_args):
+def run_from_task(task, cfg, parsed_args):
     result = None
     try:
         result = task.run()
         dbt.tracking.track_invocation_end(
-            project=proj, args=parsed_args, result_type="ok"
+            config=cfg, args=parsed_args, result_type="ok"
         )
     except (dbt.exceptions.NotImplementedException,
             dbt.exceptions.FailedToConnectException) as e:
         logger.info('ERROR: {}'.format(e))
         dbt.tracking.track_invocation_end(
-            project=proj, args=parsed_args, result_type="error"
+            config=cfg, args=parsed_args, result_type="error"
         )
     except Exception as e:
         dbt.tracking.track_invocation_end(
-            project=proj, args=parsed_args, result_type="error"
+            config=cfg, args=parsed_args, result_type="error"
         )
         raise
 
@@ -198,22 +202,21 @@ def run_from_task(task, proj, parsed_args):
 
 def invoke_dbt(parsed):
     task = None
-    proj = None
+    cfg = None
 
     try:
-        proj = project.read_project(
-            'dbt_project.yml',
-            parsed.profiles_dir,
-            validate=False,
-            profile_to_load=parsed.profile,
-            args=parsed
-        )
-        proj.validate()
-    except project.DbtProjectError as e:
+        if parsed.which == 'deps':
+            # deps doesn't need a profile, so don't require one.
+            cfg = config.Project.from_current_directory()
+        elif parsed.which != 'debug':
+            # for debug, we will attempt to load the various configurations as
+            # part of the task, so just leave cfg=None.
+            cfg = config.RuntimeConfig.from_args(parsed)
+    except config.DbtProjectError as e:
         logger.info("Encountered an error while reading the project:")
         logger.info(dbt.compat.to_string(e))
 
-        all_profiles = project.read_profiles(parsed.profiles_dir).keys()
+        all_profiles = config.read_profiles(parsed.profiles_dir).keys()
 
         if len(all_profiles) > 0:
             logger.info("Defined profiles:")
@@ -226,46 +229,26 @@ def invoke_dbt(parsed):
         logger.info(PROFILES_HELP_MESSAGE)
 
         dbt.tracking.track_invalid_invocation(
-            project=proj,
+            config=cfg,
             args=parsed,
-            result_type="invalid_profile")
+            result_type=e.result_type)
 
         return None
-    except project.DbtProfileError as e:
+    except config.DbtProfileError as e:
         logger.info("Encountered an error while reading profiles:")
         logger.info("  ERROR {}".format(str(e)))
 
         dbt.tracking.track_invalid_invocation(
-            project=proj,
+            config=cfg,
             args=parsed,
-            result_type="invalid_profile")
+            result_type=e.result_type)
 
         return None
 
-    if parsed.target is not None:
-        targets = proj.cfg.get('outputs', {}).keys()
-        if parsed.target in targets:
-            proj.cfg['target'] = parsed.target
-            # make sure we update the target if this is overriden on the cli
-            proj.compile_and_update_target()
-        else:
-            logger.info("Encountered an error while reading the project:")
-            logger.info("  ERROR Specified target {} is not a valid option "
-                        "for profile {}"
-                        .format(parsed.target, proj.profile_to_load))
-            logger.info("Valid targets are: {}".format(
-                ', '.join(targets)))
-            dbt.tracking.track_invalid_invocation(
-                project=proj,
-                args=parsed,
-                result_type="invalid_target")
+    flags.NON_DESTRUCTIVE = getattr(parsed, 'non_destructive', False)
 
-            return None
-
-    flags.NON_DESTRUCTIVE = getattr(proj.args, 'non_destructive', False)
-
-    arg_drop_existing = getattr(proj.args, 'drop_existing', False)
-    arg_full_refresh = getattr(proj.args, 'full_refresh', False)
+    arg_drop_existing = getattr(parsed, 'drop_existing', False)
+    arg_full_refresh = getattr(parsed, 'full_refresh', False)
 
     if arg_drop_existing:
         dbt.deprecations.warn('drop-existing')
@@ -275,9 +258,9 @@ def invoke_dbt(parsed):
 
     logger.debug("running dbt with arguments %s", parsed)
 
-    task = parsed.cls(args=parsed, project=proj)
+    task = parsed.cls(args=parsed, config=cfg)
 
-    return task, proj
+    return task, cfg
 
 
 def parse_args(args):
@@ -310,11 +293,11 @@ def parse_args(args):
 
     base_subparser.add_argument(
         '--profiles-dir',
-        default=project.default_profiles_dir,
+        default=config.DEFAULT_PROFILES_DIR,
         type=str,
         help="""
         Which directory to look in for the profiles.yml file. Default = {}
-        """.format(project.default_profiles_dir)
+        """.format(config.DEFAULT_PROFILES_DIR)
     )
 
     base_subparser.add_argument(

@@ -12,7 +12,7 @@ from nose.plugins.attrib import attr
 import dbt.flags as flags
 
 from dbt.adapters.factory import get_adapter
-from dbt.project import Project
+from dbt.config import RuntimeConfig
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -32,6 +32,27 @@ class FakeArgs(object):
         self.full_refresh = False
         self.models = None
         self.exclude = None
+
+
+class TestArgs(object):
+    def __init__(self, kwargs):
+        self.__dict__.update(kwargs)
+
+
+def _profile_from_test_name(test_name):
+    adapters_in_name =  sum(x in test_name for x in
+                            ('postgres', 'snowflake', 'redshift', 'bigquery'))
+    if adapters_in_name > 1:
+        raise ValueError('test names must only have 1 profile choice embedded')
+
+    if 'snowflake' in test_name:
+        return 'snowflake'
+    elif 'redshift' in test_name:
+        return 'redshift'
+    elif 'bigquery' in test_name:
+        return 'bigquery'
+    else:
+        return 'postgres'
 
 
 class DBTIntegrationTest(unittest.TestCase):
@@ -148,6 +169,10 @@ class DBTIntegrationTest(unittest.TestCase):
             }
         }
 
+    @property
+    def packages_config(self):
+        return None
+
     def unique_schema(self):
         schema = self.schema
 
@@ -167,65 +192,21 @@ class DBTIntegrationTest(unittest.TestCase):
             return self.bigquery_profile()
         elif adapter_type == 'redshift':
             return self.redshift_profile()
+        else:
+            raise ValueError('invalid adapter type {}'.format(adapter_type))
+
+    def _pick_profile(self):
+        test_name = self.id().split('.')[-1]
+        return _profile_from_test_name(test_name)
 
     def setUp(self):
         flags.reset()
-        self.adapter_type = 'postgres'
+        self._clean_files()
 
-        # create a dbt_project.yml
-
-        base_project_config = {
-            'name': 'test',
-            'version': '1.0',
-            'test-paths': [],
-            'source-paths': [self.models],
-            'profile': 'test'
-        }
-
-        project_config = {}
-        project_config.update(base_project_config)
-        project_config.update(self.project_config)
-
-        with open("dbt_project.yml", 'w') as f:
-            yaml.safe_dump(project_config, f, default_flow_style=True)
-
-        # create profiles
-
-        profile_config = {}
-        default_profile_config = self.postgres_profile()
-        profile_config.update(default_profile_config)
-        profile_config.update(self.profile_config)
-
-        if not os.path.exists(DBT_CONFIG_DIR):
-            os.makedirs(DBT_CONFIG_DIR)
-
-        with open(DBT_PROFILES, 'w') as f:
-            yaml.safe_dump(profile_config, f, default_flow_style=True)
-
-        target = profile_config.get('test').get('target')
-
-        if target is None:
-            target = profile_config.get('test').get('run-target')
-
-        profile = profile_config.get('test').get('outputs').get(target)
-
-        project = Project(project_config, profile_config, DBT_CONFIG_DIR)
-
-        adapter = get_adapter(profile)
-
-        # it's important to use a different connection handle here so
-        # we don't look into an incomplete transaction
-        adapter.cleanup_connections()
-        connection = adapter.acquire_connection(profile, '__test')
-        self.handle = connection.get('handle')
-        self.adapter_type = profile.get('type')
-        self.adapter = adapter
-        self._profile = profile
-        self._profile_config = profile_config
-        self.project = project
-
-        self._drop_schema()
-        self._create_schema()
+        self.use_profile(self._pick_profile())
+        self.use_default_project()
+        self.set_packages()
+        self.load_config()
 
     def use_default_project(self, overrides=None):
         # create a dbt_project.yml
@@ -241,9 +222,6 @@ class DBTIntegrationTest(unittest.TestCase):
         project_config.update(base_project_config)
         project_config.update(self.project_config)
         project_config.update(overrides or {})
-
-        project = Project(project_config, self._profile_config, DBT_CONFIG_DIR)
-        self.project = project
 
         with open("dbt_project.yml", 'w') as f:
             yaml.safe_dump(project_config, f, default_flow_style=True)
@@ -262,35 +240,50 @@ class DBTIntegrationTest(unittest.TestCase):
 
         with open(DBT_PROFILES, 'w') as f:
             yaml.safe_dump(profile_config, f, default_flow_style=True)
+        self._profile_config = profile_config
 
-        profile = profile_config.get('test').get('outputs').get('default2')
-        adapter = get_adapter(profile)
+    def set_packages(self):
+        if self.packages_config is not None:
+            with open('packages.yml', 'w') as f:
+                yaml.safe_dump(self.packages_config, f, default_flow_style=True)
 
-        self.adapter = adapter
-
+    def load_config(self):
+        # we've written our profile and project. Now we want to instantiate a
+        # fresh adapter for the tests.
         # it's important to use a different connection handle here so
         # we don't look into an incomplete transaction
-        connection = adapter.acquire_connection(profile, '__test')
-        self.handle = connection.get('handle')
-        self.adapter_type = profile.get('type')
-        self._profile_config = profile_config
-        self._profile = profile
+        kwargs = {
+            'profile': None,
+            'profile_dir': DBT_CONFIG_DIR,
+            'target': None,
+        }
+
+        config = RuntimeConfig.from_args(TestArgs(kwargs))
+
+        adapter = get_adapter(config)
+
+        adapter.cleanup_connections()
+        connection = adapter.acquire_connection(config, '__test')
+        self.handle = connection.handle
+        self.adapter_type = connection.type
+        self.adapter = adapter
+        self.config = config
 
         self._drop_schema()
         self._create_schema()
 
     def quote_as_configured(self, value, quote_key):
-        # we need this because some tests explicitly skip setUp - but they are
-        # all ok with default values here.
-        project = getattr(self, 'project', {})
         return self.adapter.quote_as_configured(
-            self._profile, project, value, quote_key
+            self.config, value, quote_key
         )
 
-    def tearDown(self):
-        os.remove(DBT_PROFILES)
-        os.remove("dbt_project.yml")
-
+    def _clean_files(self):
+        if os.path.exists(DBT_PROFILES):
+            os.remove(DBT_PROFILES)
+        if os.path.exists('dbt_project.yml'):
+            os.remove("dbt_project.yml")
+        if os.path.exists('packages.yml'):
+            os.remove('packages.yml')
         # quick fix for windows bug that prevents us from deleting dbt_modules
         try:
             if os.path.exists('dbt_modules'):
@@ -298,7 +291,10 @@ class DBTIntegrationTest(unittest.TestCase):
         except:
             os.rename("dbt_modules", "dbt_modules-{}".format(time.time()))
 
-        self.adapter = get_adapter(self._profile)
+    def tearDown(self):
+        self._clean_files()
+
+        self.adapter = get_adapter(self.config)
 
         self._drop_schema()
 
@@ -310,7 +306,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def _create_schema(self):
         if self.adapter_type == 'bigquery':
-            self.adapter.create_schema(self._profile, self.project, self.unique_schema(), '__test')
+            self.adapter.create_schema(self.config, self.unique_schema(), '__test')
         else:
             schema = self.quote_as_configured(self.unique_schema(), 'schema')
             self.run_sql('CREATE SCHEMA {}'.format(schema))
@@ -318,8 +314,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def _drop_schema(self):
         if self.adapter_type == 'bigquery':
-            self.adapter.drop_schema(self._profile, self.project,
-                                     self.unique_schema(), '__test')
+            self.adapter.drop_schema(self.config, self.unique_schema(), '__test')
         else:
             had_existing = False
             try:
@@ -386,9 +381,9 @@ class DBTIntegrationTest(unittest.TestCase):
         """Run an SQL query on a bigquery adapter. No cursors, transactions,
         etc. to worry about"""
 
-        adapter = get_adapter(self._profile)
+        adapter = get_adapter(self.config)
         do_fetch = fetch != 'None'
-        _, res = adapter.execute(self._profile, sql, fetch=do_fetch)
+        _, res = adapter.execute(self.config, sql, fetch=do_fetch)
 
         # convert dataframe to matrix-ish repr
         if fetch == 'one':
@@ -451,8 +446,7 @@ class DBTIntegrationTest(unittest.TestCase):
     def get_table_columns(self, table, schema=None):
         schema = self.unique_schema() if schema is None else schema
         columns = self.adapter.get_columns_in_table(
-            self._profile,
-            self.project_config,
+            self.config,
             schema,
             table
         )
@@ -664,7 +658,8 @@ def use_profile(profile_name):
         @attr(type=profile_name)
         @wraps(wrapped)
         def func(self, *args, **kwargs):
-            self.use_profile(profile_name)
             return wrapped(self, *args, **kwargs)
+        # sanity check at import time
+        assert _profile_from_test_name(wrapped.__name__) == profile_name
         return func
     return outer

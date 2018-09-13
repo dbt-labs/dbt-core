@@ -3,7 +3,6 @@ import unittest
 import os
 import string
 import dbt.graph.selector as graph_selector
-import dbt.project
 
 import networkx as nx
 
@@ -23,47 +22,6 @@ class GraphSelectionTest(unittest.TestCase):
 
         for node in self.package_graph:
             self.package_graph.node[node]['fqn'] = node.split('.')[1:]
-
-        self.project = self.get_project()
-
-    def get_project(self, extra_cfg=None):
-        if extra_cfg is None:
-            extra_cfg = {}
-
-        cfg = {
-            'name': 'X',
-            'version': '0.1',
-            'profile': 'test',
-            'project-root': os.path.abspath('.'),
-        }
-
-        profiles = {
-            'test': {
-                'outputs': {
-                    'test': {
-                        'type': 'postgres',
-                        'threads': 4,
-                        'host': 'database',
-                        'port': 5432,
-                        'user': 'root',
-                        'pass': 'password',
-                        'dbname': 'dbt',
-                        'schema': 'dbt_test'
-                    }
-                },
-                'target': 'test'
-            }
-        }
-
-        cfg.update(extra_cfg)
-
-        project = dbt.project.Project(
-            cfg=cfg,
-            profiles=profiles,
-            profiles_dir=None)
-
-        project.validate()
-        return project
 
     def run_specs_and_assert(self, graph, include, exclude, expected):
         selected = graph_selector.select_nodes(

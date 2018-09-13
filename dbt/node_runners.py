@@ -43,9 +43,8 @@ def track_model_run(index, num_nodes, run_model_result):
 class BaseRunner(object):
     print_header = True
 
-    def __init__(self, project, adapter, node, node_index, num_nodes):
-        self.project = project
-        self.profile = project.run_environment()
+    def __init__(self, config, adapter, node, node_index, num_nodes):
+        self.config = config
         self.adapter = adapter
         self.node = node
         self.node_index = node_index
@@ -118,7 +117,7 @@ class BaseRunner(object):
 
         finally:
             node_name = self.node.name
-            self.adapter.release_connection(self.profile, node_name)
+            self.adapter.release_connection(self.config, node_name)
 
         result.execution_time = time.time() - started
         return result
@@ -159,19 +158,19 @@ class BaseRunner(object):
         return schemas
 
     @classmethod
-    def before_hooks(self, project, adapter, manifest):
+    def before_hooks(self, config, adapter, manifest):
         pass
 
     @classmethod
-    def before_run(self, project, adapter, manifest):
+    def before_run(self, config, adapter, manifest):
         pass
 
     @classmethod
-    def after_run(self, project, adapter, results, manifest):
+    def after_run(self, config, adapter, results, manifest):
         pass
 
     @classmethod
-    def after_hooks(self, project, adapter, results, manifest, elapsed):
+    def after_hooks(self, config, adapter, results, manifest, elapsed):
         pass
 
 
@@ -191,14 +190,14 @@ class CompileRunner(BaseRunner):
         return RunModelResult(compiled_node)
 
     def compile(self, manifest):
-        return self._compile_node(self.adapter, self.project, self.node,
+        return self._compile_node(self.adapter, self.config, self.node,
                                   manifest)
 
     @classmethod
-    def _compile_node(cls, adapter, project, node, manifest):
-        compiler = dbt.compilation.Compiler(project)
+    def _compile_node(cls, adapter, config, node, manifest):
+        compiler = dbt.compilation.Compiler(config)
         node = compiler.compile_node(node, manifest)
-        node = cls._inject_runtime_config(adapter, project, node)
+        node = cls._inject_runtime_config(adapter, config, node)
 
         if(node.injected_sql is not None and
            not (dbt.utils.is_type(node, NodeType.Archive))):
@@ -207,7 +206,7 @@ class CompileRunner(BaseRunner):
 
             written_path = dbt.writer.write_node(
                 node,
-                project.get('target-path'),
+                config.target_path,
                 'compiled',
                 node.injected_sql)
 
@@ -216,31 +215,30 @@ class CompileRunner(BaseRunner):
         return node
 
     @classmethod
-    def _inject_runtime_config(cls, adapter, project, node):
+    def _inject_runtime_config(cls, adapter, config, node):
         wrapped_sql = node.wrapped_sql
-        context = cls._node_context(adapter, project, node)
+        context = cls._node_context(adapter, config, node)
         sql = dbt.clients.jinja.get_rendered(wrapped_sql, context)
         node.wrapped_sql = sql
         return node
 
     @classmethod
-    def _node_context(cls, adapter, project, node):
-        profile = project.run_environment()
+    def _node_context(cls, adapter, config, node):
 
         def call_get_columns_in_table(schema_name, table_name):
             return adapter.get_columns_in_table(
-                profile, project, schema_name,
+                config, schema_name,
                 table_name, model_name=node.alias)
 
         def call_get_missing_columns(from_schema, from_table,
                                      to_schema, to_table):
             return adapter.get_missing_columns(
-                profile, project, from_schema, from_table,
+                config, from_schema, from_table,
                 to_schema, to_table, node.alias)
 
         def call_already_exists(schema, table):
             return adapter.already_exists(
-                profile, project, schema, table, node.alias)
+                config, schema, table, node.alias)
 
         return {
             "run_started_at": dbt.tracking.active_user.run_started_at,
@@ -251,12 +249,11 @@ class CompileRunner(BaseRunner):
         }
 
     @classmethod
-    def create_schemas(cls, project, adapter, manifest):
-        profile = project.run_environment()
+    def create_schemas(cls, config, adapter, manifest):
         required_schemas = cls.get_model_schemas(manifest)
-        existing_schemas = set(adapter.get_existing_schemas(profile, project))
+        existing_schemas = set(adapter.get_existing_schemas(config))
         for schema in (required_schemas - existing_schemas):
-            adapter.create_schema(profile, project, schema)
+            adapter.create_schema(config, schema)
 
 
 class ModelRunner(CompileRunner):
@@ -265,8 +262,7 @@ class ModelRunner(CompileRunner):
         return False
 
     @classmethod
-    def run_hooks(cls, project, adapter, manifest, hook_type):
-        profile = project.run_environment()
+    def run_hooks(cls, config, adapter, manifest, hook_type):
 
         nodes = manifest.nodes.values()
         hooks = get_nodes_by_tags(nodes, {hook_type}, NodeType.Operation)
@@ -283,8 +279,8 @@ class ModelRunner(CompileRunner):
             # implement a for-loop over these sql statements in jinja-land.
             # Also, consider configuring psycopg2 (and other adapters?) to
             # ensure that a transaction is only created if dbt initiates it.
-            adapter.clear_transaction(profile, model_name)
-            compiled = cls._compile_node(adapter, project, hook, manifest)
+            adapter.clear_transaction(config, model_name)
+            compiled = cls._compile_node(adapter, config, hook, manifest)
             statement = compiled.wrapped_sql
 
             hook_index = hook.get('index', len(hooks))
@@ -296,40 +292,39 @@ class ModelRunner(CompileRunner):
             sql = hook_dict.get('sql', '')
 
             if len(sql.strip()) > 0:
-                adapter.execute(profile, sql, model_name=model_name,
+                adapter.execute(config, sql, model_name=model_name,
                                 auto_begin=False, fetch=False)
 
-            adapter.release_connection(profile, model_name)
+            adapter.release_connection(config, model_name)
 
     @classmethod
-    def safe_run_hooks(cls, project, adapter, manifest, hook_type):
+    def safe_run_hooks(cls, config, adapter, manifest, hook_type):
         try:
-            cls.run_hooks(project, adapter, manifest, hook_type)
+            cls.run_hooks(config, adapter, manifest, hook_type)
 
         except dbt.exceptions.RuntimeException:
             logger.info("Database error while running {}".format(hook_type))
             raise
 
     @classmethod
-    def create_schemas(cls, project, adapter, manifest):
-        profile = project.run_environment()
+    def create_schemas(cls, config, adapter, manifest):
         required_schemas = cls.get_model_schemas(manifest)
 
         # Snowflake needs to issue a "use {schema}" query, where schema
         # is the one defined in the profile. Create this schema if it
         # does not exist, otherwise subsequent queries will fail. Generally,
         # dbt expects that this schema will exist anyway.
-        required_schemas.add(adapter.get_default_schema(profile, project))
+        required_schemas.add(adapter.get_default_schema(config))
 
-        existing_schemas = set(adapter.get_existing_schemas(profile, project))
+        existing_schemas = set(adapter.get_existing_schemas(config))
 
         for schema in (required_schemas - existing_schemas):
-            adapter.create_schema(profile, project, schema)
+            adapter.create_schema(config, schema)
 
     @classmethod
-    def before_run(cls, project, adapter, manifest):
-        cls.safe_run_hooks(project, adapter, manifest, RunHookType.Start)
-        cls.create_schemas(project, adapter, manifest)
+    def before_run(cls, config, adapter, manifest):
+        cls.safe_run_hooks(config, adapter, manifest, RunHookType.Start)
+        cls.create_schemas(config, adapter, manifest)
 
     @classmethod
     def print_results_line(cls, results, execution_time):
@@ -348,11 +343,11 @@ class ModelRunner(CompileRunner):
             .format(stat_line=stat_line, execution=execution))
 
     @classmethod
-    def after_run(cls, project, adapter, results, manifest):
-        cls.safe_run_hooks(project, adapter, manifest, RunHookType.End)
+    def after_run(cls, config, adapter, results, manifest):
+        cls.safe_run_hooks(config, adapter, manifest, RunHookType.End)
 
     @classmethod
-    def after_hooks(cls, project, adapter, results, manifest, elapsed):
+    def after_hooks(cls, config, adapter, results, manifest, elapsed):
         cls.print_results_line(results, elapsed)
 
     def describe_node(self):
@@ -382,7 +377,7 @@ class ModelRunner(CompileRunner):
 
     def execute(self, model, manifest):
         context = dbt.context.runtime.generate(
-            model, self.project.cfg, manifest)
+            model, self.config, manifest)
 
         materialization_macro = manifest.get_materialization_macro(
             model.get_materialization(),
@@ -423,7 +418,7 @@ class TestRunner(CompileRunner):
 
     def execute_test(self, test):
         res, table = self.adapter.execute_and_fetch(
-            self.profile,
+            self.config,
             test.wrapped_sql,
             test.name,
             auto_begin=True)

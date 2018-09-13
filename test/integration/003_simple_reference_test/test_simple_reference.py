@@ -1,11 +1,6 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 class TestSimpleReference(DBTIntegrationTest):
-
-    def setUp(self):
-        pass
-
     @property
     def schema(self):
         return "simple_reference_003"
@@ -14,9 +9,8 @@ class TestSimpleReference(DBTIntegrationTest):
     def models(self):
         return "test/integration/003_simple_reference_test/models"
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__simple_reference(self):
-        self.use_profile('postgres')
         self.use_default_project()
         self.run_sql_file(
             "test/integration/003_simple_reference_test/seed.sql")
@@ -52,9 +46,8 @@ class TestSimpleReference(DBTIntegrationTest):
         self.assertTablesEqual("summary_expected","view_summary")
         self.assertTablesEqual("summary_expected","ephemeral_summary")
 
-    @attr(type='snowflake')
+    @use_profile('snowflake')
     def test__snowflake__simple_reference(self):
-        self.use_profile('snowflake')
         self.use_default_project()
         self.run_sql_file("test/integration/003_simple_reference_test/seed.sql")
 
@@ -78,9 +71,8 @@ class TestSimpleReference(DBTIntegrationTest):
             ["SUMMARY_EXPECTED", "INCREMENTAL_SUMMARY", "MATERIALIZED_SUMMARY", "VIEW_SUMMARY", "EPHEMERAL_SUMMARY"]
         )
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__simple_reference_with_models(self):
-        self.use_profile('postgres')
         self.use_default_project()
         self.run_sql_file("test/integration/003_simple_reference_test/seed.sql")
 
@@ -97,9 +89,8 @@ class TestSimpleReference(DBTIntegrationTest):
         created_models = self.get_models_in_schema()
         self.assertTrue('materialized_copy' in created_models)
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__simple_reference_with_models_and_children(self):
-        self.use_profile('postgres')
         self.use_default_project()
         self.run_sql_file("test/integration/003_simple_reference_test/seed.sql")
 
@@ -136,9 +127,8 @@ class TestSimpleReference(DBTIntegrationTest):
         self.assertTrue('ephemeral_summary' in created_models)
         self.assertEqual(created_models['ephemeral_summary'], 'table')
 
-    @attr(type='snowflake')
+    @use_profile('snowflake')
     def test__snowflake__simple_reference_with_models(self):
-        self.use_profile('snowflake')
         self.use_default_project()
         self.run_sql_file("test/integration/003_simple_reference_test/seed.sql")
 
@@ -155,9 +145,8 @@ class TestSimpleReference(DBTIntegrationTest):
         created_models = self.get_models_in_schema()
         self.assertTrue('MATERIALIZED_COPY' in created_models)
 
-    @attr(type='snowflake')
+    @use_profile('snowflake')
     def test__snowflake__simple_reference_with_models_and_children(self):
-        self.use_profile('snowflake')
         self.use_default_project()
         self.run_sql_file("test/integration/003_simple_reference_test/seed.sql")
 

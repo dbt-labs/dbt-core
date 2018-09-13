@@ -1,5 +1,6 @@
 from dbt.api.object import APIObject
 from dbt.utils import deep_merge
+from dbt.contracts.common import named_property
 from dbt.contracts.graph.manifest import COMPILE_RESULT_NODE_CONTRACT
 from dbt.contracts.graph.parsed import PARSED_NODE_CONTRACT
 from dbt.contracts.graph.compiled import COMPILED_NODE_CONTRACT
@@ -36,17 +37,6 @@ RUN_MODEL_RESULT_CONTRACT = {
     },
     'required': ['node'],
 }
-
-
-def named_property(name, doc=None):
-    def get_prop(self):
-        return self._contents.get(name)
-
-    def set_prop(self, value):
-        self._contents[name] = value
-        self.validate()
-
-    return property(get_prop, set_prop, doc=doc)
 
 
 class RunModelResult(APIObject):

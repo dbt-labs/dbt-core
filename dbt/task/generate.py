@@ -187,12 +187,12 @@ def incorporate_catalog_unique_ids(catalog, manifest):
 
 class GenerateTask(CompileTask):
     def _get_manifest(self):
-        compiler = dbt.compilation.Compiler(self.project)
+        compiler = dbt.compilation.Compiler(self.config)
         compiler.initialize()
 
         all_projects = compiler.get_all_projects()
 
-        manifest = dbt.loader.GraphLoader.load_all(self.project, all_projects)
+        manifest = dbt.loader.GraphLoader.load_all(self.config, all_projects)
         return manifest
 
     def run(self):
@@ -207,14 +207,13 @@ class GenerateTask(CompileTask):
 
         shutil.copyfile(
             DOCS_INDEX_FILE_PATH,
-            os.path.join(self.project['target-path'], 'index.html'))
+            os.path.join(self.config.target_path, 'index.html'))
 
         manifest = self._get_manifest()
-        profile = self.project.run_environment()
-        adapter = get_adapter(profile)
+        adapter = get_adapter(self.config)
 
         dbt.ui.printer.print_timestamped_line("Building catalog")
-        results = adapter.get_catalog(profile, self.project.cfg, manifest)
+        results = adapter.get_catalog(self.config, manifest)
 
         results = [
             dict(zip(results.column_names, row))
@@ -227,7 +226,7 @@ class GenerateTask(CompileTask):
             'generated_at': dbt.utils.timestring(),
         }
 
-        path = os.path.join(self.project['target-path'], CATALOG_FILENAME)
+        path = os.path.join(self.config.target_path, CATALOG_FILENAME)
         write_json(path, results)
 
         dbt.ui.printer.print_timestamped_line(

@@ -22,9 +22,9 @@ class SnowflakeAdapter(PostgresAdapter):
 
     @classmethod
     @contextmanager
-    def exception_handler(cls, profile, sql, model_name=None,
+    def exception_handler(cls, config, sql, model_name=None,
                           connection_name='master'):
-        connection = cls.get_connection(profile, connection_name)
+        connection = cls.get_connection(config, connection_name)
 
         try:
             yield
@@ -36,7 +36,7 @@ class SnowflakeAdapter(PostgresAdapter):
             if 'Empty SQL statement' in msg:
                 logger.debug("got empty sql statement, moving on")
             elif 'This session does not have a current database' in msg:
-                cls.release_connection(profile, connection_name)
+                cls.release_connection(config, connection_name)
                 raise dbt.exceptions.FailedToConnectException(
                     ('{}\n\nThis error sometimes occurs when invalid '
                      'credentials are provided, or when your default role '
@@ -44,12 +44,12 @@ class SnowflakeAdapter(PostgresAdapter):
                      'Please double check your profile and try again.')
                     .format(msg))
             else:
-                cls.release_connection(profile, connection_name)
+                cls.release_connection(config, connection_name)
                 raise dbt.exceptions.DatabaseException(msg)
         except Exception as e:
             logger.debug("Error running SQL: %s", sql)
             logger.debug("Rolling back transaction.")
-            cls.release_connection(profile, connection_name)
+            cls.release_connection(config, connection_name)
             raise dbt.exceptions.RuntimeException(e.msg)
 
     @classmethod
@@ -71,41 +71,39 @@ class SnowflakeAdapter(PostgresAdapter):
 
     @classmethod
     def open_connection(cls, connection):
-        if connection.get('state') == 'open':
+        if connection.state == 'open':
             logger.debug('Connection is already open, skipping open.')
             return connection
 
-        result = connection.copy()
-
         try:
-            credentials = connection.get('credentials', {})
+            credentials = connection.credentials
             handle = snowflake.connector.connect(
-                account=credentials.get('account'),
-                user=credentials.get('user'),
-                password=credentials.get('password'),
-                database=credentials.get('database'),
-                schema=credentials.get('schema'),
-                warehouse=credentials.get('warehouse'),
+                account=credentials.account,
+                user=credentials.user,
+                password=credentials.password,
+                database=credentials.database,
+                schema=credentials.schema,
+                warehouse=credentials.warehouse,
                 role=credentials.get('role', None),
                 autocommit=False
             )
 
-            result['handle'] = handle
-            result['state'] = 'open'
+            connection.handle = handle
+            connection.state = 'open'
         except snowflake.connector.errors.Error as e:
             logger.debug("Got an error when attempting to open a snowflake "
                          "connection: '{}'"
                          .format(e))
 
-            result['handle'] = None
-            result['state'] = 'fail'
+            connection.handle = None
+            connection.state = 'fail'
 
             raise dbt.exceptions.FailedToConnectException(str(e))
 
-        return result
+        return connection
 
     @classmethod
-    def list_relations(cls, profile, project_cfg, schema, model_name=None):
+    def list_relations(cls, config, schema, model_name=None):
         sql = """
         select
           table_name as name, table_schema as schema, table_type as type
@@ -114,7 +112,7 @@ class SnowflakeAdapter(PostgresAdapter):
         """.format(schema=schema).strip()  # noqa
 
         _, cursor = cls.add_query(
-            profile, sql, model_name, auto_begin=False)
+            config, sql, model_name, auto_begin=False)
 
         results = cursor.fetchall()
 
@@ -124,7 +122,7 @@ class SnowflakeAdapter(PostgresAdapter):
 
         }
         return [cls.Relation.create(
-            database=profile.get('database'),
+            database=config.credentials.database,
             schema=_schema,
             identifier=name,
             quote_policy={
@@ -135,37 +133,36 @@ class SnowflakeAdapter(PostgresAdapter):
                 for (name, _schema, type) in results]
 
     @classmethod
-    def rename_relation(cls, profile, project_cfg, from_relation,
-                        to_relation, model_name=None):
+    def rename_relation(cls, config, from_relation, to_relation,
+                        model_name=None):
         sql = 'alter table {} rename to {}'.format(
             from_relation, to_relation)
 
-        connection, cursor = cls.add_query(profile, sql, model_name)
+        connection, cursor = cls.add_query(config, sql, model_name)
 
     @classmethod
-    def add_begin_query(cls, profile, name):
-        return cls.add_query(profile, 'BEGIN', name, auto_begin=False)
+    def add_begin_query(cls, config, name):
+        return cls.add_query(config, 'BEGIN', name, auto_begin=False)
 
     @classmethod
-    def get_existing_schemas(cls, profile, project_cfg, model_name=None):
+    def get_existing_schemas(cls, config, model_name=None):
         sql = "select distinct schema_name from information_schema.schemata"
 
-        connection, cursor = cls.add_query(profile, sql, model_name,
+        connection, cursor = cls.add_query(config, sql, model_name,
                                            auto_begin=False)
         results = cursor.fetchall()
 
         return [row[0] for row in results]
 
     @classmethod
-    def check_schema_exists(cls, profile, project_cfg,
-                            schema, model_name=None):
+    def check_schema_exists(cls, config, schema, model_name=None):
         sql = """
         select count(*)
         from information_schema.schemata
         where upper(schema_name) = upper('{schema}')
         """.format(schema=schema).strip()  # noqa
 
-        connection, cursor = cls.add_query(profile, sql, model_name,
+        connection, cursor = cls.add_query(config, sql, model_name,
                                            auto_begin=False)
         results = cursor.fetchone()
 
@@ -181,7 +178,7 @@ class SnowflakeAdapter(PostgresAdapter):
         return [part[0] for part in split_query]
 
     @classmethod
-    def add_query(cls, profile, sql, model_name=None, auto_begin=True,
+    def add_query(cls, config, sql, model_name=None, auto_begin=True,
                   bindings=None, abridge_sql_log=False):
 
         connection = None
@@ -206,7 +203,7 @@ class SnowflakeAdapter(PostgresAdapter):
                 continue
 
             connection, cursor = super(PostgresAdapter, cls).add_query(
-                profile, individual_query, model_name, auto_begin,
+                config, individual_query, model_name, auto_begin,
                 bindings=bindings, abridge_sql_log=abridge_sql_log)
 
         if cursor is None:
@@ -228,30 +225,28 @@ class SnowflakeAdapter(PostgresAdapter):
         return super(SnowflakeAdapter, cls)._filter_table(lowered, manifest)
 
     @classmethod
-    def _make_match_kwargs(cls, project_cfg, schema, identifier):
-        if identifier is not None and \
-           project_cfg.get('quoting', {}).get('identifier', False) is False:
+    def _make_match_kwargs(cls, config, schema, identifier):
+        if identifier is not None and config.quoting['identifier'] is False:
             identifier = identifier.upper()
 
-        if schema is not None and \
-           project_cfg.get('quoting', {}).get('schema', False) is False:
+        if schema is not None and config.quoting['schema'] is False:
             schema = schema.upper()
 
         return filter_null_values({'identifier': identifier,
                                    'schema': schema})
 
     @classmethod
-    def cancel_connection(cls, profile, connection):
-        handle = connection['handle']
+    def cancel_connection(cls, config, connection):
+        handle = connection.handle
         sid = handle.session_id
 
-        connection_name = connection.get('name')
+        connection_name = connection.name
 
         sql = 'select system$abort_session({})'.format(sid)
 
         logger.debug("Cancelling query '{}' ({})".format(connection_name, sid))
 
-        _, cursor = cls.add_query(profile, sql, 'master')
+        _, cursor = cls.add_query(config, sql, 'master')
         res = cursor.fetchone()
 
         logger.debug("Cancel query '{}': {}".format(connection_name, res))

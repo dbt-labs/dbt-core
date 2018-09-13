@@ -160,13 +160,13 @@ class Manifest(APIObject):
     the current state of the compiler. Macros will always be ParsedMacros and
     docs will always be ParsedDocumentations.
     """
-    def __init__(self, nodes, macros, docs, generated_at, project=None):
+    def __init__(self, nodes, macros, docs, generated_at, config=None):
         """The constructor. nodes and macros are dictionaries mapping unique
         IDs to ParsedNode/CompiledNode and ParsedMacro objects, respectively.
         docs is a dictionary mapping unique IDs to ParsedDocumentation objects.
         generated_at is a text timestamp in RFC 3339 format.
         """
-        metadata = self.get_metadata(project)
+        metadata = self.get_metadata(config)
         self.nodes = nodes
         self.macros = macros
         self.docs = docs
@@ -175,13 +175,13 @@ class Manifest(APIObject):
         super(Manifest, self).__init__()
 
     @staticmethod
-    def get_metadata(project):
+    def get_metadata(config):
         project_id = None
         user_id = None
         send_anonymous_usage_stats = None
 
-        if project is not None:
-            project_id = project.hashed_name()
+        if config is not None:
+            project_id = config.hashed_name()
 
         if tracking.active_user is not None:
             user_id = tracking.active_user.id

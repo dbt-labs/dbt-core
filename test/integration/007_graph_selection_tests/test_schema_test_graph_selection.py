@@ -2,7 +2,6 @@ from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest, FakeArgs
 
 from dbt.task.test import TestTask
-from dbt.project import read_project
 
 
 class TestSchemaTestGraphSelection(DBTIntegrationTest):
@@ -16,17 +15,16 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         return "test/integration/007_graph_selection_tests/models"
 
     @property
-    def project_config(self):
+    def packages_config(self):
         return {
-            "repositories": [
-                'https://github.com/fishtown-analytics/dbt-integration-project'
+            "packages": [
+                {'git': 'https://github.com/fishtown-analytics/dbt-integration-project'}
             ]
         }
 
     def run_schema_and_assert(self, include, exclude, expected_tests):
         self.use_profile('postgres')
         self.use_default_project()
-        self.project = read_project('dbt_project.yml')
 
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
         self.run_dbt(["deps"])
@@ -37,7 +35,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         args.models = include
         args.exclude = exclude
 
-        test_task = TestTask(args, self.project)
+        test_task = TestTask(args, self.config)
         test_results = test_task.run()
 
         ran_tests = sorted([test.node.get('name') for test in test_results])
