@@ -75,6 +75,7 @@ class BaseRunner(object):
 
         result = RunModelResult(self.node)
         started = time.time()
+        exc_info = (None, None, None)
 
         try:
             # if we fail here, we still have a compiled node to return
@@ -107,6 +108,9 @@ class BaseRunner(object):
             result.status = 'ERROR'
 
         except Exception as e:
+            # set this here instead of finally, as python 2/3 exc_info()
+            # behavior with re-raised exceptions are slightly different
+            exc_info = sys.exc_info()
             prefix = "Unhandled error while executing {filepath}".format(
                         filepath=self.node.build_path)
 
@@ -118,7 +122,6 @@ class BaseRunner(object):
             raise e
 
         finally:
-            exc_info = sys.exc_info()
             exc_str = self._safe_release_connection()
 
             # if we had an unhandled exception, re-raise it
