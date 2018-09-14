@@ -1,7 +1,8 @@
 from test.integration.base import DBTIntegrationTest, FakeArgs, use_profile
+import random
+import time
 
-
-class TestSimpleBigQueryRun(DBTIntegrationTest):
+class TestBaseBigQueryRun(DBTIntegrationTest):
 
     @property
     def schema(self):
@@ -21,6 +22,9 @@ class TestSimpleBigQueryRun(DBTIntegrationTest):
     @property
     def profile_config(self):
         return self.bigquery_profile()
+
+
+class TestSimpleBigQueryRun(TestBaseBigQueryRun):
 
     @use_profile('bigquery')
     def test__bigquery_simple_run(self):
@@ -53,6 +57,34 @@ class TestSimpleBigQueryRun(DBTIntegrationTest):
         self.assertEqual(len(self.run_dbt()), 4)
         # then run dbt with --non-destructive. The view should still exist.
         self.run_dbt(['run', '--non-destructive'])
+        # The 'dupe' model should fail, but all others should pass
+        test_results = self.run_dbt(['test'], expect_pass=False)
+
+        for result in test_results:
+            if 'dupe' in result.node.get('name'):
+                self.assertFalse(result.errored)
+                self.assertFalse(result.skipped)
+                self.assertTrue(result.status > 0)
+
+            # assert that actual tests pass
+            else:
+                self.assertFalse(result.errored)
+                self.assertFalse(result.skipped)
+                # status = # of failing rows
+                self.assertEqual(result.status, 0)
+
+
+class TestUnderscoreBigQueryRun(TestBaseBigQueryRun):
+    prefix = "_test{}{:04}".format(int(time.time()), random.randint(0, 9999))
+
+    @use_profile('bigquery')
+    def test_bigquery_run_twice(self):
+        self.run_dbt(['seed'])
+        results = self.run_dbt()
+        self.assertEqual(len(results), 4)
+        results = self.run_dbt()
+        self.assertEqual(len(results), 4)
+
         # The 'dupe' model should fail, but all others should pass
         test_results = self.run_dbt(['test'], expect_pass=False)
 
