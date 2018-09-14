@@ -267,7 +267,7 @@ class DBTIntegrationTest(unittest.TestCase):
         adapter = get_adapter(config)
 
         adapter.cleanup_connections()
-        connection = adapter.acquire_connection(config, '__test')
+        connection = adapter.acquire_connection('__test')
         self.handle = connection.handle
         self.adapter_type = connection.type
         self.adapter = adapter
@@ -277,9 +277,7 @@ class DBTIntegrationTest(unittest.TestCase):
         self._create_schema()
 
     def quote_as_configured(self, value, quote_key):
-        return self.adapter.quote_as_configured(
-            self.config, value, quote_key
-        )
+        return self.adapter.quote_as_configured(value, quote_key)
 
     def _clean_files(self):
         if os.path.exists(DBT_PROFILES):
@@ -310,7 +308,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def _create_schema(self):
         if self.adapter_type == 'bigquery':
-            self.adapter.create_schema(self.config, self.unique_schema(), '__test')
+            self.adapter.create_schema(self.unique_schema(), '__test')
         else:
             schema = self.quote_as_configured(self.unique_schema(), 'schema')
             self.run_sql('CREATE SCHEMA {}'.format(schema))
@@ -318,7 +316,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def _drop_schema(self):
         if self.adapter_type == 'bigquery':
-            self.adapter.drop_schema(self.config, self.unique_schema(), '__test')
+            self.adapter.drop_schema(self.unique_schema(), '__test')
         else:
             had_existing = False
             try:
@@ -385,9 +383,8 @@ class DBTIntegrationTest(unittest.TestCase):
         """Run an SQL query on a bigquery adapter. No cursors, transactions,
         etc. to worry about"""
 
-        adapter = get_adapter(self.config)
         do_fetch = fetch != 'None'
-        _, res = adapter.execute(self.config, sql, fetch=do_fetch)
+        _, res = self.adapter.execute(sql, fetch=do_fetch)
 
         # convert dataframe to matrix-ish repr
         if fetch == 'one':
@@ -449,11 +446,8 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def get_table_columns(self, table, schema=None):
         schema = self.unique_schema() if schema is None else schema
-        columns = self.adapter.get_columns_in_table(
-            self.config,
-            schema,
-            table
-        )
+        columns = self.adapter.get_columns_in_table(schema, table)
+
         return sorted(((c.name, c.dtype, c.char_size) for c in columns),
                       key=lambda x: x[0])
 

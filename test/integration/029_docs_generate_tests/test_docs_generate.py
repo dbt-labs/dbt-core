@@ -26,6 +26,11 @@ class AnyStringWith(object):
         return isinstance(other, basestring) and self.contains in other
 
 
+def _read_file(path):
+    with open(path) as fp:
+        return fp.read()
+
+
 class TestDocsGenerate(DBTIntegrationTest):
     def setUp(self):
         super(TestDocsGenerate,self).setUp()
@@ -729,7 +734,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'model.sql',
                     'original_file_path': model_sql_path,
                     'package_name': 'test',
-                    'raw_sql': open(model_sql_path).read().rstrip('\n'),
+                    'raw_sql': _read_file(model_sql_path).rstrip('\n'),
                     'refs': [['seed']],
                     'depends_on': {'nodes': ['seed.test.seed'], 'macros': []},
                     'unique_id': 'model.test.model',
@@ -920,7 +925,7 @@ class TestDocsGenerate(DBTIntegrationTest):
     def expected_postgres_references_manifest(self):
         my_schema_name = self.unique_schema()
         docs_path = self.dir('ref_models/docs.md')
-        docs_file = open(docs_path).read().lstrip()
+        docs_file = _read_file(docs_path).lstrip()
         return {
             'nodes': {
                 'model.test.ephemeral_copy': {
@@ -1204,7 +1209,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': clustered_sql_path,
                     'package_name': 'test',
                     'path': 'clustered.sql',
-                    'raw_sql': open(clustered_sql_path).read().rstrip('\n'),
+                    'raw_sql': _read_file(clustered_sql_path).rstrip('\n'),
                     'refs': [['seed']],
                     'resource_type': 'model',
                     'root_path': os.getcwd(),
@@ -1258,7 +1263,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': nested_view_sql_path,
                     'package_name': 'test',
                     'path': 'nested_view.sql',
-                    'raw_sql': open(nested_view_sql_path).read().rstrip('\n'),
+                    'raw_sql': _read_file(nested_view_sql_path).rstrip('\n'),
                     'refs': [['nested_table']],
                     'resource_type': 'model',
                     'root_path': os.getcwd(),
@@ -1312,7 +1317,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': nested_table_sql_path,
                     'package_name': 'test',
                     'path': 'nested_table.sql',
-                    'raw_sql': open(nested_table_sql_path).read().rstrip('\n'),
+                    'raw_sql': _read_file(nested_table_sql_path).rstrip('\n'),
                     'refs': [],
                     'resource_type': 'model',
                     'root_path': os.getcwd(),
@@ -1388,7 +1393,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     "path": "model.sql",
                     "original_file_path": model_sql_path,
                     "package_name": "test",
-                    "raw_sql": open(model_sql_path).read().rstrip('\n'),
+                    "raw_sql": _read_file(model_sql_path).rstrip('\n'),
                     "refs": [["seed"]],
                     "depends_on": {
                         "nodes": ["seed.test.seed"],
