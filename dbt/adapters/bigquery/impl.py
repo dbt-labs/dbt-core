@@ -28,7 +28,7 @@ import agate
 
 class BigQueryAdapter(PostgresAdapter):
 
-    context_functions = [
+    config_functions = [
         # deprecated -- use versions that take relations instead
         "query_for_existing",
         "execute_model",
@@ -51,7 +51,10 @@ class BigQueryAdapter(PostgresAdapter):
         "drop_relation",
         "rename_relation",
 
-        "get_columns_in_table"
+        "get_columns_in_table",
+
+        # formerly profile functions
+        "add_query",
     ]
 
     SCOPE = ('https://www.googleapis.com/auth/bigquery',

@@ -51,9 +51,8 @@ class DatabaseWrapper(object):
         self.adapter = adapter
         self.Relation = RelationProxy(adapter)
 
-        # TODO: clean up this part of the adapter classes
         self._wrapped = frozenset(
-            self.adapter.context_functions + self.adapter.profile_functions
+            self.adapter.config_functions
         )
         self._proxied = frozenset(self.adapter.raw_functions)
 

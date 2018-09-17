@@ -52,7 +52,7 @@ def _filter_schemas(manifest):
 class DefaultAdapter(object):
     requires = {}
 
-    context_functions = [
+    config_functions = [
         "get_columns_in_table",
         "get_missing_columns",
         "expand_target_column_types",
@@ -75,9 +75,8 @@ class DefaultAdapter(object):
         "drop_relation",
         "rename_relation",
         "truncate_relation",
-    ]
 
-    profile_functions = [
+        # formerly profile functions
         "execute",
         "add_query",
     ]
