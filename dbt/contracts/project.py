@@ -115,6 +115,12 @@ PROJECT_CONTRACT = {
                 'schema': {
                     'type': 'boolean',
                 },
+                'database': {
+                    'type': 'boolean',
+                },
+                'project': {
+                    'type': 'boolean',
+                }
             },
         },
         'models': {

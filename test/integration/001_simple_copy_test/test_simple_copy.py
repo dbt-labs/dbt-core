@@ -16,6 +16,7 @@ class BaseTestSimpleCopy(DBTIntegrationTest):
     def models(self):
         return self.dir("models")
 
+
 class TestSimpleCopy(BaseTestSimpleCopy):
     @use_profile("postgres")
     def test__postgres__simple_copy(self):

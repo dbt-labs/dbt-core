@@ -12,6 +12,7 @@ from dbt.contracts.project import Project as ProjectContract, Configuration, \
     PackageConfig, ProfileConfig
 from dbt.context.common import env_var
 from dbt import compat
+from dbt.adapters.factory import get_relation_class_by_name
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -19,18 +20,6 @@ from dbt.logger import GLOBAL_LOGGER as logger
 DEFAULT_THREADS = 1
 DEFAULT_SEND_ANONYMOUS_USAGE_STATS = True
 DEFAULT_USE_COLORS = True
-DEFAULT_QUOTING_GLOBAL = {
-    'identifier': True,
-    'schema': True,
-}
-# some adapters need different quoting rules, for example snowflake gets a bit
-# weird with quoting on
-DEFAULT_QUOTING_ADAPTER = {
-    'snowflake': {
-        'identifier': False,
-        'schema': False,
-    },
-}
 DEFAULT_PROFILES_DIR = os.path.join(os.path.expanduser('~'), '.dbt')
 
 
@@ -676,8 +665,8 @@ class RuntimeConfig(Project, Profile):
         :returns RuntimeConfig: The new configuration.
         """
         quoting = deepcopy(
-            DEFAULT_QUOTING_ADAPTER.get(profile.credentials.type,
-                                        DEFAULT_QUOTING_GLOBAL)
+            get_relation_class_by_name(profile.credentials.type)
+            .DEFAULTS['quote_policy']
         )
         quoting.update(project.quoting)
         return cls(
@@ -725,11 +714,14 @@ class RuntimeConfig(Project, Profile):
         # load the new project and its packages
         project = Project.from_project_root(project_root)
 
-        return self.from_parts(
+        cfg = self.from_parts(
             project=project,
             profile=profile,
             cli_vars=deepcopy(self.cli_vars)
         )
+        # force our quoting back onto the new project.
+        cfg.quoting = deepcopy(self.quoting)
+        return cfg
 
     def serialize(self):
         """Serialize the full configuration to a single dictionary. For any

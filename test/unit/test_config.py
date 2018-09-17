@@ -724,7 +724,11 @@ class TestRuntimeConfig(BaseConfigTest):
         expected_project = project.to_project_config()
         self.assertEqual(expected_project['quoting'], {})
 
-        expected_project['quoting'] = {'identifier': True, 'schema': True}
+        expected_project['quoting'] = {
+            'database': True,
+            'identifier': True,
+            'schema': True,
+        }
         self.assertEqual(config.to_project_config(), expected_project)
 
     def test_str(self):
@@ -771,7 +775,7 @@ class TestRuntimeConfigFiles(BaseFileTest):
         self.assertEqual(config.clean_targets, ['target'])
         self.assertEqual(config.log_path, 'logs')
         self.assertEqual(config.modules_path, 'dbt_modules')
-        self.assertEqual(config.quoting, {'identifier': True, 'schema': True})
+        self.assertEqual(config.quoting, {'database': True, 'identifier': True, 'schema': True})
         self.assertEqual(config.models, {})
         self.assertEqual(config.on_run_start, [])
         self.assertEqual(config.on_run_end, [])

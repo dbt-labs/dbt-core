@@ -28,7 +28,7 @@ import datetime
 
 class RelationProxy(object):
     def __init__(self, adapter):
-        self.config = adapter.config
+        self.quoting_config = adapter.config.quoting
         self.relation_type = adapter.Relation
 
     def __getattr__(self, key):
@@ -36,7 +36,7 @@ class RelationProxy(object):
 
     def create(self, *args, **kwargs):
         kwargs['quote_policy'] = dbt.utils.merge(
-            self.config.quoting,
+            self.quoting_config,
             kwargs.pop('quote_policy', {})
         )
         return self.relation_type.create(*args, **kwargs)
@@ -49,7 +49,7 @@ class DatabaseWrapper(object):
     def __init__(self, model, adapter):
         self.model = model
         self.adapter = adapter
-        self.Relation = RelationProxy(self.adapter)
+        self.Relation = RelationProxy(adapter)
 
         # TODO: clean up this part of the adapter classes
         self._wrapped = frozenset(
@@ -322,8 +322,7 @@ def _return(value):
 
 
 def get_this_relation(db_wrapper, config, model):
-    return db_wrapper.adapter.Relation.create_from_node(
-        config, model)
+    return db_wrapper.Relation.create_from_node(config, model)
 
 
 def generate_base(model, model_dict, config, manifest, source_config,

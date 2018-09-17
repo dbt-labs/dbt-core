@@ -34,7 +34,6 @@ def get_adapter_class_by_name(adapter_name):
         return adapter
 
 
-
 def get_adapter(config):
     adapter_name = config.credentials.type
     if adapter_name in _ADAPTERS:
@@ -50,3 +49,7 @@ def get_adapter(config):
         _ADAPTERS[adapter_name] = adapter
         return adapter
 
+
+def get_relation_class_by_name(adapter_name):
+    adapter = get_adapter_class_by_name(adapter_name)
+    return adapter.Relation
