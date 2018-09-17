@@ -77,7 +77,7 @@ class SourceConfig(object):
 
         active_config = self.load_config_from_active_project()
 
-        if self.active_project['name'] == self.own_project['name']:
+        if self.active_project.project_name == self.own_project.project_name:
             cfg = self._merge(defaults, active_config,
                               self.in_model_config)
         else:
@@ -133,7 +133,7 @@ class SourceConfig(object):
 
         return relevant_configs
 
-    def get_project_config(self, project):
+    def get_project_config(self, runtime_config):
         # most configs are overwritten by a more specific config, but pre/post
         # hooks are appended!
         config = {}
@@ -143,9 +143,9 @@ class SourceConfig(object):
             config[k] = {}
 
         if self.node_type == NodeType.Seed:
-            model_configs = project.get('seeds')
+            model_configs = runtime_config.seeds
         else:
-            model_configs = project.get('models')
+            model_configs = runtime_config.models
 
         if model_configs is None:
             return config

@@ -162,8 +162,8 @@ class TestSimpleArchiveBigquery(DBTIntegrationTest):
         # A more thorough test would assert that archived == expected, but BigQuery does not support the
         # "EXCEPT DISTINCT" operator on nested fields! Instead, just check that schemas are congruent.
 
-        expected_cols = self.adapter.get_columns_in_table(self._profile, self.project_config, self.unique_schema(), 'archive_expected')
-        archived_cols = self.adapter.get_columns_in_table(self._profile, self.project_config, self.unique_schema(), 'archive_actual')
+        expected_cols = self.adapter.get_columns_in_table(self.config, self.unique_schema(), 'archive_expected')
+        archived_cols = self.adapter.get_columns_in_table(self.config, self.unique_schema(), 'archive_actual')
 
         self.assertTrue(len(expected_cols) > 0, "source table does not exist -- bad test")
         self.assertEqual(len(expected_cols), len(archived_cols), "actual and expected column lengths are different")

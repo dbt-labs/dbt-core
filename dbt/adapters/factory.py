@@ -29,6 +29,5 @@ def get_adapter_by_name(adapter_name):
         return adapter
 
 
-def get_adapter(profile):
-    adapter_type = profile.get('type', None)
-    return get_adapter_by_name(adapter_type)
+def get_adapter(config):
+    return get_adapter_by_name(config.credentials.type)

@@ -168,20 +168,10 @@ def get_docs_macro_name(docs_name, with_prefix=True):
         return docs_name
 
 
-def load_project_with_profile(source_project, project_dir):
-    project_filepath = os.path.join(project_dir, 'dbt_project.yml')
-    return dbt.project.read_project(
-        project_filepath,
-        source_project.profiles_dir,
-        profile_to_load=source_project.profile_to_load,
-        args=source_project.args)
-
-
-def dependencies_for_path(project, module_path):
+def dependencies_for_path(config, module_path):
     """Given a module path, yield all dependencies in that path."""
-    import dbt.project
     logger.debug("Loading dependency project from {}".format(module_path))
-
+    import dbt.config
     for obj in os.listdir(module_path):
         full_obj = os.path.join(module_path, obj)
 
@@ -192,8 +182,8 @@ def dependencies_for_path(project, module_path):
             continue
 
         try:
-            yield load_project_with_profile(project, full_obj)
-        except dbt.project.DbtProjectError as e:
+            yield config.new_project(full_obj)
+        except dbt.config.DbtProjectError as e:
             logger.info(
                 "Error reading dependency project at {}".format(
                     full_obj)
@@ -201,14 +191,14 @@ def dependencies_for_path(project, module_path):
             logger.info(str(e))
 
 
-def dependency_projects(project):
+def dependency_projects(config):
     module_paths = [
         GLOBAL_DBT_MODULES_PATH,
-        os.path.join(project['project-root'], project['modules-path'])
+        os.path.join(config.project_root, config.modules_path)
     ]
 
     for module_path in module_paths:
-        for entry in dependencies_for_path(project, module_path):
+        for entry in dependencies_for_path(config, module_path):
             yield entry
 
 

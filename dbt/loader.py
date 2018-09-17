@@ -12,8 +12,8 @@ class GraphLoader(object):
     _LOADERS = []
 
     @classmethod
-    def load_all(cls, project_obj, all_projects):
-        root_project = project_obj.cfg
+    def load_all(cls, project_config, all_projects):
+        root_project = project_config
         macros = MacroLoader.load_all(root_project, all_projects)
         macros.update(OperationLoader.load_all(root_project, all_projects))
         nodes = {}
@@ -24,13 +24,13 @@ class GraphLoader(object):
         tests, patches = SchemaTestLoader.load_all(root_project, all_projects)
 
         manifest = Manifest(nodes=nodes, macros=macros, docs=docs,
-                            generated_at=timestring(), project=project_obj)
+                            generated_at=timestring(), config=project_config)
         manifest.add_nodes(tests)
         manifest.patch_nodes(patches)
 
         manifest = dbt.parser.ParserUtils.process_refs(
             manifest,
-            root_project.get('name')
+            root_project.project_name
         )
         manifest = dbt.parser.ParserUtils.process_docs(manifest, root_project)
         return manifest
@@ -68,8 +68,8 @@ class MacroLoader(ResourceLoader):
             package_name=project_name,
             root_project=root_project,
             all_projects=all_projects,
-            root_dir=project.get('project-root'),
-            relative_dirs=project.get('macro-paths', []),
+            root_dir=project.project_root,
+            relative_dirs=project.macro_paths,
             resource_type=NodeType.Macro)
 
 
@@ -93,13 +93,13 @@ class ModelLoader(ResourceLoader):
     def load_project(cls, root_project, all_projects, project, project_name,
                      macros):
         return dbt.parser.ModelParser.load_and_parse(
-                package_name=project_name,
-                root_project=root_project,
-                all_projects=all_projects,
-                root_dir=project.get('project-root'),
-                relative_dirs=project.get('source-paths', []),
-                resource_type=NodeType.Model,
-                macros=macros)
+            package_name=project_name,
+            root_project=root_project,
+            all_projects=all_projects,
+            root_dir=project.project_root,
+            relative_dirs=project.source_paths,
+            resource_type=NodeType.Model,
+            macros=macros)
 
 
 class OperationLoader(ResourceLoader):
@@ -111,8 +111,8 @@ class OperationLoader(ResourceLoader):
             package_name=project_name,
             root_project=root_project,
             all_projects=all_projects,
-            root_dir=project.get('project-root'),
-            relative_dirs=project.get('macro-paths', []),
+            root_dir=project.project_root,
+            relative_dirs=project.macro_paths,
             resource_type=NodeType.Operation)
 
 
@@ -125,8 +125,8 @@ class AnalysisLoader(ResourceLoader):
             package_name=project_name,
             root_project=root_project,
             all_projects=all_projects,
-            root_dir=project.get('project-root'),
-            relative_dirs=project.get('analysis-paths', []),
+            root_dir=project.project_root,
+            relative_dirs=project.analysis_paths,
             resource_type=NodeType.Analysis,
             macros=macros)
 
@@ -161,8 +161,8 @@ class SchemaTestLoader(ResourceLoader):
             package_name=project_name,
             root_project=root_project,
             all_projects=all_projects,
-            root_dir=project.get('project-root'),
-            relative_dirs=project.get('source-paths', []),
+            root_dir=project.project_root,
+            relative_dirs=project.source_paths,
             macros=macros)
 
 
@@ -175,8 +175,8 @@ class DataTestLoader(ResourceLoader):
             package_name=project_name,
             root_project=root_project,
             all_projects=all_projects,
-            root_dir=project.get('project-root'),
-            relative_dirs=project.get('test-paths', []),
+            root_dir=project.project_root,
+            relative_dirs=project.test_paths,
             resource_type=NodeType.Test,
             tags=['data'],
             macros=macros)
@@ -218,8 +218,8 @@ class SeedLoader(ResourceLoader):
             package_name=project_name,
             root_project=root_project,
             all_projects=all_projects,
-            root_dir=project.get('project-root'),
-            relative_dirs=project.get('data-paths', []),
+            root_dir=project.project_root,
+            relative_dirs=project.data_paths,
             macros=macros)
 
 
@@ -231,8 +231,8 @@ class DocumentationLoader(ResourceLoader):
             package_name=project_name,
             root_project=root_project,
             all_projects=all_projects,
-            root_dir=project.get('project-root'),
-            relative_dirs=project.get('docs-paths', []))
+            root_dir=project.project_root,
+            relative_dirs=project.docs_paths)
 
 # node loaders
 GraphLoader.register(ModelLoader)

@@ -11,8 +11,15 @@ from dbt.node_types import NodeType, RunHookType
 
 class HookParser(BaseSqlParser):
     @classmethod
-    def get_hooks_from_project(cls, project_cfg, hook_type):
-        hooks = project_cfg.get(hook_type, [])
+    def get_hooks_from_project(cls, config, hook_type):
+        if hook_type == RunHookType.Start:
+            hooks = config.on_run_start
+        elif hook_type == RunHookType.End:
+            hooks = config.on_run_end
+        else:
+            dbt.exceptions.InternalException(
+                'hook_type must be one of "{}" or "{}"'
+                .format(RunHookType.Start, RunHookType.End))
 
         if type(hooks) not in (list, tuple):
             hooks = [hooks]

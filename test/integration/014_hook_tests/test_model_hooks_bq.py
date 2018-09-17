@@ -45,8 +45,6 @@ MODEL_POST_HOOK = """
 class TestBigqueryPrePostModelHooks(DBTIntegrationTest):
     def setUp(self):
         DBTIntegrationTest.setUp(self)
-        self.use_profile('bigquery')
-        self.use_default_project()
         self.run_sql_file("test/integration/014_hook_tests/seed_model_bigquery.sql")
 
         self.fields = [
@@ -109,7 +107,7 @@ class TestBigqueryPrePostModelHooks(DBTIntegrationTest):
         self.assertTrue(ctx['invocation_id'] is not None and len(ctx['invocation_id']) > 0, 'invocation_id was not set')
 
     @attr(type='bigquery')
-    def test_pre_and_post_model_hooks(self):
+    def test_pre_and_post_model_hooks_bigquery(self):
         self.run_dbt(['run'])
 
         self.check_hooks('start')
@@ -117,11 +115,6 @@ class TestBigqueryPrePostModelHooks(DBTIntegrationTest):
 
 
 class TestBigqueryPrePostModelHooksOnSeeds(DBTIntegrationTest):
-    def setUp(self):
-        DBTIntegrationTest.setUp(self)
-        self.use_profile('bigquery')
-        self.use_default_project()
-
     @property
     def schema(self):
         return "model_hooks_014"
@@ -143,7 +136,7 @@ class TestBigqueryPrePostModelHooksOnSeeds(DBTIntegrationTest):
         }
 
     @attr(type='bigquery')
-    def test_hooks_on_seeds(self):
+    def test_hooks_on_seeds_bigquery(self):
         res = self.run_dbt(['seed'])
         self.assertEqual(len(res), 1, 'Expected exactly one item')
         res = self.run_dbt(['test'])

@@ -447,3 +447,10 @@ def raise_incorrect_version(path):
         'for more information on schema.yml syntax:\n\n'
         'https://docs.getdbt.com/v0.11/docs/schemayml-files'.format(path)
     )
+
+
+def raise_unrecognized_credentials_type(typename, supported_types):
+    raise_compiler_error(
+        'Unrecognized credentials type "{}" - supported types are ({})'
+        .format(typename, ', '.join('"{}"'.format(t) for t in supported_types))
+    )

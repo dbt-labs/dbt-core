@@ -30,11 +30,10 @@ class DatabaseWrapper(object):
     functions.
     """
 
-    def __init__(self, model, adapter, profile, project):
+    def __init__(self, model, adapter, config):
         self.model = model
         self.adapter = adapter
-        self.profile = profile
-        self.project = project
+        self.config = config
         self.Relation = adapter.Relation
 
         # Fun with metaprogramming
@@ -44,12 +43,12 @@ class DatabaseWrapper(object):
         for context_function in self.adapter.context_functions:
             setattr(self,
                     context_function,
-                    self.wrap(context_function, (self.profile, self.project,)))
+                    self.wrap(context_function, (self.config,)))
 
         for profile_function in self.adapter.profile_functions:
             setattr(self,
                     profile_function,
-                    self.wrap(profile_function, (self.profile,)))
+                    self.wrap(profile_function, (self.config,)))
 
         for raw_function in self.adapter.raw_functions:
             setattr(self,
@@ -69,7 +68,7 @@ class DatabaseWrapper(object):
 
     def commit(self):
         return self.adapter.commit_if_has_connection(
-            self.profile, self.model.get('name'))
+            self.config, self.model.get('name'))
 
 
 def _add_macros(context, model, manifest):
@@ -140,7 +139,7 @@ def _add_validation(context):
         {'validation': validation_utils})
 
 
-def _env_var(var, default=None):
+def env_var(var, default=None):
     if var in os.environ:
         return os.environ[var]
     elif default is not None:
@@ -303,9 +302,9 @@ def _return(value):
     raise dbt.exceptions.MacroReturn(value)
 
 
-def get_this_relation(db_wrapper, project_cfg, profile, model):
+def get_this_relation(db_wrapper, config, model):
     return db_wrapper.adapter.Relation.create_from_node(
-        profile, model)
+        config, model)
 
 
 def create_relation(relation_type, quoting_config):
@@ -336,33 +335,34 @@ def create_adapter(adapter_type, relation_type):
     return AdapterWithContext
 
 
-def generate_base(model, model_dict, project_cfg, manifest, source_config,
+def generate_base(model, model_dict, config, manifest, source_config,
                   provider):
     """Generate the common aspects of the config dict."""
     if provider is None:
         raise dbt.exceptions.InternalException(
             "Invalid provider given to context: {}".format(provider))
 
-    target_name = project_cfg.get('target')
-    profile = project_cfg.get('outputs').get(target_name)
-    target = profile.copy()
+    target_name = config.target_name
+    target = config.to_profile_info()
+    del target['credentials']
+    target.update(config.credentials.serialize())
+    target['type'] = config.credentials.type
     target.pop('pass', None)
     target['name'] = target_name
-    adapter = get_adapter(profile)
+    adapter = get_adapter(config)
 
     context = {'env': target}
-    schema = profile.get('schema', 'public')
+    schema = config.credentials.schema
 
     pre_hooks = None
     post_hooks = None
 
     relation_type = create_relation(adapter.Relation,
-                                    project_cfg.get('quoting'))
+                                    config.quoting)
 
     db_wrapper = DatabaseWrapper(model_dict,
                                  create_adapter(adapter, relation_type),
-                                 profile,
-                                 project_cfg)
+                                 config)
     context = dbt.utils.merge(context, {
         "adapter": db_wrapper,
         "api": {
@@ -371,7 +371,7 @@ def generate_base(model, model_dict, project_cfg, manifest, source_config,
         },
         "column": adapter.Column,
         "config": provider.Config(model_dict, source_config),
-        "env_var": _env_var,
+        "env_var": env_var,
         "exceptions": dbt.exceptions,
         "execute": provider.execute,
         "flags": dbt.flags,
@@ -385,8 +385,7 @@ def generate_base(model, model_dict, project_cfg, manifest, source_config,
         },
         "post_hooks": post_hooks,
         "pre_hooks": pre_hooks,
-        "ref": provider.ref(db_wrapper, model, project_cfg,
-                            profile, manifest),
+        "ref": provider.ref(db_wrapper, model, config, manifest),
         "return": _return,
         "schema": schema,
         "sql": None,
@@ -406,19 +405,19 @@ def generate_base(model, model_dict, project_cfg, manifest, source_config,
     # https://github.com/fishtown-analytics/dbt/issues/878
     if model.resource_type == NodeType.Operation:
         this = db_wrapper.adapter.Relation.create(
-                schema=target['schema'],
+                schema=config.credentials.schema,
                 identifier=model.name
         )
     else:
-        this = get_this_relation(db_wrapper, project_cfg, profile, model_dict)
+        this = get_this_relation(db_wrapper, config, model_dict)
 
     context["this"] = this
     return context
 
 
-def modify_generated_context(context, model, model_dict, project_cfg,
+def modify_generated_context(context, model, model_dict, config,
                              manifest):
-    cli_var_overrides = project_cfg.get('cli_vars', {})
+    cli_var_overrides = config.cli_vars
 
     context = _add_tracking(context)
     context = _add_validation(context)
@@ -428,7 +427,7 @@ def modify_generated_context(context, model, model_dict, project_cfg,
 
     context = _add_macros(context, model, manifest)
 
-    context["write"] = write(model_dict, project_cfg.get('target-path'), 'run')
+    context["write"] = write(model_dict, config.target_path, 'run')
     context["render"] = render(context, model_dict)
     context["var"] = Var(model, context=context, overrides=cli_var_overrides)
     context['context'] = context
@@ -436,21 +435,21 @@ def modify_generated_context(context, model, model_dict, project_cfg,
     return context
 
 
-def generate_operation_macro(model, project_cfg, manifest, provider):
+def generate_operation_macro(model, config, manifest, provider):
     """This is an ugly hack to support the fact that the `docs generate`
     operation ends up in here, and macros are not nodes.
     """
     model_dict = model.serialize()
-    context = generate_base(model, model_dict, project_cfg, manifest,
+    context = generate_base(model, model_dict, config, manifest,
                             None, provider)
 
-    return modify_generated_context(context, model, model_dict, project_cfg,
+    return modify_generated_context(context, model, model_dict, config,
                                     manifest)
 
 
-def generate_model(model, project_cfg, manifest, source_config, provider):
+def generate_model(model, config, manifest, source_config, provider):
     model_dict = model.to_dict()
-    context = generate_base(model, model_dict, project_cfg, manifest,
+    context = generate_base(model, model_dict, config, manifest,
                             source_config, provider)
     # overwrite schema if we have it, and hooks + sql
     context.update({
@@ -460,11 +459,11 @@ def generate_model(model, project_cfg, manifest, source_config, provider):
         'sql': model.get('injected_sql'),
     })
 
-    return modify_generated_context(context, model, model_dict, project_cfg,
+    return modify_generated_context(context, model, model_dict, config,
                                     manifest)
 
 
-def generate(model, project_cfg, manifest, source_config=None, provider=None):
+def generate(model, config, manifest, source_config=None, provider=None):
     """
     Not meant to be called directly. Call with either:
         dbt.context.parser.generate
@@ -472,7 +471,7 @@ def generate(model, project_cfg, manifest, source_config=None, provider=None):
         dbt.context.runtime.generate
     """
     if isinstance(model, ParsedMacro):
-        return generate_operation_macro(model, project_cfg, manifest, provider)
+        return generate_operation_macro(model, config, manifest, provider)
     else:
-        return generate_model(model, project_cfg, manifest, source_config,
+        return generate_model(model, config, manifest, source_config,
                               provider)

@@ -12,7 +12,7 @@ from dbt.task.base_task import RunnableTask
 
 class ServeTask(RunnableTask):
     def run(self):
-        os.chdir(self.project['target-path'])
+        os.chdir(self.config.target_path)
 
         port = self.args.port
 

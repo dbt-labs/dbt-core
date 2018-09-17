@@ -1,5 +1,4 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 
 class TestStatements(DBTIntegrationTest):
@@ -16,9 +15,8 @@ class TestStatements(DBTIntegrationTest):
     def models(self):
         return self.dir("models")
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test_postgres_statements(self):
-        self.use_profile("postgres")
         self.use_default_project({"data-paths": [self.dir("seed")]})
 
         results = self.run_dbt(["seed"])
@@ -28,9 +26,8 @@ class TestStatements(DBTIntegrationTest):
 
         self.assertTablesEqual("statement_actual","statement_expected")
 
-    @attr(type="snowflake")
+    @use_profile("snowflake")
     def test_snowflake_statements(self):
-        self.use_profile("snowflake")
         self.use_default_project({"data-paths": [self.dir("seed")]})
 
         results = self.run_dbt(["seed"])
@@ -40,9 +37,23 @@ class TestStatements(DBTIntegrationTest):
 
         self.assertManyTablesEqual(["STATEMENT_ACTUAL", "STATEMENT_EXPECTED"])
 
-    @attr(type="bigquery")
+
+class TestStatementsBigquery(DBTIntegrationTest):
+
+    @property
+    def schema(self):
+        return "statements_030"
+
+    @staticmethod
+    def dir(path):
+        return "test/integration/030_statement_test/" + path.lstrip("/")
+
+    @property
+    def models(self):
+        return self.dir("models-bq")
+
+    @use_profile("bigquery")
     def test_bigquery_statements(self):
-        self.use_profile("postgres")
         self.use_default_project({"data-paths": [self.dir("seed")]})
 
         results = self.run_dbt(["seed"])

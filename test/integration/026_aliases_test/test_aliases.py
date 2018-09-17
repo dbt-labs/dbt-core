@@ -29,21 +29,18 @@ class TestAliases(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test__alias_model_name(self):
-        self.use_profile('postgres')
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 4)
         self.run_dbt(['test'])
 
     @attr(type='bigquery')
     def test__alias_model_name_bigquery(self):
-        self.use_profile('bigquery')
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 4)
         self.run_dbt(['test'])
 
     @attr(type='snowflake')
     def test__alias_model_name_snowflake(self):
-        self.use_profile('snowflake')
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 4)
         self.run_dbt(['test'])

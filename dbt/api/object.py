@@ -42,6 +42,11 @@ class APIObject(Mapping):
     def __repr__(self):
         return '{}(**{})'.format(self.__class__.__name__, self._contents)
 
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
+        return self.serialize() == other.serialize()
+
     def incorporate(self, **kwargs):
         """
         Given a list of kwargs, incorporate these arguments

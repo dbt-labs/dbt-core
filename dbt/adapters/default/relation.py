@@ -173,9 +173,9 @@ class DefaultRelation(APIObject):
             identifier=identifier)
 
     @classmethod
-    def create_from_node(cls, profile, node, table_name=None, **kwargs):
+    def create_from_node(cls, project, node, table_name=None, **kwargs):
         return cls.create(
-            database=profile.get('dbname'),
+            database=project.credentials.dbname,
             schema=node.get('schema'),
             identifier=node.get('alias'),
             table_name=table_name,

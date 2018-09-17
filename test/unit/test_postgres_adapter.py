@@ -10,26 +10,41 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from psycopg2 import extensions as psycopg2_extensions
 import agate
 
+from .utils import config_from_parts_or_dicts
+
 
 class TestPostgresAdapter(unittest.TestCase):
 
     def setUp(self):
         flags.STRICT_MODE = True
-
-        self.profile = {
-            'dbname': 'postgres',
-            'user': 'root',
-            'host': 'database',
-            'pass': 'password',
-            'port': 5432,
-            'schema': 'public'
+        project_cfg = {
+            'name': 'X',
+            'version': '0.1',
+            'profile': 'test',
+            'project-root': '/tmp/dbt/does-not-exist',
         }
+        profile_cfg = {
+            'outputs': {
+                'test': {
+                    'type': 'postgres',
+                    'dbname': 'postgres',
+                    'user': 'root',
+                    'host': 'database',
+                    'pass': 'password',
+                    'port': 5432,
+                    'schema': 'public'
+                }
+            },
+            'target': 'test'
+        }
+
+        self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
 
     def test_acquire_connection_validations(self):
         try:
-            connection = PostgresAdapter.acquire_connection(self.profile,
+            connection = PostgresAdapter.acquire_connection(self.config,
                                                             'dummy')
-            self.assertEquals(connection.get('type'), 'postgres')
+            self.assertEquals(connection.type, 'postgres')
         except ValidationException as e:
             self.fail('got ValidationException: {}'.format(str(e)))
         except BaseException as e:
@@ -37,14 +52,14 @@ class TestPostgresAdapter(unittest.TestCase):
                       .format(str(e)))
 
     def test_acquire_connection(self):
-        connection = PostgresAdapter.acquire_connection(self.profile, 'dummy')
+        connection = PostgresAdapter.acquire_connection(self.config, 'dummy')
 
-        self.assertEquals(connection.get('state'), 'open')
-        self.assertNotEquals(connection.get('handle'), None)
+        self.assertEquals(connection.state, 'open')
+        self.assertNotEquals(connection.handle, None)
 
     @mock.patch('dbt.adapters.postgres.impl.psycopg2')
     def test_default_keepalive(self, psycopg2):
-        connection = PostgresAdapter.acquire_connection(self.profile, 'dummy')
+        connection = PostgresAdapter.acquire_connection(self.config, 'dummy')
 
         psycopg2.connect.assert_called_once_with(
             dbname='postgres',
@@ -56,8 +71,9 @@ class TestPostgresAdapter(unittest.TestCase):
 
     @mock.patch('dbt.adapters.postgres.impl.psycopg2')
     def test_changed_keepalive(self, psycopg2):
-        self.profile['keepalives_idle'] = 256
-        connection = PostgresAdapter.acquire_connection(self.profile, 'dummy')
+        credentials = self.config.credentials.incorporate(keepalives_idle=256)
+        self.config.credentials = credentials
+        connection = PostgresAdapter.acquire_connection(self.config, 'dummy')
 
         psycopg2.connect.assert_called_once_with(
             dbname='postgres',
@@ -70,8 +86,9 @@ class TestPostgresAdapter(unittest.TestCase):
 
     @mock.patch('dbt.adapters.postgres.impl.psycopg2')
     def test_set_zero_keepalive(self, psycopg2):
-        self.profile['keepalives_idle'] = 0
-        connection = PostgresAdapter.acquire_connection(self.profile, 'dummy')
+        credentials = self.config.credentials.incorporate(keepalives_idle=0)
+        self.config.credentials = credentials
+        connection = PostgresAdapter.acquire_connection(self.config, 'dummy')
 
         psycopg2.connect.assert_called_once_with(
             dbname='postgres',
@@ -104,26 +121,32 @@ class TestPostgresAdapter(unittest.TestCase):
         # give manifest the dict it wants
         mock_manifest = mock.MagicMock(spec_set=['nodes'], nodes=nodes)
 
-        catalog = PostgresAdapter.get_catalog({}, {}, mock_manifest)
+        catalog = PostgresAdapter.get_catalog(mock.MagicMock(), mock_manifest)
         self.assertEqual(
             set(map(tuple, catalog)),
             {('foo', 'bar'), ('FOO', 'baz'), ('quux', 'bar')}
         )
 
+
 class TestConnectingPostgresAdapter(unittest.TestCase):
     def setUp(self):
         flags.STRICT_MODE = False
 
-        self.profile = {
-            'dbname': 'postgres',
-            'user': 'root',
-            'host': 'database',
-            'pass': 'password',
-            'port': 5432,
-            'schema': 'public'
+        profile_cfg = {
+            'outputs': {
+                'test': {
+                    'type': 'postgres',
+                    'dbname': 'postgres',
+                    'user': 'root',
+                    'host': 'database',
+                    'pass': 'password',
+                    'port': 5432,
+                    'schema': 'public'
+                }
+            },
+            'target': 'test'
         }
-
-        self.project = {
+        project_cfg = {
             'name': 'X',
             'version': '0.1',
             'profile': 'test',
@@ -134,6 +157,8 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
             }
         }
 
+        self.config = config_from_parts_or_dicts(project_cfg, profile_cfg)
+
         self.handle = mock.MagicMock(spec=psycopg2_extensions.connection)
         self.cursor = self.handle.cursor.return_value
         self.mock_execute = self.cursor.execute
@@ -141,7 +166,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         self.psycopg2 = self.patcher.start()
 
         self.psycopg2.connect.return_value = self.handle
-        conn = PostgresAdapter.get_connection(self.profile)
+        conn = PostgresAdapter.get_connection(self.config)
 
     def tearDown(self):
         # we want a unique self.handle every time.
@@ -150,8 +175,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
 
     def test_quoting_on_drop_schema(self):
         PostgresAdapter.drop_schema(
-            profile=self.profile,
-            project_cfg=self.project,
+            config=self.config,
             schema='test_schema'
         )
 
@@ -161,8 +185,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
 
     def test_quoting_on_drop(self):
         PostgresAdapter.drop(
-            profile=self.profile,
-            project_cfg=self.project,
+            config=self.config,
             schema='test_schema',
             relation='test_table',
             relation_type='table'
@@ -173,8 +196,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
 
     def test_quoting_on_truncate(self):
         PostgresAdapter.truncate(
-            profile=self.profile,
-            project_cfg=self.project,
+            config=self.config,
             schema='test_schema',
             table='test_table'
         )
@@ -184,8 +206,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
 
     def test_quoting_on_rename(self):
         PostgresAdapter.rename(
-            profile=self.profile,
-            project_cfg=self.project,
+            config=self.config,
             schema='test_schema',
             from_name='table_a',
             to_name='table_b'

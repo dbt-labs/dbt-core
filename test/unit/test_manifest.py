@@ -259,11 +259,11 @@ class ManifestTest(unittest.TestCase):
     def test_get_metadata(self, mock_user):
         mock_user.id = 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf'
         mock_user.do_not_track = True
-        project = mock.MagicMock()
+        config = mock.MagicMock()
         # md5 of 'test'
-        project.hashed_name.return_value = '098f6bcd4621d373cade4e832627b4f6'
+        config.hashed_name.return_value = '098f6bcd4621d373cade4e832627b4f6'
         self.assertEqual(
-            Manifest.get_metadata(project),
+            Manifest.get_metadata(config),
             {
                 'project_id': '098f6bcd4621d373cade4e832627b4f6',
                 'user_id': 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf',
@@ -276,11 +276,11 @@ class ManifestTest(unittest.TestCase):
     def test_no_nodes_with_metadata(self, mock_user):
         mock_user.id = 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf'
         mock_user.do_not_track = True
-        project = mock.MagicMock()
+        config = mock.MagicMock()
         # md5 of 'test'
-        project.hashed_name.return_value = '098f6bcd4621d373cade4e832627b4f6'
+        config.hashed_name.return_value = '098f6bcd4621d373cade4e832627b4f6'
         manifest = Manifest(nodes={}, macros={}, docs={},
-                            generated_at=timestring(), project=project)
+                            generated_at=timestring(), config=config)
         metadata = {
             'project_id': '098f6bcd4621d373cade4e832627b4f6',
             'user_id': 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf',

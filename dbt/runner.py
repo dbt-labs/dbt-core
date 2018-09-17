@@ -26,23 +26,13 @@ RESULT_FILE_NAME = 'run_results.json'
 
 
 class RunManager(object):
-    def __init__(self, project, target_path, args):
-        self.project = project
-        self.target_path = target_path
-        self.args = args
-
-        profile = self.project.run_environment()
-
-        # TODO validate the number of threads
-        if not getattr(self.args, "threads", None):
-            self.threads = profile.get('threads', 1)
-        else:
-            self.threads = self.args.threads
+    def __init__(self, config):
+        self.config = config
 
     def deserialize_graph(self):
         logger.info("Loading dependency graph file.")
 
-        base_target_path = self.project['target-path']
+        base_target_path = self.config.target_path
         graph_file = os.path.join(
             base_target_path,
             dbt.compilation.graph_file_name
@@ -67,10 +57,10 @@ class RunManager(object):
         for node in all_nodes:
             uid = node.get('unique_id')
             if Runner.is_ephemeral_model(node):
-                runner = Runner(self.project, adapter, node, 0, 0)
+                runner = Runner(self.config, adapter, node, 0, 0)
             else:
                 i += 1
-                runner = Runner(self.project, adapter, node, i, num_nodes)
+                runner = Runner(self.config, adapter, node, i, num_nodes)
             node_runners[uid] = runner
 
         return node_runners
@@ -105,11 +95,10 @@ class RunManager(object):
         return runners
 
     def execute_nodes(self, linker, Runner, manifest, node_dependency_list):
-        profile = self.project.run_environment()
-        adapter = get_adapter(profile)
+        adapter = get_adapter(self.config)
 
-        num_threads = self.threads
-        target_name = self.project.get_target().get('name')
+        num_threads = self.config.threads
+        target_name = self.config.target_name
 
         text = "Concurrency: {} threads (target='{}')"
         concurrency_line = text.format(num_threads, target_name)
@@ -150,8 +139,7 @@ class RunManager(object):
                 pool.close()
                 pool.terminate()
 
-                profile = self.project.run_environment()
-                adapter = get_adapter(profile)
+                adapter = get_adapter(self.config)
 
                 if not adapter.is_cancelable():
                     msg = ("The {} adapter does not support query "
@@ -162,7 +150,7 @@ class RunManager(object):
                     dbt.ui.printer.print_timestamped_line(msg, yellow)
                     raise
 
-                for conn_name in adapter.cancel_open_connections(profile):
+                for conn_name in adapter.cancel_open_connections(self.config):
                     dbt.ui.printer.print_cancel_line(conn_name)
 
                 dbt.ui.printer.print_run_end_messages(node_results,
@@ -177,11 +165,11 @@ class RunManager(object):
         return node_results
 
     def write_results(self, execution_result):
-        filepath = os.path.join(self.project['target-path'], RESULT_FILE_NAME)
+        filepath = os.path.join(self.config.target_path, RESULT_FILE_NAME)
         write_json(filepath, execution_result.serialize())
 
-    def compile(self, project):
-        compiler = dbt.compilation.Compiler(project)
+    def compile(self, config):
+        compiler = dbt.compilation.Compiler(config)
         compiler.initialize()
         return compiler.compile()
 
@@ -194,14 +182,13 @@ class RunManager(object):
             dbt.node_runners.BaseRunner
 
         """
-        manifest, linker = self.compile(self.project)
+        manifest, linker = self.compile(self.config)
 
         selector = Selector(linker, manifest)
         selected_nodes = selector.select(query)
         dep_list = selector.as_node_list(selected_nodes)
 
-        profile = self.project.run_environment()
-        adapter = get_adapter(profile)
+        adapter = get_adapter(self.config)
 
         flat_nodes = dbt.utils.flatten_nodes(dep_list)
         if len(flat_nodes) == 0:
@@ -217,13 +204,13 @@ class RunManager(object):
             logger.info("")
 
         try:
-            Runner.before_hooks(self.project, adapter, manifest)
+            Runner.before_hooks(self.config, adapter, manifest)
             started = time.time()
-            Runner.before_run(self.project, adapter, manifest)
+            Runner.before_run(self.config, adapter, manifest)
             res = self.execute_nodes(linker, Runner, manifest, dep_list)
-            Runner.after_run(self.project, adapter, res, manifest)
+            Runner.after_run(self.config, adapter, res, manifest)
             elapsed = time.time() - started
-            Runner.after_hooks(self.project, adapter, res, manifest, elapsed)
+            Runner.after_hooks(self.config, adapter, res, manifest, elapsed)
 
         finally:
             adapter.cleanup_connections()

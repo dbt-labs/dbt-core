@@ -12,9 +12,7 @@ from dbt.task.base_task import RunnableTask
 
 class RunTask(RunnableTask):
     def run(self):
-        runner = RunManager(
-            self.project, self.project['target-path'], self.args
-        )
+        runner = RunManager(self.config)
 
         query = {
             "include": self.args.models,

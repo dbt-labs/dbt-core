@@ -2,7 +2,7 @@ from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest, use_profile
 
 
-class TestSimpleCopy(DBTIntegrationTest):
+class BaseTestSimpleCopy(DBTIntegrationTest):
 
     @property
     def schema(self):
@@ -16,6 +16,7 @@ class TestSimpleCopy(DBTIntegrationTest):
     def models(self):
         return self.dir("models")
 
+class TestSimpleCopy(BaseTestSimpleCopy):
     @use_profile("postgres")
     def test__postgres__simple_copy(self):
         self.use_default_project({"data-paths": [self.dir("seed-initial")]})
@@ -63,31 +64,6 @@ class TestSimpleCopy(DBTIntegrationTest):
         self.run_dbt()
 
         self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED"])
-
-    @use_profile("snowflake")
-    def test__snowflake__simple_copy__quoting_on(self):
-        self.use_default_project({
-            "data-paths": [self.dir("seed-initial")],
-            "quoting": {"identifier": True},
-        })
-
-        results = self.run_dbt(["seed"])
-        self.assertEqual(len(results),  1)
-        results = self.run_dbt()
-        self.assertEqual(len(results),  6)
-
-        self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized"])
-
-        self.use_default_project({
-            "data-paths": [self.dir("seed-update")],
-            "quoting": {"identifier": True},
-        })
-        results = self.run_dbt(["seed"])
-        self.assertEqual(len(results),  1)
-        results = self.run_dbt()
-        self.assertEqual(len(results),  6)
-
-        self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized"])
 
     @use_profile("snowflake")
     def test__snowflake__simple_copy__quoting_off(self):
@@ -155,24 +131,47 @@ class TestSimpleCopy(DBTIntegrationTest):
         self.assertTablesEqual("seed","materialized")
 
 
-class TestSimpleCopyLowercasedSchema(DBTIntegrationTest):
+class TestSimpleCopyQuotingIdentifierOn(BaseTestSimpleCopy):
     @property
-    def schema(self):
-        return "simple_copy_001"
+    def project_config(self):
+        return {
+            'quoting': {
+                'identifier': True,
+            },
+        }
 
-    @staticmethod
-    def dir(path):
-        return "test/integration/001_simple_copy_test/" + path.lstrip("/")
+    @use_profile("snowflake")
+    def test__snowflake__simple_copy__quoting_on(self):
+        self.use_default_project({
+            "data-paths": [self.dir("seed-initial")],
+        })
 
-    @property
-    def models(self):
-        return self.dir("models")
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        results = self.run_dbt()
+        self.assertEqual(len(results),  6)
 
+        self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized"])
+
+        self.use_default_project({
+            "data-paths": [self.dir("seed-update")],
+        })
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        results = self.run_dbt()
+        self.assertEqual(len(results),  6)
+
+        self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized"])
+
+
+class BaseLowercasedSchemaTest(BaseTestSimpleCopy):
     def unique_schema(self):
         # bypass the forced uppercasing that unique_schema() does on snowflake
-        schema = super(TestSimpleCopyLowercasedSchema, self).unique_schema()
+        schema = super(BaseLowercasedSchemaTest, self).unique_schema()
         return schema.lower()
 
+
+class TestSnowflakeSimpleLowercasedSchemaCopy(BaseLowercasedSchemaTest):
     @use_profile('snowflake')
     def test__snowflake__simple_copy(self):
         self.use_default_project({"data-paths": [self.dir("seed-initial")]})
@@ -188,11 +187,18 @@ class TestSimpleCopyLowercasedSchema(DBTIntegrationTest):
 
         self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED"])
 
+
+class TestSnowflakeSimpleLowercasedSchemaQuoted(BaseLowercasedSchemaTest):
+    @property
+    def project_config(self):
+        return {
+            'quoting': {'identifier': False, 'schema': True}
+        }
+
     @use_profile("snowflake")
     def test__snowflake__seed__quoting_switch_schema(self):
         self.use_default_project({
             "data-paths": [self.dir("seed-initial")],
-            "quoting": {"identifier": False, "schema": True},
         })
 
         results = self.run_dbt(["seed"])

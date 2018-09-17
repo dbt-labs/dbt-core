@@ -35,8 +35,6 @@ class TestExitCodes(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test_exit_code_run_succeed(self):
-        self.use_profile('postgres')
-        self.use_default_project()
         results, success = self.run_dbt_and_check(['run', '--model', 'good'])
         self.assertEqual(len(results), 1)
         self.assertTrue(success)
@@ -44,8 +42,6 @@ class TestExitCodes(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test__exit_code_run_fail(self):
-        self.use_profile('postgres')
-        self.use_default_project()
         results, success = self.run_dbt_and_check(['run', '--model', 'bad'])
         self.assertEqual(len(results), 1)
         self.assertFalse(success)
@@ -53,8 +49,6 @@ class TestExitCodes(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test___schema_test_pass(self):
-        self.use_profile('postgres')
-        self.use_default_project()
         results, success = self.run_dbt_and_check(['run', '--model', 'good'])
         self.assertEqual(len(results), 1)
         self.assertTrue(success)
@@ -64,8 +58,6 @@ class TestExitCodes(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test___schema_test_fail(self):
-        self.use_profile('postgres')
-        self.use_default_project()
         results, success = self.run_dbt_and_check(['run', '--model', 'dupe'])
         self.assertEqual(len(results), 1)
         self.assertTrue(success)
@@ -75,17 +67,12 @@ class TestExitCodes(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test___compile(self):
-        self.use_profile('postgres')
-        self.use_default_project()
         results, success = self.run_dbt_and_check(['compile'])
         self.assertEqual(len(results), 7)
         self.assertTrue(success)
 
     @attr(type='postgres')
     def test___archive_pass(self):
-        self.use_profile('postgres')
-        self.use_default_project()
-
         self.run_dbt_and_check(['run', '--model', 'good'])
         results, success = self.run_dbt_and_check(['archive'])
         self.assertEqual(len(results), 1)
@@ -123,9 +110,6 @@ class TestExitCodesArchiveFail(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test___archive_fail(self):
-        self.use_profile('postgres')
-        self.use_default_project()
-
         results, success = self.run_dbt_and_check(['run', '--model', 'good'])
         self.assertTrue(success)
         self.assertEqual(len(results), 1)
@@ -146,10 +130,10 @@ class TestExitCodesDeps(DBTIntegrationTest):
         return "test/integration/023_exit_codes_test/models"
 
     @property
-    def project_config(self):
+    def packages_config(self):
         return {
-            "repositories": [
-                'https://github.com/fishtown-analytics/dbt-integration-project'
+            "packages": [
+                {'git': 'https://github.com/fishtown-analytics/dbt-integration-project'}
             ]
         }
 
@@ -167,11 +151,15 @@ class TestExitCodesDepsFail(DBTIntegrationTest):
     def models(self):
         return "test/integration/023_exit_codes_test/models"
 
+
     @property
-    def project_config(self):
+    def packages_config(self):
         return {
-            "repositories": [
-                'https://github.com/fishtown-analytics/dbt-integration-project@bad-branch'
+            "packages": [
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'revision': 'bad-branch',
+                },
             ]
         }
 

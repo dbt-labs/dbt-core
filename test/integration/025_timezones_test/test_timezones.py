@@ -5,9 +5,6 @@ from test.integration.base import DBTIntegrationTest
 
 class TestTimezones(DBTIntegrationTest):
 
-    def setUp(self):
-        DBTIntegrationTest.setUp(self)
-
     @property
     def schema(self):
         return "timezones_025"

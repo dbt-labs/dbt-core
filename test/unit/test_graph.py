@@ -9,13 +9,15 @@ import dbt.exceptions
 import dbt.flags
 import dbt.linker
 import dbt.model
-import dbt.project
+import dbt.config
 import dbt.templates
 import dbt.utils
 
 import networkx as nx
 
 from dbt.logger import GLOBAL_LOGGER as logger # noqa
+
+from .utils import config_from_parts_or_dicts
 
 
 class GraphTest(unittest.TestCase):
@@ -37,22 +39,20 @@ class GraphTest(unittest.TestCase):
 
         self.graph_result = None
 
-        self.profiles = {
-            'test': {
-                'outputs': {
-                    'test': {
-                        'type': 'postgres',
-                        'threads': 4,
-                        'host': 'database',
-                        'port': 5432,
-                        'user': 'root',
-                        'pass': 'password',
-                        'dbname': 'dbt',
-                        'schema': 'dbt_test'
-                    }
-                },
-                'target': 'test'
-            }
+        self.profile = {
+            'outputs': {
+                'test': {
+                    'type': 'postgres',
+                    'threads': 4,
+                    'host': 'database',
+                    'port': 5432,
+                    'user': 'root',
+                    'pass': 'password',
+                    'dbname': 'dbt',
+                    'schema': 'dbt_test'
+                }
+            },
+            'target': 'test'
         }
 
         self.real_dependency_projects = dbt.utils.dependency_projects
@@ -84,7 +84,7 @@ class GraphTest(unittest.TestCase):
         dbt.clients.system.load_file_contents = MagicMock(
             side_effect=mock_load_file_contents)
 
-    def get_project(self, extra_cfg=None):
+    def get_config(self, extra_cfg=None):
         if extra_cfg is None:
             extra_cfg = {}
 
@@ -96,13 +96,7 @@ class GraphTest(unittest.TestCase):
         }
         cfg.update(extra_cfg)
 
-        project = dbt.project.Project(
-            cfg=cfg,
-            profiles=self.profiles,
-            profiles_dir=None)
-
-        project.validate()
-        return project
+        return config_from_parts_or_dicts(project=cfg, profile=self.profile)
 
     def get_compiler(self, project):
         return dbt.compilation.Compiler(project)
@@ -121,7 +115,7 @@ class GraphTest(unittest.TestCase):
             'model_one': 'select * from events',
         })
 
-        compiler = self.get_compiler(self.get_project())
+        compiler = self.get_compiler(self.get_config())
         graph, linker = compiler.compile()
 
         self.assertEquals(
@@ -138,7 +132,7 @@ class GraphTest(unittest.TestCase):
             'model_two': "select * from {{ref('model_one')}}",
         })
 
-        compiler = self.get_compiler(self.get_project())
+        compiler = self.get_compiler(self.get_config())
         graph, linker = compiler.compile()
 
         six.assertCountEqual(self,
@@ -172,7 +166,7 @@ class GraphTest(unittest.TestCase):
             }
         }
 
-        compiler = self.get_compiler(self.get_project(cfg))
+        compiler = self.get_compiler(self.get_config(cfg))
         graph, linker = compiler.compile()
 
         expected_materialization = {
@@ -207,7 +201,7 @@ class GraphTest(unittest.TestCase):
             }
         }
 
-        compiler = self.get_compiler(self.get_project(cfg))
+        compiler = self.get_compiler(self.get_config(cfg))
         graph, linker = compiler.compile()
 
         node = 'model.test_models_compile.model_one'
@@ -231,7 +225,7 @@ class GraphTest(unittest.TestCase):
             'model_4': 'select * from {{ ref("model_3") }}'
         })
 
-        compiler = self.get_compiler(self.get_project({}))
+        compiler = self.get_compiler(self.get_config({}))
         graph, linker = compiler.compile()
 
         actual_dep_list = linker.as_dependency_list()

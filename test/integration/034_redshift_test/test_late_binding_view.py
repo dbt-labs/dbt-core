@@ -20,10 +20,12 @@ class TestLateBindingView(DBTIntegrationTest):
     def models(self):
         return self.dir("models")
 
-    @use_profile('redshift')
-    def test__late_binding_view_query(self):
-        self.use_default_project({"data-paths": [self.dir("seed")]})
+    @property
+    def project_config(self):
+        return {"data-paths": [self.dir("seed")]}
 
+    @use_profile('redshift')
+    def test__redshift_late_binding_view_query(self):
         self.assertEqual(len(self.run_dbt(["seed"])), 1)
         self.assertEqual(len(self.run_dbt()), 1)
         # remove the table. Use 'cascade' here so that if late-binding views

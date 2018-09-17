@@ -18,8 +18,7 @@ class TestTask(RunnableTask):
            d) accepted value
     """
     def run(self):
-        runner = RunManager(
-            self.project, self.project['target-path'], self.args)
+        runner = RunManager(self.config)
 
         include = self.args.models
         exclude = self.args.exclude
