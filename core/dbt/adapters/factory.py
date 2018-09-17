@@ -178,8 +178,7 @@ def get_adapter(config: AdapterRequiredConfig):
 
 
 def reset_adapters():
-    """Clear the adapters. This is useful for tests, which change configs.
-    """
+    """Clear the adapters. This is useful for tests, which change configs."""
     FACTORY.reset_adapters()
 
 
