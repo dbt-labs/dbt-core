@@ -24,12 +24,11 @@ class TestSimpleBigQueryRun(DBTIntegrationTest):
 
     @use_profile('bigquery')
     def test__bigquery_simple_run(self):
-        self.use_default_project()
         # make sure seed works twice. Full-refresh is a no-op
         self.run_dbt(['seed'])
         self.run_dbt(['seed', '--full-refresh'])
         results = self.run_dbt()
-        self.assertEqual(len(results), 2)
+        self.assertEqual(len(results), 4)
 
         # The 'dupe' model should fail, but all others should pass
         test_results = self.run_dbt(['test'], expect_pass=False)
@@ -49,10 +48,9 @@ class TestSimpleBigQueryRun(DBTIntegrationTest):
 
     @use_profile('bigquery')
     def test__bigquery_exists_non_destructive(self):
-        self.use_default_project()
         self.run_dbt(['seed'])
         # first run dbt. this should work
-        self.assertEqual(len(self.run_dbt()), 2)
+        self.assertEqual(len(self.run_dbt()), 4)
         # then run dbt with --non-destructive. The view should still exist.
         self.run_dbt(['run', '--non-destructive'])
         # The 'dupe' model should fail, but all others should pass
