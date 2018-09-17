@@ -50,6 +50,13 @@ def get_adapter(config):
         return adapter
 
 
+def reset_adapters():
+    """Clear the adapters. This is useful for tests, which change configs.
+    """
+    with _ADAPTER_LOCK:
+        _ADAPTERS.clear()
+
+
 def get_relation_class_by_name(adapter_name):
     adapter = get_adapter_class_by_name(adapter_name)
     return adapter.Relation

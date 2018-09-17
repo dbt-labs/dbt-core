@@ -11,7 +11,7 @@ from nose.plugins.attrib import attr
 
 import dbt.flags as flags
 
-from dbt.adapters.factory import get_adapter
+from dbt.adapters.factory import get_adapter, reset_adapters
 from dbt.config import RuntimeConfig
 
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -296,7 +296,8 @@ class DBTIntegrationTest(unittest.TestCase):
     def tearDown(self):
         self._clean_files()
 
-        self.adapter = get_adapter(self.config)
+        if not hasattr(self, 'adapter'):
+            self.adapter = get_adapter(self.config)
 
         self._drop_schema()
 
@@ -305,6 +306,7 @@ class DBTIntegrationTest(unittest.TestCase):
             self.handle.close()
 
         self.adapter.cleanup_connections()
+        reset_adapters()
 
     def _create_schema(self):
         if self.adapter_type == 'bigquery':
@@ -340,6 +342,8 @@ class DBTIntegrationTest(unittest.TestCase):
         return {}
 
     def run_dbt(self, args=None, expect_pass=True, strict=True):
+        # clear the adapter cache
+        reset_adapters()
         if args is None:
             args = ["run"]
 
