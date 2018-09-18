@@ -640,10 +640,10 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     def _make_match_kwargs(self, database: str, schema: str, identifier: str) -> Dict[str, str]:
         quoting = self.config.quoting
-        if identifier is not None and quoting['identifier'] is False:
+        if identifier is not None and quoting["identifier"] is False:
             identifier = identifier.lower()
 
-        if schema is not None and quoting['schema'] is False:
+        if schema is not None and quoting["schema"] is False:
             schema = schema.lower()
 
         if database is not None and quoting['database'] is False:
