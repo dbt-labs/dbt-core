@@ -4,4 +4,4 @@
     )
 }}
 
-select * from {{ ref('seed') }}
+select * from {{ ref('nested_table') }}

@@ -18,8 +18,6 @@ from dbt.utils import filter_null_values
 
 
 class SnowflakeAdapter(PostgresAdapter):
-    DEFAULT_QUOTE = False
-
     Relation = SnowflakeRelation
 
     @classmethod
@@ -219,6 +217,15 @@ class SnowflakeAdapter(PostgresAdapter):
                     "Provided SQL:\n{}".format(model_name, sql))
 
         return connection, cursor
+
+    @classmethod
+    def _filter_table(cls, table, manifest):
+        # On snowflake, users can set QUOTED_IDENTIFIERS_IGNORE_CASE, so force
+        # the column names to their lowercased forms.
+        lowered = table.rename(
+            column_names=[c.lower() for c in table.column_names]
+        )
+        return super(SnowflakeAdapter, cls)._filter_table(lowered, manifest)
 
     @classmethod
     def _make_match_kwargs(cls, project_cfg, schema, identifier):

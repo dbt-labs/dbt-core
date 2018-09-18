@@ -24,9 +24,32 @@ connections_in_use = {}
 connections_available = []
 
 
-class DefaultAdapter(object):
-    DEFAULT_QUOTE = True
+def _filter_schemas(manifest):
+    """Return a function that takes a row and decides if the row should be
+    included in the catalog output.
+    """
+    schemas = frozenset({
+        node.schema.lower()
+        for node in manifest.nodes.values()
+    })
 
+    def test(row):
+        if 'table_schema' not in row.keys():
+            # this means the get catalog operation is somehow not well formed!
+            raise dbt.exceptions.InternalException(
+                'Got a row without "table_schema" column, columns: {}'
+                .format(row.keys())
+            )
+        # the schema may be present but None, which is not an error and should
+        # be filtered out
+        table_schema = row['table_schema']
+        if table_schema is None:
+            return False
+        return table_schema.lower() in schemas
+    return test
+
+
+class DefaultAdapter(object):
     requires = {}
 
     context_functions = [
@@ -154,7 +177,8 @@ class DefaultAdapter(object):
         relation = cls.Relation.create(
             schema=schema,
             identifier=identifier,
-            type=relation_type)
+            type=relation_type,
+            quote_policy=project_cfg.get('quoting', {}))
 
         return cls.drop_relation(profile, project_cfg, relation, model_name)
 
@@ -175,7 +199,8 @@ class DefaultAdapter(object):
         relation = cls.Relation.create(
             schema=schema,
             identifier=table,
-            type='table')
+            type='table',
+            quote_policy=project_cfg.get('quoting', {}))
 
         return cls.truncate_relation(profile, project_cfg,
                                      relation, model_name)
@@ -190,12 +215,20 @@ class DefaultAdapter(object):
     @classmethod
     def rename(cls, profile, project_cfg, schema,
                from_name, to_name, model_name=None):
+        quote_policy = project_cfg.get('quoting', {})
+        from_relation = cls.Relation.create(
+            schema=schema,
+            identifier=from_name,
+            quote_policy=quote_policy
+        )
+        to_relation = cls.Relation.create(
+            identifier=to_name,
+            quote_policy=quote_policy
+        )
         return cls.rename_relation(
             profile, project_cfg,
-            from_relation=cls.Relation.create(
-                schema=schema, identifier=from_name),
-            to_relation=cls.Relation.create(
-                identifier=to_name),
+            from_relation=from_relation,
+            to_relation=to_relation,
             model_name=model_name)
 
     @classmethod
@@ -729,7 +762,8 @@ class DefaultAdapter(object):
         """This is the actual implementation of quote_as_configured, without
         the extra arguments needed for use inside materialization code.
         """
-        if project_cfg.get('quoting', {}).get(quote_key, cls.DEFAULT_QUOTE):
+        default = cls.Relation.DEFAULTS['quote_policy'].get(quote_key)
+        if project_cfg.get('quoting', {}).get(quote_key, default):
             return cls.quote(identifier)
         else:
             return identifier
@@ -823,6 +857,10 @@ class DefaultAdapter(object):
     # Abstract methods involving the manifest
     ###
     @classmethod
+    def _filter_table(cls, table, manifest):
+        return table.where(_filter_schemas(manifest))
+
+    @classmethod
     def get_catalog(cls, profile, project_cfg, manifest):
         try:
             table = cls.run_operation(profile, project_cfg, manifest,
@@ -830,10 +868,5 @@ class DefaultAdapter(object):
         finally:
             cls.release_connection(profile, GET_CATALOG_OPERATION_NAME)
 
-        schemas = list({
-            node.schema.lower()
-            for node in manifest.nodes.values()
-        })
-
-        results = table.where(lambda r: r['table_schema'].lower() in schemas)
+        results = cls._filter_table(table, manifest)
         return results

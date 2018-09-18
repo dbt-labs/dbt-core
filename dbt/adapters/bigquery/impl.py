@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 from contextlib import contextmanager
+import copy
 
 import dbt.compat
 import dbt.deprecations
@@ -698,7 +699,8 @@ class BigQueryAdapter(PostgresAdapter):
         columns of data.
         """
         columns = []
-        stats = ('num_bytes', 'num_rows', 'location', 'partitioning_type')
+        stats = ('num_bytes', 'num_rows', 'location', 'partitioning_type',
+                 'clustering_fields')
         stat_components = ('label', 'value', 'description', 'include')
         for stat_id in stats:
             for stat_component in stat_components:
@@ -711,6 +713,11 @@ class BigQueryAdapter(PostgresAdapter):
         column names/values.
         """
         column_names = cls._get_stats_column_names()
+
+        # agate does not handle the array of column names gracefully
+        clustering_value = None
+        if table.clustering_fields is not None:
+            clustering_value = ','.join(table.clustering_fields)
         # cast num_bytes/num_rows to str before they get to agate, or else
         # agate will incorrectly decide they are booleans.
         column_values = (
@@ -732,6 +739,11 @@ class BigQueryAdapter(PostgresAdapter):
             'Partitioning Type',
             table.partitioning_type,
             'The partitioning type used for this table',
+            relation_type == 'table',
+
+            'Clustering Fields',
+            clustering_value,
+            'The clustering fields for this table',
             relation_type == 'table',
         )
         return zip(column_names, column_values)
@@ -772,6 +784,8 @@ class BigQueryAdapter(PostgresAdapter):
                 table = client.get_table(table_ref)
 
                 flattened = cls._flat_columns_in_table(table)
+                relation_stats = dict(cls._get_stats_columns(table,
+                                                             relation.type))
 
                 for index, column in enumerate(flattened, start=1):
                     column_data = (
@@ -786,8 +800,7 @@ class BigQueryAdapter(PostgresAdapter):
                         None,
                     )
                     column_dict = dict(zip(column_names, column_data))
-                    column_dict.update(cls._get_stats_columns(table,
-                                                              relation.type))
+                    column_dict.update(copy.deepcopy(relation_stats))
 
                     columns.append(column_dict)
 

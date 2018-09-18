@@ -62,8 +62,7 @@ MODEL_POST_HOOK = """
    )
 """
 
-
-class TestPrePostModelHooks(DBTIntegrationTest):
+class BaseTestPrePost(DBTIntegrationTest):
     def setUp(self):
         self.adapter_type = 'bigquery'
         DBTIntegrationTest.setUp(self)
@@ -89,6 +88,35 @@ class TestPrePostModelHooks(DBTIntegrationTest):
     def schema(self):
         return "model_hooks_014"
 
+    def get_ctx_vars(self, state, count):
+        field_list = ", ".join(['"{}"'.format(f) for f in self.fields])
+        query = "select {field_list} from {schema}.on_model_hook where state = '{state}'".format(field_list=field_list, schema=self.unique_schema(), state=state)
+
+        vals = self.run_sql(query, fetch='all')
+        self.assertFalse(len(vals) == 0, 'nothing inserted into hooks table')
+        self.assertFalse(len(vals) < count, 'too few rows in hooks table')
+        self.assertFalse(len(vals) > count, 'too many rows in hooks table')
+        return [{k: v for k, v in zip(self.fields, val)} for val in vals]
+
+    def check_hooks(self, state, count=1):
+        ctxs = self.get_ctx_vars(state, count=count)
+        for ctx in ctxs:
+            self.assertEqual(ctx['state'], state)
+            self.assertEqual(ctx['target.dbname'], 'dbt')
+            self.assertEqual(ctx['target.host'], 'database')
+            self.assertEqual(ctx['target.name'], 'default2')
+            self.assertEqual(ctx['target.port'], 5432)
+            self.assertEqual(ctx['target.schema'], self.unique_schema())
+            self.assertEqual(ctx['target.threads'], 4)
+            self.assertEqual(ctx['target.type'], 'postgres')
+            self.assertEqual(ctx['target.user'], 'root')
+            self.assertEqual(ctx['target.pass'], '')
+
+            self.assertTrue(ctx['run_started_at'] is not None and len(ctx['run_started_at']) > 0, 'run_started_at was not set')
+            self.assertTrue(ctx['invocation_id'] is not None and len(ctx['invocation_id']) > 0, 'invocation_id was not set')
+
+
+class TestPrePostModelHooks(BaseTestPrePost):
     @property
     def project_config(self):
         return {
@@ -117,34 +145,6 @@ class TestPrePostModelHooks(DBTIntegrationTest):
     @property
     def models(self):
         return "test/integration/014_hook_tests/models"
-
-    def get_ctx_vars(self, state):
-        field_list = ", ".join(['"{}"'.format(f) for f in self.fields])
-        query = "select {field_list} from {schema}.on_model_hook where state = '{state}'".format(field_list=field_list, schema=self.unique_schema(), state=state)
-
-        vals = self.run_sql(query, fetch='all')
-        self.assertFalse(len(vals) == 0, 'nothing inserted into hooks table')
-        self.assertFalse(len(vals) > 1, 'too many rows in hooks table')
-        ctx = dict([(k,v) for (k,v) in zip(self.fields, vals[0])])
-
-        return ctx
-
-    def check_hooks(self, state):
-        ctx = self.get_ctx_vars(state)
-
-        self.assertEqual(ctx['state'], state)
-        self.assertEqual(ctx['target.dbname'], 'dbt')
-        self.assertEqual(ctx['target.host'], 'database')
-        self.assertEqual(ctx['target.name'], 'default2')
-        self.assertEqual(ctx['target.port'], 5432)
-        self.assertEqual(ctx['target.schema'], self.unique_schema())
-        self.assertEqual(ctx['target.threads'], 4)
-        self.assertEqual(ctx['target.type'], 'postgres')
-        self.assertEqual(ctx['target.user'], 'root')
-        self.assertEqual(ctx['target.pass'], '')
-
-        self.assertTrue(ctx['run_started_at'] is not None and len(ctx['run_started_at']) > 0, 'run_started_at was not set')
-        self.assertTrue(ctx['invocation_id'] is not None and len(ctx['invocation_id']) > 0, 'invocation_id was not set')
 
     @attr(type='postgres')
     def test_pre_and_post_model_hooks(self):
@@ -182,4 +182,51 @@ class TestPrePostModelHooksOnSeeds(DBTIntegrationTest):
         self.assertEqual(len(res), 1, 'Expected exactly one item')
         res = self.run_dbt(['test'])
         self.assertEqual(len(res), 1, 'Expected exactly one item')
+
+
+class TestPrePostModelHooksInConfig(BaseTestPrePost):
+    @property
+    def project_config(self):
+        return {
+            'macro-paths': ['test/integration/014_hook_tests/macros'],
+        }
+
+    @property
+    def models(self):
+        return "test/integration/014_hook_tests/configured-models"
+
+    @attr(type='postgres')
+    def test_pre_and_post_model_hooks_model(self):
+        self.run_dbt(['run'])
+
+        self.check_hooks('start')
+        self.check_hooks('end')
+
+    @attr(type='postgres')
+    def test_pre_and_post_model_hooks_model_and_project(self):
+        self.use_default_project({
+            'models': {
+                'test': {
+                    'pre-hook': [
+                        # inside transaction (runs second)
+                        MODEL_PRE_HOOK,
+
+                        # outside transaction (runs first)
+                        {"sql": "vacuum {{ this.schema }}.on_model_hook", "transaction": False},
+                    ],
+
+                    'post-hook':[
+                        # outside transaction (runs second)
+                        {"sql": "vacuum {{ this.schema }}.on_model_hook", "transaction": False},
+
+                        # inside transaction (runs first)
+                        MODEL_POST_HOOK,
+                    ]
+                }
+            }
+        })
+        self.run_dbt(['run'])
+
+        self.check_hooks('start', count=2)
+        self.check_hooks('end', count=2)
 

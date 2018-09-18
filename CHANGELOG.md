@@ -1,3 +1,28 @@
+## dbt 0.11.1 - Lucretia Mott (September 18, 2018)
+
+### Overview
+
+This is a patch release containing a few bugfixes and one quality of life change for dbt docs.
+
+### Features
+
+- dbt
+  - Add `--port` parameter to dbt docs serve ([#987](https://github.com/fishtown-analytics/dbt/pull/987))
+
+### Fixes
+
+- dbt
+  - Fix hooks in model configs not running ([#985](https://github.com/fishtown-analytics/dbt/pull/985))
+  - Fix integration test on redshift catalog generation ([#977](https://github.com/fishtown-analytics/dbt/pull/977))
+  - Snowflake: Fix docs generation errors when QUOTED_IDENTIFIER_IGNORE_CASE is set ([#998](https://github.com/fishtown-analytics/dbt/pull/998))
+  - Translate empty strings to null in seeds ([#995](https://github.com/fishtown-analytics/dbt/pull/995))
+  - Filter out null schemas during catalog generation ([#992](https://github.com/fishtown-analytics/dbt/pull/992))
+  - Fix quoting on drop, truncate, and rename ([#991](https://github.com/fishtown-analytics/dbt/pull/991))
+- dbt-docs
+  - Fix for non-existent column in schema.yml ([#3](https://github.com/fishtown-analytics/dbt-docs/pull/3))
+  - Fixes for missing tests in docs UI when columns are upcased ([#2](https://github.com/fishtown-analytics/dbt-docs/pull/2))
+  - Fix "copy to clipboard" ([#4](https://github.com/fishtown-analytics/dbt-docs/issues/4))
+
 ## dbt 0.11.0 - Isaac Asimov (September 6, 2018)
 
 ### Overview
