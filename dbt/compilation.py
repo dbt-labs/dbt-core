@@ -18,6 +18,7 @@ import dbt.contracts.project
 import dbt.exceptions
 import dbt.flags
 import dbt.loader
+import dbt.config
 from dbt.contracts.graph.compiled import CompiledNode, CompiledGraph
 
 from dbt.clients.system import write_json
@@ -231,6 +232,16 @@ class Compiler(object):
             names_resources[name] = node
             alias_resources[alias] = node
 
+    def get_resource_fqns(self, manifest):
+        resource_fqns = {}
+        for unique_id, node in manifest.nodes.items():
+            resource_type_plural = node.resource_type + 's'
+            if resource_type_plural not in resource_fqns:
+                resource_fqns[resource_type_plural] = []
+            resource_fqns[resource_type_plural].append(node.fqn)
+
+        return resource_fqns
+
     def compile(self):
         linker = Linker()
 
@@ -241,6 +252,10 @@ class Compiler(object):
         self.write_manifest_file(manifest)
 
         self._check_resource_uniqueness(manifest)
+
+        resource_fqns = self.get_resource_fqns(manifest)
+
+        self.config.warn_for_unused_resource_config_paths(resource_fqns)
 
         self.link_graph(linker, manifest)
 

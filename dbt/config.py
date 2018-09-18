@@ -15,6 +15,7 @@ from dbt import compat
 from dbt.adapters.factory import get_relation_class_by_name
 
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.utils import DBTConfigKeys
 
 
 DEFAULT_THREADS = 1
@@ -28,6 +29,7 @@ dbt encountered an error while trying to read your profiles.yml file.
 
 {error_string}
 """
+
 
 NO_SUPPLIED_PROFILE_ERROR = """\
 dbt cannot run because no profile was specified for this dbt project.
@@ -56,6 +58,13 @@ class DbtProjectError(DbtConfigError):
 
 class DbtProfileError(DbtConfigError):
     pass
+
+
+UNUSED_RESOURCE_CONFIGURATION_PATH_MESSAGE = """\
+WARNING: Configuration paths exist in your dbt_project.yml file which do not \
+apply to any resources.
+There are {} unused configuration paths:\n{}
+"""
 
 
 def read_profile(profiles_dir):
@@ -313,6 +322,43 @@ class Project(object):
 
     def hashed_name(self):
         return hashlib.md5(self.project_name.encode('utf-8')).hexdigest()
+
+    def get_resource_config_paths(self):
+        """Return a dictionary with 'seeds' and 'models' keys whose values are
+        lists of lists of strings, where each inner list of strings represents
+        a configured path in the resource.
+        """
+        return {
+            'models': _get_config_paths(self.models),
+            'seeds': _get_config_paths(self.seeds),
+        }
+
+    def get_unused_resource_config_paths(self, resource_fqns):
+        """Return a list of lists of strings, where each inner list of strings
+        represents a type + FQN path of a resource configuration that is not
+        used.
+        """
+        resource_config_paths = self.get_resource_config_paths()
+        unused_resource_config_paths = []
+        for resource_type, config_paths in resource_config_paths.items():
+            fqns = resource_fqns.get(resource_type, [])
+            for config_path in config_paths:
+                if not _is_config_used(config_path, fqns):
+                    unused_resource_config_paths.append(
+                        [resource_type] + config_path
+                    )
+        return unused_resource_config_paths
+
+    def warn_for_unused_resource_config_paths(self, resource_fqns):
+        unused = self.get_unused_resource_config_paths(resource_fqns)
+        if len(unused) == 0:
+            return
+
+        msg = UNUSED_RESOURCE_CONFIGURATION_PATH_MESSAGE.format(
+            len(unused),
+            '\n'.join('- {}'.format('.'.join(u) for u in unused))
+        )
+        logger.info(dbt.ui.printer.yellow(msg))
 
 
 class Profile(object):
@@ -776,3 +822,32 @@ class RuntimeConfig(Project, Profile):
 def _load_yaml(path):
     contents = dbt.clients.system.load_file_contents(path)
     return dbt.clients.yaml_helper.load_yaml_text(contents)
+
+
+def _get_config_paths(config, path=None, paths=None):
+    if path is None:
+        path = []
+
+    if paths is None:
+        paths = []
+
+    for key, value in config.items():
+        if isinstance(value, dict):
+            if key in DBTConfigKeys:
+                if path not in paths:
+                    paths.append(path)
+            else:
+                _get_config_paths(value, path + [key], paths)
+        else:
+            if path not in paths:
+                paths.append(path)
+
+    return paths
+
+
+def _is_config_used(path, fqns):
+    if fqns:
+        for fqn in fqns:
+            if len(path) <= len(fqn) and fqn[:len(path)] == path:
+                return True
+    return False
