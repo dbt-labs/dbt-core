@@ -19,6 +19,7 @@ import dbt.writer
 import six
 import sys
 import time
+import traceback
 
 
 INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If \
@@ -145,12 +146,10 @@ class BaseRunner(object):
         try:
             self.adapter.release_connection(self.config, node_name)
         except Exception as exc:
-            # log it
-            logger.error(
-                'Error releasing connection for node {}: {!s}'
-                .format(node_name, exc)
+            logger.debug(
+                'Error releasing connection for node {}: {!s}\n{}'
+                .format(node_name, exc, traceback.format_exc())
             )
-            logger.debug(traceback.format_exc())
             return dbt.compat.to_string(exc)
 
         return None
