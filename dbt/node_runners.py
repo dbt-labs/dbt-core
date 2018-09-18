@@ -16,7 +16,10 @@ import dbt.schema
 import dbt.templates
 import dbt.writer
 
+import six
+import sys
 import time
+import traceback
 
 
 INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If \
@@ -73,6 +76,7 @@ class BaseRunner(object):
 
         result = RunModelResult(self.node)
         started = time.time()
+        exc_info = (None, None, None)
 
         try:
             # if we fail here, we still have a compiled node to return
@@ -105,6 +109,9 @@ class BaseRunner(object):
             result.status = 'ERROR'
 
         except Exception as e:
+            # set this here instead of finally, as python 2/3 exc_info()
+            # behavior with re-raised exceptions are slightly different
+            exc_info = sys.exc_info()
             prefix = "Unhandled error while executing {filepath}".format(
                         filepath=self.node.build_path)
 
@@ -112,15 +119,40 @@ class BaseRunner(object):
                          prefix=dbt.ui.printer.red(prefix),
                          error=str(e).strip())
 
-            logger.debug(error)
+            logger.error(error)
             raise e
 
         finally:
-            node_name = self.node.name
-            self.adapter.release_connection(self.config, node_name)
+            exc_str = self._safe_release_connection()
+
+            # if we had an unhandled exception, re-raise it
+            if exc_info and exc_info[1]:
+                six.reraise(*exc_info)
+
+            # if releasing failed and the result doesn't have an error yet, set
+            # an error
+            if exc_str is not None and result.error is None:
+                result.error = exc_str
+                result.status = 'ERROR'
 
         result.execution_time = time.time() - started
         return result
+
+    def _safe_release_connection(self):
+        """Try to release a connection. If an exception is hit, log and return
+        the error string.
+        """
+        node_name = self.node.name
+        try:
+            self.adapter.release_connection(self.config, node_name)
+        except Exception as exc:
+            logger.debug(
+                'Error releasing connection for node {}: {!s}\n{}'
+                .format(node_name, exc, traceback.format_exc())
+            )
+            return dbt.compat.to_string(exc)
+
+        return None
 
     def before_execute(self):
         raise NotImplementedException()

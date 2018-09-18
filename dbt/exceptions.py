@@ -69,7 +69,8 @@ class RuntimeException(RuntimeError, Exception):
         if hasattr(self.msg, 'split'):
             split_msg = self.msg.split("\n")
         else:
-            split_msg = basestring(self.msg).split("\n")
+            # can't use basestring here, as on python2 it's an abstract class
+            split_msg = str(self.msg).split("\n")
 
         lines = ["{}{}".format(self.type + ' Error',
                                node_string)] + split_msg
