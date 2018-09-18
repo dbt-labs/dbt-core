@@ -248,13 +248,6 @@ class CompileRunner(BaseRunner):
             "already_exists": call_already_exists,
         }
 
-    @classmethod
-    def create_schemas(cls, config, adapter, manifest):
-        required_schemas = cls.get_model_schemas(manifest)
-        existing_schemas = set(adapter.get_existing_schemas(config))
-        for schema in (required_schemas - existing_schemas):
-            adapter.create_schema(config, schema)
-
 
 class ModelRunner(CompileRunner):
 
