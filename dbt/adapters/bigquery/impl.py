@@ -495,7 +495,7 @@ class BigQueryAdapter(PostgresAdapter):
         client = conn.handle
 
         with cls.exception_handler(config, 'list dataset', model_name):
-            all_datasets = client.list_datasets()
+            all_datasets = client.list_datasets(include_all=True)
             return [ds.dataset_id for ds in all_datasets]
 
     @classmethod
@@ -535,9 +535,10 @@ class BigQueryAdapter(PostgresAdapter):
     @classmethod
     def check_schema_exists(cls, config, schema, model_name=None):
         conn = cls.get_connection(config, model_name)
+        client = conn.handle
 
         with cls.exception_handler(config, 'get dataset', model_name):
-            all_datasets = conn.handle.list_datasets()
+            all_datasets = client.list_datasets(include_all=True)
             return any([ds.dataset_id == schema for ds in all_datasets])
 
     @classmethod
