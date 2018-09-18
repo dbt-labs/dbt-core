@@ -213,7 +213,7 @@ class GenerateTask(CompileTask):
         adapter = get_adapter(self.config)
 
         dbt.ui.printer.print_timestamped_line("Building catalog")
-        results = adapter.get_catalog(self.config, manifest)
+        results = adapter.get_catalog(manifest)
 
         results = [
             dict(zip(results.column_names, row))

@@ -156,8 +156,7 @@ class RedshiftAdapter(PostgresAdapter):
                    table_schema_filter=table_schema_filter).strip()
         return sql
 
-    @classmethod
-    def drop_relation(cls, config, relation, model_name=None):
+    def drop_relation(self, relation, model_name=None):
         """
         In Redshift, DROP TABLE ... CASCADE should not be used
         inside a transaction. Redshift doesn't prevent the CASCADE
@@ -178,18 +177,18 @@ class RedshiftAdapter(PostgresAdapter):
 
         with drop_lock:
 
-            connection = cls.get_connection(config, model_name)
+            connection = self.get_connection(model_name)
 
             if connection.transaction_open:
-                cls.commit(config, connection)
+                self.commit(connection)
 
-            cls.begin(config, connection.name)
+            self.begin(connection.name)
 
-            to_return = super(PostgresAdapter, cls).drop_relation(
-                config, relation, model_name)
+            to_return = super(RedshiftAdapter, self).drop_relation(
+                relation, model_name)
 
-            cls.commit(config, connection)
-            cls.begin(config, connection.name)
+            self.commit(connection)
+            self.begin(connection.name)
 
             return to_return
 

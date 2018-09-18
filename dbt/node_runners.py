@@ -144,7 +144,7 @@ class BaseRunner(object):
         """
         node_name = self.node.name
         try:
-            self.adapter.release_connection(self.config, node_name)
+            self.adapter.release_connection(node_name)
         except Exception as exc:
             logger.debug(
                 'Error releasing connection for node {}: {!s}\n{}'
@@ -229,7 +229,7 @@ class CompileRunner(BaseRunner):
     def _compile_node(cls, adapter, config, node, manifest):
         compiler = dbt.compilation.Compiler(config)
         node = compiler.compile_node(node, manifest)
-        node = cls._inject_runtime_config(adapter, config, node)
+        node = cls._inject_runtime_config(adapter, node)
 
         if(node.injected_sql is not None and
            not (dbt.utils.is_type(node, NodeType.Archive))):
@@ -247,30 +247,29 @@ class CompileRunner(BaseRunner):
         return node
 
     @classmethod
-    def _inject_runtime_config(cls, adapter, config, node):
+    def _inject_runtime_config(cls, adapter, node):
         wrapped_sql = node.wrapped_sql
-        context = cls._node_context(adapter, config, node)
+        context = cls._node_context(adapter, node)
         sql = dbt.clients.jinja.get_rendered(wrapped_sql, context)
         node.wrapped_sql = sql
         return node
 
     @classmethod
-    def _node_context(cls, adapter, config, node):
+    def _node_context(cls, adapter, node):
 
         def call_get_columns_in_table(schema_name, table_name):
             return adapter.get_columns_in_table(
-                config, schema_name,
-                table_name, model_name=node.alias)
+                schema_name, table_name, model_name=node.alias
+            )
 
         def call_get_missing_columns(from_schema, from_table,
                                      to_schema, to_table):
             return adapter.get_missing_columns(
-                config, from_schema, from_table,
-                to_schema, to_table, node.alias)
+                from_schema, from_table, to_schema, to_table, node.alias
+            )
 
         def call_already_exists(schema, table):
-            return adapter.already_exists(
-                config, schema, table, node.alias)
+            return adapter.already_exists(schema, table, node.alias)
 
         return {
             "run_started_at": dbt.tracking.active_user.run_started_at,
@@ -304,7 +303,7 @@ class ModelRunner(CompileRunner):
             # implement a for-loop over these sql statements in jinja-land.
             # Also, consider configuring psycopg2 (and other adapters?) to
             # ensure that a transaction is only created if dbt initiates it.
-            adapter.clear_transaction(config, model_name)
+            adapter.clear_transaction(model_name)
             compiled = cls._compile_node(adapter, config, hook, manifest)
             statement = compiled.wrapped_sql
 
@@ -317,10 +316,10 @@ class ModelRunner(CompileRunner):
             sql = hook_dict.get('sql', '')
 
             if len(sql.strip()) > 0:
-                adapter.execute(config, sql, model_name=model_name,
-                                auto_begin=False, fetch=False)
+                adapter.execute(sql, model_name=model_name, auto_begin=False,
+                                fetch=False)
 
-            adapter.release_connection(config, model_name)
+            adapter.release_connection(model_name)
 
     @classmethod
     def safe_run_hooks(cls, config, adapter, manifest, hook_type):
@@ -339,12 +338,12 @@ class ModelRunner(CompileRunner):
         # is the one defined in the profile. Create this schema if it
         # does not exist, otherwise subsequent queries will fail. Generally,
         # dbt expects that this schema will exist anyway.
-        required_schemas.add(adapter.get_default_schema(config))
+        required_schemas.add(adapter.get_default_schema())
 
-        existing_schemas = set(adapter.get_existing_schemas(config))
+        existing_schemas = set(adapter.get_existing_schemas())
 
         for schema in (required_schemas - existing_schemas):
-            adapter.create_schema(config, schema)
+            adapter.create_schema(schema)
 
     @classmethod
     def before_run(cls, config, adapter, manifest):
@@ -443,7 +442,6 @@ class TestRunner(CompileRunner):
 
     def execute_test(self, test):
         res, table = self.adapter.execute_and_fetch(
-            self.config,
             test.wrapped_sql,
             test.name,
             auto_begin=True)
