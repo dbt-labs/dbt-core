@@ -26,6 +26,7 @@ class ManifestTest(unittest.TestCase):
             'vars': {},
             'quoting': {},
             'column_types': {},
+            'tags': [],
         }
 
         self.nested_nodes = {
@@ -321,6 +322,7 @@ class MixedManifestTest(unittest.TestCase):
             'vars': {},
             'quoting': {},
             'column_types': {},
+            'tags': [],
         }
 
         self.nested_nodes = {

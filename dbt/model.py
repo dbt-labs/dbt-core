@@ -11,7 +11,7 @@ from dbt.node_types import NodeType
 class SourceConfig(object):
     ConfigKeys = DBTConfigKeys
 
-    AppendListFields = ['pre-hook', 'post-hook']
+    AppendListFields = ['pre-hook', 'post-hook', 'tags']
     ExtendDictFields = ['vars', 'column_types', 'quoting']
     ClobberFields = [
         'alias',
@@ -94,22 +94,21 @@ class SourceConfig(object):
 
         # make sure we're not clobbering an array of hooks with a single hook
         # string
-        hook_fields = ['pre-hook', 'post-hook']
-        for hook_field in hook_fields:
-            if hook_field in config:
-                config[hook_field] = self.__get_hooks(config, hook_field)
+        for field in self.AppendListFields:
+            if field in config:
+                config[field] = self.__get_as_list(config, field)
 
         self.in_model_config.update(config)
 
-    def __get_hooks(self, relevant_configs, key):
+    def __get_as_list(self, relevant_configs, key):
         if key not in relevant_configs:
             return []
 
-        hooks = relevant_configs[key]
-        if not isinstance(hooks, (list, tuple)):
-            hooks = [hooks]
+        items = relevant_configs[key]
+        if not isinstance(items, (list, tuple)):
+            items = [items]
 
-        return hooks
+        return items
 
     def smart_update(self, mutable_config, new_configs):
         relevant_configs = {
@@ -118,9 +117,9 @@ class SourceConfig(object):
         }
 
         for key in SourceConfig.AppendListFields:
-            new_hooks = self.__get_hooks(relevant_configs, key)
+            append_fields = self.__get_as_list(relevant_configs, key)
             mutable_config[key].extend([
-                h for h in new_hooks if h not in mutable_config[key]
+                f for f in append_fields if f not in mutable_config[key]
             ])
 
         for key in SourceConfig.ExtendDictFields:

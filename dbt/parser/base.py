@@ -7,6 +7,7 @@ import dbt.utils
 import dbt.hooks
 import dbt.clients.jinja
 import dbt.context.parser
+from dbt.compat import basestring
 
 from dbt.utils import coalesce
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -127,6 +128,10 @@ class BaseParser(object):
                                  lambda x: default_schema)
         parsed_node.schema = get_schema(schema_override)
         parsed_node.alias = config.config.get('alias', default_alias)
+
+        # Set tags on node provided in config blocks
+        model_tags = config.config.get('tags', [])
+        parsed_node.tags.extend(model_tags)
 
         # Overwrite node config
         config_dict = parsed_node.get('config', {})

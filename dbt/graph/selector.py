@@ -4,10 +4,17 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import is_enabled, get_materialization, coalesce
 from dbt.node_types import NodeType
 from dbt.contracts.graph.parsed import ParsedNode
+import dbt.exceptions
 
 SELECTOR_PARENTS = '+'
 SELECTOR_CHILDREN = '+'
 SELECTOR_GLOB = '*'
+SELECTOR_DELIMITER = ':'
+
+
+class SELECTOR_FILTERS:
+    FQN = 'fqn'
+    TAG = 'tag'
 
 
 def split_specs(node_specs):
@@ -34,12 +41,27 @@ def parse_spec(node_spec):
         index_end -= 1
 
     node_selector = node_spec[index_start:index_end]
-    qualified_node_name = node_selector.split('.')
+
+    if SELECTOR_DELIMITER in node_selector:
+        selector_parts = node_selector.split(SELECTOR_DELIMITER, 1)
+        selector_type, selector_value = selector_parts
+
+        node_filter = {
+            "type": selector_type,
+            "value": selector_value
+        }
+
+    else:
+        node_filter = {
+            "type": SELECTOR_FILTERS.FQN,
+            "value": node_selector
+
+        }
 
     return {
         "select_parents": select_parents,
         "select_children": select_children,
-        "qualified_node_name": qualified_node_name,
+        "filter": node_filter,
         "raw": node_spec
     }
 
@@ -74,10 +96,11 @@ def is_selected_node(real_node, node_selector):
     return True
 
 
-def get_nodes_by_qualified_name(graph, qualified_name):
+def get_nodes_by_qualified_name(graph, name):
     """ returns a node if matched, else throws a CompilerError. qualified_name
     should be either 1) a node name or 2) a dot-notation qualified selector"""
 
+    qualified_name = name.split('.')
     package_names = get_package_names(graph)
 
     for node in graph.nodes():
@@ -98,13 +121,40 @@ def get_nodes_by_qualified_name(graph, qualified_name):
                     break
 
 
+def get_nodes_by_tag(graph, tag_name):
+    """ yields nodes from graph that have the specified tag """
+
+    for node in graph.nodes():
+        tags = graph.node[node]['tags']
+
+        if tag_name in tags:
+            yield node
+
+
 def get_nodes_from_spec(graph, spec):
     select_parents = spec['select_parents']
     select_children = spec['select_children']
-    qualified_node_name = spec['qualified_node_name']
 
-    selected_nodes = set(get_nodes_by_qualified_name(graph,
-                                                     qualified_node_name))
+    filter_map = {
+        SELECTOR_FILTERS.FQN: get_nodes_by_qualified_name,
+        SELECTOR_FILTERS.TAG: get_nodes_by_tag,
+    }
+
+    node_filter = spec['filter']
+    filter_func = filter_map.get(node_filter['type'])
+
+    if filter_func is None:
+        valid_selectors = ", ".join(filter_map.keys())
+        logger.info("The '{}' selector specified in {} is invalid. Must be "
+                    "one of [{}]".format(
+                        node_filter['type'],
+                        spec['raw'],
+                        valid_selectors))
+
+        selected_nodes = set()
+
+    else:
+        selected_nodes = set(filter_func(graph, node_filter['value']))
 
     additional_nodes = set()
     test_nodes = set()

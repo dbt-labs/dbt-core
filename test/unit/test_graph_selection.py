@@ -23,6 +23,15 @@ class GraphSelectionTest(unittest.TestCase):
         for node in self.package_graph:
             self.package_graph.node[node]['fqn'] = node.split('.')[1:]
 
+        self.package_graph.node['m.X.a']['tags'] = ['abc']
+        self.package_graph.node['m.Y.b']['tags'] = ['abc']
+        self.package_graph.node['m.X.c']['tags'] = ['abc']
+        self.package_graph.node['m.Y.d']['tags'] = []
+        self.package_graph.node['m.X.e']['tags'] = ['efg']
+        self.package_graph.node['m.Y.f']['tags'] = ['efg']
+        self.package_graph.node['m.X.g']['tags'] = ['efg']
+
+
     def run_specs_and_assert(self, graph, include, exclude, expected):
         selected = graph_selector.select_nodes(
             graph,
@@ -41,6 +50,37 @@ class GraphSelectionTest(unittest.TestCase):
             set(['m.X.a'])
         )
 
+    def test__select_by_tag(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['tag:abc'],
+            [],
+            set(['m.X.a', 'm.Y.b', 'm.X.c'])
+        )
+
+    def test__exclude_by_tag(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['*'],
+            ['tag:abc'],
+            set(['m.Y.d', 'm.X.e', 'm.Y.f', 'm.X.g'])
+        )
+
+    def test__select_by_tag_and_model_name(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['tag:abc', 'a'],
+            [],
+            set(['m.X.a', 'm.Y.b', 'm.X.c'])
+        )
+
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['tag:abc', 'd'],
+            [],
+            set(['m.X.a', 'm.Y.b', 'm.X.c', 'm.Y.d'])
+        )
+
     def test__multiple_node_selection_in_package(self):
         self.run_specs_and_assert(
             self.package_graph,
@@ -56,33 +96,48 @@ class GraphSelectionTest(unittest.TestCase):
             ['b'],
             set(['m.X.a','m.X.c', 'm.Y.d','m.X.e','m.Y.f','m.X.g']))
 
-    def parse_spec_and_assert(self, spec, parents, children, qualified_node_name):
+    def test__select_children_except_tag(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['X.a+'],
+            ['tag:efg'],
+            set(['m.X.a','m.Y.b','m.X.c', 'm.Y.d']))
+
+    def parse_spec_and_assert(self, spec, parents, children, filter_type, filter_value):
         parsed = graph_selector.parse_spec(spec)
         self.assertEquals(
             parsed,
             {
                 "select_parents": parents,
                 "select_children": children,
-                "qualified_node_name": qualified_node_name,
+                "filter": {
+                    'type': filter_type,
+                    'value': filter_value
+                },
                 "raw": spec
             }
         )
 
     def test__spec_parsing(self):
-        self.parse_spec_and_assert('a', False, False, ['a'])
-        self.parse_spec_and_assert('+a', True, False, ['a'])
-        self.parse_spec_and_assert('a+', False, True, ['a'])
-        self.parse_spec_and_assert('+a+', True, True, ['a'])
+        self.parse_spec_and_assert('a', False, False, 'fqn', 'a')
+        self.parse_spec_and_assert('+a', True, False, 'fqn', 'a')
+        self.parse_spec_and_assert('a+', False, True, 'fqn', 'a')
+        self.parse_spec_and_assert('+a+', True, True, 'fqn', 'a')
 
-        self.parse_spec_and_assert('a.b', False, False, ['a', 'b'])
-        self.parse_spec_and_assert('+a.b', True, False, ['a', 'b'])
-        self.parse_spec_and_assert('a.b+', False, True, ['a', 'b'])
-        self.parse_spec_and_assert('+a.b+', True, True, ['a', 'b'])
+        self.parse_spec_and_assert('a.b', False, False, 'fqn', 'a.b')
+        self.parse_spec_and_assert('+a.b', True, False, 'fqn', 'a.b')
+        self.parse_spec_and_assert('a.b+', False, True, 'fqn', 'a.b')
+        self.parse_spec_and_assert('+a.b+', True, True, 'fqn', 'a.b')
 
-        self.parse_spec_and_assert('a.b.*', False, False, ['a', 'b', '*'])
-        self.parse_spec_and_assert('+a.b.*', True, False, ['a', 'b', '*'])
-        self.parse_spec_and_assert('a.b.*+', False, True, ['a', 'b', '*'])
-        self.parse_spec_and_assert('+a.b.*+', True, True, ['a', 'b', '*'])
+        self.parse_spec_and_assert('a.b.*', False, False, 'fqn', 'a.b.*')
+        self.parse_spec_and_assert('+a.b.*', True, False, 'fqn', 'a.b.*')
+        self.parse_spec_and_assert('a.b.*+', False, True, 'fqn', 'a.b.*')
+        self.parse_spec_and_assert('+a.b.*+', True, True, 'fqn', 'a.b.*')
+
+        self.parse_spec_and_assert('tag:a', False, False, 'tag', 'a')
+        self.parse_spec_and_assert('+tag:a', True, False, 'tag', 'a')
+        self.parse_spec_and_assert('tag:a+', False, True, 'tag', 'a')
+        self.parse_spec_and_assert('+tag:a+', True, True, 'tag', 'a')
 
     def test__package_name_getter(self):
         found = graph_selector.get_package_names(self.package_graph)

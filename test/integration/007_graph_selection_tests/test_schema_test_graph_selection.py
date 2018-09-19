@@ -63,11 +63,30 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         )
 
     @attr(type='postgres')
+    def test__postgres__schema_tests_specify_tag(self):
+        self.run_schema_and_assert(
+            ['tag:bi'],
+            None,
+            ['unique_users_id',
+             'unique_users_rollup_gender']
+        )
+
+    @attr(type='postgres')
     def test__postgres__schema_tests_specify_model_and_children(self):
         self.run_schema_and_assert(
             ['users+'],
             None,
             ['unique_users_id', 'unique_users_rollup_gender']
+        )
+
+    @attr(type='postgres')
+    def test__postgres__schema_tests_specify_tag_and_children(self):
+        self.run_schema_and_assert(
+            ['tag:base+'],
+            None,
+            ['unique_emails_email',
+             'unique_users_id',
+             'unique_users_rollup_gender']
         )
 
     @attr(type='postgres')

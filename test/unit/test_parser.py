@@ -81,6 +81,7 @@ class ParserTest(unittest.TestCase):
             'vars': {},
             'quoting': {},
             'column_types': {},
+            'tags': [],
         }
 
         self.disabled_config = {
@@ -91,6 +92,7 @@ class ParserTest(unittest.TestCase):
             'vars': {},
             'quoting': {},
             'column_types': {},
+            'tags': [],
         }
 
     def test__single_model(self):

@@ -68,10 +68,23 @@ CONFIG_CONTRACT = {
             'type': 'object',
             'additionalProperties': True,
         },
+        'tags': {
+            'anyOf': [
+                {
+                    'type': 'array',
+                    'items': {
+                        'type': 'string'
+                    },
+                },
+                {
+                    'type': 'string'
+                }
+            ]
+        },
     },
     'required': [
         'enabled', 'materialized', 'post-hook', 'pre-hook', 'vars',
-        'quoting', 'column_types'
+        'quoting', 'column_types', 'tags'
     ]
 }
 
