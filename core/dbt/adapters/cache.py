@@ -47,7 +47,7 @@ class _CachedRelation:
         self.inner = inner
 
     def __str__(self) -> str:
-        return (
+        return ("_CachedRelation(database={}, schema={}, identifier={}, inner={})").format(
             self.database, self.schema, self.identifier, self.inner
         )
 
@@ -469,7 +469,7 @@ class RelationsCache:
         schema = lowercase(schema)
         with self.lock:
             results = [
-                r.inner for r in self.relations.values()
+                r.inner
                 for r in self.relations.values()
                 if (lowercase(r.schema) == schema and lowercase(r.database) == database)
             ]

@@ -53,8 +53,7 @@ FRESHNESS_MACRO_NAME = "collect_freshness"
 def _expect_row_value(key: str, row: agate.Row):
     if key not in row.keys():
         raise InternalException(
-            'Got a row without "{}" column, columns: {}'
-            .format(key, row.keys())
+            'Got a row without "{}" column, columns: {}'.format(key, row.keys())
         )
     return row[key]
 
@@ -67,7 +66,7 @@ def _catalog_filter_schemas(manifest: Manifest) -> Callable[[agate.Row], bool]:
 
     def test(row: agate.Row) -> bool:
         table_database = _expect_row_value("table_database", row)
-        table_schema = _expect_row_value('table_schema', row)
+        table_schema = _expect_row_value("table_schema", row)
         # the schema may be present but None, which is not an error and should
         # be filtered out
         if table_schema is None:
