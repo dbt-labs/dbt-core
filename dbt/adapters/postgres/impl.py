@@ -10,6 +10,9 @@ import agate
 from dbt.logger import GLOBAL_LOGGER as logger
 
 
+GET_RELATIONS_OPERATION_NAME = 'get_relations_data'
+
+
 class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
 
     DEFAULT_TCP_KEEPALIVE = 0  # 0 means to use the default value
@@ -143,7 +146,20 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
 
         return connection, cursor
 
-    def list_relations(self, schema, model_name=None):
+    def _link_cached_relations(self, manifest, schemas):
+        # now set up any links
+        try:
+            table = self.run_operation(manifest, GET_RELATIONS_OPERATION_NAME)
+            # avoid a rollback when releasing the connection
+            self.commit_if_has_connection(GET_RELATIONS_OPERATION_NAME)
+        finally:
+            self.release_connection(GET_RELATIONS_OPERATION_NAME)
+        table = self._relations_filter_table(table, schemas)
+
+        for (refed_schema, refed_name, dep_schema, dep_name) in table:
+            self.cache.add_link(dep_schema, dep_name, refed_schema, refed_name)
+
+    def _list_relations(self, schema, model_name=None):
         sql = """
         select tablename as name, schemaname as schema, 'table' as type from pg_tables
         where schemaname ilike '{schema}'
@@ -152,8 +168,7 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         where schemaname ilike '{schema}'
         """.format(schema=schema).strip()  # noqa
 
-        connection, cursor = self.add_query(sql, model_name,
-                                            auto_begin=False)
+        connection, cursor = self.add_query(sql, model_name, auto_begin=False)
 
         results = cursor.fetchall()
 

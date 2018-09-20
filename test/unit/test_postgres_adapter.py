@@ -116,15 +116,8 @@ class TestPostgresAdapter(unittest.TestCase):
         mock_run.return_value = agate.Table(rows=rows,
                                             column_names=column_names)
 
-        # we should accept the lowercase matching 'foo's only.
-        mock_nodes = [
-            mock.MagicMock(spec_set=['schema'], schema='foo')
-            for k in range(2)
-        ]
-        mock_nodes.append(mock.MagicMock(spec_set=['schema'], schema='quux'))
-        nodes = {str(idx): n for idx, n in enumerate(mock_nodes)}
-        # give manifest the dict it wants
-        mock_manifest = mock.MagicMock(spec_set=['nodes'], nodes=nodes)
+        mock_manifest = mock.MagicMock()
+        mock_manifest.get_used_schemas.return_value = {'foo', 'quux'}
 
         catalog = self.adapter.get_catalog(mock_manifest)
         self.assertEqual(

@@ -14,6 +14,7 @@
 {% macro default__create_csv_table(model) %}
   {%- set agate_table = model['agate_table'] -%}
   {%- set column_override = model['config'].get('column_types', {}) -%}
+  {{ adapter.cache_new_relation(this) }}
 
   {% set sql %}
     create table {{ this.render(False) }} (

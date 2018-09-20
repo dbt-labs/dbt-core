@@ -33,6 +33,10 @@
 {% endmacro %}
 
 {% macro create_table_as(temporary, relation, sql) -%}
+  {%- if not temporary -%}
+    {{ adapter.cache_new_relation(relation) }}
+  {%- endif -%}
+
   {{ adapter_macro('create_table_as', temporary, relation, sql) }}
 {%- endmacro %}
 
@@ -46,6 +50,8 @@
 
 
 {% macro create_view_as(relation, sql) -%}
+  {{ adapter.cache_new_relation(relation) }}
+
   {{ adapter_macro('create_view_as', relation, sql) }}
 {%- endmacro %}
 
@@ -57,6 +63,8 @@
 
 
 {% macro create_archive_table(relation, columns) -%}
+  {{ adapter.cache_new_relation(relation) }}
+
   {{ adapter_macro('create_archive_table', relation, columns) }}
 {%- endmacro %}
 
@@ -76,6 +84,22 @@
   {% set typename = adapter.type() %}
   {% set msg -%}
     get_catalog not implemented for {{ typename }}
+  {%- endset %}
+
+  {{ exceptions.raise_compiler_error(msg) }}
+{% endmacro %}
+
+{% macro get_relations() -%}
+  {{ return(adapter_macro('get_relations')) }}
+{% endmacro %}
+
+
+{% macro default__get_relations() -%}
+  {# TODO: should this just return an empty agate table? #}
+
+  {% set typename = adapter.type() %}
+  {% set msg -%}
+    get_relations not implemented for {{ typename }}
   {%- endset %}
 
   {{ exceptions.raise_compiler_error(msg) }}

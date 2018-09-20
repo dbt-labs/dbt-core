@@ -16,6 +16,7 @@ from dbt.schema import Column
 from dbt.utils import filter_null_values
 
 from dbt.adapters.default.relation import DefaultRelation
+from dbt.adapters.cache import RelationsCache
 
 GET_CATALOG_OPERATION_NAME = 'get_catalog_data'
 
@@ -24,25 +25,39 @@ connections_in_use = {}
 connections_available = []
 
 
-def _filter_schemas(manifest):
+def _expect_row_value(key, row):
+    if key not in row.keys():
+        raise dbt.exceptions.InternalException(
+            'Got a row without "{}" column, columns: {}'
+            .format(key, row.keys())
+        )
+    return row[key]
+
+
+def _relations_filter_schemas(schemas):
+    def test(row):
+        referenced_schema = _expect_row_value('referenced_schema', row)
+        dependent_schema = _expect_row_value('dependent_schema', row)
+        # if you somehow depend on the null schema, we should return that stuff
+        # TODO: is that true?
+        if referenced_schema is not None:
+            referenced_schema = referenced_schema.lower()
+        if dependent_schema is not None:
+            dependent_schema = dependent_schema.lower()
+        return referenced_schema in schemas or dependent_schema in schemas
+    return test
+
+
+def _catalog_filter_schemas(manifest):
     """Return a function that takes a row and decides if the row should be
     included in the catalog output.
     """
-    schemas = frozenset({
-        node.schema.lower()
-        for node in manifest.nodes.values()
-    })
+    schemas = frozenset(s.lower() for s in manifest.get_used_schemas())
 
     def test(row):
-        if 'table_schema' not in row.keys():
-            # this means the get catalog operation is somehow not well formed!
-            raise dbt.exceptions.InternalException(
-                'Got a row without "table_schema" column, columns: {}'
-                .format(row.keys())
-            )
+        table_schema = _expect_row_value('table_schema', row)
         # the schema may be present but None, which is not an error and should
         # be filtered out
-        table_schema = row['table_schema']
         if table_schema is None:
             return False
         return table_schema.lower() in schemas
@@ -85,13 +100,15 @@ class DefaultAdapter(object):
         "get_status",
         "get_result_from_cursor",
         "quote",
-        "convert_type"
+        "convert_type",
+        "cache_new_relation"
     ]
     Relation = DefaultRelation
     Column = Column
 
     def __init__(self, config):
         self.config = config
+        self.cache = RelationsCache()
 
     ###
     # ADAPTER-SPECIFIC FUNCTIONS -- each of these must be overridden in
@@ -151,6 +168,17 @@ class DefaultAdapter(object):
     ###
     # FUNCTIONS THAT SHOULD BE ABSTRACT
     ###
+    def cache_new_relation(self, relation):
+        """Cache a new relation in dbt. It will show up in `list relations`."""
+        self.cache.add(
+            schema=relation.schema,
+            identifier=relation.identifier,
+            kind=relation.type,
+            inner=relation,
+        )
+        # so jinja doesn't render things
+        return ''
+
     @classmethod
     def get_result_from_cursor(cls, cursor):
         data = []
@@ -175,6 +203,7 @@ class DefaultAdapter(object):
         return self.drop_relation(relation, model_name)
 
     def drop_relation(self, relation, model_name=None):
+        self.cache.drop(schema=relation.schema, identifier=relation.identifier)
         if relation.type is None:
             dbt.exceptions.raise_compiler_error(
                 'Tried to drop relation {}, but its type is null.'
@@ -216,6 +245,12 @@ class DefaultAdapter(object):
 
     def rename_relation(self, from_relation, to_relation,
                         model_name=None):
+        self.cache.rename_relation(
+            old_schema=from_relation.schema,
+            old_identifier=from_relation.identifier,
+            new_schema=to_relation.schema,
+            new_identifier=to_relation.identifier
+        )
         sql = 'alter table {} rename to {}'.format(
             from_relation, to_relation.include(schema=False))
 
@@ -324,9 +359,31 @@ class DefaultAdapter(object):
     ###
     # RELATIONS
     ###
-    def list_relations(self, schema, model_name=None):
+    def _list_relations(self, schema, model_name=None):
         raise dbt.exceptions.NotImplementedException(
             '`list_relations` is not implemented for this adapter!')
+
+    def list_relations(self, schema, model_name=None):
+        if schema in self.cache.schemas:
+            logger.debug('In list_relations, model_name={}, cache hit'
+                         .format(model_name))
+            relations = self.cache.get_relations(schema)
+        else:
+            # this indicates that we missed a schema when populating. Warn
+            # about it.
+            logger.warning(
+                'Schema "{}" not in the cache while handling model "{}", this'
+                'is inefficient'
+                .format(schema, model_name or '<None>')
+            )
+            # we can't build the relations cache because we don't have a
+            # manifest so we can't run any operations.
+            # TODO: Should the manifest be stored on the adapter itself?
+            # Then we could call _relations_cache_for_schemas here
+            relations = self._list_relations(schema, model_name=model_name)
+        logger.debug('with schema={}, model_name={}, relations={}'
+                     .format(schema, model_name, relations))
+        return relations
 
     def _make_match_kwargs(self, schema, identifier):
         quoting = self.config.quoting
@@ -778,15 +835,54 @@ class DefaultAdapter(object):
     # Abstract methods involving the manifest
     ###
     @classmethod
-    def _filter_table(cls, table, manifest):
-        return table.where(_filter_schemas(manifest))
+    def _catalog_filter_table(cls, table, manifest):
+        return table.where(_catalog_filter_schemas(manifest))
 
     def get_catalog(self, manifest):
         try:
-            table = self.run_operation(manifest,
-                                       GET_CATALOG_OPERATION_NAME)
+            table = self.run_operation(manifest, GET_CATALOG_OPERATION_NAME)
         finally:
             self.release_connection(GET_CATALOG_OPERATION_NAME)
 
-        results = self._filter_table(table, manifest)
+        results = self._catalog_filter_table(table, manifest)
         return results
+
+    @classmethod
+    def _relations_filter_table(cls, table, schemas):
+        return table.where(_relations_filter_schemas(schemas))
+
+    def _link_cached_relations(self, manifest, schemas):
+        """This method has to exist because BigQueryAdapter and SnowflakeAdapter
+        inherit from the PostgresAdapter, so they need something to override
+        in order to disable linking.
+        """
+        pass
+
+    def _relations_cache_for_schemas(self, manifest, schemas=None):
+        if schemas is None:
+            schemas = manifest.get_used_schemas()
+
+        relations = []
+        # add all relations
+        for schema in schemas:
+            # bypass the cache, of course!
+            for relation in self._list_relations(schema):
+                self.cache.add(
+                    schema=relation.schema,
+                    identifier=relation.name,
+                    kind=relation.type,
+                    inner=relation
+                )
+        self._link_cached_relations(manifest, schemas)
+        # it's possible that there were no relations in some schemas. We want
+        # to insert the schemas we query into the cache's `.schemas` attribute
+        # so we can check it later
+        self.cache.schemas.update(schemas)
+
+    def set_relations_cache(self, manifest):
+        """Run a query that gets a populated cache of the relations in the
+        database and set the cache on this adapter.
+        """
+        # TODO: ensure cache is empty?
+        with self.cache.lock:
+            self._relations_cache_for_schemas(manifest)

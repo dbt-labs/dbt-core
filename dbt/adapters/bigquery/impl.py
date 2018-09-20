@@ -180,7 +180,10 @@ class BigQueryAdapter(PostgresAdapter):
 
         return connection
 
-    def list_relations(self, schema, model_name=None):
+    def _link_cached_relations(self, manifest, schemas):
+        pass
+
+    def _list_relations(self, schema, model_name=None):
         connection = self.get_connection(model_name)
         client = connection.handle
 
@@ -222,6 +225,7 @@ class BigQueryAdapter(PostgresAdapter):
             model_name)
 
     def drop_relation(self, relation, model_name=None):
+        self.cache.drop(schema=relation.schema, identifier=relation.identifier)
         conn = self.get_connection(model_name)
         client = conn.handle
 
