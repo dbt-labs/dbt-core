@@ -24,6 +24,7 @@ import dbt.tracking
 import dbt.ui.printer
 import dbt.compat
 import dbt.deprecations
+import dbt.profiler
 
 from dbt.utils import ExitCodes
 from dbt.config import Project, RuntimeConfig, DbtProjectError, \
@@ -108,25 +109,34 @@ def handle(args):
 def handle_and_check(args):
     parsed = parse_args(args)
 
-    # this needs to happen after args are parsed so we can determine the
-    # correct profiles.yml file
-    profile_config = read_config(parsed.profiles_dir)
-    if not send_anonymous_usage_stats(profile_config):
-        dbt.tracking.do_not_track()
-    else:
-        dbt.tracking.initialize_tracking()
+    profiler_enabled = False
 
-    if colorize_output(profile_config):
-        dbt.ui.printer.use_colors()
+    if parsed.record_timing_info:
+        profiler_enabled = True
 
-    try:
-        task, res = run_from_args(parsed)
-    finally:
-        dbt.tracking.flush()
+    with dbt.profiler.profiler(
+        enable=profiler_enabled,
+        outfile=parsed.record_timing_info
+    ):
+        # this needs to happen after args are parsed so we can determine the
+        # correct profiles.yml file
+        profile_config = read_config(parsed.profiles_dir)
+        if not send_anonymous_usage_stats(profile_config):
+            dbt.tracking.do_not_track()
+        else:
+            dbt.tracking.initialize_tracking()
 
-    success = task.interpret_results(res)
+        if colorize_output(profile_config):
+            dbt.ui.printer.use_colors()
 
-    return res, success
+        try:
+            task, res = run_from_args(parsed)
+        finally:
+            dbt.tracking.flush()
+
+        success = task.interpret_results(res)
+
+        return res, success
 
 
 def get_nearest_project_dir():
@@ -274,6 +284,18 @@ def parse_args(args):
         '--version',
         action='dbtversion',
         help="Show version information")
+
+    p.add_argument(
+        '-r',
+        '--record-timing-info',
+        default=None,
+        type=str,
+        help="""
+        When this option is passed, dbt will output low-level timing
+        stats to the specified file. Example:
+        `--record-timing-info output.profile`
+        """
+    )
 
     p.add_argument(
         '-d',
