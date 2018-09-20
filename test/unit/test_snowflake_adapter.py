@@ -49,16 +49,16 @@ class TestSnowflakeAdapter(unittest.TestCase):
         self.snowflake = self.patcher.start()
 
         self.snowflake.return_value = self.handle
-        conn = SnowflakeAdapter.get_connection(self.config)
+        self.adapter = SnowflakeAdapter(self.config)
+        self.adapter.get_connection()
 
     def tearDown(self):
         # we want a unique self.handle every time.
-        SnowflakeAdapter.cleanup_connections()
+        self.adapter.cleanup_connections()
         self.patcher.stop()
 
     def test_quoting_on_drop_schema(self):
-        SnowflakeAdapter.drop_schema(
-            config=self.config,
+        self.adapter.drop_schema(
             schema='test_schema'
         )
 
@@ -67,8 +67,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         ])
 
     def test_quoting_on_drop(self):
-        SnowflakeAdapter.drop(
-            config=self.config,
+        self.adapter.drop(
             schema='test_schema',
             relation='test_table',
             relation_type='table'
@@ -78,8 +77,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         ])
 
     def test_quoting_on_truncate(self):
-        SnowflakeAdapter.truncate(
-            config=self.config,
+        self.adapter.truncate(
             schema='test_schema',
             table='test_table'
         )
@@ -88,8 +86,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         ])
 
     def test_quoting_on_rename(self):
-        SnowflakeAdapter.rename(
-            config=self.config,
+        self.adapter.rename(
             schema='test_schema',
             from_name='table_a',
             to_name='table_b'

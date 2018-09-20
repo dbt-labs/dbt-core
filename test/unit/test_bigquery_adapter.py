@@ -11,38 +11,56 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 fake_conn = {"handle": None, "state": "open", "type": "bigquery"}
 
+from .utils import config_from_parts_or_dicts
+
 class TestBigQueryAdapter(unittest.TestCase):
 
     def setUp(self):
         flags.STRICT_MODE = True
 
+        self.raw_profile = {
+            'outputs': {
+                'oauth': {
+                    'type': 'bigquery',
+                    'method': 'oauth',
+                    'project': 'dbt-unit-000000',
+                    'schema': 'dummy_schema',
+                    'threads': 1,
+                },
+                'service_account': {
+                    'type': 'bigquery',
+                    'method': 'service-account',
+                    'project': 'dbt-unit-000000',
+                    'schema': 'dummy_schema',
+                    'keyfile': '/tmp/dummy-service-account.json',
+                    'threads': 1,
+                },
+            },
+            'target': 'oauth',
+        }
 
-        self.oauth_credentials = BigQueryCredentials(
-            method='oauth',
-            project='dbt-unit-000000',
-            schema='dummy_schema'
-        )
-        self.oauth_profile = MagicMock(
-            credentials=self.oauth_credentials,
-            threads=1
-        )
+        self.project_cfg = {
+            'name': 'X',
+            'version': '0.1',
+            'project-root': '/tmp/dbt/does-not-exist',
+        }
 
-        self.service_account_credentials = BigQueryCredentials(
-            method='service-account',
-            project='dbt-unit-000000',
-            schema='dummy_schema',
-            keyfile='/tmp/dummy-service-account.json'
+    def get_adapter(self, profile):
+        project = self.project_cfg.copy()
+        project['profile'] = profile
+
+        config = config_from_parts_or_dicts(
+            project=project,
+            profile=self.raw_profile,
         )
-        self.service_account_profile = MagicMock(
-            credentials=self.service_account_credentials,
-            threads=1
-        )
+        return BigQueryAdapter(config)
 
 
     @patch('dbt.adapters.bigquery.BigQueryAdapter.open_connection', return_value=fake_conn)
     def test_acquire_connection_oauth_validations(self, mock_open_connection):
+        adapter = self.get_adapter('oauth')
         try:
-            connection = BigQueryAdapter.acquire_connection(self.oauth_profile, 'dummy')
+            connection = adapter.acquire_connection('dummy')
             self.assertEquals(connection.get('type'), 'bigquery')
 
         except dbt.exceptions.ValidationException as e:
@@ -56,8 +74,9 @@ class TestBigQueryAdapter(unittest.TestCase):
 
     @patch('dbt.adapters.bigquery.BigQueryAdapter.open_connection', return_value=fake_conn)
     def test_acquire_connection_service_account_validations(self, mock_open_connection):
+        adapter = self.get_adapter('service_account')
         try:
-            connection = BigQueryAdapter.acquire_connection(self.service_account_profile, 'dummy')
+            connection = adapter.acquire_connection('dummy')
             self.assertEquals(connection.get('type'), 'bigquery')
 
         except dbt.exceptions.ValidationException as e:

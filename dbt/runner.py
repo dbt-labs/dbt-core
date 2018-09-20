@@ -150,7 +150,7 @@ class RunManager(object):
                     dbt.ui.printer.print_timestamped_line(msg, yellow)
                     raise
 
-                for conn_name in adapter.cancel_open_connections(self.config):
+                for conn_name in adapter.cancel_open_connections():
                     dbt.ui.printer.print_cancel_line(conn_name)
 
                 dbt.ui.printer.print_run_end_messages(node_results,

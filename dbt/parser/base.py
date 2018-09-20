@@ -119,7 +119,7 @@ class BaseParser(object):
         db_wrapper = context['adapter']
         adapter = db_wrapper.adapter
         runtime_config = db_wrapper.config
-        adapter.release_connection(runtime_config, parsed_node.name)
+        adapter.release_connection(parsed_node.name)
 
         # Special macro defined in the global project
         schema_override = config.config.get('schema')
