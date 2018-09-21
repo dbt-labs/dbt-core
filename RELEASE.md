@@ -1,9 +1,17 @@
 ### Release Procedure :shipit:
 
+#### Branching Strategy
+
+dbt has three types of branches:
+
+- **Trunks** track the latest release of a minor version of dbt. Historically, we used the `master` branch as the trunk. Each minor version release has a corresponding trunk. For example, the `0.11.x` series of releases has a branch called `0.11.latest`. This allows us to release new patch versions under `0.11` without necessarily needing to pull them into the latest version of dbt.
+- **Release Branches** track a specific, not yet complete release of dbt. These releases are codenamed since we don't always know what their semantic version will be. Example: `dev/lucretia-mott` became `0.11.1`.
+- **Feature Branches** track individual features and fixes. On completion they should be merged into a release branch.
+
+#### Git & PyPI
+
 1. Update CHANGELOG.md with the most recent changes
-2. If this is a release candidate, you want to create it off of development. If it's an actual release, you must first merge to master.
-  - `git checkout master`
-  - `git pull origin development`
+2. If this is a release candidate, you want to create it off of your release branch. If it's an actual release, you must first merge to master. Open a Pull Request in Github to merge it.
 3. Bump the version using `bumpversion`:
   - Dry run first by running `bumpversion --new-version <desired-version> <part>` and checking the diff. If it looks correct, clean up the chanages and move on:
   - Alpha releases: `bumpversion --commit --tag --new-version 0.10.2a1 num`
@@ -12,58 +20,55 @@
   - Major releases: `bumpversion --commit --tag --new-version 1.0.0 major`
 4. Deploy to pypi
   - `python setup.py sdist upload -r pypi`
-5. Deploy to homebrew
-  - Make a pull request against homebrew-core
-6. Deploy to conda-forge
-  - Make a pull request against dbt-feedstock
+5. Deploy to homebrew (see below)
+6. Deploy to conda-forge (see below)
 7. Git release notes (points to changelog)
 8. Post to slack (point to changelog)
 
+After releasing a new version, it's important to merge the changes back into the other outstanding release branches. This avoids merge conflicts moving forward.
+
+In some cases, where the branches have diverged wildly, it's ok to skip this step. But this means that the changes you just released won't be included in future releases.
+
 #### Homebrew Release Process
 
-1. fork homebrew and add a remote:
+1. Clone the `homebrew-dbt` repository:
 
 ```
-cd $(brew --repo homebrew/core)
-git remote add origin <your-github-username> <your-fork-url>
+git clone git@github.com:fishtown-analytics/homebrew-dbt.git
 ```
 
-2. edit the formula.
+2. For ALL releases (prereleases and version releases), copy the relevant formula. To copy from the latest version release of dbt, do:
 
 ```bash
-brew update
-mkvirtualenv --python="$(which python3)" brew
-pip install homebrew-pypi-poet dbt
-diff "$(brew --repo homebrew/core)"/Formula/dbt.rb <(poet -f dbt)
+cp Formula/dbt.rb Formula/dbt@{NEW-VERSION}.rb
 ```
 
-find any differences in resource stanzas, and incorporate them into the formula
+To copy from a different version, simply copy the corresponding file.
+
+3. Open the file, and edit the following:
+- the name of the ruby class: this is important, homebrew won't function properly if the class name is wrong. Check historical versions to figure out the right name.
+- under the `bottle` section, remove all of the hashes (lines starting with `sha256`)
+
+4. Create a **Python 3.7** virtualenv, activate it, and then install two packages: `homebrew-pypi-poet`, and the version of dbt you are preparing. I use:
 
 ```
-brew edit dbt
-...
-diff "$(brew --repo homebrew/core)"/Formula/dbt.rb <(poet -f dbt)
+pyenv virtualenv 3.7.0 homebrew-dbt-{VERSION}
+pyenv activate homebrew-dbt-{VERSION}
+pip install dbt=={VERSION} homebrew-pypi-poet
 ```
 
-3. reinstall, test, and audit dbt. if the test or audit fails, fix the formula with step 1.
+homebrew-pypi-poet is a program that generates a valid homebrew formula for an installed pip package. You want to use it to generate a diff against the existing formula. Then you want to apply the diff for the dependency packages only -- e.g. it will tell you that `google-api-core` has been updated and that you need to use the latest version.
+
+5. reinstall, test, and audit dbt. if the test or audit fails, fix the formula with step 1.
 
 ```bash
-brew uninstall --force dbt
-brew install --build-from-source dbt
+brew uninstall --force Formula/{YOUR-FILE}.rb
+brew install Formula/{YOUR-FILE}.rb
 brew test dbt
 brew audit --strict dbt
 ```
 
-4. make a pull request for the change.
-
-```bash
-cd $(brew --repo homebrew/core)
-git pull origin master
-git checkout -b dbt-<version> origin/master
-git add . -p
-git commit -m 'dbt <version>'
-git push -u <your-github-username> dbt-<version>
-```
+6. Ask Connor to bottle the change (only his laptop can do it!)
 
 #### Conda Forge Release Process
 
