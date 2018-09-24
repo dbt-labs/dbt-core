@@ -78,7 +78,7 @@ class CachedRelation(object):
                     'schema': new_relation.schema,
                     'identifier': new_relation.identifier
                 },
-                table_name = new_relation.identifier
+                table_name=new_relation.identifier
             )
 
     def rename_key(self, old_key, new_key):
@@ -146,7 +146,7 @@ class RelationsCache(object):
             identifier=dependent_name
         )
         logger.debug('adding link, {!s} references {!s}'
-            .format(dependent, referenced)
+                     .format(dependent, referenced)
         )
         with self.lock:
             self._add_link(referenced, dependent)
@@ -222,7 +222,6 @@ class RelationsCache(object):
                 cached.rename_key(old_key, new_key)
 
         self.relations[new_key] = relation
-
 
     def rename_relation(self, old_schema, old_identifier, new_schema,
                         new_identifier):
