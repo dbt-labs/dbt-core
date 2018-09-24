@@ -2,6 +2,7 @@ from collections import namedtuple
 import threading
 from dbt.logger import GLOBAL_LOGGER as logger
 from copy import deepcopy
+import pprint
 
 ReferenceKey = namedtuple('ReferenceKey', 'schema identifier')
 
@@ -102,6 +103,16 @@ class RelationsCache(object):
         # the set of cached schemas
         self.schemas = set()
 
+    def dump_graph(self):
+        return {
+            '{}.{}'.format(k.schema, k.identifier):
+                [
+                    '{}.{}'.format(x.schema, x.identifier)
+                    for x in v.referenced_by
+                ]
+            for k, v in self.relations.items()
+        }
+
     def _setdefault(self, relation):
         self.schemas.add(relation.schema)
         key = relation.key()
@@ -148,8 +159,14 @@ class RelationsCache(object):
         logger.debug('adding link, {!s} references {!s}'
                      .format(dependent, referenced)
         )
+        logger.debug('before adding link: {}'.format(
+            pprint.pformat(self.dump_graph()))
+        )
         with self.lock:
             self._add_link(referenced, dependent)
+        logger.debug('after adding link: {}'.format(
+            pprint.pformat(self.dump_graph()))
+        )
 
     def add(self, schema, identifier, kind=None, inner=None):
         relation = CachedRelation(
@@ -159,8 +176,14 @@ class RelationsCache(object):
             inner=inner
         )
         logger.debug('Adding relation: {!s}'.format(relation))
+        logger.debug('before adding: {}'.format(
+            pprint.pformat(self.dump_graph()))
+        )
         with self.lock:
             self._setdefault(relation)
+        logger.debug('after adding: {}'.format(
+            pprint.pformat(self.dump_graph()))
+        )
 
     def _remove_refs(self, keys):
         # remove direct refs
@@ -185,8 +208,14 @@ class RelationsCache(object):
     def drop(self, schema, identifier):
         dropped = CachedRelation(schema=schema, identifier=identifier)
         logger.debug('Dropping relation: {!s}'.format(dropped))
+        logger.debug('before drop: {}'.format(
+            pprint.pformat(self.dump_graph()))
+        )
         with self.lock:
             self._drop_cascade_relation(dropped)
+        logger.debug('after drop: {}'.format(
+            pprint.pformat(self.dump_graph()))
+        )
 
     def _rename_relation(self, old_relation, new_relation):
         old_key = old_relation.key()
@@ -195,6 +224,10 @@ class RelationsCache(object):
         # relation earlier in its run and we can ignore it, as we don't care
         # about the rename either
         if old_key not in self.relations:
+            logger.debug(
+                'old key {} not found in self.relations, assuming temporary'
+                .format(old_key)
+            )
             return
         # not good
         if new_key in self.relations:
@@ -236,8 +269,14 @@ class RelationsCache(object):
         logger.debug('Renaming relation {!s} to {!s}'.format(
             old_relation, new_relation)
         )
+        logger.debug('before rename: {}'.format(
+            pprint.pformat(self.dump_graph()))
+        )
         with self.lock:
             self._rename_relation(old_relation, new_relation)
+        logger.debug('after rename: {}'.format(
+            pprint.pformat(self.dump_graph()))
+        )
 
     def _get_relation(self, schema, identifier):
         """Get the relation by name. Raises a KeyError if it does not exist"""
