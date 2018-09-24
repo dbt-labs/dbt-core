@@ -1,3 +1,7 @@
+import codecs
+import linecache
+import os
+
 import jinja2
 import jinja2._compat
 import jinja2.ext
@@ -38,16 +42,20 @@ class MacroFuzzEnvironment(jinja2.sandbox.SandboxedEnvironment):
         ).parse()
 
     def _compile(self, source, filename):
-        import linecache, codecs, os
-        if filename == '<template>':
-            # make a better filename
-            filename = 'dbt-{}'.format(
-                codecs.encode(os.urandom(12), 'hex').decode('ascii')
-            )
-            # encode, though I don't think this matters
-            filename = jinja2._compat.encode_filename(filename)
-            # put ourselves in the cache using the 'lazycache' method
-            linecache.cache[filename] = (lambda: source,)
+        """Override jinja's compilation to stash the rendered source inside
+        the python linecache for debugging. To avoid paying this cost, run
+        python with the `-O` flag/set PYTHONOPTIMIZE.
+        """
+        if __debug__:
+            if filename == '<template>':
+                # make a better filename
+                filename = 'dbt-{}'.format(
+                    codecs.encode(os.urandom(12), 'hex').decode('ascii')
+                )
+                # encode, though I don't think this matters
+                filename = jinja2._compat.encode_filename(filename)
+                # put ourselves in the cache using the 'lazycache' method
+                linecache.cache[filename] = (lambda: source,)
 
         return super(MacroFuzzEnvironment, self)._compile(source, filename)
 
@@ -70,7 +78,6 @@ def macro_generator(template, node):
                 return e.value
             except (TypeError,
                     jinja2.exceptions.TemplateRuntimeError) as e:
-                import ipdb;ipdb.post_mortem()
                 dbt.exceptions.raise_compiler_error(
                     str(e),
                     node)

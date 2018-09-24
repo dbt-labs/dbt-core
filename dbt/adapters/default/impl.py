@@ -379,7 +379,8 @@ class DefaultAdapter(object):
             msg = (
                 'cache failure! cache has:\nextra entries:\n\t{}\n'
                 'missing entries:\n\t{}'
-                .format('\n\t'.join(extra), '\n\t'.join(missing))
+                .format('\n\t'.join('.'.join(e) for e in extra),
+                        '\n\t'.join('.'.join(m) for m in missing))
             )
             logger.error(msg)
             raise RuntimeError(msg)
