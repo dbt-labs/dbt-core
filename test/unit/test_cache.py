@@ -134,6 +134,13 @@ class TestLikeDbt(TestCase):
         self.cache.rename_relation('schema', 'b__tmp', 'schema', 'b')
         self.assert_has_relations(set('abcdef') | {'b__backup'})
 
+        # drop backup, everything that used to depend on b should be gone, but
+        # b itself should still exist
+        self.cache.drop('schema', 'b__backup')
+        self.assert_has_relations(set('abe'))
+        relation = self.cache._get_relation('schema', 'a')
+        self.assertEqual(len(relation.referenced_by), 1)
+
 
 class TestComplexCache(TestCase):
     def setUp(self):
