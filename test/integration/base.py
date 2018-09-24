@@ -341,7 +341,7 @@ class DBTIntegrationTest(unittest.TestCase):
     def profile_config(self):
         return {}
 
-    def run_dbt(self, args=None, expect_pass=True, strict=True):
+    def run_dbt(self, args=None, expect_pass=True, strict=True, verify_cache=True):
         # clear the adapter cache
         reset_adapters()
         if args is None:
@@ -349,6 +349,8 @@ class DBTIntegrationTest(unittest.TestCase):
 
         if strict:
             args = ["--strict"] + args
+        if verify_cache:
+            args.append("--verify-relation-cache")
         logger.info("Invoking dbt with {}".format(args))
 
         res, success = dbt.handle_and_check(args)
