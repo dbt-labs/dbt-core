@@ -252,6 +252,7 @@ def invoke_dbt(parsed):
 
     flags.NON_DESTRUCTIVE = getattr(parsed, 'non_destructive', False)
     flags.LOG_CACHE_EVENTS = getattr(parsed, 'log_cache_events', False)
+    flags.USE_CACHE = getattr(parsed, 'use_cache', True)
 
     arg_drop_existing = getattr(parsed, 'drop_existing', False)
     arg_full_refresh = getattr(parsed, 'full_refresh', False)
@@ -337,6 +338,13 @@ def parse_args(args):
         '--log-cache-events',
         action='store_true',
         help=argparse.SUPPRESS,
+    )
+
+    base_subparser.add_argument(
+        '--bypass-cache',
+        action='store_false',
+        dest='use_cache',
+        help='If set, bypass the adapter-level cache of database state',
     )
 
     sub = subs.add_parser('init', parents=[base_subparser])

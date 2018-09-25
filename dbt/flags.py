@@ -2,6 +2,7 @@ STRICT_MODE = False
 NON_DESTRUCTIVE = False
 FULL_REFRESH = False
 LOG_CACHE_EVENTS = False
+USE_CACHE = True
 
 
 def reset():
@@ -11,3 +12,4 @@ def reset():
     NON_DESTRUCTIVE = False
     FULL_REFRESH = False
     LOG_CACHE_EVENTS = False
+    USE_CACHE = True

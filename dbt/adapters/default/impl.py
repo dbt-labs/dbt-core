@@ -172,11 +172,12 @@ class DefaultAdapter(object):
         """Cache a new relation in dbt. It will show up in `list relations`."""
         if relation is None:
             dbt.exceptions.raise_compiler_error()
-        self.cache.add(
-            schema=relation.schema,
-            identifier=relation.identifier,
-            inner=relation,
-        )
+        if dbt.flags.USE_CACHE:
+            self.cache.add(
+                schema=relation.schema,
+                identifier=relation.identifier,
+                inner=relation,
+            )
         # so jinja doesn't render things
         return ''
 
@@ -204,7 +205,9 @@ class DefaultAdapter(object):
         return self.drop_relation(relation, model_name)
 
     def drop_relation(self, relation, model_name=None):
-        self.cache.drop(schema=relation.schema, identifier=relation.identifier)
+        if flags.USE_CACHE:
+            self.cache.drop(schema=relation.schema,
+                            identifier=relation.identifier)
         if relation.type is None:
             dbt.exceptions.raise_compiler_error(
                 'Tried to drop relation {}, but its type is null.'
@@ -246,12 +249,13 @@ class DefaultAdapter(object):
 
     def rename_relation(self, from_relation, to_relation,
                         model_name=None):
-        self.cache.rename_relation(
-            old_schema=from_relation.schema,
-            old_identifier=from_relation.identifier,
-            new_schema=to_relation.schema,
-            new_identifier=to_relation.identifier
-        )
+        if flags.USE_CACHE:
+            self.cache.rename_relation(
+                old_schema=from_relation.schema,
+                old_identifier=from_relation.identifier,
+                new_schema=to_relation.schema,
+                new_identifier=to_relation.identifier
+            )
         sql = 'alter table {} rename to {}'.format(
             from_relation, to_relation.include(schema=False))
 
@@ -365,7 +369,10 @@ class DefaultAdapter(object):
             '`list_relations` is not implemented for this adapter!')
 
     def list_relations(self, schema, model_name=None):
-        if schema in self.cache.schemas:
+        if flags.USE_CACHE is False:
+            logger.debug('Bypassing cache at user instruction')
+            relations = self._list_relations(schema, model_name=model_name)
+        elif schema in self.cache.schemas:
             logger.debug('In list_relations, model_name={}, cache hit'
                          .format(model_name))
             relations = self.cache.get_relations(schema)
@@ -883,6 +890,8 @@ class DefaultAdapter(object):
         """Run a query that gets a populated cache of the relations in the
         database and set the cache on this adapter.
         """
+        if flags.USE_CACHE is False:
+            return
         with self.cache.lock:
             if clear:
                 self.cache.clear()
