@@ -360,32 +360,6 @@ class DefaultAdapter(object):
     ###
     # RELATIONS
     ###
-    def _verify_relation_cache(self, schema, model_name=None):
-        cached = self.cache.get_relations(schema)
-        retrieved = self._list_relations(schema, model_name=model_name)
-        retrieved_map = {
-            (r.schema, r.identifier): r for r in retrieved
-        }
-        extra = set()
-
-        for relation in cached:
-            key = (relation.schema, relation.identifier)
-            try:
-                retrieved_map.pop(key)
-            except KeyError:
-                extra.add(key)
-
-        missing = set(retrieved_map)
-        if extra or missing:
-            msg = (
-                'cache failure! cache has:\nextra entries:\n\t{}\n'
-                'missing entries:\n\t{}'
-                .format('\n\t'.join('.'.join(e) for e in extra),
-                        '\n\t'.join('.'.join(m) for m in missing))
-            )
-            logger.error(msg)
-            dbt.exceptions.raise_compiler_error(msg)
-
     def _list_relations(self, schema, model_name=None):
         raise dbt.exceptions.NotImplementedException(
             '`list_relations` is not implemented for this adapter!')
@@ -394,8 +368,6 @@ class DefaultAdapter(object):
         if schema in self.cache.schemas:
             logger.debug('In list_relations, model_name={}, cache hit'
                          .format(model_name))
-            if dbt.flags.VERIFY_RELATION_CACHE:
-                self._verify_relation_cache(schema, model_name)
             relations = self.cache.get_relations(schema)
         else:
             # this indicates that we missed a schema when populating. Warn

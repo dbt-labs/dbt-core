@@ -251,8 +251,6 @@ def invoke_dbt(parsed):
         return None
 
     flags.NON_DESTRUCTIVE = getattr(parsed, 'non_destructive', False)
-    flags.VERIFY_RELATION_CACHE = getattr(parsed, 'verify_relation_cache',
-                                          False)
 
     arg_drop_existing = getattr(parsed, 'drop_existing', False)
     arg_full_refresh = getattr(parsed, 'full_refresh', False)
@@ -331,14 +329,6 @@ def parse_args(args):
             Supply variables to the project. This argument overrides
             variables defined in your dbt_project.yml file. This argument
             should be a YAML string, eg. '{my_variable: my_value}'"""
-    )
-
-    base_subparser.add_argument(
-        # if enabled, everything that would ordinarily hit the cache will
-        # instead perform the query and verify the result against the cache.
-        '--verify-relation-cache',
-        action='store_true',
-        help=argparse.SUPPRESS,
     )
 
     sub = subs.add_parser('init', parents=[base_subparser])
