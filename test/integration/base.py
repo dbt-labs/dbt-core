@@ -341,7 +341,7 @@ class DBTIntegrationTest(unittest.TestCase):
     def profile_config(self):
         return {}
 
-    def run_dbt(self, args=None, expect_pass=True, strict=True, verify_cache=True):
+    def run_dbt(self, args=None, expect_pass=True, strict=True, verify_cache=False):
         # clear the adapter cache
         reset_adapters()
         if args is None:
