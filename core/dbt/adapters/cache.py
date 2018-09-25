@@ -145,8 +145,9 @@ class _CachedRelation:
         """
         if new_key in self.referenced_by:
             dbt.exceptions.raise_cache_inconsistent(
-                'in rename of "{}" -> "{}", new name is in the cache already'
-                .format(old_key, new_key)
+                'in rename of "{}" -> "{}", new name is in the cache already'.format(
+                    old_key, new_key
+                )
             )
 
         if old_key not in self.referenced_by:
@@ -267,15 +268,13 @@ class RelationsCache:
             return
         if referenced is None:
             dbt.exceptions.raise_cache_inconsistent(
-                'in add_link, referenced link key {} not in cache!'
-                .format(referenced_key)
+                "in add_link, referenced link key {} not in cache!".format(referenced_key)
             )
 
         dependent = self.relations.get(dependent_key)
         if dependent is None:
             dbt.exceptions.raise_cache_inconsistent(
-                'in add_link, dependent link key {} not in cache!'
-                .format(dependent_key)
+                "in add_link, dependent link key {} not in cache!".format(dependent_key)
             )
 
         assert dependent is not None  # we just raised!
@@ -476,7 +475,7 @@ class RelationsCache:
 
         if None in results:
             dbt.exceptions.raise_cache_inconsistent(
-                'in get_relations, a None relation was found in the cache!'
+                "in get_relations, a None relation was found in the cache!"
             )
         return results
 
