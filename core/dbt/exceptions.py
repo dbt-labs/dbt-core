@@ -709,7 +709,7 @@ def bad_package_spec(repo, spec, error_message):
 
 
 def raise_cache_inconsistent(message):
-    raise InternalException('Cache inconsistency detected: {}'.format(message))
+    raise InternalException("Cache inconsistency detected: {}".format(message))
 
 
 def missing_config(model, name):
