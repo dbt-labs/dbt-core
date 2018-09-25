@@ -383,7 +383,7 @@ class DefaultAdapter(object):
                         '\n\t'.join('.'.join(m) for m in missing))
             )
             logger.error(msg)
-            raise RuntimeError(msg)
+            dbt.exceptions.raise_compiler_error(msg)
 
     def _list_relations(self, schema, model_name=None):
         raise dbt.exceptions.NotImplementedException(
