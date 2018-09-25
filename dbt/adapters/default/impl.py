@@ -405,11 +405,7 @@ class DefaultAdapter(object):
         return filter_null_values({'identifier': identifier,
                                    'schema': schema})
 
-    def get_relation(self, schema, identifier, model_name=None):
-        if self._is_cached(schema, model_name):
-            return self.cache.get_relation(schema, identifier)
-
-        relations_list = self.list_relations(schema, model_name)
+    def _make_match(self, relations_list, schema, identifier):
 
         matches = []
 
@@ -418,6 +414,13 @@ class DefaultAdapter(object):
         for relation in relations_list:
             if relation.matches(**search):
                 matches.append(relation)
+
+        return matches
+
+    def get_relation(self, schema, identifier, model_name=None):
+        relations_list = self.list_relations(schema, model_name)
+
+        matches = self._make_match(relations_list, schema, identifier)
 
         if len(matches) > 1:
             dbt.exceptions.get_relation_returned_multiple_results(
@@ -884,7 +887,7 @@ class DefaultAdapter(object):
         # it's possible that there were no relations in some schemas. We want
         # to insert the schemas we query into the cache's `.schemas` attribute
         # so we can check it later
-        self.cache.schemas.update(schemas)
+        self.cache.update_schemas(schemas)
 
     def set_relations_cache(self, manifest, clear=False):
         """Run a query that gets a populated cache of the relations in the

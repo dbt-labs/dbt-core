@@ -58,13 +58,13 @@ class TestCache(TestCase):
         self.assertEqual(len(relations), 2)
 
         self.assertEqual(self.cache.schemas, {'foo', 'FOO'})
-        self.assertIsNot(self.cache.get_relation('foo', 'bar'), None)
-        self.assertIsNot(self.cache.get_relation('FOO', 'baz'), None)
+        self.assertIsNot(self.cache._get_cache_value('foo', 'bar').inner, None)
+        self.assertIsNot(self.cache._get_cache_value('FOO', 'baz').inner, None)
 
     def test_rename(self):
         obj = make_mock_relationship('foo', 'bar')
         self.cache.add('foo', 'bar', inner=obj)
-        self.assertIsNot(self.cache.get_relation('foo', 'bar'), None)
+        self.assertIsNot(self.cache._get_cache_value('foo', 'bar').inner, None)
         self.cache.rename('foo', 'bar', 'foo', 'baz')
 
         relations = self.cache.get_relations('foo')
@@ -78,7 +78,8 @@ class TestCache(TestCase):
         self.assertEqual(relation.schema, 'foo')
         self.assertEqual(relation.identifier, 'baz')
 
-        self.assertIs(self.cache.get_relation('foo', 'bar'), None)
+        with self.assertRaises(KeyError):
+            self.cache._get_cache_value('foo', 'bar')
 
 
 class TestLikeDbt(TestCase):
@@ -195,7 +196,7 @@ class TestComplexCache(TestCase):
 
     def test_rename_root(self):
         self.cache.rename('foo', 'table1', 'bar', 'table1')
-        retrieved = self.cache.get_relation('bar','table1')
+        retrieved = self.cache._get_cache_value('bar','table1').inner
         self.assertEqual(retrieved.schema, 'bar')
         self.assertEqual(retrieved.identifier, 'table1')
         self.assertEqual(len(self.cache.get_relations('foo')), 2)

@@ -100,6 +100,12 @@ class RelationsCache(object):
         # the set of cached schemas
         self.schemas = set()
 
+    def add_schema(self, schema):
+        self.schemas.add(schema.lower())
+
+    def update_schemas(self, schemas):
+        self.schemas.update(s.lower() for s in schemas)
+
     def __contains__(self, schema):
         """A schema is 'in' the relations cache if it is in the set of cached
         schemas.
@@ -281,20 +287,9 @@ class RelationsCache(object):
         key = ReferenceKey(schema=schema, identifier=identifier)
         return self.relations[key]
 
-    def get_relation(self, schema, identifier, default=None):
-        """Get the Relation by name. Returns default if it does not exist."""
-        try:
-            relation = self._get_cache_value(schema, identifier)
-        except KeyError:
-            return default
-
-        return relation.inner
-
     def get_relations(self, schema):
         """Case-insensitively yield all relations matching the given schema.
         """
-        # TODO: What do we do if the inner value is None? Should that be
-        # possible?
         schema = schema.lower()
         with self.lock:
             results = [

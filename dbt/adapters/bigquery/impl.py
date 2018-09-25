@@ -209,7 +209,13 @@ class BigQueryAdapter(PostgresAdapter):
 
     def get_relation(self, schema, identifier, model_name=None):
         if self._is_cached(schema, model_name):
-            return self.cache.get_relation(schema, identifier)
+            # if it's in the cache, use the parent's model of going through
+            # the relations cache and picking out the relation
+            return super(BigQueryAdapter, self).get_relation(
+                schema=schema,
+                identifier=identifier,
+                model_name=model_name
+            )
 
         table = self.get_bq_table(schema, identifier)
         return self.bq_table_to_relation(table)
