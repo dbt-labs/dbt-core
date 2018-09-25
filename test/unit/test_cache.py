@@ -65,7 +65,7 @@ class TestCache(TestCase):
         obj = make_mock_relationship('foo', 'bar')
         self.cache.add('foo', 'bar', inner=obj)
         self.assertIsNot(self.cache.get_relation('foo', 'bar'), None)
-        self.cache.rename_relation('foo', 'bar', 'foo', 'baz')
+        self.cache.rename('foo', 'bar', 'foo', 'baz')
 
         relations = self.cache.get_relations('foo')
         self.assertEqual(len(relations), 1)
@@ -127,10 +127,10 @@ class TestLikeDbt(TestCase):
         )
         self.assert_has_relations(set('abcdef') | {'b__tmp'})
         # rename b -> b__backup
-        self.cache.rename_relation('schema', 'b', 'schema', 'b__backup')
+        self.cache.rename('schema', 'b', 'schema', 'b__backup')
         self.assert_has_relations(set('acdef') | {'b__tmp', 'b__backup'})
         # rename temp to b
-        self.cache.rename_relation('schema', 'b__tmp', 'schema', 'b')
+        self.cache.rename('schema', 'b__tmp', 'schema', 'b')
         self.assert_has_relations(set('abcdef') | {'b__backup'})
 
         # drop backup, everything that used to depend on b should be gone, but
@@ -194,7 +194,7 @@ class TestComplexCache(TestCase):
         self.assertEqual(len(self.cache.relations), 1)
 
     def test_rename_root(self):
-        self.cache.rename_relation('foo', 'table1', 'bar', 'table1')
+        self.cache.rename('foo', 'table1', 'bar', 'table1')
         retrieved = self.cache.get_relation('bar','table1')
         self.assertEqual(retrieved.schema, 'bar')
         self.assertEqual(retrieved.identifier, 'table1')
@@ -208,7 +208,7 @@ class TestComplexCache(TestCase):
         self.assertEqual(len(self.cache.relations), 1)
 
     def test_rename_branch(self):
-        self.cache.rename_relation('foo', 'table3', 'foo', 'table2')
+        self.cache.rename('foo', 'table3', 'foo', 'table2')
         self.assertEqual(len(self.cache.get_relations('foo')), 3)
         self.assertEqual(len(self.cache.get_relations('bar')), 2)
 

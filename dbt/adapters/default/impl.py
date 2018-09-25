@@ -147,8 +147,7 @@ class DefaultAdapter(object):
         all_relations = []
 
         for schema in schemas:
-            all_relations.extend(
-                self.list_relations(schema, model_name))
+            all_relations.extend(self.list_relations(schema, model_name))
 
         return {relation.identifier: relation.type
                 for relation in all_relations}
@@ -205,7 +204,7 @@ class DefaultAdapter(object):
         return self.drop_relation(relation, model_name)
 
     def drop_relation(self, relation, model_name=None):
-        if flags.USE_CACHE:
+        if dbt.flags.USE_CACHE:
             self.cache.drop(schema=relation.schema,
                             identifier=relation.identifier)
         if relation.type is None:
@@ -249,8 +248,8 @@ class DefaultAdapter(object):
 
     def rename_relation(self, from_relation, to_relation,
                         model_name=None):
-        if flags.USE_CACHE:
-            self.cache.rename_relation(
+        if dbt.flags.USE_CACHE:
+            self.cache.rename(
                 old_schema=from_relation.schema,
                 old_identifier=from_relation.identifier,
                 new_schema=to_relation.schema,
@@ -364,31 +363,34 @@ class DefaultAdapter(object):
     ###
     # RELATIONS
     ###
+    def _is_cached(self, schema, model_name=None, debug_on_missing=True):
+        """Check if the schema is cached, and by default logs if it is not."""
+        if dbt.flags.USE_CACHE is False:
+            return False
+        elif schema not in self.cache:
+            if debug_on_missing:
+                logger.debug(
+                    'On "{}": cache miss for schema "{}", this is inefficient'
+                    .format(model_name or '<None>', schema)
+                )
+            return False
+        else:
+            return True
+
     def _list_relations(self, schema, model_name=None):
         raise dbt.exceptions.NotImplementedException(
             '`list_relations` is not implemented for this adapter!')
 
     def list_relations(self, schema, model_name=None):
-        if flags.USE_CACHE is False:
-            logger.debug('Bypassing cache at user instruction')
-            relations = self._list_relations(schema, model_name=model_name)
-        elif schema in self.cache.schemas:
-            logger.debug('In list_relations, model_name={}, cache hit'
-                         .format(model_name))
-            relations = self.cache.get_relations(schema)
-        else:
-            # this indicates that we missed a schema when populating. Warn
-            # about it.
-            logger.warning(
-                'Schema "{}" not in the cache while handling model "{}", this'
-                'is inefficient'
-                .format(schema, model_name or '<None>')
-            )
-            # we can't build the relations cache because we don't have a
-            # manifest so we can't run any operations.
-            # TODO: Should the manifest be stored on the adapter itself?
-            # Then we could call _relations_cache_for_schemas here
-            relations = self._list_relations(schema, model_name=model_name)
+        if self._is_cached(schema, model_name):
+            return self.cache.get_relations(schema)
+
+        # we can't build the relations cache because we don't have a
+        # manifest so we can't run any operations.
+        # TODO: Should the manifest be stored on the adapter itself?
+        # Then we could call _relations_cache_for_schemas here
+        relations = self._list_relations(schema, model_name=model_name)
+
         logger.debug('with schema={}, model_name={}, relations={}'
                      .format(schema, model_name, relations))
         return relations
@@ -404,15 +406,11 @@ class DefaultAdapter(object):
         return filter_null_values({'identifier': identifier,
                                    'schema': schema})
 
-    def get_relation(self, schema=None, identifier=None,
-                     relations_list=None, model_name=None):
-        if schema is None and relations_list is None:
-            raise dbt.exceptions.RuntimeException(
-                'get_relation needs either a schema to query, or a list '
-                'of relations to use')
+    def get_relation(self, schema, identifier, model_name=None):
+        if self._is_cached(schema, model_name):
+            return self.cache.get_relation(schema, identifier)
 
-        if relations_list is None:
-            relations_list = self.list_relations(schema, model_name)
+        relations_list = self.list_relations(schema, model_name)
 
         matches = []
 
@@ -867,6 +865,9 @@ class DefaultAdapter(object):
         pass
 
     def _relations_cache_for_schemas(self, manifest, schemas=None):
+        if not dbt.flags.USE_CACHE:
+            return
+
         if schemas is None:
             schemas = manifest.get_used_schemas()
 
@@ -890,8 +891,9 @@ class DefaultAdapter(object):
         """Run a query that gets a populated cache of the relations in the
         database and set the cache on this adapter.
         """
-        if flags.USE_CACHE is False:
+        if not dbt.flags.USE_CACHE:
             return
+
         with self.cache.lock:
             if clear:
                 self.cache.clear()

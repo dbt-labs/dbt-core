@@ -208,21 +208,12 @@ class BigQueryAdapter(PostgresAdapter):
         except google.api_core.exceptions.NotFound as e:
             return []
 
-    def get_relation(self, schema=None, identifier=None,
-                     relations_list=None, model_name=None):
-        if schema is None and relations_list is None:
-            raise dbt.exceptions.RuntimeException(
-                'get_relation needs either a schema to query, or a list '
-                'of relations to use')
+    def get_relation(self, schema, identifier, model_name=None):
+        if self._is_cached(schema, model_name):
+            return self.cache.get_relation(schema, identifier)
 
-        if relations_list is None and identifier is not None:
-            table = self.get_bq_table(schema, identifier)
-
-            return self.bq_table_to_relation(table)
-
-        return super(BigQueryAdapter, self).get_relation(
-            schema, identifier, relations_list,
-            model_name)
+        table = self.get_bq_table(schema, identifier)
+        return self.bq_table_to_relation(table)
 
     def drop_relation(self, relation, model_name=None):
         self.cache.drop(schema=relation.schema, identifier=relation.identifier)

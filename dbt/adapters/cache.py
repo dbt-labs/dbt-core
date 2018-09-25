@@ -100,6 +100,12 @@ class RelationsCache(object):
         # the set of cached schemas
         self.schemas = set()
 
+    def __contains__(self, schema):
+        """A schema is 'in' the relations cache if it is in the set of cached
+        schemas.
+        """
+        return schema in self.schemas
+
     def dump_graph(self):
         return {
             '{}.{}'.format(k.schema, k.identifier):
@@ -246,8 +252,8 @@ class RelationsCache(object):
 
         self.relations[new_key] = relation
 
-    def rename_relation(self, old_schema, old_identifier, new_schema,
-                        new_identifier):
+    def rename(self, old_schema, old_identifier, new_schema,
+               new_identifier):
         old_key = ReferenceKey(
             schema=old_schema,
             identifier=old_identifier
@@ -274,7 +280,6 @@ class RelationsCache(object):
         """
         key = ReferenceKey(schema=schema, identifier=identifier)
         return self.relations[key]
-
 
     def get_relation(self, schema, identifier, default=None):
         """Get the Relation by name. Returns default if it does not exist."""

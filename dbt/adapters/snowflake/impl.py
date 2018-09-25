@@ -136,7 +136,7 @@ class SnowflakeAdapter(PostgresAdapter):
 
     def rename_relation(self, from_relation, to_relation,
                         model_name=None):
-        self.cache.rename_relation(
+        self.cache.rename(
             old_schema=from_relation.schema,
             old_identifier=from_relation.identifier,
             new_schema=to_relation.schema,
