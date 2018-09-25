@@ -58,13 +58,13 @@ class TestCache(TestCase):
         self.assertEqual(len(relations), 2)
 
         self.assertEqual(self.cache.schemas, {'foo', 'FOO'})
-        self.cache._get_relation('foo', 'bar')
-        self.cache._get_relation('FOO', 'baz')
+        self.assertIsNot(self.cache.get_relation('foo', 'bar'), None)
+        self.assertIsNot(self.cache.get_relation('FOO', 'baz'), None)
 
     def test_rename(self):
         obj = make_mock_relationship('foo', 'bar')
         self.cache.add('foo', 'bar', inner=obj)
-        self.cache._get_relation('foo', 'bar')
+        self.assertIsNot(self.cache.get_relation('foo', 'bar'), None)
         self.cache.rename_relation('foo', 'bar', 'foo', 'baz')
 
         relations = self.cache.get_relations('foo')
@@ -72,14 +72,13 @@ class TestCache(TestCase):
         self.assertEqual(relations[0].schema, 'foo')
         self.assertEqual(relations[0].identifier, 'baz')
 
-        relation = self.cache._get_relation('foo', 'baz')
+        relation = self.cache._get_cache_value('foo', 'baz')
         self.assertEqual(relation.inner.schema, 'foo')
         self.assertEqual(relation.inner.identifier, 'baz')
         self.assertEqual(relation.schema, 'foo')
         self.assertEqual(relation.identifier, 'baz')
 
-        with self.assertRaises(KeyError):
-            self.cache._get_relation('foo', 'bar')
+        self.assertIs(self.cache.get_relation('foo', 'bar'), None)
 
 
 class TestLikeDbt(TestCase):
@@ -138,7 +137,7 @@ class TestLikeDbt(TestCase):
         # b itself should still exist
         self.cache.drop('schema', 'b__backup')
         self.assert_has_relations(set('abe'))
-        relation = self.cache._get_relation('schema', 'a')
+        relation = self.cache._get_cache_value('schema', 'a')
         self.assertEqual(len(relation.referenced_by), 1)
 
 
@@ -196,7 +195,7 @@ class TestComplexCache(TestCase):
 
     def test_rename_root(self):
         self.cache.rename_relation('foo', 'table1', 'bar', 'table1')
-        retrieved = self.cache._get_relation('bar','table1').inner
+        retrieved = self.cache.get_relation('bar','table1')
         self.assertEqual(retrieved.schema, 'bar')
         self.assertEqual(retrieved.identifier, 'table1')
         self.assertEqual(len(self.cache.get_relations('foo')), 2)

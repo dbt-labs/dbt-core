@@ -268,10 +268,22 @@ class RelationsCache(object):
             pprint.pformat(self.dump_graph()))
         )
 
-    def _get_relation(self, schema, identifier):
-        """Get the relation by name. Raises a KeyError if it does not exist"""
+    def _get_cache_value(self, schema, identifier):
+        """Get the underlying cache value. Raises a KeyError if it does not
+        exist.
+        """
         key = ReferenceKey(schema=schema, identifier=identifier)
         return self.relations[key]
+
+
+    def get_relation(self, schema, identifier, default=None):
+        """Get the Relation by name. Returns default if it does not exist."""
+        try:
+            relation = self._get_cache_value(schema, identifier)
+        except KeyError:
+            return default
+
+        return relation.inner
 
     def get_relations(self, schema):
         """Case-insensitively yield all relations matching the given schema.
