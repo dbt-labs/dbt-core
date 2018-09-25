@@ -1,8 +1,8 @@
 from collections import namedtuple
 import threading
-from dbt.logger import GLOBAL_LOGGER as logger
 from copy import deepcopy
 import pprint
+from dbt.logger import CACHE_LOGGER as logger
 
 ReferenceKey = namedtuple('ReferenceKey', 'schema identifier')
 
@@ -148,8 +148,9 @@ class RelationsCache(object):
             schema=dependent_schema,
             identifier=dependent_name
         )
-        logger.debug('adding link, {!s} references {!s}'.format(dependent,
-                                                                referenced))
+        logger.debug(
+            'adding link, {!s} references {!s}'.format(dependent, referenced)
+        )
         logger.debug('before adding link: {}'.format(
             pprint.pformat(self.dump_graph()))
         )
