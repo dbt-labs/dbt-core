@@ -85,7 +85,6 @@ class DefaultAdapter(object):
         "quote_schema_and_table",
 
         # versions of adapter functions that take / return Relations
-        "list_relations",
         "get_relation",
         "drop_relation",
         "rename_relation",

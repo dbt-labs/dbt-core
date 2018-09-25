@@ -46,7 +46,6 @@ class BigQueryAdapter(PostgresAdapter):
         "alter_table_add_columns",
 
         # versions of adapter functions that take / return Relations
-        "list_relations",
         "get_relation",
         "drop_relation",
         "rename_relation",
