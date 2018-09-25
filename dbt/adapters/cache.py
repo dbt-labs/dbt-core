@@ -9,8 +9,6 @@ ReferenceKey = namedtuple('ReferenceKey', 'schema identifier')
 
 
 class CachedRelation(object):
-    # TODO: should this more directly related to the Relation class in the
-    # adapters themselves?
     """Nothing about CachedRelation is guaranteed to be thread-safe!"""
     def __init__(self, schema, identifier, inner):
         self.schema = schema
@@ -67,10 +65,10 @@ class CachedRelation(object):
         self.identifier = new_relation.identifier
         # rename our inner value as well
         if self.inner:
-            # Relations store this stuff inside their `path` dict.
-            # but they also store a table_name, and conditionally use it in
-            # .render(), so we need to update that as well...
-            # TODO: is this an aliasing issue? Do I have to worry about this?
+            # Relations store this stuff inside their `path` dict. But they
+            # also store a table_name, and usually use it in their  .render(),
+            # so we need to update that as well. It doesn't appear that
+            # table_name is ever anything but the identifier (via .create())
             self.inner = self.inner.incorporate(
                 path={
                     'schema': new_relation.schema,
@@ -80,9 +78,13 @@ class CachedRelation(object):
             )
 
     def rename_key(self, old_key, new_key):
-            # we've lost track of the state of the world!
-        assert new_key not in self.referenced_by, \
-            'Internal consistency error: new name is in the cache already'
+        # we've lost track of the state of the world!
+        if new_key in self.referenced_by:
+            dbt.exceptions.raise_cache_inconsistent(
+                'in rename of "{}" -> "{}", new name is in the cache already'
+                .format(old_key, new_key)
+            )
+
         if old_key not in self.referenced_by:
             return
         value = self.referenced_by.pop(old_key)
@@ -94,7 +96,7 @@ class RelationsCache(object):
         # map (schema, name) -> CachedRelation object.
         # I think we can ignore database/project?
         self.relations = {}
-        # make this a reentrant lock so the adatper can hold it while buliding
+        # make this a reentrant lock so the adapter can hold it while buliding
         # the cache.
         self.lock = threading.RLock()
         # the set of cached schemas
@@ -132,13 +134,15 @@ class RelationsCache(object):
         referenced = self.relations.get(referenced_key)
         if referenced is None:
             dbt.exceptions.raise_cache_inconsistent(
-                'link key {} not in cache!'.format(referenced_key)
+                'in add_link, referenced link key {} not in cache!'
+                .format(referenced_key)
             )
 
         dependent = self.relations.get(dependent_key)
         if dependent is None:
             dbt.exceptions.raise_cache_inconsistent(
-                'link key {} not in cache!'.format(dependent_key)
+                'in add_link, dependent link key {} not in cache!'
+                .format(dependent_key)
             )
 
         # link them up
@@ -235,7 +239,8 @@ class RelationsCache(object):
         # not good
         if new_key in self.relations:
             dbt.exceptions.raise_cache_inconsistent(
-                '{} in {}'.format(new_key, list(self.relations.keys()))
+                'in rename, new key {} already in cache: {}'
+                .format(new_key, list(self.relations.keys()))
             )
 
         # On the database level, a rename updates all values that were
@@ -296,9 +301,10 @@ class RelationsCache(object):
                 r.inner for r in self.relations.values()
                 if r.schema.lower() == schema
             ]
+
         if None in results:
             dbt.exceptions.raise_cache_inconsistent(
-                'A None relation was found in the cache!'
+                'in get_relations, a None relation was found in the cache!'
             )
         return results
 

@@ -95,8 +95,6 @@
 
 
 {% macro default__get_relations() -%}
-  {# TODO: should this just return an empty agate table? #}
-
   {% set typename = adapter.type() %}
   {% set msg -%}
     get_relations not implemented for {{ typename }}

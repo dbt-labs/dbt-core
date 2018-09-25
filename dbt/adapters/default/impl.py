@@ -38,8 +38,7 @@ def _relations_filter_schemas(schemas):
     def test(row):
         referenced_schema = _expect_row_value('referenced_schema', row)
         dependent_schema = _expect_row_value('dependent_schema', row)
-        # if you somehow depend on the null schema, we should return that stuff
-        # TODO: is that true?
+        # handle the null schema
         if referenced_schema is not None:
             referenced_schema = referenced_schema.lower()
         if dependent_schema is not None:
@@ -386,8 +385,6 @@ class DefaultAdapter(object):
 
         # we can't build the relations cache because we don't have a
         # manifest so we can't run any operations.
-        # TODO: Should the manifest be stored on the adapter itself?
-        # Then we could call _relations_cache_for_schemas here
         relations = self._list_relations(schema, model_name=model_name)
 
         logger.debug('with schema={}, model_name={}, relations={}'
