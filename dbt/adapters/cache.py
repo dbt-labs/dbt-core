@@ -11,21 +11,17 @@ class CachedRelation(object):
     # TODO: should this more directly related to the Relation class in the
     # adapters themselves?
     """Nothing about CachedRelation is guaranteed to be thread-safe!"""
-    def __init__(self, schema, identifier, kind=None, inner=None):
+    def __init__(self, schema, identifier, inner):
         self.schema = schema
         self.identifier = identifier
-        # This might be None, if the table is only referenced _by_ things, or
-        # temporariliy during cache building
-        # TODO: I'm still not sure we need this
-        self.kind = kind
         self.referenced_by = {}
-        # a inner to store on this cached relation.
+        # the underlying Relation
         self.inner = inner
 
     def __str__(self):
         return (
-            'CachedRelation(schema={}, identifier={}, kind={}, inner={})'
-        ).format(self.schema, self.identifier, self.kind, self.inner)
+            'CachedRelation(schema={}, identifier={}, inner={})'
+        ).format(self.schema, self.identifier, self.inner)
 
     def __copy__(self):
         new = self.__class__(self.schema, self.identifier)
@@ -116,25 +112,21 @@ class RelationsCache(object):
     def _setdefault(self, relation):
         self.schemas.add(relation.schema)
         key = relation.key()
-        result = self.relations.setdefault(key, relation)
-        # if we previously only saw the dependent without any kind information,
-        # update the type info.
-        if relation.kind is not None:
-            if result.kind is None:
-                result.kind = relation.kind
-            # we've lost track of the state of the world!
-            assert result.kind == relation.kind, \
-                'Internal consistency error: Different non-None relation kinds'
-        # ditto for inner, except overwriting is fine
-        if relation.inner is not None:
-            if result.inner is None:
-                result.inner = relation.inner
-        return result
+        return self.relations.setdefault(key, relation)
 
-    def _add_link(self, new_referenced, new_dependent):
-        # get the canonical referenced entries (our new one could be canonical)
-        referenced = self._setdefault(new_referenced)
-        dependent = self._setdefault(new_dependent)
+    def _add_link(self, referenced_key, dependent_key):
+        # get the canonical referenced entries. both entries must exist!
+        referenced = self.relations.get(referenced_key)
+        if referenced is None:
+            dbt.exceptions.raise_cache_inconsistent(
+                'link key {} not in cache!'.format(referenced_key)
+            )
+
+        dependent = self.relations.get(dependent_key)
+        if dependent is None:
+            dbt.exceptions.raise_cache_inconsistent(
+                'link key {} not in cache!'.format(dependent_key)
+            )
 
         # link them up
         referenced.add_reference(dependent)
@@ -148,11 +140,11 @@ class RelationsCache(object):
         # foo is a view that refers to bar -> "drop bar cascade" will drop foo
         # and all of foo's dependencies, recursively
         """
-        referenced = CachedRelation(
+        referenced = ReferenceKey(
             schema=referenced_schema,
             identifier=referenced_name
         )
-        dependent = CachedRelation(
+        dependent = ReferenceKey(
             schema=dependent_schema,
             identifier=dependent_name
         )
@@ -167,11 +159,10 @@ class RelationsCache(object):
             pprint.pformat(self.dump_graph()))
         )
 
-    def add(self, schema, identifier, kind=None, inner=None):
+    def add(self, schema, identifier, inner):
         relation = CachedRelation(
             schema=schema,
             identifier=identifier,
-            kind=kind,
             inner=inner
         )
         logger.debug('Adding relation: {!s}'.format(relation))
@@ -193,19 +184,20 @@ class RelationsCache(object):
             cached.release_references(keys)
 
     def _drop_cascade_relation(self, dropped):
-        key = dropped.key()
-        if key not in self.relations:
+        if dropped not in self.relations:
             # dbt drops potentially non-existent relations all the time, so
             # this is fine.
             logger.debug('dropped a nonexistent relationship: {!s}'
-                         .format(dropped.key()))
+                         .format(dropped))
             return
-        consequences = self.relations[key].collect_consequences()
-        logger.debug('drop {} is cascading to {}'.format(key, consequences))
+        consequences = self.relations[dropped].collect_consequences()
+        logger.debug(
+            'drop {} is cascading to {}'.format(dropped, consequences)
+        )
         self._remove_refs(consequences)
 
     def drop(self, schema, identifier):
-        dropped = CachedRelation(schema=schema, identifier=identifier)
+        dropped = ReferenceKey(schema=schema, identifier=identifier)
         logger.debug('Dropping relation: {!s}'.format(dropped))
         logger.debug('before drop: {}'.format(
             pprint.pformat(self.dump_graph()))
@@ -216,9 +208,7 @@ class RelationsCache(object):
             pprint.pformat(self.dump_graph()))
         )
 
-    def _rename_relation(self, old_relation, new_relation):
-        old_key = old_relation.key()
-        new_key = new_relation.key()
+    def _rename_relation(self, old_key, new_key):
         # the old relation might not exist. In that case, dbt created this
         # relation earlier in its run and we can ignore it, as we don't care
         # about the rename either
@@ -230,9 +220,8 @@ class RelationsCache(object):
             return
         # not good
         if new_key in self.relations:
-            raise RuntimeError(
-                'Internal consistency error!: {} in {}'
-                .format(new_key, list(self.relations.keys()))
+            dbt.exceptions.raise_cache_inconsistent(
+                '{} in {}'.format(new_key, list(self.relations.keys()))
             )
 
         # On the database level, a rename updates all values that were
@@ -243,7 +232,7 @@ class RelationsCache(object):
         relation = self.relations.pop(old_key)
 
         # change the old_relation's name and schema to the new relation's
-        relation.rename(new_relation)
+        relation.rename(new_key)
         # update all the relations that refer to it
         for cached in self.relations.values():
             if old_key in cached.referenced_by:
@@ -257,30 +246,30 @@ class RelationsCache(object):
 
     def rename_relation(self, old_schema, old_identifier, new_schema,
                         new_identifier):
-        old_relation = CachedRelation(
+        old_key = ReferenceKey(
             schema=old_schema,
             identifier=old_identifier
         )
-        new_relation = CachedRelation(
+        new_key = ReferenceKey(
             schema=new_schema,
             identifier=new_identifier
         )
         logger.debug('Renaming relation {!s} to {!s}'.format(
-            old_relation, new_relation)
+            old_key, new_key)
         )
         logger.debug('before rename: {}'.format(
             pprint.pformat(self.dump_graph()))
         )
         with self.lock:
-            self._rename_relation(old_relation, new_relation)
+            self._rename_relation(old_key, new_key)
         logger.debug('after rename: {}'.format(
             pprint.pformat(self.dump_graph()))
         )
 
     def _get_relation(self, schema, identifier):
         """Get the relation by name. Raises a KeyError if it does not exist"""
-        relation = CachedRelation(schema=schema, identifier=identifier)
-        return self.relations[relation.key()]
+        key = ReferenceKey(schema=schema, identifier=identifier)
+        return self.relations[key]
 
     def get_relations(self, schema):
         """Case-insensitively yield all relations matching the given schema.
@@ -289,10 +278,15 @@ class RelationsCache(object):
         # possible?
         schema = schema.lower()
         with self.lock:
-            return [
+            results = [
                 r.inner for r in self.relations.values()
                 if r.schema.lower() == schema
             ]
+        if None in results:
+            dbt.exceptions.raise_cache_inconsistent(
+                'A None relation was found in the cache!'
+            )
+        return results
 
     def clear(self):
         with self.lock:

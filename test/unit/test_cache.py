@@ -24,7 +24,7 @@ class TestCache(TestCase):
 
     def test_retrieval(self):
         obj = object()
-        self.cache.add('foo', 'bar', kind='view', inner=obj)
+        self.cache.add('foo', 'bar', inner=obj)
         self.assertEqual(len(self.cache.relations), 1)
 
         relations = self.cache.get_relations('foo')
@@ -37,11 +37,11 @@ class TestCache(TestCase):
 
     def test_additions(self):
         obj = object()
-        self.cache.add('foo', 'bar', kind='view')
+        self.cache.add('foo', 'bar', inner=obj)
 
         relations = self.cache.get_relations('foo')
         self.assertEqual(len(relations), 1)
-        self.assertIs(relations[0], None)
+        self.assertIs(relations[0], obj)
 
         self.cache.add('foo', 'bar', inner=obj)
         self.assertEqual(len(self.cache.relations), 1)
@@ -63,7 +63,7 @@ class TestCache(TestCase):
 
     def test_rename(self):
         obj = make_mock_relationship('foo', 'bar')
-        self.cache.add('foo', 'bar', kind='view', inner=obj)
+        self.cache.add('foo', 'bar', inner=obj)
         self.cache._get_relation('foo', 'bar')
         self.cache.rename_relation('foo', 'bar', 'foo', 'baz')
 
@@ -75,7 +75,6 @@ class TestCache(TestCase):
         relation = self.cache._get_relation('foo', 'baz')
         self.assertEqual(relation.inner.schema, 'foo')
         self.assertEqual(relation.inner.identifier, 'baz')
-        self.assertEqual(relation.kind, 'view')
         self.assertEqual(relation.schema, 'foo')
         self.assertEqual(relation.identifier, 'baz')
 
@@ -94,7 +93,7 @@ class TestLikeDbt(TestCase):
                 ident,
                 make_mock_relationship('schema', ident)
             )
-            self.cache.add('schema', ident, kind='view', inner=obj)
+            self.cache.add('schema', ident, inner=obj)
         # 'b' references 'a'
         self.cache.add_link('schema', 'a', 'schema', 'b')
         # and 'c' references 'b'
@@ -123,8 +122,9 @@ class TestLikeDbt(TestCase):
         self.cache.drop('schema', 'b__tmp')
         self.assert_has_relations(set('abcdef'))
         # create a new b__tmp
-        self.cache.add('schema', 'b__tmp', kind='view',
-            inner=make_mock_relationship('schema', 'b__tmp')
+        self.cache.add(
+            'schema', 'b__tmp',
+            make_mock_relationship('schema', 'b__tmp')
         )
         self.assert_has_relations(set('abcdef') | {'b__tmp'})
         # rename b -> b__backup
@@ -146,18 +146,15 @@ class TestComplexCache(TestCase):
     def setUp(self):
         self.cache = RelationsCache()
         inputs = [
-            ('foo', 'table1', 'table'),
-            ('bar', 'table2', 'view'),
-            ('foo', 'table3', 'view'),
-            ('foo', 'table4', 'view'),
-            ('bar', 'table3', 'view'),
+            ('foo', 'table1'),
+            ('bar', 'table2'),
+            ('foo', 'table3'),
+            ('foo', 'table4'),
+            ('bar', 'table3'),
         ]
-        self.inputs = [
-            (s, i, k, make_mock_relationship(s, i))
-            for s, i, k in inputs
-        ]
-        for schema, ident, kind, inner in self.inputs:
-            self.cache.add(schema, ident, kind, inner)
+        self.inputs = [(s, i, make_mock_relationship(s, i)) for s, i in inputs]
+        for schema, ident, inner in self.inputs:
+            self.cache.add(schema, ident, inner)
 
         # foo.table3 references foo.table1
         # (create view table3 as (select * from table1...))

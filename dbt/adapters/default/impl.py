@@ -170,10 +170,11 @@ class DefaultAdapter(object):
     ###
     def cache_new_relation(self, relation):
         """Cache a new relation in dbt. It will show up in `list relations`."""
+        if relation is None:
+            dbt.exceptions.raise_compiler_error()
         self.cache.add(
             schema=relation.schema,
             identifier=relation.identifier,
-            kind=relation.type,
             inner=relation,
         )
         # so jinja doesn't render things
@@ -898,7 +899,6 @@ class DefaultAdapter(object):
                 self.cache.add(
                     schema=relation.schema,
                     identifier=relation.name,
-                    kind=relation.type,
                     inner=relation
                 )
         self._link_cached_relations(manifest, schemas)
