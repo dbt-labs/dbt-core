@@ -3,6 +3,7 @@ import threading
 from copy import deepcopy
 import pprint
 from dbt.logger import CACHE_LOGGER as logger
+import dbt.exceptions
 
 ReferenceKey = namedtuple('ReferenceKey', 'schema identifier')
 
