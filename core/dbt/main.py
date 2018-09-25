@@ -292,8 +292,8 @@ def _build_base_subparser():
 
     # if set, log all cache events. This is extremely verbose!
     base_subparser.add_argument(
-        '--log-cache-events',
-        action='store_true',
+        "--log-cache-events",
+        action="store_true",
         help=argparse.SUPPRESS,
     )
 
