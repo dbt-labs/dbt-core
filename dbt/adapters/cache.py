@@ -156,9 +156,8 @@ class RelationsCache(object):
             schema=dependent_schema,
             identifier=dependent_name
         )
-        logger.debug('adding link, {!s} references {!s}'
-                     .format(dependent, referenced)
-        )
+        logger.debug('adding link, {!s} references {!s}'.format(dependent,
+                                                                referenced))
         logger.debug('before adding link: {}'.format(
             pprint.pformat(self.dump_graph()))
         )
@@ -294,3 +293,8 @@ class RelationsCache(object):
                 r.inner for r in self.relations.values()
                 if r.schema.lower() == schema
             ]
+
+    def clear(self):
+        with self.lock:
+            self.relations.clear()
+            self.schemas.clear()

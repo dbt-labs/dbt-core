@@ -134,6 +134,12 @@ class BaseRunner(object):
             if exc_str is not None and result.error is None:
                 result.error = exc_str
                 result.status = 'ERROR'
+        # if we got an error, the cache is... suspect at best. clear and reset
+        # it. While we could maybe clear it earlier, this is the first place
+        # we really know how to reset it.
+        # note: other transactions will block on this, hope that's ok.
+        if result.status == 'ERROR':
+            self.adapter.set_relations_cache(manifest, clear=True)
 
         result.execution_time = time.time() - started
         return result

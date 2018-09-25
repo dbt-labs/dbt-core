@@ -907,10 +907,11 @@ class DefaultAdapter(object):
         # so we can check it later
         self.cache.schemas.update(schemas)
 
-    def set_relations_cache(self, manifest):
+    def set_relations_cache(self, manifest, clear=False):
         """Run a query that gets a populated cache of the relations in the
         database and set the cache on this adapter.
         """
-        # TODO: ensure cache is empty?
         with self.cache.lock:
+            if clear:
+                self.cache.clear()
             self._relations_cache_for_schemas(manifest)
