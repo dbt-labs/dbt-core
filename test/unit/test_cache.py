@@ -1,6 +1,11 @@
 from unittest import TestCase
 from dbt.adapters.cache import RelationsCache
 from dbt.adapters.default.relation import DefaultRelation
+from multiprocessing.dummy import Pool as ThreadPool
+import dbt.exceptions
+
+import random
+import time
 
 
 def make_mock_relationship(schema, identifier):
@@ -19,10 +24,30 @@ class TestCache(TestCase):
         relations = self.cache.get_relations('test')
         self.assertEqual(len(relations), 0)
 
-        # make sure drop() is ok
+    def test_bad_drop(self):
         self.cache.drop('foo', 'bar')
 
-    def test_retrieval(self):
+    def test_bad_link(self):
+        self.cache.add('schema', 'foo', object())
+        # src does not exist
+        with self.assertRaises(dbt.exceptions.InternalException):
+            self.cache.add_link('schema', 'bar', 'schema', 'foo')
+
+        # dst does not exist
+        with self.assertRaises(dbt.exceptions.InternalException):
+            self.cache.add_link('schema', 'foo', 'schema', 'bar')
+
+    def test_bad_rename(self):
+        # foo does not exist - should be ignored
+        self.cache.rename('schema', 'foo', 'schema', 'bar')
+
+        self.cache.add('schema', 'foo', object())
+        self.cache.add('schema', 'bar', object())
+        # bar exists
+        with self.assertRaises(dbt.exceptions.InternalException):
+            self.cache.rename('schema', 'foo', 'schema', 'bar')
+
+    def test_get_relations(self):
         obj = object()
         self.cache.add('foo', 'bar', inner=obj)
         self.assertEqual(len(self.cache.relations), 1)
@@ -35,7 +60,7 @@ class TestCache(TestCase):
         self.assertEqual(len(relations), 1)
         self.assertIs(relations[0], obj)
 
-    def test_additions(self):
+    def test_add(self):
         obj = object()
         self.cache.add('foo', 'bar', inner=obj)
 
@@ -85,14 +110,11 @@ class TestCache(TestCase):
 class TestLikeDbt(TestCase):
     def setUp(self):
         self.cache = RelationsCache()
+        self._sleep = True
 
-        self.stored_relations = {}
         # add a bunch of cache entries
         for ident in 'abcdef':
-            obj = self.stored_relations.setdefault(
-                ident,
-                make_mock_relationship('schema', ident)
-            )
+            obj = make_mock_relationship('schema', ident)
             self.cache.add('schema', ident, inner=obj)
         # 'b' references 'a'
         self.cache.add_link('schema', 'a', 'schema', 'b')
@@ -140,6 +162,69 @@ class TestLikeDbt(TestCase):
         self.assert_has_relations(set('abe'))
         relation = self.cache._get_cache_value('schema', 'a')
         self.assertEqual(len(relation.referenced_by), 1)
+
+    def _rand_sleep(self):
+        if not self._sleep:
+            return
+        time.sleep(random.random() * 0.1)
+
+    def _target(self, ident):
+        self._rand_sleep()
+        self.cache.rename('schema', ident, 'schema', ident+'__backup')
+        self._rand_sleep()
+        self.cache.add(
+            'schema', ident+'__tmp',
+            make_mock_relationship('schema', 'b__tmp')
+        )
+        self._rand_sleep()
+        self.cache.rename('schema', ident+'__tmp', 'schema', ident)
+        self._rand_sleep()
+        self.cache.drop('schema', ident+'__backup')
+        return ident, self.cache.get_relations('schema')
+
+    def test_threaded(self):
+        # add three more short subchains for threads to test on
+        for ident in 'ghijklmno':
+            obj = make_mock_relationship('schema', ident)
+            self.cache.add('schema', ident, inner=obj)
+
+        self.cache.add_link('schema', 'a', 'schema', 'g')
+        self.cache.add_link('schema', 'g', 'schema', 'h')
+        self.cache.add_link('schema', 'h', 'schema', 'i')
+
+        self.cache.add_link('schema', 'a', 'schema', 'j')
+        self.cache.add_link('schema', 'j', 'schema', 'k')
+        self.cache.add_link('schema', 'k', 'schema', 'l')
+
+        self.cache.add_link('schema', 'a', 'schema', 'm')
+        self.cache.add_link('schema', 'm', 'schema', 'n')
+        self.cache.add_link('schema', 'n', 'schema', 'o')
+
+        pool = ThreadPool(4)
+        results = list(pool.imap_unordered(self._target, ('b', 'g', 'j', 'm')))
+        pool.close()
+        pool.join()
+        # at a minimum, we expect each table to "see" itself, its parent ('a'),
+        # and the unrelated table ('a')
+        min_expect = {
+            'b': {'a', 'b', 'e'},
+            'g': {'a', 'g', 'e'},
+            'j': {'a', 'j', 'e'},
+            'm': {'a', 'm', 'e'},
+        }
+
+        for ident, relations in results:
+            seen = set(r.identifier for r in relations)
+            self.assertTrue(min_expect[ident].issubset(seen))
+
+        self.assert_has_relations(set('abgjme'))
+
+    def test_threaded_repeated(self):
+        for _ in range(10):
+            self.setUp()
+            self._sleep = False
+            self.test_threaded()
+
 
 
 class TestComplexCache(TestCase):
