@@ -284,6 +284,16 @@ class Manifest(APIObject):
 
         return macro
 
+    def get_resource_fqns(self):
+        resource_fqns = {}
+        for unique_id, node in self.nodes.items():
+            resource_type_plural = node.resource_type + 's'
+            if resource_type_plural not in resource_fqns:
+                resource_fqns[resource_type_plural] = []
+            resource_fqns[resource_type_plural].append(node.fqn)
+
+        return resource_fqns
+
     def _filter_subgraph(self, subgraph, predicate):
         """
         Given a subgraph of the manifest, and a predicate, filter

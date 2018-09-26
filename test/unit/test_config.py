@@ -736,6 +736,72 @@ class TestProject(BaseConfigTest):
         unused = project.get_unused_resource_config_paths(resource_fqns)
         self.assertEqual(len(unused), 3)
 
+    def test__get_unused_resource_config_paths_empty(self):
+        project = dbt.config.Project.from_project_config(
+            self.default_project_data
+        )
+        unused = project.get_unused_resource_config_paths({'models': [
+            ['my_test_project', 'foo', 'bar'],
+            ['my_test_project', 'foo', 'baz'],
+        ]})
+        self.assertEqual(len(unused), 0)
+
+    @mock.patch.object(dbt.config, 'logger')
+    def test__warn_for_unused_resource_config_paths_empty(self, mock_logger):
+        project = dbt.config.Project.from_project_config(
+            self.default_project_data
+        )
+        unused = project.warn_for_unused_resource_config_paths({'models': [
+            ['my_test_project', 'foo', 'bar'],
+            ['my_test_project', 'foo', 'baz'],
+        ]})
+        mock_logger.info.assert_not_called()
+
+
+class TestProjectWithConfigs(BaseConfigTest):
+    def setUp(self):
+        self.profiles_dir = '/invalid-profiles-path'
+        self.project_dir = '/invalid-root-path'
+        super(TestProjectWithConfigs, self).setUp()
+        self.default_project_data['project-root'] = self.project_dir
+        self.default_project_data['models'] = {
+            'enabled': True,
+            'my_test_project': {
+                'foo': {
+                    'materialized': 'view',
+                    'bar': {
+                        'materialized': 'table',
+                    }
+                },
+                'baz': {
+                    'materialized': 'table',
+                }
+            }
+        }
+
+    def test__get_unused_resource_config_paths(self):
+        project = dbt.config.Project.from_project_config(
+            self.default_project_data
+        )
+        unused = project.get_unused_resource_config_paths({'models': [
+            ['my_test_project', 'foo', 'bar'],
+            ['my_test_project', 'foo', 'baz'],
+        ]})
+        self.assertEqual(len(unused), 1)
+        self.assertEqual(unused[0], ['models', 'my_test_project', 'baz'])
+
+    @mock.patch.object(dbt.config, 'logger')
+    def test__warn_for_unused_resource_config_paths(self, mock_logger):
+        project = dbt.config.Project.from_project_config(
+            self.default_project_data
+        )
+        unused = project.warn_for_unused_resource_config_paths({'models': [
+            ['my_test_project', 'foo', 'bar'],
+            ['my_test_project', 'foo', 'baz'],
+        ]})
+        mock_logger.info.assert_called_once()
+
+
 
 class TestProjectFile(BaseFileTest):
     def setUp(self):

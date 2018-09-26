@@ -16,7 +16,7 @@ from dbt.adapters.factory import get_relation_class_by_name
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import DBTConfigKeys
-
+import dbt.ui.printer
 
 DEFAULT_THREADS = 1
 DEFAULT_SEND_ANONYMOUS_USAGE_STATS = True

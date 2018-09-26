@@ -303,8 +303,50 @@ class ManifestTest(unittest.TestCase):
             }
         )
 
+    def test_get_resource_fqns_empty(self):
+        manifest = Manifest(nodes={}, macros={}, docs={},
+                            generated_at=timestring())
+        self.assertEqual(manifest.get_resource_fqns(), {})
 
-
+    def test_get_resource_fqns(self):
+        nodes = copy.copy(self.nested_nodes)
+        nodes['seed.root.seed'] = ParsedNode(
+            name='seed',
+            schema='analytics',
+                alias='seed',
+                resource_type='seed',
+                unique_id='seed.root.seed',
+                fqn=['root', 'seed'],
+                empty=False,
+                package_name='root',
+                refs=[['events']],
+                depends_on={
+                    'nodes': [],
+                    'macros': []
+                },
+                config=self.model_config,
+                tags=[],
+                path='seed.csv',
+                original_file_path='seed.csv',
+                root_path='',
+                raw_sql='-- csv --'
+        )
+        manifest = Manifest(nodes=nodes, macros={}, docs={},
+                            generated_at=timestring())
+        expect = {
+            'models': sorted((
+                ['snowplow', 'events'],
+                ['root', 'events'],
+                ['root', 'dep'],
+                ['root', 'nested'],
+                ['root', 'sibling'],
+                ['root', 'multi'],
+            )),
+            'seeds': [['root', 'seed']],
+        }
+        resource_fqns = manifest.get_resource_fqns()
+        resource_fqns['models'].sort()
+        self.assertEqual(resource_fqns, expect)
 
 
 class MixedManifestTest(unittest.TestCase):
