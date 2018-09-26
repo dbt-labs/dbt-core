@@ -41,6 +41,7 @@ class _CachedRelation:
         that refer to this relation.
     :attr BaseRelation inner: The underlying dbt relation.
     """
+
     def __init__(self, inner):
         self.referenced_by = {}
         self.inner = inner
@@ -170,6 +171,7 @@ class RelationsCache:
         The adapters also hold this lock while filling the cache.
     :attr Set[str] schemas: The set of known/cached schemas, all lowercased.
     """
+
     def __init__(self) -> None:
         self.relations: Dict[_ReferenceKey, _CachedRelation] = {}
         self.lock = threading.RLock()
