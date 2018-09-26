@@ -102,7 +102,10 @@ class Compiler(object):
         dbt.clients.system.make_directory(self.config.target_path)
         dbt.clients.system.make_directory(self.config.modules_path)
 
-    def compile_node(self, node, manifest):
+    def compile_node(self, node, manifest, extra_context=None):
+        if extra_context is None:
+            extra_context = {}
+
         logger.debug("Compiling {}".format(node.get('unique_id')))
 
         data = node.to_dict()
@@ -117,6 +120,7 @@ class Compiler(object):
 
         context = dbt.context.runtime.generate(
             compiled_node, self.config, manifest)
+        context.update(extra_context)
 
         compiled_node.compiled_sql = dbt.clients.jinja.get_rendered(
             node.get('raw_sql'),
