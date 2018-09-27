@@ -205,10 +205,13 @@ class TestProfile(BaseConfigTest):
         self.profiles_dir = '/invalid-path'
         super(TestProfile, self).setUp()
 
-    def test_from_raw_profiles(self):
-        profile = dbt.config.Profile.from_raw_profiles(
-            self.default_profile_data, 'default'
+    def from_raw_profiles(self):
+        return dbt.config.Profile.from_raw_profiles(
+            self.default_profile_data, 'default', {}
         )
+
+    def test_from_raw_profiles(self):
+        profile = self.from_raw_profiles()
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'postgres')
         self.assertEqual(profile.threads, 7)
@@ -228,9 +231,7 @@ class TestProfile(BaseConfigTest):
             'send_anonymous_usage_stats': False,
             'use_colors': False
         }
-        profile = dbt.config.Profile.from_raw_profiles(
-            self.default_profile_data, 'default'
-        )
+        profile = self.from_raw_profiles()
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'postgres')
         self.assertFalse(profile.send_anonymous_usage_stats)
@@ -240,9 +241,7 @@ class TestProfile(BaseConfigTest):
         self.default_profile_data['config'] = {
             'send_anonymous_usage_stats': False,
         }
-        profile = dbt.config.Profile.from_raw_profiles(
-            self.default_profile_data, 'default'
-        )
+        profile = self.from_raw_profiles()
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'postgres')
         self.assertFalse(profile.send_anonymous_usage_stats)
@@ -251,9 +250,7 @@ class TestProfile(BaseConfigTest):
     def test_missing_type(self):
         del self.default_profile_data['default']['outputs']['postgres']['type']
         with self.assertRaises(dbt.config.DbtProfileError) as exc:
-            profile = dbt.config.Profile.from_raw_profiles(
-                self.default_profile_data, 'default'
-            )
+            self.from_raw_profiles()
         self.assertIn('type', str(exc.exception))
         self.assertIn('postgres', str(exc.exception))
         self.assertIn('default', str(exc.exception))
@@ -261,9 +258,7 @@ class TestProfile(BaseConfigTest):
     def test_bad_type(self):
         self.default_profile_data['default']['outputs']['postgres']['type'] = 'invalid'
         with self.assertRaises(dbt.config.DbtProfileError) as exc:
-            profile = dbt.config.Profile.from_raw_profiles(
-                self.default_profile_data, 'default'
-            )
+            self.from_raw_profiles()
         self.assertIn('Credentials', str(exc.exception))
         self.assertIn('postgres', str(exc.exception))
         self.assertIn('default', str(exc.exception))
@@ -271,9 +266,7 @@ class TestProfile(BaseConfigTest):
     def test_invalid_credentials(self):
         del self.default_profile_data['default']['outputs']['postgres']['host']
         with self.assertRaises(dbt.config.DbtProfileError) as exc:
-            profile = dbt.config.Profile.from_raw_profiles(
-                self.default_profile_data, 'default'
-            )
+            self.from_raw_profiles()
         self.assertIn('Credentials', str(exc.exception))
         self.assertIn('postgres', str(exc.exception))
         self.assertIn('default', str(exc.exception))
@@ -281,16 +274,14 @@ class TestProfile(BaseConfigTest):
     def test_target_missing(self):
         del self.default_profile_data['default']['target']
         with self.assertRaises(dbt.config.DbtProfileError) as exc:
-            profile = dbt.config.Profile.from_raw_profiles(
-                self.default_profile_data, 'default'
-            )
+            self.from_raw_profiles()
         self.assertIn('target not specified in profile', str(exc.exception))
         self.assertIn('default', str(exc.exception))
 
     def test_profile_invalid_project(self):
         with self.assertRaises(dbt.config.DbtProjectError) as exc:
-            profile = dbt.config.Profile.from_raw_profiles(
-                self.default_profile_data, 'invalid-profile'
+            dbt.config.Profile.from_raw_profiles(
+                self.default_profile_data, 'invalid-profile', {}
             )
 
         self.assertEqual(exc.exception.result_type, 'invalid_project')
@@ -299,8 +290,9 @@ class TestProfile(BaseConfigTest):
 
     def test_profile_invalid_target(self):
         with self.assertRaises(dbt.config.DbtProfileError) as exc:
-            profile = dbt.config.Profile.from_raw_profiles(
-                self.default_profile_data, 'default', target_override='nope',
+            dbt.config.Profile.from_raw_profiles(
+                self.default_profile_data, 'default', {},
+                target_override='nope',
             )
 
         self.assertIn('nope', str(exc.exception))
@@ -310,38 +302,25 @@ class TestProfile(BaseConfigTest):
 
     def test_no_outputs(self):
         with self.assertRaises(dbt.config.DbtProfileError) as exc:
-            profile = dbt.config.Profile.from_raw_profiles(
-                {'some-profile': {'target': 'blah'}}, 'some-profile'
+            dbt.config.Profile.from_raw_profiles(
+                {'some-profile': {'target': 'blah'}}, 'some-profile', {}
             )
         self.assertIn('outputs not specified', str(exc.exception))
         self.assertIn('some-profile', str(exc.exception))
 
     def test_neq(self):
-        profile = dbt.config.Profile.from_raw_profiles(
-            self.default_profile_data, 'default'
-        )
+        profile = self.from_raw_profiles()
         self.assertNotEqual(profile, object())
 
     def test_eq(self):
         profile = dbt.config.Profile.from_raw_profiles(
-            deepcopy(self.default_profile_data), 'default'
+            deepcopy(self.default_profile_data), 'default', {}
         )
 
         other = dbt.config.Profile.from_raw_profiles(
-            deepcopy(self.default_profile_data), 'default'
+            deepcopy(self.default_profile_data), 'default', {}
         )
         self.assertEqual(profile, other)
-
-    def test_invalid_env_vars(self):
-        self.env_override['env_value_port'] = 'hello'
-        with mock.patch.dict(os.environ, self.env_override):
-            with self.assertRaises(dbt.config.DbtProfileError) as exc:
-                dbt.config.Profile.from_raw_profile_info(
-                    self.default_profile_data['default'],
-                    'default',
-                    target_override='with-vars'
-                )
-        self.assertIn("not of type 'integer'", str(exc.exception))
 
 
 class TestProfileFile(BaseFileTest):
@@ -349,12 +328,30 @@ class TestProfileFile(BaseFileTest):
         super(TestProfileFile, self).setUp()
         self.write_profile(self.default_profile_data)
 
+    def from_raw_profile_info(self, raw_profile=None, profile_name='default', **kwargs):
+        if raw_profile is None:
+            raw_profile = self.default_profile_data['default']
+        kw = {
+            'raw_profile': raw_profile,
+            'profile_name': profile_name,
+            'cli_vars': {},
+        }
+        kw.update(kwargs)
+        return dbt.config.Profile.from_raw_profile_info(**kw)
+
+    def from_args(self, project_profile_name='default', **kwargs):
+        kw = {
+            'args': self.args,
+            'project_profile_name': project_profile_name,
+            'cli_vars': {},
+        }
+        kw.update(kwargs)
+        return dbt.config.Profile.from_args(**kw)
+
+
     def test_profile_simple(self):
-        profile = dbt.config.Profile.from_args(self.args, 'default')
-        from_raw = dbt.config.Profile.from_raw_profile_info(
-            self.default_profile_data['default'],
-            'default'
-        )
+        profile = self.from_args()
+        from_raw = self.from_raw_profile_info()
 
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'postgres')
@@ -374,8 +371,8 @@ class TestProfileFile(BaseFileTest):
     def test_profile_override(self):
         self.args.profile = 'other'
         self.args.threads = 3
-        profile = dbt.config.Profile.from_args(self.args, 'default')
-        from_raw = dbt.config.Profile.from_raw_profile_info(
+        profile = self.from_args()
+        from_raw = self.from_raw_profile_info(
                 self.default_profile_data['other'],
                 'other',
                 threads_override=3,
@@ -398,10 +395,8 @@ class TestProfileFile(BaseFileTest):
 
     def test_target_override(self):
         self.args.target = 'redshift'
-        profile = dbt.config.Profile.from_args(self.args, 'default')
-        from_raw = dbt.config.Profile.from_raw_profile_info(
-                self.default_profile_data['default'],
-                'default',
+        profile = self.from_args()
+        from_raw = self.from_raw_profile_info(
                 target_override='redshift'
             )
 
@@ -423,10 +418,8 @@ class TestProfileFile(BaseFileTest):
     def test_env_vars(self):
         self.args.target = 'with-vars'
         with mock.patch.dict(os.environ, self.env_override):
-            profile = dbt.config.Profile.from_args(self.args, 'default')
-            from_raw = dbt.config.Profile.from_raw_profile_info(
-                self.default_profile_data['default'],
-                'default',
+            profile = self.from_args()
+            from_raw = self.from_raw_profile_info(
                 target_override='with-vars'
             )
 
@@ -442,9 +435,40 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.credentials.password, 'env-postgres-pass')
         self.assertEqual(profile, from_raw)
 
+    def test_env_vars_env_target(self):
+        self.default_profile_data['default']['target'] = "{{ env_var('env_value_target') }}"
+        self.write_profile(self.default_profile_data)
+        self.env_override['env_value_target'] = 'with-vars'
+        with mock.patch.dict(os.environ, self.env_override):
+            profile = self.from_args()
+            from_raw = self.from_raw_profile_info(
+                target_override='with-vars'
+            )
+
+        self.assertEqual(profile.profile_name, 'default')
+        self.assertEqual(profile.target_name, 'with-vars')
+        self.assertEqual(profile.threads, 1)
+        self.assertTrue(profile.send_anonymous_usage_stats)
+        self.assertTrue(profile.use_colors)
+        self.assertEqual(profile.credentials.type, 'postgres')
+        self.assertEqual(profile.credentials.host, 'env-postgres-host')
+        self.assertEqual(profile.credentials.port, 6543)
+        self.assertEqual(profile.credentials.user, 'env-postgres-user')
+        self.assertEqual(profile.credentials.password, 'env-postgres-pass')
+        self.assertEqual(profile, from_raw)
+
+    def test_invalid_env_vars(self):
+        self.env_override['env_value_port'] = 'hello'
+        self.args.target = 'with-vars'
+        with mock.patch.dict(os.environ, self.env_override):
+            with self.assertRaises(dbt.config.DbtProfileError) as exc:
+                profile = self.from_args()
+
+        self.assertIn("not of type 'integer'", str(exc.exception))
+
     def test_no_profile(self):
         with self.assertRaises(dbt.config.DbtProjectError) as exc:
-            dbt.config.Profile.from_args(self.args)
+            profile = self.from_args(project_profile_name=None)
         self.assertIn('no profile was specified', str(exc.exception))
 
 
@@ -708,7 +732,7 @@ class TestRuntimeConfig(BaseConfigTest):
 
     def get_profile(self):
         return dbt.config.Profile.from_raw_profiles(
-            self.default_profile_data, self.default_project_data['profile']
+            self.default_profile_data, self.default_project_data['profile'], {}
         )
 
     def test_from_parts(self):

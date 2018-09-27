@@ -43,7 +43,6 @@ class TestMerge(unittest.TestCase):
                     case['description'], actual, case['expected']))
 
 
-
 class TestDeepMap(unittest.TestCase):
     def setUp(self):
         self.input_value = {
@@ -125,6 +124,4 @@ class TestDeepMap(unittest.TestCase):
 
         actual = dbt.utils.deep_map(self.special_keypath, expected)
         self.assertEquals(actual, expected)
-
-
 

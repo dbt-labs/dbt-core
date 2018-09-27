@@ -10,7 +10,7 @@ import dbt.utils
 from dbt.contracts.connection import Connection, create_credentials
 from dbt.contracts.project import Project as ProjectContract, Configuration, \
     PackageConfig, ProfileConfig
-from dbt.context.common import env_var
+from dbt.context.common import env_var, Var
 from dbt import compat
 from dbt.adapters.factory import get_relation_class_by_name
 
@@ -104,27 +104,94 @@ def colorize_output(config):
     return config.get('use_colors', True)
 
 
-def _render(key, value, ctx):
-    """Render an entry in the credentials dictionary, in case it's jinja.
-
-    If the parsed entry is a string and has the name 'port', this will attempt
-    to cast it to an int, and on failure will return the parsed string.
-
-    :param key str: The key to convert on.
-    :param value Any: The value to potentially render
-    :param ctx dict: The context dictionary, mapping function names to
-        functions that take a str and return a value
-    :return Any: The rendered entry.
+class ConfigRenderer(object):
+    """A renderer provides configuration rendering for a given set of cli
+    variables and a render type.
     """
-    if not isinstance(value, compat.basestring):
+    def __init__(self, cli_vars):
+        self.context = {'env_var': env_var}
+        self.context['var'] = Var(None, self.context, cli_vars)
+
+    @staticmethod
+    def _is_hook_path(keypath):
+        if not keypath:
+            return False
+
+        first = keypath[0]
+        # run hooks
+        if first in {'on-run-start', 'on-run-end'}:
+            return True
+        # model hooks
+        if first in {'seeds', 'models'}:
+            if 'pre-hook' in keypath or 'post-hook' in keypath:
+                return True
+
+        return False
+
+    @staticmethod
+    def _is_port_path(keypath):
+        return len(keypath) == 2 and keypath[-1] == 'port'
+
+    @staticmethod
+    def _convert_port(value, keypath):
+
+        if len(keypath) != 4:
+            return value
+
+        if keypath[-1] == 'port' and keypath[1] == 'outputs':
+            try:
+                return int(value)
+            except ValueError:
+                pass  # let the validator or connection handle this
         return value
-    result = dbt.clients.jinja.get_rendered(value, ctx)
-    if key == 'port':
-        try:
-            return int(result)
-        except ValueError:
-            pass  # let the validator or connection handle this
-    return result
+
+    def _render_project_entry(self, value, keypath):
+        """Render an entry, in case it's jinja. This is meant to be passed to
+        dbt.utils.deep_map.
+
+        If the parsed entry is a string and has the name 'port', this will
+        attempt to cast it to an int, and on failure will return the parsed
+        string.
+
+        :param value Any: The value to potentially render
+        :param key str: The key to convert on.
+        :return Any: The rendered entry.
+        """
+        # hooks should be treated as raw sql, they'll get rendered later
+        if self._is_hook_path(keypath):
+            return value
+
+        return self.render_value(value)
+
+    def render_value(self, value, keypath=None):
+        # keypath is ignored.
+        # if it wasn't read as a string, ignore it
+        if not isinstance(value, compat.basestring):
+            return value
+
+        return dbt.clients.jinja.get_rendered(value, self.context)
+
+    def _render_profile_data(self, value, keypath):
+        result = self.render_value(value)
+        if len(keypath) == 1 and keypath[-1] == 'port':
+            try:
+                result = int(result)
+            except ValueError:
+                # let the validator or connection handle this
+                pass
+        return result
+
+    def render(self, as_parsed):
+        return dbt.utils.deep_map(self.render_value, as_parsed)
+
+    def render_project(self, as_parsed):
+        """Render the parsed data, returning a new dict (or whatever was read).
+        """
+        return dbt.utils.deep_map(self._render_project_entry, as_parsed)
+
+    def render_profile_data(self, as_parsed):
+        """Render the chosen profile entry, as it was parsed."""
+        return dbt.utils.deep_map(self._render_profile_data, as_parsed)
 
 
 class Project(object):
@@ -363,16 +430,6 @@ class Profile(object):
             raise DbtProfileError(str(exc))
 
     @staticmethod
-    def _rendered_profile(profile):
-        # if entries are strings, we want to render them so we can get any
-        # environment variables that might store important credentials
-        # elements.
-        return {
-            k: _render(k, v, {'env_var': env_var})
-            for k, v in profile.items()
-        }
-
-    @staticmethod
     def _credentials_from_profile(profile, profile_name, target_name):
         # credentials carry their 'type' in their actual type, not their
         # attributes. We do want this in order to pick our Credentials class.
@@ -401,25 +458,12 @@ class Profile(object):
         return profile_name
 
     @staticmethod
-    def _pick_target(raw_profile, profile_name, target_override=None):
-
-        if target_override is not None:
-            target_name = target_override
-        elif 'target' in raw_profile:
-            target_name = raw_profile['target']
-        else:
-            raise DbtProfileError(
-                "target not specified in profile '{}'".format(profile_name)
-            )
-        return target_name
-
-    @staticmethod
-    def _get_profile_data(raw_profile, profile_name, target_name):
-        if 'outputs' not in raw_profile:
+    def _get_profile_data(profile, profile_name, target_name):
+        if 'outputs' not in profile:
             raise DbtProfileError(
                 "outputs not specified in profile '{}'".format(profile_name)
             )
-        outputs = raw_profile['outputs']
+        outputs = profile['outputs']
 
         if target_name not in outputs:
             outputs = '\n'.join(' - {}'.format(output)
@@ -468,15 +512,50 @@ class Profile(object):
         return profile
 
     @classmethod
-    def from_raw_profile_info(cls, raw_profile, profile_name, user_cfg=None,
-                              target_override=None, threads_override=None):
+    def _render_profile(cls, raw_profile, profile_name, target_override,
+                        cli_vars):
+        """This is a containment zone for the hateful way we're rendering
+        profiles.
+        """
+        renderer = ConfigRenderer(cli_vars=cli_vars)
+
+        # rendering profiles is a bit complex. Two constraints cause trouble:
+        # 1) users should be able to use environment/cli variables to specify
+        #    the target in their profile.
+        # 2) Missing environment/cli variables in profiles/targets that don't
+        #    end up getting selected should not cause errors.
+        # so first we'll just render the target name, then we use that rendered
+        # name to extract a profile that we can render.
+        if target_override is not None:
+            target_name = target_override
+        elif 'target' in raw_profile:
+            # render the target if it was parsed from yaml
+            target_name = renderer.render_value(raw_profile['target'])
+        else:
+            raise DbtProfileError(
+                "target not specified in profile '{}'".format(profile_name)
+            )
+
+        raw_profile_data = cls._get_profile_data(
+            raw_profile, profile_name, target_name
+        )
+
+        profile_data = renderer.render_profile_data(raw_profile_data)
+        return target_name, profile_data
+
+    @classmethod
+    def from_raw_profile_info(cls, raw_profile, profile_name, cli_vars,
+                              user_cfg=None, target_override=None,
+                              threads_override=None):
         """Create a profile from its raw profile information.
 
          (this is an intermediate step, mostly useful for unit testing)
 
-        :param raw_profiles dict: The profile data for a single profile, from
-            disk as yaml.
+        :param raw_profile dict: The profile data for a single profile, from
+            disk as yaml and its values rendered with jinja.
         :param profile_name str: The profile name used.
+        :param cli_vars dict: The command-line variables passed as arguments,
+            as a dict.
         :param user_cfg Optional[dict]: The global config for the user, if it
             was present.
         :param target_override Optional[str]: The target to use, if provided on
@@ -487,22 +566,20 @@ class Profile(object):
             target could not be found
         :returns Profile: The new Profile object.
         """
-        target_name = cls._pick_target(
-            raw_profile, profile_name, target_override
+        # user_cfg is not rendered since it only contains booleans.
+        # TODO: should it be, and the values coerced to bool?
+        target_name, profile_data = cls._render_profile(
+            raw_profile, profile_name, target_override, cli_vars
         )
-        profile_data = cls._get_profile_data(
-            raw_profile, profile_name, target_name
-        )
-        rendered_profile = cls._rendered_profile(profile_data)
 
         # valid connections never include the number of threads, but it's
         # stored on a per-connection level in the raw configs
-        threads = rendered_profile.pop('threads', DEFAULT_THREADS)
+        threads = profile_data.pop('threads', DEFAULT_THREADS)
         if threads_override is not None:
             threads = threads_override
 
         credentials = cls._credentials_from_profile(
-            rendered_profile, profile_name, target_name
+            profile_data, profile_name, target_name
         )
         return cls.from_credentials(
             credentials=credentials,
@@ -513,11 +590,13 @@ class Profile(object):
         )
 
     @classmethod
-    def from_raw_profiles(cls, raw_profiles, profile_name,
+    def from_raw_profiles(cls, raw_profiles, profile_name, cli_vars,
                           target_override=None, threads_override=None):
         """
         :param raw_profiles dict: The profile data, from disk as yaml.
         :param profile_name str: The profile name to use.
+        :param cli_vars dict: The command-line variables passed as arguments,
+            as a dict.
         :param target_override Optional[str]: The target to use, if provided on
             the command line.
         :param threads_override Optional[str]: The thread count to use, if
@@ -528,29 +607,35 @@ class Profile(object):
             target could not be found
         :returns Profile: The new Profile object.
         """
-        # TODO(jeb): Validate the raw_profiles structure right here
         if profile_name not in raw_profiles:
             raise DbtProjectError(
                 "Could not find profile named '{}'".format(profile_name)
             )
+
+        # First, we've already got our final decision on profile name, and we
+        # don't render keys, so we can pluck that out
         raw_profile = raw_profiles[profile_name]
+
         user_cfg = raw_profiles.get('config')
 
         return cls.from_raw_profile_info(
             raw_profile=raw_profile,
             profile_name=profile_name,
+            cli_vars=cli_vars,
             user_cfg=user_cfg,
             target_override=target_override,
             threads_override=threads_override,
         )
 
     @classmethod
-    def from_args(cls, args, project_profile_name=None):
+    def from_args(cls, args, project_profile_name=None, cli_vars=None):
         """Given the raw profiles as read from disk and the name of the desired
         profile if specified, return the profile component of the runtime
         config.
 
         :param args argparse.Namespace: The arguments as parsed from the cli.
+        :param cli_vars dict: The command-line variables passed as arguments,
+            as a dict.
         :param project_profile_name Optional[str]: The profile name, if
             specified in a project.
         :raises DbtProjectError: If there is no profile name specified in the
@@ -560,6 +645,9 @@ class Profile(object):
             target could not be found.
         :returns Profile: The new Profile object.
         """
+        if cli_vars is None:
+            cli_vars = dbt.utils.parse_cli_vars(getattr(args, 'vars', '{}'))
+
         threads_override = getattr(args, 'threads', None)
         # TODO(jeb): is it even possible for this to not be set?
         profiles_dir = getattr(args, 'profiles_dir', DEFAULT_PROFILES_DIR)
@@ -571,6 +659,7 @@ class Profile(object):
         return cls.from_raw_profiles(
             raw_profiles=raw_profiles,
             profile_name=profile_name,
+            cli_vars=cli_vars,
             target_override=target_override,
             threads_override=threads_override
         )
@@ -759,13 +848,18 @@ class RuntimeConfig(Project, Profile):
         :raises DbtProfileError: If the profile is invalid or missing.
         :raises ValidationException: If the cli variables are invalid.
         """
+        cli_vars = dbt.utils.parse_cli_vars(getattr(args, 'vars', '{}'))
+
         # build the project and read in packages.yml
         project = Project.from_current_directory()
 
         # build the profile
-        profile = Profile.from_args(args, project.profile_name)
+        profile = Profile.from_args(
+            args=args,
+            project_profile_name=project.profile_name,
+            cli_vars=cli_vars
+        )
 
-        cli_vars = dbt.utils.parse_cli_vars(getattr(args, 'vars', '{}'))
         return cls.from_parts(
             project=project,
             profile=profile,
