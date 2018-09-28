@@ -5,7 +5,7 @@ issues.
 """
 
 class Obj(object):
-    pass
+    which = 'blah'
 
 
 def config_from_parts_or_dicts(project, profile, packages=None, cli_vars='{}'):
