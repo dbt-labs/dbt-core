@@ -4,6 +4,10 @@ Note that all imports should be inside the functions to avoid import/mocking
 issues.
 """
 
+class Obj(object):
+    pass
+
+
 def config_from_parts_or_dicts(project, profile, packages=None, cli_vars='{}'):
     from dbt.config import Project, Profile, RuntimeConfig
     from dbt.utils import parse_cli_vars
@@ -16,9 +20,10 @@ def config_from_parts_or_dicts(project, profile, packages=None, cli_vars='{}'):
         profile = Profile.from_raw_profile_info(deepcopy(profile),
                                                 project.profile_name,
                                                 cli_vars)
-
+    args = Obj()
+    args.cli_vars = cli_vars
     return RuntimeConfig.from_parts(
         project=project,
         profile=profile,
-        cli_vars=cli_vars
+        args=args
     )
