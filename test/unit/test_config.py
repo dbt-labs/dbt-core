@@ -129,6 +129,15 @@ class BaseConfigTest(unittest.TestCase):
                         'pass': "{{ env_var('env_value_pass') }}",
                         'dbname': "{{ env_var('env_value_dbname') }}",
                         'schema': "{{ env_var('env_value_schema') }}",
+                    },
+                    'cli-and-env-vars': {
+                        'type': "{{ env_var('env_value_type') }}",
+                        'host': "{{ var('cli_value_host') }}",
+                        'port': "{{ env_var('env_value_port') }}",
+                        'user': "{{ env_var('env_value_user') }}",
+                        'pass': "{{ env_var('env_value_pass') }}",
+                        'dbname': "{{ env_var('env_value_dbname') }}",
+                        'schema': "{{ env_var('env_value_schema') }}",
                     }
                 },
                 'target': 'postgres',
@@ -158,6 +167,7 @@ class BaseConfigTest(unittest.TestCase):
             'env_value_pass': 'env-postgres-pass',
             'env_value_dbname': 'env-postgres-dbname',
             'env_value_schema': 'env-postgres-schema',
+            'env_value_project': 'blah',
         }
 
 
@@ -466,6 +476,28 @@ class TestProfileFile(BaseFileTest):
 
         self.assertIn("not of type 'integer'", str(exc.exception))
 
+    def test_cli_and_env_vars(self):
+        self.args.target = 'cli-and-env-vars'
+        self.args.vars = '{"cli_value_host": "cli-postgres-host"}'
+        with mock.patch.dict(os.environ, self.env_override):
+            profile = self.from_args(cli_vars=None)
+            from_raw = self.from_raw_profile_info(
+                target_override='cli-and-env-vars',
+                cli_vars={'cli_value_host': 'cli-postgres-host'},
+            )
+
+        self.assertEqual(profile.profile_name, 'default')
+        self.assertEqual(profile.target_name, 'cli-and-env-vars')
+        self.assertEqual(profile.threads, 1)
+        self.assertTrue(profile.send_anonymous_usage_stats)
+        self.assertTrue(profile.use_colors)
+        self.assertEqual(profile.credentials.type, 'postgres')
+        self.assertEqual(profile.credentials.host, 'cli-postgres-host')
+        self.assertEqual(profile.credentials.port, 6543)
+        self.assertEqual(profile.credentials.user, 'env-postgres-user')
+        self.assertEqual(profile.credentials.password, 'env-postgres-pass')
+        self.assertEqual(profile, from_raw)
+
     def test_no_profile(self):
         with self.assertRaises(dbt.config.DbtProjectError) as exc:
             profile = self.from_args(project_profile_name=None)
@@ -711,11 +743,35 @@ class TestProjectFile(BaseFileTest):
             self.default_project_data
         )
         self.assertEqual(project, from_config)
+        self.assertEqual(project.version, "0.0.1")
+        self.assertEqual(project.project_name, 'my_test_project')
 
     def test_with_invalid_package(self):
         self.write_packages({'invalid': ['not a package of any kind']})
         with self.assertRaises(dbt.config.DbtProjectError) as exc:
             dbt.config.Project.from_project_root(self.project_dir, {})
+
+
+class TestVariableProjectFile(BaseFileTest):
+    def setUp(self):
+        super(TestVariableProjectFile, self).setUp()
+        self.default_project_data['version'] = "{{ var('cli_version') }}"
+        self.default_project_data['name'] = "{{ env_var('env_value_project') }}"
+        self.write_project(self.default_project_data)
+        # and after the fact, add the project root
+        self.default_project_data['project-root'] = self.project_dir
+
+    def test_cli_and_env_vars(self):
+        cli_vars = '{"cli_version": "0.1.2"}'
+        with mock.patch.dict(os.environ, self.env_override):
+            project = dbt.config.Project.from_project_root(
+                self.project_dir,
+                cli_vars
+            )
+
+        self.assertEqual(project.version, "0.1.2")
+        self.assertEqual(project.project_name, 'blah')
+
 
 
 class TestRuntimeConfig(BaseConfigTest):
@@ -806,3 +862,55 @@ class TestRuntimeConfigFiles(BaseFileTest):
         self.assertEqual(config.archive, [])
         self.assertEqual(config.seeds, {})
         self.assertEqual(config.packages, PackageConfig(packages=[]))
+
+
+class TestVariableRuntimeConfigFiles(BaseFileTest):
+    def setUp(self):
+        super(TestVariableRuntimeConfigFiles, self).setUp()
+        self.default_project_data.update({
+            'version': "{{ var('cli_version') }}",
+            'name': "{{ env_var('env_value_project') }}",
+            'on-run-end': [
+                "{{ env_var('env_value_project') }}",
+            ],
+            'models': {
+                'foo': {
+                    'post-hook': "{{ env_var('env_value_target') }}",
+                },
+                'bar': {
+                    # just gibberish, make sure it gets interpreted
+                    'materialized': "{{ env_var('env_value_project') }}",
+                }
+            },
+            'seeds': {
+                'foo': {
+                    'post-hook': "{{ env_var('env_value_target') }}",
+                },
+                'bar': {
+                    # just gibberish, make sure it gets interpreted
+                    'materialized': "{{ env_var('env_value_project') }}",
+                }
+            },
+        })
+        self.write_project(self.default_project_data)
+        self.write_profile(self.default_profile_data)
+        # and after the fact, add the project root
+        self.default_project_data['project-root'] = self.project_dir
+
+    def test_cli_and_env_vars(self):
+        self.args.target = 'cli-and-env-vars'
+        self.args.vars = '{"cli_value_host": "cli-postgres-host", "cli_version": "0.1.2"}'
+        with mock.patch.dict(os.environ, self.env_override), temp_cd(self.project_dir):
+            config = dbt.config.RuntimeConfig.from_args(self.args)
+
+        self.assertEqual(config.version, "0.1.2")
+        self.assertEqual(config.project_name, 'blah')
+        self.assertEqual(config.credentials.host, 'cli-postgres-host')
+        self.assertEqual(config.credentials.user, 'env-postgres-user')
+        # make sure hooks are not interpreted
+        self.assertEqual(config.on_run_end, ["{{ env_var('env_value_project') }}"])
+        self.assertEqual(config.models['foo']['post-hook'], "{{ env_var('env_value_target') }}")
+        self.assertEqual(config.models['bar']['materialized'], 'blah')
+        self.assertEqual(config.seeds['foo']['post-hook'], "{{ env_var('env_value_target') }}")
+        self.assertEqual(config.seeds['bar']['materialized'], 'blah')
+
