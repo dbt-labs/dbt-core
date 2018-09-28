@@ -693,7 +693,7 @@ class TestProject(BaseConfigTest):
 
     def test_no_project(self):
         with self.assertRaises(dbt.config.DbtProjectError) as exc:
-            dbt.config.Project.from_project_root(self.project_dir)
+            dbt.config.Project.from_project_root(self.project_dir, {})
 
         self.assertIn('no dbt_project.yml', str(exc.exception))
 
@@ -706,7 +706,7 @@ class TestProjectFile(BaseFileTest):
         self.default_project_data['project-root'] = self.project_dir
 
     def test_from_project_root(self):
-        project = dbt.config.Project.from_project_root(self.project_dir)
+        project = dbt.config.Project.from_project_root(self.project_dir, {})
         from_config = dbt.config.Project.from_project_config(
             self.default_project_data
         )
@@ -715,7 +715,7 @@ class TestProjectFile(BaseFileTest):
     def test_with_invalid_package(self):
         self.write_packages({'invalid': ['not a package of any kind']})
         with self.assertRaises(dbt.config.DbtProjectError) as exc:
-            dbt.config.Project.from_project_root(self.project_dir)
+            dbt.config.Project.from_project_root(self.project_dir, {})
 
 
 class TestRuntimeConfig(BaseConfigTest):

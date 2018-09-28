@@ -209,7 +209,7 @@ def invoke_dbt(parsed):
     try:
         if parsed.which == 'deps':
             # deps doesn't need a profile, so don't require one.
-            cfg = Project.from_current_directory()
+            cfg = Project.from_current_directory(getattr(parsed, 'vars', '{}'))
         elif parsed.which != 'debug':
             # for debug, we will attempt to load the various configurations as
             # part of the task, so just leave cfg=None.

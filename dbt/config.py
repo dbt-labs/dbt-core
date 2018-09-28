@@ -350,7 +350,7 @@ class Project(object):
             raise DbtProjectError(str(exc))
 
     @classmethod
-    def from_project_root(cls, project_root):
+    def from_project_root(cls, project_root, cli_vars):
         """Create a project from a root directory. Reads in dbt_project.yml and
         packages.yml, if it exists.
 
@@ -369,14 +369,19 @@ class Project(object):
                 .format(project_yaml_filepath)
             )
 
+        if isinstance(cli_vars, compat.basestring):
+            cli_vars = dbt.utils.parse_cli_vars(cli_vars)
+        renderer = ConfigRenderer(cli_vars)
+
         project_dict = _load_yaml(project_yaml_filepath)
-        project_dict['project-root'] = project_root
+        rendered_project = renderer.render_project(project_dict)
+        rendered_project['project-root'] = project_root
         packages_dict = package_data_from_root(project_root)
-        return cls.from_project_config(project_dict, packages_dict)
+        return cls.from_project_config(rendered_project, packages_dict)
 
     @classmethod
-    def from_current_directory(cls):
-        return cls.from_project_root(os.getcwd())
+    def from_current_directory(cls, cli_vars):
+        return cls.from_project_root(os.getcwd(), cli_vars)
 
     def hashed_name(self):
         return hashlib.md5(self.project_name.encode('utf-8')).hexdigest()
@@ -800,8 +805,8 @@ class RuntimeConfig(Project, Profile):
         # copy profile
         profile = Profile(**self.to_profile_info())
         profile.validate()
-        # load the new project and its packages
-        project = Project.from_project_root(project_root)
+        # load the new project and its packages. Don't pass cli variables.
+        project = Project.from_project_root(project_root, {})
 
         cfg = self.from_parts(
             project=project,
@@ -851,7 +856,7 @@ class RuntimeConfig(Project, Profile):
         cli_vars = dbt.utils.parse_cli_vars(getattr(args, 'vars', '{}'))
 
         # build the project and read in packages.yml
-        project = Project.from_current_directory()
+        project = Project.from_current_directory(cli_vars)
 
         # build the profile
         profile = Profile.from_args(
