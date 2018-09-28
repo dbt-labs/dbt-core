@@ -84,7 +84,9 @@ class SnowflakeAdapter(PostgresAdapter):
                 schema=credentials.schema,
                 warehouse=credentials.warehouse,
                 role=credentials.get('role', None),
-                autocommit=False
+                autocommit=False,
+                client_session_keep_alive=credentials.get(
+                    'client_session_keep_alive', False)
             )
 
             connection.handle = handle
