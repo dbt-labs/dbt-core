@@ -129,6 +129,21 @@ class DependencyException(Exception):
     pass
 
 
+class DbtConfigError(RuntimeException):
+    def __init__(self, message, project=None, result_type='invalid_project'):
+        self.project = project
+        super(DbtConfigError, self).__init__(message)
+        self.result_type = result_type
+
+
+class DbtProjectError(DbtConfigError):
+    pass
+
+
+class DbtProfileError(DbtConfigError):
+    pass
+
+
 class SemverException(Exception):
     def __init__(self, msg=None):
         self.msg = msg
