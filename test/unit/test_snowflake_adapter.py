@@ -94,3 +94,26 @@ class TestSnowflakeAdapter(unittest.TestCase):
         self.mock_execute.assert_has_calls([
             mock.call('alter table "test_schema".table_a rename to table_b', None)
         ])
+
+    def test_client_session_keep_alive_false_by_default(self):
+        self.snowflake.assert_has_calls([
+            mock.call(
+                account='test_account', autocommit=False,
+                client_session_keep_alive=False, database='test_databse',
+                password='test_password', role=None, schema='public',
+                user='test_user', warehouse='test_warehouse')
+        ])
+
+    def test_client_session_keep_alive_true(self):
+        self.config.credentials = self.config.credentials.incorporate(
+            client_session_keep_alive=True)
+        self.adapter = SnowflakeAdapter(self.config)
+        self.adapter.get_connection(name='new_connection_with_new_config')
+
+        self.snowflake.assert_has_calls([
+            mock.call(
+                account='test_account', autocommit=False,
+                client_session_keep_alive=True, database='test_databse',
+                password='test_password', role=None, schema='public',
+                user='test_user', warehouse='test_warehouse')
+        ])
