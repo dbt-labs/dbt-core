@@ -110,6 +110,9 @@ SNOWFLAKE_CREDENTIALS_CONTRACT = {
         'role': {
             'type': 'string',
         },
+        'client_session_keep_alive': {
+            'type': 'boolean',
+        }
     },
     'required': ['account', 'user', 'password', 'database', 'schema'],
 }
