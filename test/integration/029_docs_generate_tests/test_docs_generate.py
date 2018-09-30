@@ -1316,7 +1316,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': {}
+                        'vars': {},
+                        'tags': [],
                     },
                     'depends_on': {
                         'macros': [],
