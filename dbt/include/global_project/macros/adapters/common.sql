@@ -33,10 +33,6 @@
 {% endmacro %}
 
 {% macro create_table_as(temporary, relation, sql) -%}
-  {%- if not temporary -%}
-    {{ adapter.cache_new_relation(relation) }}
-  {%- endif -%}
-
   {{ adapter_macro('create_table_as', temporary, relation, sql) }}
 {%- endmacro %}
 
@@ -50,8 +46,6 @@
 
 
 {% macro create_view_as(relation, sql) -%}
-  {{ adapter.cache_new_relation(relation) }}
-
   {{ adapter_macro('create_view_as', relation, sql) }}
 {%- endmacro %}
 
@@ -63,8 +57,6 @@
 
 
 {% macro create_archive_table(relation, columns) -%}
-  {{ adapter.cache_new_relation(relation) }}
-
   {{ adapter_macro('create_archive_table', relation, columns) }}
 {%- endmacro %}
 

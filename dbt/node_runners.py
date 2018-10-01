@@ -453,6 +453,10 @@ class ModelRunner(CompileRunner):
 
         materialization_macro.generator(context)()
 
+        # we must have built a new model, add it to the cache
+        relation = self.adapter.Relation.create_from_node(self.config, model)
+        self.adapter.cache_new_relation(relation)
+
         result = context['load_result']('main')
 
         return RunModelResult(model, status=result.status)
