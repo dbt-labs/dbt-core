@@ -107,7 +107,6 @@ def handle(args):
 
 def handle_and_check(args):
     parsed = parse_args(args)
-
     # this needs to happen after args are parsed so we can determine the
     # correct profiles.yml file
     profile_config = read_config(parsed.profiles_dir)
@@ -207,7 +206,7 @@ def invoke_dbt(parsed):
     cfg = None
 
     try:
-        if parsed.which == 'deps':
+        if parsed.which in {'deps', 'clean'}:
             # deps doesn't need a profile, so don't require one.
             cfg = Project.from_current_directory()
         elif parsed.which != 'debug':
@@ -494,5 +493,11 @@ def parse_args(args):
         sys.exit(1)
 
     parsed = p.parse_args(args)
+
+    if not hasattr(parsed, 'which'):
+        # the user did not provide a valid subcommand. trigger the help message
+        # and exit with a error
+        p.print_help()
+        p.exit(1)
 
     return parsed
