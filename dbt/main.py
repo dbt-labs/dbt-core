@@ -156,7 +156,7 @@ def run_from_args(parsed):
     else:
         nearest_project_dir = get_nearest_project_dir()
         if nearest_project_dir is None:
-            raise RuntimeError(
+            raise RuntimeException(
                 "fatal: Not a dbt project (or any of the parent directories). "
                 "Missing dbt_project.yml file"
             )
@@ -165,7 +165,7 @@ def run_from_args(parsed):
 
         res = invoke_dbt(parsed)
         if res is None:
-            raise RuntimeError("Could not run dbt")
+            raise RuntimeException("Could not run dbt")
         else:
             task, cfg = res
 
