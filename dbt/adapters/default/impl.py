@@ -72,6 +72,7 @@ class DefaultAdapter(object):
         "expand_target_column_types",
         "create_schema",
         "quote_as_configured",
+        "cache_new_relation",
 
         # deprecated -- use versions that take relations instead
         "already_exists",
@@ -99,7 +100,6 @@ class DefaultAdapter(object):
         "get_result_from_cursor",
         "quote",
         "convert_type",
-        "cache_new_relation"
     ]
     Relation = DefaultRelation
     Column = Column
@@ -165,16 +165,14 @@ class DefaultAdapter(object):
     ###
     # FUNCTIONS THAT SHOULD BE ABSTRACT
     ###
-    def cache_new_relation(self, relation):
+    def cache_new_relation(self, relation, model_name=None):
         """Cache a new relation in dbt. It will show up in `list relations`."""
         if relation is None:
-            dbt.exceptions.raise_compiler_error()
-        if dbt.flags.USE_CACHE:
-            self.cache.add(
-                schema=relation.schema,
-                identifier=relation.identifier,
-                inner=relation,
+            dbt.exceptions.raise_compiler_error(
+                'Attempted to cache a null relation for {}'.format(model_name)
             )
+        if dbt.flags.USE_CACHE:
+            self.cache.add(relation)
         # so jinja doesn't render things
         return ''
 
@@ -203,8 +201,7 @@ class DefaultAdapter(object):
 
     def drop_relation(self, relation, model_name=None):
         if dbt.flags.USE_CACHE:
-            self.cache.drop(schema=relation.schema,
-                            identifier=relation.identifier)
+            self.cache.drop(relation)
         if relation.type is None:
             dbt.exceptions.raise_compiler_error(
                 'Tried to drop relation {}, but its type is null.'
@@ -247,12 +244,7 @@ class DefaultAdapter(object):
     def rename_relation(self, from_relation, to_relation,
                         model_name=None):
         if dbt.flags.USE_CACHE:
-            self.cache.rename(
-                old_schema=from_relation.schema,
-                old_identifier=from_relation.identifier,
-                new_schema=to_relation.schema,
-                new_identifier=to_relation.identifier
-            )
+            self.cache.rename(from_relation, to_relation)
         sql = 'alter table {} rename to {}'.format(
             from_relation, to_relation.include(schema=False))
 
@@ -361,7 +353,8 @@ class DefaultAdapter(object):
     ###
     # RELATIONS
     ###
-    def _is_cached(self, schema, model_name=None, debug_on_missing=True):
+    def _schema_is_cached(self, schema, model_name=None,
+                          debug_on_missing=True):
         """Check if the schema is cached, and by default logs if it is not."""
         if dbt.flags.USE_CACHE is False:
             return False
@@ -380,7 +373,7 @@ class DefaultAdapter(object):
             '`list_relations` is not implemented for this adapter!')
 
     def list_relations(self, schema, model_name=None):
-        if self._is_cached(schema, model_name):
+        if self._schema_is_cached(schema, model_name):
             return self.cache.get_relations(schema)
 
         # we can't build the relations cache because we don't have a
@@ -875,11 +868,7 @@ class DefaultAdapter(object):
         for schema in schemas:
             # bypass the cache, of course!
             for relation in self._list_relations(schema):
-                self.cache.add(
-                    schema=relation.schema,
-                    identifier=relation.name,
-                    inner=relation
-                )
+                self.cache.add(relation)
         self._link_cached_relations(manifest, schemas)
         # it's possible that there were no relations in some schemas. We want
         # to insert the schemas we query into the cache's `.schemas` attribute

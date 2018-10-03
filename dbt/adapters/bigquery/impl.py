@@ -41,6 +41,7 @@ class BigQueryAdapter(PostgresAdapter):
         "expand_target_column_types",
         "load_dataframe",
         "get_missing_columns",
+        "cache_new_relation",
 
         "create_schema",
         "alter_table_add_columns",
@@ -203,12 +204,12 @@ class BigQueryAdapter(PostgresAdapter):
         # This will 404 if the dataset does not exist. This behavior mirrors
         # the implementation of list_relations for other adapters
         try:
-            return [self.bq_table_to_relation(table) for table in all_tables]
+            return [self._bq_table_to_relation(table) for table in all_tables]
         except google.api_core.exceptions.NotFound as e:
             return []
 
     def get_relation(self, schema, identifier, model_name=None):
-        if self._is_cached(schema, model_name):
+        if self._schema_is_cached(schema, model_name):
             # if it's in the cache, use the parent's model of going through
             # the relations cache and picking out the relation
             return super(BigQueryAdapter, self).get_relation(
@@ -217,11 +218,13 @@ class BigQueryAdapter(PostgresAdapter):
                 model_name=model_name
             )
 
-        table = self.get_bq_table(schema, identifier)
-        return self.bq_table_to_relation(table)
+        table = self._get_bq_table(schema, identifier)
+        return self._bq_table_to_relation(table)
 
     def drop_relation(self, relation, model_name=None):
-        self.cache.drop(schema=relation.schema, identifier=relation.identifier)
+        if self._schema_is_cached(relation.schema, model_name):
+            self.cache.drop(relation)
+
         conn = self.get_connection(model_name)
         client = conn.handle
 
@@ -515,7 +518,7 @@ class BigQueryAdapter(PostgresAdapter):
         dataset_ref = conn.handle.dataset(dataset_name)
         return google.cloud.bigquery.Dataset(dataset_ref)
 
-    def bq_table_to_relation(self, bq_table):
+    def _bq_table_to_relation(self, bq_table):
         if bq_table is None:
             return None
 
@@ -529,7 +532,7 @@ class BigQueryAdapter(PostgresAdapter):
             },
             type=self.RELATION_TYPES.get(bq_table.table_type))
 
-    def get_bq_table(self, dataset_name, identifier, model_name=None):
+    def _get_bq_table(self, dataset_name, identifier, model_name=None):
         conn = self.get_connection(model_name)
 
         dataset = self.get_dataset(dataset_name, model_name)

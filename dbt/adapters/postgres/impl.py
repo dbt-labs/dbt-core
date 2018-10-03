@@ -147,17 +147,18 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         return connection, cursor
 
     def _link_cached_relations(self, manifest, schemas):
-        # now set up any links
         try:
             table = self.run_operation(manifest, GET_RELATIONS_OPERATION_NAME)
-            # avoid a rollback when releasing the connection
-            self.commit_if_has_connection(GET_RELATIONS_OPERATION_NAME)
         finally:
             self.release_connection(GET_RELATIONS_OPERATION_NAME)
         table = self._relations_filter_table(table, schemas)
 
         for (refed_schema, refed_name, dep_schema, dep_name) in table:
-            self.cache.add_link(dep_schema, dep_name, refed_schema, refed_name)
+            referenced = self.Relation.create(schema=refed_schema,
+                                              identifier=refed_name)
+            dependent = self.Relation.create(schema=dep_schema,
+                                             identifier=dep_name)
+            self.cache.add_link(dependent, referenced)
 
     def _list_relations(self, schema, model_name=None):
         sql = """
