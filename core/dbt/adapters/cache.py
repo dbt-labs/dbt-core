@@ -237,10 +237,7 @@ class RelationsCache:
         # self.relations or any cache entry's referenced_by during iteration
         # it's a runtime error!
         with self.lock:
-            return {
-                dot_separated(k): v.dump_graph_entry()
-                for k, v in self.relations.items()
-            }
+            return {dot_separated(k): v.dump_graph_entry() for k, v in self.relations.items()}
 
     def _setdefault(self, relation: _CachedRelation):
         """Add a relation to the cache, or return it if it already exists.
