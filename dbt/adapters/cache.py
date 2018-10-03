@@ -184,13 +184,14 @@ class RelationsCache(object):
         known relation is a key with a value of a list of keys it is referenced
         by.
         """
-        # we have to hold the lock while iterating, if other threads modify
-        # self.relations during iteration it's a runtime error
+        # we have to hold the lock for the entire dump, if other threads modify
+        # self.relations or any cache entry's referenced_by during iteration
+        # it's a runtime error!
         with self.lock:
-            # consume the full iterator inside the lock
-            items = list(self.relations.items())
-
-        return {dot_separated(k): v.dump_graph_entry() for k, v in items}
+            return {
+                dot_separated(k): v.dump_graph_entry()
+                for k, v in self.relations.items()
+            }
 
     def _setdefault(self, relation):
         """Add a relation to the cache, or return it if it already exists.
