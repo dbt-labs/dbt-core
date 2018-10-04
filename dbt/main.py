@@ -29,6 +29,7 @@ from dbt.utils import ExitCodes
 from dbt.config import Project, RuntimeConfig, DbtProjectError, \
     DbtProfileError, DEFAULT_PROFILES_DIR, read_config, \
     send_anonymous_usage_stats, colorize_output, read_profiles
+from dbt.exceptions import DbtProfileError, DbtProfileError, RuntimeException
 
 
 PROFILES_HELP_MESSAGE = """
@@ -92,7 +93,10 @@ def main(args=None):
 
         if logger_initialized:
             logger.debug(traceback.format_exc())
-        else:
+        elif not isinstance(e, RuntimeException):
+            # if it did not come from dbt proper and the logger is not
+            # initialized (so there's no safe path to log to), log the stack
+            # trace at error level.
             logger.error(traceback.format_exc())
         exit_code = ExitCodes.UnhandledError
 
@@ -151,7 +155,7 @@ def run_from_args(parsed):
     else:
         nearest_project_dir = get_nearest_project_dir()
         if nearest_project_dir is None:
-            raise RuntimeError(
+            raise RuntimeException(
                 "fatal: Not a dbt project (or any of the parent directories). "
                 "Missing dbt_project.yml file"
             )
@@ -160,7 +164,7 @@ def run_from_args(parsed):
 
         res = invoke_dbt(parsed)
         if res is None:
-            raise RuntimeError("Could not run dbt")
+            raise RuntimeException("Could not run dbt")
         else:
             task, cfg = res
 

@@ -171,7 +171,6 @@ def get_docs_macro_name(docs_name, with_prefix=True):
 def dependencies_for_path(config, module_path):
     """Given a module path, yield all dependencies in that path."""
     logger.debug("Loading dependency project from {}".format(module_path))
-    import dbt.config
     for obj in os.listdir(module_path):
         full_obj = os.path.join(module_path, obj)
 
@@ -183,7 +182,7 @@ def dependencies_for_path(config, module_path):
 
         try:
             yield config.new_project(full_obj)
-        except dbt.config.DbtProjectError as e:
+        except dbt.exceptions.DbtProjectError as e:
             logger.info(
                 "Error reading dependency project at {}".format(
                     full_obj)
