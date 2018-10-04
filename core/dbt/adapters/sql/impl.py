@@ -114,8 +114,7 @@ class SQLAdapter(BaseAdapter):
         for column_name, reference_column in reference_columns.items():
             target_column = target_columns.get(column_name)
 
-            if target_column is not None and \
-               target_column.can_expand_to(reference_column):
+            if target_column is not None and target_column.can_expand_to(reference_column):
                 col_string_size = reference_column.string_size()
                 new_type = self.Column.string_type(col_string_size)
                 fire_event(

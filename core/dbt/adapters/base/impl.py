@@ -157,6 +157,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     Macros:
         - get_catalog
     """
+
     Relation: Type[BaseRelation] = BaseRelation
     Column: Type[BaseColumn] = BaseColumn
     ConnectionManager: Type[ConnectionManagerProtocol]
@@ -508,7 +509,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     ) -> List[BaseColumn]:
         """Get a list of the columns in the given Relation. """
         raise NotImplementedException(
-            '`get_columns_in_relation` is not implemented for this adapter!'
+            "`get_columns_in_relation` is not implemented for this adapter!"
         )
 
     @available.deprecated("get_columns_in_relation", lambda *a, **k: [])
@@ -532,7 +533,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             database with columns of unspecified types.
         """
         raise NotImplementedException(
-            '`expand_target_column_types` is not implemented for this adapter!'
+            "`expand_target_column_types` is not implemented for this adapter!"
         )
 
     @abc.abstractmethod
@@ -549,8 +550,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :rtype: List[self.Relation]
         """
         raise NotImplementedException(
-            '`list_relations_without_caching` is not implemented for this '
-            'adapter!'
+            "`list_relations_without_caching` is not implemented for this " "adapter!"
         )
 
     ###
@@ -669,7 +669,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         # we can't build the relations cache because we don't have a
         # manifest so we can't run any operations.
-        relations = self.list_relations_without_caching(
+        relations = self.list_relations_without_caching(schema_relation)
         fire_event(
             ListRelations(
                 database=database, schema=schema, relations=[_make_key(x) for x in relations]
