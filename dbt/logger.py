@@ -50,10 +50,7 @@ CACHE_LOGGER = logging.getLogger('dbt.cache')
 # Redirect warnings through our logging setup
 # They will be logged to a file below
 logging.captureWarnings(True)
-# suppress ResourceWarnings about unclosed sockets, as the bigquery library
-# never closes them
-warnings.filterwarnings("ignore", category=ResourceWarning,
-                        message="unclosed.*<socket.socket.*>")
+dbt.compat.suppress_warnings()
 
 initialized = False
 
