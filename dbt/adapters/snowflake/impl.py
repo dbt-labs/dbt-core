@@ -11,19 +11,17 @@ from contextlib import contextmanager
 import dbt.compat
 import dbt.exceptions
 
-from dbt.adapters.postgres import PostgresAdapter
-from dbt.adapters.snowflake.relation import SnowflakeRelation
+from dbt.adapters.sql import SQLAdapter
+from dbt.adapters.snowflake import SnowflakeRelation
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import filter_null_values
 
 
-class SnowflakeAdapter(PostgresAdapter):
+class SnowflakeAdapter(SQLAdapter):
     Relation = SnowflakeRelation
 
     @contextmanager
-    def exception_handler(self, sql, model_name=None,
-                          connection_name='master'):
-        connection = self.get_connection(connection_name)
+    def exception_handler(self, sql, connection_name='master'):
 
         try:
             yield
@@ -103,10 +101,7 @@ class SnowflakeAdapter(PostgresAdapter):
 
         return connection
 
-    def _link_cached_relations(self, manifest, schemas):
-        pass
-
-    def _list_relations(self, schema, model_name=None):
+    def list_relations_without_caching(self, schema, model_name=None):
         sql = """
         select
           table_name as name, table_schema as schema, table_type as type
@@ -133,14 +128,6 @@ class SnowflakeAdapter(PostgresAdapter):
             },
             type=relation_type_lookup.get(type))
                 for (name, _schema, type) in results]
-
-    def rename_relation(self, from_relation, to_relation,
-                        model_name=None):
-        self.cache.rename(from_relation, to_relation)
-        sql = 'alter table {} rename to {}'.format(
-            from_relation, to_relation)
-
-        connection, cursor = self.add_query(sql, model_name)
 
     def add_begin_query(self, name):
         return self.add_query('BEGIN', name, auto_begin=False)
@@ -249,12 +236,14 @@ class SnowflakeAdapter(PostgresAdapter):
         logger.debug("Cancel query '{}': {}".format(connection_name, res))
 
     @classmethod
-    def _get_columns_in_table_sql(cls, schema_name, table_name, database):
+    def get_columns_in_relation_sql(cls, relation):
         schema_filter = '1=1'
-        if schema_name is not None:
-            schema_filter = "table_schema ilike '{}'".format(schema_name)
+        if relation.schema:
+            schema_filter = "table_schema ilike '{}'".format(relation.schema)
 
-        db_prefix = '' if database is None else '{}.'.format(database)
+        db_prefix = ''
+        if relation.database:
+            db_prefix = '{}.'.format(relation.database)
 
         sql = """
         select
@@ -268,7 +257,7 @@ class SnowflakeAdapter(PostgresAdapter):
           and {schema_filter}
         order by ordinal_position
         """.format(db_prefix=db_prefix,
-                   table_name=table_name,
+                   table_name=relation.identifier,
                    schema_filter=schema_filter).strip()
 
         return sql

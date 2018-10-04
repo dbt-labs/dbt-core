@@ -1,8 +1,9 @@
 import psycopg2
 
 from contextlib import contextmanager
+import time
 
-import dbt.adapters.default
+from dbt.adapters.sql import SQLAdapter
 import dbt.compat
 import dbt.exceptions
 import agate
@@ -13,12 +14,12 @@ from dbt.logger import GLOBAL_LOGGER as logger
 GET_RELATIONS_OPERATION_NAME = 'get_relations_data'
 
 
-class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
+class PostgresAdapter(SQLAdapter):
 
     DEFAULT_TCP_KEEPALIVE = 0  # 0 means to use the default value
 
     @contextmanager
-    def exception_handler(self, sql, model_name=None, connection_name=None):
+    def exception_handler(self, sql, connection_name='master'):
         try:
             yield
 
@@ -110,43 +111,8 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
 
         logger.debug("Cancel query '{}': {}".format(connection_name, res))
 
-    # DATABASE INSPECTION FUNCTIONS
-    # These require the profile AND project, as they need to know
-    # database-specific configs at the project level.
-    def alter_column_type(self, schema, table, column_name,
-                          new_column_type, model_name=None):
-        """
-        1. Create a new column (w/ temp name and correct type)
-        2. Copy data over to it
-        3. Drop the existing column (cascade!)
-        4. Rename the new column to existing column
-        """
-
-        relation = self.Relation.create(
-            schema=schema,
-            identifier=table,
-            quote_policy=self.config.quoting
-        )
-
-        opts = {
-            "relation": relation,
-            "old_column": column_name,
-            "tmp_column": "{}__dbt_alter".format(column_name),
-            "dtype": new_column_type
-        }
-
-        sql = """
-        alter table {relation} add column "{tmp_column}" {dtype};
-        update {relation} set "{tmp_column}" = "{old_column}";
-        alter table {relation} drop column "{old_column}" cascade;
-        alter table {relation} rename column "{tmp_column}" to "{old_column}";
-        """.format(**opts).strip()  # noqa
-
-        connection, cursor = self.add_query(sql, model_name)
-
-        return connection, cursor
-
-    def _link_cached_relations(self, manifest, schemas):
+    def _link_cached_relations(self, manifest):
+        schemas = manifest.get_used_schemas()
         try:
             table = self.run_operation(manifest, GET_RELATIONS_OPERATION_NAME)
         finally:
@@ -160,7 +126,11 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
                                              identifier=dep_name)
             self.cache.add_link(dependent, referenced)
 
-    def _list_relations(self, schema, model_name=None):
+    def _relations_cache_for_schemas(self, manifest):
+        super(PostgresAdapter, self)._relations_cache_for_schemas(manifest)
+        self._link_cached_relations(manifest)
+
+    def list_relations_without_caching(self, schema, model_name=None):
         sql = """
         select tablename as name, schemaname as schema, 'table' as type from pg_tables
         where schemaname ilike '{schema}'
@@ -204,26 +174,28 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
         return results[0] > 0
 
     @classmethod
-    def convert_text_type(cls, agate_table, col_idx):
-        return "text"
+    def get_columns_in_relation_sql(cls, relation):
+        schema_filter = '1=1'
+        if relation.schema:
+            schema_filter = "table_schema = '{}'".format(relation.schema)
 
-    @classmethod
-    def convert_number_type(cls, agate_table, col_idx):
-        decimals = agate_table.aggregate(agate.MaxPrecision(col_idx))
-        return "float8" if decimals else "integer"
+        db_prefix = ''
+        if relation.database:
+            db_prefix = '{}.'.format(relation.database)
 
-    @classmethod
-    def convert_boolean_type(cls, agate_table, col_idx):
-        return "boolean"
+        sql = """
+        select
+            column_name,
+            data_type,
+            character_maximum_length,
+            numeric_precision || ',' || numeric_scale as numeric_size
 
-    @classmethod
-    def convert_datetime_type(cls, agate_table, col_idx):
-        return "timestamp without time zone"
+        from {db_prefix}information_schema.columns
+        where table_name = '{table_name}'
+          and {schema_filter}
+        order by ordinal_position
+        """.format(db_prefix=db_prefix,
+                   table_name=relation.identifier,
+                   schema_filter=schema_filter).strip()
 
-    @classmethod
-    def convert_date_type(cls, agate_table, col_idx):
-        return "date"
-
-    @classmethod
-    def convert_time_type(cls, agate_table, col_idx):
-        return "time"
+        return sql

@@ -492,10 +492,11 @@ class TestRunner(CompileRunner):
                                         self.num_nodes)
 
     def execute_test(self, test):
-        res, table = self.adapter.execute_and_fetch(
+        res, table = self.adapter.execute(
             test.wrapped_sql,
             test.name,
-            auto_begin=True)
+            auto_begin=True,
+            fetch=True)
 
         num_rows = len(table.rows)
         if num_rows > 1:

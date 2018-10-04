@@ -1,6 +1,6 @@
 from unittest import TestCase
 from dbt.adapters.cache import RelationsCache
-from dbt.adapters.default.relation import DefaultRelation
+from dbt.adapters.base.relation import BaseRelation
 from multiprocessing.dummy import Pool as ThreadPool
 import dbt.exceptions
 
@@ -9,10 +9,10 @@ import time
 
 
 def make_relation(schema, identifier):
-    return DefaultRelation.create(schema=schema, identifier=identifier)
+    return BaseRelation.create(schema=schema, identifier=identifier)
 
 def make_mock_relationship(schema, identifier):
-    return DefaultRelation.create(
+    return BaseRelation.create(
         database='test_db', schema=schema, identifier=identifier,
         table_name=identifier, type='view'
     )

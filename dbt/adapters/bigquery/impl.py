@@ -11,8 +11,8 @@ import dbt.flags as flags
 import dbt.clients.gcloud
 import dbt.clients.agate_helper
 
-from dbt.adapters.postgres import PostgresAdapter
-from dbt.adapters.bigquery.relation import BigQueryRelation
+from dbt.adapters.base import BaseAdapter
+from dbt.adapters.bigquery import BigQueryRelation
 from dbt.contracts.connection import Connection
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -26,35 +26,13 @@ import time
 import agate
 
 
-class BigQueryAdapter(PostgresAdapter):
-
-    config_functions = [
-        # deprecated -- use versions that take relations instead
-        "query_for_existing",
-        "execute_model",
-        "create_temporary_table",
-        "drop",
-        "execute",
-        "quote_schema_and_table",
-        "make_date_partitioned_table",
-        "already_exists",
-        "expand_target_column_types",
-        "load_dataframe",
-        "get_missing_columns",
-        "cache_new_relation",
-
-        "create_schema",
-        "alter_table_add_columns",
-
-        # versions of adapter functions that take / return Relations
-        "get_relation",
-        "drop_relation",
-        "rename_relation",
-
-        "get_columns_in_table",
-
-        # formerly profile functions
-        "add_query",
+class BigQueryAdapter(BaseAdapter):
+    config_functions = BaseAdapter.config_functions[:] + [
+        'execute_model',
+        'load_dataframe',
+        'make_date_partitioned_table',
+        'create_temporary_table',
+        'alter_table_add_columns',
     ]
 
     SCOPE = ('https://www.googleapis.com/auth/bigquery',
@@ -81,8 +59,7 @@ class BigQueryAdapter(PostgresAdapter):
         raise dbt.exceptions.DatabaseException(error_msg)
 
     @contextmanager
-    def exception_handler(self, sql, model_name=None,
-                          connection_name='master'):
+    def exception_handler(self, sql, connection_name='master'):
         try:
             yield
 
@@ -113,10 +90,8 @@ class BigQueryAdapter(PostgresAdapter):
     def commit(self, connection):
         pass
 
-    @classmethod
-    def get_status(cls, cursor):
-        raise dbt.exceptions.NotImplementedException(
-            '`get_status` is not implemented for this adapter!')
+    def cancel_open_connections(self):
+        pass
 
     @classmethod
     def get_bigquery_credentials(cls, profile_credentials):
@@ -180,10 +155,7 @@ class BigQueryAdapter(PostgresAdapter):
 
         return connection
 
-    def _link_cached_relations(self, manifest, schemas):
-        pass
-
-    def _list_relations(self, schema, model_name=None):
+    def list_relations_without_caching(self, schema, model_name=None):
         connection = self.get_connection(model_name)
         client = connection.handle
 
@@ -232,9 +204,9 @@ class BigQueryAdapter(PostgresAdapter):
         relation_object = dataset.table(relation.identifier)
         client.delete_table(relation_object)
 
-    def rename(self, schema, from_name, to_name, model_name=None):
+    def truncate_relation(self, relation, model_name=None):
         raise dbt.exceptions.NotImplementedException(
-            '`rename` is not implemented for this adapter!')
+            '`truncate` is not implemented for this adapter!')
 
     def rename_relation(self, from_relation, to_relation, model_name=None):
         raise dbt.exceptions.NotImplementedException(
@@ -260,7 +232,7 @@ class BigQueryAdapter(PostgresAdapter):
 
         logger.debug("Model SQL ({}):\n{}".format(model_name, model_sql))
 
-        with self.exception_handler(model_sql, model_name, model_name):
+        with self.exception_handler(model_sql, model_name):
             client.create_table(view)
 
         return "CREATE VIEW"
@@ -317,8 +289,7 @@ class BigQueryAdapter(PostgresAdapter):
         query_job = client.query(model_sql, job_config=job_config)
 
         # this waits for the job to complete
-        with self.exception_handler(model_sql, model_alias,
-                                    model_name):
+        with self.exception_handler(model_sql, model_name):
             query_job.result(timeout=self.get_timeout(conn))
 
         return "CREATE TABLE"
@@ -362,7 +333,7 @@ class BigQueryAdapter(PostgresAdapter):
         query_job = client.query(sql, job_config)
 
         # this blocks until the query has completed
-        with self.exception_handler(sql, model_name):
+        with self.exception_handler(sql, conn.name):
             iterator = query_job.result()
 
         return query_job, iterator
@@ -414,23 +385,11 @@ class BigQueryAdapter(PostgresAdapter):
         status = 'OK'
         return status, res
 
-    def execute_and_fetch(self, sql, model_name, auto_begin=None):
-        status, table = self.execute(sql, model_name, fetch=True)
-        return status, table
-
     @classmethod
     def get_table_from_response(cls, resp):
         column_names = [field.name for field in resp.schema]
         rows = [dict(row.items()) for row in resp]
         return dbt.clients.agate_helper.table_from_data(rows, column_names)
-
-    # BigQuery doesn't support BEGIN/COMMIT, so stub these out.
-
-    def add_begin_query(self, name):
-        pass
-
-    def add_commit_query(self, name):
-        pass
 
     def create_schema(self, schema, model_name=None):
         logger.debug('Creating schema "%s".', schema)
@@ -444,7 +403,7 @@ class BigQueryAdapter(PostgresAdapter):
         try:
             client.get_dataset(dataset)
         except google.api_core.exceptions.NotFound:
-            with self.exception_handler('create dataset', model_name):
+            with self.exception_handler('create dataset', conn.name):
                 client.create_dataset(dataset)
 
     def drop_tables_in_schema(self, dataset):
@@ -464,7 +423,7 @@ class BigQueryAdapter(PostgresAdapter):
         client = conn.handle
 
         dataset = self.get_dataset(schema, model_name)
-        with self.exception_handler('drop dataset', model_name):
+        with self.exception_handler('drop dataset', conn.name):
             self.drop_tables_in_schema(dataset)
             client.delete_dataset(dataset)
 
@@ -472,22 +431,17 @@ class BigQueryAdapter(PostgresAdapter):
         conn = self.get_connection(model_name)
         client = conn.handle
 
-        with self.exception_handler('list dataset', model_name):
+        with self.exception_handler('list dataset', conn.name):
             all_datasets = client.list_datasets(include_all=True)
             return [ds.dataset_id for ds in all_datasets]
 
-    def get_columns_in_table(self, schema_name, table_name,
-                             database=None, model_name=None):
-
-        # BigQuery does not have databases -- the database parameter is here
-        # for consistency with the base implementation
-
+    def get_columns_in_relation(self, relation, model_name=None):
         conn = self.get_connection(model_name)
         client = conn.handle
 
         try:
-            dataset_ref = client.dataset(schema_name)
-            table_ref = dataset_ref.table(table_name)
+            dataset_ref = client.dataset(relation.schema)
+            table_ref = dataset_ref.table(relation.table_name)
             table = client.get_table(table_ref)
             return self.get_dbt_columns_from_bq_table(table)
 
@@ -512,7 +466,7 @@ class BigQueryAdapter(PostgresAdapter):
         conn = self.get_connection(model_name)
         client = conn.handle
 
-        with self.exception_handler('get dataset', model_name):
+        with self.exception_handler('get dataset', conn.name):
             all_datasets = client.list_datasets(include_all=True)
             return any([ds.dataset_id == schema for ds in all_datasets])
 
@@ -595,6 +549,14 @@ class BigQueryAdapter(PostgresAdapter):
         return "datetime"
 
     @classmethod
+    def convert_date_type(cls, agate_table, col_idx):
+        return "date"
+
+    @classmethod
+    def convert_time_type(cls, agate_table, col_idx):
+        return "time"
+
+    @classmethod
     def _agate_to_schema(cls, agate_table, column_override):
         bq_schema = []
         for idx, col_name in enumerate(agate_table.column_names):
@@ -620,11 +582,10 @@ class BigQueryAdapter(PostgresAdapter):
             job = client.load_table_from_file(f, table, rewind=True,
                                               job_config=load_config)
 
-        with self.exception_handler("LOAD TABLE"):
+        with self.exception_handler("LOAD TABLE", conn.name):
             self.poll_until_job_completes(job, self.get_timeout(conn))
 
-    def expand_target_column_types(self, temp_table,
-                                   to_schema, to_table, model_name=None):
+    def expand_column_types(self, goal, current, model_name=None):
         # This is a no-op on BigQuery
         pass
 

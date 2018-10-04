@@ -180,29 +180,46 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         ])
 
     def test_quoting_on_drop(self):
-        self.adapter.drop(
+        relation = self.adapter.Relation.create(
             schema='test_schema',
-            relation='test_table',
-            relation_type='table'
+            identifier='test_table',
+            type='table',
+            quote_policy=self.adapter.config.quoting,
         )
+        self.adapter.drop_relation(relation)
         self.mock_execute.assert_has_calls([
             mock.call('drop table if exists "test_schema".test_table cascade', None)
         ])
 
     def test_quoting_on_truncate(self):
-        self.adapter.truncate(
+        relation = self.adapter.Relation.create(
             schema='test_schema',
-            table='test_table'
+            identifier='test_table',
+            type='table',
+            quote_policy=self.adapter.config.quoting,
         )
+        self.adapter.truncate_relation(relation)
         self.mock_execute.assert_has_calls([
             mock.call('truncate table "test_schema".test_table', None)
         ])
 
     def test_quoting_on_rename(self):
-        self.adapter.rename(
+        from_relation = self.adapter.Relation.create(
             schema='test_schema',
-            from_name='table_a',
-            to_name='table_b'
+            identifier='table_a',
+            type='table',
+            quote_policy=self.adapter.config.quoting,
+        )
+        to_relation = self.adapter.Relation.create(
+            schema='test_schema',
+            identifier='table_b',
+            type='table',
+            quote_policy=self.adapter.config.quoting,
+        )
+
+        self.adapter.rename_relation(
+            from_relation=from_relation,
+            to_relation=to_relation
         )
         self.mock_execute.assert_has_calls([
             mock.call('alter table "test_schema".table_a rename to table_b', None)

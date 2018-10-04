@@ -84,16 +84,12 @@ class RedshiftAdapter(PostgresAdapter):
                     "Invalid 'method' in profile: '{}'".format(method))
 
     @classmethod
-    def _get_columns_in_table_sql(cls, schema_name, table_name, database):
-        # Redshift doesn't support cross-database queries,
-        # so we can ignore the `database` argument
-
-        # TODO : how do we make this a macro?
-        if schema_name is None:
-            table_schema_filter = '1=1'
-        else:
-            table_schema_filter = "table_schema = '{schema_name}'".format(
-                schema_name=schema_name)
+    def get_columns_in_relation_sql(cls, relation):
+        # Redshift doesn't support cross-database queries, so we can ignore the
+        # relation's database
+        schema_filter = '1=1'
+        if relation.schema:
+            schema_filter = "table_schema = '{}'".format(relation.schema)
 
         sql = """
             with bound_views as (
@@ -150,10 +146,10 @@ class RedshiftAdapter(PostgresAdapter):
                 numeric_size
 
             from unioned
-            where {table_schema_filter}
+            where {schema_filter}
             order by ordinal_position
-        """.format(table_name=table_name,
-                   table_schema_filter=table_schema_filter).strip()
+        """.format(table_name=relation.identifier,
+                   schema_filter=schema_filter).strip()
         return sql
 
     def drop_relation(self, relation, model_name=None):

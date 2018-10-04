@@ -24,7 +24,7 @@ class _CachedRelation(object):
     :attr str identifier: The identifier of this relation.
     :attr Dict[_ReferenceKey, _CachedRelation] referenced_by: The relations
         that refer to this relation.
-    :attr DefaultRelation inner: The underlying dbt relation.
+    :attr BaseRelation inner: The underlying dbt relation.
     """
     def __init__(self, inner):
         self.referenced_by = {}
@@ -239,8 +239,8 @@ class RelationsCache(object):
         to bar, so "drop bar cascade" will drop foo and all of foo's
         dependents.
 
-        :param DefaultRelation referenced: The referenced model.
-        :param DefaultRelation dependent: The dependent model.
+        :param BaseRelation referenced: The referenced model.
+        :param BaseRelation dependent: The dependent model.
         :raises InternalError: If either entry does not exist.
         """
         referenced = _ReferenceKey(
@@ -271,7 +271,7 @@ class RelationsCache(object):
         """Add the relation inner to the cache, under the schema schema and
         identifier identifier
 
-        :param DefaultRelation relation: The underlying relation.
+        :param BaseRelation relation: The underlying relation.
         """
         cached = _CachedRelation(relation)
         logger.debug('Adding relation: {!s}'.format(cached))
@@ -379,8 +379,8 @@ class RelationsCache(object):
         If the schema/identifier key is absent, we only debug log and return,
         assuming it's a temp table being renamed.
 
-        :param DefaultRelation old: The existing relation name information.
-        :param DefaultRelation new: The new relation name information.
+        :param BaseRelation old: The existing relation name information.
+        :param BaseRelation new: The new relation name information.
         :raises InternalError: If the new key is already present.
         """
         old_key = _ReferenceKey(
@@ -407,7 +407,7 @@ class RelationsCache(object):
         """Case-insensitively yield all relations matching the given schema.
 
         :param str schema: The case-insensitive schema name to list from.
-        :return List[DefaultRelation]: The list of relations with the given
+        :return List[BaseRelation]: The list of relations with the given
             schema
         """
         schema = schema.lower()

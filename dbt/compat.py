@@ -1,3 +1,4 @@
+import abc
 import codecs
 import json
 import warnings
@@ -54,6 +55,26 @@ def write_file(path, s):
     else:
         with open(path, 'w') as f:
             return f.write(to_string(s))
+
+
+if WHICH_PYTHON == 2:
+    # python 2.7 is missing this.
+    class abstractclassmethod(classmethod):
+        __isabstractmethod__ = True
+
+        def __init__(self, func):
+            func.__isabstractmethod__ = True
+            super(abstractclassmethod, self).__init__(func)
+
+    class abstractstaticmethod(staticmethod):
+        __isabstractmethod__ = True
+
+        def __init__(self, func):
+            func.__isabstractmethod__ = True
+            super(abstractstaticmethod, self).__init__(func)
+else:
+    abstractclassmethod = abc.abstractclassmethod
+    abstractstaticmethod = abc.abstractstaticmethod
 
 
 def suppress_warnings():

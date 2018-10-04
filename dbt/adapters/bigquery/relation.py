@@ -1,8 +1,8 @@
-from dbt.adapters.default.relation import DefaultRelation
+from dbt.adapters.base.relation import BaseRelation
 from dbt.utils import filter_null_values
 
 
-class BigQueryRelation(DefaultRelation):
+class BigQueryRelation(BaseRelation):
     External = "external"
 
     DEFAULTS = {
@@ -55,7 +55,7 @@ class BigQueryRelation(DefaultRelation):
                 },
             },
             'type': {
-                'enum': DefaultRelation.RelationTypes + [External, None],
+                'enum': BaseRelation.RelationTypes + [External, None],
             },
             'path': PATH_SCHEMA,
             'include_policy': POLICY_SCHEMA,
