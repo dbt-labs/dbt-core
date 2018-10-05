@@ -10,6 +10,7 @@ import mock
 import yaml
 
 import dbt.config
+import dbt.exceptions
 from dbt.contracts.connection import PostgresCredentials, RedshiftCredentials
 from dbt.contracts.project import PackageConfig
 
@@ -259,7 +260,7 @@ class TestProfile(BaseConfigTest):
 
     def test_missing_type(self):
         del self.default_profile_data['default']['outputs']['postgres']['type']
-        with self.assertRaises(dbt.config.DbtProfileError) as exc:
+        with self.assertRaises(dbt.exceptions.DbtProfileError) as exc:
             self.from_raw_profiles()
         self.assertIn('type', str(exc.exception))
         self.assertIn('postgres', str(exc.exception))
@@ -267,7 +268,7 @@ class TestProfile(BaseConfigTest):
 
     def test_bad_type(self):
         self.default_profile_data['default']['outputs']['postgres']['type'] = 'invalid'
-        with self.assertRaises(dbt.config.DbtProfileError) as exc:
+        with self.assertRaises(dbt.exceptions.DbtProfileError) as exc:
             self.from_raw_profiles()
         self.assertIn('Credentials', str(exc.exception))
         self.assertIn('postgres', str(exc.exception))
@@ -275,7 +276,7 @@ class TestProfile(BaseConfigTest):
 
     def test_invalid_credentials(self):
         del self.default_profile_data['default']['outputs']['postgres']['host']
-        with self.assertRaises(dbt.config.DbtProfileError) as exc:
+        with self.assertRaises(dbt.exceptions.DbtProfileError) as exc:
             self.from_raw_profiles()
         self.assertIn('Credentials', str(exc.exception))
         self.assertIn('postgres', str(exc.exception))
@@ -283,13 +284,13 @@ class TestProfile(BaseConfigTest):
 
     def test_target_missing(self):
         del self.default_profile_data['default']['target']
-        with self.assertRaises(dbt.config.DbtProfileError) as exc:
+        with self.assertRaises(dbt.exceptions.DbtProfileError) as exc:
             self.from_raw_profiles()
         self.assertIn('target not specified in profile', str(exc.exception))
         self.assertIn('default', str(exc.exception))
 
     def test_profile_invalid_project(self):
-        with self.assertRaises(dbt.config.DbtProjectError) as exc:
+        with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
             dbt.config.Profile.from_raw_profiles(
                 self.default_profile_data, 'invalid-profile', {}
             )
@@ -299,10 +300,10 @@ class TestProfile(BaseConfigTest):
         self.assertIn('invalid-profile', str(exc.exception))
 
     def test_profile_invalid_target(self):
-        with self.assertRaises(dbt.config.DbtProfileError) as exc:
+        with self.assertRaises(dbt.exceptions.DbtProfileError) as exc:
             dbt.config.Profile.from_raw_profiles(
                 self.default_profile_data, 'default', {},
-                target_override='nope',
+                target_override='nope'
             )
 
         self.assertIn('nope', str(exc.exception))
@@ -311,7 +312,7 @@ class TestProfile(BaseConfigTest):
         self.assertIn('- with-vars', str(exc.exception))
 
     def test_no_outputs(self):
-        with self.assertRaises(dbt.config.DbtProfileError) as exc:
+        with self.assertRaises(dbt.exceptions.DbtProfileError) as exc:
             dbt.config.Profile.from_raw_profiles(
                 {'some-profile': {'target': 'blah'}}, 'some-profile', {}
             )
@@ -331,6 +332,18 @@ class TestProfile(BaseConfigTest):
             deepcopy(self.default_profile_data), 'default', {}
         )
         self.assertEqual(profile, other)
+
+    def test_invalid_env_vars(self):
+        self.env_override['env_value_port'] = 'hello'
+        with mock.patch.dict(os.environ, self.env_override):
+            with self.assertRaises(dbt.exceptions.DbtProfileError) as exc:
+                dbt.config.Profile.from_raw_profile_info(
+                    self.default_profile_data['default'],
+                    'default',
+                    {},
+                    target_override='with-vars'
+                )
+        self.assertIn("not of type 'integer'", str(exc.exception))
 
 
 class TestProfileFile(BaseFileTest):
@@ -472,7 +485,7 @@ class TestProfileFile(BaseFileTest):
         self.args.target = 'with-vars'
         with mock.patch.dict(os.environ, self.env_override):
             with self.assertRaises(dbt.config.DbtProfileError) as exc:
-                profile = self.from_args()
+                self.from_args()
 
         self.assertIn("not of type 'integer'", str(exc.exception))
 
@@ -499,8 +512,8 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile, from_raw)
 
     def test_no_profile(self):
-        with self.assertRaises(dbt.config.DbtProjectError) as exc:
-            profile = self.from_args(project_profile_name=None)
+        with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
+            self.from_args(project_profile_name=None)
         self.assertIn('no profile was specified', str(exc.exception))
 
 
@@ -717,14 +730,13 @@ class TestProject(BaseConfigTest):
 
     def test_invalid_project_name(self):
         self.default_project_data['name'] = 'invalid-project-name'
-        with self.assertRaises(dbt.config.DbtProjectError) as exc:
-            project = dbt.config.Project.from_project_config(
-                self.default_project_data
-            )
+        with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
+            dbt.config.Project.from_project_config(self.default_project_data)
+
         self.assertIn('invalid-project-name', str(exc.exception))
 
     def test_no_project(self):
-        with self.assertRaises(dbt.config.DbtProjectError) as exc:
+        with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
             dbt.config.Project.from_project_root(self.project_dir, {})
 
         self.assertIn('no dbt_project.yml', str(exc.exception))
@@ -748,7 +760,7 @@ class TestProjectFile(BaseFileTest):
 
     def test_with_invalid_package(self):
         self.write_packages({'invalid': ['not a package of any kind']})
-        with self.assertRaises(dbt.config.DbtProjectError) as exc:
+        with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
             dbt.config.Project.from_project_root(self.project_dir, {})
 
 
@@ -771,7 +783,6 @@ class TestVariableProjectFile(BaseFileTest):
 
         self.assertEqual(project.version, "0.1.2")
         self.assertEqual(project.project_name, 'blah')
-
 
 
 class TestRuntimeConfig(BaseConfigTest):
@@ -824,7 +835,7 @@ class TestRuntimeConfig(BaseConfigTest):
         profile = self.get_profile()
         # invalid - must be boolean
         profile.use_colors = None
-        with self.assertRaises(dbt.config.DbtProjectError):
+        with self.assertRaises(dbt.exceptions.DbtProjectError):
             dbt.config.RuntimeConfig.from_parts(project, profile, {})
 
 

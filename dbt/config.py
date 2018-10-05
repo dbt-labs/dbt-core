@@ -10,6 +10,7 @@ import dbt.utils
 from dbt.contracts.connection import Connection, create_credentials
 from dbt.contracts.project import Project as ProjectContract, Configuration, \
     PackageConfig, ProfileConfig
+from dbt.exceptions import DbtProjectError, DbtProfileError
 from dbt.context.common import env_var, Var
 from dbt import compat
 from dbt.adapters.factory import get_relation_class_by_name
@@ -41,21 +42,6 @@ defined in your profiles.yml file. You can find profiles.yml here:
 
 {profiles_file}/profiles.yml
 """.format(profiles_file=DEFAULT_PROFILES_DIR)
-
-
-class DbtConfigError(Exception):
-    def __init__(self, message, project=None, result_type='invalid_project'):
-        self.project = project
-        super(DbtConfigError, self).__init__(message)
-        self.result_type = result_type
-
-
-class DbtProjectError(DbtConfigError):
-    pass
-
-
-class DbtProfileError(DbtConfigError):
-    pass
 
 
 def read_profile(profiles_dir):
