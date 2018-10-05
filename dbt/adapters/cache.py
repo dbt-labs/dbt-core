@@ -44,15 +44,14 @@ class _CachedRelation(object):
         return self.inner.identifier
 
     def __copy__(self):
-        new = self.__class__(self.schema, self.identifier)
+        new = self.__class__(self.inner)
         new.__dict__.update(self.__dict__)
         return new
 
     def __deepcopy__(self, memo):
-        new = self.__class__(self.schema, self.identifier)
+        new = self.__class__(self.inner.incorporate())
         new.__dict__.update(self.__dict__)
         new.referenced_by = deepcopy(self.referenced_by, memo)
-        new.inner = self.inner.incorporate()
 
     def is_referenced_by(self, key):
         return key in self.referenced_by
