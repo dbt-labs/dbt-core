@@ -1,5 +1,6 @@
 import unittest
 
+import dbt.exceptions
 import dbt.utils
 
 
@@ -124,4 +125,17 @@ class TestDeepMap(unittest.TestCase):
 
         actual = dbt.utils.deep_map(self.special_keypath, expected)
         self.assertEquals(actual, expected)
+
+    def test__noop(self):
+        actual = dbt.utils.deep_map(lambda x, _: x, self.input_value)
+        self.assertEquals(actual, self.input_value)
+
+    def test_trivial(self):
+        cases = [[], {}, 1, 'abc', None, True]
+        for case in cases:
+            result = dbt.utils.deep_map(lambda x, _: x, case)
+            self.assertEquals(result, case)
+
+        with self.assertRaises(dbt.exceptions.DbtConfigError):
+            dbt.utils.deep_map(lambda x, _: x, {'foo': object()})
 
