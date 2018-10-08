@@ -3,6 +3,7 @@ import pprint
 from dbt.logger import GLOBAL_LOGGER as logger
 import dbt.clients.system
 import dbt.config
+import dbt.utils
 import dbt.exceptions
 
 from dbt.task.base_task import BaseTask
@@ -28,15 +29,18 @@ class DebugTask(BaseTask):
         # if we got here, a 'dbt_project.yml' does exist, but we have not tried
         # to parse it.
         project_profile = None
+        cli_vars = dbt.utils.parse_cli_vars(getattr(self.args, 'vars', '{}'))
+
         try:
-            project = dbt.config.Project.from_current_directory()
+            project = dbt.config.Project.from_current_directory(cli_vars)
             project_profile = project.profile_name
         except dbt.exceptions.DbtConfigError as exc:
             project = 'ERROR loading project: {!s}'.format(exc)
 
         # log the profile we decided on as well, if it's available.
         try:
-            profile = dbt.config.Profile.from_args(self.args, project_profile)
+            profile = dbt.config.Profile.from_args(self.args, project_profile,
+                                                   cli_vars)
         except dbt.exceptions.DbtConfigError as exc:
             profile = 'ERROR loading profile: {!s}'.format(exc)
 
