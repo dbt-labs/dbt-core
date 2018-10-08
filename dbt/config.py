@@ -114,23 +114,6 @@ class ConfigRenderer(object):
 
         return False
 
-    @staticmethod
-    def _is_port_path(keypath):
-        return len(keypath) == 2 and keypath[-1] == 'port'
-
-    @staticmethod
-    def _convert_port(value, keypath):
-
-        if len(keypath) != 4:
-            return value
-
-        if keypath[-1] == 'port' and keypath[1] == 'outputs':
-            try:
-                return int(value)
-            except ValueError:
-                pass  # let the validator or connection handle this
-        return value
-
     def _render_project_entry(self, value, keypath):
         """Render an entry, in case it's jinja. This is meant to be passed to
         dbt.utils.deep_map.
