@@ -302,8 +302,7 @@ def deep_map(func, value, keypath=(), memo=None, _notfound=object()):
         ret = func(value, keypath)
     else:
         ok_types = (list, dict) + atomic_types
-        # TODO(jeb): real error
-        raise TypeError(
+        raise dbt.exceptions.DbtConfigError(
             'in deep_map, expected one of {!r}, got {!r}'
             .format(ok_types, type(value))
         )
