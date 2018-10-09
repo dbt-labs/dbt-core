@@ -1,6 +1,8 @@
 from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 
+from dbt.exceptions import CompilationException
+
 class TestSimpleSeed(DBTIntegrationTest):
 
     def setUp(self):
@@ -129,3 +131,36 @@ class TestSimpleSeedDisabled(DBTIntegrationTest):
         self.assertEqual(len(results),  1)
         self.assertTableDoesExist('seed_enabled')
         self.assertTableDoesNotExist('seed_disabled')
+
+
+class TestSeedParsing(DBTIntegrationTest):
+    def setUp(self):
+        super(TestSeedParsing, self).setUp()
+        self.run_sql_file("test/integration/005_simple_seed_test/seed.sql")
+
+    @property
+    def schema(self):
+        return "simple_seed_005"
+
+    @property
+    def models(self):
+        return "test/integration/005_simple_seed_test/models-exist"
+
+    @property
+    def project_config(self):
+        return {
+            "data-paths": ['test/integration/005_simple_seed_test/data-bad']
+        }
+
+    @attr(type='postgres')
+    def test_postgres_dbt_run_skips_seeds(self):
+        # run does not try to parse the seed files
+        self.assertEqual(len(self.run_dbt(['run'])), 1)
+
+        # make sure 'dbt seed' fails, otherwise our test is invalid!
+        with self.assertRaises(CompilationException):
+            self.run_dbt(['seed'])
+
+
+
+
