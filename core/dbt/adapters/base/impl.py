@@ -222,11 +222,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         :return: A tuple of the status and the results (empty if fetch=False).
         :rtype: Tuple[Union[str, AdapterResponse], agate.Table]
         """
-        return self.connections.execute(
-            sql=sql,
-            auto_begin=auto_begin,
-            fetch=fetch
-        )
+        return self.connections.execute(sql=sql, auto_begin=auto_begin, fetch=fetch)
 
     @available.parse(lambda *a, **k: ('', empty_table()))
     def get_partitions_metadata(
@@ -389,7 +385,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             )
         self.cache.add(relation)
         # so jinja doesn't render things
-        return ''
+        return ""
 
     @available
     def cache_dropped(self, relation: Optional[BaseRelation]) -> str:
@@ -585,10 +581,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         missing_columns = set(from_columns.keys()) - set(to_columns.keys())
 
-        return [
-            col for (col_name, col) in from_columns.items()
-            if col_name in missing_columns
-        ]
+        return [col for (col_name, col) in from_columns.items() if col_name in missing_columns]
 
     @available.parse_none
     def valid_snapshot_target(self, relation: BaseRelation) -> None:

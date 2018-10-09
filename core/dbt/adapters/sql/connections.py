@@ -23,11 +23,12 @@ class SQLConnectionManager(BaseConnectionManager):
         - get_response
         - open
     """
+
     @abc.abstractmethod
     def cancel(self, connection: Connection):
         """Cancel the given connection."""
         raise dbt.exceptions.NotImplementedException(
-            '`cancel` is not implemented for this adapter!'
+            "`cancel` is not implemented for this adapter!"
         )
 
     def cancel_open(self) -> List[str]:
@@ -153,7 +154,8 @@ class SQLConnectionManager(BaseConnectionManager):
         if connection.transaction_open is False:
             raise dbt.exceptions.InternalException(
                 'Tried to commit transaction on connection "{}", but '
-                'it does not have one open!'.format(connection.name))
+                "it does not have one open!".format(connection.name)
+            )
 
         fire_event(SQLCommit(conn_name=connection.name))
         self.add_commit_query()

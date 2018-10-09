@@ -46,6 +46,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     You must also set the 'TYPE' class attribute with a class-unique constant
     string.
     """
+
     TYPE: str = NotImplemented
 
     def __init__(self, profile: AdapterRequiredConfig):
@@ -116,7 +117,8 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             underlying database.
         """
         raise dbt.exceptions.NotImplementedException(
-            '`exception_handler` is not implemented for this adapter!')
+            "`exception_handler` is not implemented for this adapter!"
+        )
 
     def set_connection_name(self, name: Optional[str] = None) -> Connection:
         conn_name: str
@@ -161,7 +163,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     def cancel_open(self) -> Optional[List[str]]:
         """Cancel all open connections on the adapter. (passable)"""
         raise dbt.exceptions.NotImplementedException(
-            '`cancel_open` is not implemented for this adapter!'
+            "`cancel_open` is not implemented for this adapter!"
         )
 
     @abc.abstractclassmethod
@@ -174,9 +176,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         This should be thread-safe, or hold the lock if necessary. The given
         connection should not be in either in_use or available.
         """
-        raise dbt.exceptions.NotImplementedException(
-            '`open` is not implemented for this adapter!'
-        )
+        raise dbt.exceptions.NotImplementedException("`open` is not implemented for this adapter!")
 
     def release(self) -> None:
         with self.lock:
@@ -209,14 +209,14 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     def begin(self) -> None:
         """Begin a transaction. (passable)"""
         raise dbt.exceptions.NotImplementedException(
-            '`begin` is not implemented for this adapter!'
+            "`begin` is not implemented for this adapter!"
         )
 
     @abc.abstractmethod
     def commit(self) -> None:
         """Commit a transaction. (passable)"""
         raise dbt.exceptions.NotImplementedException(
-            '`commit` is not implemented for this adapter!'
+            "`commit` is not implemented for this adapter!"
         )
 
     @classmethod
@@ -292,5 +292,5 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         :rtype: Tuple[Union[str, AdapterResponse], agate.Table]
         """
         raise dbt.exceptions.NotImplementedException(
-            '`execute` is not implemented for this adapter!'
+            "`execute` is not implemented for this adapter!"
         )

@@ -51,7 +51,7 @@ class PostgresCredentials(Credentials):
 
 
 class PostgresConnectionManager(SQLConnectionManager):
-    TYPE = 'postgres'
+    TYPE = "postgres"
 
     @contextmanager
     def exception_handler(self, sql):
@@ -59,7 +59,7 @@ class PostgresConnectionManager(SQLConnectionManager):
             yield
 
         except psycopg2.DatabaseError as e:
-            logger.debug('Postgres error: {}'.format(str(e)))
+            logger.debug("Postgres error: {}".format(str(e)))
 
             try:
                 self.rollback_if_open()
@@ -83,8 +83,8 @@ class PostgresConnectionManager(SQLConnectionManager):
 
     @classmethod
     def open(cls, connection):
-        if connection.state == 'open':
-            logger.debug('Connection is already open, skipping open.')
+        if connection.state == "open":
+            logger.debug("Connection is already open, skipping open.")
             return connection
 
         credentials = cls.get_credentials(connection.credentials)
@@ -125,20 +125,21 @@ class PostgresConnectionManager(SQLConnectionManager):
                 password=credentials.password,
                 port=credentials.port,
                 connect_timeout=credentials.connect_timeout,
-                **kwargs)
+                **kwargs,
+            )
 
             if credentials.role:
                 handle.cursor().execute('set role {}'.format(credentials.role))
 
             connection.handle = handle
-            connection.state = 'open'
+            connection.state = "open"
         except psycopg2.Error as e:
-            logger.debug("Got an error when attempting to open a postgres "
-                         "connection: '{}'"
-                         .format(e))
+            logger.debug(
+                "Got an error when attempting to open a postgres " "connection: '{}'".format(e)
+            )
 
             connection.handle = None
-            connection.state = 'fail'
+            connection.state = "fail"
 
             raise dbt.exceptions.FailedToConnectException(str(e))
 

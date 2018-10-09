@@ -116,7 +116,7 @@ class AdapterMeta(abc.ABCMeta):
 
         # override with local data if it exists
         for name, value in namespace.items():
-            if getattr(value, '_is_available_', False):
+            if getattr(value, "_is_available_", False):
                 available.add(name)
             parse_replacement = getattr(value, "_parse_replacement_", None)
             if parse_replacement is not None:
