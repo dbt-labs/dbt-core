@@ -247,6 +247,16 @@ class RelationsCache(object):
             schema=referenced.schema,
             identifier=referenced.name
         )
+        if referenced.schema not in self:
+            # if we have not cached the referenced schema at all, we must be
+            # referring to a table outside our control. There's no need to make
+            # a link - we will never drop the referenced relation during a run.
+            logger.debug(
+                '{dep!s} references {ref!s} but {ref.schema} is not in the '
+                'cache, skipping assumed external relation'
+                .format(dep=dependent, ref=referenced)
+            )
+            return
         dependent = _ReferenceKey(
             schema=dependent.schema,
             identifier=dependent.name
