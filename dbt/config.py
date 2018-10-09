@@ -99,7 +99,7 @@ class ConfigRenderer(object):
         self.context['var'] = Var(None, self.context, cli_vars)
 
     @staticmethod
-    def _is_hook_path(keypath):
+    def _is_hook_or_model_vars_path(keypath):
         if not keypath:
             return False
 
@@ -107,9 +107,13 @@ class ConfigRenderer(object):
         # run hooks
         if first in {'on-run-start', 'on-run-end'}:
             return True
-        # model hooks
+        # models have two things to avoid
         if first in {'seeds', 'models'}:
+            # model-level hooks
             if 'pre-hook' in keypath or 'post-hook' in keypath:
+                return True
+            # model-level 'vars' declarations
+            if 'vars' in keypath:
                 return True
 
         return False
@@ -126,8 +130,9 @@ class ConfigRenderer(object):
         :param key str: The key to convert on.
         :return Any: The rendered entry.
         """
-        # hooks should be treated as raw sql, they'll get rendered later
-        if self._is_hook_path(keypath):
+        # hooks should be treated as raw sql, they'll get rendered later.
+        # Same goes for 'vars' declarations inside 'models'/'seeds'.
+        if self._is_hook_or_model_vars_path(keypath):
             return value
 
         return self.render_value(value)
