@@ -15,7 +15,7 @@ from dbt.parser.base import BaseParser
 
 class SeedParser(BaseParser):
     @classmethod
-    def parse_seed_file(cls, file_match, root_dir, package_name):
+    def parse_seed_file(cls, file_match, root_dir, package_name, should_parse):
         """Parse the given seed file, returning an UnparsedNode and the agate
         table.
         """
@@ -34,10 +34,13 @@ class SeedParser(BaseParser):
             original_file_path=os.path.join(file_match.get('searched_path'),
                                             file_match.get('relative_path')),
         )
-        try:
-            table = dbt.clients.agate_helper.from_csv(abspath)
-        except ValueError as e:
-            dbt.exceptions.raise_compiler_error(str(e), node)
+        if should_parse:
+            try:
+                table = dbt.clients.agate_helper.from_csv(abspath)
+            except ValueError as e:
+                dbt.exceptions.raise_compiler_error(str(e), node)
+        else:
+            table = dbt.clients.agate_helper.empty_table()
         table.original_abspath = abspath
         return node, table
 
@@ -56,10 +59,13 @@ class SeedParser(BaseParser):
             relative_dirs,
             extension)
 
+        # we only want to parse seeds if we're inside 'dbt seed'
+        should_parse = root_project.args.which == 'seed'
+
         result = {}
         for file_match in file_matches:
             node, agate_table = cls.parse_seed_file(file_match, root_dir,
-                                                    package_name)
+                                                    package_name, should_parse)
             node_path = cls.get_path(NodeType.Seed, package_name, node.name)
             parsed = cls.parse_node(node, node_path, root_project,
                                     all_projects.get(package_name),

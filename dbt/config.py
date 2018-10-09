@@ -677,9 +677,10 @@ class RuntimeConfig(Project, Profile):
                  modules_path, quoting, models, on_run_start, on_run_end,
                  archive, seeds, profile_name, target_name,
                  send_anonymous_usage_stats, use_colors, threads, credentials,
-                 packages, cli_vars):
+                 packages, args):
         # 'vars'
-        self.cli_vars = cli_vars
+        self.args = args
+        self.cli_vars = dbt.utils.parse_cli_vars(getattr(args, 'vars', '{}'))
         # 'project'
         Project.__init__(
             self,
@@ -718,13 +719,12 @@ class RuntimeConfig(Project, Profile):
         self.validate()
 
     @classmethod
-    def from_parts(cls, project, profile, cli_vars):
+    def from_parts(cls, project, profile, args):
         """Instantiate a RuntimeConfig from its components.
 
         :param profile Profile: A parsed dbt Profile.
         :param project Project: A parsed dbt Project.
-        :param cli_vars dict: A dict of vars, as provided from the command
-            line.
+        :param args argparse.Namespace: The parsed command-line arguments.
         :returns RuntimeConfig: The new configuration.
         """
         quoting = deepcopy(
@@ -759,7 +759,7 @@ class RuntimeConfig(Project, Profile):
             use_colors=profile.use_colors,
             threads=profile.threads,
             credentials=profile.credentials,
-            cli_vars=cli_vars
+            args=args
         )
 
     def new_project(self, project_root):
@@ -780,7 +780,7 @@ class RuntimeConfig(Project, Profile):
         cfg = self.from_parts(
             project=project,
             profile=profile,
-            cli_vars=deepcopy(self.cli_vars)
+            args=deepcopy(self.args),
         )
         # force our quoting back onto the new project.
         cfg.quoting = deepcopy(self.quoting)
@@ -790,6 +790,8 @@ class RuntimeConfig(Project, Profile):
         """Serialize the full configuration to a single dictionary. For any
         instance that has passed validate() (which happens in __init__), it
         matches the Configuration contract.
+
+        Note that args are not serialized.
 
         :returns dict: The serialized configuration.
         """
@@ -837,7 +839,7 @@ class RuntimeConfig(Project, Profile):
         return cls.from_parts(
             project=project,
             profile=profile,
-            cli_vars=cli_vars
+            args=args
         )
 
 

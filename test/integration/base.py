@@ -38,6 +38,7 @@ class FakeArgs(object):
 
 class TestArgs(object):
     def __init__(self, kwargs):
+        self.which = 'run'
         self.__dict__.update(kwargs)
 
 
