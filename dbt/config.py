@@ -396,7 +396,7 @@ class Project(object):
 
         msg = UNUSED_RESOURCE_CONFIGURATION_PATH_MESSAGE.format(
             len(unused),
-            '\n'.join('- {}'.format('.'.join(u) for u in unused))
+            '\n'.join('- {}'.format('.'.join(u)) for u in unused)
         )
         logger.info(dbt.ui.printer.yellow(msg))
 
