@@ -91,7 +91,7 @@ class InitTask(BaseTask):
     def run(self):
         project_dir = self.args.project_name
 
-        profiles_dir = dbt.config.DEFAULT_PROFILES_DIR
+        profiles_dir = dbt.config.PROFILES_DIR
         profiles_file = os.path.join(profiles_dir, 'profiles.yml')
 
         self.create_profiles_dir(profiles_dir)

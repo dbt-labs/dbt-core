@@ -70,3 +70,6 @@ target/
 *.sublime-*
 
 .python-version
+
+# Vim
+*.sw*

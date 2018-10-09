@@ -27,7 +27,7 @@ import dbt.deprecations
 
 from dbt.utils import ExitCodes
 from dbt.config import Project, RuntimeConfig, DbtProjectError, \
-    DbtProfileError, DEFAULT_PROFILES_DIR, read_config, \
+    DbtProfileError, PROFILES_DIR, read_config, \
     send_anonymous_usage_stats, colorize_output, read_profiles
 from dbt.exceptions import DbtProfileError, DbtProfileError, RuntimeException
 
@@ -298,11 +298,11 @@ def parse_args(args):
 
     base_subparser.add_argument(
         '--profiles-dir',
-        default=DEFAULT_PROFILES_DIR,
+        default=PROFILES_DIR,
         type=str,
         help="""
         Which directory to look in for the profiles.yml file. Default = {}
-        """.format(DEFAULT_PROFILES_DIR)
+        """.format(PROFILES_DIR)
     )
 
     base_subparser.add_argument(

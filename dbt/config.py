@@ -1,4 +1,5 @@
 import os.path
+import os
 from copy import deepcopy
 import hashlib
 import pprint
@@ -23,6 +24,10 @@ DEFAULT_SEND_ANONYMOUS_USAGE_STATS = True
 DEFAULT_USE_COLORS = True
 DEFAULT_PROFILES_DIR = os.path.join(os.path.expanduser('~'), '.dbt')
 
+if os.environ.get('DBT_PROFILES_DIR') is not None:
+    PROFILES_DIR = os.environ.get('DBT_PROFILES_DIR')
+else:
+    PROFILES_DIR = DEFAULT_PROFILES_DIR
 
 INVALID_PROFILE_MESSAGE = """
 dbt encountered an error while trying to read your profiles.yml file.
@@ -41,7 +46,7 @@ Here, [profile name] should be replaced with a profile name
 defined in your profiles.yml file. You can find profiles.yml here:
 
 {profiles_file}/profiles.yml
-""".format(profiles_file=DEFAULT_PROFILES_DIR)
+""".format(profiles_file=PROFILES_DIR)
 
 
 def read_profile(profiles_dir):
@@ -62,7 +67,7 @@ def read_profile(profiles_dir):
 def read_profiles(profiles_dir=None):
     """This is only used in main, for some error handling"""
     if profiles_dir is None:
-        profiles_dir = DEFAULT_PROFILES_DIR
+        profiles_dir = PROFILES_DIR
 
     raw_profiles = read_profile(profiles_dir)
 
@@ -624,7 +629,7 @@ class Profile(object):
 
         threads_override = getattr(args, 'threads', None)
         # TODO(jeb): is it even possible for this to not be set?
-        profiles_dir = getattr(args, 'profiles_dir', DEFAULT_PROFILES_DIR)
+        profiles_dir = getattr(args, 'profiles_dir', PROFILES_DIR)
         target_override = getattr(args, 'target', None)
         raw_profiles = read_profile(profiles_dir)
         profile_name = cls._pick_profile_name(args.profile,

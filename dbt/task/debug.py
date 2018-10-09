@@ -16,7 +16,7 @@ PROFILE_DIR_MESSAGE = """To view your profiles.yml file, run:
 class DebugTask(BaseTask):
     def path_info(self):
         open_cmd = dbt.clients.system.open_dir_cmd()
-        profiles_dir = dbt.config.DEFAULT_PROFILES_DIR
+        profiles_dir = dbt.config.PROFILES_DIR
 
         message = PROFILE_DIR_MESSAGE.format(
             open_cmd=open_cmd,
