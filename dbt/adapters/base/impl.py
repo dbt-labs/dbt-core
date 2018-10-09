@@ -11,20 +11,17 @@ import dbt.flags
 import dbt.schema
 import dbt.clients.agate_helper
 
-from dbt.compat import abstractclassmethod
+from dbt.compat import abstractclassmethod, classmethod
 from dbt.contracts.connection import Connection
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.schema import Column
 from dbt.utils import filter_null_values
 
+from dbt.adapters.base.meta import AdapterMeta, available, available_raw
 from dbt.adapters.base import BaseRelation
 from dbt.adapters.cache import RelationsCache
 
 GET_CATALOG_OPERATION_NAME = 'get_catalog_data'
-
-lock = multiprocessing.Lock()
-connections_in_use = {}
-connections_available = []
 
 
 def _expect_row_value(key, row):
@@ -65,7 +62,7 @@ def _catalog_filter_schemas(manifest):
     return test
 
 
-@six.add_metaclass(abc.ABCMeta)
+@six.add_metaclass(AdapterMeta)
 class BaseAdapter(object):
     """The BaseAdapter provides an abstract base class for adapters.
 
@@ -77,7 +74,6 @@ class BaseAdapter(object):
 
     Methods:
         - exception_handler
-        - type
         - date_function
         - get_existing_schemas
         - drop_relation
@@ -87,11 +83,6 @@ class BaseAdapter(object):
         - expand_column_types
         - list_relations_without_caching
         - is_cancelable
-        - cancel_open_connections
-        - open_connection
-        - begin
-        - commit
-        - execute
         - create_schema
         - drop_schema
         - quote
@@ -104,72 +95,141 @@ class BaseAdapter(object):
     """
     requires = {}
 
-    config_functions = [
-        # officially documented
-        "get_columns_in_table",
-        "get_missing_columns",
-        # to be documented
-        'get_columns_in_relation',
-        "quote_as_configured",
-        # documented, but deprecated -- use versions that take relations
-        # instead.
-        "already_exists",
-        "query_for_existing",
-
-        # not documented
-        "expand_target_column_types",
-        "create_schema",
-        "execute",
-        "get_relation",
-        "drop_relation",
-        "rename_relation",
-        "truncate_relation",
-        "cache_new_relation",
-    ]
-
-    raw_functions = [
-        # to be documented
-        "quote",
-        # not documented
-        "convert_type",
-    ]
-
     Relation = BaseRelation
     Column = Column
+    # This should be an implementation of BaseConnectionManager
+    ConnectionManager = None
 
     def __init__(self, config):
         self.config = config
         self.cache = RelationsCache()
+        self.connections = self.ConnectionManager(config)
 
     ###
-    # ADAPTER-SPECIFIC FUNCTIONS -- each of these must be overridden in
-    #                               every adapter
+    # Methods that pass through to the connection manager
     ###
-    @abc.abstractmethod
-    def exception_handler(self, sql, connection_name='master'):
-        """Create a context manager that handles exceptions caused by database
-        interactions.
+    # TODO: I would like a better way to do this. Should adapters be subclasses
+    # of managers?
+    # TODO: Remove this
+    def acquire_connection(self, name):
+        return self.connections.get(name)
 
-        :param str sql: The SQL string that the block inside the context
-            manager is executing.
-        :param str connection_name: The name of the connection being used
-        :return: A context manager that handles exceptions raised by the
-            underlying database.
+    def release_connection(self, name):
+        return self.connections.release(name)
+
+    def cleanup_connections(self):
+        return self.connections.cleanup_all()
+
+    def clear_transaction(self, conn_name='master'):
+        return self.connections.clear_transaction(conn_name)
+
+    def commit_if_has_connection(self, name):
+        return self.connections.commit_if_has_connection(name)
+
+    @available
+    def execute(self, sql, model_name=None, auto_begin=False, fetch=False):
+        """Execute the given SQL. This is a thin wrapper around
+        ConnectionManager.execute.
+
+        :param str sql: The sql to execute.
+        :param Optional[str] model_name: The model name to use for the
+            connection.
+        :param bool auto_begin: If set, and dbt is not currently inside a
+            transaction, automatically begin one.
+        :param bool fetch: If set, fetch results.
+        :return: A tuple of the status and the results (empty if fetch=False).
+        :rtype: Tuple[str, agate.Table]
         """
-        raise dbt.exceptions.NotImplementedException(
-            '`exception_handler` is not implemented for this adapter!')
+        return self.connections.execute(
+            sql=sql,
+            name=model_name,
+            auto_begin=auto_begin,
+            fetch=fetch
+        )
 
-    @abstractclassmethod
-    def type(cls):
+    ###
+    # Methods that should never be overridden
+    ###
+    def type(self):
         """Get the type of this adapter. Types must be class-unique and
         consistent.
 
         :return: The type name
         :rtype: str
         """
-        raise dbt.exceptions.NotImplementedException(
-            '`type` is not implemented for this adapter!')
+        return self.ConnectionManager.TYPE
 
+    ###
+    # Caching methods
+    ###
+    def _schema_is_cached(self, schema, model_name=None):
+        """Check if the schema is cached, and by default logs if it is not."""
+        if dbt.flags.USE_CACHE is False:
+            return False
+        elif schema not in self.cache:
+            logger.debug(
+                'On "{}": cache miss for schema "{}", this is inefficient'
+                .format(model_name or '<None>', schema)
+            )
+            return False
+        else:
+            return True
+
+    @classmethod
+    def _relations_filter_table(cls, table, schemas):
+        """Filter the table as appropriate for relations table entries.
+        Subclasses can override this to change filtering rules on a per-adapter
+        basis.
+        """
+        return table.where(_relations_filter_schemas(schemas))
+
+    def _relations_cache_for_schemas(self, manifest):
+        """Populate the relations cache for the given schemas. Returns an
+        iteratble of the schemas populated, as strings.
+        """
+        if not dbt.flags.USE_CACHE:
+            return
+
+        schemas = manifest.get_used_schemas()
+
+        relations = []
+        # add all relations
+        for schema in schemas:
+            for relation in self.list_relations_without_caching(schema):
+                self.cache.add(relation)
+        # it's possible that there were no relations in some schemas. We want
+        # to insert the schemas we query into the cache's `.schemas` attribute
+        # so we can check it later
+        self.cache.update_schemas(schemas)
+
+    def set_relations_cache(self, manifest, clear=False):
+        """Run a query that gets a populated cache of the relations in the
+        database and set the cache on this adapter.
+        """
+        if not dbt.flags.USE_CACHE:
+            return
+
+        with self.cache.lock:
+            if clear:
+                self.cache.clear()
+            self._relations_cache_for_schemas(manifest)
+
+    @available
+    def cache_new_relation(self, relation, model_name=None):
+        """Cache a new relation in dbt. It will show up in `list relations`."""
+        if relation is None:
+            dbt.exceptions.raise_compiler_error(
+                'Attempted to cache a null relation for {}'.format(model_name)
+            )
+        if dbt.flags.USE_CACHE:
+            self.cache.add(relation)
+        # so jinja doesn't render things
+        return ''
+
+    ###
+    # Abstract methods for database-specific values, attributes, and types
+    ###
+    # TODO: should this be an abstract property?
     @abstractclassmethod
     def date_function(cls):
         """Get the date function used by this adapter's database.
@@ -180,18 +240,19 @@ class BaseAdapter(object):
         raise dbt.exceptions.NotImplementedException(
             '`date_function` is not implemented for this adapter!')
 
-    def query_for_existing(self, schemas, model_name=None):
-        if not isinstance(schemas, (list, tuple)):
-            schemas = [schemas]
+    @abstractclassmethod
+    def is_cancelable(cls):
+        raise dbt.exceptions.NotImplementedException(
+            '`is_cancelable` is not implemented for this adapter!'
+        )
 
-        all_relations = []
+    def get_default_schema(self):
+        return self.config.credentials.schema
 
-        for schema in schemas:
-            all_relations.extend(self.list_relations(schema, model_name))
-
-        return {relation.identifier: relation.type
-                for relation in all_relations}
-
+    ###
+    # Abstract methods about schemas
+    ###
+    # TODO: rename to `list_schemas` for consistency w/ realtions
     @abc.abstractmethod
     def get_existing_schemas(self, model_name=None):
         """Get a list of existing schemas.
@@ -204,30 +265,24 @@ class BaseAdapter(object):
             '`get_existing_schemas` is not implemented for this adapter!'
         )
 
-    def check_schema_exists(self, schema):
+    def check_schema_exists(self, schema, model_name=None):
         """Check if a schema exists.
 
         The default implementation of this is potentially unnecessarily slow,
-        and adapters should implement it if there is an optimized way.
+        and adapters should implement it if there is an optimized path (and
+        there probably is)
         """
-        search = (s.lower() for s in self.get_existing_schemas())
+        search = (
+            s.lower() for s in
+            self.get_existing_schemas(model_name=model_name)
+        )
         return schema.lower() in search
 
     ###
-    # FUNCTIONS THAT SHOULD BE ABSTRACT
+    # Abstract methods about relations
     ###
-    def cache_new_relation(self, relation, model_name=None):
-        """Cache a new relation in dbt. It will show up in `list relations`."""
-        if relation is None:
-            dbt.exceptions.raise_compiler_error(
-                'Attempted to cache a null relation for {}'.format(model_name)
-            )
-        if dbt.flags.USE_CACHE:
-            self.cache.add(relation)
-        # so jinja doesn't render things
-        return ''
-
     @abc.abstractmethod
+    @available
     def drop_relation(self, relation, model_name=None):
         """Drop the given relation.
 
@@ -242,6 +297,7 @@ class BaseAdapter(object):
         )
 
     @abc.abstractmethod
+    @available
     def truncate_relation(self, relation, model_name=None):
         """Truncate the given relation.
 
@@ -253,6 +309,7 @@ class BaseAdapter(object):
         )
 
     @abc.abstractmethod
+    @available
     def rename_relation(self, from_relation, to_relation, model_name=None):
         """Rename the relation from from_relation to to_relation.
 
@@ -267,29 +324,8 @@ class BaseAdapter(object):
             '`rename_relation` is not implemented for this adapter!'
         )
 
-    def get_missing_columns(self, from_schema, from_table,
-                            to_schema, to_table, model_name=None):
-        """Returns dict of {column:type} for columns in from_table that are
-        missing from to_table"""
-        from_columns = {
-            col.name: col for col in
-            self.get_columns_in_table(
-                from_schema, from_table,
-                model_name=model_name)
-        }
-        to_columns = {
-            col.name: col for col in
-            self.get_columns_in_table(
-                to_schema, to_table,
-                model_name=model_name)
-        }
-
-        missing_columns = set(from_columns.keys()) - set(to_columns.keys())
-
-        return [col for (col_name, col) in from_columns.items()
-                if col_name in missing_columns]
-
     @abc.abstractmethod
+    @available
     def get_columns_in_relation(self, relation, model_name=None):
         """Get a list of the columns in the given Relation.
 
@@ -302,17 +338,6 @@ class BaseAdapter(object):
         raise dbt.exceptions.NotImplementedException(
             '`get_columns_in_relation` is not implemented for this adapter!'
         )
-
-    def get_columns_in_table(self, schema_name, table_name, database=None,
-                             model_name=None):
-        relation = self.Relation.create(
-            schema=schema_name,
-            identifier=table_name,
-            database=database,
-            type='table',
-            quote_policy=self.config.quoting
-        )
-        return self.get_columns_in_relation(relation, model_name=model_name)
 
     @abc.abstractmethod
     def expand_column_types(self, goal, current, model_name=None):
@@ -328,40 +353,6 @@ class BaseAdapter(object):
         raise dbt.exceptions.NotImplementedException(
             '`expand_target_column_types` is not implemented for this adapter!'
         )
-
-    def expand_target_column_types(self, temp_table, to_schema, to_table,
-                                   model_name=None):
-        goal = self.Relation.create(
-            schema=None,
-            identifier=temp_table,
-            type='table',
-            quote_policy=self.config.quoting
-        )
-        current = self.Relation.create(
-            schema=to_schema,
-            identifier=to_table,
-            type='table',
-            quote_policy=self.config.quoting
-        )
-        self.expand_column_types(goal, current, model_name)
-
-    ###
-    # RELATIONS
-    ###
-    def _schema_is_cached(self, schema, model_name=None,
-                          debug_on_missing=True):
-        """Check if the schema is cached, and by default logs if it is not."""
-        if dbt.flags.USE_CACHE is False:
-            return False
-        elif schema not in self.cache:
-            if debug_on_missing:
-                logger.debug(
-                    'On "{}": cache miss for schema "{}", this is inefficient'
-                    .format(model_name or '<None>', schema)
-                )
-            return False
-        else:
-            return True
 
     @abc.abstractmethod
     def list_relations_without_caching(self, schema, model_name=None):
@@ -380,6 +371,63 @@ class BaseAdapter(object):
             'adapter!'
         )
 
+    ###
+    # Provided methods about relations
+    ###
+    @available
+    def get_missing_columns(self, from_schema, from_table, to_schema, to_table,
+                            model_name=None):
+        """Returns dict of {column:type} for columns in from_table that are
+        missing from to_table"""
+        from_columns = {
+            col.name: col for col in
+            self.get_columns_in_table(
+                from_schema, from_table,
+                model_name=model_name)
+        }
+        to_columns = {
+            col.name: col for col in
+            self.get_columns_in_table(
+                to_schema, to_table,
+                model_name=model_name)
+        }
+
+        missing_columns = set(from_columns.keys()) - set(to_columns.keys())
+
+        return [
+            col for (col_name, col) in from_columns.items()
+            if col_name in missing_columns
+        ]
+
+    @available
+    def get_columns_in_table(self, schema_name, table_name, database=None,
+                             model_name=None):
+        relation = self.Relation.create(
+            schema=schema_name,
+            identifier=table_name,
+            database=database,
+            type='table',
+            quote_policy=self.config.quoting
+        )
+        return self.get_columns_in_relation(relation, model_name=model_name)
+
+    @available
+    def expand_target_column_types(self, temp_table, to_schema, to_table,
+                                   model_name=None):
+        goal = self.Relation.create(
+            schema=None,
+            identifier=temp_table,
+            type='table',
+            quote_policy=self.config.quoting
+        )
+        current = self.Relation.create(
+            schema=to_schema,
+            identifier=to_table,
+            type='table',
+            quote_policy=self.config.quoting
+        )
+        self.expand_column_types(goal, current, model_name)
+
     def list_relations(self, schema, model_name=None):
         if self._schema_is_cached(schema, model_name):
             return self.cache.get_relations(schema)
@@ -393,6 +441,19 @@ class BaseAdapter(object):
         logger.debug('with schema={}, model_name={}, relations={}'
                      .format(schema, model_name, relations))
         return relations
+
+    @available
+    def query_for_existing(self, schemas, model_name=None):
+        if not isinstance(schemas, (list, tuple)):
+            schemas = [schemas]
+
+        all_relations = []
+
+        for schema in schemas:
+            all_relations.extend(self.list_relations(schema, model_name))
+
+        return {relation.identifier: relation.type
+                for relation in all_relations}
 
     def _make_match_kwargs(self, schema, identifier):
         quoting = self.config.quoting
@@ -417,6 +478,7 @@ class BaseAdapter(object):
 
         return matches
 
+    @available
     def get_relation(self, schema, identifier, model_name=None):
         relations_list = self.list_relations(schema, model_name)
 
@@ -435,236 +497,8 @@ class BaseAdapter(object):
     # ODBC FUNCTIONS -- these should not need to change for every adapter,
     #                   although some adapters may override them
     ###
-    def get_default_schema(self):
-        return self.config.credentials.schema
-
-    def get_connection(self, name=None, recache_if_missing=True):
-        global connections_in_use
-
-        if name is None:
-            # if a name isn't specified, we'll re-use a single handle
-            # named 'master'
-            name = 'master'
-
-        if connections_in_use.get(name):
-            return connections_in_use.get(name)
-
-        if not recache_if_missing:
-            raise dbt.exceptions.InternalException(
-                'Tried to get a connection "{}" which does not exist '
-                '(recache_if_missing is off).'.format(name))
-
-        logger.debug('Acquiring new {} connection "{}".'
-                     .format(self.type(), name))
-
-        connection = self.acquire_connection(name)
-        connections_in_use[name] = connection
-
-        return self.get_connection(name)
-
-    @abstractclassmethod
-    def is_cancelable(cls):
-        return True
-
     @abc.abstractmethod
-    def cancel_open_connections(self):
-        """Cancel all open connections on the adapter. (passable)"""
-        raise dbt.exceptions.NotImplementedException(
-            '`cancel_open_connections` is not implemented for this adapter!'
-        )
-
-    @abstractclassmethod
-    def open_connection(cls, connection):
-        """Open a connection on the adapter.
-
-        This may mutate the given connection (in particular, its state and its
-        handle).
-
-        :param Connection connection: A connection object to open.
-        :return: A connection with a handle attached and an 'open' state.
-        :rtype: Connection
-        """
-        raise dbt.exceptions.NotImplementedException(
-            '`open_connection` is not implemented for this adapter!'
-        )
-
-    @classmethod
-    def total_connections_allocated(cls):
-        global connections_in_use, connections_available
-
-        return len(connections_in_use) + len(connections_available)
-
-    def acquire_connection(self, name):
-        global connections_available, lock
-
-        # we add a magic number, 2 because there are overhead connections,
-        # one for pre- and post-run hooks and other misc operations that occur
-        # before the run starts, and one for integration tests.
-        max_connections = self.config.threads + 2
-
-        with lock:
-            num_allocated = self.total_connections_allocated()
-
-            if len(connections_available) > 0:
-                logger.debug('Re-using an available connection from the pool.')
-                to_return = connections_available.pop()
-                to_return.name = name
-                return to_return
-
-            elif num_allocated >= max_connections:
-                raise dbt.exceptions.InternalException(
-                    'Tried to request a new connection "{}" but '
-                    'the maximum number of connections are already '
-                    'allocated!'.format(name))
-
-            logger.debug('Opening a new connection ({} currently allocated)'
-                         .format(num_allocated))
-
-            result = Connection(
-                type=self.type(),
-                name=name,
-                state='init',
-                transaction_open=False,
-                handle=None,
-                credentials=self.config.credentials
-            )
-
-            return self.open_connection(result)
-
-    def release_connection(self, name):
-        global connections_in_use, connections_available, lock
-
-        with lock:
-
-            if name not in connections_in_use:
-                return
-
-            to_release = self.get_connection(name, recache_if_missing=False)
-
-            if to_release.state == 'open':
-
-                if to_release.transaction_open is True:
-                    self.rollback(to_release)
-
-                to_release.name = None
-                connections_available.append(to_release)
-            else:
-                self.close(to_release)
-
-            del connections_in_use[name]
-
-    @classmethod
-    def cleanup_connections(cls):
-        global connections_in_use, connections_available, lock
-
-        with lock:
-            for name, connection in connections_in_use.items():
-                if connection.get('state') != 'closed':
-                    logger.debug("Connection '{}' was left open."
-                                 .format(name))
-                else:
-                    logger.debug("Connection '{}' was properly closed."
-                                 .format(name))
-
-            conns_in_use = list(connections_in_use.values())
-            for conn in conns_in_use + connections_available:
-                cls.close(conn)
-
-            # garbage collect these connections
-            connections_in_use = {}
-            connections_available = []
-
-    def reload(self, connection):
-        return self.get_connection(connection.name)
-
-    @abc.abstractmethod
-    def begin(self, name):
-        """Begin a transaction. (passable)
-
-        :param str name: The name of the connection to use.
-        """
-        raise dbt.exceptions.NotImplementedException(
-            '`begin` is not implemented for this adapter!'
-        )
-
-    def commit_if_has_connection(self, name):
-        global connections_in_use
-
-        if name is None:
-            name = 'master'
-
-        if connections_in_use.get(name) is None:
-            return
-
-        connection = self.get_connection(name, False)
-
-        return self.commit(connection)
-
-    @abc.abstractmethod
-    def commit(self, connection):
-        """Commit a transaction. (passable)
-
-        :param str name: The name of the connection to use.
-        """
-        raise dbt.exceptions.NotImplementedException(
-            '`commit` is not implemented for this adapter!'
-        )
-
-    def rollback(self, connection):
-        if dbt.flags.STRICT_MODE:
-            Connection(**connection)
-
-        connection = self.reload(connection)
-
-        if connection.transaction_open is False:
-            raise dbt.exceptions.InternalException(
-                'Tried to rollback transaction on connection "{}", but '
-                'it does not have one open!'.format(connection.name))
-
-        logger.debug('On {}: ROLLBACK'.format(connection.name))
-        connection.handle.rollback()
-
-        connection.transaction_open = False
-        connections_in_use[connection.name] = connection
-
-        return connection
-
-    @classmethod
-    def close(cls, connection):
-        if dbt.flags.STRICT_MODE:
-            assert isinstance(connection, Connection)
-
-        # On windows, sometimes connection handles don't have a close() attr.
-        if hasattr(connection.handle, 'close'):
-            connection.handle.close()
-
-        connection.state = 'closed'
-
-        return connection
-
-    def clear_transaction(self, conn_name='master'):
-        conn = self.begin(conn_name)
-        self.commit(conn)
-        return conn_name
-
-    @abc.abstractmethod
-    def execute(self, sql, model_name=None, auto_begin=False, fetch=False):
-        """Execute the given SQL.
-
-        :param str sql: The sql to execute.
-        :param Optional[str] model_name: The name of the model to use for the
-            connection.
-        :param bool auto_begin: If set, and dbt is not currently inside a
-            transaction, automatically begin one.
-        :param bool fetch: If set, fetch results.
-        :return: A tuple of the status and the results (empty if fetch=False).
-        :rtype: Tuple[str, agate.Table]
-        """
-        raise dbt.exceptions.NotImplementedException(
-            '`execute` is not implemented for this adapter!'
-        )
-
-    @abc.abstractmethod
+    @available
     def create_schema(self, schema, model_name=None):
         """Create the given schema if it does not exist.
 
@@ -688,10 +522,12 @@ class BaseAdapter(object):
             '`drop_schema` is not implemented for this adapter!'
         )
 
+    @available
     def already_exists(self, schema, table, model_name=None):
         relation = self.get_relation(schema=schema, identifier=table)
         return relation is not None
 
+    @available_raw
     @abstractclassmethod
     def quote(cls, identifier):
         """Quote the given identifier, as appropriate for the database.
@@ -704,6 +540,7 @@ class BaseAdapter(object):
             '`quote` is not implemented for this adapter!'
         )
 
+    @available
     def quote_as_configured(self, identifier, quote_key, model_name=None):
         """Quote or do not quote the given identifer as configured in the
         project config for the quote key.
@@ -799,6 +636,7 @@ class BaseAdapter(object):
         raise dbt.exceptions.NotImplementedException(
             '`convert_time_type` is not implemented for this adapter!')
 
+    @available_raw
     @classmethod
     def convert_type(cls, agate_table, col_idx):
         return cls.convert_agate_type(agate_table, col_idx)
@@ -861,41 +699,6 @@ class BaseAdapter(object):
         results = self._catalog_filter_table(table, manifest)
         return results
 
-    @classmethod
-    def _relations_filter_table(cls, table, schemas):
-        """Filter the table as appropriate for relations table entries.
-        Subclasses can override this to change filtering rules on a per-adapter
-        basis.
-        """
-        return table.where(_relations_filter_schemas(schemas))
-
-    def _relations_cache_for_schemas(self, manifest):
-        """Populate the relations cache for the given schemas. Returns an
-        iteratble of the schemas populated, as strings.
-        """
-        if not dbt.flags.USE_CACHE:
-            return
-
-        schemas = manifest.get_used_schemas()
-
-        relations = []
-        # add all relations
-        for schema in schemas:
-            for relation in self.list_relations_without_caching(schema):
-                self.cache.add(relation)
-        # it's possible that there were no relations in some schemas. We want
-        # to insert the schemas we query into the cache's `.schemas` attribute
-        # so we can check it later
-        self.cache.update_schemas(schemas)
-
-    def set_relations_cache(self, manifest, clear=False):
-        """Run a query that gets a populated cache of the relations in the
-        database and set the cache on this adapter.
-        """
-        if not dbt.flags.USE_CACHE:
-            return
-
-        with self.cache.lock:
-            if clear:
-                self.cache.clear()
-            self._relations_cache_for_schemas(manifest)
+    def cancel_open_connections(self):
+        """Cancel all open connections."""
+        return self.connections.cancel_open()

@@ -1,9 +1,9 @@
 import psycopg2
 
-from contextlib import contextmanager
 import time
 
 from dbt.adapters.sql import SQLAdapter
+from dbt.adapters.postgres import PostgresConnectionManager
 import dbt.compat
 import dbt.exceptions
 import agate
@@ -15,101 +15,11 @@ GET_RELATIONS_OPERATION_NAME = 'get_relations_data'
 
 
 class PostgresAdapter(SQLAdapter):
-
-    DEFAULT_TCP_KEEPALIVE = 0  # 0 means to use the default value
-
-    @contextmanager
-    def exception_handler(self, sql, connection_name='master'):
-        try:
-            yield
-
-        except psycopg2.DatabaseError as e:
-            logger.debug('Postgres error: {}'.format(str(e)))
-
-            try:
-                # attempt to release the connection
-                self.release_connection(connection_name)
-            except psycopg2.Error:
-                logger.debug("Failed to release connection!")
-                pass
-
-            raise dbt.exceptions.DatabaseException(
-                dbt.compat.to_string(e).strip())
-
-        except Exception as e:
-            logger.debug("Error running SQL: %s", sql)
-            logger.debug("Rolling back transaction.")
-            self.release_connection(connection_name)
-            raise dbt.exceptions.RuntimeException(e)
-
-    @classmethod
-    def type(cls):
-        return 'postgres'
+    ConnectionManager = PostgresConnectionManager
 
     @classmethod
     def date_function(cls):
         return 'datenow()'
-
-    @classmethod
-    def get_status(cls, cursor):
-        return cursor.statusmessage
-
-    @classmethod
-    def get_credentials(cls, credentials):
-        return credentials
-
-    @classmethod
-    def open_connection(cls, connection):
-        if connection.state == 'open':
-            logger.debug('Connection is already open, skipping open.')
-            return connection
-
-        base_credentials = connection.credentials
-        credentials = cls.get_credentials(connection.credentials.incorporate())
-        kwargs = {}
-        keepalives_idle = credentials.get('keepalives_idle',
-                                          cls.DEFAULT_TCP_KEEPALIVE)
-        # we don't want to pass 0 along to connect() as postgres will try to
-        # call an invalid setsockopt() call (contrary to the docs).
-        if keepalives_idle:
-            kwargs['keepalives_idle'] = keepalives_idle
-
-        try:
-            handle = psycopg2.connect(
-                dbname=credentials.dbname,
-                user=credentials.user,
-                host=credentials.host,
-                password=credentials.password,
-                port=credentials.port,
-                connect_timeout=10,
-                **kwargs)
-
-            connection.handle = handle
-            connection.state = 'open'
-        except psycopg2.Error as e:
-            logger.debug("Got an error when attempting to open a postgres "
-                         "connection: '{}'"
-                         .format(e))
-
-            connection.handle = None
-            connection.state = 'fail'
-
-            raise dbt.exceptions.FailedToConnectException(str(e))
-
-        return connection
-
-    def cancel_connection(self, connection):
-        connection_name = connection.name
-        pid = connection.handle.get_backend_pid()
-
-        sql = "select pg_terminate_backend({})".format(pid)
-
-        logger.debug("Cancelling query '{}' ({})".format(connection_name, pid))
-
-        _, cursor = self.add_query(sql, 'master')
-        res = cursor.fetchone()
-
-        logger.debug("Cancel query '{}': {}".format(connection_name, res))
 
     def _link_cached_relations(self, manifest):
         schemas = manifest.get_used_schemas()

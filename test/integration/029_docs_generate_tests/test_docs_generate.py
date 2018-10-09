@@ -7,7 +7,7 @@ from mock import ANY, patch
 
 from test.integration.base import DBTIntegrationTest, use_profile
 from dbt.compat import basestring
-from dbt.adapters.snowflake import impl as snowflake_impl
+from dbt.adapters.snowflake import connections as snowflake_conn
 
 DATEFMT = '%Y-%m-%dT%H:%M:%S.%fZ'
 
@@ -2145,13 +2145,13 @@ class TestDocsGenerate(DBTIntegrationTest):
 
     @use_profile('snowflake')
     def test__snowflake__run_and_generate_ignore_quoting_parameter(self):
-        old_connect = snowflake_impl.snowflake.connector.connect
+        old_connect = snowflake_conn.snowflake.connector.connect
         def connect(*args, **kwargs):
             kwargs['session_parameters'] = {
                 'QUOTED_IDENTIFIERS_IGNORE_CASE':True
             }
             return old_connect(*args, **kwargs)
-        with patch.object(snowflake_impl.snowflake.connector, 'connect', connect):
+        with patch.object(snowflake_conn.snowflake.connector, 'connect', connect):
             self.run_and_generate({
                 'quoting': {
                     'identifier': True,

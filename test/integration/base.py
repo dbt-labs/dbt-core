@@ -271,7 +271,6 @@ class DBTIntegrationTest(unittest.TestCase):
 
         adapter.cleanup_connections()
         connection = adapter.acquire_connection('__test')
-        self.handle = connection.handle
         self.adapter_type = connection.type
         self.adapter = adapter
         self.config = config
@@ -303,10 +302,6 @@ class DBTIntegrationTest(unittest.TestCase):
             self.adapter = get_adapter(self.config)
 
         self._drop_schema()
-
-        # hack for BQ -- TODO
-        if hasattr(self.handle, 'close'):
-            self.handle.close()
 
         self.adapter.cleanup_connections()
         reset_adapters()
@@ -408,10 +403,11 @@ class DBTIntegrationTest(unittest.TestCase):
         if self.adapter_type == 'bigquery':
             return self.run_sql_bigquery(sql, fetch)
 
-        with self.handle.cursor() as cursor:
+        conn = self.adapter.acquire_connection('__test')
+        with conn.handle.cursor() as cursor:
             try:
                 cursor.execute(sql)
-                self.handle.commit()
+                conn.handle.commit()
                 if fetch == 'one':
                     return cursor.fetchone()
                 elif fetch == 'all':
@@ -419,7 +415,7 @@ class DBTIntegrationTest(unittest.TestCase):
                 else:
                     return
             except BaseException as e:
-                self.handle.rollback()
+                conn.handle.rollback()
                 print(query)
                 print(e)
                 raise e

@@ -153,10 +153,10 @@ class RunManager(object):
                 for conn_name in adapter.cancel_open_connections():
                     dbt.ui.printer.print_cancel_line(conn_name)
 
+                pool.join()
+
                 dbt.ui.printer.print_run_end_messages(node_results,
                                                       early_exit=True)
-
-                pool.join()
                 raise
 
         pool.close()

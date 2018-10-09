@@ -51,11 +51,6 @@ class DatabaseWrapper(object):
         self.adapter = adapter
         self.Relation = RelationProxy(adapter)
 
-        self._wrapped = frozenset(
-            self.adapter.config_functions
-        )
-        self._proxied = frozenset(self.adapter.raw_functions)
-
     def wrap(self, name):
         func = getattr(self.adapter, name)
 
@@ -67,9 +62,9 @@ class DatabaseWrapper(object):
         return wrapped
 
     def __getattr__(self, name):
-        if name in self._wrapped:
+        if name in self.adapter._available_model_:
             return self.wrap(name)
-        elif name in self._proxied:
+        elif name in self.adapter._available_raw_:
             return getattr(self.adapter, name)
         else:
             raise AttributeError(
@@ -404,8 +399,7 @@ def generate_base(model, model_dict, config, manifest, source_config,
     return context
 
 
-def modify_generated_context(context, model, model_dict, config,
-                             manifest):
+def modify_generated_context(context, model, model_dict, config, manifest):
     cli_var_overrides = config.cli_vars
 
     context = _add_tracking(context)

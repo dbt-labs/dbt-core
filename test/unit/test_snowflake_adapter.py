@@ -45,12 +45,11 @@ class TestSnowflakeAdapter(unittest.TestCase):
         self.handle = mock.MagicMock(spec=snowflake_connector.SnowflakeConnection)
         self.cursor = self.handle.cursor.return_value
         self.mock_execute = self.cursor.execute
-        self.patcher = mock.patch('dbt.adapters.snowflake.impl.snowflake.connector.connect')
+        self.patcher = mock.patch('dbt.adapters.snowflake.connections.snowflake.connector.connect')
         self.snowflake = self.patcher.start()
 
         self.snowflake.return_value = self.handle
         self.adapter = SnowflakeAdapter(self.config)
-        self.adapter.get_connection()
 
     def tearDown(self):
         # we want a unique self.handle every time.
@@ -112,7 +111,32 @@ class TestSnowflakeAdapter(unittest.TestCase):
             mock.call('alter table "test_schema".table_a rename to table_b', None)
         ])
 
+    def test_cancel_open_connections_empty(self):
+        self.assertEqual(len(list(self.adapter.cancel_open_connections())), 0)
+
+    def test_cancel_open_connections_master(self):
+        self.adapter.connections.in_use['master'] = mock.MagicMock()
+        self.assertEqual(len(list(self.adapter.cancel_open_connections())), 0)
+
+    def test_cancel_open_connections_single(self):
+        master = mock.MagicMock()
+        model = mock.MagicMock()
+        model.handle.session_id = 42
+
+        self.adapter.connections.in_use.update({
+            'master': master,
+            'model': model,
+        })
+        with mock.patch.object(self.adapter.connections, 'add_query') as add_query:
+            query_result = mock.MagicMock()
+            add_query.return_value = (None, query_result)
+
+            self.assertEqual(len(list(self.adapter.cancel_open_connections())), 1)
+
+            add_query.assert_called_once_with('select system$abort_session(42)', 'master')
+
     def test_client_session_keep_alive_false_by_default(self):
+        self.adapter.connections.get(name='new_connection_with_new_config')
         self.snowflake.assert_has_calls([
             mock.call(
                 account='test_account', autocommit=False,
@@ -125,7 +149,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         self.config.credentials = self.config.credentials.incorporate(
             client_session_keep_alive=True)
         self.adapter = SnowflakeAdapter(self.config)
-        self.adapter.get_connection(name='new_connection_with_new_config')
+        self.adapter.connections.get(name='new_connection_with_new_config')
 
         self.snowflake.assert_has_calls([
             mock.call(
