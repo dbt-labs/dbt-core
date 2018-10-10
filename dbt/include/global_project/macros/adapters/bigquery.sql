@@ -13,7 +13,7 @@
 
 {% macro cluster_by(raw_cluster_by) %}
   {%- if raw_cluster_by is not none -%}
-  cluster by (
+  cluster by
   {%- if raw_cluster_by is string -%}
     {% set raw_cluster_by = [raw_cluster_by] %}
   {%- endif -%}
@@ -21,7 +21,6 @@
     {{ cluster }}
     {%- if not loop.last -%},{%- endif -%}
   {%- endfor -%}
-  )
 
   {% endif %}
 
