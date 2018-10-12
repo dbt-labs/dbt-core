@@ -220,8 +220,9 @@ def print_run_status_line(results):
     logger.info(stats_line.format(**stats))
 
 
-def print_run_result_error(result):
-    logger.info("")
+def print_run_result_error(result, newline=True):
+    if newline:
+        logger.info("")
 
     if result.failed:
         logger.info(yellow("Failure in {} {} ({})").format(
@@ -243,6 +244,14 @@ def print_run_result_error(result):
                 first = False
             else:
                 logger.info(line)
+
+
+def print_skip_caused_by_error(model, schema, relation, index, num_models,
+                               result):
+    msg = ('SKIP relation {}.{} due to ephemeral model error'
+           .format(schema, relation))
+    print_fancy_output_line(msg, red('ERROR SKIP'), index, num_models)
+    print_run_result_error(result, newline=False)
 
 
 def print_end_of_run_summary(num_errors, early_exit=False):
