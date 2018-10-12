@@ -346,7 +346,12 @@ class ModelRunner(CompileRunner):
             adapter.create_schema(schema)
 
     @classmethod
+    def populate_adapter_cache(cls, config, adapter, manifest):
+        adapter.set_relations_cache(manifest)
+
+    @classmethod
     def before_run(cls, config, adapter, manifest):
+        cls.populate_adapter_cache(config, adapter, manifest)
         cls.safe_run_hooks(config, adapter, manifest, RunHookType.Start)
         cls.create_schemas(config, adapter, manifest)
 

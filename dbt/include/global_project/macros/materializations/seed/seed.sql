@@ -14,6 +14,7 @@
 {% macro default__create_csv_table(model) %}
   {%- set agate_table = model['agate_table'] -%}
   {%- set column_override = model['config'].get('column_types', {}) -%}
+  {{ adapter.cache_new_relation(this) }}
 
   {% set sql %}
     create table {{ this.render(False) }} (
@@ -88,10 +89,8 @@
 
   {%- set identifier = model['alias'] -%}
   {%- set full_refresh_mode = (flags.FULL_REFRESH == True) -%}
-  {%- set existing_relations = adapter.list_relations(schema=schema) -%}
 
-  {%- set old_relation = adapter.get_relation(relations_list=existing_relations,
-                                              schema=schema, identifier=identifier) -%}
+  {%- set old_relation = adapter.get_relation(schema=schema, identifier=identifier) -%}
 
   {%- set exists_as_table = (old_relation is not none and old_relation.is_table) -%}
   {%- set exists_as_view = (old_relation is not none and old_relation.is_view) -%}

@@ -350,6 +350,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
         if strict:
             args = ["--strict"] + args
+        args.append('--log-cache-events')
         logger.info("Invoking dbt with {}".format(args))
 
         res, success = dbt.handle_and_check(args)

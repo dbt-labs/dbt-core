@@ -297,6 +297,10 @@ def bad_package_spec(repo, spec, error_message):
             spec, repo, error_message))
 
 
+def raise_cache_inconsistent(message):
+    raise InternalException('Cache inconsistency detected: {}'.format(message))
+
+
 def missing_config(model, name):
     raise_compiler_error(
         "Model '{}' does not define a required config parameter '{}'."

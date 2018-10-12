@@ -103,7 +103,10 @@ class SnowflakeAdapter(PostgresAdapter):
 
         return connection
 
-    def list_relations(self, schema, model_name=None):
+    def _link_cached_relations(self, manifest, schemas):
+        pass
+
+    def _list_relations(self, schema, model_name=None):
         sql = """
         select
           table_name as name, table_schema as schema, table_type as type
@@ -133,6 +136,7 @@ class SnowflakeAdapter(PostgresAdapter):
 
     def rename_relation(self, from_relation, to_relation,
                         model_name=None):
+        self.cache.rename(from_relation, to_relation)
         sql = 'alter table {} rename to {}'.format(
             from_relation, to_relation)
 
@@ -209,13 +213,14 @@ class SnowflakeAdapter(PostgresAdapter):
         return connection, cursor
 
     @classmethod
-    def _filter_table(cls, table, manifest):
+    def _catalog_filter_table(cls, table, manifest):
         # On snowflake, users can set QUOTED_IDENTIFIERS_IGNORE_CASE, so force
         # the column names to their lowercased forms.
         lowered = table.rename(
             column_names=[c.lower() for c in table.column_names]
         )
-        return super(SnowflakeAdapter, cls)._filter_table(lowered, manifest)
+        return super(SnowflakeAdapter, cls)._catalog_filter_table(lowered,
+                                                                  manifest)
 
     def _make_match_kwargs(self, schema, identifier):
         quoting = self.config.quoting
