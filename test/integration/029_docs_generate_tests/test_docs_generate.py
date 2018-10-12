@@ -531,6 +531,18 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'stats': clustering_stats,
                 'columns': self._clustered_bigquery_columns('DATE'),
             },
+            'model.test.multi_clustered': {
+                'unique_id': 'model.test.multi_clustered',
+                'metadata': {
+                    'comment': None,
+                    'name': 'multi_clustered',
+                    'owner': None,
+                    'schema': my_schema_name,
+                    'type': 'table'
+                },
+                'stats': clustering_stats,
+                'columns': self._clustered_bigquery_columns('DATE'),
+            },
             'seed.test.seed': {
                 'unique_id': 'seed.test.seed',
                 'metadata': {
@@ -1239,6 +1251,59 @@ class TestDocsGenerate(DBTIntegrationTest):
                         },
                     },
                     'description': 'A clustered and partitioned copy of the test model',
+                    'patch_path': self.dir('bq_models/schema.yml'),
+                    'docrefs': [],
+                },
+                'model.test.multi_clustered': {
+                    'alias': 'multi_clustered',
+                    'config': {
+                        'cluster_by': ['first_name','email'],
+                        'column_types': {},
+                        'enabled': True,
+                        'materialized': 'table',
+                        'partition_by': 'updated_at',
+                        'post-hook': [],
+                        'pre-hook': [],
+                        'quoting': {},
+                        'vars': {}
+                    },
+                    'depends_on': {'macros': [], 'nodes': ['seed.test.seed']},
+                    'empty': False,
+                    'fqn': ['test', 'multi_clustered'],
+                    'name': 'multi_clustered',
+                    'original_file_path': multi_clustered_sql_path,
+                    'package_name': 'test',
+                    'path': 'multi_clustered.sql',
+                    'raw_sql': _read_file(multi_clustered_sql_path).rstrip('\n'),
+                    'refs': [['seed']],
+                    'resource_type': 'model',
+                    'root_path': os.getcwd(),
+                    'schema': my_schema_name,
+                    'tags': [],
+                    'unique_id': 'model.test.multi_clustered',
+                    'columns': {
+                        'email': {
+                            'description': "The user's email",
+                            'name': 'email'
+                        },
+                        'first_name': {
+                            'description': "The user's name",
+                            'name': 'first_name'
+                        },
+                        'id': {
+                            'description': 'The user id',
+                            'name': 'id'
+                        },
+                        'ip_address': {
+                            'description': "The user's IP address",
+                            'name': 'ip_address'
+                        },
+                        'updated_at': {
+                            'description': 'When the user was updated',
+                            'name': 'updated_at'
+                        },
+                    },
+                    'description': 'A clustered and partitioned copy of the test model, clustered on multiple columns',
                     'patch_path': self.dir('bq_models/schema.yml'),
                     'docrefs': [],
                 },
