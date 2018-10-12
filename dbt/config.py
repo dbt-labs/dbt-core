@@ -23,11 +23,7 @@ DEFAULT_THREADS = 1
 DEFAULT_SEND_ANONYMOUS_USAGE_STATS = True
 DEFAULT_USE_COLORS = True
 DEFAULT_PROFILES_DIR = os.path.join(os.path.expanduser('~'), '.dbt')
-
-if os.environ.get('DBT_PROFILES_DIR') is not None:
-    PROFILES_DIR = os.environ.get('DBT_PROFILES_DIR')
-else:
-    PROFILES_DIR = DEFAULT_PROFILES_DIR
+PROFILES_DIR = os.path.expanduser(os.environ.get('DBT_PROFILES_DIR', DEFAULT_PROFILES_DIR))
 
 INVALID_PROFILE_MESSAGE = """
 dbt encountered an error while trying to read your profiles.yml file.
