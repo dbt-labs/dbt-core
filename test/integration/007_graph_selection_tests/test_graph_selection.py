@@ -126,3 +126,15 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertFalse('BASE_USERS' in created_models)
         self.assertFalse('USERS_ROLLUP' in created_models)
         self.assertFalse('EMAILS' in created_models)
+
+    @attr(type='postgres')
+    def test__postgres__locally_qualified_name(self):
+        results = self.run_dbt(['run', '--models', 'test.subdir'])
+        self.assertEqual(len(results), 2)
+
+        created_models = self.get_models_in_schema()
+        self.assertNotIn('users_rollup', created_models)
+        self.assertNotIn('base_users', created_models)
+        self.assertNotIn('emails', created_models)
+        self.assertIn('subdir', created_models)
+        self.assertIn('nested_users', created_models)
