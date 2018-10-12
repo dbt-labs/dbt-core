@@ -378,7 +378,7 @@ class ModelRunner(CompileRunner):
             if not any((r.errored, r.failed, r.skipped))
         ))
         cls.safe_run_hooks(config, adapter, manifest, RunHookType.End,
-                           {'schemas': schemas})
+                           {'schemas': schemas, 'results': results})
 
     @classmethod
     def after_hooks(cls, config, adapter, results, manifest, elapsed):
