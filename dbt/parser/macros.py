@@ -72,9 +72,7 @@ class MacroParser(BaseParser):
                     'depends_on': {'macros': []},
                 })
 
-            new_node = ParsedMacro(
-                file_contents=macro_file_contents,
-                **merged)
+            new_node = ParsedMacro(**merged)
 
             to_return[unique_id] = new_node
 

@@ -38,15 +38,34 @@ class MacroFuzzEnvironment(jinja2.sandbox.SandboxedEnvironment):
         ).parse()
 
 
-def macro_generator(file_contents, node):
+class TemplateCache:
+
+    def __init__(self):
+        self.file_cache = {}
+
+    def get_node_template(self, node):
+        file_path = node.get('original_file_path')
+
+        if self.file_cache.get(file_path):
+            return self.file_cache[file_path]
+
+        self.file_cache[file_path] = dbt.clients.jinja.get_template(
+            string=node.get('raw_sql'),
+            ctx={},
+            node=node
+        )
+
+        return self.file_cache[file_path]
+
+
+template_cache = TemplateCache()
+
+
+def macro_generator(node):
     def apply_context(context):
         def call(*args, **kwargs):
             name = node.get('name')
-            template = dbt.clients.jinja.get_template(
-                string=file_contents,
-                ctx={},
-                node=node
-            )
+            template = template_cache.get_node_template(node)
             module = template.make_module(
                 context, False, context)
 
