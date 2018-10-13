@@ -38,10 +38,15 @@ class MacroFuzzEnvironment(jinja2.sandbox.SandboxedEnvironment):
         ).parse()
 
 
-def macro_generator(template, node):
+def macro_generator(file_contents, node):
     def apply_context(context):
         def call(*args, **kwargs):
             name = node.get('name')
+            template = dbt.clients.jinja.get_template(
+                string=file_contents,
+                ctx={},
+                node=node
+            )
             module = template.make_module(
                 context, False, context)
 
@@ -173,20 +178,34 @@ def create_macro_capture_env(node):
     return ParserMacroCapture
 
 
+def get_environment(node=None, capture_macros=False):
+    args = {
+        'extensions': []
+    }
+
+    if capture_macros:
+        args['undefined'] = create_macro_capture_env(node)
+
+    args['extensions'].append(MaterializationExtension)
+    args['extensions'].append(OperationExtension)
+    args['extensions'].append(DocumentationExtension)
+
+    return MacroFuzzEnvironment(**args)
+
+
+def parse(string):
+    try:
+        return get_environment().parse(dbt.compat.to_string(string))
+
+    except (jinja2.exceptions.TemplateSyntaxError,
+            jinja2.exceptions.UndefinedError) as e:
+        e.translated = False
+        dbt.exceptions.raise_compiler_error(str(e))
+
+
 def get_template(string, ctx, node=None, capture_macros=False):
     try:
-        args = {
-            'extensions': []
-        }
-
-        if capture_macros:
-            args['undefined'] = create_macro_capture_env(node)
-
-        args['extensions'].append(MaterializationExtension)
-        args['extensions'].append(OperationExtension)
-        args['extensions'].append(DocumentationExtension)
-
-        env = MacroFuzzEnvironment(**args)
+        env = get_environment(node, capture_macros)
 
         return env.from_string(dbt.compat.to_string(string), globals=ctx)
 

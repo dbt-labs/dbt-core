@@ -437,8 +437,9 @@ PARSED_MACRO_CONTRACT = deep_merge(
 class ParsedMacro(APIObject):
     SCHEMA = PARSED_MACRO_CONTRACT
 
-    def __init__(self, template=None, **kwargs):
-        self.template = template
+    def __init__(self, file_contents=None, **kwargs):
+        self.file_contents = file_contents
+        self.template = None
         super(ParsedMacro, self).__init__(**kwargs)
 
     @property
@@ -449,7 +450,7 @@ class ParsedMacro(APIObject):
         # TODO: we can generate self.template from the other properties
         # available in this class. should we just generate this here?
         return dbt.clients.jinja.macro_generator(
-            self.template, self._contents)
+            self.file_contents, self._contents)
 
 
 # This is just the file + its ID
