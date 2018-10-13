@@ -370,3 +370,9 @@ class Manifest(APIObject):
         raise AttributeError("'{}' object has no attribute '{}'".format(
             type(self).__name__, name)
         )
+
+    def get_used_schemas(self):
+        return frozenset({
+            node.schema
+            for node in self.nodes.values()
+        })

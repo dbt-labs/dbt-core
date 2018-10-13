@@ -99,7 +99,7 @@ class ConfigRenderer(object):
         self.context['var'] = Var(None, self.context, cli_vars)
 
     @staticmethod
-    def _is_hook_path(keypath):
+    def _is_hook_or_model_vars_path(keypath):
         if not keypath:
             return False
 
@@ -107,9 +107,13 @@ class ConfigRenderer(object):
         # run hooks
         if first in {'on-run-start', 'on-run-end'}:
             return True
-        # model hooks
+        # models have two things to avoid
         if first in {'seeds', 'models'}:
+            # model-level hooks
             if 'pre-hook' in keypath or 'post-hook' in keypath:
+                return True
+            # model-level 'vars' declarations
+            if 'vars' in keypath:
                 return True
 
         return False
@@ -126,8 +130,9 @@ class ConfigRenderer(object):
         :param key str: The key to convert on.
         :return Any: The rendered entry.
         """
-        # hooks should be treated as raw sql, they'll get rendered later
-        if self._is_hook_path(keypath):
+        # hooks should be treated as raw sql, they'll get rendered later.
+        # Same goes for 'vars' declarations inside 'models'/'seeds'.
+        if self._is_hook_or_model_vars_path(keypath):
             return value
 
         return self.render_value(value)
@@ -677,9 +682,10 @@ class RuntimeConfig(Project, Profile):
                  modules_path, quoting, models, on_run_start, on_run_end,
                  archive, seeds, profile_name, target_name,
                  send_anonymous_usage_stats, use_colors, threads, credentials,
-                 packages, cli_vars):
+                 packages, args):
         # 'vars'
-        self.cli_vars = cli_vars
+        self.args = args
+        self.cli_vars = dbt.utils.parse_cli_vars(getattr(args, 'vars', '{}'))
         # 'project'
         Project.__init__(
             self,
@@ -718,13 +724,12 @@ class RuntimeConfig(Project, Profile):
         self.validate()
 
     @classmethod
-    def from_parts(cls, project, profile, cli_vars):
+    def from_parts(cls, project, profile, args):
         """Instantiate a RuntimeConfig from its components.
 
         :param profile Profile: A parsed dbt Profile.
         :param project Project: A parsed dbt Project.
-        :param cli_vars dict: A dict of vars, as provided from the command
-            line.
+        :param args argparse.Namespace: The parsed command-line arguments.
         :returns RuntimeConfig: The new configuration.
         """
         quoting = deepcopy(
@@ -759,7 +764,7 @@ class RuntimeConfig(Project, Profile):
             use_colors=profile.use_colors,
             threads=profile.threads,
             credentials=profile.credentials,
-            cli_vars=cli_vars
+            args=args
         )
 
     def new_project(self, project_root):
@@ -780,7 +785,7 @@ class RuntimeConfig(Project, Profile):
         cfg = self.from_parts(
             project=project,
             profile=profile,
-            cli_vars=deepcopy(self.cli_vars)
+            args=deepcopy(self.args),
         )
         # force our quoting back onto the new project.
         cfg.quoting = deepcopy(self.quoting)
@@ -790,6 +795,8 @@ class RuntimeConfig(Project, Profile):
         """Serialize the full configuration to a single dictionary. For any
         instance that has passed validate() (which happens in __init__), it
         matches the Configuration contract.
+
+        Note that args are not serialized.
 
         :returns dict: The serialized configuration.
         """
@@ -837,7 +844,7 @@ class RuntimeConfig(Project, Profile):
         return cls.from_parts(
             project=project,
             profile=profile,
-            cli_vars=cli_vars
+            args=args
         )
 
 

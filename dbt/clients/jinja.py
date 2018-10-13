@@ -1,3 +1,7 @@
+import codecs
+import linecache
+import os
+
 import jinja2
 import jinja2._compat
 import jinja2.ext
@@ -37,6 +41,22 @@ class MacroFuzzEnvironment(jinja2.sandbox.SandboxedEnvironment):
             jinja2._compat.encode_filename(filename)
         ).parse()
 
+    def _compile(self, source, filename):
+        """Override jinja's compilation to stash the rendered source inside
+        the python linecache for debugging.
+        """
+        if filename == '<template>':
+            # make a better filename
+            filename = 'dbt-{}'.format(
+                codecs.encode(os.urandom(12), 'hex').decode('ascii')
+            )
+            # encode, though I don't think this matters
+            filename = jinja2._compat.encode_filename(filename)
+            # put ourselves in the cache using the 'lazycache' method
+            linecache.cache[filename] = (lambda: source,)
+
+        return super(MacroFuzzEnvironment, self)._compile(source, filename)
+
 
 class TemplateCache:
 
@@ -66,8 +86,7 @@ def macro_generator(node):
         def call(*args, **kwargs):
             name = node.get('name')
             template = template_cache.get_node_template(node)
-            module = template.make_module(
-                context, False, context)
+            module = template.make_module(context, False, context)
 
             if node['resource_type'] == NodeType.Operation:
                 macro = module.__dict__[dbt.utils.get_dbt_operation_name(name)]
@@ -226,7 +245,8 @@ def get_template(string, ctx, node=None, capture_macros=False):
     try:
         env = get_environment(node, capture_macros)
 
-        return env.from_string(dbt.compat.to_string(string), globals=ctx)
+        template_source = dbt.compat.to_string(string)
+        return env.from_string(template_source, globals=ctx)
 
     except (jinja2.exceptions.TemplateSyntaxError,
             jinja2.exceptions.UndefinedError) as e:
