@@ -45,7 +45,7 @@ setup(
         'psycopg2>=2.7.5,<2.8',
         'sqlparse==0.2.3',
         'networkx==1.11',
-        'minimal-snowplow-tracker==0.0.1',
+        'minimal-snowplow-tracker==0.0.2',
         'snowflake-connector-python>=1.4.9',
         'requests>=2.18.0,<3',
         'colorama==0.3.9',
