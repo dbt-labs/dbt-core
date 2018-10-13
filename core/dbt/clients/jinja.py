@@ -469,8 +469,8 @@ def get_environment(
     if capture_macros:
         args["undefined"] = create_undefined(node)
 
-    args['extensions'].append(MaterializationExtension)
-    args['extensions'].append(DocumentationExtension)
+    args["extensions"].append(MaterializationExtension)
+    args["extensions"].append(DocumentationExtension)
     args["extensions"].append(TestExtension)
 
     env_cls: Type[jinja2.Environment]
