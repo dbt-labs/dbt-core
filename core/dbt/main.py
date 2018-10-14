@@ -411,7 +411,7 @@ def _build_build_subparser(subparsers, base_subparser):
 
 def _build_clean_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
-        'clean',
+        "clean",
         parents=[base_subparser],
         help="""
         Delete all folders in the clean-targets list
@@ -424,7 +424,7 @@ def _build_clean_subparser(subparsers, base_subparser):
 
 def _build_debug_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
-        'debug',
+        "debug",
         parents=[base_subparser],
         help="""
         Show some helpful information about dbt for debugging.
@@ -446,7 +446,7 @@ def _build_debug_subparser(subparsers, base_subparser):
 
 def _build_deps_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
-        'deps',
+        "deps",
         parents=[base_subparser],
         help="""
         Pull the most recent version of the dependencies listed in packages.yml
@@ -495,7 +495,7 @@ def _add_defer_argument(*subparsers):
 
 def _build_run_subparser(subparsers, base_subparser):
     run_sub = subparsers.add_parser(
-        'run',
+        "run",
         parents=[base_subparser],
         help="""
         Compile SQL and execute against the current target database.
@@ -517,7 +517,7 @@ def _build_run_subparser(subparsers, base_subparser):
 
 def _build_compile_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
-        'compile',
+        "compile",
         parents=[base_subparser],
         help="""
         Generates executable SQL from source, model, test, and analysis files.
@@ -655,7 +655,7 @@ def _add_common_arguments(*subparsers):
 
 def _build_seed_subparser(subparsers, base_subparser):
     seed_sub = subparsers.add_parser(
-        'seed',
+        "seed",
         parents=[base_subparser],
         help="""
         Load data from csv files into your data warehouse.
@@ -700,7 +700,7 @@ def _build_docs_serve_subparser(subparsers, base_subparser):
 
 def _build_test_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
-        'test',
+        "test",
         parents=[base_subparser],
         help="""
         Runs tests on data in deployed models. Run this after `dbt run`
