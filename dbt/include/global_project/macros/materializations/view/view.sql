@@ -5,9 +5,7 @@
   {%- set backup_identifier = identifier + '__dbt_backup' -%}
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
 
-  {%- set existing_relations = adapter.list_relations(schema=schema) -%}
-  {%- set old_relation = adapter.get_relation(relations_list=existing_relations,
-                                              schema=schema, identifier=identifier) -%}
+  {%- set old_relation = adapter.get_relation(schema=schema, identifier=identifier) -%}
   {%- set target_relation = api.Relation.create(identifier=identifier, schema=schema,
                                                 type='view') -%}
   {%- set intermediate_relation = api.Relation.create(identifier=tmp_identifier,

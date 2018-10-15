@@ -122,7 +122,8 @@ class RunManager(object):
 
             try:
                 for result in pool.imap_unordered(self.call_runner, args_list):
-                    if not Runner.is_ephemeral_model(result.node):
+                    is_ephemeral = Runner.is_ephemeral_model(result.node)
+                    if not is_ephemeral:
                         node_results.append(result)
 
                     node = CompileResultNode(**result.node)
@@ -130,10 +131,9 @@ class RunManager(object):
                     manifest.nodes[node_id] = node
 
                     if result.errored:
-                        for dep_node_id in self.get_dependent(linker, node_id):
-                            runner = node_runners.get(dep_node_id)
-                            if runner:
-                                runner.do_skip()
+                        dependents = self.get_dependent(linker, node_id)
+                        self._mark_dependent_errors(node_runners, dependents,
+                                                    result, is_ephemeral)
 
             except KeyboardInterrupt:
                 pool.close()
@@ -163,6 +163,18 @@ class RunManager(object):
         pool.join()
 
         return node_results
+
+    @staticmethod
+    def _mark_dependent_errors(node_runners, dependents, result, is_ephemeral):
+        for dep_node_id in dependents:
+            runner = node_runners.get(dep_node_id)
+            if not runner:
+                continue
+            if is_ephemeral:
+                cause = result
+            else:
+                cause = None
+            runner.do_skip(cause=result)
 
     def write_results(self, execution_result):
         filepath = os.path.join(self.config.target_path, RESULT_FILE_NAME)

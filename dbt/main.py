@@ -251,6 +251,8 @@ def invoke_dbt(parsed):
         return None
 
     flags.NON_DESTRUCTIVE = getattr(parsed, 'non_destructive', False)
+    flags.LOG_CACHE_EVENTS = getattr(parsed, 'log_cache_events', False)
+    flags.USE_CACHE = getattr(parsed, 'use_cache', True)
 
     arg_drop_existing = getattr(parsed, 'drop_existing', False)
     arg_full_refresh = getattr(parsed, 'full_refresh', False)
@@ -271,7 +273,13 @@ def invoke_dbt(parsed):
 def parse_args(args):
     p = DBTArgumentParser(
         prog='dbt: data build tool',
-        formatter_class=argparse.RawTextHelpFormatter)
+        formatter_class=argparse.RawTextHelpFormatter,
+        description="An ELT tool for managing your SQL "
+        "transformations and data models."
+        "\nFor more documentation on these commands, visit: "
+        "docs.getdbt.com",
+        epilog="Specify one of these sub-commands and you can "
+        "find more help from there.")
 
     p.add_argument(
         '--version',
@@ -292,7 +300,7 @@ def parse_args(args):
         help='''Run schema validations at runtime. This will surface
         bugs in dbt, but may incur a performance penalty.''')
 
-    subs = p.add_subparsers()
+    subs = p.add_subparsers(title="Available sub-commands")
 
     base_subparser = argparse.ArgumentParser(add_help=False)
 
@@ -331,14 +339,40 @@ def parse_args(args):
             should be a YAML string, eg. '{my_variable: my_value}'"""
     )
 
-    sub = subs.add_parser('init', parents=[base_subparser])
+    # if set, log all cache events. This is extremely verbose!
+    base_subparser.add_argument(
+        '--log-cache-events',
+        action='store_true',
+        help=argparse.SUPPRESS,
+    )
+
+    base_subparser.add_argument(
+        '--bypass-cache',
+        action='store_false',
+        dest='use_cache',
+        help='If set, bypass the adapter-level cache of database state',
+    )
+
+    sub = subs.add_parser(
+            'init',
+            parents=[base_subparser],
+            help="Initialize a new DBT project.")
     sub.add_argument('project_name', type=str, help='Name of the new project')
     sub.set_defaults(cls=init_task.InitTask, which='init')
 
-    sub = subs.add_parser('clean', parents=[base_subparser])
+    sub = subs.add_parser(
+        'clean',
+        parents=[base_subparser],
+        help="Delete all folders in the clean-targets list"
+        "\n(usually the dbt_modules and target directories.)")
     sub.set_defaults(cls=clean_task.CleanTask, which='clean')
 
-    sub = subs.add_parser('debug', parents=[base_subparser])
+    sub = subs.add_parser(
+        'debug',
+        parents=[base_subparser],
+        help="Show some helpful information about dbt for debugging."
+        "\nNot to be confused with the --debug option which increases "
+        "verbosity.")
     sub.add_argument(
         '--config-dir',
         action='store_true',
@@ -348,10 +382,18 @@ def parse_args(args):
     )
     sub.set_defaults(cls=debug_task.DebugTask, which='debug')
 
-    sub = subs.add_parser('deps', parents=[base_subparser])
+    sub = subs.add_parser(
+        'deps',
+        parents=[base_subparser],
+        help="Pull the most recent version of the dependencies "
+        "listed in packages.yml")
     sub.set_defaults(cls=deps_task.DepsTask, which='deps')
 
-    sub = subs.add_parser('archive', parents=[base_subparser])
+    sub = subs.add_parser(
+        'archive',
+        parents=[base_subparser],
+        help="Record changes to a mutable table over time."
+             "\nMust be configured in your dbt_project.yml.")
     sub.add_argument(
         '--threads',
         type=int,
@@ -363,13 +405,26 @@ def parse_args(args):
     )
     sub.set_defaults(cls=archive_task.ArchiveTask, which='archive')
 
-    run_sub = subs.add_parser('run', parents=[base_subparser])
+    run_sub = subs.add_parser(
+        'run',
+        parents=[base_subparser],
+        help="Compile SQL and execute against the current "
+        "target database.")
     run_sub.set_defaults(cls=run_task.RunTask, which='run')
 
-    compile_sub = subs.add_parser('compile', parents=[base_subparser])
+    compile_sub = subs.add_parser(
+        'compile',
+        parents=[base_subparser],
+        help="Generates executable SQL from source model, test, and"
+        "analysis files. \nCompiled SQL files are written to the target/"
+        "directory.")
     compile_sub.set_defaults(cls=compile_task.CompileTask, which='compile')
 
-    docs_sub = subs.add_parser('docs', parents=[base_subparser])
+    docs_sub = subs.add_parser(
+        'docs',
+        parents=[base_subparser],
+        help="Generate or serve the documentation "
+        "website for your project.")
     docs_subs = docs_sub.add_subparsers()
     # it might look like docs_sub is the correct parents entry, but that
     # will cause weird errors about 'conflicting option strings'.
@@ -425,7 +480,10 @@ def parse_args(args):
             fully-recalculate the incremental table from the model definition.
             """)
 
-    seed_sub = subs.add_parser('seed', parents=[base_subparser])
+    seed_sub = subs.add_parser(
+        'seed',
+        parents=[base_subparser],
+        help="Load data from csv files into your data warehouse.")
     seed_sub.add_argument(
         '--drop-existing',
         action='store_true',
@@ -453,7 +511,11 @@ def parse_args(args):
     serve_sub.set_defaults(cls=serve_task.ServeTask,
                            which='serve')
 
-    sub = subs.add_parser('test', parents=[base_subparser])
+    sub = subs.add_parser(
+        'test',
+        parents=[base_subparser],
+        help="Runs tests on data in deployed models."
+        "Run this after `dbt run`")
     sub.add_argument(
         '--data',
         action='store_true',
