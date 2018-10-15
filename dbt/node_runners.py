@@ -247,13 +247,13 @@ class CompileRunner(BaseRunner):
 
     def compile(self, manifest):
         return self._compile_node(self.adapter, self.config, self.node,
-                                  manifest)
+                                  manifest, {})
 
     @classmethod
-    def _compile_node(cls, adapter, config, node, manifest):
+    def _compile_node(cls, adapter, config, node, manifest, extra_context):
         compiler = dbt.compilation.Compiler(config)
-        node = compiler.compile_node(node, manifest)
-        node = cls._inject_runtime_config(adapter, node)
+        node = compiler.compile_node(node, manifest, extra_context)
+        node = cls._inject_runtime_config(adapter, node, extra_context)
 
         if(node.injected_sql is not None and
            not (dbt.utils.is_type(node, NodeType.Archive))):
@@ -271,9 +271,10 @@ class CompileRunner(BaseRunner):
         return node
 
     @classmethod
-    def _inject_runtime_config(cls, adapter, node):
+    def _inject_runtime_config(cls, adapter, node, extra_context):
         wrapped_sql = node.wrapped_sql
         context = cls._node_context(adapter, node)
+        context.update(extra_context)
         sql = dbt.clients.jinja.get_rendered(wrapped_sql, context)
         node.wrapped_sql = sql
         return node
@@ -310,7 +311,7 @@ class ModelRunner(CompileRunner):
         return False
 
     @classmethod
-    def run_hooks(cls, config, adapter, manifest, hook_type):
+    def run_hooks(cls, config, adapter, manifest, hook_type, extra_context):
 
         nodes = manifest.nodes.values()
         hooks = get_nodes_by_tags(nodes, {hook_type}, NodeType.Operation)
@@ -328,7 +329,8 @@ class ModelRunner(CompileRunner):
             # Also, consider configuring psycopg2 (and other adapters?) to
             # ensure that a transaction is only created if dbt initiates it.
             adapter.clear_transaction(model_name)
-            compiled = cls._compile_node(adapter, config, hook, manifest)
+            compiled = cls._compile_node(adapter, config, hook, manifest,
+                                         extra_context)
             statement = compiled.wrapped_sql
 
             hook_index = hook.get('index', len(hooks))
@@ -346,10 +348,10 @@ class ModelRunner(CompileRunner):
             adapter.release_connection(model_name)
 
     @classmethod
-    def safe_run_hooks(cls, config, adapter, manifest, hook_type):
+    def safe_run_hooks(cls, config, adapter, manifest, hook_type,
+                       extra_context):
         try:
-            cls.run_hooks(config, adapter, manifest, hook_type)
-
+            cls.run_hooks(config, adapter, manifest, hook_type, extra_context)
         except dbt.exceptions.RuntimeException:
             logger.info("Database error while running {}".format(hook_type))
             raise
@@ -376,7 +378,7 @@ class ModelRunner(CompileRunner):
     @classmethod
     def before_run(cls, config, adapter, manifest):
         cls.populate_adapter_cache(config, adapter, manifest)
-        cls.safe_run_hooks(config, adapter, manifest, RunHookType.Start)
+        cls.safe_run_hooks(config, adapter, manifest, RunHookType.Start, {})
         cls.create_schemas(config, adapter, manifest)
 
     @classmethod
@@ -397,7 +399,15 @@ class ModelRunner(CompileRunner):
 
     @classmethod
     def after_run(cls, config, adapter, results, manifest):
-        cls.safe_run_hooks(config, adapter, manifest, RunHookType.End)
+        # in on-run-end hooks, provide the value 'schemas', which is a list of
+        # unique schemas that successfully executed models were in
+        # errored failed skipped
+        schemas = list(set(
+            r.node.schema for r in results
+            if not any((r.errored, r.failed, r.skipped))
+        ))
+        cls.safe_run_hooks(config, adapter, manifest, RunHookType.End,
+                           {'schemas': schemas, 'results': results})
 
     @classmethod
     def after_hooks(cls, config, adapter, results, manifest, elapsed):
