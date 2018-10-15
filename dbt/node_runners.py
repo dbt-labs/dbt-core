@@ -54,6 +54,7 @@ class BaseRunner(object):
         self.num_nodes = num_nodes
 
         self.skip = False
+        self.skip_cause = None
 
     def raise_on_first_error(self):
         return False
@@ -170,15 +171,38 @@ class BaseRunner(object):
         schema_name = self.node.schema
         node_name = self.node.name
 
+        error = None
         if not self.is_ephemeral_model(self.node):
-            dbt.ui.printer.print_skip_line(self.node, schema_name, node_name,
-                                           self.node_index, self.num_nodes)
+            if self.skip_cause is None:
+                dbt.ui.printer.print_skip_line(
+                    self.node,
+                    schema_name,
+                    node_name,
+                    self.node_index,
+                    self.num_nodes
+                )
+            else:
+                dbt.ui.printer.print_skip_caused_by_error(
+                    self.node,
+                    schema_name,
+                    node_name,
+                    self.node_index,
+                    self.num_nodes,
+                    self.skip_cause
+                )
+                # set an error so dbt will exit with an error code
+                error = (
+                    'Compilation Error in referenced ephemeral model {}.{}'
+                    .format(self.skip_cause.node.schema,
+                            self.skip_cause.node.name)
+                )
 
-        node_result = RunModelResult(self.node, skip=True)
+        node_result = RunModelResult(self.node, skip=True, error=error)
         return node_result
 
-    def do_skip(self):
+    def do_skip(self, cause=None):
         self.skip = True
+        self.skip_cause = cause
 
     @classmethod
     def get_model_schemas(cls, manifest):
