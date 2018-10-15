@@ -52,6 +52,7 @@ apply to any resources.
 There are {} unused configuration paths:\n{}
 """
 
+
 def read_profile(profiles_dir):
     path = os.path.join(profiles_dir, 'profiles.yml')
 
