@@ -237,7 +237,7 @@ class GitPackage(Package):
 
     def _fetch_metadata(self, project):
         path = self._checkout(project)
-        return project.from_project_root(path)
+        return project.from_project_root(path, {})
 
     def install(self, project):
         dest_path = self.get_installation_path(project)
@@ -273,7 +273,7 @@ class LocalPackage(Package):
             self.local,
             project.project_root)
 
-        return project.from_project_root(project_file_path)
+        return project.from_project_root(project_file_path, {})
 
     def install(self, project):
         src_path = dbt.clients.system.resolve_path_from_base(

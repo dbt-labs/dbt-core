@@ -212,7 +212,7 @@ def invoke_dbt(parsed):
     try:
         if parsed.which in {'deps', 'clean'}:
             # deps doesn't need a profile, so don't require one.
-            cfg = Project.from_current_directory()
+            cfg = Project.from_current_directory(getattr(parsed, 'vars', '{}'))
         elif parsed.which != 'debug':
             # for debug, we will attempt to load the various configurations as
             # part of the task, so just leave cfg=None.
@@ -251,6 +251,8 @@ def invoke_dbt(parsed):
         return None
 
     flags.NON_DESTRUCTIVE = getattr(parsed, 'non_destructive', False)
+    flags.LOG_CACHE_EVENTS = getattr(parsed, 'log_cache_events', False)
+    flags.USE_CACHE = getattr(parsed, 'use_cache', True)
 
     arg_drop_existing = getattr(parsed, 'drop_existing', False)
     arg_full_refresh = getattr(parsed, 'full_refresh', False)
@@ -329,6 +331,20 @@ def parse_args(args):
             Supply variables to the project. This argument overrides
             variables defined in your dbt_project.yml file. This argument
             should be a YAML string, eg. '{my_variable: my_value}'"""
+    )
+
+    # if set, log all cache events. This is extremely verbose!
+    base_subparser.add_argument(
+        '--log-cache-events',
+        action='store_true',
+        help=argparse.SUPPRESS,
+    )
+
+    base_subparser.add_argument(
+        '--bypass-cache',
+        action='store_false',
+        dest='use_cache',
+        help='If set, bypass the adapter-level cache of database state',
     )
 
     sub = subs.add_parser('init', parents=[base_subparser])

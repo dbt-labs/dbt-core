@@ -229,6 +229,10 @@ class Var(object):
         elif isinstance(model, ParsedNode):
             local_vars = model.config.get('vars', {})
             self.model_name = model.name
+        elif model is None:
+            # during config parsing we have no model and no local vars
+            self.model_name = '<Configuration>'
+            local_vars = {}
         else:
             # still used for wrapping
             self.model_name = model.nice_name
