@@ -379,24 +379,27 @@ class Project(object):
             'seeds': _get_config_paths(self.seeds),
         }
 
-    def get_unused_resource_config_paths(self, resource_fqns):
+    def get_unused_resource_config_paths(self, resource_fqns, disabled):
         """Return a list of lists of strings, where each inner list of strings
         represents a type + FQN path of a resource configuration that is not
         used.
         """
+        disabled_fqns = frozenset(tuple(fqn) for fqn in disabled)
         resource_config_paths = self.get_resource_config_paths()
         unused_resource_config_paths = []
         for resource_type, config_paths in resource_config_paths.items():
-            fqns = resource_fqns.get(resource_type, [])
+            used_fqns = resource_fqns.get(resource_type, frozenset())
+            fqns = used_fqns | disabled_fqns
+
             for config_path in config_paths:
                 if not _is_config_used(config_path, fqns):
                     unused_resource_config_paths.append(
-                        [resource_type] + config_path
+                        (resource_type,) + config_path
                     )
         return unused_resource_config_paths
 
-    def warn_for_unused_resource_config_paths(self, resource_fqns):
-        unused = self.get_unused_resource_config_paths(resource_fqns)
+    def warn_for_unused_resource_config_paths(self, resource_fqns, disabled):
+        unused = self.get_unused_resource_config_paths(resource_fqns, disabled)
         if len(unused) == 0:
             return
 
@@ -899,25 +902,22 @@ def _load_yaml(path):
     return dbt.clients.yaml_helper.load_yaml_text(contents)
 
 
-def _get_config_paths(config, path=None, paths=None):
-    if path is None:
-        path = []
-
+def _get_config_paths(config, path=(), paths=None):
     if paths is None:
-        paths = []
+        paths = set()
 
     for key, value in config.items():
         if isinstance(value, dict):
             if key in DBTConfigKeys:
                 if path not in paths:
-                    paths.append(path)
+                    paths.add(path)
             else:
-                _get_config_paths(value, path + [key], paths)
+                _get_config_paths(value, path + (key,), paths)
         else:
             if path not in paths:
-                paths.append(path)
+                paths.add(path)
 
-    return paths
+    return frozenset(paths)
 
 
 def _is_config_used(path, fqns):

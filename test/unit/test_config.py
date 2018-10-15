@@ -55,11 +55,11 @@ model_config = {
     }
 }
 
-model_fqns = [
-    ['my_package_name', 'snowplow', 'snowplow_sessions'],
-    ['my_package_name', 'snowplow', 'base', 'snowplow_events'],
-    ['my_package_name', 'adwords', 'adwords_ads']
-]
+model_fqns = frozenset((
+    ('my_package_name', 'snowplow', 'snowplow_sessions'),
+    ('my_package_name', 'snowplow', 'base', 'snowplow_events'),
+    ('my_package_name', 'adwords', 'adwords_ads'),
+))
 
 
 class ConfigTest(unittest.TestCase):
@@ -788,7 +788,8 @@ class TestProject(BaseConfigTest):
         )
 
         resource_fqns = {'models': model_fqns}
-        unused = project.get_unused_resource_config_paths(resource_fqns)
+        # import ipdb;ipdb.set_trace()
+        unused = project.get_unused_resource_config_paths(resource_fqns, [])
         self.assertEqual(len(unused), 0)
 
     def test__unused_resource_config_paths(self):
@@ -801,17 +802,17 @@ class TestProject(BaseConfigTest):
         )
 
         resource_fqns = {'models': model_fqns}
-        unused = project.get_unused_resource_config_paths(resource_fqns)
+        unused = project.get_unused_resource_config_paths(resource_fqns, [])
         self.assertEqual(len(unused), 3)
 
     def test__get_unused_resource_config_paths_empty(self):
         project = dbt.config.Project.from_project_config(
             self.default_project_data
         )
-        unused = project.get_unused_resource_config_paths({'models': [
-            ['my_test_project', 'foo', 'bar'],
-            ['my_test_project', 'foo', 'baz'],
-        ]})
+        unused = project.get_unused_resource_config_paths({'models': frozenset((
+            ('my_test_project', 'foo', 'bar'),
+            ('my_test_project', 'foo', 'baz'),
+        ))}, [])
         self.assertEqual(len(unused), 0)
 
     @mock.patch.object(dbt.config, 'logger')
@@ -819,10 +820,10 @@ class TestProject(BaseConfigTest):
         project = dbt.config.Project.from_project_config(
             self.default_project_data
         )
-        unused = project.warn_for_unused_resource_config_paths({'models': [
-            ['my_test_project', 'foo', 'bar'],
-            ['my_test_project', 'foo', 'baz'],
-        ]})
+        unused = project.warn_for_unused_resource_config_paths({'models': frozenset((
+            ('my_test_project', 'foo', 'bar'),
+            ('my_test_project', 'foo', 'baz'),
+        ))}, [])
         mock_logger.info.assert_not_called()
 
 
@@ -846,28 +847,38 @@ class TestProjectWithConfigs(BaseConfigTest):
                 }
             }
         }
+        self.used = {'models': frozenset((
+            ('my_test_project', 'foo', 'bar'),
+            ('my_test_project', 'foo', 'baz'),
+        ))}
 
     def test__get_unused_resource_config_paths(self):
         project = dbt.config.Project.from_project_config(
             self.default_project_data
         )
-        unused = project.get_unused_resource_config_paths({'models': [
-            ['my_test_project', 'foo', 'bar'],
-            ['my_test_project', 'foo', 'baz'],
-        ]})
+        unused = project.get_unused_resource_config_paths(self.used, [])
         self.assertEqual(len(unused), 1)
-        self.assertEqual(unused[0], ['models', 'my_test_project', 'baz'])
+        self.assertEqual(unused[0], ('models', 'my_test_project', 'baz'))
 
     @mock.patch.object(dbt.config, 'logger')
     def test__warn_for_unused_resource_config_paths(self, mock_logger):
         project = dbt.config.Project.from_project_config(
             self.default_project_data
         )
-        unused = project.warn_for_unused_resource_config_paths({'models': [
-            ['my_test_project', 'foo', 'bar'],
-            ['my_test_project', 'foo', 'baz'],
-        ]})
+        unused = project.warn_for_unused_resource_config_paths(self.used, [])
         mock_logger.info.assert_called_once()
+
+    @mock.patch.object(dbt.config, 'logger')
+    def test__warn_for_unused_resource_config_paths_disabled(self, mock_logger):
+        project = dbt.config.Project.from_project_config(
+            self.default_project_data
+        )
+        unused = project.get_unused_resource_config_paths(
+            self.used,
+            frozenset([('my_test_project', 'baz')])
+        )
+
+        self.assertEqual(len(unused), 0)
 
 
 

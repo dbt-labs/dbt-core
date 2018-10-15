@@ -248,7 +248,8 @@ class Compiler(object):
         self._check_resource_uniqueness(manifest)
 
         resource_fqns = manifest.get_resource_fqns()
-        self.config.warn_for_unused_resource_config_paths(resource_fqns)
+        self.config.warn_for_unused_resource_config_paths(resource_fqns,
+                                                          manifest.disabled)
 
         self.link_graph(linker, manifest)
 

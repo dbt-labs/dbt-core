@@ -79,6 +79,17 @@ PARSED_MANIFEST_CONTRACT = {
         'nodes': COMPILE_RESULT_NODES_CONTRACT,
         'macros': PARSED_MACROS_CONTRACT,
         'docs': PARSED_DOCUMENTATIONS_CONTRACT,
+        'disabled': {
+            'type': 'array',
+            'items': {
+                'type': 'array',
+                'items': {
+                    'type': 'string',
+                },
+                'description': 'A disabled node FQN',
+            },
+            'description': 'An array of disabled node FQNs',
+        },
         'generated_at': {
             'type': 'string',
             'format': 'date-time',
@@ -160,11 +171,13 @@ class Manifest(APIObject):
     the current state of the compiler. Macros will always be ParsedMacros and
     docs will always be ParsedDocumentations.
     """
-    def __init__(self, nodes, macros, docs, generated_at, config=None):
+    def __init__(self, nodes, macros, docs, generated_at, disabled,
+                 config=None):
         """The constructor. nodes and macros are dictionaries mapping unique
         IDs to ParsedNode/CompiledNode and ParsedMacro objects, respectively.
         docs is a dictionary mapping unique IDs to ParsedDocumentation objects.
         generated_at is a text timestamp in RFC 3339 format.
+        disabled is a list of disabled FQNs (as strings).
         """
         metadata = self.get_metadata(config)
         self.nodes = nodes
@@ -172,6 +185,7 @@ class Manifest(APIObject):
         self.docs = docs
         self.generated_at = generated_at
         self.metadata = metadata
+        self.disabled = disabled
         super(Manifest, self).__init__()
 
     @staticmethod
@@ -207,6 +221,7 @@ class Manifest(APIObject):
             'child_map': forward_edges,
             'generated_at': self.generated_at,
             'metadata': self.metadata,
+            'disabled': self.disabled,
         }
 
     def _find_by_name(self, name, package, subgraph, nodetype):
@@ -289,8 +304,8 @@ class Manifest(APIObject):
         for unique_id, node in self.nodes.items():
             resource_type_plural = node.resource_type + 's'
             if resource_type_plural not in resource_fqns:
-                resource_fqns[resource_type_plural] = []
-            resource_fqns[resource_type_plural].append(node.fqn)
+                resource_fqns[resource_type_plural] = set()
+            resource_fqns[resource_type_plural].add(tuple(node.fqn))
 
         return resource_fqns
 
