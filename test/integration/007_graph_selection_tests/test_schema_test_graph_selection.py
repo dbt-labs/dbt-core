@@ -23,13 +23,10 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         }
 
     def run_schema_and_assert(self, include, exclude, expected_tests):
-        self.use_profile('postgres')
-        self.use_default_project()
-
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
         self.run_dbt(["deps"])
         results = self.run_dbt()
-        self.assertEqual(len(results), 5)
+        self.assertEqual(len(results), 7)
 
         args = FakeArgs()
         args.models = include
