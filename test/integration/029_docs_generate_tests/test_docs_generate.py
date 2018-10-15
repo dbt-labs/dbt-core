@@ -2140,7 +2140,7 @@ class TestDocsGenerate(DBTIntegrationTest):
     def test__bigquery__complex_models(self):
         self.run_and_generate(
             extra={'source-paths': [self.dir('bq_models')]},
-            model_count=3
+            model_count=4
         )
 
         self.verify_catalog(self.expected_bigquery_complex_catalog())
