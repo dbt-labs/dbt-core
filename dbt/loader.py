@@ -4,240 +4,135 @@ from dbt.node_types import NodeType
 from dbt.contracts.graph.manifest import Manifest
 from dbt.utils import timestring
 
-import dbt.parser
+from dbt.parser import MacroParser, ModelParser, SeedParser, AnalysisParser, \
+    DocumentationParser, DataTestParser, HookParser, ArchiveParser, \
+    SchemaParser, ParserUtils
 
 
 class GraphLoader(object):
+    def __init__(self, root_project, all_projects):
+        self.root_project = root_project
+        self.all_projects = all_projects
+        self.nodes = {}
+        self.docs = {}
+        self.macros = {}
+        self.tests = {}
+        self.patches = {}
+        self.disabled = []
 
-    _LOADERS = []
+    def _load_macro_nodes(self, resource_type):
+        for project_name, project in self.all_projects.items():
+            self.macros.update(MacroParser.load_and_parse(
+                package_name=project_name,
+                root_project=self.root_project,
+                all_projects=self.all_projects,
+                root_dir=project.project_root,
+                relative_dirs=project.macro_paths,
+                resource_type=resource_type,
+            ))
 
-    @classmethod
-    def load_all(cls, project_config, all_projects):
-        root_project = project_config
-        macros = MacroLoader.load_all(root_project, all_projects)
-        macros.update(OperationLoader.load_all(root_project, all_projects))
-        nodes = {}
-        for loader in cls._LOADERS:
-            nodes.update(loader.load_all(root_project, all_projects, macros))
-        docs = DocumentationLoader.load_all(root_project, all_projects)
+    def _load_sql_nodes(self, parser, resource_type, relative_dirs_attr,
+                        **kwargs):
+        for project_name, project in self.all_projects.items():
+            nodes, disabled = parser.load_and_parse(
+                package_name=project_name,
+                root_project=self.root_project,
+                all_projects=self.all_projects,
+                root_dir=project.project_root,
+                relative_dirs=getattr(project, relative_dirs_attr),
+                resource_type=resource_type,
+                macros=self.macros,
+                **kwargs
+            )
+            self.nodes.update(nodes)
+            self.disabled.extend(disabled)
 
-        tests, patches = SchemaTestLoader.load_all(root_project, all_projects)
+    def _load_macros(self):
+        self._load_macro_nodes(NodeType.Macro)
+        self._load_macro_nodes(NodeType.Operation)
 
-        manifest = Manifest(nodes=nodes, macros=macros, docs=docs,
-                            generated_at=timestring(), config=project_config)
-        manifest.add_nodes(tests)
-        manifest.patch_nodes(patches)
+    def _load_seeds(self):
+        for project_name, project in self.all_projects.items():
+            self.nodes.update(SeedParser.load_and_parse(
+                package_name=project_name,
+                root_project=self.root_project,
+                all_projects=self.all_projects,
+                root_dir=project.project_root,
+                relative_dirs=project.data_paths,
+                macros=self.macros
+            ))
 
-        manifest = dbt.parser.ParserUtils.process_refs(
-            manifest,
-            root_project.project_name
+    def _load_nodes(self):
+        self._load_sql_nodes(ModelParser, NodeType.Model, 'source_paths')
+        self._load_sql_nodes(AnalysisParser, NodeType.Analysis,
+                             'analysis_paths')
+        self._load_sql_nodes(DataTestParser, NodeType.Test, 'test_paths',
+                             tags=['data'])
+
+        self.nodes.update(HookParser.load_and_parse(
+            self.root_project, self.all_projects, self.macros
+        ))
+        self.nodes.update(ArchiveParser.load_and_parse(
+            self.root_project, self.all_projects, self.macros
+        ))
+
+        self._load_seeds()
+
+    def _load_docs(self):
+        for project_name, project in self.all_projects.items():
+            self.docs.update(DocumentationParser.load_and_parse(
+                package_name=project_name,
+                root_project=self.root_project,
+                all_projects=self.all_projects,
+                root_dir=project.project_root,
+                relative_dirs=project.docs_paths
+            ))
+
+    def _load_schema_tests(self):
+        for project_name, project in self.all_projects.items():
+            tests, patches = SchemaParser.load_and_parse(
+                package_name=project_name,
+                root_project=self.root_project,
+                all_projects=self.all_projects,
+                root_dir=project.project_root,
+                relative_dirs=project.source_paths,
+                macros=self.macros
+            )
+
+            for unique_id, test in tests.items():
+                if unique_id in self.tests:
+                    dbt.exceptions.raise_duplicate_resource_name(
+                        test, self.tests[unique_id],
+                    )
+                self.tests[unique_id] = test
+
+            for name, patch in patches.items():
+                if name in self.patches:
+                    dbt.exceptions.raise_duplicate_patch_name(
+                        name, patch, self.patches[name]
+                    )
+                self.patches[name] = patch
+
+    def load(self):
+        self._load_macros()
+        self._load_nodes()
+        self._load_docs()
+        self._load_schema_tests()
+        manifest = Manifest(
+            nodes=self.nodes,
+            macros=self.macros,
+            docs=self.docs,
+            generated_at=timestring(),
+            config=self.root_project,
+            disabled=self.disabled
         )
-        manifest = dbt.parser.ParserUtils.process_docs(manifest, root_project)
+        manifest.add_nodes(self.tests)
+        manifest.patch_nodes(self.patches)
+        manifest = ParserUtils.process_refs(manifest,
+                                            self.root_project.project_name)
+        manifest = ParserUtils.process_docs(manifest, self.root_project)
         return manifest
 
     @classmethod
-    def register(cls, loader):
-        cls._LOADERS.append(loader)
-
-
-class ResourceLoader(object):
-
-    @classmethod
-    def load_all(cls, root_project, all_projects, macros=None):
-        to_return = {}
-
-        for project_name, project in all_projects.items():
-            to_return.update(cls.load_project(root_project, all_projects,
-                                              project, project_name, macros))
-
-        return to_return
-
-    @classmethod
-    def load_project(cls, root_project, all_projects, project, project_name,
-                     macros):
-        raise dbt.exceptions.NotImplementedException(
-            'load_project is not implemented for this loader!')
-
-
-class MacroLoader(ResourceLoader):
-
-    @classmethod
-    def load_project(cls, root_project, all_projects, project, project_name,
-                     macros):
-        return dbt.parser.MacroParser.load_and_parse(
-            package_name=project_name,
-            root_project=root_project,
-            all_projects=all_projects,
-            root_dir=project.project_root,
-            relative_dirs=project.macro_paths,
-            resource_type=NodeType.Macro)
-
-
-class ModelLoader(ResourceLoader):
-
-    @classmethod
-    def load_all(cls, root_project, all_projects, macros=None):
-        to_return = {}
-
-        for project_name, project in all_projects.items():
-            project_loaded = cls.load_project(root_project,
-                                              all_projects,
-                                              project, project_name,
-                                              macros)
-
-            to_return.update(project_loaded)
-
-        return to_return
-
-    @classmethod
-    def load_project(cls, root_project, all_projects, project, project_name,
-                     macros):
-        return dbt.parser.ModelParser.load_and_parse(
-            package_name=project_name,
-            root_project=root_project,
-            all_projects=all_projects,
-            root_dir=project.project_root,
-            relative_dirs=project.source_paths,
-            resource_type=NodeType.Model,
-            macros=macros)
-
-
-class OperationLoader(ResourceLoader):
-
-    @classmethod
-    def load_project(cls, root_project, all_projects, project, project_name,
-                     macros):
-        return dbt.parser.MacroParser.load_and_parse(
-            package_name=project_name,
-            root_project=root_project,
-            all_projects=all_projects,
-            root_dir=project.project_root,
-            relative_dirs=project.macro_paths,
-            resource_type=NodeType.Operation)
-
-
-class AnalysisLoader(ResourceLoader):
-
-    @classmethod
-    def load_project(cls, root_project, all_projects, project, project_name,
-                     macros):
-        return dbt.parser.AnalysisParser.load_and_parse(
-            package_name=project_name,
-            root_project=root_project,
-            all_projects=all_projects,
-            root_dir=project.project_root,
-            relative_dirs=project.analysis_paths,
-            resource_type=NodeType.Analysis,
-            macros=macros)
-
-
-class SchemaTestLoader(ResourceLoader):
-    @classmethod
-    def load_all(cls, root_project, all_projects, macros=None):
-        tests = {}
-        patches = {}
-        for project_name, project in all_projects.items():
-            project_tests, project_patches = cls.load_project(
-                root_project, all_projects, project, project_name, macros
-            )
-            for unique_id, test in project_tests.items():
-                if unique_id in tests:
-                    dbt.exceptions.raise_duplicate_resource_name(
-                        test, tests[unique_id],
-                    )
-                tests[unique_id] = test
-
-            for name, patch in project_patches.items():
-                if name in patches:
-                    dbt.exceptions.raise_duplicate_patch_name(name, patch,
-                                                              patches[name])
-                patches[name] = patch
-        return tests, patches
-
-    @classmethod
-    def load_project(cls, root_project, all_projects, project, project_name,
-                     macros):
-        return dbt.parser.SchemaParser.load_and_parse(
-            package_name=project_name,
-            root_project=root_project,
-            all_projects=all_projects,
-            root_dir=project.project_root,
-            relative_dirs=project.source_paths,
-            macros=macros)
-
-
-class DataTestLoader(ResourceLoader):
-
-    @classmethod
-    def load_project(cls, root_project, all_projects, project, project_name,
-                     macros):
-        return dbt.parser.DataTestParser.load_and_parse(
-            package_name=project_name,
-            root_project=root_project,
-            all_projects=all_projects,
-            root_dir=project.project_root,
-            relative_dirs=project.test_paths,
-            resource_type=NodeType.Test,
-            tags=['data'],
-            macros=macros)
-
-
-# ArchiveLoader and RunHookLoader operate on configs, so we just need to run
-# them both once, not for each project
-class ArchiveLoader(ResourceLoader):
-
-    @classmethod
-    def load_all(cls, root_project, all_projects, macros=None):
-        return cls.load_project(root_project, all_projects, macros)
-
-    @classmethod
-    def load_project(cls, root_project, all_projects, macros):
-        return dbt.parser.ArchiveParser.load_and_parse(root_project,
-                                                       all_projects,
-                                                       macros)
-
-
-class RunHookLoader(ResourceLoader):
-
-    @classmethod
-    def load_all(cls, root_project, all_projects, macros=None):
-        return cls.load_project(root_project, all_projects, macros)
-
-    @classmethod
-    def load_project(cls, root_project, all_projects, macros):
-        return dbt.parser.HookParser.load_and_parse(root_project, all_projects,
-                                                    macros)
-
-
-class SeedLoader(ResourceLoader):
-
-    @classmethod
-    def load_project(cls, root_project, all_projects, project, project_name,
-                     macros):
-        return dbt.parser.SeedParser.load_and_parse(
-            package_name=project_name,
-            root_project=root_project,
-            all_projects=all_projects,
-            root_dir=project.project_root,
-            relative_dirs=project.data_paths,
-            macros=macros)
-
-
-class DocumentationLoader(ResourceLoader):
-    @classmethod
-    def load_project(cls, root_project, all_projects, project, project_name,
-                     macros):
-        return dbt.parser.DocumentationParser.load_and_parse(
-            package_name=project_name,
-            root_project=root_project,
-            all_projects=all_projects,
-            root_dir=project.project_root,
-            relative_dirs=project.docs_paths)
-
-# node loaders
-GraphLoader.register(ModelLoader)
-GraphLoader.register(AnalysisLoader)
-GraphLoader.register(DataTestLoader)
-GraphLoader.register(RunHookLoader)
-GraphLoader.register(ArchiveLoader)
-GraphLoader.register(SeedLoader)
+    def load_all(cls, project_config, all_projects):
+        return cls(project_config, all_projects).load()

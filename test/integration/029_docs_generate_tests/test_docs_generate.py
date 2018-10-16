@@ -920,6 +920,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'user_id': None,
                 'send_anonymous_usage_stats': False,
             },
+            'disabled': [],
         }
 
     def expected_postgres_references_manifest(self):
@@ -1180,6 +1181,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'user_id': None,
                 'send_anonymous_usage_stats': False,
             },
+            'disabled': [],
         }
 
     def expected_bigquery_complex_manifest(self):
@@ -1379,6 +1381,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'user_id': None,
                 'send_anonymous_usage_stats': False,
             },
+            'disabled': [],
         }
 
     def expected_redshift_incremental_view_manifest(self):
@@ -1489,6 +1492,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'user_id': None,
                 'send_anonymous_usage_stats': False,
             },
+            'disabled': [],
         }
 
     def verify_manifest(self, expected_manifest):
@@ -1500,7 +1504,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.assertEqual(
             set(manifest),
             {'nodes', 'macros', 'parent_map', 'child_map', 'generated_at',
-             'docs', 'metadata', 'docs'}
+             'docs', 'metadata', 'docs', 'disabled'}
         )
 
         self.verify_manifest_macros(manifest)
@@ -1512,6 +1516,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             manifest['generated_at'],
             start=self.generate_start_time
         )
+        self.assertEqual(manifest['disabled'], [])
         self.assertEqual(manifest_without_extras, expected_manifest)
 
     def _quote(self, value):

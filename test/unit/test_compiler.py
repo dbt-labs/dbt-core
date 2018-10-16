@@ -110,7 +110,8 @@ class CompilerTest(unittest.TestCase):
                 ),
             },
             docs={},
-            generated_at='2018-02-14T09:15:13Z'
+            generated_at='2018-02-14T09:15:13Z',
+            disabled=[]
         )
 
         result, output_graph = dbt.compilation.prepend_ctes(
@@ -192,7 +193,8 @@ class CompilerTest(unittest.TestCase):
                 ),
             },
             docs={},
-            generated_at='2018-02-14T09:15:13Z'
+            generated_at='2018-02-14T09:15:13Z',
+            disabled=[]
         )
 
         result, output_graph = dbt.compilation.prepend_ctes(
@@ -288,7 +290,8 @@ class CompilerTest(unittest.TestCase):
                 ),
             },
             docs={},
-            generated_at='2018-02-14T09:15:13Z'
+            generated_at='2018-02-14T09:15:13Z',
+            disabled=[]
         )
 
         result, output_graph = dbt.compilation.prepend_ctes(
@@ -406,7 +409,8 @@ class CompilerTest(unittest.TestCase):
                 ),
             },
             docs={},
-            generated_at='2018-02-14T09:15:13Z'
+            generated_at='2018-02-14T09:15:13Z',
+            disabled=[]
         )
 
         result, output_graph = dbt.compilation.prepend_ctes(
