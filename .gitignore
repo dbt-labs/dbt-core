@@ -73,3 +73,6 @@ target/
 *.sw*
 
 .python-version
+
+# Vim
+*.sw*
