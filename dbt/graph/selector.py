@@ -12,7 +12,7 @@ SELECTOR_GLOB = '*'
 SELECTOR_DELIMITER = ':'
 
 
-class SELECTOR_FILTERS:
+class SELECTOR_FILTERS(object):
     FQN = 'fqn'
     TAG = 'tag'
 

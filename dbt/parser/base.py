@@ -7,7 +7,6 @@ import dbt.utils
 import dbt.hooks
 import dbt.clients.jinja
 import dbt.context.parser
-from dbt.compat import basestring
 
 from dbt.utils import coalesce
 from dbt.logger import GLOBAL_LOGGER as logger
