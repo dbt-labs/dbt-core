@@ -96,29 +96,42 @@ def is_selected_node(real_node, node_selector):
     return True
 
 
-def get_nodes_by_qualified_name(graph, name):
-    """ returns a node if matched, else throws a CompilerError. qualified_name
-    should be either 1) a node name or 2) a dot-notation qualified selector"""
+def _node_is_match(qualified_name, package_names, fqn):
+    """Determine if a qualfied name matches an fqn, given the set of package
+    names in the graph.
 
-    qualified_name = name.split('.')
+    :param List[str] qualified_name: The components of the selector or node
+        name, split on '.'.
+    :param Set[str] package_names: The set of pacakge names in the graph.
+    :param List[str] fqn: The node's fully qualified name in the graph.
+    """
+    if len(qualified_name) == 1 and fqn[-1] == qualified_name[0]:
+        return True
+
+    if qualified_name[0] in package_names:
+        if is_selected_node(fqn, qualified_name):
+            return True
+
+    for package_name in package_names:
+        local_qualified_node_name = [package_name] + qualified_name
+        if is_selected_node(fqn, local_qualified_node_name):
+            return True
+
+    return False
+
+
+def get_nodes_by_qualified_name(graph, qualified_name_selector):
+    """Yield all nodes in the graph that match the qualified_name_selector.
+
+    :param str qualified_name_selector: The selector or node name
+    """
+    qualified_name = qualified_name_selector.split(".")
     package_names = get_package_names(graph)
 
     for node in graph.nodes():
         fqn_ish = graph.node[node]['fqn']
-
-        if len(qualified_name) == 1 and fqn_ish[-1] == qualified_name[0]:
+        if _node_is_match(qualified_name, package_names, fqn_ish):
             yield node
-
-        elif qualified_name[0] in package_names:
-            if is_selected_node(fqn_ish, qualified_name):
-                yield node
-
-        else:
-            for package_name in package_names:
-                local_qualified_node_name = [package_name] + qualified_name
-                if is_selected_node(fqn_ish, local_qualified_node_name):
-                    yield node
-                    break
 
 
 def get_nodes_by_tag(graph, tag_name):

@@ -106,7 +106,7 @@ class BaseParser(object):
 
         # make a manifest with just the macros to get the context
         manifest = Manifest(macros=macros, nodes={}, docs={},
-                            generated_at=dbt.utils.timestring())
+                            generated_at=dbt.utils.timestring(), disabled=[])
 
         parsed_node = ParsedNode(**node)
         context = dbt.context.parser.generate(parsed_node, root_project_config,

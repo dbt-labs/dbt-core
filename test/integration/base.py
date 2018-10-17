@@ -38,6 +38,7 @@ class FakeArgs(object):
 
 class TestArgs(object):
     def __init__(self, kwargs):
+        self.which = 'run'
         self.__dict__.update(kwargs)
 
 
@@ -349,6 +350,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
         if strict:
             args = ["--strict"] + args
+        args.append('--log-cache-events')
         logger.info("Invoking dbt with {}".format(args))
 
         res, success = dbt.handle_and_check(args)

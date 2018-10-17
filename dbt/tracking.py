@@ -1,7 +1,7 @@
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt import version as dbt_version
 from snowplow_tracker import Subject, Tracker, Emitter, logger as sp_logger
-from snowplow_tracker import SelfDescribingJson, disable_contracts
+from snowplow_tracker import SelfDescribingJson
 from datetime import datetime
 
 import pytz
@@ -12,7 +12,6 @@ import os
 
 import dbt.clients.system
 
-disable_contracts()
 sp_logger.setLevel(100)
 
 COLLECTOR_URL = "fishtownanalytics.sinter-collect.com"
