@@ -1280,6 +1280,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
+                        'tags': [],
                         'vars': {}
                     },
                     'depends_on': {'macros': [], 'nodes': ['seed.test.seed']},
