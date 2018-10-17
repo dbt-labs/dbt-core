@@ -485,6 +485,8 @@ class TestDocsGenerate(DBTIntegrationTest):
         table_stats = self._bigquery_stats(True)
         clustering_stats = self._bigquery_stats(True, partition='DAY',
                                                 cluster='first_name')
+        multi_clustering_stats = self._bigquery_stats(True, partition='DAY',
+                                                cluster='first_name,email')
         nesting_columns = {
             'field_1': {
                 "name": "field_1",
@@ -540,7 +542,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'schema': my_schema_name,
                     'type': 'table'
                 },
-                'stats': clustering_stats,
+                'stats': multi_clustering_stats,
                 'columns': self._clustered_bigquery_columns('DATE'),
             },
             'seed.test.seed': {
@@ -1198,6 +1200,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         nested_view_sql_path = self.dir('bq_models/nested_view.sql')
         nested_table_sql_path = self.dir('bq_models/nested_table.sql')
         clustered_sql_path = self.dir('bq_models/clustered.sql')
+        multi_clustered_sql_path = self.dir('bq_models/multi_clustered.sql')
         my_schema_name = self.unique_schema()
         return {
             'nodes': {
@@ -1426,12 +1429,14 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
             'child_map': {
                 'model.test.clustered': [],
+                'model.test.multi_clustered': [],
                 'model.test.nested_table': ['model.test.nested_view'],
                 'model.test.nested_view': [],
-                'seed.test.seed': ['model.test.clustered']
+                'seed.test.seed': ['model.test.clustered','model.test.multi_clustered']
             },
             'parent_map': {
                 'model.test.clustered': ['seed.test.seed'],
+                'model.test.multi_clustered': ['seed.test.seed'],
                 'seed.test.seed': [],
                 'model.test.nested_table': [],
                 'model.test.nested_view': ['model.test.nested_table'],
