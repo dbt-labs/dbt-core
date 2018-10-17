@@ -41,6 +41,7 @@ class CompilerTest(unittest.TestCase):
             'vars': {},
             'quoting': {},
             'column_types': {},
+            'tags': [],
         }
 
     def test__prepend_ctes__already_has_cte(self):

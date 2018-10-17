@@ -128,6 +128,10 @@ class BaseParser(object):
         parsed_node.schema = get_schema(schema_override)
         parsed_node.alias = config.config.get('alias', default_alias)
 
+        # Set tags on node provided in config blocks
+        model_tags = config.config.get('tags', [])
+        parsed_node.tags.extend(model_tags)
+
         # Overwrite node config
         config_dict = parsed_node.get('config', {})
         config_dict.update(config.config)
