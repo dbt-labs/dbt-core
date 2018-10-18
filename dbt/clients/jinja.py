@@ -64,18 +64,20 @@ class TemplateCache(object):
         self.file_cache = {}
 
     def get_node_template(self, node):
-        file_path = node.get('original_file_path')
+        # multiple nodes can be in a file, but they must have unique names!
+        key = (node['original_file_path'], node['name'])
 
-        if self.file_cache.get(file_path):
-            return self.file_cache[file_path]
+        if key in self.file_cache:
+            return self.file_cache[key]
 
-        self.file_cache[file_path] = dbt.clients.jinja.get_template(
+        template = dbt.clients.jinja.get_template(
             string=node.get('raw_sql'),
             ctx={},
             node=node
         )
+        self.file_cache[key] = template
 
-        return self.file_cache[file_path]
+        return template
 
     def clear(self):
         self.file_cache.clear()
@@ -101,11 +103,8 @@ def macro_generator(node):
                 return macro(*args, **kwargs)
             except dbt.exceptions.MacroReturn as e:
                 return e.value
-            except (TypeError,
-                    jinja2.exceptions.TemplateRuntimeError) as e:
-                dbt.exceptions.raise_compiler_error(
-                    str(e),
-                    node)
+            except (TypeError, jinja2.exceptions.TemplateRuntimeError) as e:
+                dbt.exceptions.raise_compiler_error(str(e), node)
             except dbt.exceptions.CompilationException as e:
                 e.stack.append(node)
                 raise e
