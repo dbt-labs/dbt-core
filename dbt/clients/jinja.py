@@ -64,13 +64,12 @@ class TemplateCache(object):
         self.file_cache = {}
 
     def get_node_template(self, node):
-        # multiple nodes can be in a file, but they must have unique names!
-        key = (node['original_file_path'], node['name'])
+        key = (node['package_name'], node['original_file_path'])
 
         if key in self.file_cache:
             return self.file_cache[key]
 
-        template = dbt.clients.jinja.get_template(
+        template = get_template(
             string=node.get('raw_sql'),
             ctx={},
             node=node

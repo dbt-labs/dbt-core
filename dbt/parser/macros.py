@@ -1,3 +1,4 @@
+import os
 
 import jinja2.runtime
 
@@ -100,9 +101,14 @@ class MacroParser(BaseParser):
             file_contents = dbt.clients.system.load_file_contents(
                 file_match.get('absolute_path'))
 
+            original_file_path = os.path.join(
+                file_match.get('searched_path'),
+                file_match.get('relative_path')
+            )
+
             result.update(
                 cls.parse_macro_file(
-                    file_match.get('relative_path'),
+                    original_file_path,
                     file_contents,
                     root_dir,
                     package_name,
