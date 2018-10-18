@@ -45,6 +45,8 @@ class TestPrePostRunHooks(DBTIntegrationTest):
                 "{{ custom_run_hook('end', target, run_started_at, invocation_id) }}",
                 "create table {{ target.schema }}.end_hook_order_test ( id int )",
                 "drop table {{ target.schema }}.end_hook_order_test",
+                "create table {{ target.schema }}.schemas ( schema text )",
+                "insert into {{ target.schema }}.schemas values ({% for schema in schemas %}( '{{ schema }}' ){% if not loop.last %},{% endif %}{% endfor %})",
             ]
         }
 
@@ -62,6 +64,12 @@ class TestPrePostRunHooks(DBTIntegrationTest):
         ctx = dict([(k,v) for (k,v) in zip(self.fields, vals[0])])
 
         return ctx
+
+    def assert_used_schemas(self):
+        schemas_query = 'select * from {}.schemas'.format(self.unique_schema())
+        results = self.run_sql(schemas_query, fetch='all')
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0][0], self.unique_schema())
 
     def check_hooks(self, state):
         ctx = self.get_ctx_vars(state)
@@ -81,7 +89,7 @@ class TestPrePostRunHooks(DBTIntegrationTest):
         self.assertTrue(ctx['invocation_id'] is not None and len(ctx['invocation_id']) > 0, 'invocation_id was not set')
 
     @attr(type='postgres')
-    def test_pre_and_post_run_hooks(self):
+    def test__postgres__pre_and_post_run_hooks(self):
         self.run_dbt(['run'])
 
         self.check_hooks('start')
@@ -89,9 +97,10 @@ class TestPrePostRunHooks(DBTIntegrationTest):
 
         self.assertTableDoesNotExist("start_hook_order_test")
         self.assertTableDoesNotExist("end_hook_order_test")
+        self.assert_used_schemas()
 
     @attr(type='postgres')
-    def test_pre_and_post_seed_hooks(self):
+    def test__postgres__pre_and_post_seed_hooks(self):
         self.run_dbt(['seed'])
 
         self.check_hooks('start')
@@ -99,4 +108,4 @@ class TestPrePostRunHooks(DBTIntegrationTest):
 
         self.assertTableDoesNotExist("start_hook_order_test")
         self.assertTableDoesNotExist("end_hook_order_test")
-
+        self.assert_used_schemas()

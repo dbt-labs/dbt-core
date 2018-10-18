@@ -105,7 +105,7 @@ class BaseParser(object):
 
         # make a manifest with just the macros to get the context
         manifest = Manifest(macros=macros, nodes={}, docs={},
-                            generated_at=dbt.utils.timestring())
+                            generated_at=dbt.utils.timestring(), disabled=[])
 
         parsed_node = ParsedNode(**node)
         context = dbt.context.parser.generate(parsed_node, root_project_config,
@@ -127,6 +127,10 @@ class BaseParser(object):
                                  lambda x: default_schema)
         parsed_node.schema = get_schema(schema_override)
         parsed_node.alias = config.config.get('alias', default_alias)
+
+        # Set tags on node provided in config blocks
+        model_tags = config.config.get('tags', [])
+        parsed_node.tags.extend(model_tags)
 
         # Overwrite node config
         config_dict = parsed_node.get('config', {})

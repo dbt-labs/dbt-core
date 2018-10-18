@@ -31,6 +31,7 @@ class TestVar(unittest.TestCase):
                 'vars': {},
                 'quoting': {},
                 'column_types': {},
+                'tags': [],
             },
             tags=[],
             path='model_one.sql',

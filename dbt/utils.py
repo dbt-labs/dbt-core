@@ -36,6 +36,7 @@ DBTConfigKeys = [
     'column_types',
     'bind',
     'quoting',
+    'tags',
 ]
 
 

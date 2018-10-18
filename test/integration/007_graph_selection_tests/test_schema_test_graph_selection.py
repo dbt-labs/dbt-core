@@ -23,13 +23,10 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         }
 
     def run_schema_and_assert(self, include, exclude, expected_tests):
-        self.use_profile('postgres')
-        self.use_default_project()
-
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
         self.run_dbt(["deps"])
         results = self.run_dbt()
-        self.assertEqual(len(results), 5)
+        self.assertEqual(len(results), 7)
 
         args = FakeArgs()
         args.models = include
@@ -63,11 +60,30 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         )
 
     @attr(type='postgres')
+    def test__postgres__schema_tests_specify_tag(self):
+        self.run_schema_and_assert(
+            ['tag:bi'],
+            None,
+            ['unique_users_id',
+             'unique_users_rollup_gender']
+        )
+
+    @attr(type='postgres')
     def test__postgres__schema_tests_specify_model_and_children(self):
         self.run_schema_and_assert(
             ['users+'],
             None,
             ['unique_users_id', 'unique_users_rollup_gender']
+        )
+
+    @attr(type='postgres')
+    def test__postgres__schema_tests_specify_tag_and_children(self):
+        self.run_schema_and_assert(
+            ['tag:base+'],
+            None,
+            ['unique_emails_email',
+             'unique_users_id',
+             'unique_users_rollup_gender']
         )
 
     @attr(type='postgres')
