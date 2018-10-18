@@ -58,7 +58,7 @@ class MacroFuzzEnvironment(jinja2.sandbox.SandboxedEnvironment):
         return super(MacroFuzzEnvironment, self)._compile(source, filename)
 
 
-class TemplateCache:
+class TemplateCache(object):
 
     def __init__(self):
         self.file_cache = {}
@@ -76,6 +76,9 @@ class TemplateCache:
         )
 
         return self.file_cache[file_path]
+
+    def clear(self):
+        self.file_cache.clear()
 
 
 template_cache = TemplateCache()

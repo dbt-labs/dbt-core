@@ -12,6 +12,7 @@ from nose.plugins.attrib import attr
 import dbt.flags as flags
 
 from dbt.adapters.factory import get_adapter, reset_adapters
+from dbt.clients.jinja import template_cache
 from dbt.config import RuntimeConfig
 
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -204,6 +205,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def setUp(self):
         flags.reset()
+        template_cache.clear()
         # disable capturing warnings
         logging.captureWarnings(False)
         self._clean_files()
