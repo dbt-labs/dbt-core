@@ -718,7 +718,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.assertTrue(len(macro['raw_sql']) > 10)
         without_sql = {k: v for k, v in macro.items() if k != 'raw_sql'}
         # Windows means we can't hard-code this.
-        helpers_path = os.path.join('materializations', 'helpers.sql')
+        helpers_path = os.path.normpath('macros/materializations/helpers.sql')
         self.assertEqual(
             without_sql,
             {
