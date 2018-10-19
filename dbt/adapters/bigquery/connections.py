@@ -9,9 +9,44 @@ import google.cloud.bigquery
 
 import dbt.clients.agate_helper
 import dbt.exceptions
-from dbt.adapters.base import BaseConnectionManager
+from dbt.adapters.base import BaseConnectionManager, Credentials
 from dbt.compat import abstractclassmethod
 from dbt.logger import GLOBAL_LOGGER as logger
+
+
+BIGQUERY_CREDENTIALS_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'properties': {
+        'method': {
+            'enum': ['oauth', 'service-account', 'service-account-json'],
+        },
+        'project': {
+            'type': 'string',
+        },
+        'schema': {
+            'type': 'string',
+        },
+        'keyfile': {
+            'type': 'string',
+        },
+        'keyfile_json': {
+            'type': 'object',
+        },
+        'timeout_seconds': {
+            'type': 'integer',
+        },
+    },
+    'required': ['method', 'project', 'schema'],
+}
+
+
+class BigQueryCredentials(Credentials):
+    SCHEMA = BIGQUERY_CREDENTIALS_CONTRACT
+
+    @property
+    def type(self):
+        return 'bigquery'
 
 
 class BigQueryConnectionManager(BaseConnectionManager):

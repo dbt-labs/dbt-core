@@ -11,6 +11,17 @@ package_version = "0.12.0"
 description = """dbt (data build tool) is a command line tool that helps \
 analysts and engineers transform data in their warehouse more effectively"""
 
+
+boto_requirements = [
+    'boto3>=1.6.23,<1.8.0',
+    'botocore>=1.9.23,<1.11.0',
+]
+
+postgres_requirements = [
+    'psycopg2>=2.7.5,<2.8',
+]
+
+
 setup(
     name=package_name,
     version=package_version,
@@ -39,20 +50,24 @@ setup(
     scripts=[
         'scripts/dbt',
     ],
+    extras_require={
+        # when we split out adapters into their own python packages, these
+        # extras requirements lists will just be the appropriate adapter
+        # packages
+        'snowflake': ['snowflake-connector-python>=1.4.9'] + boto_requirements,
+        'bigquery': ['google-cloud-bigquery>=1.0.0,<2'],
+        'redshift': boto_requirements[:] + postgres_requirements[:],
+        'postgres': postgres_requirements[:],
+    },
     install_requires=[
         'Jinja2>=2.10',
         'PyYAML>=3.11',
-        'psycopg2>=2.7.5,<2.8',
         'sqlparse==0.2.3',
         'networkx==1.11',
         'minimal-snowplow-tracker==0.0.2',
-        'snowflake-connector-python>=1.4.9',
         'requests>=2.18.0,<3',
         'colorama==0.3.9',
-        'google-cloud-bigquery>=1.0.0,<2',
         'agate>=1.6,<2',
         'jsonschema==2.6.0',
-        'boto3>=1.6.23,<1.8.0',
-        'botocore>=1.9.23,<1.11.0',
     ]
 )

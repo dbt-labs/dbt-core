@@ -26,6 +26,19 @@ import time
 import agate
 
 
+def column_to_bq_schema(col):
+    """Convert a column to a bigquery schema object. This is here instead of
+    in dbt.schema to avoid importing google libraries there.
+    """
+    kwargs = {}
+    if len(col.fields) > 0:
+        fields = [column_to_bq_schema(field) for field in col.fields]
+        kwargs = {"fields": fields}
+
+    return google.cloud.bigquery.SchemaField(col.name, col.dtype, col.mode,
+                                             **kwargs)
+
+
 class BigQueryAdapter(BaseAdapter):
 
     RELATION_TYPES = {
@@ -357,7 +370,7 @@ class BigQueryAdapter(BaseAdapter):
                                                relation.identifier, conn)
         table = client.get_table(table_ref)
 
-        new_columns = [col.to_bq_schema_object() for col in columns]
+        new_columns = [column_to_bq_schema(col) for col in columns]
         new_schema = table.schema + new_columns
 
         new_table = google.cloud.bigquery.Table(table_ref, schema=new_schema)

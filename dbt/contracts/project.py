@@ -1,9 +1,6 @@
 from dbt.api.object import APIObject
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.utils import deep_merge
-from dbt.contracts.connection import POSTGRES_CREDENTIALS_CONTRACT, \
-    REDSHIFT_CREDENTIALS_CONTRACT, SNOWFLAKE_CREDENTIALS_CONTRACT, \
-    BIGQUERY_CREDENTIALS_CONTRACT
 
 # TODO: add description fields.
 ARCHIVE_TABLE_CONFIG_CONTRACT = {
@@ -261,12 +258,7 @@ PROFILE_INFO_CONTRACT = {
             'type': 'number',
         },
         'credentials': {
-            'anyOf': [
-                POSTGRES_CREDENTIALS_CONTRACT,
-                REDSHIFT_CREDENTIALS_CONTRACT,
-                SNOWFLAKE_CREDENTIALS_CONTRACT,
-                BIGQUERY_CREDENTIALS_CONTRACT,
-            ],
+            'anyOf': [],
         },
     },
     'required': [
@@ -311,6 +303,15 @@ CONFIG_CONTRACT = deep_merge(
         ),
     },
 )
+
+
+def update_config_contract(typename, connection):
+    PROFILE_INFO_CONTRACT['properties']['credentials']['anyOf'].append(
+        connection.SCHEMA
+    )
+    CONFIG_CONTRACT['properties']['credentials']['anyOf'].append(
+        connection.SCHEMA
+    )
 
 
 class Configuration(APIObject):

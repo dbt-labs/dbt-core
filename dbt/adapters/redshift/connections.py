@@ -2,12 +2,77 @@ from contextlib import contextmanager
 import multiprocessing
 
 from dbt.adapters.postgres import PostgresConnectionManager
+from dbt.adapters.postgres import PostgresCredentials
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 import dbt.exceptions
 
 import boto3
 
 drop_lock = multiprocessing.Lock()
+
+
+REDSHIFT_CREDENTIALS_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'properties': {
+        'method': {
+            'enum': ['database', 'iam'],
+            'description': (
+                'database: use user/pass creds; iam: use temporary creds'
+            ),
+        },
+        'dbname': {
+            'type': 'string',
+        },
+        'host': {
+            'type': 'string',
+        },
+        'user': {
+            'type': 'string',
+        },
+        'pass': {
+            'type': 'string',
+        },
+        'port': {
+            'type': 'integer',
+            'minimum': 0,
+            'maximum': 65535,
+        },
+        'schema': {
+            'type': 'string',
+        },
+        'cluster_id': {
+            'type': 'string',
+            'description': (
+                'If using IAM auth, the name of the cluster'
+            )
+        },
+        'iam_duration_seconds': {
+            'type': 'integer',
+            'minimum': 900,
+            'maximum': 3600,
+            'description': (
+                'If using IAM auth, the ttl for the temporary credentials'
+            )
+        },
+        'keepalives_idle': {
+            'type': 'integer',
+        },
+        'required': ['dbname', 'host', 'user', 'port', 'schema']
+    }
+}
+
+
+class RedshiftCredentials(PostgresCredentials):
+    SCHEMA = REDSHIFT_CREDENTIALS_CONTRACT
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('method', 'database')
+        super(RedshiftCredentials, self).__init__(*args, **kwargs)
+
+    @property
+    def type(self):
+        return 'redshift'
 
 
 class RedshiftConnectionManager(PostgresConnectionManager):

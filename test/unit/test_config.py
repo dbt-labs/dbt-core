@@ -11,7 +11,8 @@ import yaml
 
 import dbt.config
 import dbt.exceptions
-from dbt.contracts.connection import PostgresCredentials, RedshiftCredentials
+from dbt.adapters.postgres import PostgresCredentials
+from dbt.adapters.redshift import RedshiftCredentials
 from dbt.contracts.project import PackageConfig
 
 
@@ -807,7 +808,6 @@ class TestProject(BaseConfigTest):
         )
 
         resource_fqns = {'models': model_fqns}
-        # import ipdb;ipdb.set_trace()
         unused = project.get_unused_resource_config_paths(resource_fqns, [])
         self.assertEqual(len(unused), 0)
 

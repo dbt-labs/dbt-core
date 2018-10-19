@@ -3,9 +3,9 @@ from mock import patch, MagicMock
 
 import dbt.flags as flags
 
-from dbt.contracts.connection import BigQueryCredentials
+from dbt.adapters.bigquery import BigQueryCredentials
 from dbt.adapters.bigquery import BigQueryAdapter
-from dbt.adapters.bigquery.relation import BigQueryRelation
+from dbt.adapters.bigquery import BigQueryRelation
 import dbt.exceptions
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 

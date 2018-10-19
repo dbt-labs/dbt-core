@@ -150,14 +150,15 @@ class BaseAdapter(object):
     ###
     # Methods that should never be overridden
     ###
-    def type(self):
+    @classmethod
+    def type(cls):
         """Get the type of this adapter. Types must be class-unique and
         consistent.
 
         :return: The type name
         :rtype: str
         """
-        return self.ConnectionManager.TYPE
+        return cls.ConnectionManager.TYPE
 
     ###
     # Caching methods

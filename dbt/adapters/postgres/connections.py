@@ -4,8 +4,59 @@ import psycopg2
 
 import dbt.compat
 import dbt.exceptions
+from dbt.adapters.base import Credentials
 from dbt.adapters.sql import SQLConnectionManager
 from dbt.logger import GLOBAL_LOGGER as logger
+
+
+POSTGRES_CREDENTIALS_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'properties': {
+        'dbname': {
+            'type': 'string',
+        },
+        'host': {
+            'type': 'string',
+        },
+        'user': {
+            'type': 'string',
+        },
+        'pass': {
+            'type': 'string',
+        },
+        'port': {
+            'type': 'integer',
+            'minimum': 0,
+            'maximum': 65535,
+        },
+        'schema': {
+            'type': 'string',
+        },
+        'keepalives_idle': {
+            'type': 'integer',
+        },
+    },
+    'required': ['dbname', 'host', 'user', 'pass', 'port', 'schema'],
+}
+
+
+class PostgresCredentials(Credentials):
+    SCHEMA = POSTGRES_CREDENTIALS_CONTRACT
+
+    @property
+    def type(self):
+        return 'postgres'
+
+    def incorporate(self, **kwargs):
+        if 'password' in kwargs:
+            kwargs['pass'] = kwargs.pop('password')
+        return super(PostgresCredentials, self).incorporate(**kwargs)
+
+    @property
+    def password(self):
+        # we can't access this as 'pass' since that's reserved
+        return self._contents['pass']
 
 
 class PostgresConnectionManager(SQLConnectionManager):

@@ -1,8 +1,6 @@
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 import dbt.exceptions
 
-import google.cloud.bigquery
-
 
 class Column(object):
     TYPE_LABELS = {
@@ -142,15 +140,6 @@ class BigQueryColumn(Column):
 
     def literal(self, value):
         return "cast({} as {})".format(value, self.dtype)
-
-    def to_bq_schema_object(self):
-        kwargs = {}
-        if len(self.fields) > 0:
-            fields = [field.to_bq_schema_object() for field in self.fields]
-            kwargs = {"fields": fields}
-
-        return google.cloud.bigquery.SchemaField(self.name, self.dtype,
-                                                 self.mode, **kwargs)
 
     @property
     def data_type(self):

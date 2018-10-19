@@ -5,9 +5,21 @@ import six
 
 import dbt.exceptions
 import dbt.flags
+from dbt.api import APIObject
 from dbt.compat import abstractclassmethod
 from dbt.contracts.connection import Connection
 from dbt.logger import GLOBAL_LOGGER as logger
+
+
+class Credentials(APIObject):
+    """Common base class for credentials. This is not valid to instantiate"""
+    SCHEMA = NotImplemented
+
+    @property
+    def type(self):
+        raise NotImplementedError(
+            'type not implemented for base credentials class'
+        )
 
 
 @six.add_metaclass(abc.ABCMeta)

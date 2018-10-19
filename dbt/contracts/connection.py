@@ -3,145 +3,8 @@ from dbt.api.object import APIObject
 from dbt.contracts.common import named_property
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
-POSTGRES_CREDENTIALS_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'properties': {
-        'dbname': {
-            'type': 'string',
-        },
-        'host': {
-            'type': 'string',
-        },
-        'user': {
-            'type': 'string',
-        },
-        'pass': {
-            'type': 'string',
-        },
-        'port': {
-            'type': 'integer',
-            'minimum': 0,
-            'maximum': 65535,
-        },
-        'schema': {
-            'type': 'string',
-        },
-        'keepalives_idle': {
-            'type': 'integer',
-        },
-    },
-    'required': ['dbname', 'host', 'user', 'pass', 'port', 'schema'],
-}
 
-REDSHIFT_CREDENTIALS_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'properties': {
-        'method': {
-            'enum': ['database', 'iam'],
-            'description': (
-                'database: use user/pass creds; iam: use temporary creds'
-            ),
-        },
-        'dbname': {
-            'type': 'string',
-        },
-        'host': {
-            'type': 'string',
-        },
-        'user': {
-            'type': 'string',
-        },
-        'pass': {
-            'type': 'string',
-        },
-        'port': {
-            'type': 'integer',
-            'minimum': 0,
-            'maximum': 65535,
-        },
-        'schema': {
-            'type': 'string',
-        },
-        'cluster_id': {
-            'type': 'string',
-            'description': (
-                'If using IAM auth, the name of the cluster'
-            )
-        },
-        'iam_duration_seconds': {
-            'type': 'integer',
-            'minimum': 900,
-            'maximum': 3600,
-            'description': (
-                'If using IAM auth, the ttl for the temporary credentials'
-            )
-        },
-        'keepalives_idle': {
-            'type': 'integer',
-        },
-        'required': ['dbname', 'host', 'user', 'port', 'schema']
-    }
-}
-
-SNOWFLAKE_CREDENTIALS_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'properties': {
-        'account': {
-            'type': 'string',
-        },
-        'user': {
-            'type': 'string',
-        },
-        'password': {
-            'type': 'string',
-        },
-        'database': {
-            'type': 'string',
-        },
-        'schema': {
-            'type': 'string',
-        },
-        'warehouse': {
-            'type': 'string',
-        },
-        'role': {
-            'type': 'string',
-        },
-        'client_session_keep_alive': {
-            'type': 'boolean',
-        }
-    },
-    'required': ['account', 'user', 'password', 'database', 'schema'],
-}
-
-BIGQUERY_CREDENTIALS_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'properties': {
-        'method': {
-            'enum': ['oauth', 'service-account', 'service-account-json'],
-        },
-        'project': {
-            'type': 'string',
-        },
-        'schema': {
-            'type': 'string',
-        },
-        'keyfile': {
-            'type': 'string',
-        },
-        'keyfile_json': {
-            'type': 'object',
-        },
-        'timeout_seconds': {
-            'type': 'integer',
-        },
-    },
-    'required': ['method', 'project', 'schema'],
-}
+CREDENTIALS_MAPPING = {}
 
 
 CONNECTION_CONTRACT = {
@@ -149,7 +12,7 @@ CONNECTION_CONTRACT = {
     'additionalProperties': False,
     'properties': {
         'type': {
-            'enum': ['postgres', 'redshift', 'snowflake', 'bigquery'],
+            'enum': [],
         },
         'name': {
             'type': ['null', 'string'],
@@ -169,12 +32,7 @@ CONNECTION_CONTRACT = {
             'description': (
                 'The credentials object here should match the connection type.'
             ),
-            'anyOf': [
-                POSTGRES_CREDENTIALS_CONTRACT,
-                REDSHIFT_CREDENTIALS_CONTRACT,
-                SNOWFLAKE_CREDENTIALS_CONTRACT,
-                BIGQUERY_CREDENTIALS_CONTRACT,
-            ],
+            'anyOf': [],
         }
     },
     'required': [
@@ -183,69 +41,11 @@ CONNECTION_CONTRACT = {
 }
 
 
-class Credentials(APIObject):
-    """Common base class for credentials. This is not valid to instantiate"""
-    SCHEMA = NotImplemented
-
-    @property
-    def type(self):
-        raise NotImplementedError(
-            'type not implemented for base credentials class'
-        )
-
-
-class PostgresCredentials(Credentials):
-    SCHEMA = POSTGRES_CREDENTIALS_CONTRACT
-
-    @property
-    def type(self):
-        return 'postgres'
-
-    def incorporate(self, **kwargs):
-        if 'password' in kwargs:
-            kwargs['pass'] = kwargs.pop('password')
-        return super(PostgresCredentials, self).incorporate(**kwargs)
-
-    @property
-    def password(self):
-        # we can't access this as 'pass' since that's reserved
-        return self._contents['pass']
-
-
-class RedshiftCredentials(PostgresCredentials):
-    SCHEMA = REDSHIFT_CREDENTIALS_CONTRACT
-
-    def __init__(self, *args, **kwargs):
-        kwargs.setdefault('method', 'database')
-        super(RedshiftCredentials, self).__init__(*args, **kwargs)
-
-    @property
-    def type(self):
-        return 'redshift'
-
-
-class SnowflakeCredentials(Credentials):
-    SCHEMA = SNOWFLAKE_CREDENTIALS_CONTRACT
-
-    @property
-    def type(self):
-        return 'snowflake'
-
-
-class BigQueryCredentials(Credentials):
-    SCHEMA = BIGQUERY_CREDENTIALS_CONTRACT
-
-    @property
-    def type(self):
-        return 'bigquery'
-
-
-CREDENTIALS_MAPPING = {
-    'postgres': PostgresCredentials,
-    'redshift': RedshiftCredentials,
-    'snowflake': SnowflakeCredentials,
-    'bigquery': BigQueryCredentials,
-}
+def update_connection_contract(typename, connection):
+    properties = CONNECTION_CONTRACT['properties']
+    properties['type']['enum'].append(typename)
+    properties['credentials']['anyOf'].append(connection.SCHEMA)
+    CREDENTIALS_MAPPING[typename] = connection
 
 
 def create_credentials(typename, credentials):
@@ -262,7 +62,7 @@ class Connection(APIObject):
 
     def __init__(self, credentials, *args, **kwargs):
         # this is a bit clunky but we deserialize and then reserialize for now
-        if isinstance(credentials, Credentials):
+        if hasattr(credentials, 'serialize'):
             credentials = credentials.serialize()
         # we can't serialize handles
         self._handle = kwargs.pop('handle')

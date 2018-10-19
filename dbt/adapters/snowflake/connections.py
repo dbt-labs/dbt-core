@@ -7,8 +7,50 @@ import snowflake.connector.errors
 
 import dbt.compat
 import dbt.exceptions
+from dbt.adapters.base import Credentials
 from dbt.adapters.sql import SQLConnectionManager
 from dbt.logger import GLOBAL_LOGGER as logger
+
+
+SNOWFLAKE_CREDENTIALS_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'properties': {
+        'account': {
+            'type': 'string',
+        },
+        'user': {
+            'type': 'string',
+        },
+        'password': {
+            'type': 'string',
+        },
+        'database': {
+            'type': 'string',
+        },
+        'schema': {
+            'type': 'string',
+        },
+        'warehouse': {
+            'type': 'string',
+        },
+        'role': {
+            'type': 'string',
+        },
+        'client_session_keep_alive': {
+            'type': 'boolean',
+        }
+    },
+    'required': ['account', 'user', 'password', 'database', 'schema'],
+}
+
+
+class SnowflakeCredentials(Credentials):
+    SCHEMA = SNOWFLAKE_CREDENTIALS_CONTRACT
+
+    @property
+    def type(self):
+        return 'snowflake'
 
 
 class SnowflakeConnectionManager(SQLConnectionManager):

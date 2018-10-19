@@ -7,7 +7,6 @@ from mock import ANY, patch
 
 from test.integration.base import DBTIntegrationTest, use_profile
 from dbt.compat import basestring
-from dbt.adapters.snowflake import connections as snowflake_conn
 
 DATEFMT = '%Y-%m-%dT%H:%M:%S.%fZ'
 
@@ -2145,6 +2144,9 @@ class TestDocsGenerate(DBTIntegrationTest):
 
     @use_profile('snowflake')
     def test__snowflake__run_and_generate_ignore_quoting_parameter(self):
+        # with optional adapters, this package could easily just not exist!
+        # accordingly, only run it when we think snowflake things should work
+        from dbt.adapters.snowflake import connections as snowflake_conn
         old_connect = snowflake_conn.snowflake.connector.connect
         def connect(*args, **kwargs):
             kwargs['session_parameters'] = {
