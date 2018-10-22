@@ -265,7 +265,7 @@ def deep_merge_item(destination, key, value):
         destination[key] = value
 
 
-def deep_map(func, value, keypath=(), memo=None, _notfound=object()):
+def deep_map(func, value, keypath=()):
     """map the function func() onto each non-container value in 'value'
     recursively, returning a new value. As long as func does not manipulate
     value, then deep_map will also not manipulate it.
@@ -277,26 +277,19 @@ def deep_map(func, value, keypath=(), memo=None, _notfound=object()):
     func() will be called on numbers, strings, Nones, and booleans. Its first
     parameter will be the value, and the second will be its keypath, an
     iterable over the __getitem__ keys needed to get to it.
+
+    If there are cycles in the value, this will cause an infinite loop.
     """
-    # TODO: if we could guarantee no cycles, we would not need to memoize
-    if memo is None:
-        memo = {}
-
-    value_id = id(value)
-    cached = memo.get(value_id, _notfound)
-    if cached is not _notfound:
-        return cached
-
     atomic_types = (int, float, basestring, type(None), bool)
 
     if isinstance(value, list):
         ret = [
-            deep_map(func, v, (keypath + (idx,)), memo)
+            deep_map(func, v, (keypath + (idx,)))
             for idx, v in enumerate(value)
         ]
     elif isinstance(value, dict):
         ret = {
-            k: deep_map(func, v, (keypath + (k,)), memo)
+            k: deep_map(func, v, (keypath + (k,)))
             for k, v in value.items()
         }
     elif isinstance(value, atomic_types):
@@ -307,7 +300,7 @@ def deep_map(func, value, keypath=(), memo=None, _notfound=object()):
             'in deep_map, expected one of {!r}, got {!r}'
             .format(ok_types, type(value))
         )
-    memo[value_id] = ret
+
     return ret
 
 
