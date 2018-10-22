@@ -826,6 +826,34 @@ class TestProject(BaseConfigTest):
         ))}, [])
         mock_logger.info.assert_not_called()
 
+    def test_none_values(self):
+        self.default_project_data.update({
+            'models': None,
+            'seeds': None,
+            'archive': None,
+            'on-run-end': None,
+            'on-run-start': None,
+        })
+        project = dbt.config.Project.from_project_config(
+            self.default_project_data
+        )
+        self.assertEqual(project.models, {})
+        self.assertEqual(project.on_run_start, [])
+        self.assertEqual(project.on_run_end, [])
+        self.assertEqual(project.archive, [])
+        self.assertEqual(project.seeds, {})
+
+    def test_nested_none_values(self):
+        self.default_project_data.update({
+            'models': {'vars': None, 'pre-hook': None, 'post-hook': None},
+            'seeds': {'vars': None, 'pre-hook': None, 'post-hook': None, 'column_types': None},
+        })
+        project = dbt.config.Project.from_project_config(
+            self.default_project_data
+        )
+        self.assertEqual(project.models, {'vars': {}, 'pre-hook': [], 'post-hook': []})
+        self.assertEqual(project.seeds, {'vars': {}, 'pre-hook': [], 'post-hook': [], 'column_types': {}})
+
 
 class TestProjectWithConfigs(BaseConfigTest):
     def setUp(self):

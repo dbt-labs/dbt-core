@@ -208,6 +208,32 @@ class Project(object):
         self.seeds = seeds
         self.packages = packages
 
+    @staticmethod
+    def _preprocess(project_dict):
+        """Pre-process certain special keys to convert them from None values
+        into empty containers.
+        """
+        handlers = {
+            ('archive',): list,
+            ('on-run-start',): list,
+            ('on-run-end',): list,
+        }
+        for k in ('models', 'seeds'):
+            handlers[(k,)] = dict
+            handlers[(k, 'vars')] = dict
+            handlers[(k, 'pre-hook')] = list
+            handlers[(k, 'post-hook')] = list
+        handlers[('seeds', 'column_types')] = dict
+
+        def converter(value, keypath):
+            if value is None and keypath in handlers:
+                handler = handlers[keypath]
+                return handler()
+            else:
+                return value
+
+        return dbt.utils.deep_map(converter, project_dict)
+
     @classmethod
     def from_project_config(cls, project_dict, packages_dict=None):
         """Create a project from its project and package configuration, as read
@@ -220,6 +246,7 @@ class Project(object):
             the packages file exists and is invalid.
         :returns Project: The project, with defaults populated.
         """
+        project_dict = cls._preprocess(project_dict)
         # just for validation.
         try:
             ProjectContract(**project_dict)
@@ -250,6 +277,7 @@ class Project(object):
         modules_path = project_dict.get('modules-path', 'dbt_modules')
         # in the default case we'll populate this once we know the adapter type
         quoting = project_dict.get('quoting', {})
+
         models = project_dict.get('models', {})
         on_run_start = project_dict.get('on-run-start', [])
         on_run_end = project_dict.get('on-run-end', [])
