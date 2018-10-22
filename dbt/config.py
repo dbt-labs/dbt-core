@@ -11,7 +11,7 @@ import dbt.utils
 from dbt.contracts.connection import Connection, create_credentials
 from dbt.contracts.project import Project as ProjectContract, Configuration, \
     PackageConfig, ProfileConfig
-from dbt.exceptions import DbtProjectError, DbtProfileError
+from dbt.exceptions import DbtProjectError, DbtProfileError, RecursionException
 from dbt.context.common import env_var, Var
 from dbt import compat
 from dbt.adapters.factory import get_relation_class_by_name
@@ -167,17 +167,26 @@ class ConfigRenderer(object):
                 pass
         return result
 
-    def render(self, as_parsed):
-        return dbt.utils.deep_map(self.render_value, as_parsed)
-
     def render_project(self, as_parsed):
         """Render the parsed data, returning a new dict (or whatever was read).
         """
-        return dbt.utils.deep_map(self._render_project_entry, as_parsed)
+        try:
+            return dbt.utils.deep_map(self._render_project_entry, as_parsed)
+        except RecursionException:
+            raise DbtProjectError(
+                'Cycle detected: Project input has a reference to itself',
+                project=project_dict
+            )
 
     def render_profile_data(self, as_parsed):
         """Render the chosen profile entry, as it was parsed."""
-        return dbt.utils.deep_map(self._render_profile_data, as_parsed)
+        try:
+            return dbt.utils.deep_map(self._render_profile_data, as_parsed)
+        except RecursionException:
+            raise DbtProfileError(
+                'Cycle detected: Profile input has a reference to itself',
+                project=as_parsed
+            )
 
 
 class Project(object):
@@ -246,7 +255,13 @@ class Project(object):
             the packages file exists and is invalid.
         :returns Project: The project, with defaults populated.
         """
-        project_dict = cls._preprocess(project_dict)
+        try:
+            project_dict = cls._preprocess(project_dict)
+        except RecursionException:
+            raise DbtProjectError(
+                'Cycle detected: Project input has a reference to itself',
+                project=project_dict
+            )
         # just for validation.
         try:
             ProjectContract(**project_dict)

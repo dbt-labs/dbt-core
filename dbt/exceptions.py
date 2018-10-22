@@ -103,6 +103,10 @@ class CompilationException(RuntimeException):
         return 'Compilation'
 
 
+class RecursionException(RuntimeException):
+    pass
+
+
 class ValidationException(RuntimeException):
     pass
 

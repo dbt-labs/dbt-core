@@ -854,6 +854,17 @@ class TestProject(BaseConfigTest):
         self.assertEqual(project.models, {'vars': {}, 'pre-hook': [], 'post-hook': []})
         self.assertEqual(project.seeds, {'vars': {}, 'pre-hook': [], 'post-hook': [], 'column_types': {}})
 
+    def test_cycle(self):
+        models = {}
+        models['models'] = models
+        self.default_project_data.update({
+            'models': models,
+        })
+        with self.assertRaises(dbt.exceptions.DbtProjectError):
+            dbt.config.Project.from_project_config(
+                self.default_project_data
+            )
+
 
 class TestProjectWithConfigs(BaseConfigTest):
     def setUp(self):
