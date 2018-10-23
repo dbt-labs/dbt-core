@@ -222,6 +222,11 @@ def create_macro_capture_env(node):
                 .format(self.node.get('package_name'), self.node.get('name'))
             )
 
+        def __getitem__(self, name):
+            # Propagate the undefined value if a caller accesses this as if it
+            # were a dictionary
+            return self
+
         def __getattr__(self, name):
             if name == 'name' or _is_dunder_name(name):
                 raise AttributeError(
