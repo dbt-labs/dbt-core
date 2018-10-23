@@ -176,7 +176,8 @@ GIT_PACKAGE_CONTRACT = {
             ),
         },
         'revision': {
-            'type': 'string',
+            'type': ['string', 'array'],
+            'item': 'string',
             'description': 'The git revision to use, if it is not tip',
         },
     },

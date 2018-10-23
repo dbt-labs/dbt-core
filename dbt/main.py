@@ -221,6 +221,16 @@ def invoke_dbt(parsed):
         logger.info("Encountered an error while reading the project:")
         logger.info(dbt.compat.to_string(e))
 
+        dbt.tracking.track_invalid_invocation(
+            config=cfg,
+            args=parsed,
+            result_type=e.result_type)
+
+        return None
+    except DbtProfileError as e:
+        logger.info("Encountered an error while reading profiles:")
+        logger.info("  ERROR {}".format(str(e)))
+
         all_profiles = read_profiles(parsed.profiles_dir).keys()
 
         if len(all_profiles) > 0:
@@ -232,16 +242,6 @@ def invoke_dbt(parsed):
                         "profiles.yml file")
 
         logger.info(PROFILES_HELP_MESSAGE)
-
-        dbt.tracking.track_invalid_invocation(
-            config=cfg,
-            args=parsed,
-            result_type=e.result_type)
-
-        return None
-    except DbtProfileError as e:
-        logger.info("Encountered an error while reading profiles:")
-        logger.info("  ERROR {}".format(str(e)))
 
         dbt.tracking.track_invalid_invocation(
             config=cfg,
