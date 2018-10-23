@@ -185,6 +185,10 @@ class DocumentationExtension(jinja2.ext.Extension):
         return node
 
 
+def _is_dunder_name(name):
+    return name.startswith('__') and name.endswith('__')
+
+
 def create_macro_capture_env(node):
 
     class ParserMacroCapture(jinja2.Undefined):
@@ -220,7 +224,7 @@ def create_macro_capture_env(node):
             )
 
         def __getattr__(self, name):
-            if name == 'name' or name.startswith('__') and name.endswith('__'):
+            if name == 'name' or _is_dunder_name(name):
                 raise AttributeError(
                     "'{}' object has no attribute '{}'"
                     .format(type(self).__name__, name)
