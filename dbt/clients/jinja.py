@@ -210,16 +210,15 @@ def create_macro_capture_env(node):
                                 self.node.get('original_file_path'))
 
             logger.debug(
-                'A ParserMacroCapture has been deecopy()d, invalid reference '
-                'to "{}" in node {}.{} (source path: {})'
+                'dbt encountered an undefined variable, "{}" in node {}.{} '
+                '(source path: {})'
                 .format(self.name, self.node.get('package_name'),
-                        self.node.get('name'),
-                        path))
+                        self.node.get('name'), path))
 
+            # match jinja's message
             dbt.exceptions.raise_compiler_error(
-                'dbt has detected at least one invalid reference in {}.{}. '
-                'Check logs for more information'
-                .format(self.node.get('package_name'), self.node.get('name'))
+                "{!r} is undefined".format(self.name),
+                node=self.node
             )
 
         def __getitem__(self, name):
