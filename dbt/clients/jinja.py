@@ -194,17 +194,31 @@ def create_macro_capture_env(node):
         def __init__(self, hint=None, obj=None, name=None,
                      exc=None):
             super(jinja2.Undefined, self).__init__()
-
             self.node = node
             self.name = name
             self.package_name = node.get('package_name')
-
-        def __getattr__(self, name):
-
             # jinja uses these for safety, so we have to override them.
             # see https://github.com/pallets/jinja/blob/master/jinja2/sandbox.py#L332-L339 # noqa
-            if name in ['unsafe_callable', 'alters_data']:
-                return False
+            self.unsafe_callable = False
+            self.alters_data = False
+
+        def __deepcopy__(self, memo):
+            path = os.path.join(self.node.get('root_path'),
+                                self.node.get('original_file_path'))
+
+            dbt.exceptions.raise_compiler_error(
+                'A ParserMacroCapture has been deecopy()d, invalid reference '
+                'to {}.{} in node {}.{} (source path: {})'
+                .format(self.package_name, self.name,
+                        self.node.get('package_name'), self.node.get('name'),
+                        path))
+
+        def __getattr__(self, name):
+            if name == 'name' or name.startswith('__') and name.endswith('__'):
+                raise AttributeError(
+                    "'{}' object has no attribute '{}'"
+                    .format(type(self).__name__, name)
+                )
 
             self.package_name = self.name
             self.name = name
