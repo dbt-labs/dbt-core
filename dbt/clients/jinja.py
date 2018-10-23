@@ -206,12 +206,18 @@ def create_macro_capture_env(node):
             path = os.path.join(self.node.get('root_path'),
                                 self.node.get('original_file_path'))
 
-            dbt.exceptions.raise_compiler_error(
+            logger.debug(
                 'A ParserMacroCapture has been deecopy()d, invalid reference '
-                'to {}.{} in node {}.{} (source path: {})'
-                .format(self.package_name, self.name,
-                        self.node.get('package_name'), self.node.get('name'),
+                'to "{}" in node {}.{} (source path: {})'
+                .format(self.name, self.node.get('package_name'),
+                        self.node.get('name'),
                         path))
+
+            dbt.exceptions.raise_compiler_error(
+                'dbt has detected at least one invalid reference in {}.{}. '
+                'Check logs for more information'
+                .format(self.node.get('package_name'), self.node.get('name'))
+            )
 
         def __getattr__(self, name):
             if name == 'name' or name.startswith('__') and name.endswith('__'):
