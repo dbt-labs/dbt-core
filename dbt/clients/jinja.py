@@ -195,9 +195,8 @@ def create_macro_capture_env(node):
         """
         This class sets up the parser to capture macros.
         """
-        def __init__(self, hint=None, obj=None, name=None,
-                     exc=None):
-            super(jinja2.Undefined, self).__init__()
+        def __init__(self, hint=None, obj=None, name=None, exc=None):
+            super(ParserMacroCapture, self).__init__(hint=hint, name=name)
             self.node = node
             self.name = name
             self.package_name = node.get('package_name')
