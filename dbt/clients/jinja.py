@@ -195,9 +195,8 @@ def create_macro_capture_env(node):
         """
         This class sets up the parser to capture macros.
         """
-        def __init__(self, hint=None, obj=None, name=None,
-                     exc=None):
-            super(jinja2.Undefined, self).__init__()
+        def __init__(self, hint=None, obj=None, name=None, exc=None):
+            super(ParserMacroCapture, self).__init__(hint=hint, name=name)
             self.node = node
             self.name = name
             self.package_name = node.get('package_name')
@@ -211,17 +210,21 @@ def create_macro_capture_env(node):
                                 self.node.get('original_file_path'))
 
             logger.debug(
-                'A ParserMacroCapture has been deecopy()d, invalid reference '
-                'to "{}" in node {}.{} (source path: {})'
+                'dbt encountered an undefined variable, "{}" in node {}.{} '
+                '(source path: {})'
                 .format(self.name, self.node.get('package_name'),
-                        self.node.get('name'),
-                        path))
+                        self.node.get('name'), path))
 
+            # match jinja's message
             dbt.exceptions.raise_compiler_error(
-                'dbt has detected at least one invalid reference in {}.{}. '
-                'Check logs for more information'
-                .format(self.node.get('package_name'), self.node.get('name'))
+                "{!r} is undefined".format(self.name),
+                node=self.node
             )
+
+        def __getitem__(self, name):
+            # Propagate the undefined value if a caller accesses this as if it
+            # were a dictionary
+            return self
 
         def __getattr__(self, name):
             if name == 'name' or _is_dunder_name(name):
