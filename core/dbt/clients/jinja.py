@@ -402,7 +402,7 @@ class TestExtension(jinja2.ext.Extension):
 
 
 def _is_dunder_name(name):
-    return name.startswith('__') and name.endswith('__')
+    return name.startswith("__") and name.endswith("__")
 
 
 def create_undefined(node=None):
@@ -423,7 +423,7 @@ def create_undefined(node=None):
             return self
 
         def __getattr__(self, name):
-            if name == 'name' or _is_dunder_name(name):
+            if name == "name" or _is_dunder_name(name):
                 raise AttributeError(
                     "'{}' object has no attribute '{}'"
                     .format(type(self).__name__, name)
