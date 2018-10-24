@@ -319,12 +319,14 @@ class TestProfile(BaseConfigTest):
         self.assertIn('postgres', str(exc.exception))
         self.assertIn('default', str(exc.exception))
 
-    def test_target_missing(self):
-        del self.default_profile_data['default']['target']
-        with self.assertRaises(dbt.exceptions.DbtProfileError) as exc:
-            self.from_raw_profiles()
-        self.assertIn('target not specified in profile', str(exc.exception))
-        self.assertIn('default', str(exc.exception))
+    def test_missing_target(self):
+        profile = self.default_profile_data['default']
+        del profile['target']
+        profile['outputs']['default'] = profile['outputs']['postgres']
+        profile = self.from_raw_profiles()
+        self.assertEqual(profile.profile_name, 'default')
+        self.assertEqual(profile.target_name, 'default')
+        self.assertEqual(profile.credentials.type, 'postgres')
 
     def test_profile_invalid_project(self):
         with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
