@@ -278,7 +278,9 @@ class BigQueryAdapter(PostgresAdapter):
             raise dbt.exceptions.RuntimeException("BigQuery Timeout Exceeded")
 
         elif job.error_result:
-            message = '\n'.join(error['message'].strip() for error in job.errors)
+            message = '\n'.join(
+                error['message'].strip() for error in job.errors
+            )
             raise dbt.exceptions.RuntimeException(message)
 
     def make_date_partitioned_table(self, dataset_name, identifier,
