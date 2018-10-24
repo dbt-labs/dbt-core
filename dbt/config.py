@@ -606,8 +606,10 @@ class Profile(object):
             # render the target if it was parsed from yaml
             target_name = renderer.render_value(raw_profile['target'])
         else:
-            raise DbtProfileError(
-                "target not specified in profile '{}'".format(profile_name)
+            target_name = 'default'
+            logger.debug(
+                "target not specified in profile '{}', using '{}'"
+                .format(profile_name, target_name)
             )
 
         raw_profile_data = cls._get_profile_data(
