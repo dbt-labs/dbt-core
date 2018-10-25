@@ -193,8 +193,8 @@ class BaseRunner(object):
                 error = (
                     'Compilation Error in {}, caused by compilation error '
                     'in referenced ephemeral model {}'
-                    .format(self.skip_cause.node.unique_id,
-                            self.node.unique_id)
+                    .format(self.node.unique_id,
+                            self.skip_cause.node.unique_id)
                 )
             else:
                 dbt.ui.printer.print_skip_line(
