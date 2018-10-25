@@ -167,21 +167,20 @@ class BaseRunner(object):
     def after_execute(self, result):
         raise NotImplementedException()
 
+    def _skip_caused_by_ephemeral_failure(self):
+        if self.skip_cause is None or self.skip_cause.node is None:
+            return False
+        return self.is_ephemeral_model(self.skip_cause.node)
+
     def on_skip(self):
         schema_name = self.node.schema
         node_name = self.node.name
 
         error = None
         if not self.is_ephemeral_model(self.node):
-            if self.skip_cause is None:
-                dbt.ui.printer.print_skip_line(
-                    self.node,
-                    schema_name,
-                    node_name,
-                    self.node_index,
-                    self.num_nodes
-                )
-            else:
+            # if this model was skipped due to an upstream ephemeral model
+            # failure, print a special 'error skip' message.
+            if self._skip_caused_by_ephemeral_failure():
                 dbt.ui.printer.print_skip_caused_by_error(
                     self.node,
                     schema_name,
@@ -195,6 +194,14 @@ class BaseRunner(object):
                     'Compilation Error in referenced ephemeral model {}.{}'
                     .format(self.skip_cause.node.schema,
                             self.skip_cause.node.name)
+                )
+            else:
+                dbt.ui.printer.print_skip_line(
+                    self.node,
+                    schema_name,
+                    node_name,
+                    self.node_index,
+                    self.num_nodes
                 )
 
         node_result = RunModelResult(self.node, skip=True, error=error)
