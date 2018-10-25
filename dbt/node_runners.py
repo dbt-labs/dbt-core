@@ -191,9 +191,10 @@ class BaseRunner(object):
                 )
                 # set an error so dbt will exit with an error code
                 error = (
-                    'Compilation Error in referenced ephemeral model {}.{}'
-                    .format(self.skip_cause.node.schema,
-                            self.skip_cause.node.name)
+                    'Compilation Error in {}, caused by compilation error '
+                    'in referenced ephemeral model {}'
+                    .format(self.skip_cause.node.unique_id,
+                            self.node.unique_id)
                 )
             else:
                 dbt.ui.printer.print_skip_line(
