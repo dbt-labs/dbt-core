@@ -258,7 +258,8 @@ PROFILE_INFO_CONTRACT = {
             'type': 'number',
         },
         'credentials': {
-            'anyOf': [],
+            'type': 'object',
+            'additionalProperties': True,
         },
     },
     'required': [

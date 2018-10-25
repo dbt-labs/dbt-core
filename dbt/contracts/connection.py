@@ -4,15 +4,14 @@ from dbt.contracts.common import named_property
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
-CREDENTIALS_MAPPING = {}
-
-
 CONNECTION_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
     'properties': {
         'type': {
-            'enum': [],
+            'type': 'string',
+            # valid python identifiers only
+            'pattern': r'^[A-Za-z_][A-Za-z0-9_]+$',
         },
         'name': {
             'type': ['null', 'string'],
@@ -28,11 +27,13 @@ CONNECTION_CONTRACT = {
         # 'handle': {
         #     'type': ['null', 'object'],
         # },
+        # credentials are validated separately by the adapter packages
         'credentials': {
             'description': (
                 'The credentials object here should match the connection type.'
             ),
-            'anyOf': [],
+            'type': 'object',
+            'additionalProperties': True,
         }
     },
     'required': [
@@ -41,36 +42,16 @@ CONNECTION_CONTRACT = {
 }
 
 
-def update_connection_contract(typename, connection):
-    properties = CONNECTION_CONTRACT['properties']
-    properties['type']['enum'].append(typename)
-    properties['credentials']['anyOf'].append(connection.SCHEMA)
-    CREDENTIALS_MAPPING[typename] = connection
-
-
-def create_credentials(typename, credentials):
-    if typename not in CREDENTIALS_MAPPING:
-        dbt.exceptions.raise_unrecognized_credentials_type(
-            typename, CREDENTIALS_MAPPING.keys()
-        )
-    cls = CREDENTIALS_MAPPING[typename]
-    return cls(**credentials)
-
-
 class Connection(APIObject):
     SCHEMA = CONNECTION_CONTRACT
 
     def __init__(self, credentials, *args, **kwargs):
-        # this is a bit clunky but we deserialize and then reserialize for now
-        if hasattr(credentials, 'serialize'):
-            credentials = credentials.serialize()
         # we can't serialize handles
         self._handle = kwargs.pop('handle')
-        super(Connection, self).__init__(credentials=credentials,
+        super(Connection, self).__init__(credentials=credentials.serialize(),
                                          *args, **kwargs)
         # this will validate itself in its own __init__.
-        self._credentials = create_credentials(self.type,
-                                               self._contents['credentials'])
+        self._credentials = credentials
 
     @property
     def credentials(self):
