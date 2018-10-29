@@ -767,6 +767,23 @@ class TestProject(BaseConfigTest):
         str(project)
         json.dumps(project.to_project_config())
 
+    def test_string_run_hooks(self):
+        self.default_project_data.update({
+            'on-run-start': '{{ logging.log_run_start_event() }}',
+            'on-run-end': '{{ logging.log_run_end_event() }}',
+        })
+        project = dbt.config.Project.from_project_config(
+            self.default_project_data
+        )
+        self.assertEqual(
+            project.on_run_start,
+            ['{{ logging.log_run_start_event() }}']
+        )
+        self.assertEqual(
+            project.on_run_end,
+            ['{{ logging.log_run_end_event() }}']
+        )
+
     def test_invalid_project_name(self):
         self.default_project_data['name'] = 'invalid-project-name'
         with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
