@@ -189,6 +189,25 @@ class ConfigRenderer(object):
             )
 
 
+def _list_if_none(value):
+    if value is None:
+        value = []
+    return value
+
+
+def _dict_if_none(value):
+    if value is None:
+        value = {}
+    return value
+
+
+def _list_if_none_or_string(value):
+    value = _list_if_none(value)
+    if isinstance(value, compat.basestring):
+        return [value]
+    return value
+
+
 class Project(object):
     def __init__(self, project_name, version, project_root, profile_name,
                  source_paths, macro_paths, data_paths, test_paths,
@@ -220,24 +239,25 @@ class Project(object):
     @staticmethod
     def _preprocess(project_dict):
         """Pre-process certain special keys to convert them from None values
-        into empty containers.
+        into empty containers, and to turn strings into arrays of strings.
         """
         handlers = {
-            ('archive',): list,
-            ('on-run-start',): list,
-            ('on-run-end',): list,
+            ('archive',): _list_if_none,
+            ('on-run-start',): _list_if_none_or_string,
+            ('on-run-end',): _list_if_none_or_string,
         }
+
         for k in ('models', 'seeds'):
-            handlers[(k,)] = dict
-            handlers[(k, 'vars')] = dict
-            handlers[(k, 'pre-hook')] = list
-            handlers[(k, 'post-hook')] = list
-        handlers[('seeds', 'column_types')] = dict
+            handlers[(k,)] = _dict_if_none
+            handlers[(k, 'vars')] = _dict_if_none
+            handlers[(k, 'pre-hook')] = _list_if_none_or_string
+            handlers[(k, 'post-hook')] = _list_if_none_or_string
+        handlers[('seeds', 'column_types')] = _dict_if_none
 
         def converter(value, keypath):
-            if value is None and keypath in handlers:
+            if keypath in handlers:
                 handler = handlers[keypath]
-                return handler()
+                return handler(value)
             else:
                 return value
 
