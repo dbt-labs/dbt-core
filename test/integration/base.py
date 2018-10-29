@@ -11,7 +11,8 @@ from nose.plugins.attrib import attr
 
 import dbt.flags as flags
 
-from dbt.adapters.factory import get_adapter
+from dbt.adapters.factory import get_adapter, reset_adapters
+from dbt.clients.jinja import template_cache
 from dbt.config import RuntimeConfig
 
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -38,6 +39,7 @@ class FakeArgs(object):
 
 class TestArgs(object):
     def __init__(self, kwargs):
+        self.which = 'run'
         self.__dict__.update(kwargs)
 
 
@@ -203,6 +205,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def setUp(self):
         flags.reset()
+        template_cache.clear()
         # disable capturing warnings
         logging.captureWarnings(False)
         self._clean_files()
@@ -267,7 +270,7 @@ class DBTIntegrationTest(unittest.TestCase):
         adapter = get_adapter(config)
 
         adapter.cleanup_connections()
-        connection = adapter.acquire_connection(config, '__test')
+        connection = adapter.acquire_connection('__test')
         self.handle = connection.handle
         self.adapter_type = connection.type
         self.adapter = adapter
@@ -277,9 +280,7 @@ class DBTIntegrationTest(unittest.TestCase):
         self._create_schema()
 
     def quote_as_configured(self, value, quote_key):
-        return self.adapter.quote_as_configured(
-            self.config, value, quote_key
-        )
+        return self.adapter.quote_as_configured(value, quote_key)
 
     def _clean_files(self):
         if os.path.exists(DBT_PROFILES):
@@ -298,7 +299,8 @@ class DBTIntegrationTest(unittest.TestCase):
     def tearDown(self):
         self._clean_files()
 
-        self.adapter = get_adapter(self.config)
+        if not hasattr(self, 'adapter'):
+            self.adapter = get_adapter(self.config)
 
         self._drop_schema()
 
@@ -307,10 +309,11 @@ class DBTIntegrationTest(unittest.TestCase):
             self.handle.close()
 
         self.adapter.cleanup_connections()
+        reset_adapters()
 
     def _create_schema(self):
         if self.adapter_type == 'bigquery':
-            self.adapter.create_schema(self.config, self.unique_schema(), '__test')
+            self.adapter.create_schema(self.unique_schema(), '__test')
         else:
             schema = self.quote_as_configured(self.unique_schema(), 'schema')
             self.run_sql('CREATE SCHEMA {}'.format(schema))
@@ -318,7 +321,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def _drop_schema(self):
         if self.adapter_type == 'bigquery':
-            self.adapter.drop_schema(self.config, self.unique_schema(), '__test')
+            self.adapter.drop_schema(self.unique_schema(), '__test')
         else:
             had_existing = False
             try:
@@ -342,11 +345,14 @@ class DBTIntegrationTest(unittest.TestCase):
         return {}
 
     def run_dbt(self, args=None, expect_pass=True, strict=True):
+        # clear the adapter cache
+        reset_adapters()
         if args is None:
             args = ["run"]
 
         if strict:
             args = ["--strict"] + args
+        args.append('--log-cache-events')
         logger.info("Invoking dbt with {}".format(args))
 
         res, success = dbt.handle_and_check(args)
@@ -385,9 +391,8 @@ class DBTIntegrationTest(unittest.TestCase):
         """Run an SQL query on a bigquery adapter. No cursors, transactions,
         etc. to worry about"""
 
-        adapter = get_adapter(self.config)
         do_fetch = fetch != 'None'
-        _, res = adapter.execute(self.config, sql, fetch=do_fetch)
+        _, res = self.adapter.execute(sql, fetch=do_fetch)
 
         # convert dataframe to matrix-ish repr
         if fetch == 'one':
@@ -449,11 +454,8 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def get_table_columns(self, table, schema=None):
         schema = self.unique_schema() if schema is None else schema
-        columns = self.adapter.get_columns_in_table(
-            self.config,
-            schema,
-            table
-        )
+        columns = self.adapter.get_columns_in_table(schema, table)
+
         return sorted(((c.name, c.dtype, c.char_size) for c in columns),
                       key=lambda x: x[0])
 

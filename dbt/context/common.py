@@ -1,3 +1,5 @@
+import copy
+import functools
 import json
 import os
 
@@ -24,51 +26,67 @@ import pytz
 import datetime
 
 
+class RelationProxy(object):
+    def __init__(self, adapter):
+        self.quoting_config = adapter.config.quoting
+        self.relation_type = adapter.Relation
+
+    def __getattr__(self, key):
+        return getattr(self.relation_type, key)
+
+    def create(self, *args, **kwargs):
+        kwargs['quote_policy'] = dbt.utils.merge(
+            self.quoting_config,
+            kwargs.pop('quote_policy', {})
+        )
+        return self.relation_type.create(*args, **kwargs)
+
+
 class DatabaseWrapper(object):
     """
-    Wrapper for runtime database interaction. Should only call adapter
-    functions.
+    Wrapper for runtime database interaction. Mostly a compatibility layer now.
     """
-
-    def __init__(self, model, adapter, config):
+    def __init__(self, model, adapter):
         self.model = model
         self.adapter = adapter
-        self.config = config
-        self.Relation = adapter.Relation
+        self.Relation = RelationProxy(adapter)
 
-        # Fun with metaprogramming
-        # Most adapter functions take `profile` as the first argument, and
-        # `model_name` as the last. This automatically injects those arguments.
-        # In model code, these functions can be called without those two args.
-        for context_function in self.adapter.context_functions:
-            setattr(self,
-                    context_function,
-                    self.wrap(context_function, (self.config,)))
+        self._wrapped = frozenset(
+            self.adapter.config_functions
+        )
+        self._proxied = frozenset(self.adapter.raw_functions)
 
-        for profile_function in self.adapter.profile_functions:
-            setattr(self,
-                    profile_function,
-                    self.wrap(profile_function, (self.config,)))
+    def wrap(self, name):
+        func = getattr(self.adapter, name)
 
-        for raw_function in self.adapter.raw_functions:
-            setattr(self,
-                    raw_function,
-                    getattr(self.adapter, raw_function))
-
-    def wrap(self, fn, arg_prefix):
+        @functools.wraps(func)
         def wrapped(*args, **kwargs):
-            args = arg_prefix + args
             kwargs['model_name'] = self.model.get('name')
-            return getattr(self.adapter, fn)(*args, **kwargs)
+            return func(*args, **kwargs)
 
         return wrapped
+
+    def __getattr__(self, name):
+        if name in self._wrapped:
+            return self.wrap(name)
+        elif name in self._proxied:
+            return getattr(self.adapter, name)
+        else:
+            raise AttributeError(
+                "'{}' object has no attribute '{}'".format(
+                    self.__class__.__name__, name
+                )
+            )
+
+    @property
+    def config(self):
+        return self.adapter.config
 
     def type(self):
         return self.adapter.type()
 
     def commit(self):
-        return self.adapter.commit_if_has_connection(
-            self.config, self.model.get('name'))
+        return self.adapter.commit_if_has_connection(self.model.get('name'))
 
 
 def _add_macros(context, model, manifest):
@@ -211,6 +229,10 @@ class Var(object):
         elif isinstance(model, ParsedNode):
             local_vars = model.config.get('vars', {})
             self.model_name = model.name
+        elif model is None:
+            # during config parsing we have no model and no local vars
+            self.model_name = '<Configuration>'
+            local_vars = {}
         else:
             # still used for wrapping
             self.model_name = model.nice_name
@@ -303,36 +325,7 @@ def _return(value):
 
 
 def get_this_relation(db_wrapper, config, model):
-    return db_wrapper.adapter.Relation.create_from_node(
-        config, model)
-
-
-def create_relation(relation_type, quoting_config):
-
-    class RelationWithContext(relation_type):
-        @classmethod
-        def create(cls, *args, **kwargs):
-            quote_policy = quoting_config
-
-            if 'quote_policy' in kwargs:
-                quote_policy = dbt.utils.merge(
-                    quote_policy,
-                    kwargs.pop('quote_policy'))
-
-            return relation_type.create(*args,
-                                        quote_policy=quote_policy,
-                                        **kwargs)
-
-    return RelationWithContext
-
-
-def create_adapter(adapter_type, relation_type):
-
-    class AdapterWithContext(adapter_type):
-
-        Relation = relation_type
-
-    return AdapterWithContext
+    return db_wrapper.Relation.create_from_node(config, model)
 
 
 def generate_base(model, model_dict, config, manifest, source_config,
@@ -357,16 +350,12 @@ def generate_base(model, model_dict, config, manifest, source_config,
     pre_hooks = None
     post_hooks = None
 
-    relation_type = create_relation(adapter.Relation,
-                                    config.quoting)
+    db_wrapper = DatabaseWrapper(model_dict, adapter)
 
-    db_wrapper = DatabaseWrapper(model_dict,
-                                 create_adapter(adapter, relation_type),
-                                 config)
     context = dbt.utils.merge(context, {
         "adapter": db_wrapper,
         "api": {
-            "Relation": relation_type,
+            "Relation": db_wrapper.Relation,
             "Column": adapter.Column,
         },
         "column": adapter.Column,

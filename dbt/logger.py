@@ -1,8 +1,10 @@
 import dbt.compat
+import dbt.flags
 import logging
 import logging.handlers
 import os
 import sys
+import warnings
 
 import colorama
 
@@ -42,9 +44,13 @@ logging.getLogger('google').setLevel(logging.INFO)
 logging.getLogger('snowflake.connector').setLevel(logging.INFO)
 logging.getLogger('parsedatetime').setLevel(logging.INFO)
 
+# provide this for the cache.
+CACHE_LOGGER = logging.getLogger('dbt.cache')
+
 # Redirect warnings through our logging setup
 # They will be logged to a file below
 logging.captureWarnings(True)
+dbt.compat.suppress_warnings()
 
 initialized = False
 
@@ -100,6 +106,8 @@ def initialize_logger(debug_mode=False, path=None):
         warning_logger = logging.getLogger('py.warnings')
         warning_logger.addHandler(logdir_handler)
         warning_logger.setLevel(logging.DEBUG)
+
+        CACHE_LOGGER.propagate = dbt.flags.LOG_CACHE_EVENTS
 
     initialized = True
 

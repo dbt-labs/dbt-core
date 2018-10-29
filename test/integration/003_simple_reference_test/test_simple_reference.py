@@ -9,6 +9,16 @@ class TestSimpleReference(DBTIntegrationTest):
     def models(self):
         return "test/integration/003_simple_reference_test/models"
 
+    @property
+    def project_config(self):
+        return {
+            'models': {
+                'vars': {
+                    'var_ref': '{{ ref("view_copy") }}',
+                }
+            }
+        }
+
     @use_profile('postgres')
     def test__postgres__simple_reference(self):
         self.use_default_project()
@@ -17,7 +27,7 @@ class TestSimpleReference(DBTIntegrationTest):
 
         results = self.run_dbt()
         # ephemeral_copy doesn't show up in results
-        self.assertEqual(len(results),  7)
+        self.assertEqual(len(results),  8)
 
         # Copies should match
         self.assertTablesEqual("seed","incremental_copy")
@@ -29,11 +39,12 @@ class TestSimpleReference(DBTIntegrationTest):
         self.assertTablesEqual("summary_expected","materialized_summary")
         self.assertTablesEqual("summary_expected","view_summary")
         self.assertTablesEqual("summary_expected","ephemeral_summary")
+        self.assertTablesEqual("summary_expected","view_using_ref")
 
         self.run_sql_file("test/integration/003_simple_reference_test/update.sql")
 
         results = self.run_dbt()
-        self.assertEqual(len(results),  7)
+        self.assertEqual(len(results),  8)
 
         # Copies should match
         self.assertTablesEqual("seed","incremental_copy")
@@ -45,6 +56,7 @@ class TestSimpleReference(DBTIntegrationTest):
         self.assertTablesEqual("summary_expected","materialized_summary")
         self.assertTablesEqual("summary_expected","view_summary")
         self.assertTablesEqual("summary_expected","ephemeral_summary")
+        self.assertTablesEqual("summary_expected","view_using_ref")
 
     @use_profile('snowflake')
     def test__snowflake__simple_reference(self):
@@ -52,7 +64,7 @@ class TestSimpleReference(DBTIntegrationTest):
         self.run_sql_file("test/integration/003_simple_reference_test/seed.sql")
 
         results = self.run_dbt()
-        self.assertEqual(len(results),  7)
+        self.assertEqual(len(results),  8)
 
         # Copies should match
         self.assertManyTablesEqual(
@@ -64,7 +76,7 @@ class TestSimpleReference(DBTIntegrationTest):
             "test/integration/003_simple_reference_test/update.sql")
 
         results = self.run_dbt()
-        self.assertEqual(len(results),  7)
+        self.assertEqual(len(results),  8)
 
         self.assertManyTablesEqual(
             ["SEED", "INCREMENTAL_COPY", "MATERIALIZED_COPY", "VIEW_COPY"],

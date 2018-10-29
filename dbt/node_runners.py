@@ -54,6 +54,7 @@ class BaseRunner(object):
         self.num_nodes = num_nodes
 
         self.skip = False
+        self.skip_cause = None
 
     def raise_on_first_error(self):
         return False
@@ -144,7 +145,7 @@ class BaseRunner(object):
         """
         node_name = self.node.name
         try:
-            self.adapter.release_connection(self.config, node_name)
+            self.adapter.release_connection(node_name)
         except Exception as exc:
             logger.debug(
                 'Error releasing connection for node {}: {!s}\n{}'
@@ -166,19 +167,50 @@ class BaseRunner(object):
     def after_execute(self, result):
         raise NotImplementedException()
 
+    def _skip_caused_by_ephemeral_failure(self):
+        if self.skip_cause is None or self.skip_cause.node is None:
+            return False
+        return self.is_ephemeral_model(self.skip_cause.node)
+
     def on_skip(self):
         schema_name = self.node.schema
         node_name = self.node.name
 
+        error = None
         if not self.is_ephemeral_model(self.node):
-            dbt.ui.printer.print_skip_line(self.node, schema_name, node_name,
-                                           self.node_index, self.num_nodes)
+            # if this model was skipped due to an upstream ephemeral model
+            # failure, print a special 'error skip' message.
+            if self._skip_caused_by_ephemeral_failure():
+                dbt.ui.printer.print_skip_caused_by_error(
+                    self.node,
+                    schema_name,
+                    node_name,
+                    self.node_index,
+                    self.num_nodes,
+                    self.skip_cause
+                )
+                # set an error so dbt will exit with an error code
+                error = (
+                    'Compilation Error in {}, caused by compilation error '
+                    'in referenced ephemeral model {}'
+                    .format(self.node.unique_id,
+                            self.skip_cause.node.unique_id)
+                )
+            else:
+                dbt.ui.printer.print_skip_line(
+                    self.node,
+                    schema_name,
+                    node_name,
+                    self.node_index,
+                    self.num_nodes
+                )
 
-        node_result = RunModelResult(self.node, skip=True)
+        node_result = RunModelResult(self.node, skip=True, error=error)
         return node_result
 
-    def do_skip(self):
+    def do_skip(self, cause=None):
         self.skip = True
+        self.skip_cause = cause
 
     @classmethod
     def get_model_schemas(cls, manifest):
@@ -223,13 +255,13 @@ class CompileRunner(BaseRunner):
 
     def compile(self, manifest):
         return self._compile_node(self.adapter, self.config, self.node,
-                                  manifest)
+                                  manifest, {})
 
     @classmethod
-    def _compile_node(cls, adapter, config, node, manifest):
+    def _compile_node(cls, adapter, config, node, manifest, extra_context):
         compiler = dbt.compilation.Compiler(config)
-        node = compiler.compile_node(node, manifest)
-        node = cls._inject_runtime_config(adapter, config, node)
+        node = compiler.compile_node(node, manifest, extra_context)
+        node = cls._inject_runtime_config(adapter, node, extra_context)
 
         if(node.injected_sql is not None and
            not (dbt.utils.is_type(node, NodeType.Archive))):
@@ -247,30 +279,30 @@ class CompileRunner(BaseRunner):
         return node
 
     @classmethod
-    def _inject_runtime_config(cls, adapter, config, node):
+    def _inject_runtime_config(cls, adapter, node, extra_context):
         wrapped_sql = node.wrapped_sql
-        context = cls._node_context(adapter, config, node)
+        context = cls._node_context(adapter, node)
+        context.update(extra_context)
         sql = dbt.clients.jinja.get_rendered(wrapped_sql, context)
         node.wrapped_sql = sql
         return node
 
     @classmethod
-    def _node_context(cls, adapter, config, node):
+    def _node_context(cls, adapter, node):
 
         def call_get_columns_in_table(schema_name, table_name):
             return adapter.get_columns_in_table(
-                config, schema_name,
-                table_name, model_name=node.alias)
+                schema_name, table_name, model_name=node.alias
+            )
 
         def call_get_missing_columns(from_schema, from_table,
                                      to_schema, to_table):
             return adapter.get_missing_columns(
-                config, from_schema, from_table,
-                to_schema, to_table, node.alias)
+                from_schema, from_table, to_schema, to_table, node.alias
+            )
 
         def call_already_exists(schema, table):
-            return adapter.already_exists(
-                config, schema, table, node.alias)
+            return adapter.already_exists(schema, table, node.alias)
 
         return {
             "run_started_at": dbt.tracking.active_user.run_started_at,
@@ -287,7 +319,7 @@ class ModelRunner(CompileRunner):
         return False
 
     @classmethod
-    def run_hooks(cls, config, adapter, manifest, hook_type):
+    def run_hooks(cls, config, adapter, manifest, hook_type, extra_context):
 
         nodes = manifest.nodes.values()
         hooks = get_nodes_by_tags(nodes, {hook_type}, NodeType.Operation)
@@ -304,8 +336,9 @@ class ModelRunner(CompileRunner):
             # implement a for-loop over these sql statements in jinja-land.
             # Also, consider configuring psycopg2 (and other adapters?) to
             # ensure that a transaction is only created if dbt initiates it.
-            adapter.clear_transaction(config, model_name)
-            compiled = cls._compile_node(adapter, config, hook, manifest)
+            adapter.clear_transaction(model_name)
+            compiled = cls._compile_node(adapter, config, hook, manifest,
+                                         extra_context)
             statement = compiled.wrapped_sql
 
             hook_index = hook.get('index', len(hooks))
@@ -317,16 +350,16 @@ class ModelRunner(CompileRunner):
             sql = hook_dict.get('sql', '')
 
             if len(sql.strip()) > 0:
-                adapter.execute(config, sql, model_name=model_name,
-                                auto_begin=False, fetch=False)
+                adapter.execute(sql, model_name=model_name, auto_begin=False,
+                                fetch=False)
 
-            adapter.release_connection(config, model_name)
+            adapter.release_connection(model_name)
 
     @classmethod
-    def safe_run_hooks(cls, config, adapter, manifest, hook_type):
+    def safe_run_hooks(cls, config, adapter, manifest, hook_type,
+                       extra_context):
         try:
-            cls.run_hooks(config, adapter, manifest, hook_type)
-
+            cls.run_hooks(config, adapter, manifest, hook_type, extra_context)
         except dbt.exceptions.RuntimeException:
             logger.info("Database error while running {}".format(hook_type))
             raise
@@ -339,16 +372,21 @@ class ModelRunner(CompileRunner):
         # is the one defined in the profile. Create this schema if it
         # does not exist, otherwise subsequent queries will fail. Generally,
         # dbt expects that this schema will exist anyway.
-        required_schemas.add(adapter.get_default_schema(config))
+        required_schemas.add(adapter.get_default_schema())
 
-        existing_schemas = set(adapter.get_existing_schemas(config))
+        existing_schemas = set(adapter.get_existing_schemas())
 
         for schema in (required_schemas - existing_schemas):
-            adapter.create_schema(config, schema)
+            adapter.create_schema(schema)
+
+    @classmethod
+    def populate_adapter_cache(cls, config, adapter, manifest):
+        adapter.set_relations_cache(manifest)
 
     @classmethod
     def before_run(cls, config, adapter, manifest):
-        cls.safe_run_hooks(config, adapter, manifest, RunHookType.Start)
+        cls.populate_adapter_cache(config, adapter, manifest)
+        cls.safe_run_hooks(config, adapter, manifest, RunHookType.Start, {})
         cls.create_schemas(config, adapter, manifest)
 
     @classmethod
@@ -369,7 +407,15 @@ class ModelRunner(CompileRunner):
 
     @classmethod
     def after_run(cls, config, adapter, results, manifest):
-        cls.safe_run_hooks(config, adapter, manifest, RunHookType.End)
+        # in on-run-end hooks, provide the value 'schemas', which is a list of
+        # unique schemas that successfully executed models were in
+        # errored failed skipped
+        schemas = list(set(
+            r.node.schema for r in results
+            if not any((r.errored, r.failed, r.skipped))
+        ))
+        cls.safe_run_hooks(config, adapter, manifest, RunHookType.End,
+                           {'schemas': schemas, 'results': results})
 
     @classmethod
     def after_hooks(cls, config, adapter, results, manifest, elapsed):
@@ -415,6 +461,10 @@ class ModelRunner(CompileRunner):
 
         materialization_macro.generator(context)()
 
+        # we must have built a new model, add it to the cache
+        relation = self.adapter.Relation.create_from_node(self.config, model)
+        self.adapter.cache_new_relation(relation)
+
         result = context['load_result']('main')
 
         return RunModelResult(model, status=result.status)
@@ -443,7 +493,6 @@ class TestRunner(CompileRunner):
 
     def execute_test(self, test):
         res, table = self.adapter.execute_and_fetch(
-            self.config,
             test.wrapped_sql,
             test.name,
             auto_begin=True)

@@ -1,7 +1,8 @@
 
 {{
     config(
-        materialized = 'ephemeral'
+        materialized = 'ephemeral',
+        tags = ['base']
     )
 }}
 

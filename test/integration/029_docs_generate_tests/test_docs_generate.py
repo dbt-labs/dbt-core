@@ -26,6 +26,11 @@ class AnyStringWith(object):
         return isinstance(other, basestring) and self.contains in other
 
 
+def _read_file(path):
+    with open(path) as fp:
+        return fp.read()
+
+
 class TestDocsGenerate(DBTIntegrationTest):
     def setUp(self):
         super(TestDocsGenerate,self).setUp()
@@ -480,6 +485,8 @@ class TestDocsGenerate(DBTIntegrationTest):
         table_stats = self._bigquery_stats(True)
         clustering_stats = self._bigquery_stats(True, partition='DAY',
                                                 cluster='first_name')
+        multi_clustering_stats = self._bigquery_stats(True, partition='DAY',
+                                                cluster='first_name,email')
         nesting_columns = {
             'field_1': {
                 "name": "field_1",
@@ -524,6 +531,18 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'type': 'table'
                 },
                 'stats': clustering_stats,
+                'columns': self._clustered_bigquery_columns('DATE'),
+            },
+            'model.test.multi_clustered': {
+                'unique_id': 'model.test.multi_clustered',
+                'metadata': {
+                    'comment': None,
+                    'name': 'multi_clustered',
+                    'owner': None,
+                    'schema': my_schema_name,
+                    'type': 'table'
+                },
+                'stats': multi_clustering_stats,
                 'columns': self._clustered_bigquery_columns('DATE'),
             },
             'seed.test.seed': {
@@ -699,7 +718,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.assertTrue(len(macro['raw_sql']) > 10)
         without_sql = {k: v for k, v in macro.items() if k != 'raw_sql'}
         # Windows means we can't hard-code this.
-        helpers_path = os.path.join('materializations', 'helpers.sql')
+        helpers_path = os.path.normpath('macros/materializations/helpers.sql')
         self.assertEqual(
             without_sql,
             {
@@ -729,7 +748,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': 'model.sql',
                     'original_file_path': model_sql_path,
                     'package_name': 'test',
-                    'raw_sql': open(model_sql_path).read().rstrip('\n'),
+                    'raw_sql': _read_file(model_sql_path).rstrip('\n'),
                     'refs': [['seed']],
                     'depends_on': {'nodes': ['seed.test.seed'], 'macros': []},
                     'unique_id': 'model.test.model',
@@ -743,7 +762,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'vars': {},
                         'column_types': {},
-                        'quoting': {}
+                        'quoting': {},
+                        'tags': [],
                     },
                     'schema': my_schema_name,
                     'alias': 'model',
@@ -795,7 +815,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'vars': {},
                         'column_types': {},
-                        'quoting': {}
+                        'quoting': {},
+                        'tags': [],
                     },
                     'schema': my_schema_name,
                     'alias': 'seed',
@@ -813,7 +834,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': {}
+                        'vars': {},
+                        'tags': [],
                     },
                     'depends_on': {'macros': [], 'nodes': ['model.test.model']},
                     'description': '',
@@ -841,7 +863,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': {}
+                        'vars': {},
+                        'tags': [],
                     },
                     'depends_on': {'macros': [], 'nodes': ['model.test.model']},
                     'description': '',
@@ -870,7 +893,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': {}
+                        'vars': {},
+                        'tags': [],
                     },
                     'depends_on': {'macros': [], 'nodes': ['model.test.model']},
                     'description': '',
@@ -915,12 +939,13 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'user_id': None,
                 'send_anonymous_usage_stats': False,
             },
+            'disabled': [],
         }
 
     def expected_postgres_references_manifest(self):
         my_schema_name = self.unique_schema()
         docs_path = self.dir('ref_models/docs.md')
-        docs_file = open(docs_path).read().lstrip()
+        docs_file = _read_file(docs_path).lstrip()
         return {
             'nodes': {
                 'model.test.ephemeral_copy': {
@@ -933,7 +958,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': {}
+                        'vars': {},
+                        'tags': [],
                     },
                     'depends_on': {'macros': [], 'nodes': []},
                     'description': '',
@@ -973,7 +999,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': {}
+                        'vars': {},
+                        'tags': [],
                     },
                     'depends_on': {
                         'macros': [],
@@ -1035,7 +1062,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': {}
+                        'vars': {},
+                        'tags': [],
                     },
                     'depends_on': {
                         'macros': [],
@@ -1087,7 +1115,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': {}
+                        'vars': {},
+                        'tags': [],
                     },
                     'depends_on': {'macros': [], 'nodes': []},
                     'description': '',
@@ -1175,12 +1204,14 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'user_id': None,
                 'send_anonymous_usage_stats': False,
             },
+            'disabled': [],
         }
 
     def expected_bigquery_complex_manifest(self):
         nested_view_sql_path = self.dir('bq_models/nested_view.sql')
         nested_table_sql_path = self.dir('bq_models/nested_table.sql')
         clustered_sql_path = self.dir('bq_models/clustered.sql')
+        multi_clustered_sql_path = self.dir('bq_models/multi_clustered.sql')
         my_schema_name = self.unique_schema()
         return {
             'nodes': {
@@ -1195,7 +1226,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': {}
+                        'vars': {},
+                        'tags': [],
                     },
                     'depends_on': {'macros': [], 'nodes': ['seed.test.seed']},
                     'empty': False,
@@ -1204,7 +1236,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': clustered_sql_path,
                     'package_name': 'test',
                     'path': 'clustered.sql',
-                    'raw_sql': open(clustered_sql_path).read().rstrip('\n'),
+                    'raw_sql': _read_file(clustered_sql_path).rstrip('\n'),
                     'refs': [['seed']],
                     'resource_type': 'model',
                     'root_path': os.getcwd(),
@@ -1237,6 +1269,60 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'patch_path': self.dir('bq_models/schema.yml'),
                     'docrefs': [],
                 },
+                'model.test.multi_clustered': {
+                    'alias': 'multi_clustered',
+                    'config': {
+                        'cluster_by': ['first_name','email'],
+                        'column_types': {},
+                        'enabled': True,
+                        'materialized': 'table',
+                        'partition_by': 'updated_at',
+                        'post-hook': [],
+                        'pre-hook': [],
+                        'quoting': {},
+                        'tags': [],
+                        'vars': {}
+                    },
+                    'depends_on': {'macros': [], 'nodes': ['seed.test.seed']},
+                    'empty': False,
+                    'fqn': ['test', 'multi_clustered'],
+                    'name': 'multi_clustered',
+                    'original_file_path': multi_clustered_sql_path,
+                    'package_name': 'test',
+                    'path': 'multi_clustered.sql',
+                    'raw_sql': _read_file(multi_clustered_sql_path).rstrip('\n'),
+                    'refs': [['seed']],
+                    'resource_type': 'model',
+                    'root_path': os.getcwd(),
+                    'schema': my_schema_name,
+                    'tags': [],
+                    'unique_id': 'model.test.multi_clustered',
+                    'columns': {
+                        'email': {
+                            'description': "The user's email",
+                            'name': 'email'
+                        },
+                        'first_name': {
+                            'description': "The user's name",
+                            'name': 'first_name'
+                        },
+                        'id': {
+                            'description': 'The user id',
+                            'name': 'id'
+                        },
+                        'ip_address': {
+                            'description': "The user's IP address",
+                            'name': 'ip_address'
+                        },
+                        'updated_at': {
+                            'description': 'When the user was updated',
+                            'name': 'updated_at'
+                        },
+                    },
+                    'description': 'A clustered and partitioned copy of the test model, clustered on multiple columns',
+                    'patch_path': self.dir('bq_models/schema.yml'),
+                    'docrefs': [],
+                },
                 'model.test.nested_view': {
                     'alias': 'nested_view',
                     'config': {
@@ -1246,7 +1332,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': {}
+                        'vars': {},
+                        'tags': [],
                     },
                     'depends_on': {
                         'macros': [],
@@ -1258,7 +1345,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': nested_view_sql_path,
                     'package_name': 'test',
                     'path': 'nested_view.sql',
-                    'raw_sql': open(nested_view_sql_path).read().rstrip('\n'),
+                    'raw_sql': _read_file(nested_view_sql_path).rstrip('\n'),
                     'refs': [['nested_table']],
                     'resource_type': 'model',
                     'root_path': os.getcwd(),
@@ -1300,7 +1387,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': {}
+                        'vars': {},
+                        'tags': [],
                     },
                     'depends_on': {
                         'macros': [],
@@ -1312,7 +1400,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': nested_table_sql_path,
                     'package_name': 'test',
                     'path': 'nested_table.sql',
-                    'raw_sql': open(nested_table_sql_path).read().rstrip('\n'),
+                    'raw_sql': _read_file(nested_table_sql_path).rstrip('\n'),
                     'refs': [],
                     'resource_type': 'model',
                     'root_path': os.getcwd(),
@@ -1347,6 +1435,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': {},
                         'column_types': {},
                         'quoting': {},
+                        'tags': [],
                     },
                     'schema': my_schema_name,
                     'alias': 'seed',
@@ -1356,12 +1445,14 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
             'child_map': {
                 'model.test.clustered': [],
+                'model.test.multi_clustered': [],
                 'model.test.nested_table': ['model.test.nested_view'],
                 'model.test.nested_view': [],
-                'seed.test.seed': ['model.test.clustered']
+                'seed.test.seed': ['model.test.clustered','model.test.multi_clustered']
             },
             'parent_map': {
                 'model.test.clustered': ['seed.test.seed'],
+                'model.test.multi_clustered': ['seed.test.seed'],
                 'seed.test.seed': [],
                 'model.test.nested_table': [],
                 'model.test.nested_view': ['model.test.nested_table'],
@@ -1374,6 +1465,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'user_id': None,
                 'send_anonymous_usage_stats': False,
             },
+            'disabled': [],
         }
 
     def expected_redshift_incremental_view_manifest(self):
@@ -1388,7 +1480,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     "path": "model.sql",
                     "original_file_path": model_sql_path,
                     "package_name": "test",
-                    "raw_sql": open(model_sql_path).read().rstrip('\n'),
+                    "raw_sql": _read_file(model_sql_path).rstrip('\n'),
                     "refs": [["seed"]],
                     "depends_on": {
                         "nodes": ["seed.test.seed"],
@@ -1407,6 +1499,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         "vars": {},
                         "column_types": {},
                         "quoting": {},
+                        "tags": [],
                     },
                     "schema": my_schema_name,
                     "alias": "model",
@@ -1461,6 +1554,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         "vars": {},
                         "column_types": {},
                         "quoting": {},
+                        "tags": [],
                     },
                     "schema": my_schema_name,
                     "alias": "seed",
@@ -1484,6 +1578,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'user_id': None,
                 'send_anonymous_usage_stats': False,
             },
+            'disabled': [],
         }
 
     def verify_manifest(self, expected_manifest):
@@ -1495,7 +1590,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.assertEqual(
             set(manifest),
             {'nodes', 'macros', 'parent_map', 'child_map', 'generated_at',
-             'docs', 'metadata', 'docs'}
+             'docs', 'metadata', 'docs', 'disabled'}
         )
 
         self.verify_manifest_macros(manifest)
@@ -1507,6 +1602,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             manifest['generated_at'],
             start=self.generate_start_time
         )
+        self.assertEqual(manifest['disabled'], [])
         self.assertEqual(manifest_without_extras, expected_manifest)
 
     def _quote(self, value):
@@ -1557,7 +1653,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': {}
+                        'vars': {},
+                        'tags': [],
                     },
                     'depends_on': {
                         'macros': [],
@@ -1607,6 +1704,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'pre-hook': [],
                         'quoting': {},
                         'vars': {},
+                        'tags': [],
                     },
                     'depends_on': {'macros': [], 'nodes': []},
                     'description': '',
@@ -1649,7 +1747,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': {}
+                        'vars': {},
+                        'tags': [],
                     },
                     'depends_on': {'macros': [], 'nodes': ['model.test.model']},
                     'description': '',
@@ -1691,7 +1790,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
-                        'vars': {}
+                        'vars': {},
+                        'tags': [],
                     },
                     'depends_on': {'macros': [], 'nodes': ['model.test.model']},
                     'description': '',
@@ -1735,6 +1835,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'pre-hook': [],
                         'quoting': {},
                         'vars': {},
+                        'tags': [],
                     },
                     'depends_on': {'macros': [], 'nodes': ['model.test.model']},
                     'description': '',
@@ -1812,7 +1913,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'vars': {},
                         'column_types': {},
-                        'quoting': {}
+                        'quoting': {},
+                        'tags': [],
                     },
                     'depends_on': {
                         'nodes': ['model.test.ephemeral_copy'],
@@ -1895,7 +1997,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'post-hook': [],
                         'vars': {},
                         'column_types': {},
-                        'quoting': {}
+                        'quoting': {},
+                        'tags': [],
                     },
                     'depends_on': {
                         'nodes': ['model.test.ephemeral_summary'],
@@ -1967,6 +2070,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'pre-hook': [],
                         'quoting': {},
                         'vars': {},
+                        'tags': [],
                     },
                     'depends_on': {'macros': [], 'nodes': []},
                     'description': '',
@@ -2070,7 +2174,7 @@ class TestDocsGenerate(DBTIntegrationTest):
     def test__bigquery__complex_models(self):
         self.run_and_generate(
             extra={'source-paths': [self.dir('bq_models')]},
-            model_count=3
+            model_count=4
         )
 
         self.verify_catalog(self.expected_bigquery_complex_catalog())

@@ -4,10 +4,17 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import is_enabled, get_materialization, coalesce
 from dbt.node_types import NodeType
 from dbt.contracts.graph.parsed import ParsedNode
+import dbt.exceptions
 
 SELECTOR_PARENTS = '+'
 SELECTOR_CHILDREN = '+'
 SELECTOR_GLOB = '*'
+SELECTOR_DELIMITER = ':'
+
+
+class SELECTOR_FILTERS(object):
+    FQN = 'fqn'
+    TAG = 'tag'
 
 
 def split_specs(node_specs):
@@ -34,12 +41,27 @@ def parse_spec(node_spec):
         index_end -= 1
 
     node_selector = node_spec[index_start:index_end]
-    qualified_node_name = node_selector.split('.')
+
+    if SELECTOR_DELIMITER in node_selector:
+        selector_parts = node_selector.split(SELECTOR_DELIMITER, 1)
+        selector_type, selector_value = selector_parts
+
+        node_filter = {
+            "type": selector_type,
+            "value": selector_value
+        }
+
+    else:
+        node_filter = {
+            "type": SELECTOR_FILTERS.FQN,
+            "value": node_selector
+
+        }
 
     return {
         "select_parents": select_parents,
         "select_children": select_children,
-        "qualified_node_name": qualified_node_name,
+        "filter": node_filter,
         "raw": node_spec
     }
 
@@ -74,37 +96,78 @@ def is_selected_node(real_node, node_selector):
     return True
 
 
-def get_nodes_by_qualified_name(graph, qualified_name):
-    """ returns a node if matched, else throws a CompilerError. qualified_name
-    should be either 1) a node name or 2) a dot-notation qualified selector"""
+def _node_is_match(qualified_name, package_names, fqn):
+    """Determine if a qualfied name matches an fqn, given the set of package
+    names in the graph.
 
+    :param List[str] qualified_name: The components of the selector or node
+        name, split on '.'.
+    :param Set[str] package_names: The set of pacakge names in the graph.
+    :param List[str] fqn: The node's fully qualified name in the graph.
+    """
+    if len(qualified_name) == 1 and fqn[-1] == qualified_name[0]:
+        return True
+
+    if qualified_name[0] in package_names:
+        if is_selected_node(fqn, qualified_name):
+            return True
+
+    for package_name in package_names:
+        local_qualified_node_name = [package_name] + qualified_name
+        if is_selected_node(fqn, local_qualified_node_name):
+            return True
+
+    return False
+
+
+def get_nodes_by_qualified_name(graph, qualified_name_selector):
+    """Yield all nodes in the graph that match the qualified_name_selector.
+
+    :param str qualified_name_selector: The selector or node name
+    """
+    qualified_name = qualified_name_selector.split(".")
     package_names = get_package_names(graph)
 
     for node in graph.nodes():
         fqn_ish = graph.node[node]['fqn']
-
-        if len(qualified_name) == 1 and fqn_ish[-1] == qualified_name[0]:
+        if _node_is_match(qualified_name, package_names, fqn_ish):
             yield node
 
-        elif qualified_name[0] in package_names:
-            if is_selected_node(fqn_ish, qualified_name):
-                yield node
 
-        else:
-            for package_name in package_names:
-                local_qualified_node_name = [package_name] + qualified_name
-                if is_selected_node(fqn_ish, local_qualified_node_name):
-                    yield node
-                    break
+def get_nodes_by_tag(graph, tag_name):
+    """ yields nodes from graph that have the specified tag """
+
+    for node in graph.nodes():
+        tags = graph.node[node]['tags']
+
+        if tag_name in tags:
+            yield node
 
 
 def get_nodes_from_spec(graph, spec):
     select_parents = spec['select_parents']
     select_children = spec['select_children']
-    qualified_node_name = spec['qualified_node_name']
 
-    selected_nodes = set(get_nodes_by_qualified_name(graph,
-                                                     qualified_node_name))
+    filter_map = {
+        SELECTOR_FILTERS.FQN: get_nodes_by_qualified_name,
+        SELECTOR_FILTERS.TAG: get_nodes_by_tag,
+    }
+
+    node_filter = spec['filter']
+    filter_func = filter_map.get(node_filter['type'])
+
+    if filter_func is None:
+        valid_selectors = ", ".join(filter_map.keys())
+        logger.info("The '{}' selector specified in {} is invalid. Must be "
+                    "one of [{}]".format(
+                        node_filter['type'],
+                        spec['raw'],
+                        valid_selectors))
+
+        selected_nodes = set()
+
+    else:
+        selected_nodes = set(filter_func(graph, node_filter['value']))
 
     additional_nodes = set()
     test_nodes = set()

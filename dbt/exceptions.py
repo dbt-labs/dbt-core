@@ -103,6 +103,10 @@ class CompilationException(RuntimeException):
         return 'Compilation'
 
 
+class RecursionException(RuntimeException):
+    pass
+
+
 class ValidationException(RuntimeException):
     pass
 
@@ -126,6 +130,21 @@ class ParsingException(Exception):
 
 
 class DependencyException(Exception):
+    pass
+
+
+class DbtConfigError(RuntimeException):
+    def __init__(self, message, project=None, result_type='invalid_project'):
+        self.project = project
+        super(DbtConfigError, self).__init__(message)
+        self.result_type = result_type
+
+
+class DbtProjectError(DbtConfigError):
+    pass
+
+
+class DbtProfileError(DbtConfigError):
     pass
 
 
@@ -280,6 +299,10 @@ def bad_package_spec(repo, spec, error_message):
     raise InternalException(
         "Error checking out spec='{}' for repo {}\n{}".format(
             spec, repo, error_message))
+
+
+def raise_cache_inconsistent(message):
+    raise InternalException('Cache inconsistency detected: {}'.format(message))
 
 
 def missing_config(model, name):

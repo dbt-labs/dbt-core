@@ -18,6 +18,7 @@ import dbt.contracts.project
 import dbt.exceptions
 import dbt.flags
 import dbt.loader
+import dbt.config
 from dbt.contracts.graph.compiled import CompiledNode, CompiledGraph
 
 from dbt.clients.system import write_json
@@ -102,7 +103,10 @@ class Compiler(object):
         dbt.clients.system.make_directory(self.config.target_path)
         dbt.clients.system.make_directory(self.config.modules_path)
 
-    def compile_node(self, node, manifest):
+    def compile_node(self, node, manifest, extra_context=None):
+        if extra_context is None:
+            extra_context = {}
+
         logger.debug("Compiling {}".format(node.get('unique_id')))
 
         data = node.to_dict()
@@ -117,6 +121,7 @@ class Compiler(object):
 
         context = dbt.context.runtime.generate(
             compiled_node, self.config, manifest)
+        context.update(extra_context)
 
         compiled_node.compiled_sql = dbt.clients.jinja.get_rendered(
             node.get('raw_sql'),
@@ -241,6 +246,10 @@ class Compiler(object):
         self.write_manifest_file(manifest)
 
         self._check_resource_uniqueness(manifest)
+
+        resource_fqns = manifest.get_resource_fqns()
+        self.config.warn_for_unused_resource_config_paths(resource_fqns,
+                                                          manifest.disabled)
 
         self.link_graph(linker, manifest)
 
