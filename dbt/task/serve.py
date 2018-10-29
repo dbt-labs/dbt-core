@@ -1,10 +1,9 @@
 import shutil
 import os
 import webbrowser
-from socketserver import TCPServer
 
 from dbt.include import DOCS_INDEX_FILE_PATH
-from dbt.compat import SimpleHTTPRequestHandler
+from dbt.compat import SimpleHTTPRequestHandler, TCPServer
 from dbt.logger import GLOBAL_LOGGER as logger
 
 from dbt.task.base_task import RunnableTask
