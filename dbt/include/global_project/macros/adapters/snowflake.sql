@@ -11,3 +11,8 @@
     {{ sql }}
   );
 {% endmacro %}
+
+{% macro snowflake__swap_table(old_relation, new_relation) -%}
+  alter table {{ old_relation }} swap with {{ new_relation }}
+  ;
+{% endmacro %}

@@ -13,8 +13,6 @@
   /*
       See ../view/view.sql for more information about this relation.
   */
-  {%- set backup_relation = api.Relation.create(identifier=backup_identifier,
-                                                schema=schema, type=(old_relation.type or 'table')) -%}
 
   {%- set exists_as_table = (old_relation is not none and old_relation.is_table) -%}
   {%- set exists_as_view = (old_relation is not none and old_relation.is_view) -%}
@@ -23,7 +21,6 @@
 
   -- drop the temp relations if they exists for some reason
   {{ adapter.drop_relation(intermediate_relation) }}
-  {{ adapter.drop_relation(backup_relation) }}
 
   -- setup: if the target relation already exists, truncate or drop it (if it's a view)
   {% if non_destructive_mode -%}
@@ -71,12 +68,18 @@
           -- would cause an error if the view has become invalid due to upstream schema changes #}
         {{ log("Dropping relation " ~ old_relation ~ " because it is a view and this model is a table.") }}
         {{ drop_relation_if_exists(old_relation) }}
-      {% else %}
-        {{ adapter.rename_relation(target_relation, backup_relation) }}
+      {%- else -%}
+        {#-- DDL execution within a transaction in Snowflake commits the transaction. The strategy of renaming
+          -- and swapping can result in no table found errors that occur between the tables
+          -- being renamed, and the permissions set. Snowflake offer an ALTER TABLE SWAP TABLE command to
+          -- perform an atomic swap #}
+        {{ adapter.execute(snowflake__swap_table(intermediate_relation, target_relation)) }}
       {% endif %}
+    {%- else -%}
+      {{ adapter.rename_relation(intermediate_relation, target_relation) }}
     {% endif %}
 
-    {{ adapter.rename_relation(intermediate_relation, target_relation) }}
+
   {%- endif %}
 
   {{ run_hooks(post_hooks, inside_transaction=True) }}
@@ -85,7 +88,7 @@
   {{ adapter.commit() }}
 
   -- finally, drop the existing/backup relation after the commit
-  {{ drop_relation_if_exists(backup_relation) }}
+  {{ drop_relation_if_exists(intermediate_relation) }}
 
   {{ run_hooks(post_hooks, inside_transaction=False) }}
 {% endmaterialization %}
