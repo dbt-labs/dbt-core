@@ -46,7 +46,8 @@ class SeedParser(BaseParser):
 
     @classmethod
     def load_and_parse(cls, package_name, root_project, all_projects, root_dir,
-                       relative_dirs, tags=None, macros=None):
+                       relative_dirs, tags=None, macros=None,
+                       macro_manifest=None):
         """Load and parse seed files in a list of directories. Returns a dict
            that maps unique ids onto ParsedNodes"""
 
@@ -70,7 +71,8 @@ class SeedParser(BaseParser):
             parsed = cls.parse_node(node, node_path, root_project,
                                     all_projects.get(package_name),
                                     all_projects, tags=tags, macros=macros,
-                                    agate_table=agate_table)
+                                    agate_table=agate_table,
+                                    macro_manifest=macro_manifest)
             result[node_path] = parsed
 
         return result

@@ -38,7 +38,8 @@ class HookParser(BaseSqlParser):
 
     @classmethod
     def load_and_parse_run_hook_type(cls, root_project, all_projects,
-                                     hook_type, macros=None):
+                                     hook_type, macros=None,
+                                     macro_manifest=None):
 
         if dbt.flags.STRICT_MODE:
             dbt.contracts.project.ProjectList(**all_projects)
@@ -64,11 +65,13 @@ class HookParser(BaseSqlParser):
 
         tags = [hook_type]
         hooks, _ = cls.parse_sql_nodes(result, root_project, all_projects,
-                                       tags=tags, macros=macros)
+                                       tags=tags, macros=macros,
+                                       macro_manifest=macro_manifest)
         return hooks
 
     @classmethod
-    def load_and_parse(cls, root_project, all_projects, macros=None):
+    def load_and_parse(cls, root_project, all_projects, macros=None,
+                       macro_manifest=None):
         if macros is None:
             macros = {}
 
@@ -78,7 +81,8 @@ class HookParser(BaseSqlParser):
                 root_project,
                 all_projects,
                 hook_type,
-                macros=macros
+                macros=macros,
+                macro_manifest=macro_manifest
             )
             hook_nodes.update(project_hooks)
 

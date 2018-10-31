@@ -178,7 +178,8 @@ class SchemaParser(BaseParser):
 
     @classmethod
     def build_parsed_node(cls, unparsed, model_name, test_namespace, test_type,
-                          root_project, all_projects, macros, column_name):
+                          root_project, all_projects, macros, macro_manifest,
+                          column_name):
         """Given an UnparsedNode with a node type of Test and some extra
         information, build a ParsedNode representing the test.
         """
@@ -208,12 +209,13 @@ class SchemaParser(BaseParser):
                               fqn_extra=None,
                               fqn=fqn_override,
                               macros=macros,
-                              column_name=column_name)
+                              column_name=column_name,
+                              macro_manifest=macro_manifest)
 
     @classmethod
     def build_node(cls, model_name, package_name, test_type, test_args,
                    root_dir, original_file_path, root_project, all_projects,
-                   macros, column_name=None):
+                   macros, macro_manifest, column_name=None):
         """From the various components that are common to both v1 and v2 schema,
         build a ParsedNode representing a test case.
         """
@@ -232,7 +234,8 @@ class SchemaParser(BaseParser):
 
         parsed = cls.build_parsed_node(unparsed, model_name, test_namespace,
                                        original_test_type, root_project,
-                                       all_projects, macros, column_name)
+                                       all_projects, macros, macro_manifest,
+                                       column_name)
         return parsed
 
     @classmethod
@@ -272,7 +275,8 @@ class SchemaParser(BaseParser):
 
     @classmethod
     def parse_v1_test_yml(cls, original_file_path, test_yml, package_name,
-                          root_project, all_projects, root_dir, macros=None):
+                          root_project, all_projects, root_dir, macros=None,
+                          macro_manifest=None):
         """Parse v1 yml contents, yielding parsed nodes.
 
         A v1 yml file is laid out like this ('variables' written
@@ -327,13 +331,15 @@ class SchemaParser(BaseParser):
                     to_add = cls.build_node(
                         model_name, package_name, test_type, test_args,
                         root_dir, original_file_path,
-                        root_project, all_projects, macros)
+                        root_project, all_projects, macros,
+                        macro_manifest)
                     if to_add is not None:
                         yield to_add
 
     @classmethod
     def parse_v2_yml(cls, original_file_path, test_yml, package_name,
-                     root_project, all_projects, root_dir, macros):
+                     root_project, all_projects, root_dir, macros,
+                     macro_manifest):
         """Parse v2 yml contents, yielding both parsed nodes and node patches.
 
         A v2 yml file is laid out like this ('variables' written
@@ -386,14 +392,14 @@ class SchemaParser(BaseParser):
 
             iterator = cls.parse_model(model, package_name, root_dir,
                                        original_file_path, root_project,
-                                       all_projects, macros)
+                                       all_projects, macros, macro_manifest)
 
             for node_type, node in iterator:
                 yield node_type, node
 
     @classmethod
     def parse_model(cls, model, package_name, root_dir, path, root_project,
-                    all_projects, macros):
+                    all_projects, macros, macro_manifest):
         """Given an UnparsedNodeUpdate, return column info about the model
 
             - column info (name and maybe description) as a dict
@@ -421,7 +427,8 @@ class SchemaParser(BaseParser):
                 )
                 node = cls.build_node(
                     model_name, package_name, test_type, test_args, root_dir,
-                    path, root_project, all_projects, macros, column_name
+                    path, root_project, all_projects, macros, macro_manifest,
+                    column_name
                 )
                 yield 'test', node
 
@@ -431,7 +438,7 @@ class SchemaParser(BaseParser):
             test_type, test_args = cls._build_v2_test_args(test, None)
             node = cls.build_node(model_name, package_name, test_type,
                                   test_args, root_dir, path, root_project,
-                                  all_projects, macros)
+                                  all_projects, macros, macro_manifest)
             yield 'test', node
 
         context = {'doc': dbt.context.parser.docs(model, docrefs)}
@@ -449,7 +456,7 @@ class SchemaParser(BaseParser):
 
     @classmethod
     def load_and_parse(cls, package_name, root_project, all_projects, root_dir,
-                       relative_dirs, macros=None):
+                       relative_dirs, macros=None, macro_manifest=None):
         if dbt.flags.STRICT_MODE:
             dbt.contracts.project.ProjectList(**all_projects)
         new_tests = {}  # test unique ID -> ParsedNode
@@ -467,12 +474,14 @@ class SchemaParser(BaseParser):
                     (t.get('unique_id'), t)
                     for t in cls.parse_v1_test_yml(
                         original_file_path, test_yml, package_name,
-                        root_project, all_projects, root_dir, macros)
+                        root_project, all_projects, root_dir, macros,
+                        macro_manifest)
                 )
             elif version == 2:
                 v2_results = cls.parse_v2_yml(
                         original_file_path, test_yml, package_name,
-                        root_project, all_projects, root_dir, macros)
+                        root_project, all_projects, root_dir, macros,
+                        macro_manifest)
                 for result_type, node in v2_results:
                     if result_type == 'patch':
                         node_patches[node.name] = node

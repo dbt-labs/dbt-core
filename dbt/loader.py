@@ -19,7 +19,9 @@ class GraphLoader(object):
         self.tests = {}
         self.patches = {}
         self.disabled = []
+        self.macro_manifest = None
 
+        # make a manifest with just the macros to get the context
     def _load_macro_nodes(self, resource_type):
         for project_name, project in self.all_projects.items():
             self.macros.update(MacroParser.load_and_parse(
@@ -31,8 +33,12 @@ class GraphLoader(object):
                 resource_type=resource_type,
             ))
 
+        self.macro_manifest = Manifest(macros=self.macros, nodes={}, docs={},
+                                       generated_at=timestring(), disabled=[])
+
     def _load_sql_nodes(self, parser, resource_type, relative_dirs_attr,
                         **kwargs):
+
         for project_name, project in self.all_projects.items():
             nodes, disabled = parser.load_and_parse(
                 package_name=project_name,
@@ -42,6 +48,7 @@ class GraphLoader(object):
                 relative_dirs=getattr(project, relative_dirs_attr),
                 resource_type=resource_type,
                 macros=self.macros,
+                macro_manifest=self.macro_manifest,
                 **kwargs
             )
             self.nodes.update(nodes)
@@ -59,7 +66,8 @@ class GraphLoader(object):
                 all_projects=self.all_projects,
                 root_dir=project.project_root,
                 relative_dirs=project.data_paths,
-                macros=self.macros
+                macros=self.macros,
+                macro_manifest=self.macro_manifest,
             ))
 
     def _load_nodes(self):
@@ -70,10 +78,12 @@ class GraphLoader(object):
                              tags=['data'])
 
         self.nodes.update(HookParser.load_and_parse(
-            self.root_project, self.all_projects, self.macros
+            self.root_project, self.all_projects, self.macros,
+            self.macro_manifest
         ))
         self.nodes.update(ArchiveParser.load_and_parse(
-            self.root_project, self.all_projects, self.macros
+            self.root_project, self.all_projects, self.macros,
+            self.macro_manifest
         ))
 
         self._load_seeds()
@@ -96,7 +106,8 @@ class GraphLoader(object):
                 all_projects=self.all_projects,
                 root_dir=project.project_root,
                 relative_dirs=project.source_paths,
-                macros=self.macros
+                macros=self.macros,
+                macro_manifest=self.macro_manifest,
             )
 
             for unique_id, test in tests.items():
