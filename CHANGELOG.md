@@ -7,6 +7,12 @@ This release adds caching for some introspective queries on all adapters. Additi
 ### Breaking Changes
 - Support for the `repositories:` block in `dbt_project.yml` (deprecated in 0.10.0) was removed.
 
+### tl;dr
+- Make runs faster by caching introspective queries
+- Support [model tags](https://docs.getdbt.com/v0.12/docs/tags)
+- Add a list of [schemas](https://docs.getdbt.com/v0.12/reference#schemas) to the `on-run-end` context
+- Set your [profiles directory](https://docs.getdbt.com/v0.12/docs/configure-your-profile#section-using-the-dbt_profiles_dir-environment-variable) with an environment variable
+
 ### Features
 
 - Cache the existence of relations to speed up dbt runs ([#1025](https://github.com/fishtown-analytics/dbt/pull/1025))
