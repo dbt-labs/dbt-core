@@ -1,7 +1,7 @@
 version: 2
 jobs:
   unit:
-    docker: &py36
+    docker: &py36_postgres
       - image: python:3.6
       - image: postgres
         environment: &pgenv
@@ -23,7 +23,7 @@ jobs:
             PGDATABASE: postgres
       - run: tox -e pep8,unit-py27,unit-py36
   integration-postgres-py36:
-    docker: *py36
+    docker: *py36_postgres
     steps:
       - checkout
       - run: apt-get update && apt-get install -y python3-dev postgresql
@@ -34,10 +34,11 @@ jobs:
           name: Run tests
           command: tox -e integration-postgres-py36
   integration-snowflake-py36:
-    docker: *py36
+    docker: &py36
+      - image: python:3.6
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python3-dev postgresql
+      - run: apt-get update && apt-get install -y python3-dev
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run:
@@ -58,14 +59,14 @@ jobs:
     docker: *py36
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python3-dev postgresql
+      - run: apt-get update && apt-get install -y python3-dev
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run:
           name: Run tests
           command: tox -e integration-bigquery-py36
   integration-postgres-py27:
-    docker: &py27
+    docker: &py27_postgres
       - image: python:2.7
       - image: postgres
         environment: *pgenv
@@ -79,10 +80,11 @@ jobs:
           name: Run tests
           command: tox -e integration-postgres-py27
   integration-snowflake-py27:
-    docker: *py27
+    docker: &py27
+      - image: python:2.7
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python-dev postgresql
+      - run: apt-get update && apt-get install -y python-dev
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run:
@@ -103,7 +105,7 @@ jobs:
     docker: *py27
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python-dev postgresql
+      - run: apt-get update && apt-get install -y python-dev
       - run: echo 127.0.0.1 database | tee -a /etc/hosts
       - run: pip install virtualenvwrapper tox
       - run:
