@@ -1,111 +1,82 @@
 version: 2
 jobs:
   unit:
-    docker: &py36
-      - image: python:3.6
+    docker: &containers
+      - image: fishtownjacob/test-container
       - image: postgres
+        name: database
         environment: &pgenv
           POSTGRES_USER: "root"
           POSTGRES_PASSWORD: "password"
           POSTGRES_DB: "dbt"
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python-dev python3-dev postgresql
-      - run: echo 127.0.0.1 database | tee -a /etc/hosts
-      - run: pip install virtualenvwrapper tox
       - run: &setupdb
           name: Setup postgres
           command: bash test/setup_db.sh
           environment:
-            PGHOST: 127.0.0.1
+            PGHOST: database
             PGUSER: root
             PGPASSWORD: password
             PGDATABASE: postgres
       - run: tox -e pep8,unit-py27,unit-py36
   integration-postgres-py36:
-    docker: *py36
+    docker: *containers
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python3-dev postgresql
-      - run: echo 127.0.0.1 database | tee -a /etc/hosts
-      - run: pip install virtualenvwrapper tox
       - run: *setupdb
       - run:
           name: Run tests
           command: tox -e integration-postgres-py36
   integration-snowflake-py36:
-    docker: *py36
+    docker: *containers
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python3-dev postgresql
-      - run: echo 127.0.0.1 database | tee -a /etc/hosts
-      - run: pip install virtualenvwrapper tox
       - run:
           name: Run tests
           command: tox -e integration-snowflake-py36
           no_output_timeout: 1h
   integration-redshift-py36:
-    docker: *py36
+    docker: *containers
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python3-dev postgresql
-      - run: echo 127.0.0.1 database | tee -a /etc/hosts
-      - run: pip install virtualenvwrapper tox
       - run:
           name: Run tests
           command: tox -e integration-redshift-py36
   integration-bigquery-py36:
-    docker: *py36
+    docker: *containers
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python3-dev postgresql
-      - run: echo 127.0.0.1 database | tee -a /etc/hosts
-      - run: pip install virtualenvwrapper tox
       - run:
           name: Run tests
           command: tox -e integration-bigquery-py36
   integration-postgres-py27:
-    docker: &py27
-      - image: python:2.7
-      - image: postgres
-        environment: *pgenv
+    docker: *containers
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python-dev postgresql
-      - run: echo 127.0.0.1 database | tee -a /etc/hosts
-      - run: pip install virtualenvwrapper tox
       - run: *setupdb
       - run:
           name: Run tests
           command: tox -e integration-postgres-py27
   integration-snowflake-py27:
-    docker: *py27
+    docker: *containers
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python-dev postgresql
-      - run: echo 127.0.0.1 database | tee -a /etc/hosts
-      - run: pip install virtualenvwrapper tox
       - run:
           name: Run tests
           command: tox -e integration-snowflake-py27
           no_output_timeout: 1h
   integration-redshift-py27:
-    docker: *py27
+    docker: *containers
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python-dev postgresql
-      - run: echo 127.0.0.1 database | tee -a /etc/hosts
-      - run: pip install virtualenvwrapper tox
       - run:
           name: Run tests
           command: tox -e integration-redshift-py27
   integration-bigquery-py27:
-    docker: *py27
+    docker: *containers
     steps:
       - checkout
-      - run: apt-get update && apt-get install -y python-dev postgresql
-      - run: echo 127.0.0.1 database | tee -a /etc/hosts
-      - run: pip install virtualenvwrapper tox
       - run:
           name: Run tests
           command: tox -e integration-bigquery-py27

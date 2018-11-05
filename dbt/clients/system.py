@@ -185,7 +185,7 @@ def open_dir_cmd():
         return 'xdg-open'
 
 
-def _handle_cwd_error(exc, cwd, cmd):
+def _handle_posix_cwd_error(exc, cwd, cmd):
     if exc.errno == errno.ENOENT:
         message = 'Directory does not exist'
     elif exc.errno == errno.EACCES:
@@ -197,7 +197,7 @@ def _handle_cwd_error(exc, cwd, cmd):
     raise dbt.exceptions.WorkingDirectoryError(cwd, cmd, message)
 
 
-def _handle_cmd_error(exc, cwd, cmd):
+def _handle_posix_cmd_error(exc, cwd, cmd):
     if exc.errno == errno.ENOENT:
         message = "Could not find command, ensure it is in the user's PATH"
     elif exc.errno == errno.EACCES:
@@ -207,8 +207,8 @@ def _handle_cmd_error(exc, cwd, cmd):
     raise dbt.exceptions.ExecutableError(cwd, cmd, message)
 
 
-def _interpret_oserror(exc, cwd, cmd):
-    """Interpret an OSError exc and raise the appropriate dbt exception.
+def _handle_posix_error(exc, cwd, cmd):
+    """OSError handling for posix systems.
 
     Some things that could happen to trigger an OSError:
         - cwd could not exist
@@ -228,14 +228,44 @@ def _interpret_oserror(exc, cwd, cmd):
             - exc.errno == EACCES
             - exc.filename == None(?)
     """
+    if getattr(exc, 'filename', None) == cwd:
+        _handle_posix_cwd_error(exc, cwd, cmd)
+    else:
+        _handle_posix_cmd_error(exc, cwd, cmd)
+
+
+def _handle_windows_error(exc, cwd, cmd):
+    cls = dbt.exceptions.CommandError
+    if exc.errno == errno.ENOENT:
+        message = ("Could not find command, ensure it is in the user's PATH "
+                   "and that the user has permissions to run it")
+        cls = dbt.exceptions.ExecutableError
+    elif exc.errno == errno.ENOTDIR:
+        message = ('Unable to cd: path does not exist, user does not have'
+                   ' permissions, or not a directory')
+        cls = dbt.exceptions.WorkingDirectoryError
+    else:
+        message = 'Unknown error: {}'.format(str(exc))
+    raise cls(cwd, cmd, message)
+
+
+def _interpret_oserror(exc, cwd, cmd):
+    """Interpret an OSError exc and raise the appropriate dbt exception.
+
+    """
     if len(cmd) == 0:
         raise dbt.exceptions.CommandError(cwd, cmd)
 
-    # both of these functions raise unconditionally
-    if getattr(exc, 'filename', None) == cwd:
-        _handle_cwd_error(exc, cwd, cmd)
+    # all of these functions raise unconditionally
+    if os.name == 'nt':
+        _handle_windows_error(exc, cwd, cmd)
     else:
-        _handle_cmd_error(exc, cwd, cmd)
+        _handle_posix_error(exc, cwd, cmd)
+
+    # this should not be reachable, raise _something_ at least!
+    raise dbt.exceptions.InternalException(
+        'Unhandled exception in _interpret_oserror: {}'.format(exc)
+    )
 
 
 def run_cmd(cwd, cmd):
