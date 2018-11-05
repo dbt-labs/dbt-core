@@ -185,18 +185,82 @@ def open_dir_cmd():
         return 'xdg-open'
 
 
+def _handle_cwd_error(exc, cwd, cmd):
+    if exc.errno == errno.ENOENT:
+        message = 'Directory does not exist'
+    elif exc.errno == errno.EACCES:
+        message = 'Current user cannot access directory, check permissions'
+    elif exc.errno == errno.ENOTDIR:
+        message = 'Not a directory'
+    else:
+        message = 'Unknown OSError: {} - cwd'.format(str(exc))
+    raise dbt.exceptions.WorkingDirectoryError(cwd, cmd, message)
+
+
+def _handle_cmd_error(exc, cwd, cmd):
+    if exc.errno == errno.ENOENT:
+        message = "Could not find command, ensure it is in the user's PATH"
+    elif exc.errno == errno.EACCES:
+        message = 'User does not have permissions for this command'
+    else:
+        message = 'Unknown OSError: {} - cmd'.format(str(exc))
+    raise dbt.exceptions.ExecutableError(cwd, cmd, message)
+
+
+def _interpret_oserror(exc, cwd, cmd):
+    """Interpret an OSError exc and raise the appropriate dbt exception.
+
+    Some things that could happen to trigger an OSError:
+        - cwd could not exist
+            - exc.errno == ENOENT
+            - exc.filename == cwd
+        - cwd could have permissions that prevent the current user moving to it
+            - exc.errno == EACCESS
+            - exc.filename == cwd
+        - cwd could exist but not be a directory
+            - exc.errno == ENOTDIR
+            - exc.filename == cwd
+        - cmd[0] could not exist
+            - exc.errno == ENOENT
+            - exc.filename == None(?)
+        - cmd[0] could exist but have permissions that prevents the current
+            user from executing it (executable bit not set for the user)
+            - exc.errno == EACCES
+            - exc.filename == None(?)
+    """
+    if len(cmd) == 0:
+        raise dbt.exceptions.CommandError(cwd, cmd)
+
+    # both of these functions raise unconditionally
+    if getattr(exc, 'filename', None) == cwd:
+        _handle_cwd_error(exc, cwd, cmd)
+    else:
+        _handle_cmd_error(exc, cwd, cmd)
+
+
 def run_cmd(cwd, cmd):
     logger.debug('Executing "{}"'.format(' '.join(cmd)))
-    proc = subprocess.Popen(
-        cmd,
-        cwd=cwd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE)
+    if len(cmd) == 0:
+        raise dbt.exceptions.CommandError(cwd, cmd)
 
-    out, err = proc.communicate()
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+
+        out, err = proc.communicate()
+    except OSError as exc:
+        _interpret_oserror(exc, cwd, cmd)
 
     logger.debug('STDOUT: "{}"'.format(out))
     logger.debug('STDERR: "{}"'.format(err))
+
+    if proc.returncode != 0:
+        logger.debug('command return code={}'.format(proc.returncode))
+        raise dbt.exceptions.CommandResultError(cwd, cmd, proc.returncode,
+                                                out, err)
 
     return out, err
 

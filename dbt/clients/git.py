@@ -26,10 +26,7 @@ def list_tags(cwd):
     return tags
 
 
-def checkout(cwd, repo, branch=None):
-    if branch is None:
-        branch = 'master'
-
+def _checkout(cwd, repo, branch):
     logger.debug('  Checking out branch {}.'.format(branch))
 
     run_cmd(cwd, ['git', 'remote', 'set-branches', 'origin', branch])
@@ -44,12 +41,17 @@ def checkout(cwd, repo, branch=None):
         spec = 'origin/{}'.format(branch)
 
     out, err = run_cmd(cwd, ['git', 'reset', '--hard', spec])
-    stderr = err.decode('utf-8').strip()
+    return out, err
 
-    if stderr.startswith('fatal:'):
+
+def checkout(cwd, repo, branch=None):
+    if branch is None:
+        branch = 'master'
+    try:
+        return _checkout(cwd, repo, branch)
+    except dbt.exceptions.CommandResultError as exc:
+        stderr = exc.stderr.decode('utf-8').strip()
         dbt.exceptions.bad_package_spec(repo, branch, stderr)
-    else:
-        return out, err
 
 
 def get_current_sha(cwd):
@@ -64,9 +66,16 @@ def remove_remote(cwd):
 
 def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
                        branch=None):
-    _, err = clone(repo, cwd, dirname=dirname, remove_git_dir=remove_git_dir)
-    exists = re.match("fatal: destination path '(.+)' already exists",
-                      err.decode('utf-8'))
+    exists = None
+    try:
+        _, err = clone(repo, cwd, dirname=dirname,
+                       remove_git_dir=remove_git_dir)
+    except dbt.exceptions.CommandResultError as exc:
+        err = exc.stderr.decode('utf-8')
+        exists = re.match("fatal: destination path '(.+)' already exists", err)
+        if not exists:  # something else is wrong, raise it
+            dbt.exceptions.bad_package_spec(repo, branch, err)
+
     directory = None
     start_sha = None
     if exists:
