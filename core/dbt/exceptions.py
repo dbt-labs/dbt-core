@@ -382,7 +382,7 @@ class FailedToConnectException(DatabaseException):
 
 
 class CommandError(RuntimeException):
-    def __init__(self, cwd, cmd, message='Error running command'):
+    def __init__(self, cwd, cmd, message="Error running command"):
         super().__init__(message)
         self.cwd = cwd
         self.cmd = cmd
@@ -390,7 +390,7 @@ class CommandError(RuntimeException):
 
     def __str__(self):
         if len(self.cmd) == 0:
-            return '{}: No arguments given'.format(self.msg)
+            return "{}: No arguments given".format(self.msg)
         return '{}: "{}"'.format(self.msg, self.cmd[0])
 
 
@@ -408,8 +408,7 @@ class WorkingDirectoryError(CommandError):
 
 
 class CommandResultError(CommandError):
-    def __init__(self, cwd, cmd, returncode, stdout, stderr,
-                 message='Got a non-zero returncode'):
+    def __init__(self, cwd, cmd, returncode, stdout, stderr, message="Got a non-zero returncode"):
         super().__init__(cwd, cmd, message)
         self.returncode = returncode
         self.stdout = stdout
@@ -417,7 +416,7 @@ class CommandResultError(CommandError):
         self.args = (cwd, cmd, returncode, stdout, stderr, message)
 
     def __str__(self):
-        return '{} running: {}'.format(self.msg, self.cmd)
+        return "{} running: {}".format(self.msg, self.cmd)
 
 
 class InvalidConnectionException(RuntimeException):
