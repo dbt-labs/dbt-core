@@ -311,7 +311,7 @@ def rename(from_path, to_path, force=False):
         else:
             rmdir(to_path)
 
-    os.rename(from_path, to_path)
+    shutil.move(from_path, to_path)
 
 
 def untar_package(tar_path, dest_dir, rename_to=None):
