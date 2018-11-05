@@ -355,7 +355,7 @@ def _handle_posix_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
             - exc.errno == EACCES
             - exc.filename == None(?)
     """
-    if getattr(exc, 'filename', None) == cwd:
+    if getattr(exc, "filename", None) == cwd:
         _handle_posix_cwd_error(exc, cwd, cmd)
     else:
         _handle_posix_cmd_error(exc, cwd, cmd)
@@ -364,15 +364,19 @@ def _handle_posix_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
 def _handle_windows_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
     cls: Type[dbt.exceptions.Exception] = dbt.exceptions.CommandError
     if exc.errno == errno.ENOENT:
-        message = ("Could not find command, ensure it is in the user's PATH "
-                   "and that the user has permissions to run it")
+        message = (
+            "Could not find command, ensure it is in the user's PATH "
+            "and that the user has permissions to run it"
+        )
         cls = dbt.exceptions.ExecutableError
     elif exc.errno == errno.ENOEXEC:
         message = ('Command was not executable, ensure it is valid')
         cls = dbt.exceptions.ExecutableError
     elif exc.errno == errno.ENOTDIR:
-        message = ('Unable to cd: path does not exist, user does not have'
-                   ' permissions, or not a directory')
+        message = (
+            "Unable to cd: path does not exist, user does not have"
+            " permissions, or not a directory"
+        )
         cls = dbt.exceptions.WorkingDirectoryError
     else:
         message = 'Unknown error: {} (errno={}: "{}")'.format(
@@ -389,14 +393,14 @@ def _interpret_oserror(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
         raise dbt.exceptions.CommandError(cwd, cmd)
 
     # all of these functions raise unconditionally
-    if os.name == 'nt':
+    if os.name == "nt":
         _handle_windows_error(exc, cwd, cmd)
     else:
         _handle_posix_error(exc, cwd, cmd)
 
     # this should not be reachable, raise _something_ at least!
     raise dbt.exceptions.InternalException(
-        'Unhandled exception in _interpret_oserror: {}'.format(exc)
+        "Unhandled exception in _interpret_oserror: {}".format(exc)
     )
 
 
