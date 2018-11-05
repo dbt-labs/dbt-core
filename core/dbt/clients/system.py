@@ -386,9 +386,7 @@ def _handle_windows_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
 
 
 def _interpret_oserror(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
-    """Interpret an OSError exc and raise the appropriate dbt exception.
-
-    """
+    """Interpret an OSError exc and raise the appropriate dbt exception."""
     if len(cmd) == 0:
         raise dbt.exceptions.CommandError(cwd, cmd)
 
