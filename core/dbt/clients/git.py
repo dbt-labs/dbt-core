@@ -115,7 +115,7 @@ def checkout(cwd, repo, revision=None):
     try:
         return _checkout(cwd, repo, revision)
     except CommandResultError as exc:
-        stderr = exc.stderr.decode('utf-8').strip()
+        stderr = exc.stderr.decode("utf-8").strip()
     bad_package_spec(repo, revision, stderr)
 
 
@@ -142,7 +142,7 @@ def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
             subdirectory=subdirectory,
         )
     except CommandResultError as exc:
-        err = exc.stderr.decode('utf-8')
+        err = exc.stderr.decode("utf-8")
         exists = re.match("fatal: destination path '(.+)' already exists", err)
         if not exists:
             raise_git_cloning_problem(repo)

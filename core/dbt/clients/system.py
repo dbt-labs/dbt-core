@@ -320,13 +320,13 @@ def open_dir_cmd() -> str:
 
 def _handle_posix_cwd_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
     if exc.errno == errno.ENOENT:
-        message = 'Directory does not exist'
+        message = "Directory does not exist"
     elif exc.errno == errno.EACCES:
-        message = 'Current user cannot access directory, check permissions'
+        message = "Current user cannot access directory, check permissions"
     elif exc.errno == errno.ENOTDIR:
-        message = 'Not a directory'
+        message = "Not a directory"
     else:
-        message = 'Unknown OSError: {} - cwd'.format(str(exc))
+        message = "Unknown OSError: {} - cwd".format(str(exc))
     raise dbt.exceptions.WorkingDirectoryError(cwd, cmd, message)
 
 
@@ -334,9 +334,9 @@ def _handle_posix_cmd_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
     if exc.errno == errno.ENOENT:
         message = "Could not find command, ensure it is in the user's PATH"
     elif exc.errno == errno.EACCES:
-        message = 'User does not have permissions for this command'
+        message = "User does not have permissions for this command"
     else:
-        message = 'Unknown OSError: {} - cmd'.format(str(exc))
+        message = "Unknown OSError: {} - cmd".format(str(exc))
     raise dbt.exceptions.ExecutableError(cwd, cmd, message)
 
 
@@ -423,7 +423,7 @@ def run_cmd(cwd: str, cmd: List[str], env: Optional[Dict[str, Any]] = None) -> T
         if exe_pth:
             cmd = [os.path.abspath(exe_pth)] + list(cmd[1:])
         proc = subprocess.Popen(
-            cmd,
+            cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=full_env
             cwd=cwd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -438,8 +438,7 @@ def run_cmd(cwd: str, cmd: List[str], env: Optional[Dict[str, Any]] = None) -> T
 
     if proc.returncode != 0:
         fire_event(SystemReportReturnCode(returncode=proc.returncode))
-        raise dbt.exceptions.CommandResultError(cwd, cmd, proc.returncode,
-                                                out, err)
+        raise dbt.exceptions.CommandResultError(cwd, cmd, proc.returncode, out, err)
 
     return out, err
 
