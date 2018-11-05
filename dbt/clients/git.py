@@ -51,7 +51,7 @@ def checkout(cwd, repo, branch=None):
         return _checkout(cwd, repo, branch)
     except dbt.exceptions.CommandResultError as exc:
         stderr = exc.stderr.decode('utf-8').strip()
-        dbt.exceptions.bad_package_spec(repo, branch, stderr)
+    dbt.exceptions.bad_package_spec(repo, branch, stderr)
 
 
 def get_current_sha(cwd):
@@ -74,7 +74,7 @@ def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
         err = exc.stderr.decode('utf-8')
         exists = re.match("fatal: destination path '(.+)' already exists", err)
         if not exists:  # something else is wrong, raise it
-            dbt.exceptions.bad_package_spec(repo, branch, err)
+            raise
 
     directory = None
     start_sha = None

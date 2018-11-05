@@ -21,7 +21,24 @@ from dbt.contracts.project import LOCAL_PACKAGE_CONTRACT, \
 
 from dbt.task.base_task import BaseTask
 
-DOWNLOADS_PATH = os.path.join(tempfile.gettempdir(), "dbt-downloads")
+DOWNLOADS_PATH = None
+REMOVE_DOWNLOADS = False
+
+
+def _initialize_downloads():
+    global DOWNLOADS_PATH, REMOVE_DOWNLOADS
+    # the user might have set an environment variable. Set it to None, and do
+    # not remove it when finished.
+    if DOWNLOADS_PATH is None:
+        DOWNLOADS_PATH = os.environ.get('DBT_DOWNLOADS_DIR', None)
+        REMOVE_DOWNLOADS = False
+    # if we are making a per-run temp directory, remove it at the end of
+    # successful runs
+    if DOWNLOADS_PATH is None:
+        DOWNLOADS_PATH = tempfile.mkdtemp(prefix='dbt-downloads-')
+        REMOVE_DOWNLOADS = True
+
+    dbt.clients.system.make_directory(DOWNLOADS_PATH)
 
 
 class Package(APIObject):
@@ -396,6 +413,16 @@ def _read_packages(project_yaml):
 
 
 class DepsTask(BaseTask):
+    def __init__(self, args, config=None):
+        super(DepsTask, self).__init__(args=args, config=config)
+        self._downloads_path = None
+
+    @property
+    def downloads_path(self):
+        if self._downloads_path is None:
+            self._downloads_path = tempfile.mkdtemp(prefix='dbt-downloads')
+        return self._downloads_path
+
     def _check_for_duplicate_project_names(self, final_deps):
         seen = set()
         for _, package in final_deps.items():
@@ -421,7 +448,7 @@ class DepsTask(BaseTask):
 
     def run(self):
         dbt.clients.system.make_directory(self.config.modules_path)
-        dbt.clients.system.make_directory(DOWNLOADS_PATH)
+        _initialize_downloads()
 
         packages = self.config.packages.packages
         if not packages:
@@ -451,3 +478,6 @@ class DepsTask(BaseTask):
                 package_name=package.name,
                 source_type=package.source_type(),
                 version=package.version_name())
+
+        if REMOVE_DOWNLOADS:
+            shutil.rmtree(DOWNLOADS_PATH)
