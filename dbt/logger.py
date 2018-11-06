@@ -112,4 +112,7 @@ def initialize_logger(debug_mode=False, path=None):
     initialized = True
 
 
+def logger_initialized():
+    return initialized
+
 GLOBAL_LOGGER = logger
