@@ -1,9 +1,5 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest, FakeArgs
 
-from dbt.task.test import TestTask
-from dbt.project import read_project
-import os
+from test.integration.base import DBTIntegrationTest, use_profile
 
 
 class TestThreadCount(DBTIntegrationTest):
@@ -26,9 +22,7 @@ class TestThreadCount(DBTIntegrationTest):
     def models(self):
         return "test/integration/031_thread_count_test/models"
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_postgres_threading_8x(self):
-        self.use_profile('postgres')
-
         results = self.run_dbt(args=['run', '--threads', '16'])
         self.assertTrue(len(results), 20)

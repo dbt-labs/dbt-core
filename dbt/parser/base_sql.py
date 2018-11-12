@@ -77,6 +77,7 @@ class BaseSqlParser(BaseParser):
             macros = {}
 
         to_return = {}
+        disabled = []
 
         for n in nodes:
             node = UnparsedNode(**n)
@@ -96,6 +97,7 @@ class BaseSqlParser(BaseParser):
 
             # Ignore disabled nodes
             if not node_parsed['config']['enabled']:
+                disabled.append(node_parsed['fqn'])
                 continue
 
             # Check for duplicate model names
@@ -106,4 +108,4 @@ class BaseSqlParser(BaseParser):
 
             to_return[node_path] = node_parsed
 
-        return to_return
+        return to_return, disabled

@@ -3,10 +3,6 @@ from test.integration.base import DBTIntegrationTest
 
 
 class TestEphemeral(DBTIntegrationTest):
-
-    def setUp(self):
-        pass
-
     @property
     def schema(self):
         return "ephemeral_020"
@@ -17,8 +13,6 @@ class TestEphemeral(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test__postgres(self):
-        self.use_profile('postgres')
-        self.use_default_project()
         self.run_sql_file("test/integration/020_ephemeral_test/seed.sql")
 
         results = self.run_dbt()
@@ -30,8 +24,6 @@ class TestEphemeral(DBTIntegrationTest):
 
     @attr(type='snowflake')
     def test__snowflake(self):
-        self.use_profile('snowflake')
-        self.use_default_project()
         self.run_sql_file("test/integration/020_ephemeral_test/seed.sql")
 
         results = self.run_dbt()
@@ -40,3 +32,20 @@ class TestEphemeral(DBTIntegrationTest):
         self.assertManyTablesEqual(
             ["SEED", "DEPENDENT", "DOUBLE_DEPENDENT", "SUPER_DEPENDENT"]
         )
+
+class TestEphemeralErrorHandling(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "ephemeral_020"
+
+    @property
+    def models(self):
+        return "test/integration/020_ephemeral_test/ephemeral-errors"
+
+    @attr(type='postgres')
+    def test__postgres_upstream_error(self):
+        self.run_sql_file("test/integration/020_ephemeral_test/seed.sql")
+
+        results = self.run_dbt(expect_pass=False)
+        self.assertEqual(len(results), 1)
+        self.assertTrue(results[0].errored)

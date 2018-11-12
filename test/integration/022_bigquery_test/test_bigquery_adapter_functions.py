@@ -18,8 +18,6 @@ class TestBigqueryAdapterFunctions(DBTIntegrationTest):
 
     @attr(type='bigquery')
     def test__bigquery_adapter_functions(self):
-        self.use_profile('bigquery')
-        self.use_default_project()
         results = self.run_dbt()
         self.assertEqual(len(results), 3)
 

@@ -1,3 +1,4 @@
+import os
 
 import jinja2.runtime
 
@@ -40,24 +41,22 @@ class MacroParser(BaseParser):
         )
 
         try:
-            template = dbt.clients.jinja.get_template(
-                macro_file_contents, context, node=base_node)
+            ast = dbt.clients.jinja.parse(macro_file_contents)
         except dbt.exceptions.CompilationException as e:
             e.node = base_node
             raise e
 
-        for key, item in template.module.__dict__.items():
-            if type(item) != jinja2.runtime.Macro:
-                continue
+        for macro_node in ast.find_all(jinja2.nodes.Macro):
+            macro_name = macro_node.name
 
             node_type = None
-            if key.startswith(dbt.utils.MACRO_PREFIX):
+            if macro_name.startswith(dbt.utils.MACRO_PREFIX):
                 node_type = NodeType.Macro
-                name = key.replace(dbt.utils.MACRO_PREFIX, '')
+                name = macro_name.replace(dbt.utils.MACRO_PREFIX, '')
 
-            elif key.startswith(dbt.utils.OPERATION_PREFIX):
+            elif macro_name.startswith(dbt.utils.OPERATION_PREFIX):
                 node_type = NodeType.Operation
-                name = key.replace(dbt.utils.OPERATION_PREFIX, '')
+                name = macro_name.replace(dbt.utils.OPERATION_PREFIX, '')
 
             if node_type != resource_type:
                 continue
@@ -74,9 +73,7 @@ class MacroParser(BaseParser):
                     'depends_on': {'macros': []},
                 })
 
-            new_node = ParsedMacro(
-                template=template,
-                **merged)
+            new_node = ParsedMacro(**merged)
 
             to_return[unique_id] = new_node
 
@@ -104,9 +101,14 @@ class MacroParser(BaseParser):
             file_contents = dbt.clients.system.load_file_contents(
                 file_match.get('absolute_path'))
 
+            original_file_path = os.path.join(
+                file_match.get('searched_path'),
+                file_match.get('relative_path')
+            )
+
             result.update(
                 cls.parse_macro_file(
-                    file_match.get('relative_path'),
+                    original_file_path,
                     file_contents,
                     root_dir,
                     package_name,

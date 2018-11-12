@@ -2,7 +2,6 @@ from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest, FakeArgs
 
 from dbt.task.test import TestTask
-from dbt.project import read_project
 
 
 class TestSchemaTestGraphSelection(DBTIntegrationTest):
@@ -16,28 +15,24 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         return "test/integration/007_graph_selection_tests/models"
 
     @property
-    def project_config(self):
+    def packages_config(self):
         return {
-            "repositories": [
-                'https://github.com/fishtown-analytics/dbt-integration-project'
+            "packages": [
+                {'git': 'https://github.com/fishtown-analytics/dbt-integration-project'}
             ]
         }
 
     def run_schema_and_assert(self, include, exclude, expected_tests):
-        self.use_profile('postgres')
-        self.use_default_project()
-        self.project = read_project('dbt_project.yml')
-
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
         self.run_dbt(["deps"])
         results = self.run_dbt()
-        self.assertEqual(len(results), 5)
+        self.assertEqual(len(results), 7)
 
         args = FakeArgs()
         args.models = include
         args.exclude = exclude
 
-        test_task = TestTask(args, self.project)
+        test_task = TestTask(args, self.config)
         test_results = test_task.run()
 
         ran_tests = sorted([test.node.get('name') for test in test_results])
@@ -65,11 +60,30 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         )
 
     @attr(type='postgres')
+    def test__postgres__schema_tests_specify_tag(self):
+        self.run_schema_and_assert(
+            ['tag:bi'],
+            None,
+            ['unique_users_id',
+             'unique_users_rollup_gender']
+        )
+
+    @attr(type='postgres')
     def test__postgres__schema_tests_specify_model_and_children(self):
         self.run_schema_and_assert(
             ['users+'],
             None,
             ['unique_users_id', 'unique_users_rollup_gender']
+        )
+
+    @attr(type='postgres')
+    def test__postgres__schema_tests_specify_tag_and_children(self):
+        self.run_schema_and_assert(
+            ['tag:base+'],
+            None,
+            ['unique_emails_email',
+             'unique_users_id',
+             'unique_users_rollup_gender']
         )
 
     @attr(type='postgres')

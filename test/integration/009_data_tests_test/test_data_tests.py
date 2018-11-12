@@ -2,7 +2,6 @@ from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest, FakeArgs
 
 from dbt.task.test import TestTask
-from dbt.project import read_project
 import os
 
 
@@ -25,11 +24,10 @@ class TestDataTests(DBTIntegrationTest):
         return "test/integration/009_data_tests_test/models"
 
     def run_data_validations(self):
-        project = read_project('dbt_project.yml')
         args = FakeArgs()
         args.data = True
 
-        test_task = TestTask(args, project)
+        test_task = TestTask(args, self.config)
         return test_task.run()
 
     @attr(type='postgres')

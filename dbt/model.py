@@ -11,7 +11,7 @@ from dbt.node_types import NodeType
 class SourceConfig(object):
     ConfigKeys = DBTConfigKeys
 
-    AppendListFields = ['pre-hook', 'post-hook']
+    AppendListFields = ['pre-hook', 'post-hook', 'tags']
     ExtendDictFields = ['vars', 'column_types', 'quoting']
     ClobberFields = [
         'alias',
@@ -77,7 +77,7 @@ class SourceConfig(object):
 
         active_config = self.load_config_from_active_project()
 
-        if self.active_project['name'] == self.own_project['name']:
+        if self.active_project.project_name == self.own_project.project_name:
             cfg = self._merge(defaults, active_config,
                               self.in_model_config)
         else:
@@ -94,22 +94,21 @@ class SourceConfig(object):
 
         # make sure we're not clobbering an array of hooks with a single hook
         # string
-        hook_fields = ['pre-hook', 'post-hook']
-        for hook_field in hook_fields:
-            if hook_field in config:
-                config[hook_field] = self.__get_hooks(config, hook_field)
+        for field in self.AppendListFields:
+            if field in config:
+                config[field] = self.__get_as_list(config, field)
 
         self.in_model_config.update(config)
 
-    def __get_hooks(self, relevant_configs, key):
+    def __get_as_list(self, relevant_configs, key):
         if key not in relevant_configs:
             return []
 
-        hooks = relevant_configs[key]
-        if not isinstance(hooks, (list, tuple)):
-            hooks = [hooks]
+        items = relevant_configs[key]
+        if not isinstance(items, (list, tuple)):
+            items = [items]
 
-        return hooks
+        return items
 
     def smart_update(self, mutable_config, new_configs):
         relevant_configs = {
@@ -118,9 +117,9 @@ class SourceConfig(object):
         }
 
         for key in SourceConfig.AppendListFields:
-            new_hooks = self.__get_hooks(relevant_configs, key)
+            append_fields = self.__get_as_list(relevant_configs, key)
             mutable_config[key].extend([
-                h for h in new_hooks if h not in mutable_config[key]
+                f for f in append_fields if f not in mutable_config[key]
             ])
 
         for key in SourceConfig.ExtendDictFields:
@@ -133,7 +132,7 @@ class SourceConfig(object):
 
         return relevant_configs
 
-    def get_project_config(self, project):
+    def get_project_config(self, runtime_config):
         # most configs are overwritten by a more specific config, but pre/post
         # hooks are appended!
         config = {}
@@ -143,9 +142,9 @@ class SourceConfig(object):
             config[k] = {}
 
         if self.node_type == NodeType.Seed:
-            model_configs = project.get('seeds')
+            model_configs = runtime_config.seeds
         else:
-            model_configs = project.get('models')
+            model_configs = runtime_config.models
 
         if model_configs is None:
             return config

@@ -1,4 +1,6 @@
+import dbt.exceptions
 from dbt.api.object import APIObject
+from dbt.contracts.common import named_property
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 POSTGRES_CREDENTIALS_CONTRACT = {
@@ -18,16 +20,9 @@ POSTGRES_CREDENTIALS_CONTRACT = {
             'type': 'string',
         },
         'port': {
-            'oneOf': [
-                {
-                    'type': 'integer',
-                    'minimum': 0,
-                    'maximum': 65535,
-                },
-                {
-                    'type': 'string'
-                },
-            ],
+            'type': 'integer',
+            'minimum': 0,
+            'maximum': 65535,
         },
         'schema': {
             'type': 'string',
@@ -62,16 +57,9 @@ REDSHIFT_CREDENTIALS_CONTRACT = {
             'type': 'string',
         },
         'port': {
-            'oneOf': [
-                {
-                    'type': 'integer',
-                    'minimum': 0,
-                    'maximum': 65535,
-                },
-                {
-                    'type': 'string'
-                },
-            ],
+            'type': 'integer',
+            'minimum': 0,
+            'maximum': 65535,
         },
         'schema': {
             'type': 'string',
@@ -122,6 +110,9 @@ SNOWFLAKE_CREDENTIALS_CONTRACT = {
         'role': {
             'type': 'string',
         },
+        'client_session_keep_alive': {
+            'type': 'boolean',
+        }
     },
     'required': ['account', 'user', 'password', 'database', 'schema'],
 }
@@ -169,9 +160,11 @@ CONNECTION_CONTRACT = {
         'transaction_open': {
             'type': 'boolean',
         },
-        'handle': {
-            'type': ['null', 'object'],
-        },
+        # we can't serialize this so we can't require it as part of the
+        # contract.
+        # 'handle': {
+        #     'type': ['null', 'object'],
+        # },
         'credentials': {
             'description': (
                 'The credentials object here should match the connection type.'
@@ -185,25 +178,66 @@ CONNECTION_CONTRACT = {
         }
     },
     'required': [
-        'type', 'name', 'state', 'transaction_open', 'handle', 'credentials'
+        'type', 'name', 'state', 'transaction_open', 'credentials'
     ],
 }
 
 
-class PostgresCredentials(APIObject):
+class Credentials(APIObject):
+    """Common base class for credentials. This is not valid to instantiate"""
+    SCHEMA = NotImplemented
+
+    @property
+    def type(self):
+        raise NotImplementedError(
+            'type not implemented for base credentials class'
+        )
+
+
+class PostgresCredentials(Credentials):
     SCHEMA = POSTGRES_CREDENTIALS_CONTRACT
 
+    @property
+    def type(self):
+        return 'postgres'
 
-class RedshiftCredentials(APIObject):
+    def incorporate(self, **kwargs):
+        if 'password' in kwargs:
+            kwargs['pass'] = kwargs.pop('password')
+        return super(PostgresCredentials, self).incorporate(**kwargs)
+
+    @property
+    def password(self):
+        # we can't access this as 'pass' since that's reserved
+        return self._contents['pass']
+
+
+class RedshiftCredentials(PostgresCredentials):
     SCHEMA = REDSHIFT_CREDENTIALS_CONTRACT
 
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('method', 'database')
+        super(RedshiftCredentials, self).__init__(*args, **kwargs)
 
-class SnowflakeCredentials(APIObject):
+    @property
+    def type(self):
+        return 'redshift'
+
+
+class SnowflakeCredentials(Credentials):
     SCHEMA = SNOWFLAKE_CREDENTIALS_CONTRACT
 
+    @property
+    def type(self):
+        return 'snowflake'
 
-class BigQueryCredentials(APIObject):
+
+class BigQueryCredentials(Credentials):
     SCHEMA = BIGQUERY_CREDENTIALS_CONTRACT
+
+    @property
+    def type(self):
+        return 'bigquery'
 
 
 CREDENTIALS_MAPPING = {
@@ -214,11 +248,45 @@ CREDENTIALS_MAPPING = {
 }
 
 
+def create_credentials(typename, credentials):
+    if typename not in CREDENTIALS_MAPPING:
+        dbt.exceptions.raise_unrecognized_credentials_type(
+            typename, CREDENTIALS_MAPPING.keys()
+        )
+    cls = CREDENTIALS_MAPPING[typename]
+    return cls(**credentials)
+
+
 class Connection(APIObject):
     SCHEMA = CONNECTION_CONTRACT
 
-    def validate(self):
-        super(Connection, self).validate()
-        # make sure our credentials match our adapter type
-        ContractType = CREDENTIALS_MAPPING.get(self.get('type'))
-        ContractType(**self.get('credentials'))
+    def __init__(self, credentials, *args, **kwargs):
+        # this is a bit clunky but we deserialize and then reserialize for now
+        if isinstance(credentials, Credentials):
+            credentials = credentials.serialize()
+        # we can't serialize handles
+        self._handle = kwargs.pop('handle')
+        super(Connection, self).__init__(credentials=credentials,
+                                         *args, **kwargs)
+        # this will validate itself in its own __init__.
+        self._credentials = create_credentials(self.type,
+                                               self._contents['credentials'])
+
+    @property
+    def credentials(self):
+        return self._credentials
+
+    @property
+    def handle(self):
+        return self._handle
+
+    @handle.setter
+    def handle(self, value):
+        self._handle = value
+
+    name = named_property('name', 'The name of this connection')
+    state = named_property('state', 'The state of the connection')
+    transaction_open = named_property(
+        'transaction_open',
+        'True if there is an open transaction, False otherwise.'
+    )

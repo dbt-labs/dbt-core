@@ -6,7 +6,6 @@ import six
 import yaml
 
 import dbt.utils
-import dbt.project
 import dbt.deprecations
 import dbt.clients.git
 import dbt.clients.system
@@ -16,16 +15,25 @@ from dbt.compat import basestring
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.semver import VersionSpecifier, UnboundedVersionSpecifier
 from dbt.utils import AttrDict
+from dbt.api.object import APIObject
+from dbt.contracts.project import LOCAL_PACKAGE_CONTRACT, \
+    GIT_PACKAGE_CONTRACT, REGISTRY_PACKAGE_CONTRACT
 
 from dbt.task.base_task import BaseTask
 
 DOWNLOADS_PATH = os.path.join(tempfile.gettempdir(), "dbt-downloads")
 
 
-class Package(object):
-    def __init__(self, name):
-        self.name = name
+class Package(APIObject):
+    SCHEMA = NotImplemented
+
+    def __init__(self, *args, **kwargs):
+        super(Package, self).__init__(*args, **kwargs)
         self._cached_metadata = None
+
+    @property
+    def name(self):
+        raise NotImplementedError
 
     def __str__(self):
         version = getattr(self, 'version', None)
@@ -77,18 +85,23 @@ class Package(object):
 
     def get_project_name(self, project):
         metadata = self.fetch_metadata(project)
-        return metadata["name"]
+        return metadata.project_name
 
     def get_installation_path(self, project):
         dest_dirname = self.get_project_name(project)
-        return os.path.join(project['modules-path'], dest_dirname)
+        return os.path.join(project.modules_path, dest_dirname)
 
 
 class RegistryPackage(Package):
-    def __init__(self, package, version):
-        super(RegistryPackage, self).__init__(package)
-        self.package = package
-        self._version = self._sanitize_version(version)
+    SCHEMA = REGISTRY_PACKAGE_CONTRACT
+
+    def __init__(self, *args, **kwargs):
+        super(RegistryPackage, self).__init__(*args, **kwargs)
+        self._version = self._sanitize_version(self._contents['version'])
+
+    @property
+    def name(self):
+        return self.package
 
     @classmethod
     def _sanitize_version(cls, version):
@@ -145,6 +158,8 @@ class RegistryPackage(Package):
 
     def _fetch_metadata(self, project):
         version_string = self.version_name()
+        # TODO(jeb): this needs to actually return a RuntimeConfig, instead of
+        # parsed json from a URL
         return registry.package_version(self.package, version_string)
 
     def install(self, project):
@@ -157,17 +172,22 @@ class RegistryPackage(Package):
 
         download_url = metadata.get('downloads').get('tarball')
         dbt.clients.system.download(download_url, tar_path)
-        deps_path = project['modules-path']
+        deps_path = project.modules_path
         package_name = self.get_project_name(project)
         dbt.clients.system.untar_package(tar_path, deps_path, package_name)
 
 
 class GitPackage(Package):
-    def __init__(self, git, version):
-        super(GitPackage, self).__init__(git)
-        self.git = git
-        self._checkout_name = hashlib.md5(six.b(git)).hexdigest()
-        self._version = self._sanitize_version(version)
+    SCHEMA = GIT_PACKAGE_CONTRACT
+
+    def __init__(self, *args, **kwargs):
+        super(GitPackage, self).__init__(*args, **kwargs)
+        self._checkout_name = hashlib.md5(six.b(self.git)).hexdigest()
+        self.version = self._contents.get('revision')
+
+    @property
+    def name(self):
+        return self.git
 
     @classmethod
     def _sanitize_version(cls, version):
@@ -191,7 +211,8 @@ class GitPackage(Package):
         return "revision {}".format(self.version_name())
 
     def incorporate(self, other):
-        return GitPackage(self.git, self.version + other.version)
+        return GitPackage(git=self.git,
+                          revision=(self.version + other.version))
 
     def _resolve_version(self):
         requested = set(self.version)
@@ -216,7 +237,7 @@ class GitPackage(Package):
 
     def _fetch_metadata(self, project):
         path = self._checkout(project)
-        return dbt.utils.load_project_with_profile(project, path)
+        return project.from_project_root(path, {})
 
     def install(self, project):
         dest_path = self.get_installation_path(project)
@@ -229,9 +250,11 @@ class GitPackage(Package):
 
 
 class LocalPackage(Package):
-    def __init__(self, local):
-        super(LocalPackage, self).__init__(local)
-        self.local = local
+    SCHEMA = LOCAL_PACKAGE_CONTRACT
+
+    @property
+    def name(self):
+        return self.local
 
     def incorporate(self, _):
         return LocalPackage(self.local)
@@ -248,14 +271,14 @@ class LocalPackage(Package):
     def _fetch_metadata(self, project):
         project_file_path = dbt.clients.system.resolve_path_from_base(
             self.local,
-            project['project-root'])
+            project.project_root)
 
-        return dbt.utils.load_project_with_profile(project, project_file_path)
+        return project.from_project_root(project_file_path, {})
 
     def install(self, project):
         src_path = dbt.clients.system.resolve_path_from_base(
             self.local,
-            project['project-root'])
+            project.project_root)
 
         dest_path = self.get_installation_path(project)
 
@@ -286,15 +309,15 @@ def _parse_package(dict_):
             'yours has {} of them - {}'
             .format(only_1_keys, len(specified), specified))
     if dict_.get('package'):
-        return RegistryPackage(dict_['package'], dict_.get('version'))
+        return RegistryPackage(**dict_)
     if dict_.get('git'):
         if dict_.get('version'):
             msg = ("Keyword 'version' specified for git package {}.\nDid "
                    "you mean 'revision'?".format(dict_.get('git')))
             dbt.exceptions.raise_dependency_error(msg)
-        return GitPackage(dict_['git'], dict_.get('revision'))
+        return GitPackage(**dict_)
     if dict_.get('local'):
-        return LocalPackage(dict_['local'])
+        return LocalPackage(**dict_)
     dbt.exceptions.raise_dependency_error(
         'Malformed package definition. Must contain package, git, or local.')
 
@@ -376,7 +399,7 @@ class DepsTask(BaseTask):
     def _check_for_duplicate_project_names(self, final_deps):
         seen = set()
         for _, package in final_deps.items():
-            project_name = package.get_project_name(self.project)
+            project_name = package.get_project_name(self.config)
             if project_name in seen:
                 dbt.exceptions.raise_dependency_error(
                     'Found duplicate project {}. This occurs when a dependency'
@@ -397,10 +420,10 @@ class DepsTask(BaseTask):
         })
 
     def run(self):
-        dbt.clients.system.make_directory(self.project['modules-path'])
+        dbt.clients.system.make_directory(self.config.modules_path)
         dbt.clients.system.make_directory(DOWNLOADS_PATH)
 
-        packages = _read_packages(self.project)
+        packages = self.config.packages.packages
         if not packages:
             logger.info('Warning: No packages were found in packages.yml')
             return
@@ -413,15 +436,15 @@ class DepsTask(BaseTask):
             for name, package in pending_deps.items():
                 final_deps.incorporate(package)
                 final_deps[name].resolve_version()
-                target_metadata = final_deps[name].fetch_metadata(self.project)
-                sub_deps.incorporate_from_yaml(_read_packages(target_metadata))
+                target_config = final_deps[name].fetch_metadata(self.config)
+                sub_deps.incorporate_from_yaml(target_config.packages.packages)
             pending_deps = sub_deps
 
         self._check_for_duplicate_project_names(final_deps)
 
         for _, package in final_deps.items():
             logger.info('Installing %s', package)
-            package.install(self.project)
+            package.install(self.config)
             logger.info('  Installed from %s\n', package.nice_version_name())
 
             self.track_package_install(

@@ -16,6 +16,7 @@ from dbt.schema import Column
 from dbt.utils import filter_null_values
 
 from dbt.adapters.default.relation import DefaultRelation
+from dbt.adapters.cache import RelationsCache
 
 GET_CATALOG_OPERATION_NAME = 'get_catalog_data'
 
@@ -24,25 +25,38 @@ connections_in_use = {}
 connections_available = []
 
 
-def _filter_schemas(manifest):
+def _expect_row_value(key, row):
+    if key not in row.keys():
+        raise dbt.exceptions.InternalException(
+            'Got a row without "{}" column, columns: {}'
+            .format(key, row.keys())
+        )
+    return row[key]
+
+
+def _relations_filter_schemas(schemas):
+    def test(row):
+        referenced_schema = _expect_row_value('referenced_schema', row)
+        dependent_schema = _expect_row_value('dependent_schema', row)
+        # handle the null schema
+        if referenced_schema is not None:
+            referenced_schema = referenced_schema.lower()
+        if dependent_schema is not None:
+            dependent_schema = dependent_schema.lower()
+        return referenced_schema in schemas or dependent_schema in schemas
+    return test
+
+
+def _catalog_filter_schemas(manifest):
     """Return a function that takes a row and decides if the row should be
     included in the catalog output.
     """
-    schemas = frozenset({
-        node.schema.lower()
-        for node in manifest.nodes.values()
-    })
+    schemas = frozenset(s.lower() for s in manifest.get_used_schemas())
 
     def test(row):
-        if 'table_schema' not in row.keys():
-            # this means the get catalog operation is somehow not well formed!
-            raise dbt.exceptions.InternalException(
-                'Got a row without "table_schema" column, columns: {}'
-                .format(row.keys())
-            )
+        table_schema = _expect_row_value('table_schema', row)
         # the schema may be present but None, which is not an error and should
         # be filtered out
-        table_schema = row['table_schema']
         if table_schema is None:
             return False
         return table_schema.lower() in schemas
@@ -52,12 +66,13 @@ def _filter_schemas(manifest):
 class DefaultAdapter(object):
     requires = {}
 
-    context_functions = [
+    config_functions = [
         "get_columns_in_table",
         "get_missing_columns",
         "expand_target_column_types",
         "create_schema",
         "quote_as_configured",
+        "cache_new_relation",
 
         # deprecated -- use versions that take relations instead
         "already_exists",
@@ -70,14 +85,12 @@ class DefaultAdapter(object):
         "quote_schema_and_table",
 
         # versions of adapter functions that take / return Relations
-        "list_relations",
         "get_relation",
         "drop_relation",
         "rename_relation",
         "truncate_relation",
-    ]
 
-    profile_functions = [
+        # formerly profile functions
         "execute",
         "add_query",
     ]
@@ -86,19 +99,21 @@ class DefaultAdapter(object):
         "get_status",
         "get_result_from_cursor",
         "quote",
-        "convert_type"
+        "convert_type",
     ]
-
     Relation = DefaultRelation
     Column = Column
+
+    def __init__(self, config):
+        self.config = config
+        self.cache = RelationsCache()
 
     ###
     # ADAPTER-SPECIFIC FUNCTIONS -- each of these must be overridden in
     #                               every adapter
     ###
-    @classmethod
     @contextmanager
-    def exception_handler(cls, profile, sql, model_name=None,
+    def exception_handler(self, sql, model_name=None,
                           connection_name=None):
         raise dbt.exceptions.NotImplementedException(
             '`exception_handler` is not implemented for this adapter!')
@@ -118,45 +133,49 @@ class DefaultAdapter(object):
         raise dbt.exceptions.NotImplementedException(
             '`get_status` is not implemented for this adapter!')
 
-    @classmethod
-    def alter_column_type(cls, profile, project_cfg, schema, table,
-                          column_name, new_column_type, model_name=None):
+    def alter_column_type(self, schema, table, column_name, new_column_type,
+                          model_name=None):
         raise dbt.exceptions.NotImplementedException(
             '`alter_column_type` is not implemented for this adapter!')
 
-    @classmethod
-    def query_for_existing(cls, profile, project_cfg, schemas,
-                           model_name=None):
+    def query_for_existing(self, schemas, model_name=None):
         if not isinstance(schemas, (list, tuple)):
             schemas = [schemas]
 
         all_relations = []
 
         for schema in schemas:
-            all_relations.extend(
-                cls.list_relations(profile, project_cfg, schema, model_name))
+            all_relations.extend(self.list_relations(schema, model_name))
 
         return {relation.identifier: relation.type
                 for relation in all_relations}
 
-    @classmethod
-    def get_existing_schemas(cls, profile, project_cfg, model_name=None):
+    def get_existing_schemas(self, model_name=None):
         raise dbt.exceptions.NotImplementedException(
             '`get_existing_schemas` is not implemented for this adapter!')
 
-    @classmethod
-    def check_schema_exists(cls, profile, project_cfg, schema):
+    def check_schema_exists(self, schema):
         raise dbt.exceptions.NotImplementedException(
             '`check_schema_exists` is not implemented for this adapter!')
 
-    @classmethod
-    def cancel_connection(cls, project_cfg, connection):
+    def cancel_connection(self, connection):
         raise dbt.exceptions.NotImplementedException(
             '`cancel_connection` is not implemented for this adapter!')
 
     ###
     # FUNCTIONS THAT SHOULD BE ABSTRACT
     ###
+    def cache_new_relation(self, relation, model_name=None):
+        """Cache a new relation in dbt. It will show up in `list relations`."""
+        if relation is None:
+            dbt.exceptions.raise_compiler_error(
+                'Attempted to cache a null relation for {}'.format(model_name)
+            )
+        if dbt.flags.USE_CACHE:
+            self.cache.add(relation)
+        # so jinja doesn't render things
+        return ''
+
     @classmethod
     def get_result_from_cursor(cls, cursor):
         data = []
@@ -170,20 +189,19 @@ class DefaultAdapter(object):
 
         return dbt.clients.agate_helper.table_from_data(data, column_names)
 
-    @classmethod
-    def drop(cls, profile, project_cfg, schema,
-             relation, relation_type, model_name=None):
+    def drop(self, schema, relation, relation_type, model_name=None):
         identifier = relation
-        relation = cls.Relation.create(
+        relation = self.Relation.create(
             schema=schema,
             identifier=identifier,
             type=relation_type,
-            quote_policy=project_cfg.get('quoting', {}))
+            quote_policy=self.config.quoting)
 
-        return cls.drop_relation(profile, project_cfg, relation, model_name)
+        return self.drop_relation(relation, model_name)
 
-    @classmethod
-    def drop_relation(cls, profile, project_cfg, relation, model_name=None):
+    def drop_relation(self, relation, model_name=None):
+        if dbt.flags.USE_CACHE:
+            self.cache.drop(relation)
         if relation.type is None:
             dbt.exceptions.raise_compiler_error(
                 'Tried to drop relation {}, but its type is null.'
@@ -191,73 +209,67 @@ class DefaultAdapter(object):
 
         sql = 'drop {} if exists {} cascade'.format(relation.type, relation)
 
-        connection, cursor = cls.add_query(profile, sql, model_name,
-                                           auto_begin=False)
+        connection, cursor = self.add_query(sql, model_name, auto_begin=False)
 
-    @classmethod
-    def truncate(cls, profile, project_cfg, schema, table, model_name=None):
-        relation = cls.Relation.create(
+    def truncate(self, schema, table, model_name=None):
+        relation = self.Relation.create(
             schema=schema,
             identifier=table,
             type='table',
-            quote_policy=project_cfg.get('quoting', {}))
+            quote_policy=self.config.quoting)
 
-        return cls.truncate_relation(profile, project_cfg,
-                                     relation, model_name)
+        return self.truncate_relation(relation, model_name)
 
-    @classmethod
-    def truncate_relation(cls, profile, project_cfg,
-                          relation, model_name=None):
+    def truncate_relation(self, relation, model_name=None):
         sql = 'truncate table {}'.format(relation)
 
-        connection, cursor = cls.add_query(profile, sql, model_name)
+        connection, cursor = self.add_query(sql, model_name)
 
-    @classmethod
-    def rename(cls, profile, project_cfg, schema,
-               from_name, to_name, model_name=None):
-        quote_policy = project_cfg.get('quoting', {})
-        from_relation = cls.Relation.create(
+    def rename(self, schema, from_name, to_name, model_name=None):
+        quote_policy = self.config.quoting
+        from_relation = self.Relation.create(
             schema=schema,
             identifier=from_name,
             quote_policy=quote_policy
         )
-        to_relation = cls.Relation.create(
+        to_relation = self.Relation.create(
             identifier=to_name,
             quote_policy=quote_policy
         )
-        return cls.rename_relation(
-            profile, project_cfg,
+        return self.rename_relation(
             from_relation=from_relation,
             to_relation=to_relation,
             model_name=model_name)
 
-    @classmethod
-    def rename_relation(cls, profile, project_cfg, from_relation,
-                        to_relation, model_name=None):
+    def rename_relation(self, from_relation, to_relation,
+                        model_name=None):
+        if dbt.flags.USE_CACHE:
+            self.cache.rename(from_relation, to_relation)
         sql = 'alter table {} rename to {}'.format(
             from_relation, to_relation.include(schema=False))
 
-        connection, cursor = cls.add_query(profile, sql, model_name)
+        connection, cursor = self.add_query(sql, model_name)
 
     @classmethod
     def is_cancelable(cls):
         return True
 
-    @classmethod
-    def get_missing_columns(cls, profile, project_cfg,
-                            from_schema, from_table,
-                            to_schema, to_table,
-                            model_name=None):
+    def get_missing_columns(self, from_schema, from_table,
+                            to_schema, to_table, model_name=None):
         """Returns dict of {column:type} for columns in from_table that are
         missing from to_table"""
-        from_columns = {col.name: col for col in
-                        cls.get_columns_in_table(
-                            profile, project_cfg, from_schema, from_table,
-                            model_name=model_name)}
-        to_columns = {col.name: col for col in
-                      cls.get_columns_in_table(
-                          profile, project_cfg, to_schema, to_table,
-                          model_name=model_name)}
+        from_columns = {
+            col.name: col for col in
+            self.get_columns_in_table(
+                from_schema, from_table,
+                model_name=model_name)
+        }
+        to_columns = {
+            col.name: col for col in
+            self.get_columns_in_table(
+                to_schema, to_table,
+                model_name=model_name)
+        }
 
         missing_columns = set(from_columns.keys()) - set(to_columns.keys())
 
@@ -289,19 +301,17 @@ class DefaultAdapter(object):
 
         return sql
 
-    @classmethod
-    def get_columns_in_table(cls, profile, project_cfg, schema_name,
+    def get_columns_in_table(self, schema_name,
                              table_name, database=None, model_name=None):
-        sql = cls._get_columns_in_table_sql(schema_name, table_name, database)
-        connection, cursor = cls.add_query(
-            profile, sql, model_name)
+        sql = self._get_columns_in_table_sql(schema_name, table_name, database)
+        connection, cursor = self.add_query(sql, model_name)
 
         data = cursor.fetchall()
         columns = []
 
         for row in data:
             name, data_type, char_size, numeric_size = row
-            column = cls.Column(name, data_type, char_size, numeric_size)
+            column = self.Column(name, data_type, char_size, numeric_size)
             columns.append(column)
 
         return columns
@@ -310,20 +320,19 @@ class DefaultAdapter(object):
     def _table_columns_to_dict(cls, columns):
         return {col.name: col for col in columns}
 
-    @classmethod
-    def expand_target_column_types(cls, profile, project_cfg,
+    def expand_target_column_types(self,
                                    temp_table,
                                    to_schema, to_table,
                                    model_name=None):
 
-        reference_columns = cls._table_columns_to_dict(
-            cls.get_columns_in_table(
-                profile, project_cfg, None, temp_table, model_name=model_name))
+        reference_columns = self._table_columns_to_dict(
+            self.get_columns_in_table(None, temp_table, model_name=model_name)
+        )
 
-        target_columns = cls._table_columns_to_dict(
-            cls.get_columns_in_table(
-                profile, project_cfg, to_schema, to_table,
-                model_name=model_name))
+        target_columns = self._table_columns_to_dict(
+            self.get_columns_in_table(to_schema, to_table,
+                                      model_name=model_name)
+        )
 
         for column_name, reference_column in reference_columns.items():
             target_column = target_columns.get(column_name)
@@ -331,57 +340,77 @@ class DefaultAdapter(object):
             if target_column is not None and \
                target_column.can_expand_to(reference_column):
                 col_string_size = reference_column.string_size()
-                new_type = cls.Column.string_type(col_string_size)
+                new_type = self.Column.string_type(col_string_size)
                 logger.debug("Changing col type from %s to %s in table %s.%s",
                              target_column.data_type,
                              new_type,
                              to_schema,
                              to_table)
 
-                cls.alter_column_type(profile, project_cfg, to_schema,
-                                      to_table, column_name, new_type,
-                                      model_name)
+                self.alter_column_type(to_schema, to_table, column_name,
+                                       new_type, model_name)
 
     ###
     # RELATIONS
     ###
-    @classmethod
-    def list_relations(cls, profile, project_cfg, schema, model_name=None):
+    def _schema_is_cached(self, schema, model_name=None,
+                          debug_on_missing=True):
+        """Check if the schema is cached, and by default logs if it is not."""
+        if dbt.flags.USE_CACHE is False:
+            return False
+        elif schema not in self.cache:
+            if debug_on_missing:
+                logger.debug(
+                    'On "{}": cache miss for schema "{}", this is inefficient'
+                    .format(model_name or '<None>', schema)
+                )
+            return False
+        else:
+            return True
+
+    def _list_relations(self, schema, model_name=None):
         raise dbt.exceptions.NotImplementedException(
             '`list_relations` is not implemented for this adapter!')
 
-    @classmethod
-    def _make_match_kwargs(cls, project_cfg, schema, identifier):
-        if identifier is not None and \
-           project_cfg.get('quoting', {}).get('identifier') is False:
+    def list_relations(self, schema, model_name=None):
+        if self._schema_is_cached(schema, model_name):
+            return self.cache.get_relations(schema)
+
+        # we can't build the relations cache because we don't have a
+        # manifest so we can't run any operations.
+        relations = self._list_relations(schema, model_name=model_name)
+
+        logger.debug('with schema={}, model_name={}, relations={}'
+                     .format(schema, model_name, relations))
+        return relations
+
+    def _make_match_kwargs(self, schema, identifier):
+        quoting = self.config.quoting
+        if identifier is not None and quoting['identifier'] is False:
             identifier = identifier.lower()
 
-        if schema is not None and \
-           project_cfg.get('quoting', {}).get('schema') is False:
+        if schema is not None and quoting['schema'] is False:
             schema = schema.lower()
 
         return filter_null_values({'identifier': identifier,
                                    'schema': schema})
 
-    @classmethod
-    def get_relation(cls, profile, project_cfg, schema=None, identifier=None,
-                     relations_list=None, model_name=None):
-        if schema is None and relations_list is None:
-            raise dbt.exceptions.RuntimeException(
-                'get_relation needs either a schema to query, or a list '
-                'of relations to use')
-
-        if relations_list is None:
-            relations_list = cls.list_relations(
-                profile, project_cfg, schema, model_name)
+    def _make_match(self, relations_list, schema, identifier):
 
         matches = []
 
-        search = cls._make_match_kwargs(project_cfg, schema, identifier)
+        search = self._make_match_kwargs(schema, identifier)
 
         for relation in relations_list:
             if relation.matches(**search):
                 matches.append(relation)
+
+        return matches
+
+    def get_relation(self, schema, identifier, model_name=None):
+        relations_list = self.list_relations(schema, model_name)
+
+        matches = self._make_match(relations_list, schema, identifier)
 
         if len(matches) > 1:
             dbt.exceptions.get_relation_returned_multiple_results(
@@ -395,16 +424,14 @@ class DefaultAdapter(object):
     ###
     # SANE ANSI SQL DEFAULTS
     ###
-    @classmethod
-    def get_create_schema_sql(cls, project_cfg, schema):
-        schema = cls._quote_as_configured(project_cfg, schema, 'schema')
+    def get_create_schema_sql(self, schema):
+        schema = self.quote_as_configured(schema, 'schema')
 
         return ('create schema if not exists {schema}'
                 .format(schema=schema))
 
-    @classmethod
-    def get_drop_schema_sql(cls, project_cfg, schema):
-        schema = cls._quote_as_configured(project_cfg, schema, 'schema')
+    def get_drop_schema_sql(self, schema):
+        schema = self.quote_as_configured(schema, 'schema')
 
         return ('drop schema if exists {schema} cascade'
                 .format(schema=schema))
@@ -413,12 +440,10 @@ class DefaultAdapter(object):
     # ODBC FUNCTIONS -- these should not need to change for every adapter,
     #                   although some adapters may override them
     ###
-    @classmethod
-    def get_default_schema(cls, profile, project_cfg):
-        return profile.get('schema')
+    def get_default_schema(self):
+        return self.config.credentials.schema
 
-    @classmethod
-    def get_connection(cls, profile, name=None, recache_if_missing=True):
+    def get_connection(self, name=None, recache_if_missing=True):
         global connections_in_use
 
         if name is None:
@@ -435,22 +460,21 @@ class DefaultAdapter(object):
                 '(recache_if_missing is off).'.format(name))
 
         logger.debug('Acquiring new {} connection "{}".'
-                     .format(cls.type(), name))
+                     .format(self.type(), name))
 
-        connection = cls.acquire_connection(profile, name)
+        connection = self.acquire_connection(name)
         connections_in_use[name] = connection
 
-        return cls.get_connection(profile, name)
+        return self.get_connection(name)
 
-    @classmethod
-    def cancel_open_connections(cls, profile):
+    def cancel_open_connections(self):
         global connections_in_use
 
         for name, connection in connections_in_use.items():
             if name == 'master':
                 continue
 
-            cls.cancel_connection(profile, connection)
+            self.cancel_connection(connection)
             yield name
 
     @classmethod
@@ -459,23 +483,21 @@ class DefaultAdapter(object):
 
         return len(connections_in_use) + len(connections_available)
 
-    @classmethod
-    def acquire_connection(cls, profile, name):
+    def acquire_connection(self, name):
         global connections_available, lock
 
         # we add a magic number, 2 because there are overhead connections,
         # one for pre- and post-run hooks and other misc operations that occur
         # before the run starts, and one for integration tests.
-        max_connections = profile.get('threads', 1) + 2
+        max_connections = self.config.threads + 2
 
-        try:
-            lock.acquire()
-            num_allocated = cls.total_connections_allocated()
+        with lock:
+            num_allocated = self.total_connections_allocated()
 
             if len(connections_available) > 0:
                 logger.debug('Re-using an available connection from the pool.')
                 to_return = connections_available.pop()
-                to_return['name'] = name
+                to_return.name = name
                 return to_return
 
             elif num_allocated >= max_connections:
@@ -487,61 +509,44 @@ class DefaultAdapter(object):
             logger.debug('Opening a new connection ({} currently allocated)'
                          .format(num_allocated))
 
-            credentials = copy.deepcopy(profile)
+            result = Connection(
+                type=self.type(),
+                name=name,
+                state='init',
+                transaction_open=False,
+                handle=None,
+                credentials=self.config.credentials
+            )
 
-            credentials.pop('type', None)
-            credentials.pop('threads', None)
+            return self.open_connection(result)
 
-            result = {
-                'type': cls.type(),
-                'name': name,
-                'state': 'init',
-                'transaction_open': False,
-                'handle': None,
-                'credentials': credentials
-            }
-
-            if dbt.flags.STRICT_MODE:
-                Connection(**result)
-
-            return cls.open_connection(result)
-        finally:
-            lock.release()
-
-    @classmethod
-    def release_connection(cls, profile, name='master'):
+    def release_connection(self, name):
         global connections_in_use, connections_available, lock
 
-        if connections_in_use.get(name) is None:
-            return
+        with lock:
 
-        to_release = cls.get_connection(profile, name,
-                                        recache_if_missing=False)
+            if name not in connections_in_use:
+                return
 
-        try:
-            lock.acquire()
+            to_release = self.get_connection(name, recache_if_missing=False)
 
-            if to_release.get('state') == 'open':
+            if to_release.state == 'open':
 
-                if to_release.get('transaction_open') is True:
-                    cls.rollback(to_release)
+                if to_release.transaction_open is True:
+                    self.rollback(to_release)
 
-                to_release['name'] = None
+                to_release.name = None
                 connections_available.append(to_release)
             else:
-                cls.close(to_release)
+                self.close(to_release)
 
             del connections_in_use[name]
-        finally:
-            lock.release()
 
     @classmethod
     def cleanup_connections(cls):
         global connections_in_use, connections_available, lock
 
-        try:
-            lock.acquire()
-
+        with lock:
             for name, connection in connections_in_use.items():
                 if connection.get('state') != 'closed':
                     logger.debug("Connection '{}' was left open."
@@ -558,44 +563,35 @@ class DefaultAdapter(object):
             connections_in_use = {}
             connections_available = []
 
-        finally:
-            lock.release()
+    def reload(self, connection):
+        return self.get_connection(connection.name)
 
-    @classmethod
-    def reload(cls, connection):
-        return cls.get_connection(connection.get('credentials'),
-                                  connection.get('name'))
+    def add_begin_query(self, name):
+        return self.add_query('BEGIN', name, auto_begin=False)
 
-    @classmethod
-    def add_begin_query(cls, profile, name):
-        return cls.add_query(profile, 'BEGIN', name, auto_begin=False)
+    def add_commit_query(self, name):
+        return self.add_query('COMMIT', name, auto_begin=False)
 
-    @classmethod
-    def add_commit_query(cls, profile, name):
-        return cls.add_query(profile, 'COMMIT', name, auto_begin=False)
-
-    @classmethod
-    def begin(cls, profile, name='master'):
+    def begin(self, name):
         global connections_in_use
-        connection = cls.get_connection(profile, name)
+        connection = self.get_connection(name)
 
         if dbt.flags.STRICT_MODE:
-            Connection(**connection)
+            assert isinstance(connection, Connection)
 
-        if connection['transaction_open'] is True:
+        if connection.transaction_open is True:
             raise dbt.exceptions.InternalException(
                 'Tried to begin a new transaction on connection "{}", but '
                 'it already had one open!'.format(connection.get('name')))
 
-        cls.add_begin_query(profile, name)
+        self.add_begin_query(name)
 
-        connection['transaction_open'] = True
+        connection.transaction_open = True
         connections_in_use[name] = connection
 
         return connection
 
-    @classmethod
-    def commit_if_has_connection(cls, profile, name):
+    def commit_if_has_connection(self, name):
         global connections_in_use
 
         if name is None:
@@ -604,180 +600,161 @@ class DefaultAdapter(object):
         if connections_in_use.get(name) is None:
             return
 
-        connection = cls.get_connection(profile, name, False)
+        connection = self.get_connection(name, False)
 
-        return cls.commit(profile, connection)
+        return self.commit(connection)
 
-    @classmethod
-    def commit(cls, profile, connection):
+    def commit(self, connection):
         global connections_in_use
 
         if dbt.flags.STRICT_MODE:
-            Connection(**connection)
+            assert isinstance(connection, Connection)
 
-        connection = cls.reload(connection)
+        connection = self.reload(connection)
 
-        if connection['transaction_open'] is False:
+        if connection.transaction_open is False:
             raise dbt.exceptions.InternalException(
                 'Tried to commit transaction on connection "{}", but '
-                'it does not have one open!'.format(connection.get('name')))
+                'it does not have one open!'.format(connection.name))
 
-        logger.debug('On {}: COMMIT'.format(connection.get('name')))
-        cls.add_commit_query(profile, connection.get('name'))
+        logger.debug('On {}: COMMIT'.format(connection.name))
+        self.add_commit_query(connection.name)
 
-        connection['transaction_open'] = False
-        connections_in_use[connection.get('name')] = connection
+        connection.transaction_open = False
+        connections_in_use[connection.name] = connection
 
         return connection
 
-    @classmethod
-    def rollback(cls, connection):
+    def rollback(self, connection):
         if dbt.flags.STRICT_MODE:
             Connection(**connection)
 
-        connection = cls.reload(connection)
+        connection = self.reload(connection)
 
-        if connection['transaction_open'] is False:
+        if connection.transaction_open is False:
             raise dbt.exceptions.InternalException(
                 'Tried to rollback transaction on connection "{}", but '
-                'it does not have one open!'.format(connection.get('name')))
+                'it does not have one open!'.format(connection.name))
 
-        logger.debug('On {}: ROLLBACK'.format(connection.get('name')))
-        connection.get('handle').rollback()
+        logger.debug('On {}: ROLLBACK'.format(connection.name))
+        connection.handle.rollback()
 
-        connection['transaction_open'] = False
-        connections_in_use[connection.get('name')] = connection
+        connection.transaction_open = False
+        connections_in_use[connection.name] = connection
 
         return connection
 
     @classmethod
     def close(cls, connection):
         if dbt.flags.STRICT_MODE:
-            Connection(**connection)
+            assert isinstance(connection, Connection)
 
-        connection.get('handle').close()
-        connection['state'] = 'closed'
+        # On windows, sometimes connection handles don't have a close() attr.
+        if hasattr(connection.handle, 'close'):
+            connection.handle.close()
+
+        connection.state = 'closed'
 
         return connection
 
-    @classmethod
-    def add_query(cls, profile, sql, model_name=None, auto_begin=True,
+    def add_query(self, sql, model_name=None, auto_begin=True,
                   bindings=None, abridge_sql_log=False):
-        connection = cls.get_connection(profile, model_name)
-        connection_name = connection.get('name')
+        connection = self.get_connection(model_name)
+        connection_name = connection.name
 
-        if auto_begin and connection['transaction_open'] is False:
-            cls.begin(profile, connection_name)
+        if auto_begin and connection.transaction_open is False:
+            self.begin(connection_name)
 
         logger.debug('Using {} connection "{}".'
-                     .format(cls.type(), connection_name))
+                     .format(self.type(), connection_name))
 
-        with cls.exception_handler(profile, sql, model_name, connection_name):
+        with self.exception_handler(sql, model_name, connection_name):
             if abridge_sql_log:
                 logger.debug('On %s: %s....', connection_name, sql[0:512])
             else:
                 logger.debug('On %s: %s', connection_name, sql)
             pre = time.time()
 
-            cursor = connection.get('handle').cursor()
+            cursor = connection.handle.cursor()
             cursor.execute(sql, bindings)
 
             logger.debug("SQL status: %s in %0.2f seconds",
-                         cls.get_status(cursor), (time.time() - pre))
+                         self.get_status(cursor), (time.time() - pre))
 
             return connection, cursor
 
-    @classmethod
-    def clear_transaction(cls, profile, conn_name='master'):
-        conn = cls.begin(profile, conn_name)
-        cls.commit(profile, conn)
+    def clear_transaction(self, conn_name='master'):
+        conn = self.begin(conn_name)
+        self.commit(conn)
         return conn_name
 
-    @classmethod
-    def execute_one(cls, profile, sql, model_name=None, auto_begin=False):
-        cls.get_connection(profile, model_name)
+    def execute_one(self, sql, model_name=None, auto_begin=False):
+        self.get_connection(model_name)
 
-        return cls.add_query(profile, sql, model_name, auto_begin)
+        return self.add_query(sql, model_name, auto_begin)
 
-    @classmethod
-    def execute_and_fetch(cls, profile, sql, model_name=None,
+    def execute_and_fetch(self, sql, model_name=None,
                           auto_begin=False):
-        _, cursor = cls.execute_one(profile, sql, model_name, auto_begin)
+        _, cursor = self.execute_one(sql, model_name, auto_begin)
 
-        status = cls.get_status(cursor)
-        table = cls.get_result_from_cursor(cursor)
+        status = self.get_status(cursor)
+        table = self.get_result_from_cursor(cursor)
         return status, table
 
-    @classmethod
-    def execute(cls, profile, sql, model_name=None, auto_begin=False,
+    def execute(self, sql, model_name=None, auto_begin=False,
                 fetch=False):
         if fetch:
-            return cls.execute_and_fetch(profile, sql, model_name, auto_begin)
+            return self.execute_and_fetch(sql, model_name, auto_begin)
         else:
-            _, cursor = cls.execute_one(profile, sql, model_name, auto_begin)
-            status = cls.get_status(cursor)
+            _, cursor = self.execute_one(sql, model_name, auto_begin)
+            status = self.get_status(cursor)
             return status, dbt.clients.agate_helper.empty_table()
 
-    @classmethod
-    def execute_all(cls, profile, sqls, model_name=None):
-        connection = cls.get_connection(profile, model_name)
+    def execute_all(self, sqls, model_name=None):
+        connection = self.get_connection(model_name)
 
         if len(sqls) == 0:
             return connection
 
         for i, sql in enumerate(sqls):
-            connection, _ = cls.add_query(profile, sql, model_name)
+            connection, _ = self.add_query(sql, model_name)
 
         return connection
 
-    @classmethod
-    def create_schema(cls, profile, project_cfg, schema, model_name=None):
+    def create_schema(self, schema, model_name=None):
         logger.debug('Creating schema "%s".', schema)
-        sql = cls.get_create_schema_sql(project_cfg, schema)
-        res = cls.add_query(profile, sql, model_name)
+        sql = self.get_create_schema_sql(schema)
+        res = self.add_query(sql, model_name)
 
-        cls.commit_if_has_connection(profile, model_name)
+        self.commit_if_has_connection(model_name)
 
         return res
 
-    @classmethod
-    def drop_schema(cls, profile, project_cfg, schema, model_name=None):
+    def drop_schema(self, schema, model_name=None):
         logger.debug('Dropping schema "%s".', schema)
-        sql = cls.get_drop_schema_sql(project_cfg, schema)
-        return cls.add_query(profile, sql, model_name)
+        sql = self.get_drop_schema_sql(schema)
+        return self.add_query(sql, model_name)
 
-    @classmethod
-    def already_exists(cls, profile, project_cfg,
-                       schema, table, model_name=None):
-        relation = cls.get_relation(
-            profile, project_cfg, schema=schema, identifier=table)
+    def already_exists(self, schema, table, model_name=None):
+        relation = self.get_relation(schema=schema, identifier=table)
         return relation is not None
 
     @classmethod
     def quote(cls, identifier):
         return '"{}"'.format(identifier)
 
-    @classmethod
-    def _quote_as_configured(cls, project_cfg, identifier, quote_key):
-        """This is the actual implementation of quote_as_configured, without
-        the extra arguments needed for use inside materialization code.
-        """
-        default = cls.Relation.DEFAULTS['quote_policy'].get(quote_key)
-        if project_cfg.get('quoting', {}).get(quote_key, default):
-            return cls.quote(identifier)
-        else:
-            return identifier
-
-    @classmethod
-    def quote_as_configured(cls, profile, project_cfg, identifier, quote_key,
-                            model_name=None):
+    def quote_as_configured(self, identifier, quote_key, model_name=None):
         """Quote or do not quote the given identifer as configured in the
         project config for the quote key.
 
         The quote key should be one of 'database' (on bigquery, 'profile'),
         'identifier', or 'schema', or it will be treated as if you set `True`.
         """
-        return cls._quote_as_configured(project_cfg, identifier, quote_key)
+        default = self.Relation.DEFAULTS['quote_policy'].get(quote_key)
+        if self.config.quoting.get(quote_key, default):
+            return self.quote(identifier)
+        else:
+            return identifier
 
     @classmethod
     def convert_text_type(cls, agate_table, col_idx):
@@ -831,8 +808,7 @@ class DefaultAdapter(object):
     ###
     # Operations involving the manifest
     ###
-    @classmethod
-    def run_operation(cls, profile, project_cfg, manifest, operation_name):
+    def run_operation(self, manifest, operation_name):
         """Look the operation identified by operation_name up in the manifest
         and run it.
 
@@ -846,7 +822,7 @@ class DefaultAdapter(object):
         import dbt.context.runtime
         context = dbt.context.runtime.generate(
             operation,
-            project_cfg,
+            self.config,
             manifest,
         )
 
@@ -857,16 +833,56 @@ class DefaultAdapter(object):
     # Abstract methods involving the manifest
     ###
     @classmethod
-    def _filter_table(cls, table, manifest):
-        return table.where(_filter_schemas(manifest))
+    def _catalog_filter_table(cls, table, manifest):
+        return table.where(_catalog_filter_schemas(manifest))
+
+    def get_catalog(self, manifest):
+        try:
+            table = self.run_operation(manifest, GET_CATALOG_OPERATION_NAME)
+        finally:
+            self.release_connection(GET_CATALOG_OPERATION_NAME)
+
+        results = self._catalog_filter_table(table, manifest)
+        return results
 
     @classmethod
-    def get_catalog(cls, profile, project_cfg, manifest):
-        try:
-            table = cls.run_operation(profile, project_cfg, manifest,
-                                      GET_CATALOG_OPERATION_NAME)
-        finally:
-            cls.release_connection(profile, GET_CATALOG_OPERATION_NAME)
+    def _relations_filter_table(cls, table, schemas):
+        return table.where(_relations_filter_schemas(schemas))
 
-        results = cls._filter_table(table, manifest)
-        return results
+    def _link_cached_relations(self, manifest, schemas):
+        """This method has to exist because BigQueryAdapter and SnowflakeAdapter
+        inherit from the PostgresAdapter, so they need something to override
+        in order to disable linking.
+        """
+        pass
+
+    def _relations_cache_for_schemas(self, manifest, schemas=None):
+        if not dbt.flags.USE_CACHE:
+            return
+
+        if schemas is None:
+            schemas = manifest.get_used_schemas()
+
+        relations = []
+        # add all relations
+        for schema in schemas:
+            # bypass the cache, of course!
+            for relation in self._list_relations(schema):
+                self.cache.add(relation)
+        self._link_cached_relations(manifest, schemas)
+        # it's possible that there were no relations in some schemas. We want
+        # to insert the schemas we query into the cache's `.schemas` attribute
+        # so we can check it later
+        self.cache.update_schemas(schemas)
+
+    def set_relations_cache(self, manifest, clear=False):
+        """Run a query that gets a populated cache of the relations in the
+        database and set the cache on this adapter.
+        """
+        if not dbt.flags.USE_CACHE:
+            return
+
+        with self.cache.lock:
+            if clear:
+                self.cache.clear()
+            self._relations_cache_for_schemas(manifest)

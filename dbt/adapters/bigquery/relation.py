@@ -86,9 +86,9 @@ class BigQueryRelation(DefaultRelation):
         return True
 
     @classmethod
-    def create_from_node(cls, profile, node, **kwargs):
+    def _create_from_node(cls, config, node, **kwargs):
         return cls.create(
-            project=profile.get('project'),
+            project=config.credentials.project,
             schema=node.get('schema'),
             identifier=node.get('alias'),
             **kwargs)

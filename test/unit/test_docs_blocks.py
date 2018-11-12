@@ -1,10 +1,13 @@
 import mock
 import unittest
 
+from dbt.config import RuntimeConfig
 from dbt.node_types import NodeType
 import dbt.utils
 from dbt.parser import docs
 from dbt.contracts.graph.unparsed import UnparsedDocumentationFile
+
+from .utils import config_from_parts_or_dicts
 
 #DocumentationParser
 
@@ -51,36 +54,42 @@ TEST_DOCUMENTATION_FILE = r'''
 
 class DocumentationParserTest(unittest.TestCase):
     def setUp(self):
-        self.root_project_config = {
+        profile_data = {
+            'outputs': {
+                'test': {
+                    'type': 'postgres',
+                    'host': 'localhost',
+                    'schema': 'analytics',
+                    'user': 'test',
+                    'pass': 'test',
+                    'dbname': 'test',
+                    'port': 1,
+                }
+            },
+            'target': 'test',
+        }
+        root_project = {
             'name': 'root',
             'version': '0.1',
             'profile': 'test',
             'project-root': '/test_root',
-            'target': 'test',
-            'quoting': {},
-            'outputs': {
-                'test': {
-                    'type': 'postgres',
-                    'host': 'localhost',
-                    'schema': 'analytics',
-                }
-            }
         }
 
-        self.subdir_project_config = {
+        subdir_project = {
             'name': 'some_package',
             'version': '0.1',
+            'profile': 'test',
             'project-root': '/test_root/test_subdir',
-            'target': 'test',
             'quoting': {},
-            'outputs': {
-                'test': {
-                    'type': 'postgres',
-                    'host': 'localhost',
-                    'schema': 'analytics',
-                }
-            }
         }
+        self.root_project_config = config_from_parts_or_dicts(
+            project=root_project, profile=profile_data
+        )
+        self.subdir_project_config = config_from_parts_or_dicts(
+            project=subdir_project, profile=profile_data
+        )
+
+
     @mock.patch('dbt.clients.system')
     def test_load_file(self, system):
         system.load_file_contents.return_value = TEST_DOCUMENTATION_FILE

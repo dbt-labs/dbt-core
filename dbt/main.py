@@ -1,4 +1,5 @@
-from dbt.logger import initialize_logger, GLOBAL_LOGGER as logger
+from dbt.logger import initialize_logger, GLOBAL_LOGGER as logger, \
+    initialized as logger_initialized
 
 import argparse
 import os.path
@@ -7,7 +8,6 @@ import traceback
 
 import dbt.version
 import dbt.flags as flags
-import dbt.project as project
 import dbt.task.run as run_task
 import dbt.task.compile as compile_task
 import dbt.task.debug as debug_task
@@ -21,12 +21,16 @@ import dbt.task.generate as generate_task
 import dbt.task.serve as serve_task
 
 import dbt.tracking
-import dbt.config as config
 import dbt.ui.printer
 import dbt.compat
 import dbt.deprecations
 
 from dbt.utils import ExitCodes
+from dbt.config import Project, RuntimeConfig, DbtProjectError, \
+    DbtProfileError, PROFILES_DIR, read_config, \
+    send_anonymous_usage_stats, colorize_output, read_profiles
+from dbt.exceptions import DbtProfileError, DbtProfileError, RuntimeException
+
 
 PROFILES_HELP_MESSAGE = """
 For more information on configuring profiles, please consult the dbt docs:
@@ -87,7 +91,13 @@ def main(args=None):
         logger.info("Encountered an error:")
         logger.info(str(e))
 
-        logger.debug(traceback.format_exc())
+        if logger_initialized:
+            logger.debug(traceback.format_exc())
+        elif not isinstance(e, RuntimeException):
+            # if it did not come from dbt proper and the logger is not
+            # initialized (so there's no safe path to log to), log the stack
+            # trace at error level.
+            logger.error(traceback.format_exc())
         exit_code = ExitCodes.UnhandledError
 
     sys.exit(exit_code)
@@ -101,16 +111,15 @@ def handle(args):
 
 def handle_and_check(args):
     parsed = parse_args(args)
-
     # this needs to happen after args are parsed so we can determine the
     # correct profiles.yml file
-    profile_config = config.read_config(parsed.profiles_dir)
-    if not config.send_anonymous_usage_stats(profile_config):
+    profile_config = read_config(parsed.profiles_dir)
+    if not send_anonymous_usage_stats(profile_config):
         dbt.tracking.do_not_track()
     else:
         dbt.tracking.initialize_tracking()
 
-    if dbt.config.colorize_output(profile_config):
+    if colorize_output(profile_config):
         dbt.ui.printer.use_colors()
 
     try:
@@ -138,7 +147,7 @@ def get_nearest_project_dir():
 
 def run_from_args(parsed):
     task = None
-    proj = None
+    cfg = None
 
     if parsed.which == 'init':
         # bypass looking for a project file if we're running `dbt init`
@@ -146,7 +155,7 @@ def run_from_args(parsed):
     else:
         nearest_project_dir = get_nearest_project_dir()
         if nearest_project_dir is None:
-            raise RuntimeError(
+            raise RuntimeException(
                 "fatal: Not a dbt project (or any of the parent directories). "
                 "Missing dbt_project.yml file"
             )
@@ -155,41 +164,41 @@ def run_from_args(parsed):
 
         res = invoke_dbt(parsed)
         if res is None:
-            raise RuntimeError("Could not run dbt")
+            raise RuntimeException("Could not run dbt")
         else:
-            task, proj = res
+            task, cfg = res
 
     log_path = None
 
-    if proj is not None:
-        log_path = proj.get('log-path', 'logs')
+    if cfg is not None:
+        log_path = cfg.log_path
 
     initialize_logger(parsed.debug, log_path)
     logger.debug("Tracking: {}".format(dbt.tracking.active_user.state()))
 
-    dbt.tracking.track_invocation_start(project=proj, args=parsed)
+    dbt.tracking.track_invocation_start(config=cfg, args=parsed)
 
-    results = run_from_task(task, proj, parsed)
+    results = run_from_task(task, cfg, parsed)
 
     return task, results
 
 
-def run_from_task(task, proj, parsed_args):
+def run_from_task(task, cfg, parsed_args):
     result = None
     try:
         result = task.run()
         dbt.tracking.track_invocation_end(
-            project=proj, args=parsed_args, result_type="ok"
+            config=cfg, args=parsed_args, result_type="ok"
         )
     except (dbt.exceptions.NotImplementedException,
             dbt.exceptions.FailedToConnectException) as e:
         logger.info('ERROR: {}'.format(e))
         dbt.tracking.track_invocation_end(
-            project=proj, args=parsed_args, result_type="error"
+            config=cfg, args=parsed_args, result_type="error"
         )
     except Exception as e:
         dbt.tracking.track_invocation_end(
-            project=proj, args=parsed_args, result_type="error"
+            config=cfg, args=parsed_args, result_type="error"
         )
         raise
 
@@ -198,22 +207,31 @@ def run_from_task(task, proj, parsed_args):
 
 def invoke_dbt(parsed):
     task = None
-    proj = None
+    cfg = None
 
     try:
-        proj = project.read_project(
-            'dbt_project.yml',
-            parsed.profiles_dir,
-            validate=False,
-            profile_to_load=parsed.profile,
-            args=parsed
-        )
-        proj.validate()
-    except project.DbtProjectError as e:
+        if parsed.which in {'deps', 'clean'}:
+            # deps doesn't need a profile, so don't require one.
+            cfg = Project.from_current_directory(getattr(parsed, 'vars', '{}'))
+        elif parsed.which != 'debug':
+            # for debug, we will attempt to load the various configurations as
+            # part of the task, so just leave cfg=None.
+            cfg = RuntimeConfig.from_args(parsed)
+    except DbtProjectError as e:
         logger.info("Encountered an error while reading the project:")
         logger.info(dbt.compat.to_string(e))
 
-        all_profiles = project.read_profiles(parsed.profiles_dir).keys()
+        dbt.tracking.track_invalid_invocation(
+            config=cfg,
+            args=parsed,
+            result_type=e.result_type)
+
+        return None
+    except DbtProfileError as e:
+        logger.info("Encountered an error while reading profiles:")
+        logger.info("  ERROR {}".format(str(e)))
+
+        all_profiles = read_profiles(parsed.profiles_dir).keys()
 
         if len(all_profiles) > 0:
             logger.info("Defined profiles:")
@@ -226,46 +244,18 @@ def invoke_dbt(parsed):
         logger.info(PROFILES_HELP_MESSAGE)
 
         dbt.tracking.track_invalid_invocation(
-            project=proj,
+            config=cfg,
             args=parsed,
-            result_type="invalid_profile")
-
-        return None
-    except project.DbtProfileError as e:
-        logger.info("Encountered an error while reading profiles:")
-        logger.info("  ERROR {}".format(str(e)))
-
-        dbt.tracking.track_invalid_invocation(
-            project=proj,
-            args=parsed,
-            result_type="invalid_profile")
+            result_type=e.result_type)
 
         return None
 
-    if parsed.target is not None:
-        targets = proj.cfg.get('outputs', {}).keys()
-        if parsed.target in targets:
-            proj.cfg['target'] = parsed.target
-            # make sure we update the target if this is overriden on the cli
-            proj.compile_and_update_target()
-        else:
-            logger.info("Encountered an error while reading the project:")
-            logger.info("  ERROR Specified target {} is not a valid option "
-                        "for profile {}"
-                        .format(parsed.target, proj.profile_to_load))
-            logger.info("Valid targets are: {}".format(
-                ', '.join(targets)))
-            dbt.tracking.track_invalid_invocation(
-                project=proj,
-                args=parsed,
-                result_type="invalid_target")
+    flags.NON_DESTRUCTIVE = getattr(parsed, 'non_destructive', False)
+    flags.LOG_CACHE_EVENTS = getattr(parsed, 'log_cache_events', False)
+    flags.USE_CACHE = getattr(parsed, 'use_cache', True)
 
-            return None
-
-    flags.NON_DESTRUCTIVE = getattr(proj.args, 'non_destructive', False)
-
-    arg_drop_existing = getattr(proj.args, 'drop_existing', False)
-    arg_full_refresh = getattr(proj.args, 'full_refresh', False)
+    arg_drop_existing = getattr(parsed, 'drop_existing', False)
+    arg_full_refresh = getattr(parsed, 'full_refresh', False)
 
     if arg_drop_existing:
         dbt.deprecations.warn('drop-existing')
@@ -275,15 +265,21 @@ def invoke_dbt(parsed):
 
     logger.debug("running dbt with arguments %s", parsed)
 
-    task = parsed.cls(args=parsed, project=proj)
+    task = parsed.cls(args=parsed, config=cfg)
 
-    return task, proj
+    return task, cfg
 
 
 def parse_args(args):
     p = DBTArgumentParser(
         prog='dbt: data build tool',
-        formatter_class=argparse.RawTextHelpFormatter)
+        formatter_class=argparse.RawTextHelpFormatter,
+        description="An ELT tool for managing your SQL "
+        "transformations and data models."
+        "\nFor more documentation on these commands, visit: "
+        "docs.getdbt.com",
+        epilog="Specify one of these sub-commands and you can "
+        "find more help from there.")
 
     p.add_argument(
         '--version',
@@ -304,17 +300,17 @@ def parse_args(args):
         help='''Run schema validations at runtime. This will surface
         bugs in dbt, but may incur a performance penalty.''')
 
-    subs = p.add_subparsers()
+    subs = p.add_subparsers(title="Available sub-commands")
 
     base_subparser = argparse.ArgumentParser(add_help=False)
 
     base_subparser.add_argument(
         '--profiles-dir',
-        default=project.default_profiles_dir,
+        default=PROFILES_DIR,
         type=str,
         help="""
         Which directory to look in for the profiles.yml file. Default = {}
-        """.format(project.default_profiles_dir)
+        """.format(PROFILES_DIR)
     )
 
     base_subparser.add_argument(
@@ -343,14 +339,40 @@ def parse_args(args):
             should be a YAML string, eg. '{my_variable: my_value}'"""
     )
 
-    sub = subs.add_parser('init', parents=[base_subparser])
+    # if set, log all cache events. This is extremely verbose!
+    base_subparser.add_argument(
+        '--log-cache-events',
+        action='store_true',
+        help=argparse.SUPPRESS,
+    )
+
+    base_subparser.add_argument(
+        '--bypass-cache',
+        action='store_false',
+        dest='use_cache',
+        help='If set, bypass the adapter-level cache of database state',
+    )
+
+    sub = subs.add_parser(
+            'init',
+            parents=[base_subparser],
+            help="Initialize a new DBT project.")
     sub.add_argument('project_name', type=str, help='Name of the new project')
     sub.set_defaults(cls=init_task.InitTask, which='init')
 
-    sub = subs.add_parser('clean', parents=[base_subparser])
+    sub = subs.add_parser(
+        'clean',
+        parents=[base_subparser],
+        help="Delete all folders in the clean-targets list"
+        "\n(usually the dbt_modules and target directories.)")
     sub.set_defaults(cls=clean_task.CleanTask, which='clean')
 
-    sub = subs.add_parser('debug', parents=[base_subparser])
+    sub = subs.add_parser(
+        'debug',
+        parents=[base_subparser],
+        help="Show some helpful information about dbt for debugging."
+        "\nNot to be confused with the --debug option which increases "
+        "verbosity.")
     sub.add_argument(
         '--config-dir',
         action='store_true',
@@ -360,10 +382,18 @@ def parse_args(args):
     )
     sub.set_defaults(cls=debug_task.DebugTask, which='debug')
 
-    sub = subs.add_parser('deps', parents=[base_subparser])
+    sub = subs.add_parser(
+        'deps',
+        parents=[base_subparser],
+        help="Pull the most recent version of the dependencies "
+        "listed in packages.yml")
     sub.set_defaults(cls=deps_task.DepsTask, which='deps')
 
-    sub = subs.add_parser('archive', parents=[base_subparser])
+    sub = subs.add_parser(
+        'archive',
+        parents=[base_subparser],
+        help="Record changes to a mutable table over time."
+             "\nMust be configured in your dbt_project.yml.")
     sub.add_argument(
         '--threads',
         type=int,
@@ -375,13 +405,26 @@ def parse_args(args):
     )
     sub.set_defaults(cls=archive_task.ArchiveTask, which='archive')
 
-    run_sub = subs.add_parser('run', parents=[base_subparser])
+    run_sub = subs.add_parser(
+        'run',
+        parents=[base_subparser],
+        help="Compile SQL and execute against the current "
+        "target database.")
     run_sub.set_defaults(cls=run_task.RunTask, which='run')
 
-    compile_sub = subs.add_parser('compile', parents=[base_subparser])
+    compile_sub = subs.add_parser(
+        'compile',
+        parents=[base_subparser],
+        help="Generates executable SQL from source model, test, and"
+        "analysis files. \nCompiled SQL files are written to the target/"
+        "directory.")
     compile_sub.set_defaults(cls=compile_task.CompileTask, which='compile')
 
-    docs_sub = subs.add_parser('docs', parents=[base_subparser])
+    docs_sub = subs.add_parser(
+        'docs',
+        parents=[base_subparser],
+        help="Generate or serve the documentation "
+        "website for your project.")
     docs_subs = docs_sub.add_subparsers()
     # it might look like docs_sub is the correct parents entry, but that
     # will cause weird errors about 'conflicting option strings'.
@@ -437,7 +480,10 @@ def parse_args(args):
             fully-recalculate the incremental table from the model definition.
             """)
 
-    seed_sub = subs.add_parser('seed', parents=[base_subparser])
+    seed_sub = subs.add_parser(
+        'seed',
+        parents=[base_subparser],
+        help="Load data from csv files into your data warehouse.")
     seed_sub.add_argument(
         '--drop-existing',
         action='store_true',
@@ -465,7 +511,11 @@ def parse_args(args):
     serve_sub.set_defaults(cls=serve_task.ServeTask,
                            which='serve')
 
-    sub = subs.add_parser('test', parents=[base_subparser])
+    sub = subs.add_parser(
+        'test',
+        parents=[base_subparser],
+        help="Runs tests on data in deployed models."
+        "Run this after `dbt run`")
     sub.add_argument(
         '--data',
         action='store_true',
@@ -509,5 +559,11 @@ def parse_args(args):
         sys.exit(1)
 
     parsed = p.parse_args(args)
+
+    if not hasattr(parsed, 'which'):
+        # the user did not provide a valid subcommand. trigger the help message
+        # and exit with a error
+        p.print_help()
+        p.exit(1)
 
     return parsed

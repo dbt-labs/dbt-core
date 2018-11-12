@@ -11,8 +11,15 @@ from dbt.node_types import NodeType, RunHookType
 
 class HookParser(BaseSqlParser):
     @classmethod
-    def get_hooks_from_project(cls, project_cfg, hook_type):
-        hooks = project_cfg.get(hook_type, [])
+    def get_hooks_from_project(cls, config, hook_type):
+        if hook_type == RunHookType.Start:
+            hooks = config.on_run_start
+        elif hook_type == RunHookType.End:
+            hooks = config.on_run_end
+        else:
+            dbt.exceptions.InternalException(
+                'hook_type must be one of "{}" or "{}"'
+                .format(RunHookType.Start, RunHookType.End))
 
         if type(hooks) not in (list, tuple):
             hooks = [hooks]
@@ -56,8 +63,9 @@ class HookParser(BaseSqlParser):
                 })
 
         tags = [hook_type]
-        return cls.parse_sql_nodes(result, root_project, all_projects,
-                                   tags=tags, macros=macros)
+        hooks, _ = cls.parse_sql_nodes(result, root_project, all_projects,
+                                       tags=tags, macros=macros)
+        return hooks
 
     @classmethod
     def load_and_parse(cls, root_project, all_projects, macros=None):
@@ -66,10 +74,12 @@ class HookParser(BaseSqlParser):
 
         hook_nodes = {}
         for hook_type in RunHookType.Both:
-            project_hooks = cls.load_and_parse_run_hook_type(root_project,
-                                                             all_projects,
-                                                             hook_type,
-                                                             macros=macros)
+            project_hooks = cls.load_and_parse_run_hook_type(
+                root_project,
+                all_projects,
+                hook_type,
+                macros=macros
+            )
             hook_nodes.update(project_hooks)
 
         return hook_nodes

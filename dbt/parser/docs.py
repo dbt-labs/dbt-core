@@ -51,8 +51,7 @@ class DocumentationParser(BaseParser):
             e.node = docfile
             raise
 
-        profile = dbt.utils.get_profile_from_project(root_project_config)
-        schema = profile.get('schema', 'public')
+        schema = getattr(root_project_config.credentials, 'schema', 'public')
 
         for key, item in template.module.__dict__.items():
             if type(item) != jinja2.runtime.Macro:

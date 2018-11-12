@@ -1,4 +1,5 @@
 from dbt.adapters.default.relation import DefaultRelation
+import dbt.utils
 
 
 class SnowflakeRelation(DefaultRelation):
@@ -44,9 +45,9 @@ class SnowflakeRelation(DefaultRelation):
     }
 
     @classmethod
-    def create_from_node(cls, profile, node, **kwargs):
+    def _create_from_node(cls, config, node, **kwargs):
         return cls.create(
-            database=profile.get('database'),
+            database=config.credentials.database,
             schema=node.get('schema'),
             identifier=node.get('alias'),
             **kwargs)

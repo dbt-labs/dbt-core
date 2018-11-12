@@ -1,6 +1,6 @@
 import os
 
-import dbt.project
+import dbt.config
 import dbt.clients.git
 import dbt.clients.system
 
@@ -91,7 +91,7 @@ class InitTask(BaseTask):
     def run(self):
         project_dir = self.args.project_name
 
-        profiles_dir = dbt.project.default_profiles_dir
+        profiles_dir = dbt.config.PROFILES_DIR
         profiles_file = os.path.join(profiles_dir, 'profiles.yml')
 
         self.create_profiles_dir(profiles_dir)

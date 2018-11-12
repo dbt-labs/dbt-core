@@ -70,6 +70,7 @@ class TestSimpleSeedColumnOverrideSnowflake(TestSimpleSeedColumnOverride):
         results = self.run_dbt(["test"])
         self.assertEqual(len(results),  2)
 
+
 class TestSimpleSeedColumnOverrideBQ(TestSimpleSeedColumnOverride):
     @property
     def models(self):
@@ -86,7 +87,7 @@ class TestSimpleSeedColumnOverrideBQ(TestSimpleSeedColumnOverride):
         return self.bigquery_profile()
 
     @attr(type='bigquery')
-    def test_simple_seed_with_column_override_bq(self):
+    def test_simple_seed_with_column_override_bigquery(self):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt(["test"])

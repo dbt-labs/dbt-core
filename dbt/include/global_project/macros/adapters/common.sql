@@ -80,3 +80,17 @@
 
   {{ exceptions.raise_compiler_error(msg) }}
 {% endmacro %}
+
+{% macro get_relations() -%}
+  {{ return(adapter_macro('get_relations')) }}
+{% endmacro %}
+
+
+{% macro default__get_relations() -%}
+  {% set typename = adapter.type() %}
+  {% set msg -%}
+    get_relations not implemented for {{ typename }}
+  {%- endset %}
+
+  {{ exceptions.raise_compiler_error(msg) }}
+{% endmacro %}

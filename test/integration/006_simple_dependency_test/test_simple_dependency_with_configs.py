@@ -16,6 +16,16 @@ class BaseTestSimpleDependencyWithConfigs(DBTIntegrationTest):
         return "test/integration/006_simple_dependency_test/models"
 
 class TestSimpleDependencyWithConfigs(BaseTestSimpleDependencyWithConfigs):
+    @property
+    def packages_config(self):
+        return {
+            "packages": [
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'revision': 'with-configs',
+                },
+            ]
+        }
 
     @property
     def project_config(self):
@@ -28,9 +38,6 @@ class TestSimpleDependencyWithConfigs(BaseTestSimpleDependencyWithConfigs):
                 }
 
             },
-            "repositories": [
-                'https://github.com/fishtown-analytics/dbt-integration-project@with-configs'
-            ]
         }
 
     @attr(type='postgres')
@@ -48,6 +55,17 @@ class TestSimpleDependencyWithConfigs(BaseTestSimpleDependencyWithConfigs):
 class TestSimpleDependencyWithOverriddenConfigs(BaseTestSimpleDependencyWithConfigs):
 
     @property
+    def packages_config(self):
+        return {
+            "packages": [
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'revision': 'with-configs',
+                },
+            ]
+        }
+
+    @property
     def project_config(self):
         return {
             "models": {
@@ -62,9 +80,6 @@ class TestSimpleDependencyWithOverriddenConfigs(BaseTestSimpleDependencyWithConf
                 }
 
             },
-            "repositories": [
-                'https://github.com/fishtown-analytics/dbt-integration-project@with-configs'
-            ]
         }
 
 
@@ -84,6 +99,17 @@ class TestSimpleDependencyWithOverriddenConfigs(BaseTestSimpleDependencyWithConf
 class TestSimpleDependencyWithModelSpecificOverriddenConfigs(BaseTestSimpleDependencyWithConfigs):
 
     @property
+    def packages_config(self):
+        return {
+            "packages": [
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'revision': 'with-configs',
+                },
+            ]
+        }
+
+    @property
     def project_config(self):
         return {
             "models": {
@@ -97,11 +123,7 @@ class TestSimpleDependencyWithModelSpecificOverriddenConfigs(BaseTestSimpleDepen
                         }
                     }
                 }
-
             },
-            "repositories": [
-                'https://github.com/fishtown-analytics/dbt-integration-project@with-configs'
-            ]
         }
 
 
@@ -120,6 +142,17 @@ class TestSimpleDependencyWithModelSpecificOverriddenConfigs(BaseTestSimpleDepen
 
 
 class TestSimpleDependencyWithModelSpecificOverriddenConfigsAndMaterializations(BaseTestSimpleDependencyWithConfigs):
+
+    @property
+    def packages_config(self):
+        return {
+            "packages": [
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'revision': 'with-configs',
+                },
+            ]
+        }
 
     @property
     def project_config(self):
@@ -147,9 +180,6 @@ class TestSimpleDependencyWithModelSpecificOverriddenConfigsAndMaterializations(
                 }
 
             },
-            "repositories": [
-                'https://github.com/fishtown-analytics/dbt-integration-project@with-configs'
-            ]
         }
 
 

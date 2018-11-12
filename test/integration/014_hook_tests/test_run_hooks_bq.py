@@ -89,7 +89,7 @@ class TestBigqueryPrePostRunHooks(DBTIntegrationTest):
         self.assertTableDoesNotExist("end_hook_order_test")
 
     @attr(type='bigquery')
-    def test_pre_and_post_seed_hooks(self):
+    def test_bigquery_pre_and_post_seed_hooks(self):
         self.run_dbt(['seed'])
 
         self.check_hooks('start')

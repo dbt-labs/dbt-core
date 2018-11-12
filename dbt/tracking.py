@@ -1,7 +1,7 @@
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt import version as dbt_version
 from snowplow_tracker import Subject, Tracker, Emitter, logger as sp_logger
-from snowplow_tracker import SelfDescribingJson, disable_contracts
+from snowplow_tracker import SelfDescribingJson
 from datetime import datetime
 
 import pytz
@@ -12,7 +12,6 @@ import os
 
 import dbt.clients.system
 
-disable_contracts()
 sp_logger.setLevel(100)
 
 COLLECTOR_URL = "fishtownanalytics.sinter-collect.com"
@@ -85,9 +84,9 @@ def get_run_type(args):
     return 'regular'
 
 
-def get_invocation_context(user, project, args):
+def get_invocation_context(user, config, args):
     return {
-        "project_id": None if project is None else project.hashed_name(),
+        "project_id": None if config is None else config.hashed_name(),
         "user_id": user.id,
         "invocation_id": user.invocation_id,
 
@@ -99,8 +98,8 @@ def get_invocation_context(user, project, args):
     }
 
 
-def get_invocation_start_context(user, project, args):
-    data = get_invocation_context(user, project, args)
+def get_invocation_start_context(user, config, args):
+    data = get_invocation_context(user, config, args)
 
     start_data = {
         "progress": "start",
@@ -112,8 +111,8 @@ def get_invocation_start_context(user, project, args):
     return SelfDescribingJson(INVOCATION_SPEC, data)
 
 
-def get_invocation_end_context(user, project, args, result_type):
-    data = get_invocation_context(user, project, args)
+def get_invocation_end_context(user, config, args, result_type):
+    data = get_invocation_context(user, config, args)
 
     start_data = {
         "progress": "end",
@@ -125,8 +124,8 @@ def get_invocation_end_context(user, project, args, result_type):
     return SelfDescribingJson(INVOCATION_SPEC, data)
 
 
-def get_invocation_invalid_context(user, project, args, result_type):
-    data = get_invocation_context(user, project, args)
+def get_invocation_invalid_context(user, config, args, result_type):
+    data = get_invocation_context(user, config, args)
 
     start_data = {
         "progress": "invalid",
@@ -175,9 +174,9 @@ def track(user, *args, **kwargs):
             )
 
 
-def track_invocation_start(project=None, args=None):
+def track_invocation_start(config=None, args=None):
     context = [
-        get_invocation_start_context(active_user, project, args),
+        get_invocation_start_context(active_user, config, args),
         get_platform_context(),
         get_dbt_env_context()
     ]
@@ -216,11 +215,11 @@ def track_package_install(options):
 
 
 def track_invocation_end(
-        project=None, args=None, result_type=None
+        config=None, args=None, result_type=None
 ):
     user = active_user
     context = [
-        get_invocation_end_context(user, project, args, result_type),
+        get_invocation_end_context(user, config, args, result_type),
         get_platform_context(),
         get_dbt_env_context()
     ]
@@ -234,13 +233,13 @@ def track_invocation_end(
 
 
 def track_invalid_invocation(
-        project=None, args=None, result_type=None
+        config=None, args=None, result_type=None
 ):
 
     user = active_user
     invocation_context = get_invocation_invalid_context(
         user,
-        project,
+        config,
         args,
         result_type
     )

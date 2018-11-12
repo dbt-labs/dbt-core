@@ -11,8 +11,8 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 execute = True
 
 
-def ref(db_wrapper, model, project_cfg, profile, manifest):
-    current_project = project_cfg.get('name')
+def ref(db_wrapper, model, config, manifest):
+    current_project = config.project_name
     adapter = db_wrapper.adapter
 
     def do_ref(*args):
@@ -55,7 +55,7 @@ def ref(db_wrapper, model, project_cfg, profile, manifest):
                 identifier=add_ephemeral_model_prefix(
                     target_model_name)).quote(identifier=False)
         else:
-            return adapter.Relation.create_from_node(profile, target_model)
+            return adapter.Relation.create_from_node(config, target_model)
 
     return do_ref
 
@@ -94,6 +94,6 @@ class Config:
         return to_return
 
 
-def generate(model, project_cfg, manifest):
+def generate(model, runtime_config, manifest):
     return dbt.context.common.generate(
-        model, project_cfg, manifest, None, dbt.context.runtime)
+        model, runtime_config, manifest, None, dbt.context.runtime)
