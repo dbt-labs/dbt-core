@@ -84,7 +84,7 @@ class BigQueryAdapter(BaseAdapter):
             '`rename_relation` is not implemented for this adapter!'
         )
 
-    def get_existing_schemas(self, model_name=None):
+    def list_schemas(self, model_name=None):
         conn = self.connections.get(model_name)
         client = conn.handle
 
@@ -291,7 +291,7 @@ class BigQueryAdapter(BaseAdapter):
         dbt.ui.printer.print_timestamped_line(msg.format(hook_type),
                                               dbt.ui.printer.COLOR_FG_YELLOW)
 
-    # TODO: does this need to be available in the DBWrapper?
+    @available
     def add_query(self, sql, model_name=None, auto_begin=True,
                   bindings=None, abridge_sql_log=False):
         if model_name in ['on-run-start', 'on-run-end']:

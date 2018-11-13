@@ -64,7 +64,7 @@ class PostgresAdapter(SQLAdapter):
             type=type)
                 for (name, _schema, type) in results]
 
-    def get_existing_schemas(self, model_name=None):
+    def list_schemas(self, model_name=None):
         sql = "select distinct nspname from pg_namespace"
 
         connection, cursor = self.add_query(sql, model_name, auto_begin=False)

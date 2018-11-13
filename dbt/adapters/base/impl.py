@@ -75,7 +75,7 @@ class BaseAdapter(object):
     Methods:
         - exception_handler
         - date_function
-        - get_existing_schemas
+        - list_schemas
         - drop_relation
         - truncate_relation
         - rename_relation
@@ -108,9 +108,6 @@ class BaseAdapter(object):
     ###
     # Methods that pass through to the connection manager
     ###
-    # TODO: I would like a better way to do this. Should adapters be subclasses
-    # of managers?
-    # TODO: Remove this
     def acquire_connection(self, name):
         return self.connections.get(name)
 
@@ -230,7 +227,6 @@ class BaseAdapter(object):
     ###
     # Abstract methods for database-specific values, attributes, and types
     ###
-    # TODO: should this be an abstract property?
     @abstractclassmethod
     def date_function(cls):
         """Get the date function used by this adapter's database.
@@ -253,9 +249,8 @@ class BaseAdapter(object):
     ###
     # Abstract methods about schemas
     ###
-    # TODO: rename to `list_schemas` for consistency w/ realtions
     @abc.abstractmethod
-    def get_existing_schemas(self, model_name=None):
+    def list_schemas(self, model_name=None):
         """Get a list of existing schemas.
 
         :param Optional[str] model_name: The name of the connection to query as
@@ -263,7 +258,7 @@ class BaseAdapter(object):
         :rtype: List[str]
         """
         raise dbt.exceptions.NotImplementedException(
-            '`get_existing_schemas` is not implemented for this adapter!'
+            '`list_schemas` is not implemented for this adapter!'
         )
 
     def check_schema_exists(self, schema, model_name=None):
@@ -275,7 +270,7 @@ class BaseAdapter(object):
         """
         search = (
             s.lower() for s in
-            self.get_existing_schemas(model_name=model_name)
+            self.list_schemas(model_name=model_name)
         )
         return schema.lower() in search
 

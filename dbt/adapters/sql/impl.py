@@ -22,7 +22,7 @@ class SQLAdapter(BaseAdapter):
         - exception_handler
         - type
         - date_function
-        - get_existing_schemas
+        - list_schemas
         - list_relations_without_caching
         - get_columns_in_relation_sql
 

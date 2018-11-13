@@ -46,7 +46,7 @@ class SnowflakeAdapter(SQLAdapter):
             type=relation_type_lookup.get(type))
                 for (name, _schema, type) in results]
 
-    def get_existing_schemas(self, model_name=None):
+    def list_schemas(self, model_name=None):
         sql = "select distinct schema_name from information_schema.schemata"
 
         connection, cursor = self.add_query(sql, model_name, auto_begin=False)

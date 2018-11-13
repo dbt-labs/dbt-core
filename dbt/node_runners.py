@@ -374,7 +374,7 @@ class ModelRunner(CompileRunner):
         # dbt expects that this schema will exist anyway.
         required_schemas.add(adapter.get_default_schema())
 
-        existing_schemas = set(adapter.get_existing_schemas())
+        existing_schemas = set(adapter.list_schemas())
 
         for schema in (required_schemas - existing_schemas):
             adapter.create_schema(schema)
