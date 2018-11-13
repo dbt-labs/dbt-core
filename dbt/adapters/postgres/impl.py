@@ -160,7 +160,7 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
                                              identifier=dep_name)
 
             # don't record in cache if this relation isn't in a relevant schema
-            if refed_schema in schemas:
+            if refed_schema.lower() in schemas:
                 self.cache.add_link(dependent, referenced)
 
     def _list_relations(self, schema, model_name=None):
