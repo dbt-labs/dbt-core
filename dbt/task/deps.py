@@ -7,6 +7,7 @@ import yaml
 
 import dbt.utils
 import dbt.deprecations
+import dbt.exceptions
 import dbt.clients.git
 import dbt.clients.system
 import dbt.clients.registry as registry
@@ -247,9 +248,18 @@ class GitPackage(Package):
         if len(self.version) != 1:
             dbt.exceptions.raise_dependency_error(
                 'Cannot checkout repository until the version is pinned.')
-        dir_ = dbt.clients.git.clone_and_checkout(
-            self.git, DOWNLOADS_PATH, branch=self.version[0],
-            dirname=self._checkout_name)
+        try:
+            dir_ = dbt.clients.git.clone_and_checkout(
+                self.git, DOWNLOADS_PATH, branch=self.version[0],
+                dirname=self._checkout_name)
+        except dbt.exceptions.ExecutableError as exc:
+            if exc.cmd and exc.cmd[0] == 'git':
+                logger.error(
+                    'Make sure git is installed on your machine. More '
+                    'information: '
+                    'https://docs.getdbt.com/docs/package-management'
+                )
+            raise
         return os.path.join(DOWNLOADS_PATH, dir_)
 
     def _fetch_metadata(self, project):
