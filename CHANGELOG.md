@@ -1,4 +1,4 @@
-## dbt 0.12.0 - Guion Bluford (Currently Unreleased)
+## dbt 0.12.0 - Guion Bluford (November 12, 2018)
 
 ### Overview
 
