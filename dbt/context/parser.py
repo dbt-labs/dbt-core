@@ -6,7 +6,7 @@ import dbt.context.common
 execute = False
 
 
-def ref(db_wrapper, model, project_cfg, profile, manifest):
+def ref(db_wrapper, model, config, manifest):
 
     def ref(*args):
         if len(args) == 1 or len(args) == 2:
@@ -15,7 +15,7 @@ def ref(db_wrapper, model, project_cfg, profile, manifest):
         else:
             dbt.exceptions.ref_invalid_args(model, args)
 
-        return db_wrapper.adapter.Relation.create_from_node(profile, model)
+        return db_wrapper.adapter.Relation.create_from_node(config, model)
 
     return ref
 
@@ -73,6 +73,6 @@ class Config:
         return ''
 
 
-def generate(model, project_cfg, manifest, source_config):
+def generate(model, runtime_config, manifest, source_config):
     return dbt.context.common.generate(
-        model, project_cfg, manifest, source_config, dbt.context.parser)
+        model, runtime_config, manifest, source_config, dbt.context.parser)

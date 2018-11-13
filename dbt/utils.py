@@ -1,12 +1,14 @@
 from datetime import datetime
 from decimal import Decimal
-import os
-import hashlib
-import itertools
-import json
+
 import collections
 import copy
 import functools
+import hashlib
+import itertools
+import json
+import numbers
+import os
 
 import dbt.exceptions
 import dbt.flags
@@ -34,6 +36,7 @@ DBTConfigKeys = [
     'column_types',
     'bind',
     'quoting',
+    'tags',
 ]
 
 
@@ -168,20 +171,9 @@ def get_docs_macro_name(docs_name, with_prefix=True):
         return docs_name
 
 
-def load_project_with_profile(source_project, project_dir):
-    project_filepath = os.path.join(project_dir, 'dbt_project.yml')
-    return dbt.project.read_project(
-        project_filepath,
-        source_project.profiles_dir,
-        profile_to_load=source_project.profile_to_load,
-        args=source_project.args)
-
-
-def dependencies_for_path(project, module_path):
+def dependencies_for_path(config, module_path):
     """Given a module path, yield all dependencies in that path."""
-    import dbt.project
     logger.debug("Loading dependency project from {}".format(module_path))
-
     for obj in os.listdir(module_path):
         full_obj = os.path.join(module_path, obj)
 
@@ -192,8 +184,8 @@ def dependencies_for_path(project, module_path):
             continue
 
         try:
-            yield load_project_with_profile(project, full_obj)
-        except dbt.project.DbtProjectError as e:
+            yield config.new_project(full_obj)
+        except dbt.exceptions.DbtProjectError as e:
             logger.info(
                 "Error reading dependency project at {}".format(
                     full_obj)
@@ -201,14 +193,14 @@ def dependencies_for_path(project, module_path):
             logger.info(str(e))
 
 
-def dependency_projects(project):
+def dependency_projects(config):
     module_paths = [
         GLOBAL_DBT_MODULES_PATH,
-        os.path.join(project['project-root'], project['modules-path'])
+        os.path.join(config.project_root, config.modules_path)
     ]
 
     for module_path in module_paths:
-        for entry in dependencies_for_path(project, module_path):
+        for entry in dependencies_for_path(config, module_path):
             yield entry
 
 
@@ -271,6 +263,57 @@ def deep_merge_item(destination, key, value):
             destination[key] = value
     else:
         destination[key] = value
+
+
+def _deep_map(func, value, keypath):
+    atomic_types = (int, float, basestring, type(None), bool)
+
+    if isinstance(value, list):
+        ret = [
+            _deep_map(func, v, (keypath + (idx,)))
+            for idx, v in enumerate(value)
+        ]
+    elif isinstance(value, dict):
+        ret = {
+            k: _deep_map(func, v, (keypath + (k,)))
+            for k, v in value.items()
+        }
+    elif isinstance(value, atomic_types):
+        ret = func(value, keypath)
+    else:
+        ok_types = (list, dict) + atomic_types
+        raise dbt.exceptions.DbtConfigError(
+            'in _deep_map, expected one of {!r}, got {!r}'
+            .format(ok_types, type(value))
+        )
+
+    return ret
+
+
+def deep_map(func, value):
+    """map the function func() onto each non-container value in 'value'
+    recursively, returning a new value. As long as func does not manipulate
+    value, then deep_map will also not manipulate it.
+
+    value should be a value returned by `yaml.safe_load` or `json.load` - the
+    only expected types are list, dict, native python number, str, NoneType,
+    and bool.
+
+    func() will be called on numbers, strings, Nones, and booleans. Its first
+    parameter will be the value, and the second will be its keypath, an
+    iterable over the __getitem__ keys needed to get to it.
+
+    :raises: If there are cycles in the value, raises a
+        dbt.exceptions.RecursionException
+    """
+    try:
+        return _deep_map(func, value, ())
+    except RuntimeError as exc:
+        if 'maximum recursion depth exceeded' in str(exc):
+            raise dbt.exceptions.RecursionException(
+                'Cycle detected in deep_map'
+            )
+        raise
 
 
 class AttrDict(dict):

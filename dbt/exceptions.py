@@ -69,7 +69,8 @@ class RuntimeException(RuntimeError, Exception):
         if hasattr(self.msg, 'split'):
             split_msg = self.msg.split("\n")
         else:
-            split_msg = basestring(self.msg).split("\n")
+            # can't use basestring here, as on python2 it's an abstract class
+            split_msg = str(self.msg).split("\n")
 
         lines = ["{}{}".format(self.type + ' Error',
                                node_string)] + split_msg
@@ -102,6 +103,10 @@ class CompilationException(RuntimeException):
         return 'Compilation'
 
 
+class RecursionException(RuntimeException):
+    pass
+
+
 class ValidationException(RuntimeException):
     pass
 
@@ -125,6 +130,21 @@ class ParsingException(Exception):
 
 
 class DependencyException(Exception):
+    pass
+
+
+class DbtConfigError(RuntimeException):
+    def __init__(self, message, project=None, result_type='invalid_project'):
+        self.project = project
+        super(DbtConfigError, self).__init__(message)
+        self.result_type = result_type
+
+
+class DbtProjectError(DbtConfigError):
+    pass
+
+
+class DbtProfileError(DbtConfigError):
     pass
 
 
@@ -279,6 +299,10 @@ def bad_package_spec(repo, spec, error_message):
     raise InternalException(
         "Error checking out spec='{}' for repo {}\n{}".format(
             spec, repo, error_message))
+
+
+def raise_cache_inconsistent(message):
+    raise InternalException('Cache inconsistency detected: {}'.format(message))
 
 
 def missing_config(model, name):
@@ -446,4 +470,11 @@ def raise_incorrect_version(path):
         'the top of the file.\n\nOtherwise, please consult the documentation '
         'for more information on schema.yml syntax:\n\n'
         'https://docs.getdbt.com/v0.11/docs/schemayml-files'.format(path)
+    )
+
+
+def raise_unrecognized_credentials_type(typename, supported_types):
+    raise_compiler_error(
+        'Unrecognized credentials type "{}" - supported types are ({})'
+        .format(typename, ', '.join('"{}"'.format(t) for t in supported_types))
     )

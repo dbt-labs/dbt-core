@@ -1,11 +1,6 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 class TestVarcharWidening(DBTIntegrationTest):
-
-    def setUp(self):
-        pass
-
     @property
     def schema(self):
         return "varchar_widening_002"
@@ -14,10 +9,8 @@ class TestVarcharWidening(DBTIntegrationTest):
     def models(self):
         return "test/integration/002_varchar_widening_test/models"
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__varchar_widening(self):
-        self.use_profile('postgres')
-        self.use_default_project()
         self.run_sql_file("test/integration/002_varchar_widening_test/seed.sql")
 
         results = self.run_dbt()
@@ -34,10 +27,8 @@ class TestVarcharWidening(DBTIntegrationTest):
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
 
-    @attr(type='snowflake')
+    @use_profile('snowflake')
     def test__snowflake__varchar_widening(self):
-        self.use_profile('snowflake')
-        self.use_default_project()
         self.run_sql_file("test/integration/002_varchar_widening_test/seed.sql")
 
         results = self.run_dbt()

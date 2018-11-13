@@ -30,7 +30,7 @@ class BaseParser(object):
     def get_fqn(cls, path, package_project_config, extra=[]):
         parts = dbt.utils.split_path(path)
         name, _ = os.path.splitext(parts[-1])
-        fqn = ([package_project_config.get('name')] +
+        fqn = ([package_project_config.project_name] +
                parts[:-1] +
                extra +
                [name])
@@ -93,8 +93,8 @@ class BaseParser(object):
         node['config'] = config_dict
 
         # Set this temporarily so get_rendered() has access to a schema & alias
-        profile = dbt.utils.get_profile_from_project(root_project_config)
-        default_schema = profile.get('schema', 'public')
+        default_schema = getattr(root_project_config.credentials, 'schema',
+                                 'public')
         node['schema'] = default_schema
         default_alias = node.get('name')
         node['alias'] = default_alias
@@ -105,7 +105,7 @@ class BaseParser(object):
 
         # make a manifest with just the macros to get the context
         manifest = Manifest(macros=macros, nodes={}, docs={},
-                            generated_at=dbt.utils.timestring())
+                            generated_at=dbt.utils.timestring(), disabled=[])
 
         parsed_node = ParsedNode(**node)
         context = dbt.context.parser.generate(parsed_node, root_project_config,
@@ -118,8 +118,8 @@ class BaseParser(object):
         # Clean up any open conns opened by adapter functions that hit the db
         db_wrapper = context['adapter']
         adapter = db_wrapper.adapter
-        profile = db_wrapper.profile
-        adapter.release_connection(profile, parsed_node.name)
+        runtime_config = db_wrapper.config
+        adapter.release_connection(parsed_node.name)
 
         # Special macro defined in the global project
         schema_override = config.config.get('schema')
@@ -127,6 +127,10 @@ class BaseParser(object):
                                  lambda x: default_schema)
         parsed_node.schema = get_schema(schema_override)
         parsed_node.alias = config.config.get('alias', default_alias)
+
+        # Set tags on node provided in config blocks
+        model_tags = config.config.get('tags', [])
+        parsed_node.tags.extend(model_tags)
 
         # Overwrite node config
         config_dict = parsed_node.get('config', {})

@@ -16,10 +16,12 @@ class TestSimpleDependency(DBTIntegrationTest):
         return "test/integration/006_simple_dependency_test/models"
 
     @property
-    def project_config(self):
+    def packages_config(self):
         return {
-            "repositories": [
-                'https://github.com/fishtown-analytics/dbt-integration-project'
+            "packages": [
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project'
+                }
             ]
         }
 
@@ -77,10 +79,13 @@ class TestSimpleDependencyBranch(DBTIntegrationTest):
         return "test/integration/006_simple_dependency_test/models"
 
     @property
-    def project_config(self):
+    def packages_config(self):
         return {
-            "repositories": [
-                'https://github.com/fishtown-analytics/dbt-integration-project@master'
+            "packages": [
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'revision': 'master',
+                },
             ]
         }
 

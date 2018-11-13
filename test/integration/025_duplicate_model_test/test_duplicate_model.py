@@ -6,9 +6,6 @@ from test.integration.base import DBTIntegrationTest
 
 class TestDuplicateModelEnabled(DBTIntegrationTest):
 
-    def setUp(self):
-        DBTIntegrationTest.setUp(self)
-
     @property
     def schema(self):
         return "duplicate_model_025"
@@ -48,9 +45,6 @@ class TestDuplicateModelEnabled(DBTIntegrationTest):
 
 
 class TestDuplicateModelDisabled(DBTIntegrationTest):
-
-    def setUp(self):
-        DBTIntegrationTest.setUp(self)
 
     @property
     def schema(self):
@@ -96,9 +90,6 @@ class TestDuplicateModelDisabled(DBTIntegrationTest):
 
 class TestDuplicateModelEnabledAcrossPackages(DBTIntegrationTest):
 
-    def setUp(self):
-        DBTIntegrationTest.setUp(self)
-
     @property
     def schema(self):
         return "duplicate_model_025"
@@ -108,11 +99,14 @@ class TestDuplicateModelEnabledAcrossPackages(DBTIntegrationTest):
         return "test/integration/025_duplicate_model_test/models-3"
 
     @property
-    def project_config(self):
+    def packages_config(self):
         return {
-            "repositories": [
-                'https://github.com/fishtown-analytics/dbt-integration-project@master'
-            ]
+            "packages": [
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'revision': 'master',
+                },
+            ],
         }
 
     @attr(type="postgres")
@@ -141,11 +135,14 @@ class TestDuplicateModelDisabledAcrossPackages(DBTIntegrationTest):
         return "test/integration/025_duplicate_model_test/models-4"
 
     @property
-    def project_config(self):
+    def packages_config(self):
         return {
-            "repositories": [
-                'https://github.com/fishtown-analytics/dbt-integration-project@master'
-            ]
+            "packages": [
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'revision': 'master',
+                },
+            ],
         }
 
     @attr(type="postgres")

@@ -17,6 +17,14 @@ class TestMacros(DBTIntegrationTest):
         return "test/integration/016_macro_tests/models"
 
     @property
+    def packages_config(self):
+        return {
+            'packages': [
+                {'git': 'https://github.com/fishtown-analytics/dbt-integration-project'},
+            ]
+        }
+
+    @property
     def project_config(self):
         return {
             "models": {
@@ -25,9 +33,6 @@ class TestMacros(DBTIntegrationTest):
                 }
             },
             "macro-paths": ["test/integration/016_macro_tests/macros"],
-            "repositories": [
-                'https://github.com/fishtown-analytics/dbt-integration-project'
-            ]
         }
 
     @attr(type='postgres')
@@ -85,12 +90,17 @@ class TestMisusedMacros(DBTIntegrationTest):
         return "test/integration/016_macro_tests/bad-models"
 
     @property
+    def packages_config(self):
+        return {
+            'packages': [
+                {'git': 'https://github.com/fishtown-analytics/dbt-integration-project'}
+            ]
+        }
+
+    @property
     def project_config(self):
         return {
             "macro-paths": ["test/integration/016_macro_tests/macros"],
-            "repositories": [
-                'https://github.com/fishtown-analytics/dbt-integration-project'
-            ]
         }
 
     # TODO: compilation no longer exists, so while the model calling this macro

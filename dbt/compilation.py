@@ -4,7 +4,6 @@ import json
 from collections import OrderedDict, defaultdict
 import sqlparse
 
-import dbt.project
 import dbt.utils
 import dbt.include
 import dbt.tracking
@@ -19,6 +18,7 @@ import dbt.contracts.project
 import dbt.exceptions
 import dbt.flags
 import dbt.loader
+import dbt.config
 from dbt.contracts.graph.compiled import CompiledNode, CompiledGraph
 
 from dbt.clients.system import write_json
@@ -96,14 +96,17 @@ def recursively_prepend_ctes(model, manifest):
 
 
 class Compiler(object):
-    def __init__(self, project):
-        self.project = project
+    def __init__(self, config):
+        self.config = config
 
     def initialize(self):
-        dbt.clients.system.make_directory(self.project['target-path'])
-        dbt.clients.system.make_directory(self.project['modules-path'])
+        dbt.clients.system.make_directory(self.config.target_path)
+        dbt.clients.system.make_directory(self.config.modules_path)
 
-    def compile_node(self, node, manifest):
+    def compile_node(self, node, manifest, extra_context=None):
+        if extra_context is None:
+            extra_context = {}
+
         logger.debug("Compiling {}".format(node.get('unique_id')))
 
         data = node.to_dict()
@@ -117,7 +120,8 @@ class Compiler(object):
         compiled_node = CompiledNode(**data)
 
         context = dbt.context.runtime.generate(
-            compiled_node, self.project, manifest)
+            compiled_node, self.config, manifest)
+        context.update(extra_context)
 
         compiled_node.compiled_sql = dbt.clients.jinja.get_rendered(
             node.get('raw_sql'),
@@ -162,12 +166,12 @@ class Compiler(object):
         manifest should be a Manifest.
         """
         filename = manifest_file_name
-        manifest_path = os.path.join(self.project['target-path'], filename)
+        manifest_path = os.path.join(self.config.target_path, filename)
         write_json(manifest_path, manifest.serialize())
 
     def write_graph_file(self, linker):
         filename = graph_file_name
-        graph_path = os.path.join(self.project['target-path'], filename)
+        graph_path = os.path.join(self.config.target_path, filename)
         linker.write_graph(graph_path)
 
     def link_node(self, linker, node, manifest):
@@ -196,13 +200,12 @@ class Compiler(object):
             raise RuntimeError("Found a cycle: {}".format(cycle))
 
     def get_all_projects(self):
-        root_project = self.project.cfg
-        all_projects = {root_project.get('name'): root_project}
-        dependency_projects = dbt.utils.dependency_projects(self.project)
+        all_projects = {self.config.project_name: self.config}
+        dependency_projects = dbt.utils.dependency_projects(self.config)
 
-        for project in dependency_projects:
-            name = project.cfg.get('name', 'unknown')
-            all_projects[name] = project.cfg
+        for project_cfg in dependency_projects:
+            name = project_cfg.project_name
+            all_projects[name] = project_cfg
 
         if dbt.flags.STRICT_MODE:
             dbt.contracts.project.ProjectList(**all_projects)
@@ -238,11 +241,15 @@ class Compiler(object):
 
         all_projects = self.get_all_projects()
 
-        manifest = dbt.loader.GraphLoader.load_all(self.project, all_projects)
+        manifest = dbt.loader.GraphLoader.load_all(self.config, all_projects)
 
         self.write_manifest_file(manifest)
 
         self._check_resource_uniqueness(manifest)
+
+        resource_fqns = manifest.get_resource_fqns()
+        self.config.warn_for_unused_resource_config_paths(resource_fqns,
+                                                          manifest.disabled)
 
         self.link_graph(linker, manifest)
 

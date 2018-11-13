@@ -1,3 +1,7 @@
+import codecs
+import linecache
+import os
+
 import jinja2
 import jinja2._compat
 import jinja2.ext
@@ -37,13 +41,56 @@ class MacroFuzzEnvironment(jinja2.sandbox.SandboxedEnvironment):
             jinja2._compat.encode_filename(filename)
         ).parse()
 
+    def _compile(self, source, filename):
+        """Override jinja's compilation to stash the rendered source inside
+        the python linecache for debugging.
+        """
+        if filename == '<template>':
+            # make a better filename
+            filename = 'dbt-{}'.format(
+                codecs.encode(os.urandom(12), 'hex').decode('ascii')
+            )
+            # encode, though I don't think this matters
+            filename = jinja2._compat.encode_filename(filename)
+            # put ourselves in the cache using the 'lazycache' method
+            linecache.cache[filename] = (lambda: source,)
 
-def macro_generator(template, node):
+        return super(MacroFuzzEnvironment, self)._compile(source, filename)
+
+
+class TemplateCache(object):
+
+    def __init__(self):
+        self.file_cache = {}
+
+    def get_node_template(self, node):
+        key = (node['package_name'], node['original_file_path'])
+
+        if key in self.file_cache:
+            return self.file_cache[key]
+
+        template = get_template(
+            string=node.get('raw_sql'),
+            ctx={},
+            node=node
+        )
+        self.file_cache[key] = template
+
+        return template
+
+    def clear(self):
+        self.file_cache.clear()
+
+
+template_cache = TemplateCache()
+
+
+def macro_generator(node):
     def apply_context(context):
         def call(*args, **kwargs):
             name = node.get('name')
-            module = template.make_module(
-                context, False, context)
+            template = template_cache.get_node_template(node)
+            module = template.make_module(context, False, context)
 
             if node['resource_type'] == NodeType.Operation:
                 macro = module.__dict__[dbt.utils.get_dbt_operation_name(name)]
@@ -55,11 +102,8 @@ def macro_generator(template, node):
                 return macro(*args, **kwargs)
             except dbt.exceptions.MacroReturn as e:
                 return e.value
-            except (TypeError,
-                    jinja2.exceptions.TemplateRuntimeError) as e:
-                dbt.exceptions.raise_compiler_error(
-                    str(e),
-                    node)
+            except (TypeError, jinja2.exceptions.TemplateRuntimeError) as e:
+                dbt.exceptions.raise_compiler_error(str(e), node)
             except dbt.exceptions.CompilationException as e:
                 e.stack.append(node)
                 raise e
@@ -141,26 +185,53 @@ class DocumentationExtension(jinja2.ext.Extension):
         return node
 
 
+def _is_dunder_name(name):
+    return name.startswith('__') and name.endswith('__')
+
+
 def create_macro_capture_env(node):
 
     class ParserMacroCapture(jinja2.Undefined):
         """
         This class sets up the parser to capture macros.
         """
-        def __init__(self, hint=None, obj=None, name=None,
-                     exc=None):
-            super(jinja2.Undefined, self).__init__()
-
+        def __init__(self, hint=None, obj=None, name=None, exc=None):
+            super(ParserMacroCapture, self).__init__(hint=hint, name=name)
             self.node = node
             self.name = name
             self.package_name = node.get('package_name')
-
-        def __getattr__(self, name):
-
             # jinja uses these for safety, so we have to override them.
             # see https://github.com/pallets/jinja/blob/master/jinja2/sandbox.py#L332-L339 # noqa
-            if name in ['unsafe_callable', 'alters_data']:
-                return False
+            self.unsafe_callable = False
+            self.alters_data = False
+
+        def __deepcopy__(self, memo):
+            path = os.path.join(self.node.get('root_path'),
+                                self.node.get('original_file_path'))
+
+            logger.debug(
+                'dbt encountered an undefined variable, "{}" in node {}.{} '
+                '(source path: {})'
+                .format(self.name, self.node.get('package_name'),
+                        self.node.get('name'), path))
+
+            # match jinja's message
+            dbt.exceptions.raise_compiler_error(
+                "{!r} is undefined".format(self.name),
+                node=self.node
+            )
+
+        def __getitem__(self, name):
+            # Propagate the undefined value if a caller accesses this as if it
+            # were a dictionary
+            return self
+
+        def __getattr__(self, name):
+            if name == 'name' or _is_dunder_name(name):
+                raise AttributeError(
+                    "'{}' object has no attribute '{}'"
+                    .format(type(self).__name__, name)
+                )
 
             self.package_name = self.name
             self.name = name
@@ -173,22 +244,37 @@ def create_macro_capture_env(node):
     return ParserMacroCapture
 
 
+def get_environment(node=None, capture_macros=False):
+    args = {
+        'extensions': []
+    }
+
+    if capture_macros:
+        args['undefined'] = create_macro_capture_env(node)
+
+    args['extensions'].append(MaterializationExtension)
+    args['extensions'].append(OperationExtension)
+    args['extensions'].append(DocumentationExtension)
+
+    return MacroFuzzEnvironment(**args)
+
+
+def parse(string):
+    try:
+        return get_environment().parse(dbt.compat.to_string(string))
+
+    except (jinja2.exceptions.TemplateSyntaxError,
+            jinja2.exceptions.UndefinedError) as e:
+        e.translated = False
+        dbt.exceptions.raise_compiler_error(str(e))
+
+
 def get_template(string, ctx, node=None, capture_macros=False):
     try:
-        args = {
-            'extensions': []
-        }
+        env = get_environment(node, capture_macros)
 
-        if capture_macros:
-            args['undefined'] = create_macro_capture_env(node)
-
-        args['extensions'].append(MaterializationExtension)
-        args['extensions'].append(OperationExtension)
-        args['extensions'].append(DocumentationExtension)
-
-        env = MacroFuzzEnvironment(**args)
-
-        return env.from_string(dbt.compat.to_string(string), globals=ctx)
+        template_source = dbt.compat.to_string(string)
+        return env.from_string(template_source, globals=ctx)
 
     except (jinja2.exceptions.TemplateSyntaxError,
             jinja2.exceptions.UndefinedError) as e:

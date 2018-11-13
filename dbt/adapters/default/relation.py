@@ -173,13 +173,26 @@ class DefaultRelation(APIObject):
             identifier=identifier)
 
     @classmethod
-    def create_from_node(cls, profile, node, table_name=None, **kwargs):
+    def _create_from_node(cls, config, node, table_name, quote_policy,
+                          **kwargs):
         return cls.create(
-            database=profile.get('dbname'),
+            database=config.credentials.dbname,
             schema=node.get('schema'),
             identifier=node.get('alias'),
             table_name=table_name,
+            quote_policy=quote_policy,
             **kwargs)
+
+    @classmethod
+    def create_from_node(cls, config, node, table_name=None, quote_policy=None,
+                         **kwargs):
+        if quote_policy is None:
+            quote_policy = {}
+
+        quote_policy = dbt.utils.merge(config.quoting, quote_policy)
+        return cls._create_from_node(config=config, quote_policy=quote_policy,
+                                     node=node, table_name=table_name,
+                                     **kwargs)
 
     @classmethod
     def create(cls, database=None, schema=None,

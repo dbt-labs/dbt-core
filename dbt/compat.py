@@ -1,5 +1,6 @@
 import codecs
 import json
+import warnings
 
 WHICH_PYTHON = None
 
@@ -18,8 +19,10 @@ else:
 
 if WHICH_PYTHON == 2:
     from SimpleHTTPServer import SimpleHTTPRequestHandler
+    from SocketServer import TCPServer
 else:
     from http.server import SimpleHTTPRequestHandler
+    from socketserver import TCPServer
 
 
 def to_unicode(s):
@@ -51,3 +54,12 @@ def write_file(path, s):
     else:
         with open(path, 'w') as f:
             return f.write(to_string(s))
+
+
+def suppress_warnings():
+    # in python 2, ResourceWarnings don't exist.
+    # in python 3, suppress ResourceWarnings about unclosed sockets, as the
+    # bigquery library never closes them.
+    if WHICH_PYTHON == 3:
+        warnings.filterwarnings("ignore", category=ResourceWarning,
+                                message="unclosed.*<socket.socket.*>")

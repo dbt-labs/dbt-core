@@ -69,4 +69,10 @@ target/
 # Sublime Text
 *.sublime-*
 
+# Vim
+*.sw*
+
 .python-version
+
+# Vim
+*.sw*

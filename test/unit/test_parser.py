@@ -8,11 +8,14 @@ import dbt.flags
 import dbt.parser
 from dbt.parser import ModelParser, MacroParser, DataTestParser, SchemaParser, ParserUtils
 from dbt.utils import timestring
+from dbt.config import RuntimeConfig
 
 from dbt.node_types import NodeType
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedNode, ParsedMacro, ParsedNodePatch
 from dbt.contracts.graph.unparsed import UnparsedNode
+
+from .utils import config_from_parts_or_dicts
 
 def get_os_path(unix_path):
     return os.path.normpath(unix_path)
@@ -30,11 +33,7 @@ class ParserTest(unittest.TestCase):
 
         self.maxDiff = None
 
-        self.root_project_config = {
-            'name': 'root',
-            'version': '0.1',
-            'profile': 'test',
-            'project-root': os.path.abspath('.'),
+        profile_data = {
             'target': 'test',
             'quoting': {},
             'outputs': {
@@ -42,24 +41,37 @@ class ParserTest(unittest.TestCase):
                     'type': 'postgres',
                     'host': 'localhost',
                     'schema': 'analytics',
+                    'user': 'test',
+                    'pass': 'test',
+                    'dbname': 'test',
+                    'port': 1,
                 }
             }
         }
 
-        self.snowplow_project_config = {
+        root_project = {
+            'name': 'root',
+            'version': '0.1',
+            'profile': 'test',
+            'project-root': os.path.abspath('.'),
+        }
+
+
+        self.root_project_config = config_from_parts_or_dicts(
+            project=root_project,
+            profile=profile_data
+        )
+
+        snowplow_project = {
             'name': 'snowplow',
             'version': '0.1',
+            'profile': 'test',
             'project-root': os.path.abspath('./dbt_modules/snowplow'),
-            'target': 'test',
-            'quoting': {},
-            'outputs': {
-                'test': {
-                    'type': 'postgres',
-                    'host': 'localhost',
-                    'schema': 'analytics',
-                }
-            }
         }
+
+        self.snowplow_project_config = config_from_parts_or_dicts(
+            project=snowplow_project, profile=profile_data
+        )
 
         self.model_config = {
             'enabled': True,
@@ -69,6 +81,7 @@ class ParserTest(unittest.TestCase):
             'vars': {},
             'quoting': {},
             'column_types': {},
+            'tags': [],
         }
 
         self.disabled_config = {
@@ -79,6 +92,7 @@ class ParserTest(unittest.TestCase):
             'vars': {},
             'quoting': {},
             'column_types': {},
+            'tags': [],
         }
 
     def test__single_model(self):
@@ -98,7 +112,7 @@ class ParserTest(unittest.TestCase):
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
-            {
+            ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
                     name='model_one',
@@ -123,7 +137,7 @@ class ParserTest(unittest.TestCase):
                     description='',
                     columns={}
                 )
-            }
+            }, [])
         )
 
     def test__single_model__nested_configuration(self):
@@ -137,7 +151,7 @@ class ParserTest(unittest.TestCase):
             'raw_sql': ("select * from events"),
         }]
 
-        self.root_project_config['models'] = {
+        self.root_project_config.models = {
             'materialized': 'ephemeral',
             'root': {
                 'nested': {
@@ -159,7 +173,7 @@ class ParserTest(unittest.TestCase):
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
-            {
+            ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
                     name='model_one',
@@ -184,7 +198,7 @@ class ParserTest(unittest.TestCase):
                     description='',
                     columns={}
                 )
-            }
+            }, [])
         )
 
     def test__empty_model(self):
@@ -203,7 +217,7 @@ class ParserTest(unittest.TestCase):
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config}),
-            {
+            ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
                     name='model_one',
@@ -228,7 +242,7 @@ class ParserTest(unittest.TestCase):
                     description='',
                     columns={}
                 )
-            }
+            }, [])
         )
 
     def test__simple_dependency(self):
@@ -256,7 +270,7 @@ class ParserTest(unittest.TestCase):
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
-            {
+            ({
                 'model.root.base': ParsedNode(
                     alias='base',
                     name='base',
@@ -306,7 +320,7 @@ class ParserTest(unittest.TestCase):
                     description='',
                     columns={}
                 )
-            }
+            }, [])
         )
 
     def test__multiple_dependencies(self):
@@ -362,7 +376,7 @@ class ParserTest(unittest.TestCase):
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
-            {
+            ({
                 'model.root.events': ParsedNode(
                     alias='events',
                     name='events',
@@ -483,7 +497,7 @@ class ParserTest(unittest.TestCase):
                     description='',
                     columns={}
                 ),
-            }
+            }, [])
         )
 
     def test__multiple_dependencies__packages(self):
@@ -541,7 +555,7 @@ class ParserTest(unittest.TestCase):
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
-            {
+            ({
                 'model.snowplow.events': ParsedNode(
                     alias='events',
                     name='events',
@@ -663,7 +677,7 @@ class ParserTest(unittest.TestCase):
                     description='',
                     columns={}
                 ),
-            }
+            }, [])
         )
 
     def test__process_refs__packages(self):
@@ -741,6 +755,7 @@ class ParserTest(unittest.TestCase):
             macros={k: ParsedMacro(**v) for (k,v) in graph['macros'].items()},
             docs={},
             generated_at=timestring(),
+            disabled=[]
         )
 
         processed_manifest = ParserUtils.process_refs(manifest, 'root')
@@ -847,7 +862,7 @@ class ParserTest(unittest.TestCase):
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
-            {
+            ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
                     name='model_one',
@@ -872,11 +887,11 @@ class ParserTest(unittest.TestCase):
                     description='',
                     columns={}
                 )
-            }
+            }, [])
         )
 
     def test__root_project_config(self):
-        self.root_project_config['models'] = {
+        self.root_project_config.models = {
             'materialized': 'ephemeral',
             'root': {
                 'view': {
@@ -932,7 +947,7 @@ class ParserTest(unittest.TestCase):
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
-            {
+            ({
                 'model.root.table': ParsedNode(
                     alias='table',
                     name='table',
@@ -1005,12 +1020,11 @@ class ParserTest(unittest.TestCase):
                     description='',
                     columns={}
                 ),
-            }
-
+            }, [])
         )
 
     def test__other_project_config(self):
-        self.root_project_config['models'] = {
+        self.root_project_config.models = {
             'materialized': 'ephemeral',
             'root': {
                 'view': {
@@ -1029,7 +1043,7 @@ class ParserTest(unittest.TestCase):
             }
         }
 
-        self.snowplow_project_config['models'] = {
+        self.snowplow_project_config.models = {
             'snowplow': {
                 'enabled': False,
                 'views': {
@@ -1132,7 +1146,7 @@ class ParserTest(unittest.TestCase):
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
-            {
+            ({
                 'model.root.table': ParsedNode(
                     alias='table',
                     name='table',
@@ -1229,7 +1243,7 @@ class ParserTest(unittest.TestCase):
                     description='',
                     columns={}
                 ),
-            }
+            }, [['snowplow', 'disabled'], ['snowplow', 'views', 'package']])
         )
 
     def test__simple_schema_v1_test(self):
@@ -1581,7 +1595,7 @@ class ParserTest(unittest.TestCase):
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
-            {
+            ({
                 'test.root.no_events': ParsedNode(
                     alias='no_events',
                     name='no_events',
@@ -1606,7 +1620,7 @@ class ParserTest(unittest.TestCase):
                     description='',
                     columns={}
                 )
-            }
+            }, [])
         )
 
     def test__simple_macro(self):
@@ -1625,10 +1639,11 @@ class ParserTest(unittest.TestCase):
 
         self.assertTrue(callable(result['macro.root.simple'].generator))
 
+
         self.assertEqual(
             result,
             {
-                'macro.root.simple': {
+                'macro.root.simple': ParsedMacro(**{
                     'name': 'simple',
                     'resource_type': 'macro',
                     'unique_id': 'macro.root.simple',
@@ -1641,7 +1656,7 @@ class ParserTest(unittest.TestCase):
                     'tags': [],
                     'path': 'simple_macro.sql',
                     'raw_sql': macro_file_contents,
-                }
+                })
             }
         )
 
@@ -1664,7 +1679,7 @@ class ParserTest(unittest.TestCase):
         self.assertEqual(
             result,
             {
-                'macro.root.simple': {
+                'macro.root.simple': ParsedMacro(**{
                     'name': 'simple',
                     'resource_type': 'macro',
                     'unique_id': 'macro.root.simple',
@@ -1677,7 +1692,7 @@ class ParserTest(unittest.TestCase):
                     'tags': [],
                     'path': 'simple_macro.sql',
                     'raw_sql': macro_file_contents,
-                }
+                }),
             }
         )
 
@@ -1697,7 +1712,7 @@ class ParserTest(unittest.TestCase):
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
-            {
+            ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
                     name='model_one',
@@ -1722,7 +1737,7 @@ class ParserTest(unittest.TestCase):
                     description='',
                     columns={}
                 )
-            }
+            }, [])
         )
 
     def test__macro_no_explicit_project_used_in_model(self):
@@ -1742,7 +1757,7 @@ class ParserTest(unittest.TestCase):
                 self.root_project_config,
                 {'root': self.root_project_config,
                  'snowplow': self.snowplow_project_config}),
-            {
+            ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
                     name='model_one',
@@ -1767,5 +1782,5 @@ class ParserTest(unittest.TestCase):
                     description='',
                     columns={}
                 )
-            }
+            }, [])
         )

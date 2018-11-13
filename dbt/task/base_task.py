@@ -2,9 +2,9 @@ import dbt.exceptions
 
 
 class BaseTask(object):
-    def __init__(self, args, project=None):
+    def __init__(self, args, config=None):
         self.args = args
-        self.project = project
+        self.config = config
 
     def run(self):
         raise dbt.exceptions.NotImplementedException('Not Implemented')

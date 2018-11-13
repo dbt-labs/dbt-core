@@ -1,7 +1,8 @@
 
 {{
     config(
-        materialized = 'view'
+        materialized = 'view',
+        tags = ['bi']
     )
 }}
 

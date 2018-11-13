@@ -55,8 +55,6 @@ class TestCLIVarOverridePorject(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test__overriden_vars_project_level(self):
-        self.use_default_project()
-        self.use_profile('postgres')
 
         # This should be "override"
         self.run_dbt(["run", "--vars", "{required: override}"])

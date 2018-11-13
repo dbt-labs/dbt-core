@@ -3,11 +3,11 @@ import dbt.exceptions
 import dbt.utils
 
 
-def docs(node, manifest, project_cfg, column_name=None):
+def docs(node, manifest, config, column_name=None):
     """Return a function that will process `doc()` references in jinja, look
     them up in the manifest, and return the appropriate block contents.
     """
-    current_project = project_cfg.get('name')
+    current_project = config.project_name
 
     def do_docs(*args):
         if len(args) == 1:

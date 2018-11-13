@@ -54,21 +54,21 @@ class RedshiftAdapter(PostgresAdapter):
                     "authentication method selected")
 
         cluster_creds = cls.fetch_cluster_credentials(
-            credentials.get('user'),
-            credentials.get('dbname'),
-            credentials.get('cluster_id'),
+            credentials.user,
+            credentials.dbname,
+            credentials.cluster_id,
             iam_duration_s,
         )
 
         # replace username and password with temporary redshift credentials
-        return dbt.utils.merge(credentials, {
-            'user': cluster_creds.get('DbUser'),
-            'pass': cluster_creds.get('DbPassword')
-        })
+        return credentials.incorporate(
+            user=cluster_creds.get('DbUser'),
+            password=cluster_creds.get('DbPassword')
+        )
 
     @classmethod
     def get_credentials(cls, credentials):
-        method = credentials.get('method')
+        method = credentials.method
 
         # Support missing 'method' for backwards compatibility
         if method == 'database' or method is None:
@@ -156,8 +156,7 @@ class RedshiftAdapter(PostgresAdapter):
                    table_schema_filter=table_schema_filter).strip()
         return sql
 
-    @classmethod
-    def drop_relation(cls, profile, project, relation, model_name=None):
+    def drop_relation(self, relation, model_name=None):
         """
         In Redshift, DROP TABLE ... CASCADE should not be used
         inside a transaction. Redshift doesn't prevent the CASCADE
@@ -176,26 +175,22 @@ class RedshiftAdapter(PostgresAdapter):
 
         to_return = None
 
-        try:
-            drop_lock.acquire()
+        with drop_lock:
 
-            connection = cls.get_connection(profile, model_name)
+            connection = self.get_connection(model_name)
 
-            if connection.get('transaction_open'):
-                cls.commit(profile, connection)
+            if connection.transaction_open:
+                self.commit(connection)
 
-            cls.begin(profile, connection.get('name'))
+            self.begin(connection.name)
 
-            to_return = super(PostgresAdapter, cls).drop_relation(
-                profile, project, relation, model_name)
+            to_return = super(RedshiftAdapter, self).drop_relation(
+                relation, model_name)
 
-            cls.commit(profile, connection)
-            cls.begin(profile, connection.get('name'))
+            self.commit(connection)
+            self.begin(connection.name)
 
             return to_return
-
-        finally:
-            drop_lock.release()
 
     @classmethod
     def convert_text_type(cls, agate_table, col_idx):

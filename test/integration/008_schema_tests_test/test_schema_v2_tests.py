@@ -3,8 +3,8 @@ from test.integration.base import DBTIntegrationTest, FakeArgs, use_profile
 import os
 
 from dbt.task.test import TestTask
-from dbt.project import read_project
 from dbt.exceptions import CompilationException
+
 
 class TestSchemaTests(DBTIntegrationTest):
 
@@ -22,10 +22,9 @@ class TestSchemaTests(DBTIntegrationTest):
         return "test/integration/008_schema_tests_test/models-v2/models"
 
     def run_schema_validations(self):
-        project = read_project('dbt_project.yml')
         args = FakeArgs()
 
-        test_task = TestTask(args, project)
+        test_task = TestTask(args, self.config)
         return test_task.run()
 
     @attr(type='postgres')
@@ -73,10 +72,9 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
         return "test/integration/008_schema_tests_test/models-v2/malformed"
 
     def run_schema_validations(self):
-        project = read_project('dbt_project.yml')
         args = FakeArgs()
 
-        test_task = TestTask(args, project)
+        test_task = TestTask(args, self.config)
         return test_task.run()
 
     @attr(type='postgres')
@@ -108,16 +106,26 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         return "schema_tests_008"
 
     @property
+    def packages_config(self):
+        return {
+            'packages': [
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-utils',
+                    'revision': 'macros-v2',
+                },
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                },
+            ]
+        }
+
+    @property
     def project_config(self):
         # dbt-utils containts a schema test (equality)
         # dbt-integration-project contains a schema.yml file
         # both should work!
         return {
             "macro-paths": ["test/integration/008_schema_tests_test/macros-v2"],
-            "repositories": [
-                'https://github.com/fishtown-analytics/dbt-utils@macros-v2',
-                'https://github.com/fishtown-analytics/dbt-integration-project'
-            ]
         }
 
     @property
@@ -125,10 +133,9 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         return "test/integration/008_schema_tests_test/models-v2/custom"
 
     def run_schema_validations(self):
-        project = read_project('dbt_project.yml')
         args = FakeArgs()
 
-        test_task = TestTask(args, project)
+        test_task = TestTask(args, self.config)
         return test_task.run()
 
     @attr(type='postgres')
@@ -147,7 +154,8 @@ class TestCustomSchemaTests(DBTIntegrationTest):
                 self.assertTrue(result.node['name'] in expected_failures)
         self.assertEqual(sum(x.status for x in test_results), 52)
 
-class TestSchemaTests(DBTIntegrationTest):
+
+class TestBQSchemaTests(DBTIntegrationTest):
     @property
     def schema(self):
         return "schema_tests_008"
@@ -162,14 +170,13 @@ class TestSchemaTests(DBTIntegrationTest):
             os.path.join('test/integration/008_schema_tests_test/models-v2', path))
 
     def run_schema_validations(self):
-        project = read_project('dbt_project.yml')
         args = FakeArgs()
 
-        test_task = TestTask(args, project)
+        test_task = TestTask(args, self.config)
         return test_task.run()
 
     @use_profile('bigquery')
-    def test_schema_tests(self):
+    def test_schema_tests_bigquery(self):
         self.use_default_project({'data-paths': [self.dir('seed')]})
         self.assertEqual(len(self.run_dbt(['seed'])), 1)
         results = self.run_dbt()

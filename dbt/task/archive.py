@@ -10,11 +10,7 @@ import dbt.ui.printer
 
 class ArchiveTask(RunnableTask):
     def run(self):
-        runner = RunManager(
-            self.project,
-            self.project['target-path'],
-            self.args
-        )
+        runner = RunManager(self.config)
 
         query = {
             'include': ['*'],
