@@ -40,6 +40,7 @@ def _initialize_downloads():
         REMOVE_DOWNLOADS = True
 
     dbt.clients.system.make_directory(DOWNLOADS_PATH)
+    logger.debug("Set downloads directory='{}'".format(DOWNLOADS_PATH))
 
 
 class Package(APIObject):
