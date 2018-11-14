@@ -257,7 +257,7 @@ class LocalPackage(Package):
         return self.local
 
     def incorporate(self, _):
-        return LocalPackage(self.local)
+        return LocalPackage(local=self.local)
 
     def source_type(self):
         return 'local'
