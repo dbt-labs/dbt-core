@@ -1,8 +1,8 @@
-from dbt.adapters.default.relation import DefaultRelation
+from dbt.adapters.base.relation import BaseRelation
 import dbt.utils
 
 
-class SnowflakeRelation(DefaultRelation):
+class SnowflakeRelation(BaseRelation):
     DEFAULTS = {
         'metadata': {
             'type': 'SnowflakeRelation'
@@ -33,11 +33,11 @@ class SnowflakeRelation(DefaultRelation):
                 },
             },
             'type': {
-                'enum': DefaultRelation.RelationTypes + [None],
+                'enum': BaseRelation.RelationTypes + [None],
             },
-            'path': DefaultRelation.PATH_SCHEMA,
-            'include_policy': DefaultRelation.POLICY_SCHEMA,
-            'quote_policy': DefaultRelation.POLICY_SCHEMA,
+            'path': BaseRelation.PATH_SCHEMA,
+            'include_policy': BaseRelation.POLICY_SCHEMA,
+            'quote_policy': BaseRelation.POLICY_SCHEMA,
             'quote_character': {'type': 'string'},
         },
         'required': ['metadata', 'type', 'path', 'include_policy',

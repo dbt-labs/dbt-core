@@ -3,15 +3,20 @@ from mock import patch, MagicMock
 
 import dbt.flags as flags
 
-from dbt.contracts.connection import BigQueryCredentials
+from dbt.adapters.bigquery import BigQueryCredentials
 from dbt.adapters.bigquery import BigQueryAdapter
-from dbt.adapters.bigquery.relation import BigQueryRelation
+from dbt.adapters.bigquery import BigQueryRelation
 import dbt.exceptions
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
-fake_conn = {"handle": None, "state": "open", "type": "bigquery"}
-
 from .utils import config_from_parts_or_dicts
+
+
+def _bq_conn():
+    conn = MagicMock()
+    conn.get.side_effect = lambda x: 'bigquery' if x == 'type' else None
+    return conn
+
 
 class TestBigQueryAdapter(unittest.TestCase):
 
@@ -56,7 +61,7 @@ class TestBigQueryAdapter(unittest.TestCase):
         return BigQueryAdapter(config)
 
 
-    @patch('dbt.adapters.bigquery.BigQueryAdapter.open_connection', return_value=fake_conn)
+    @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
     def test_acquire_connection_oauth_validations(self, mock_open_connection):
         adapter = self.get_adapter('oauth')
         try:
@@ -72,7 +77,7 @@ class TestBigQueryAdapter(unittest.TestCase):
 
         mock_open_connection.assert_called_once()
 
-    @patch('dbt.adapters.bigquery.BigQueryAdapter.open_connection', return_value=fake_conn)
+    @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
     def test_acquire_connection_service_account_validations(self, mock_open_connection):
         adapter = self.get_adapter('service_account')
         try:
@@ -87,6 +92,24 @@ class TestBigQueryAdapter(unittest.TestCase):
             self.fail('validation failed with unknown exception: {}'.format(str(e)))
 
         mock_open_connection.assert_called_once()
+
+    def test_cancel_open_connections_empty(self):
+        adapter = self.get_adapter('test')
+        self.assertEqual(adapter.cancel_open_connections(), None)
+
+    def test_cancel_open_connections_master(self):
+        adapter = self.get_adapter('test')
+        adapter.connections.in_use['master'] = object()
+        self.assertEqual(adapter.cancel_open_connections(), None)
+
+    def test_cancel_open_connections_single(self):
+        adapter = self.get_adapter('test')
+        adapter.connections.in_use.update({
+            'master': object(),
+            'model': object(),
+        })
+        # actually does nothing
+        self.assertEqual(adapter.cancel_open_connections(), None)
 
 
 class TestBigQueryRelation(unittest.TestCase):

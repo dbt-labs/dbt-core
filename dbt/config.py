@@ -8,13 +8,12 @@ import dbt.exceptions
 import dbt.clients.yaml_helper
 import dbt.clients.system
 import dbt.utils
-from dbt.contracts.connection import Connection, create_credentials
 from dbt.contracts.project import Project as ProjectContract, Configuration, \
     PackageConfig, ProfileConfig
 from dbt.exceptions import DbtProjectError, DbtProfileError, RecursionException
 from dbt.context.common import env_var, Var
 from dbt import compat
-from dbt.adapters.factory import get_relation_class_by_name
+from dbt.adapters.factory import load_adapter, get_relation_class_by_name
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import DBTConfigKeys
@@ -518,6 +517,8 @@ class Profile(object):
         return self.to_profile_info() == other.to_profile_info()
 
     def validate(self):
+        if self.credentials:
+            self.credentials.validate()
         try:
             ProfileConfig(**self.to_profile_info(serialize_credentials=True))
         except dbt.exceptions.ValidationException as exc:
@@ -533,8 +534,10 @@ class Profile(object):
                 .format(profile_name, target_name))
 
         typename = profile.pop('type')
+
         try:
-            credentials = create_credentials(typename, profile)
+            cls = load_adapter(typename)
+            credentials = cls(**profile)
         except dbt.exceptions.RuntimeException as e:
             raise DbtProfileError(
                 'Credentials in profile "{}", target "{}" invalid: {}'
@@ -575,7 +578,7 @@ class Profile(object):
         """Create a profile from an existing set of Credentials and the
         remaining information.
 
-        :param credentials Credentials: The credentials for this profile.
+        :param credentials dict: The credentials dict for this profile.
         :param threads int: The number of threads to use for connections.
         :param profile_name str: The profile name used for this profile.
         :param target_name str: The target name used for this profile.
@@ -677,6 +680,7 @@ class Profile(object):
         credentials = cls._credentials_from_profile(
             profile_data, profile_name, target_name
         )
+
         return cls.from_credentials(
             credentials=credentials,
             profile_name=profile_name,

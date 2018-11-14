@@ -1,3 +1,4 @@
+import abc
 import codecs
 import json
 import warnings
@@ -54,6 +55,37 @@ def write_file(path, s):
     else:
         with open(path, 'w') as f:
             return f.write(to_string(s))
+
+
+if WHICH_PYTHON == 2:
+    # In python 2, classmethod and staticmethod do not allow setters, so you
+    # can't treat classmethods as first-class objects like you can regular
+    # functions. This rarely matters, but for metaclass shenanigans on the
+    # adapter we do want to set attributes on classmethods.
+    class _classmethod(classmethod):
+        pass
+
+    classmethod = _classmethod
+
+    # python 2.7 is missing this
+    class abstractclassmethod(classmethod):
+        __isabstractmethod__ = True
+
+        def __init__(self, func):
+            func.__isabstractmethod__ = True
+            super(abstractclassmethod, self).__init__(func)
+
+    class abstractstaticmethod(staticmethod):
+        __isabstractmethod__ = True
+
+        def __init__(self, func):
+            func.__isabstractmethod__ = True
+            super(abstractstaticmethod, self).__init__(func)
+
+else:
+    abstractclassmethod = abc.abstractclassmethod
+    abstractstaticmethod = abc.abstractstaticmethod
+    classmethod = classmethod
 
 
 def suppress_warnings():

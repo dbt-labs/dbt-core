@@ -4,7 +4,7 @@ from dbt.utils import filter_null_values
 import dbt.exceptions
 
 
-class DefaultRelation(APIObject):
+class BaseRelation(APIObject):
 
     Table = "table"
     View = "view"
@@ -18,7 +18,7 @@ class DefaultRelation(APIObject):
 
     DEFAULTS = {
         'metadata': {
-            'type': 'DefaultRelation'
+            'type': 'BaseRelation'
         },
         'quote_character': '"',
         'quote_policy': {
@@ -61,7 +61,7 @@ class DefaultRelation(APIObject):
                 'properties': {
                     'type': {
                         'type': 'string',
-                        'const': 'DefaultRelation',
+                        'const': 'BaseRelation',
                     },
                 },
             },
