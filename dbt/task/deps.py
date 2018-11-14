@@ -273,7 +273,7 @@ class GitPackage(Package):
                 dbt.clients.system.remove_file(dest_path)
             else:
                 dbt.clients.system.rmdir(dest_path)
-        shutil.move(self._checkout(project), dest_path)
+        dbt.clients.system.move(self._checkout(project), dest_path)
 
 
 class LocalPackage(Package):
@@ -490,4 +490,4 @@ class DepsTask(BaseTask):
                 version=package.version_name())
 
         if REMOVE_DOWNLOADS:
-            shutil.rmtree(DOWNLOADS_PATH)
+            dbt.clients.system.rmtree(DOWNLOADS_PATH)

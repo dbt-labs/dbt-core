@@ -215,7 +215,7 @@ def _handle_posix_error(exc, cwd, cmd):
             - exc.errno == ENOENT
             - exc.filename == cwd
         - cwd could have permissions that prevent the current user moving to it
-            - exc.errno == EACCESS
+            - exc.errno == EACCES
             - exc.filename == cwd
         - cwd could exist but not be a directory
             - exc.errno == ENOTDIR
@@ -323,3 +323,66 @@ def untar_package(tar_path, dest_dir, rename_to=None):
         downloaded_path = os.path.join(dest_dir, tar_dir_name)
         desired_path = os.path.join(dest_dir, rename_to)
         dbt.clients.system.rename(downloaded_path, desired_path, force=True)
+
+
+def chmod_and_retry(func, path, exc_info):
+    """Define an error handler to pass to shutil.rmtree.
+    On Windows, when a file is marked read-only as git likes to do, rmtree will
+    fail. To handle that, on errors try to make the file writable.
+    We want to retry most operations here, but listdir is one that we know will
+    be useless.
+    """
+    if func is os.listdir or os.name != 'nt':
+        raise
+    os.chmod(path, stat.S_IREAD | stat.S_IWRITE)
+    # on error,this will raise.
+    func(path)
+
+
+def _absnorm(path):
+    return os.path.normcase(os.path.abspath(path))
+
+
+def move(src, dst):
+    """A re-implementation of shutil.move that properly removes the source
+    directory on windows when it has read-only files in it and the move is
+    between two drives.
+
+    This is almost identical to the real shutil.move, except it uses our rmtree
+    and skips handling non-windows OSes since the existing one works ok there.
+    """
+    if os.name != 'nt':
+        return shutil.move(src, dst)
+
+    if os.path.isdir(dst):
+        if _absnorm(src) == _absnorm(dst):
+            os.rename(src, dst)
+            return
+
+        dst = os.path.join(dst, os.path.basename(src.rstrip('/\\')))
+        if os.path.exists(dst):
+            raise EnvironmentError("Path '{}' already exists".format(dst))
+
+    try:
+        os.rename(src, dst)
+    except OSError:
+        # probably different drives
+        if os.path.isdir(src):
+            if _absnorm(dst+'\\').startswith(_absnorm(src+'\\')):
+                # dst is inside src
+                raise EnvironmentError(
+                    "Cannot move a directory '{}' into itself '{}'"
+                    .format(src, dst)
+                )
+            shutil.copytree(src, dst, symlinks=True)
+            rmtree(src)
+        else:
+            shutil.copy2(src, dst)
+            os.unlink(src)
+
+
+def rmtree(path):
+    """Recursively remove path. On permissions errors on windows, try to remove
+    the read-only flag and try again.
+    """
+    return shutil.rmtree(path, onerror=chmod_and_retry)
