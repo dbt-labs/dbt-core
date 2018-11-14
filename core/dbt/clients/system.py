@@ -485,7 +485,7 @@ def chmod_and_retry(func, path, exc_info):
     We want to retry most operations here, but listdir is one that we know will
     be useless.
     """
-    if func is os.listdir or os.name != 'nt':
+    if func is os.listdir or os.name != "nt":
         raise
     os.chmod(path, stat.S_IREAD | stat.S_IWRITE)
     # on error,this will raise.
@@ -506,7 +506,7 @@ def move(src, dst):
     """
     src = convert_path(src)
     dst = convert_path(dst)
-    if os.name != 'nt':
+    if os.name != "nt":
         return shutil.move(src, dst)
 
     if os.path.isdir(dst):
@@ -514,7 +514,7 @@ def move(src, dst):
             os.rename(src, dst)
             return
 
-        dst = os.path.join(dst, os.path.basename(src.rstrip('/\\')))
+        dst = os.path.join(dst, os.path.basename(src.rstrip("/\\")))
         if os.path.exists(dst):
             raise EnvironmentError("Path '{}' already exists".format(dst))
 
@@ -526,8 +526,7 @@ def move(src, dst):
             if _absnorm(dst + "\\").startswith(_absnorm(src + "\\")):
                 # dst is inside src
                 raise EnvironmentError(
-                    "Cannot move a directory '{}' into itself '{}'"
-                    .format(src, dst)
+                    "Cannot move a directory '{}' into itself '{}'".format(src, dst)
                 )
             shutil.copytree(src, dst, symlinks=True)
             rmtree(src)
