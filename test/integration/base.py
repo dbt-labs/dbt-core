@@ -21,7 +21,7 @@ import warnings
 
 
 DBT_CONFIG_DIR = os.path.abspath(
-    os.path.expanduser(os.environ.get("DBT_CONFIG_DIR", '/root/.dbt'))
+    os.path.expanduser(os.environ.get("DBT_CONFIG_DIR", '/home/dbt_test_user/.dbt'))
 )
 
 DBT_PROFILES = os.path.join(DBT_CONFIG_DIR, 'profiles.yml')
