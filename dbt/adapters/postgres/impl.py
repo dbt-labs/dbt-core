@@ -158,7 +158,10 @@ class PostgresAdapter(dbt.adapters.default.DefaultAdapter):
                                               identifier=refed_name)
             dependent = self.Relation.create(schema=dep_schema,
                                              identifier=dep_name)
-            self.cache.add_link(dependent, referenced)
+
+            # don't record in cache if this relation isn't in a relevant schema
+            if refed_schema.lower() in schemas:
+                self.cache.add_link(dependent, referenced)
 
     def _list_relations(self, schema, model_name=None):
         sql = """
