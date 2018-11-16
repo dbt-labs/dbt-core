@@ -29,7 +29,7 @@ def dot_separated(key: _ReferenceKey) -> str:
 
     :param _ReferenceKey key: The key to stringify.
     """
-    return '.'.join(map(str, key))
+    return ".".join(map(str, key))
 
 
 class _CachedRelation:
@@ -420,8 +420,9 @@ class RelationsCache:
         """
         if new_key in self.relations:
             dbt.exceptions.raise_cache_inconsistent(
-                'in rename, new key {} already in cache: {}'
-                .format(new_key, list(self.relations.keys()))
+                "in rename, new key {} already in cache: {}".format(
+                    new_key, list(self.relations.keys())
+                )
             )
 
         if old_key not in self.relations:
