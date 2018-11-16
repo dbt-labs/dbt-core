@@ -176,7 +176,7 @@ class RelationsCache(object):
 
         :param str schema: The schema name to look up.
         """
-        return schema in self.schemas
+        return schema.lower() in self.schemas
 
     def dump_graph(self):
         """Dump a key-only representation of the schema to a dictionary. Every
@@ -199,7 +199,7 @@ class RelationsCache(object):
         :return _CachedRelation: The relation stored under the given relation's
             key
         """
-        self.schemas.add(relation.schema)
+        self.add_schema(relation.schema)
         key = relation.key()
         return self.relations.setdefault(key, relation)
 
