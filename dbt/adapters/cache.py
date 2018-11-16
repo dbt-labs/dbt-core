@@ -51,11 +51,11 @@ class _CachedRelation(object):
 
     @property
     def schema(self):
-        return self.inner.schema
+        return _lower(self.inner.schema)
 
     @property
     def identifier(self):
-        return self.inner.identifier
+        return _lower(self.inner.identifier)
 
     def __copy__(self):
         new = self.__class__(self.inner)
@@ -338,8 +338,8 @@ class RelationsCache(object):
         :param str schema: The schema of the relation to drop.
         :param str identifier: The identifier of the relation to drop.
         """
-        dropped = _ReferenceKey(schema=relation.schema,
-                                identifier=relation.identifier)
+        dropped = _make_key(schema=relation.schema,
+                            identifier=relation.identifier)
         logger.debug('Dropping relation: {!s}'.format(dropped))
         with self.lock:
             self._drop_cascade_relation(dropped)

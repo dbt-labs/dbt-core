@@ -25,7 +25,8 @@ class TestBaseCaching(DBTIntegrationTest):
         adapter = self.run_and_get_adapter()
         self.assertEqual(len(adapter.cache.relations), 1)
         relation = next(iter(adapter.cache.relations.values()))
-        self.assertEqual(relation.schema, self.unique_schema())
+        self.assertEqual(relation.inner.schema, self.unique_schema())
+        self.assertEqual(relation.schema, self.unique_schema().lower())
 
         self.run_dbt(['run'], clear_adapters=False)
         self.assertEqual(len(adapter.cache.relations), 1)
