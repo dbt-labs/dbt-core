@@ -1,5 +1,5 @@
 from dbt.logger import initialize_logger, GLOBAL_LOGGER as logger, \
-    logger_initialized
+    logger_initialized, log_cache_events
 
 import argparse
 import os.path
@@ -209,6 +209,8 @@ def invoke_dbt(parsed):
     task = None
     cfg = None
 
+    log_cache_events(getattr(parsed, 'log_cache_events', False))
+
     try:
         if parsed.which in {'deps', 'clean'}:
             # deps doesn't need a profile, so don't require one.
@@ -251,7 +253,6 @@ def invoke_dbt(parsed):
         return None
 
     flags.NON_DESTRUCTIVE = getattr(parsed, 'non_destructive', False)
-    flags.LOG_CACHE_EVENTS = getattr(parsed, 'log_cache_events', False)
     flags.USE_CACHE = getattr(parsed, 'use_cache', True)
 
     arg_drop_existing = getattr(parsed, 'drop_existing', False)

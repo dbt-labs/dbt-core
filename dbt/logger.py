@@ -107,12 +107,17 @@ def initialize_logger(debug_mode=False, path=None):
         warning_logger.addHandler(logdir_handler)
         warning_logger.setLevel(logging.DEBUG)
 
-        CACHE_LOGGER.propagate = dbt.flags.LOG_CACHE_EVENTS
-
     initialized = True
 
 
 def logger_initialized():
     return initialized
+
+
+def log_cache_events(flag):
+    """Set the cache logger to propagate its messages based on the given flag.
+    """
+    CACHE_LOGGER.propagate = flag
+
 
 GLOBAL_LOGGER = logger
