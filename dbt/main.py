@@ -19,6 +19,7 @@ import dbt.task.test as test_task
 import dbt.task.archive as archive_task
 import dbt.task.generate as generate_task
 import dbt.task.serve as serve_task
+from dbt.adapters.factory import reset_adapters
 
 import dbt.tracking
 import dbt.ui.printer
@@ -121,6 +122,8 @@ def handle_and_check(args):
 
     if colorize_output(profile_config):
         dbt.ui.printer.use_colors()
+
+    reset_adapters()
 
     try:
         task, res = run_from_args(parsed)
