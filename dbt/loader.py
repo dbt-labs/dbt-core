@@ -21,7 +21,6 @@ class GraphLoader(object):
         self.disabled = []
         self.macro_manifest = None
 
-        # make a manifest with just the macros to get the context
     def _load_macro_nodes(self, resource_type):
         for project_name, project in self.all_projects.items():
             self.macros.update(MacroParser.load_and_parse(
@@ -33,6 +32,7 @@ class GraphLoader(object):
                 resource_type=resource_type,
             ))
 
+        # make a manifest with just the macros to get the context
         self.macro_manifest = Manifest(macros=self.macros, nodes={}, docs={},
                                        generated_at=timestring(), disabled=[])
 
