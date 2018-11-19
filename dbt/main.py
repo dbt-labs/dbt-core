@@ -1,5 +1,5 @@
 from dbt.logger import initialize_logger, GLOBAL_LOGGER as logger, \
-    initialized as logger_initialized
+    logger_initialized
 
 import argparse
 import os.path
@@ -92,7 +92,7 @@ def main(args=None):
         logger.info("Encountered an error:")
         logger.info(str(e))
 
-        if logger_initialized:
+        if logger_initialized():
             logger.debug(traceback.format_exc())
         elif not isinstance(e, RuntimeException):
             # if it did not come from dbt proper and the logger is not

@@ -1,3 +1,72 @@
+## dbt 0.12.1 - (November 15, 2018)
+
+### Overview
+
+This is a bugfix release.
+
+### Fixes
+
+- Fix for relation caching when views outside of a dbt schema depend on relations inside of a dbt schema ([#1119](https://github.com/fishtown-analytics/dbt/issues/1119))
+
+
+## dbt 0.12.0 - Guion Bluford (November 12, 2018)
+
+### Overview
+
+This release adds caching for some introspective queries on all adapters. Additionally, custom tags can be supplied for models, along with many other minor improvements and bugfixes.
+
+### Breaking Changes
+- Support for the `repositories:` block in `dbt_project.yml` (deprecated in 0.10.0) was removed.
+
+### tl;dr
+- Make runs faster by caching introspective queries
+- Support [model tags](https://docs.getdbt.com/v0.12/docs/tags)
+- Add a list of [schemas](https://docs.getdbt.com/v0.12/reference#schemas) to the `on-run-end` context
+- Set your [profiles directory](https://docs.getdbt.com/v0.12/docs/configure-your-profile#section-using-the-dbt_profiles_dir-environment-variable) with an environment variable
+
+### Features
+
+- Cache the existence of relations to speed up dbt runs ([#1025](https://github.com/fishtown-analytics/dbt/pull/1025))
+- Add support for tag configuration and selection ([#1014](https://github.com/fishtown-analytics/dbt/pull/1014))
+  - Add tags to the model and graph views in the docs UI ([#7](https://github.com/fishtown-analytics/dbt-docs/pull/7))
+- Add the set of schemas that dbt built models into in the `on-run-end` hook context ([#908](https://github.com/fishtown-analytics/dbt/issues/908))
+- Warn for unused resource config paths in dbt_project.yml ([#725](https://github.com/fishtown-analytics/dbt/pull/725))
+- Add more information to the `dbt --help` output ([#1058](https://github.com/fishtown-analytics/dbt/issues/1058))
+- Add support for configuring the profiles directory with an env var ([#1055](https://github.com/fishtown-analytics/dbt/issues/1055))
+- Add support for cli and env vars in most `dbt_project.yml` and `profiles.yml` fields ([#1033](https://github.com/fishtown-analytics/dbt/pull/1033))
+- Provide a better error message when seed file loading fails on BigQuery ([#1079](https://github.com/fishtown-analytics/dbt/pull/1079))
+- Improved error handling and messaging on Redshift ([#997](https://github.com/fishtown-analytics/dbt/issues/997))
+- Include datasets with underscores when listing BigQuery datasets ([#954](https://github.com/fishtown-analytics/dbt/pull/954))
+- Forgo validating the user's profile for `dbt deps` and `dbt clean` commands ([#947](https://github.com/fishtown-analytics/dbt/issues/947), [#1022](https://github.com/fishtown-analytics/dbt/issues/1022))
+- Don't read/parse CSV files outside of the `dbt seed` command ([#1046](https://github.com/fishtown-analytics/dbt/pull/1046))  
+  
+### Fixes
+
+- Fix for incorrect model selection with the `--models` CLI flag when projects and directories share the same name ([#1023](https://github.com/fishtown-analytics/dbt/issues/1023))
+- Fix for table clustering configuration with multiple columns on BigQuery ([#1013](https://github.com/fishtown-analytics/dbt/issues/1013))
+- Fix for incorrect output when a single row fails validation in `dbt test` ([#1040](https://github.com/fishtown-analytics/dbt/issues/1040))
+- Fix for unwieldly Jinja errors regarding undefined variables at parse time ([#1086](https://github.com/fishtown-analytics/dbt/pull/1086), [#1080](https://github.com/fishtown-analytics/dbt/issues/1080), [#935](https://github.com/fishtown-analytics/dbt/issues/935))
+- Fix for incremental models that have a line comment on the last line of the file ([#1018](https://github.com/fishtown-analytics/dbt/issues/1018))
+- Fix for error messages when ephemeral models fail to compile ([#1053](https://github.com/fishtown-analytics/dbt/pull/1053))
+  
+
+### Under the hood
+- Create adapters as singleton objects instead of classes ([#961](https://github.com/fishtown-analytics/dbt/issues/961))
+- Combine project and profile into a single, coherent object ([#973](https://github.com/fishtown-analytics/dbt/pull/973))
+- Investigate approaches for providing more complete compilation output ([#588](https://github.com/fishtown-analytics/dbt/issues/588))
+  
+
+### Contributors
+
+Thanks for contributing!
+
+- [@mikekaminsky](https://github.com/mikekaminsky) ([#1049](https://github.com/fishtown-analytics/dbt/pull/1049), [#1060](https://github.com/fishtown-analytics/dbt/pull/1060))
+- [@joshtemple](https://github.com/joshtemple) ([#1079](https://github.com/fishtown-analytics/dbt/pull/1079))
+- [@k4y3ff](https://github.com/k4y3ff) ([#954](https://github.com/fishtown-analytics/dbt/pull/954))
+- [@elexisvenator](https://github.com/elexisvenator) ([#1019](https://github.com/fishtown-analytics/dbt/pull/1019))
+- [@clrcrl](https://github.com/clrcrl) ([#725](https://github.com/fishtown-analytics/dbt/pull/725)
+
+
 ## dbt 0.11.1 - Lucretia Mott (September 18, 2018)
 
 ### Overview
