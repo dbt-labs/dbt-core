@@ -18,7 +18,8 @@ class BaseSqlParser(BaseParser):
 
     @classmethod
     def load_and_parse(cls, package_name, root_project, all_projects, root_dir,
-                       relative_dirs, resource_type, tags=None, macros=None):
+                       relative_dirs, resource_type, tags=None, macros=None,
+                       macro_manifest=None):
         """Load and parse models in a list of directories. Returns a dict
            that maps unique ids onto ParsedNodes"""
 
@@ -64,11 +65,11 @@ class BaseSqlParser(BaseParser):
             })
 
         return cls.parse_sql_nodes(result, root_project, all_projects, tags,
-                                   macros)
+                                   macros, macro_manifest)
 
     @classmethod
     def parse_sql_nodes(cls, nodes, root_project, projects,
-                        tags=None, macros=None):
+                        tags=None, macros=None, macro_manifest=None):
 
         if tags is None:
             tags = []
@@ -93,7 +94,8 @@ class BaseSqlParser(BaseParser):
                                          projects.get(package_name),
                                          projects,
                                          tags=tags,
-                                         macros=macros)
+                                         macros=macros,
+                                         macro_manifest=macro_manifest)
 
             # Ignore disabled nodes
             if not node_parsed['config']['enabled']:

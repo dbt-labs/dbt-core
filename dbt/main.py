@@ -1,5 +1,5 @@
 from dbt.logger import initialize_logger, GLOBAL_LOGGER as logger, \
-    logger_initialized
+    logger_initialized, log_cache_events
 
 import argparse
 import os.path
@@ -19,6 +19,7 @@ import dbt.task.test as test_task
 import dbt.task.archive as archive_task
 import dbt.task.generate as generate_task
 import dbt.task.serve as serve_task
+from dbt.adapters.factory import reset_adapters
 
 import dbt.tracking
 import dbt.ui.printer
@@ -132,6 +133,8 @@ def handle_and_check(args):
         if colorize_output(profile_config):
             dbt.ui.printer.use_colors()
 
+        reset_adapters()
+
         try:
             task, res = run_from_args(parsed)
         finally:
@@ -219,6 +222,8 @@ def invoke_dbt(parsed):
     task = None
     cfg = None
 
+    log_cache_events(getattr(parsed, 'log_cache_events', False))
+
     try:
         if parsed.which in {'deps', 'clean'}:
             # deps doesn't need a profile, so don't require one.
@@ -261,7 +266,6 @@ def invoke_dbt(parsed):
         return None
 
     flags.NON_DESTRUCTIVE = getattr(parsed, 'non_destructive', False)
-    flags.LOG_CACHE_EVENTS = getattr(parsed, 'log_cache_events', False)
     flags.USE_CACHE = getattr(parsed, 'use_cache', True)
 
     arg_drop_existing = getattr(parsed, 'drop_existing', False)

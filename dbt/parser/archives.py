@@ -38,7 +38,8 @@ class ArchiveParser(BaseParser):
         return archives
 
     @classmethod
-    def load_and_parse(cls, root_project, all_projects, macros=None):
+    def load_and_parse(cls, root_project, all_projects, macros=None,
+                       macro_manifest=None):
         """Load and parse archives in a list of projects. Returns a dict
            that maps unique ids onto ParsedNodes"""
 
@@ -67,6 +68,7 @@ class ArchiveParser(BaseParser):
                 all_projects.get(archive.get('package_name')),
                 all_projects,
                 macros=macros,
+                macro_manifest=macro_manifest,
                 archive_config=archive_config)
 
         return to_return
