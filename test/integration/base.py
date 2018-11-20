@@ -35,11 +35,13 @@ class FakeArgs(object):
         self.full_refresh = False
         self.models = None
         self.exclude = None
+        self.single_threaded = False
 
 
 class TestArgs(object):
     def __init__(self, kwargs):
         self.which = 'run'
+        self.single_threaded = False
         self.__dict__.update(kwargs)
 
 
