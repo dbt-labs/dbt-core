@@ -3,13 +3,13 @@ import argparse
 import sys
 from pathlib import Path
 
-PROJECT_TEMPLATE = '''
+PROJECT_TEMPLATE = """
 name: dbt_{adapter}
 version: {version}
 config-version: 2
 
 macro-paths: ["macros"]
-'''
+"""
 
 
 SETUP_PY_TEMPLATE = '''
@@ -41,7 +41,7 @@ setup(
 MANIFEST_IN_TEMPLATE = "recursive-include dbt/include *.sql *.yml *.md"
 
 
-ADAPTER_INIT_TEMPLATE = '''
+ADAPTER_INIT_TEMPLATE = """
 from dbt.adapters.{adapter}.connections import {title_adapter}ConnectionManager
 from dbt.adapters.{adapter}.connections import {title_adapter}Credentials
 from dbt.adapters.{adapter}.impl import {title_adapter}Adapter
@@ -54,7 +54,7 @@ Plugin = AdapterPlugin(
     adapter={title_adapter}Adapter,
     credentials={title_adapter}Credentials,
     include_path={adapter}.PACKAGE_PATH)
-'''.lstrip()
+""".lstrip()
 
 
 ADAPTER_CONNECTIONS_TEMPLATE = '''
@@ -281,16 +281,16 @@ def parse_args(argv=None):
         argv = sys.argv[1:]
     parser = argparse.ArgumentParser()
     parser.add_argument('root', type=Path)
-    parser.add_argument('adapter')
-    parser.add_argument('--title-case', '-t', default=None)
-    parser.add_argument('--dependency', action='append')
+    parser.add_argument("adapter")
+    parser.add_argument("--title-case", "-t", default=None)
+    parser.add_argument("--dependency", action="append")
     parser.add_argument('--dbt-core-version', default='1.0.1')
-    parser.add_argument('--email')
-    parser.add_argument('--author')
-    parser.add_argument('--url')
+    parser.add_argument("--email")
+    parser.add_argument("--author")
+    parser.add_argument("--url")
     parser.add_argument('--sql', action='store_true')
     parser.add_argument('--package-version', default='1.0.1')
-    parser.add_argument('--project-version', default='1.0')
+    parser.add_argument("--project-version", default="1.0")
     parser.add_argument(
         '--no-dependency', action='store_false', dest='set_dependency'
     )
@@ -317,15 +317,15 @@ def parse_args(argv=None):
     if parsed.email is not None:
         parsed.email = "'{}'".format(parsed.email)
     else:
-        parsed.email = '<INSERT EMAIL HERE>'
+        parsed.email = "<INSERT EMAIL HERE>"
     if parsed.author is not None:
         parsed.author = "'{}'".format(parsed.author)
     else:
-        parsed.author = '<INSERT AUTHOR HERE>'
+        parsed.author = "<INSERT AUTHOR HERE>"
     if parsed.url is not None:
         parsed.url = "'{}'".format(parsed.url)
     else:
-        parsed.url = '<INSERT URL HERE>'
+        parsed.url = "<INSERT URL HERE>"
     return parsed
 
 
@@ -334,5 +334,5 @@ def main():
     builder.go()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
