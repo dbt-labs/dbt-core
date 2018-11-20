@@ -94,6 +94,18 @@ class RunManager(object):
                 runners.append(node_runners[unique_id])
         return runners
 
+    def map_run(self, pool, args):
+        """If the caller has passed the magic 'single-threaded' flag, use map()
+        instead of the pool.imap_unordered. The single-threaded flag is
+        intended for gathering more useful performance information about what
+        happens beneath `call_runner`, since python's default profiling tools
+        ignore child threads.
+        """
+        if self.config.args.single_threaded:
+            return map(self.call_runner, args)
+        else:
+            return pool.imap_unordered(self.call_runner, args)
+
     def execute_nodes(self, linker, Runner, manifest, node_dependency_list):
         adapter = get_adapter(self.config)
 
@@ -121,7 +133,7 @@ class RunManager(object):
                 })
 
             try:
-                for result in pool.imap_unordered(self.call_runner, args_list):
+                for result in self.map_run(pool, args_list):
                     is_ephemeral = Runner.is_ephemeral_model(result.node)
                     if not is_ephemeral:
                         node_results.append(result)

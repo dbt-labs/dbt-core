@@ -322,6 +322,17 @@ def parse_args(args):
         help='''Run schema validations at runtime. This will surface
         bugs in dbt, but may incur a performance penalty.''')
 
+    # if set, run dbt in single-threaded mode: thread count is ignored, and
+    # calls go through `map` instead of the thread pool. This is useful for
+    # getting performance information about aspects of dbt that normally run in
+    # a thread, as the profiler ignores child threads. Users should really
+    # never use this.
+    p.add_argument(
+        '--single-threaded',
+        action='store_true',
+        help=argparse.SUPPRESS,
+    )
+
     subs = p.add_subparsers(title="Available sub-commands")
 
     base_subparser = argparse.ArgumentParser(add_help=False)
