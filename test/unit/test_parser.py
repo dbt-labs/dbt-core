@@ -73,6 +73,9 @@ class ParserTest(unittest.TestCase):
             project=snowplow_project, profile=profile_data
         )
 
+        self.macro_manifest = Manifest(macros={}, nodes={}, docs={},
+                                       generated_at=timestring(), disabled=[])
+
         self.model_config = {
             'enabled': True,
             'materialized': 'view',
@@ -111,7 +114,8 @@ class ParserTest(unittest.TestCase):
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+                 'snowplow': self.snowplow_project_config},
+                macro_manifest=self.macro_manifest),
             ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
@@ -172,7 +176,8 @@ class ParserTest(unittest.TestCase):
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+                 'snowplow': self.snowplow_project_config},
+                macro_manifest=self.macro_manifest),
             ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
@@ -216,7 +221,8 @@ class ParserTest(unittest.TestCase):
             ModelParser.parse_sql_nodes(
                 models,
                 self.root_project_config,
-                {'root': self.root_project_config}),
+                {'root': self.root_project_config},
+                macro_manifest=self.macro_manifest),
             ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
@@ -269,7 +275,8 @@ class ParserTest(unittest.TestCase):
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+                 'snowplow': self.snowplow_project_config},
+                macro_manifest=self.macro_manifest),
             ({
                 'model.root.base': ParsedNode(
                     alias='base',
@@ -375,7 +382,8 @@ class ParserTest(unittest.TestCase):
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+                 'snowplow': self.snowplow_project_config},
+                macro_manifest=self.macro_manifest),
             ({
                 'model.root.events': ParsedNode(
                     alias='events',
@@ -554,7 +562,8 @@ class ParserTest(unittest.TestCase):
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+                 'snowplow': self.snowplow_project_config},
+                macro_manifest=self.macro_manifest),
             ({
                 'model.snowplow.events': ParsedNode(
                     alias='events',
@@ -861,7 +870,8 @@ class ParserTest(unittest.TestCase):
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+                 'snowplow': self.snowplow_project_config},
+                macro_manifest=self.macro_manifest),
             ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
@@ -946,7 +956,8 @@ class ParserTest(unittest.TestCase):
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+                 'snowplow': self.snowplow_project_config},
+                macro_manifest=self.macro_manifest),
             ({
                 'model.root.table': ParsedNode(
                     alias='table',
@@ -1145,7 +1156,8 @@ class ParserTest(unittest.TestCase):
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+                 'snowplow': self.snowplow_project_config},
+                macro_manifest=self.macro_manifest),
             ({
                 'model.root.table': ParsedNode(
                     alias='table',
@@ -1263,7 +1275,8 @@ class ParserTest(unittest.TestCase):
                 'root': self.root_project_config,
                 'snowplow': self.snowplow_project_config
             },
-            root_dir=get_os_path('/usr/src/app')
+            root_dir=get_os_path('/usr/src/app'),
+            macro_manifest=self.macro_manifest
         ))
         results.sort(key=lambda n: n.name)
 
@@ -1393,7 +1406,8 @@ class ParserTest(unittest.TestCase):
                 'snowplow': self.snowplow_project_config
             },
             root_dir=get_os_path('/usr/src/app'),
-            macros=None
+            macros=None,
+            macro_manifest=self.macro_manifest
         ))
 
         # split this into tests and patches, assert there's nothing else
@@ -1594,7 +1608,8 @@ class ParserTest(unittest.TestCase):
                 tests,
                 self.root_project_config,
                 {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+                 'snowplow': self.snowplow_project_config},
+                macro_manifest=self.macro_manifest),
             ({
                 'test.root.no_events': ParsedNode(
                     alias='no_events',
@@ -1711,7 +1726,8 @@ class ParserTest(unittest.TestCase):
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+                 'snowplow': self.snowplow_project_config},
+                macro_manifest=self.macro_manifest),
             ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
@@ -1756,7 +1772,8 @@ class ParserTest(unittest.TestCase):
                 models,
                 self.root_project_config,
                 {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+                 'snowplow': self.snowplow_project_config},
+                macro_manifest=self.macro_manifest),
             ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',

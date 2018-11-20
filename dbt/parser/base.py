@@ -11,7 +11,6 @@ import dbt.context.parser
 from dbt.utils import coalesce
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.contracts.graph.parsed import ParsedNode
-from dbt.contracts.graph.manifest import Manifest
 
 
 class BaseParser(object):
@@ -41,7 +40,8 @@ class BaseParser(object):
     def parse_node(cls, node, node_path, root_project_config,
                    package_project_config, all_projects,
                    tags=None, fqn_extra=None, fqn=None, macros=None,
-                   agate_table=None, archive_config=None, column_name=None):
+                   agate_table=None, archive_config=None, column_name=None,
+                   macro_manifest=None):
         """Parse a node, given an UnparsedNode and any other required information.
 
         agate_table should be set if the node came from a seed file.
@@ -103,13 +103,9 @@ class BaseParser(object):
         if column_name is not None:
             node['column_name'] = column_name
 
-        # make a manifest with just the macros to get the context
-        manifest = Manifest(macros=macros, nodes={}, docs={},
-                            generated_at=dbt.utils.timestring(), disabled=[])
-
         parsed_node = ParsedNode(**node)
         context = dbt.context.parser.generate(parsed_node, root_project_config,
-                                              manifest, config)
+                                              macro_manifest, config)
 
         dbt.clients.jinja.get_rendered(
             parsed_node.raw_sql, context, parsed_node.to_shallow_dict(),
