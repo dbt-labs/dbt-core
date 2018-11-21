@@ -1,5 +1,6 @@
 from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
+from dbt.exceptions import CompilationException
 
 
 MODEL_PRE_HOOK = """
@@ -64,7 +65,6 @@ MODEL_POST_HOOK = """
 
 class BaseTestPrePost(DBTIntegrationTest):
     def setUp(self):
-        self.adapter_type = 'bigquery'
         DBTIntegrationTest.setUp(self)
 
         self.run_sql_file("test/integration/014_hook_tests/seed_model.sql")
@@ -236,3 +236,21 @@ class TestPrePostModelHooksInConfigKwargs(TestPrePostModelHooksInConfig):
     def models(self):
         return "test/integration/014_hook_tests/kwargs-models"
 
+
+
+class TestDuplicateHooksInConfigs(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "model_hooks_014"
+
+    @property
+    def models(self):
+        return "test/integration/014_hook_tests/error-models"
+
+    @attr(type='postgres')
+    def test_postgres_run_duplicate_hook_defs(self):
+        with self.assertRaises(CompilationException) as exc:
+            self.run_dbt(['run'])
+
+            self.assertIn('pre_hook', str(exc.exception))
+            self.assertIn('pre-hook', str(exc.exception))
