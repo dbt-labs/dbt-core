@@ -50,11 +50,18 @@ class Config:
         self.model = model
         self.source_config = source_config
 
+    @staticmethod
+    def _transform_kwargs(kwargs):
+        for k in ('pre_hook', 'post_hook'):
+            if k in kwargs:
+                kwargs[k.replace('_', '-')] = kwargs.pop(k)
+        return kwargs
+
     def __call__(self, *args, **kwargs):
         if len(args) == 1 and len(kwargs) == 0:
             opts = args[0]
         elif len(args) == 0 and len(kwargs) > 0:
-            opts = kwargs
+            opts = self._transform_kwargs(kwargs)
         else:
             dbt.exceptions.raise_compiler_error(
                 "Invalid inline model config",

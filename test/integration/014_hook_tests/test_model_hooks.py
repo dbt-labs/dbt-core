@@ -147,7 +147,7 @@ class TestPrePostModelHooks(BaseTestPrePost):
         return "test/integration/014_hook_tests/models"
 
     @attr(type='postgres')
-    def test_pre_and_post_model_hooks(self):
+    def test_postgres_pre_and_post_model_hooks(self):
         self.run_dbt(['run'])
 
         self.check_hooks('start')
@@ -177,7 +177,7 @@ class TestPrePostModelHooksOnSeeds(DBTIntegrationTest):
         }
 
     @attr(type='postgres')
-    def test_hooks_on_seeds(self):
+    def test_postgres_hooks_on_seeds(self):
         res = self.run_dbt(['seed'])
         self.assertEqual(len(res), 1, 'Expected exactly one item')
         res = self.run_dbt(['test'])
@@ -196,14 +196,14 @@ class TestPrePostModelHooksInConfig(BaseTestPrePost):
         return "test/integration/014_hook_tests/configured-models"
 
     @attr(type='postgres')
-    def test_pre_and_post_model_hooks_model(self):
+    def test_postgres_pre_and_post_model_hooks_model(self):
         self.run_dbt(['run'])
 
         self.check_hooks('start')
         self.check_hooks('end')
 
     @attr(type='postgres')
-    def test_pre_and_post_model_hooks_model_and_project(self):
+    def test_postgres_pre_and_post_model_hooks_model_and_project(self):
         self.use_default_project({
             'models': {
                 'test': {
@@ -229,4 +229,10 @@ class TestPrePostModelHooksInConfig(BaseTestPrePost):
 
         self.check_hooks('start', count=2)
         self.check_hooks('end', count=2)
+
+class TestPrePostModelHooksInConfigKwargs(TestPrePostModelHooksInConfig):
+
+    @property
+    def models(self):
+        return "test/integration/014_hook_tests/kwargs-models"
 
