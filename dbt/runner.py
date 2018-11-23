@@ -12,7 +12,6 @@ import dbt.compilation
 import dbt.exceptions
 import dbt.linker
 import dbt.tracking
-import dbt.model
 import dbt.ui.printer
 import dbt.utils
 from dbt.clients.system import write_json

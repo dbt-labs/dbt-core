@@ -2,7 +2,6 @@ import os
 
 import dbt.exceptions
 import dbt.flags
-import dbt.model
 import dbt.utils
 import dbt.hooks
 import dbt.clients.jinja
@@ -11,6 +10,7 @@ import dbt.context.parser
 from dbt.utils import coalesce
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.contracts.graph.parsed import ParsedNode
+from dbt.parser.source_config import SourceConfig
 
 
 class BaseParser(object):
@@ -71,7 +71,7 @@ class BaseParser(object):
             fqn = cls.get_fqn(node.get('path'), package_project_config,
                               fqn_extra)
 
-        config = dbt.model.SourceConfig(
+        config = SourceConfig(
             root_project_config,
             package_project_config,
             fqn,

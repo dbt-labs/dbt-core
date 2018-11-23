@@ -1,19 +1,15 @@
-import os.path
-
 import dbt.exceptions
 
-from dbt.compat import basestring
-
-from dbt.utils import split_path, deep_merge, DBTConfigKeys
+from dbt.utils import deep_merge, DBTConfigKeys
 from dbt.node_types import NodeType
 
 
 class SourceConfig(object):
     ConfigKeys = DBTConfigKeys
 
-    AppendListFields = ['pre-hook', 'post-hook', 'tags']
-    ExtendDictFields = ['vars', 'column_types', 'quoting']
-    ClobberFields = [
+    AppendListFields = {'pre-hook', 'post-hook', 'tags'}
+    ExtendDictFields = {'vars', 'column_types', 'quoting'}
+    ClobberFields = {
         'alias',
         'schema',
         'enabled',
@@ -23,8 +19,8 @@ class SourceConfig(object):
         'sql_where',
         'unique_key',
         'sort_type',
-        'bind'
-    ]
+        'bind',
+    }
 
     def __init__(self, active_project, own_project, fqn, node_type):
         self._config = None
@@ -37,7 +33,7 @@ class SourceConfig(object):
         self.in_model_config = {}
 
         # make sure we categorize all configs
-        all_configs = self.AppendListFields + self.ExtendDictFields + \
+        all_configs = self.AppendListFields | self.ExtendDictFields | \
             self.ClobberFields
 
         for config in self.ConfigKeys:
@@ -90,15 +86,23 @@ class SourceConfig(object):
         return cfg
 
     def update_in_model_config(self, config):
-        config = config.copy()
-
-        # make sure we're not clobbering an array of hooks with a single hook
-        # string
-        for field in self.AppendListFields:
-            if field in config:
-                config[field] = self.__get_as_list(config, field)
-
-        self.in_model_config.update(config)
+        for key, value in config.items():
+            if key in self.AppendListFields:
+                current = self.in_model_config.get(key, [])
+                if not isinstance(value, (list, tuple)):
+                    value = [value]
+                current.extend(value)
+                self.in_model_config[key] = current
+            elif key in self.ExtendDictFields:
+                current = self.in_model_config.get(key, {})
+                if not isinstance(current, dict):
+                    dbt.exceptions.raise_compiler_error(
+                        'Invalid config field: "{}" must be a dict'.format(key)
+                    )
+                current.update(value)
+                self.in_model_config[key] = current
+            else:  # key in self.ClobberFields
+                self.in_model_config[key] = value
 
     def __get_as_list(self, relevant_configs, key):
         if key not in relevant_configs:
@@ -116,17 +120,17 @@ class SourceConfig(object):
             in new_configs if key in self.ConfigKeys
         }
 
-        for key in SourceConfig.AppendListFields:
+        for key in self.AppendListFields:
             append_fields = self.__get_as_list(relevant_configs, key)
             mutable_config[key].extend([
                 f for f in append_fields if f not in mutable_config[key]
             ])
 
-        for key in SourceConfig.ExtendDictFields:
+        for key in self.ExtendDictFields:
             dict_val = relevant_configs.get(key, {})
             mutable_config[key].update(dict_val)
 
-        for key in SourceConfig.ClobberFields:
+        for key in self.ClobberFields:
             if key in relevant_configs:
                 mutable_config[key] = relevant_configs[key]
 
@@ -136,9 +140,9 @@ class SourceConfig(object):
         # most configs are overwritten by a more specific config, but pre/post
         # hooks are appended!
         config = {}
-        for k in SourceConfig.AppendListFields:
+        for k in self.AppendListFields:
             config[k] = []
-        for k in SourceConfig.ExtendDictFields:
+        for k in self.ExtendDictFields:
             config[k] = {}
 
         if self.node_type == NodeType.Seed:
@@ -163,8 +167,8 @@ class SourceConfig(object):
 
             clobber_configs = {
                 k: v for (k, v) in relevant_configs.items()
-                if k not in SourceConfig.AppendListFields and
-                k not in SourceConfig.ExtendDictFields
+                if k not in self.AppendListFields and
+                k not in self.ExtendDictFields
             }
 
             config.update(clobber_configs)
@@ -177,53 +181,3 @@ class SourceConfig(object):
 
     def load_config_from_active_project(self):
         return self.get_project_config(self.active_project)
-
-
-class DBTSource(object):
-    def __init__(self, project, top_dir, rel_filepath, own_project):
-        self._config = None
-        self.project = project
-        self.own_project = own_project
-
-        self.top_dir = top_dir
-        self.rel_filepath = rel_filepath
-        self.filepath = os.path.join(top_dir, rel_filepath)
-        self.name = self.fqn[-1]
-
-        self.source_config = SourceConfig(project, own_project, self.fqn)
-
-    def compile(self):
-        raise RuntimeError("Not implemented!")
-
-    @property
-    def config(self):
-        if self._config is not None:
-            return self._config
-
-        return self.source_config.config
-
-    @property
-    def fqn(self):
-        """
-        fully-qualified name for model. Includes all subdirs below 'models'
-        path and the filename
-        """
-        parts = split_path(self.filepath)
-        name, _ = os.path.splitext(parts[-1])
-        return [self.own_project['name']] + parts[1:-1] + [name]
-
-    @property
-    def nice_name(self):
-        return "{}.{}".format(self.fqn[0], self.fqn[-1])
-
-
-class Csv(DBTSource):
-    def __init__(self, project, target_dir, rel_filepath, own_project):
-        super(Csv, self).__init__(
-            project, target_dir, rel_filepath, own_project
-        )
-
-    def __repr__(self):
-        return "<Csv {}.{}: {}>".format(
-            self.project['name'], self.model_name, self.filepath
-        )
