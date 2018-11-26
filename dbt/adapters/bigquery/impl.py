@@ -142,8 +142,9 @@ class BigQueryAdapter(PostgresAdapter):
     def get_bigquery_client(cls, profile_credentials):
         project_name = profile_credentials.project
         creds = cls.get_bigquery_credentials(profile_credentials)
-
-        return google.cloud.bigquery.Client(project_name, creds)
+        location = getattr(profile_credentials, 'location', None)
+        return google.cloud.bigquery.Client(project_name, creds,
+                                            location=location)
 
     @classmethod
     def open_connection(cls, connection):

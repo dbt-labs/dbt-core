@@ -139,6 +139,9 @@ BIGQUERY_CREDENTIALS_CONTRACT = {
         'timeout_seconds': {
             'type': 'integer',
         },
+        'location': {
+            'type': 'string',
+        },
     },
     'required': ['method', 'project', 'schema'],
 }
