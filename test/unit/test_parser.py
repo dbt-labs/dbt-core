@@ -7,6 +7,7 @@ import yaml
 import dbt.flags
 import dbt.parser
 from dbt.parser import ModelParser, MacroParser, DataTestParser, SchemaParser, ParserUtils
+from dbt.parser.source_config import SourceConfig
 from dbt.utils import timestring
 from dbt.config import RuntimeConfig
 
@@ -21,12 +22,7 @@ def get_os_path(unix_path):
     return os.path.normpath(unix_path)
 
 
-class ParserTest(unittest.TestCase):
-
-    def find_input_by_name(self, models, name):
-        return next(
-            (model for model in models if model.get('name') == name),
-            {})
+class BaseParserTest(unittest.TestCase):
 
     def setUp(self):
         dbt.flags.STRICT_MODE = True
@@ -73,6 +69,73 @@ class ParserTest(unittest.TestCase):
             project=snowplow_project, profile=profile_data
         )
 
+
+
+class SourceConfigTest(BaseParserTest):
+    def test__source_config_single_call(self):
+        cfg = SourceConfig(self.root_project_config, self.root_project_config,
+                           ['root', 'x'], NodeType.Model)
+        cfg.update_in_model_config({
+            'materialized': 'something',
+            'sort': 'my sort key',
+            'pre-hook': 'my pre run hook',
+            'vars': {'a': 1, 'b': 2},
+        })
+        expect = {
+            'column_types': {},
+            'enabled': True,
+            'materialized': 'something',
+            'post-hook': [],
+            'pre-hook': ['my pre run hook'],
+            'quoting': {},
+            'sort': 'my sort key',
+            'tags': [],
+            'vars': {'a': 1, 'b': 2},
+        }
+        self.assertEqual(cfg.config, expect)
+
+    def test__source_config_multiple_calls(self):
+        cfg = SourceConfig(self.root_project_config, self.root_project_config,
+                           ['root', 'x'], NodeType.Model)
+        cfg.update_in_model_config({
+            'materialized': 'something',
+            'sort': 'my sort key',
+            'pre-hook': 'my pre run hook',
+            'vars': {'a': 1, 'b': 2},
+        })
+        cfg.update_in_model_config({
+            'materialized': 'something else',
+            'pre-hook': ['my other pre run hook', 'another pre run hook'],
+            'vars': {'a': 4, 'c': 3},
+        })
+        expect = {
+            'column_types': {},
+            'enabled': True,
+            'materialized': 'something else',
+            'post-hook': [],
+            'pre-hook': [
+                'my pre run hook',
+                'my other pre run hook',
+                'another pre run hook',
+            ],
+            'quoting': {},
+            'sort': 'my sort key',
+            'tags': [],
+            'vars': {'a': 4, 'b': 2, 'c': 3},
+        }
+        self.assertEqual(cfg.config, expect)
+
+
+class ParserTest(BaseParserTest):
+
+    def find_input_by_name(self, models, name):
+        return next(
+            (model for model in models if model.get('name') == name),
+            {})
+
+    def setUp(self):
+        super(ParserTest, self).setUp()
+
         self.macro_manifest = Manifest(macros={}, nodes={}, docs={},
                                        generated_at=timestring(), disabled=[])
 
@@ -97,6 +160,7 @@ class ParserTest(unittest.TestCase):
             'column_types': {},
             'tags': [],
         }
+
 
     def test__single_model(self):
         models = [{
