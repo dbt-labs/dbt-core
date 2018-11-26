@@ -1,7 +1,7 @@
 
 {{
-    config({
-        "pre_hook": "\
+    config(
+        pre_hook="\
             insert into {{this.schema}}.on_model_hook (\
                 \"state\",\
                 \"target.dbname\",\
@@ -29,7 +29,7 @@
                 '{{ run_started_at }}',\
                 '{{ invocation_id }}'\
         )",
-        "post-hook": "\
+        post_hook="\
             insert into {{this.schema}}.on_model_hook (\
                 \"state\",\
                 \"target.dbname\",\
@@ -57,7 +57,7 @@
                 '{{ run_started_at }}',\
                 '{{ invocation_id }}'\
             )"
-    })
+    )
 }}
 
 select 3 as id

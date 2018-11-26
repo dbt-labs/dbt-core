@@ -50,6 +50,19 @@ class Config:
         self.model = model
         self.source_config = source_config
 
+    def _transform_config(self, config):
+        for oldkey in ('pre_hook', 'post_hook'):
+            if oldkey in config:
+                newkey = oldkey.replace('_', '-')
+                if newkey in config:
+                    dbt.exceptions.raise_compiler_error(
+                        'Invalid config, has conflicting keys "{}" and "{}"'
+                        .format(oldkey, newkey),
+                        self.model
+                    )
+                config[newkey] = config.pop(oldkey)
+        return config
+
     def __call__(self, *args, **kwargs):
         if len(args) == 1 and len(kwargs) == 0:
             opts = args[0]
@@ -59,6 +72,8 @@ class Config:
             dbt.exceptions.raise_compiler_error(
                 "Invalid inline model config",
                 self.model)
+
+        opts = self._transform_config(opts)
 
         self.source_config.update_in_model_config(opts)
         return ''
