@@ -10,7 +10,6 @@ import dbt.ui.printer
 
 class ArchiveTask(RunnableTask):
     def run(self):
-        runner = RunManager(self.config)
 
         query = {
             'include': ['*'],
@@ -18,7 +17,8 @@ class ArchiveTask(RunnableTask):
             'resource_types': [NodeType.Archive]
         }
 
-        results = runner.run_flat(query, ArchiveRunner)
+        runner = RunManager(self.config, query, ArchiveRunner, flat=True)
+        results = runner.run()
 
         dbt.ui.printer.print_run_end_messages(results)
 

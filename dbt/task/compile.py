@@ -11,7 +11,6 @@ from dbt.task.base_task import RunnableTask
 
 class CompileTask(RunnableTask):
     def run(self):
-        runner = RunManager(self.config)
 
         query = {
             "include": self.args.models,
@@ -19,8 +18,8 @@ class CompileTask(RunnableTask):
             "resource_types": NodeType.executable(),
             "tags": [],
         }
-
-        results = runner.run(query, CompileRunner)
+        runner = RunManager(self.config, query, CompileRunner)
+        results = runner.run()
 
         dbt.ui.printer.print_timestamped_line('Done.')
 

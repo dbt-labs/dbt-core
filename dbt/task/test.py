@@ -18,7 +18,6 @@ class TestTask(RunnableTask):
            d) accepted value
     """
     def run(self):
-        runner = RunManager(self.config)
 
         include = self.args.models
         exclude = self.args.exclude
@@ -41,7 +40,8 @@ class TestTask(RunnableTask):
             raise RuntimeError("unexpected")
 
         query['tags'] = tags
-        results = runner.run_flat(query, TestRunner)
+        runner = RunManager(self.config, query, TestRunner, flat=True)
+        results = runner.run()
 
         dbt.ui.printer.print_run_end_messages(results)
 

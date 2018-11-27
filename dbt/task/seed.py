@@ -9,13 +9,13 @@ import dbt.ui.printer
 
 class SeedTask(RunnableTask):
     def run(self):
-        runner = RunManager(self.config)
         query = {
             "include": ["*"],
             "exclude": [],
             "resource_types": [NodeType.Seed],
         }
-        results = runner.run_flat(query, SeedRunner)
+        runner = RunManager(self.config, query, SeedRunner, flat=True)
+        results = runner.run()
 
         if self.args.show:
             self.show_tables(results)

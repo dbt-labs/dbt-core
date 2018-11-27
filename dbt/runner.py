@@ -24,9 +24,66 @@ from multiprocessing.dummy import Pool as ThreadPool
 RESULT_FILE_NAME = 'run_results.json'
 
 
-class RunManager(object):
-    def __init__(self, config):
+class RunBuilder(object):
+    """Given a node, build a Runner, tracking the number built so far vs the
+    total.
+
+    # TODO: this name completely sucks
+    """
+    def __init__(self, flattened_nodes, Runner, config):
+        self.run_count = 0
+        num_nodes = len([
+            n for n in flattened_nodes
+            if not Runner.is_ephemeral_model(n)
+        ])
+        self.num_nodes = num_nodes
+        self.Runner = Runner
         self.config = config
+        self.adapter = get_adapter(config)
+        # TODO: do we need to track this?
+        self._created = {}
+
+    def get_runner(self, node):
+        if self.Runner.is_ephemeral_model(node):
+            runner = self.Runner(self.config, self.adapter, node,
+                                 0, 0)
+        else:
+            self.run_count += 1
+            runner = self.Runner(self.config, self.adapter, node,
+                                 self.run_count, self.num_nodes)
+        self._created[node.unique_id] = runner
+        return runner
+
+
+class RunManager(object):
+    def __init__(self, config, query, Runner, flat=False):
+        """
+        Runner is a type (not instance!) derived from
+            dbt.node_runners.BaseRunner
+
+        if flat is set, nodes will be selected using the FlatNodeSelector
+        """
+        self.config = config
+        self.query = query
+        self.Runner = Runner
+        self.run_count = 0
+
+        if flat:
+            Selector = dbt.graph.selector.FlatNodeSelector
+        else:
+            Selector = dbt.graph.selector.NodeSelector
+
+        manifest, linker = self.compile(self.config)
+        self.manifest = manifest
+        self.linker = linker
+
+        selector = Selector(linker, manifest)
+        selected_nodes = selector.select(query)
+        # TODO: swap this out for run_graph stuff once I verify this refactor
+        self.dependency_list = selector.as_node_list(selected_nodes)
+        # we use this a couple times.
+        self._flattened_nodes = dbt.utils.flatten_nodes(self.dependency_list)
+        self._builder = RunBuilder(self._flattened_nodes, Runner, config)
 
     def deserialize_graph(self):
         logger.info("Loading dependency graph file.")
@@ -43,26 +100,6 @@ class RunManager(object):
         dependent_nodes = linker.get_dependent_nodes(node_id)
         for node_id in dependent_nodes:
             yield node_id
-
-    def get_runners(self, Runner, adapter, node_dependency_list):
-        all_nodes = dbt.utils.flatten_nodes(node_dependency_list)
-
-        num_nodes = len([
-            n for n in all_nodes if not Runner.is_ephemeral_model(n)
-        ])
-
-        node_runners = {}
-        i = 0
-        for node in all_nodes:
-            uid = node.get('unique_id')
-            if Runner.is_ephemeral_model(node):
-                runner = Runner(self.config, adapter, node, 0, 0)
-            else:
-                i += 1
-                runner = Runner(self.config, adapter, node, i, num_nodes)
-            node_runners[uid] = runner
-
-        return node_runners
 
     def call_runner(self, data):
         runner = data['runner']
@@ -85,12 +122,10 @@ class RunManager(object):
 
         return result
 
-    def get_relevant_runners(self, node_runners, node_subset):
+    def get_relevant_runners(self, node_subset):
         runners = []
         for node in node_subset:
-            unique_id = node.get('unique_id')
-            if unique_id in node_runners:
-                runners.append(node_runners[unique_id])
+            runners.append(self._builder.get_runner(node))
         return runners
 
     def map_run(self, pool, args):
@@ -105,7 +140,7 @@ class RunManager(object):
         else:
             return pool.imap_unordered(self.call_runner, args)
 
-    def execute_nodes(self, linker, Runner, manifest, node_dependency_list):
+    def execute_nodes(self):
         adapter = get_adapter(self.config)
 
         num_threads = self.config.threads
@@ -116,33 +151,32 @@ class RunManager(object):
         dbt.ui.printer.print_timestamped_line(concurrency_line)
         dbt.ui.printer.print_timestamped_line("")
 
-        schemas = list(Runner.get_model_schemas(manifest))
-        node_runners = self.get_runners(Runner, adapter, node_dependency_list)
+        schemas = list(self.Runner.get_model_schemas(self.manifest))
 
         pool = ThreadPool(num_threads)
         node_results = []
-        for node_list in node_dependency_list:
-            runners = self.get_relevant_runners(node_runners, node_list)
+        for node_list in self.dependency_list:
+            runners = self.get_relevant_runners(node_list)
 
             args_list = []
             for runner in runners:
                 args_list.append({
-                    'manifest': manifest,
+                    'manifest': self.manifest,
                     'runner': runner
                 })
 
             try:
                 for result in self.map_run(pool, args_list):
-                    is_ephemeral = Runner.is_ephemeral_model(result.node)
+                    is_ephemeral = self.Runner.is_ephemeral_model(result.node)
                     if not is_ephemeral:
                         node_results.append(result)
 
                     node = CompileResultNode(**result.node)
                     node_id = node.unique_id
-                    manifest.nodes[node_id] = node
+                    self.manifest.nodes[node_id] = node
 
                     if result.errored:
-                        dependents = self.get_dependent(linker, node_id)
+                        dependents = self.get_dependent(self.linker, node_id)
                         self._mark_dependent_errors(node_runners, dependents,
                                                     result, is_ephemeral)
 
@@ -196,30 +230,18 @@ class RunManager(object):
         compiler.initialize()
         return compiler.compile()
 
-    def run_from_graph(self, Selector, Runner, query):
+    def run(self):
         """
         Run dbt for the query, based on the graph.
-        Selector is a type (not instance!) derived from
-            dbt.graph.selector.NodeSelector
-        Runner is a type (not instance!) derived from
-            dbt.node_runners.BaseRunner
-
         """
-        manifest, linker = self.compile(self.config)
-
-        selector = Selector(linker, manifest)
-        selected_nodes = selector.select(query)
-        dep_list = selector.as_node_list(selected_nodes)
-
         adapter = get_adapter(self.config)
 
-        flat_nodes = dbt.utils.flatten_nodes(dep_list)
-        if len(flat_nodes) == 0:
+        if len(self._flattened_nodes) == 0:
             logger.info("WARNING: Nothing to do. Try checking your model "
                         "configs and model specification args")
             return []
-        elif Runner.print_header:
-            stat_line = dbt.ui.printer.get_counts(flat_nodes)
+        elif self.Runner.print_header:
+            stat_line = dbt.ui.printer.get_counts(self._flattened_nodes)
             logger.info("")
             dbt.ui.printer.print_timestamped_line(stat_line)
             dbt.ui.printer.print_timestamped_line("")
@@ -227,13 +249,14 @@ class RunManager(object):
             logger.info("")
 
         try:
-            Runner.before_hooks(self.config, adapter, manifest)
+            self.Runner.before_hooks(self.config, adapter, self.manifest)
             started = time.time()
-            Runner.before_run(self.config, adapter, manifest)
-            res = self.execute_nodes(linker, Runner, manifest, dep_list)
-            Runner.after_run(self.config, adapter, res, manifest)
+            self.Runner.before_run(self.config, adapter, self.manifest)
+            res = self.execute_nodes()
+            self.Runner.after_run(self.config, adapter, res, self.manifest)
             elapsed = time.time() - started
-            Runner.after_hooks(self.config, adapter, res, manifest, elapsed)
+            self.Runner.after_hooks(self.config, adapter, res, self.manifest,
+                                    elapsed)
 
         finally:
             adapter.cleanup_connections()
@@ -246,13 +269,3 @@ class RunManager(object):
         self.write_results(result)
 
         return res
-
-    # ------------------------------------
-
-    def run(self, query, Runner):
-        Selector = dbt.graph.selector.NodeSelector
-        return self.run_from_graph(Selector, Runner, query)
-
-    def run_flat(self, query, Runner):
-        Selector = dbt.graph.selector.FlatNodeSelector
-        return self.run_from_graph(Selector, Runner, query)

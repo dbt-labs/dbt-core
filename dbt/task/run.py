@@ -12,7 +12,6 @@ from dbt.task.base_task import RunnableTask
 
 class RunTask(RunnableTask):
     def run(self):
-        runner = RunManager(self.config)
 
         query = {
             "include": self.args.models,
@@ -21,7 +20,8 @@ class RunTask(RunnableTask):
             "tags": []
         }
 
-        results = runner.run(query, ModelRunner)
+        runner = RunManager(self.config, query, ModelRunner)
+        results = runner.run()
 
         if results:
             dbt.ui.printer.print_run_end_messages(results)
