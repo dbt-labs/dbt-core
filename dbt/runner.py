@@ -3,6 +3,7 @@ import time
 
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.compat import Queue
 from dbt.contracts.graph.parsed import ParsedNode
 from dbt.contracts.graph.manifest import CompileResultNode
 from dbt.contracts.results import ExecutionResult
@@ -84,6 +85,8 @@ class RunManager(object):
         # we use this a couple times.
         self._flattened_nodes = dbt.utils.flatten_nodes(self.dependency_list)
         self._builder = RunBuilder(self._flattened_nodes, Runner, config)
+        self.node_results = []
+        self._skipped_children = {}
 
     def deserialize_graph(self):
         logger.info("Loading dependency graph file.")
@@ -96,15 +99,12 @@ class RunManager(object):
 
         return dbt.linker.from_file(graph_file)
 
-    def get_dependent(self, linker, node_id):
-        dependent_nodes = linker.get_dependent_nodes(node_id)
+    def get_dependent(self, node_id):
+        dependent_nodes = self.linker.get_dependent_nodes(node_id)
         for node_id in dependent_nodes:
             yield node_id
 
-    def call_runner(self, data):
-        runner = data['runner']
-        manifest = data['manifest']
-
+    def call_runner(self, runner):
         if runner.skip:
             return runner.on_skip()
 
@@ -112,7 +112,7 @@ class RunManager(object):
         if not runner.is_ephemeral_model(runner.node):
             runner.before_execute()
 
-        result = runner.safe_run(manifest)
+        result = runner.safe_run(self.manifest)
 
         if not runner.is_ephemeral_model(runner.node):
             runner.after_execute(result)
@@ -122,27 +122,64 @@ class RunManager(object):
 
         return result
 
-    def get_relevant_runners(self, node_subset):
-        runners = []
-        for node in node_subset:
-            runners.append(self._builder.get_runner(node))
-        return runners
+    def _submit(self, pool, args, callback):
+        """If the caller has passed the magic 'single-threaded' flag, call the
+        function directly instead of pool.apply_async. The single-threaded flag
+         is intended for gathering more useful performance information about
+        what appens beneath `call_runner`, since python's default profiling
+        tools ignore child threads.
 
-    def map_run(self, pool, args):
-        """If the caller has passed the magic 'single-threaded' flag, use map()
-        instead of the pool.imap_unordered. The single-threaded flag is
-        intended for gathering more useful performance information about what
-        happens beneath `call_runner`, since python's default profiling tools
-        ignore child threads.
+        This does still go through the callback path for result collection.
         """
         if self.config.args.single_threaded:
-            return map(self.call_runner, args)
+            callback(self.call_runner(*args))
         else:
-            return pool.imap_unordered(self.call_runner, args)
+            pool.apply_async(self.call_runner, args=args, callback=callback)
+
+    def run_queue(self, pool, job_queue):
+        """Given a pool and a job queue, submit jobs from the queue to the pool
+        and put the results onto the done queue
+        """
+        def callback(result):
+            """A callback to handle results."""
+            self._handle_result(result)
+            job_queue.task_done()
+
+        while not job_queue.empty():
+            node = job_queue.get()
+            runner = self._builder.get_runner(node)
+            # we finally know what we're running! Make sure we haven't decided
+            # to skip it due to upstream failures
+            if runner.node.unique_id in self._skipped_children:
+                cause = self._skipped_children.pop(runner.node.unique_id)
+                runner.do_skip(cause=cause)
+            args = (runner,)
+            self._submit(pool, args, callback)
+        # block on completion
+        job_queue.join()
+
+        return
+
+    def _handle_result(self, result):
+        """Note: this happens inside an apply_async() callback, so it must be
+        "fast". (The pool worker thread will block!)
+        """
+        is_ephemeral = self.Runner.is_ephemeral_model(result.node)
+        if not is_ephemeral:
+            self.node_results.append(result)
+
+        node = CompileResultNode(**result.node)
+        node_id = node.unique_id
+        self.manifest.nodes[node_id] = node
+
+        if result.errored:
+            if is_ephemeral:
+                cause = result
+            else:
+                cause = None
+            self._mark_dependent_errors(node_id, result, cause)
 
     def execute_nodes(self):
-        adapter = get_adapter(self.config)
-
         num_threads = self.config.threads
         target_name = self.config.target_name
 
@@ -154,31 +191,15 @@ class RunManager(object):
         schemas = list(self.Runner.get_model_schemas(self.manifest))
 
         pool = ThreadPool(num_threads)
-        node_results = []
         for node_list in self.dependency_list:
-            runners = self.get_relevant_runners(node_list)
-
-            args_list = []
-            for runner in runners:
-                args_list.append({
-                    'manifest': self.manifest,
-                    'runner': runner
-                })
+            job_queue = Queue()
+            # TODO when this is a GraphQueue, we'll never have to do the .put
+            for node in node_list:
+                job_queue.put(node)
 
             try:
-                for result in self.map_run(pool, args_list):
-                    is_ephemeral = self.Runner.is_ephemeral_model(result.node)
-                    if not is_ephemeral:
-                        node_results.append(result)
-
-                    node = CompileResultNode(**result.node)
-                    node_id = node.unique_id
-                    self.manifest.nodes[node_id] = node
-
-                    if result.errored:
-                        dependents = self.get_dependent(self.linker, node_id)
-                        self._mark_dependent_errors(node_runners, dependents,
-                                                    result, is_ephemeral)
+                # the job queue is exhausted after run_queue exits
+                self.run_queue(pool, job_queue)
 
             except KeyboardInterrupt:
                 pool.close()
@@ -198,7 +219,7 @@ class RunManager(object):
                 for conn_name in adapter.cancel_open_connections():
                     dbt.ui.printer.print_cancel_line(conn_name)
 
-                dbt.ui.printer.print_run_end_messages(node_results,
+                dbt.ui.printer.print_run_end_messages(self.node_results,
                                                       early_exit=True)
 
                 pool.join()
@@ -207,19 +228,11 @@ class RunManager(object):
         pool.close()
         pool.join()
 
-        return node_results
+        return self.node_results
 
-    @staticmethod
-    def _mark_dependent_errors(node_runners, dependents, result, is_ephemeral):
-        for dep_node_id in dependents:
-            runner = node_runners.get(dep_node_id)
-            if not runner:
-                continue
-            if is_ephemeral:
-                cause = result
-            else:
-                cause = None
-            runner.do_skip(cause=result)
+    def _mark_dependent_errors(self, node_id, result, cause):
+        for dep_node_id in self.linker.get_dependent_nodes(node_id):
+            self._skipped_children[dep_node_id] = cause
 
     def write_results(self, execution_result):
         filepath = os.path.join(self.config.target_path, RESULT_FILE_NAME)

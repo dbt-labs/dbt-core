@@ -318,9 +318,3 @@ class NodeSelector(object):
             concurrent_dependency_list.append(node_level)
 
         return concurrent_dependency_list
-
-
-class FlatNodeSelector(NodeSelector):
-    def as_node_list(self, selected_nodes):
-        return super(FlatNodeSelector, self).as_node_list(selected_nodes,
-                                                          ephemeral_only=True)
