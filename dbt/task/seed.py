@@ -14,8 +14,7 @@ class SeedTask(RunnableTask):
             "exclude": [],
             "resource_types": [NodeType.Seed],
         }
-        runner = RunManager(self.config, query, SeedRunner, flat=True)
-        results = runner.run()
+        results = RunManager(self.config, query, SeedRunner).run()
 
         if self.args.show:
             self.show_tables(results)

@@ -20,8 +20,7 @@ class RunTask(RunnableTask):
             "tags": []
         }
 
-        runner = RunManager(self.config, query, ModelRunner)
-        results = runner.run()
+        results = RunManager(self.config, query, ModelRunner).run()
 
         if results:
             dbt.ui.printer.print_run_end_messages(results)

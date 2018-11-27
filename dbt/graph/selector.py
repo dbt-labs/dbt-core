@@ -304,17 +304,3 @@ class NodeSelector(object):
         addins = self.get_ancestor_ephemeral_nodes(selected)
 
         return selected | addins
-
-    def as_node_list(self, selected_nodes, ephemeral_only=False):
-        dependency_list = self.linker.as_dependency_list(
-            selected_nodes,
-            ephemeral_only=ephemeral_only)
-
-        concurrent_dependency_list = []
-        for level in dependency_list:
-            node_level = [
-                ParsedNode(**self.linker.get_node(node)) for node in level
-            ]
-            concurrent_dependency_list.append(node_level)
-
-        return concurrent_dependency_list

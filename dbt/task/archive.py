@@ -17,8 +17,7 @@ class ArchiveTask(RunnableTask):
             'resource_types': [NodeType.Archive]
         }
 
-        runner = RunManager(self.config, query, ArchiveRunner, flat=True)
-        results = runner.run()
+        results = RunManager(self.config, query, ArchiveRunner).run()
 
         dbt.ui.printer.print_run_end_messages(results)
 

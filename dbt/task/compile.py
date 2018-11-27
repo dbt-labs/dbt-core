@@ -18,8 +18,7 @@ class CompileTask(RunnableTask):
             "resource_types": NodeType.executable(),
             "tags": [],
         }
-        runner = RunManager(self.config, query, CompileRunner)
-        results = runner.run()
+        results = RunManager(self.config, query, CompileRunner).run()
 
         dbt.ui.printer.print_timestamped_line('Done.')
 

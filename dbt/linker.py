@@ -1,5 +1,6 @@
 import networkx as nx
 from collections import defaultdict
+import threading
 
 import dbt.utils
 from dbt.compat import PriorityQueue
@@ -21,32 +22,31 @@ class GraphQueue(object):
     """A fancy queue that is backed by the dependency graph.
     Note: this will mutate input!
     """
-    def __init__(self, graph):
+    def __init__(self, graph, manifest):
         self.graph = graph
-        # the initial size of the graph, as the PriorityQueue class picks the
-        # lowest value but we want the highest. We need this so we don't have
-        # to re-score all queue entries every time we remove something from
-        # the graph
-        self._initial_size = len(graph)
+        self.manifest = manifest
         # store the queue as a priority queue.
         self.inner = PriorityQueue()
         # things that have been popped off the queue but not finished
+        # and worker thread reservations
         self.in_progress = set()
         # things that are in the queue
         self.queued = set()
-        self.mutex = threading.Lock()
+        # this lock controls most things
+        self.lock = threading.Lock()
         # store the number of descendants for each node.
         self._descendants = self._calculate_descendants()
+        # populate the initial queue
+        self._find_new_additions()
 
-    def _is_ephemeral(self, node):
-        materialization = dbt.utils.get_materialization(self.node.node[node])
-        return materialization == 'ephemeral'
+    def get_node(self, node_id):
+        return self.manifest.nodes[node_id]
 
-    def _include_in_count(self, node):
-        """TODO: I'm pretty sure this is really inefficient."""
-        if not dbt.utils.is_blocking_dependency(self.node.node[node]):
+    def _include_in_cost(self, node_id):
+        node = self.get_node(node_id)
+        if not dbt.utils.is_blocking_dependency(node):
             return False
-        if self._is_ephemeral(node):
+        if node.get_materialization() == 'ephemeral':
             return False
         return True
 
@@ -55,54 +55,67 @@ class GraphQueue(object):
         len(self.graph) passes but this is easy. For large graphs this may hurt
         performance.
         """
-        descendants = {}
+        costs = {}
         for node in self.graph.nodes():
-            count = len(
+            cost = len([
                 d for d in nx.descendants(self.graph, node)
-                if self._include_in_count(d)
-            )
-            descendants[node] = count
-        return descendants
+                if self._include_in_cost(d)
+            ])
+            costs[node] = cost
+        return costs
 
     def get(self):
         """Get a node off the inner priority queue. If a node is ephemeral,
         mark it done immediately and get again. This blocks!
         """
-        task_id = self.inner.get()
+        # TODO: is this a race?
+        # Technically it's unsafe to call get() and empty() from different
+        # threads, but I don't think that can happen.
+        _, node_id = self.inner.get()
+        with self.lock:
+            self._mark_in_progress(node_id)
+        return self.get_node(node_id)
+
+    def __len__(self):
+        with self.lock:
+            return len(self.graph) - len(self.in_progress)
 
     def empty(self):
         """The graph queue is 'empty' if it all remaining nodes are in progress
         """
-        return (len(self.graph) - len(self.in_progress)) == 0
+        return len(self) == 0
+
+    def _already_known(self, node):
+        """Callers must hold the lock
+        """
+        return node in self.in_progress or node in self.queued
 
     def _find_new_additions(self):
         """Find any nodes in the graph that need to be added to the internal
         queue.
+
+        Note: callers must hold the lock
         """
         for node, in_degree in self.graph.in_degree_iter():
-            if node not in (self.in_progress | self.queued) and in_degree == 0:
+            if not self._already_known(node) and in_degree == 0:
                 # lower score = more descendants = higher priority
-                score = self._initial_size - self._descendants[node]
+                score = -1 * self._descendants[node]
                 self.inner.put((score, node))
                 self.queued.add(node)
 
     def mark_done(self, task_id):
-        with self.mutex:
+        with self.lock:
             self.in_progress.remove(task_id)
             self.graph.remove_node(task_id)
             self._find_new_additions()
-            self.queue.task_done()
+            self.inner.task_done()
 
     def _mark_in_progress(self, task_id):
         self.queued.remove(task_id)
         self.in_progress.add(task_id)
 
-    def get(self):
-        with self.mutex:
-            value = self.inner.get()
-
     def join(self):
-        self.queue.join()
+        self.inner.join()
 
 
 class Linker(object):
@@ -134,11 +147,9 @@ class Linker(object):
 
         return None
 
-    def as_graph_queue(self, limit_to=None, ephemeral_only=False):
+    def as_graph_queue(self, manifest, limit_to=None):
         """Returns a queue over nodes in the graph that tracks progress of
         dependecies.
-
-        TODO: handle/understand ephemeral_only / is_blocking_dependency
         """
         if limit_to is None:
             graph_nodes = self.graph.nodes()
@@ -154,7 +165,7 @@ class Linker(object):
                 to_remove.append(node)
 
         for node in to_remove:
-            new_graph.remove(node)
+            new_graph.remove_node(node)
 
         for node in graph_nodes:
             if node not in new_graph:
@@ -162,7 +173,7 @@ class Linker(object):
                     "Couldn't find model '{}' -- does it exist or is "
                     "it disabled?".format(node)
                 )
-        return GraphQueue(new_graph)
+        return GraphQueue(new_graph, manifest)
 
     def as_dependency_list(self, limit_to=None, ephemeral_only=False):
         """returns a list of list of nodes, eg. [[0,1], [2], [4,5,6]]. Each
@@ -224,6 +235,8 @@ class Linker(object):
         self.graph.add_node(node, data)
 
     def write_graph(self, outfile):
+        # TODO: take the manifest as an argument, add that to the graph before
+        # pickling
         out_graph = self.remove_blacklisted_attributes_from_nodes(self.graph)
         nx.write_gpickle(out_graph, outfile)
 

@@ -40,8 +40,7 @@ class TestTask(RunnableTask):
             raise RuntimeError("unexpected")
 
         query['tags'] = tags
-        runner = RunManager(self.config, query, TestRunner, flat=True)
-        results = runner.run()
+        results = RunManager(self.config, query, TestRunner).run()
 
         dbt.ui.printer.print_run_end_messages(results)
 

@@ -3,7 +3,6 @@ import time
 
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.compat import Queue
 from dbt.contracts.graph.parsed import ParsedNode
 from dbt.contracts.graph.manifest import CompileResultNode
 from dbt.contracts.results import ExecutionResult
@@ -25,68 +24,49 @@ from multiprocessing.dummy import Pool as ThreadPool
 RESULT_FILE_NAME = 'run_results.json'
 
 
-class RunBuilder(object):
-    """Given a node, build a Runner, tracking the number built so far vs the
-    total.
-
-    # TODO: this name completely sucks
-    """
-    def __init__(self, flattened_nodes, Runner, config):
-        self.run_count = 0
-        num_nodes = len([
-            n for n in flattened_nodes
-            if not Runner.is_ephemeral_model(n)
-        ])
-        self.num_nodes = num_nodes
-        self.Runner = Runner
-        self.config = config
-        self.adapter = get_adapter(config)
-        # TODO: do we need to track this?
-        self._created = {}
-
-    def get_runner(self, node):
-        if self.Runner.is_ephemeral_model(node):
-            runner = self.Runner(self.config, self.adapter, node,
-                                 0, 0)
-        else:
-            self.run_count += 1
-            runner = self.Runner(self.config, self.adapter, node,
-                                 self.run_count, self.num_nodes)
-        self._created[node.unique_id] = runner
-        return runner
-
-
 class RunManager(object):
-    def __init__(self, config, query, Runner, flat=False):
+    def __init__(self, config, query, Runner):
         """
         Runner is a type (not instance!) derived from
             dbt.node_runners.BaseRunner
-
-        if flat is set, nodes will be selected using the FlatNodeSelector
         """
         self.config = config
         self.query = query
         self.Runner = Runner
-        self.run_count = 0
-
-        if flat:
-            Selector = dbt.graph.selector.FlatNodeSelector
-        else:
-            Selector = dbt.graph.selector.NodeSelector
 
         manifest, linker = self.compile(self.config)
         self.manifest = manifest
         self.linker = linker
 
-        selector = Selector(linker, manifest)
+        selector = dbt.graph.selector.NodeSelector(linker, manifest)
         selected_nodes = selector.select(query)
-        # TODO: swap this out for run_graph stuff once I verify this refactor
-        self.dependency_list = selector.as_node_list(selected_nodes)
-        # we use this a couple times.
-        self._flattened_nodes = dbt.utils.flatten_nodes(self.dependency_list)
-        self._builder = RunBuilder(self._flattened_nodes, Runner, config)
+        self.job_queue = self.linker.as_graph_queue(manifest, selected_nodes)
+
+        # we use this a couple times. order does not matter.
+        self._flattened_nodes = [
+            self.manifest.nodes[uid] for uid in selected_nodes
+        ]
+
+        self.run_count = 0
+        self.num_nodes = len([
+            n for n in self._flattened_nodes
+            if not Runner.is_ephemeral_model(n)
+        ])
         self.node_results = []
         self._skipped_children = {}
+
+    def get_runner(self, node):
+        adapter = get_adapter(self.config)
+
+        if self.Runner.is_ephemeral_model(node):
+            run_count = 0
+            num_nodes = 0
+        else:
+            self.run_count += 1
+            run_count = self.run_count
+            num_nodes = self.num_nodes
+
+        return self.Runner(self.config, adapter, node, run_count, num_nodes)
 
     def deserialize_graph(self):
         logger.info("Loading dependency graph file.")
@@ -98,11 +78,6 @@ class RunManager(object):
         )
 
         return dbt.linker.from_file(graph_file)
-
-    def get_dependent(self, node_id):
-        dependent_nodes = self.linker.get_dependent_nodes(node_id)
-        for node_id in dependent_nodes:
-            yield node_id
 
     def call_runner(self, runner):
         if runner.skip:
@@ -136,18 +111,17 @@ class RunManager(object):
         else:
             pool.apply_async(self.call_runner, args=args, callback=callback)
 
-    def run_queue(self, pool, job_queue):
-        """Given a pool and a job queue, submit jobs from the queue to the pool
-        and put the results onto the done queue
+    def run_queue(self, pool):
+        """Given a pool, submit jobs from the queue to the pool.
         """
         def callback(result):
             """A callback to handle results."""
             self._handle_result(result)
-            job_queue.task_done()
+            self.job_queue.mark_done(result.node.unique_id)
 
-        while not job_queue.empty():
-            node = job_queue.get()
-            runner = self._builder.get_runner(node)
+        while not self.job_queue.empty():
+            node = self.job_queue.get()
+            runner = self.get_runner(node)
             # we finally know what we're running! Make sure we haven't decided
             # to skip it due to upstream failures
             if runner.node.unique_id in self._skipped_children:
@@ -156,7 +130,7 @@ class RunManager(object):
             args = (runner,)
             self._submit(pool, args, callback)
         # block on completion
-        job_queue.join()
+        self.job_queue.join()
 
         return
 
@@ -191,39 +165,32 @@ class RunManager(object):
         schemas = list(self.Runner.get_model_schemas(self.manifest))
 
         pool = ThreadPool(num_threads)
-        for node_list in self.dependency_list:
-            job_queue = Queue()
-            # TODO when this is a GraphQueue, we'll never have to do the .put
-            for node in node_list:
-                job_queue.put(node)
+        try:
+            self.run_queue(pool)
 
-            try:
-                # the job queue is exhausted after run_queue exits
-                self.run_queue(pool, job_queue)
+        except KeyboardInterrupt:
+            pool.close()
+            pool.terminate()
 
-            except KeyboardInterrupt:
-                pool.close()
-                pool.terminate()
+            adapter = get_adapter(self.config)
 
-                adapter = get_adapter(self.config)
+            if not adapter.is_cancelable():
+                msg = ("The {} adapter does not support query "
+                       "cancellation. Some queries may still be "
+                       "running!".format(adapter.type()))
 
-                if not adapter.is_cancelable():
-                    msg = ("The {} adapter does not support query "
-                           "cancellation. Some queries may still be "
-                           "running!".format(adapter.type()))
-
-                    yellow = dbt.ui.printer.COLOR_FG_YELLOW
-                    dbt.ui.printer.print_timestamped_line(msg, yellow)
-                    raise
-
-                for conn_name in adapter.cancel_open_connections():
-                    dbt.ui.printer.print_cancel_line(conn_name)
-
-                dbt.ui.printer.print_run_end_messages(self.node_results,
-                                                      early_exit=True)
-
-                pool.join()
+                yellow = dbt.ui.printer.COLOR_FG_YELLOW
+                dbt.ui.printer.print_timestamped_line(msg, yellow)
                 raise
+
+            for conn_name in adapter.cancel_open_connections():
+                dbt.ui.printer.print_cancel_line(conn_name)
+
+            dbt.ui.printer.print_run_end_messages(self.node_results,
+                                                  early_exit=True)
+
+            pool.join()
+            raise
 
         pool.close()
         pool.join()
