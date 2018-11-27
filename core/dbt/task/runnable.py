@@ -265,8 +265,7 @@ class GraphRunnableTask(ManifestTask):
             raise self._raise_next_tick
 
     def run_queue(self, pool):
-        """Given a pool, submit jobs from the queue to the pool.
-        """
+        """Given a pool, submit jobs from the queue to the pool."""
         if self.job_queue is None:
             raise InternalException("Got to run_queue with no job queue set")
 
