@@ -1,4 +1,5 @@
 import unittest
+import mock
 
 import os
 import string
@@ -19,21 +20,26 @@ class GraphSelectionTest(unittest.TestCase):
 
         # Edges: [(X.a, Y.b), (X.a, X.c), (Y.b, Y.d), (Y.b, X.e), (X.c, Y.f), (X.c, X.g)]
         self.package_graph = nx.relabel_nodes(integer_graph, package_mapping)
+        nodes = {
+            node: mock.MagicMock(fqn=node.split('.')[1:], tags=[])
+            for node in self.package_graph
+        }
 
-        for node in self.package_graph:
-            self.package_graph.node[node]['fqn'] = node.split('.')[1:]
+        nodes['m.X.a'].tags = ['abc']
+        nodes['m.Y.b'].tags = ['abc']
+        nodes['m.X.c'].tags = ['abc']
+        nodes['m.Y.d'].tags = []
+        nodes['m.X.e'].tags = ['efg']
+        nodes['m.Y.f'].tags = ['efg']
+        nodes['m.X.g'].tags = ['efg']
 
-        self.package_graph.node['m.X.a']['tags'] = ['abc']
-        self.package_graph.node['m.Y.b']['tags'] = ['abc']
-        self.package_graph.node['m.X.c']['tags'] = ['abc']
-        self.package_graph.node['m.Y.d']['tags'] = []
-        self.package_graph.node['m.X.e']['tags'] = ['efg']
-        self.package_graph.node['m.Y.f']['tags'] = ['efg']
-        self.package_graph.node['m.X.g']['tags'] = ['efg']
+        self.manifest = mock.MagicMock(nodes=nodes)
+        self.linker = mock.MagicMock(graph=self.package_graph)
+        self.selector = graph_selector.NodeSelector(self.linker, self.manifest)
 
 
     def run_specs_and_assert(self, graph, include, exclude, expected):
-        selected = graph_selector.select_nodes(
+        selected = self.selector.select_nodes(
             graph,
             include,
             exclude
@@ -152,21 +158,19 @@ class GraphSelectionTest(unittest.TestCase):
         )
 
     def test__is_selected_node(self):
-        test = self.assert_is_selected_node
+        self.assert_is_selected_node(('X', 'a'), ('a'), True)
+        self.assert_is_selected_node(('X', 'a'), ('X', 'a'), True)
+        self.assert_is_selected_node(('X', 'a'), ('*'), True)
+        self.assert_is_selected_node(('X', 'a'), ('X', '*'), True)
 
-        test(('X', 'a'), ('a'), True)
-        test(('X', 'a'), ('X', 'a'), True)
-        test(('X', 'a'), ('*'), True)
-        test(('X', 'a'), ('X', '*'), True)
+        self.assert_is_selected_node(('X', 'a', 'b', 'c'), ('X', '*'), True)
+        self.assert_is_selected_node(('X', 'a', 'b', 'c'), ('X', 'a', '*'), True)
+        self.assert_is_selected_node(('X', 'a', 'b', 'c'), ('X', 'a', 'b', '*'), True)
+        self.assert_is_selected_node(('X', 'a', 'b', 'c'), ('X', 'a', 'b', 'c'), True)
+        self.assert_is_selected_node(('X', 'a', 'b', 'c'), ('X', 'a'), True)
+        self.assert_is_selected_node(('X', 'a', 'b', 'c'), ('X', 'a', 'b'), True)
 
-        test(('X', 'a', 'b', 'c'), ('X', '*'), True)
-        test(('X', 'a', 'b', 'c'), ('X', 'a', '*'), True)
-        test(('X', 'a', 'b', 'c'), ('X', 'a', 'b', '*'), True)
-        test(('X', 'a', 'b', 'c'), ('X', 'a', 'b', 'c'), True)
-        test(('X', 'a', 'b', 'c'), ('X', 'a'), True)
-        test(('X', 'a', 'b', 'c'), ('X', 'a', 'b'), True)
-
-        test(('X', 'a'), ('b'), False)
-        test(('X', 'a'), ('X', 'b'), False)
-        test(('X', 'a'), ('X', 'a', 'b'), False)
-        test(('X', 'a'), ('Y', '*'), False)
+        self.assert_is_selected_node(('X', 'a'), ('b'), False)
+        self.assert_is_selected_node(('X', 'a'), ('X', 'b'), False)
+        self.assert_is_selected_node(('X', 'a'), ('X', 'a', 'b'), False)
+        self.assert_is_selected_node(('X', 'a'), ('Y', '*'), False)

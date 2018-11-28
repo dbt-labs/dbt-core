@@ -64,14 +64,12 @@ class GraphQueue(object):
             costs[node] = cost
         return costs
 
-    def get(self):
-        """Get a node off the inner priority queue. If a node is ephemeral,
-        mark it done immediately and get again. This blocks!
+    def get(self, block=True, timeout=None):
+        """Get a node off the inner priority queue. By default, this blocks.
         """
-        # TODO: is this a race?
-        # Technically it's unsafe to call get() and empty() from different
-        # threads, but I don't think that can happen.
-        _, node_id = self.inner.get()
+        # It's unsafe to call get() and empty() from different threads, so
+        # don't do that
+        _, node_id = self.inner.get(block=block, timeout=timeout)
         with self.lock:
             self._mark_in_progress(node_id)
         return self.get_node(node_id)
@@ -130,9 +128,6 @@ class Linker(object):
     def nodes(self):
         return self.graph.nodes()
 
-    def get_node(self, node):
-        return self.graph.node[node]
-
     def find_cycles(self):
         # There's a networkx find_cycle function, but there's a bug in the
         # nx 1.11 release that prevents us from using it. We should use that
@@ -175,45 +170,6 @@ class Linker(object):
                 )
         return GraphQueue(new_graph, manifest)
 
-    def as_dependency_list(self, limit_to=None, ephemeral_only=False):
-        """returns a list of list of nodes, eg. [[0,1], [2], [4,5,6]]. Each
-        element contains nodes whose dependenices are subsumed by the union of
-        all lists before it. In this way, all nodes in list `i` can be run
-        simultaneously assuming that all lists before list `i` have been
-        completed"""
-
-        depth_nodes = defaultdict(list)
-
-        if limit_to is None:
-            graph_nodes = self.graph.nodes()
-        else:
-            graph_nodes = limit_to
-
-        for node in graph_nodes:
-            if node not in self.graph:
-                raise RuntimeError(
-                    "Couldn't find model '{}' -- does it exist or is "
-                    "it disabled?".format(node)
-                )
-
-            num_ancestors = len([
-                ancestor for ancestor in
-                nx.ancestors(self.graph, node)
-                if (dbt.utils.is_blocking_dependency(
-                        self.get_node(ancestor)) and
-                    (ephemeral_only is False or
-                     dbt.utils.get_materialization(
-                         self.get_node(ancestor)) == 'ephemeral'))
-            ])
-
-            depth_nodes[num_ancestors].append(node)
-
-        dependency_list = []
-        for depth in sorted(depth_nodes.keys()):
-            dependency_list.append(depth_nodes[depth])
-
-        return dependency_list
-
     def get_dependent_nodes(self, node):
         return nx.descendants(self.graph, node)
 
@@ -231,26 +187,24 @@ class Linker(object):
         self.graph.remove_node(node)
         return children
 
-    def update_node_data(self, node, data):
-        self.graph.add_node(node, data)
-
-    def write_graph(self, outfile):
-        # TODO: take the manifest as an argument, add that to the graph before
-        # pickling
-        out_graph = self.remove_blacklisted_attributes_from_nodes(self.graph)
+    def write_graph(self, outfile, manifest):
+        """Write the graph to a gpickle file. Before doing so, serialize and
+        include all nodes in their corresponding graph entries.
+        """
+        out_graph = _updated_graph(self.graph, manifest)
         nx.write_gpickle(out_graph, outfile)
 
     def read_graph(self, infile):
         self.graph = nx.read_gpickle(infile)
 
-    @classmethod
-    def remove_blacklisted_attributes_from_nodes(cls, graph):
-        graph = graph.copy()
-        for node_name, node in graph.node.items():
-            slim_node = node.copy()
-            for key in GRAPH_SERIALIZE_BLACKLIST:
-                if key in slim_node:
-                    del slim_node[key]
 
-            graph.node[node_name] = slim_node
-        return graph
+def _updated_graph(graph, manifest):
+    graph = graph.copy()
+    for node_id in graph.nodes():
+        # serialize() removes the agate table
+        data = manifest.nodes[node_id].serialize()
+        for key in GRAPH_SERIALIZE_BLACKLIST:
+            if key in data:
+                del data[key]
+        graph.add_node(node_id, data)
+    return graph
