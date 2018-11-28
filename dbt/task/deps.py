@@ -18,7 +18,8 @@ from dbt.semver import VersionSpecifier, UnboundedVersionSpecifier
 from dbt.utils import AttrDict
 from dbt.api.object import APIObject
 from dbt.contracts.project import LOCAL_PACKAGE_CONTRACT, \
-    GIT_PACKAGE_CONTRACT, REGISTRY_PACKAGE_CONTRACT
+    GIT_PACKAGE_CONTRACT, REGISTRY_PACKAGE_CONTRACT, \
+    REGISTRY_PACKAGE_METADATA_CONTRACT, PackageConfig
 
 from dbt.task.base_task import BaseTask
 
@@ -104,7 +105,7 @@ class Package(APIObject):
 
     def get_project_name(self, project):
         metadata = self.fetch_metadata(project)
-        return metadata.project_name
+        return metadata.name
 
     def get_installation_path(self, project):
         dest_dirname = self.get_project_name(project)
@@ -149,7 +150,10 @@ class RegistryPackage(Package):
         return "version {}".format(self.version_name())
 
     def incorporate(self, other):
-        return RegistryPackage(self.package, self.version + other.version)
+        return RegistryPackage(
+            package=self.package,
+            version=self.version + other.version
+        )
 
     def _check_in_index(self):
         index = registry.index_cached()
@@ -177,9 +181,8 @@ class RegistryPackage(Package):
 
     def _fetch_metadata(self, project):
         version_string = self.version_name()
-        # TODO(jeb): this needs to actually return a RuntimeConfig, instead of
-        # parsed json from a URL
-        return registry.package_version(self.package, version_string)
+        dct = registry.package_version(self.package, version_string)
+        return RegistryPackageMetadata(**dct)
 
     def install(self, project):
         version_string = self.version_name()
@@ -189,11 +192,22 @@ class RegistryPackage(Package):
         tar_path = os.path.realpath(os.path.join(DOWNLOADS_PATH, tar_name))
         dbt.clients.system.make_directory(os.path.dirname(tar_path))
 
-        download_url = metadata.get('downloads').get('tarball')
+        download_url = metadata['downloads']['tarball']
         dbt.clients.system.download(download_url, tar_path)
         deps_path = project.modules_path
         package_name = self.get_project_name(project)
         dbt.clients.system.untar_package(tar_path, deps_path, package_name)
+
+
+# the metadata is a package config with extra attributes we don't care about.
+class RegistryPackageMetadata(PackageConfig):
+    SCHEMA = REGISTRY_PACKAGE_METADATA_CONTRACT
+
+
+class ProjectPackageMetadata(object):
+    def __init__(self, project):
+        self.name = project.project_name
+        self.packages = project.packages.packages
 
 
 class GitPackage(Package):
@@ -265,7 +279,8 @@ class GitPackage(Package):
 
     def _fetch_metadata(self, project):
         path = self._checkout(project)
-        return project.from_project_root(path, {})
+        loaded = project.from_project_root(path, {})
+        return ProjectPackageMetadata(loaded)
 
     def install(self, project):
         dest_path = self.get_installation_path(project)
@@ -301,7 +316,8 @@ class LocalPackage(Package):
             self.local,
             project.project_root)
 
-        return project.from_project_root(project_file_path, {})
+        loaded = project.from_project_root(project_file_path, {})
+        return ProjectPackageMetadata(loaded)
 
     def install(self, project):
         src_path = dbt.clients.system.resolve_path_from_base(
@@ -475,7 +491,7 @@ class DepsTask(BaseTask):
                 final_deps.incorporate(package)
                 final_deps[name].resolve_version()
                 target_config = final_deps[name].fetch_metadata(self.config)
-                sub_deps.incorporate_from_yaml(target_config.packages.packages)
+                sub_deps.incorporate_from_yaml(target_config.packages)
             pending_deps = sub_deps
 
         self._check_for_duplicate_project_names(final_deps)

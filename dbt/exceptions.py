@@ -151,6 +151,8 @@ class DbtProfileError(DbtConfigError):
 class SemverException(Exception):
     def __init__(self, msg=None):
         self.msg = msg
+        if msg is not None:
+            super(SemverException, self).__init__(msg)
 
 
 class VersionsNotCompatibleException(SemverException):
