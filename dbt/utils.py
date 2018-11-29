@@ -338,10 +338,6 @@ def to_string(s):
         return s
 
 
-def is_blocking_dependency(node):
-    return (is_type(node, NodeType.Model))
-
-
 def get_materialization(node):
     return node.get('config', {}).get('materialized')
 

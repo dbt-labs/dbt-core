@@ -3,7 +3,7 @@ import unittest
 
 import dbt.utils
 
-from dbt.compilation import Linker
+from dbt import linker
 try:
     from queue import Empty
 except KeyError:
@@ -18,13 +18,13 @@ def _mock_manifest(nodes):
 class LinkerTest(unittest.TestCase):
 
     def setUp(self):
-        self.real_is_blocking_dependency = dbt.utils.is_blocking_dependency
-        self.linker = Linker()
-
-        dbt.utils.is_blocking_dependency = mock.MagicMock(return_value=True)
+        self.patcher = mock.patch.object(linker, 'is_blocking_dependency')
+        self.is_blocking_dependency = self.patcher.start()
+        self.is_blocking_dependency.return_value = True
+        self.linker = linker.Linker()
 
     def tearDown(self):
-        dbt.utils.is_blocking_dependency = self.real_is_blocking_dependency
+        self.patcher.stop()
 
     def test_linker_add_node(self):
         expected_nodes = ['A', 'B', 'C']

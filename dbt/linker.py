@@ -4,6 +4,7 @@ import threading
 
 import dbt.utils
 from dbt.compat import PriorityQueue
+from dbt.node_types import NodeType
 
 
 GRAPH_SERIALIZE_BLACKLIST = [
@@ -18,9 +19,17 @@ def from_file(graph_file):
     return linker
 
 
+def is_blocking_dependency(node):
+    return node.resource_type == NodeType.Model
+
+
 class GraphQueue(object):
     """A fancy queue that is backed by the dependency graph.
     Note: this will mutate input!
+
+    This queue is thread-safe for `mark_done` calls, though you must ensure
+    that separate threads do not call `.empty()` or `__len__()` and `.get()` at
+    the same time, as there is an unlocked race!
     """
     def __init__(self, graph, manifest):
         self.graph = graph
@@ -34,8 +43,8 @@ class GraphQueue(object):
         self.queued = set()
         # this lock controls most things
         self.lock = threading.Lock()
-        # store the number of descendants for each node.
-        self._descendants = self._calculate_descendants()
+        # store the 'score' of each node as a number. Lower is higher priority.
+        self._scores = self._calculate_scores()
         # populate the initial queue
         self._find_new_additions()
 
@@ -44,75 +53,124 @@ class GraphQueue(object):
 
     def _include_in_cost(self, node_id):
         node = self.get_node(node_id)
-        if not dbt.utils.is_blocking_dependency(node):
+        if not is_blocking_dependency(node):
             return False
         if node.get_materialization() == 'ephemeral':
             return False
         return True
 
-    def _calculate_descendants(self):
-        """We could do this in one pass over the graph instead of
-        len(self.graph) passes but this is easy. For large graphs this may hurt
-        performance.
+    def _calculate_scores(self):
+        """Calculate the 'value' of each node in the graph based on how many
+        blocking descendants it has. We use this score for the internal
+        priority queue's ordering, so the quality of this metric is important.
+
+        The score is stored as a negative number because the internal
+        PriorityQueue picks lowest values first.
+
+        We could do this in one pass over the graph instead of len(self.graph)
+        passes but this is easy. For large graphs this may hurt performance.
+
+        This operates on the graph, so it would require a lock if called from
+        outside __init__.
+
+        :return Dict[str, int]: The score dict, mapping unique IDs to integer
+            scores. Lower scores are higher priority.
         """
-        costs = {}
+        scores = {}
         for node in self.graph.nodes():
-            cost = len([
+            score = -1 * len([
                 d for d in nx.descendants(self.graph, node)
                 if self._include_in_cost(d)
             ])
-            costs[node] = cost
-        return costs
+            scores[node] = score
+        return scores
 
     def get(self, block=True, timeout=None):
         """Get a node off the inner priority queue. By default, this blocks.
+
+        This takes the lock, but only for part of it.
+
+        :param bool block: If True, block until the inner queue has data
+        :param Optional[float] timeout: If set, block for timeout seconds
+            waiting for data.
+        :return ParsedNode: The node as present in the manifest.
+
+        See `queue.PriorityQueue` for more information on `get()` behavior and
+        exceptions.
         """
-        # It's unsafe to call get() and empty() from different threads, so
-        # don't do that
         _, node_id = self.inner.get(block=block, timeout=timeout)
         with self.lock:
             self._mark_in_progress(node_id)
         return self.get_node(node_id)
 
     def __len__(self):
+        """The length of the queue is the number of tasks left for the queue to
+        give out, regardless of where they are. Incomplete tasks are not part
+        of the length.
+
+        This takes the lock.
+        """
         with self.lock:
             return len(self.graph) - len(self.in_progress)
 
     def empty(self):
-        """The graph queue is 'empty' if it all remaining nodes are in progress
+        """The graph queue is 'empty' if it all remaining nodes in the graph
+        are in progress.
+
+        This takes the lock.
         """
         return len(self) == 0
 
     def _already_known(self, node):
-        """Callers must hold the lock
+        """Decide if a node is already known (either handed out as a task, or
+        in the queue).
+
+        Callers must hold the lock.
+
+        :param str node: The node ID to check
+        :returns bool: If the node is in progress/queued.
         """
         return node in self.in_progress or node in self.queued
 
     def _find_new_additions(self):
         """Find any nodes in the graph that need to be added to the internal
-        queue.
+        queue and add them.
 
-        Note: callers must hold the lock
+        Callers must hold the lock.
         """
         for node, in_degree in self.graph.in_degree_iter():
             if not self._already_known(node) and in_degree == 0:
-                # lower score = more descendants = higher priority
-                score = -1 * self._descendants[node]
-                self.inner.put((score, node))
+                self.inner.put((self._scores[node], node))
                 self.queued.add(node)
 
-    def mark_done(self, task_id):
+    def mark_done(self, node_id):
+        """Given a node's unique ID, mark it as done.
+
+        This method takes the lock.
+
+        :param str node_id: The node ID to mark as complete.
+        """
         with self.lock:
-            self.in_progress.remove(task_id)
-            self.graph.remove_node(task_id)
+            self.in_progress.remove(node_id)
+            self.graph.remove_node(node_id)
             self._find_new_additions()
             self.inner.task_done()
 
-    def _mark_in_progress(self, task_id):
-        self.queued.remove(task_id)
-        self.in_progress.add(task_id)
+    def _mark_in_progress(self, node_id):
+        """Mark the node as 'in progress'.
+
+        Callers must hold the lock.
+
+        :param str node_id: The node ID to mark as in progress.
+        """
+        self.queued.remove(node_id)
+        self.in_progress.add(node_id)
 
     def join(self):
+        """Join the queue. Blocks until all tasks are marked as done.
+
+        Make sure not to call this before the queue reports that it is empty.
+        """
         self.inner.join()
 
 

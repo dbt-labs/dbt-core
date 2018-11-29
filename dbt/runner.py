@@ -68,17 +68,6 @@ class RunManager(object):
 
         return self.Runner(self.config, adapter, node, run_count, num_nodes)
 
-    def deserialize_graph(self):
-        logger.info("Loading dependency graph file.")
-
-        base_target_path = self.config.target_path
-        graph_file = os.path.join(
-            base_target_path,
-            dbt.compilation.graph_file_name
-        )
-
-        return dbt.linker.from_file(graph_file)
-
     def call_runner(self, runner):
         if runner.skip:
             return runner.on_skip()
