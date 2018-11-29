@@ -90,9 +90,9 @@ class TestCache(TestCase):
         relations = self.cache.get_relations('foo')
         self.assertEqual(len(relations), 2)
 
-        self.assertEqual(self.cache.schemas, {'foo', 'FOO'})
+        self.assertEqual(self.cache.schemas, {'foo'})
         self.assertIsNot(self.cache.relations[('foo', 'bar')].inner, None)
-        self.assertIsNot(self.cache.relations[('FOO', 'baz')].inner, None)
+        self.assertIsNot(self.cache.relations[('foo', 'baz')].inner, None)
 
     def test_rename(self):
         self.cache.add(make_relation('foo', 'bar'))

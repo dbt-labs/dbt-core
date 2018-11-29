@@ -9,12 +9,26 @@ import dbt.exceptions
 _ReferenceKey = namedtuple('_ReferenceKey', 'schema identifier')
 
 
+def _lower(value):
+    """Postgres schemas can be None so we can't just call lower()."""
+    if value is None:
+        return None
+    return value.lower()
+
+
+def _make_key(schema, identifier):
+    """Make _ReferenceKeys with lowercase values for the cache so we don't have
+    to keep track of quoting
+    """
+    return _ReferenceKey(_lower(schema), _lower(identifier))
+
+
 def dot_separated(key):
     """Return the key in dot-separated string form.
 
     :param key _ReferenceKey: The key to stringify.
     """
-    return '.'.join(key)
+    return '.'.join(map(str, key))
 
 
 class _CachedRelation(object):
@@ -37,11 +51,11 @@ class _CachedRelation(object):
 
     @property
     def schema(self):
-        return self.inner.schema
+        return _lower(self.inner.schema)
 
     @property
     def identifier(self):
-        return self.inner.identifier
+        return _lower(self.inner.identifier)
 
     def __copy__(self):
         new = self.__class__(self.inner)
@@ -61,7 +75,7 @@ class _CachedRelation(object):
 
         :return _ReferenceKey: A key for this relation.
         """
-        return _ReferenceKey(self.schema, self.identifier)
+        return _make_key(self.schema, self.identifier)
 
     def add_reference(self, referrer):
         """Add a reference from referrer to self, indicating that if this node
@@ -161,14 +175,14 @@ class RelationsCache(object):
 
         :param str schema: The schema name to add.
         """
-        self.schemas.add(schema.lower())
+        self.schemas.add(_lower(schema))
 
     def update_schemas(self, schemas):
         """Add multiple schemas to the set of known schemas (case-insensitive)
 
         :param Iterable[str] schemas: An iterable of the schema names to add.
         """
-        self.schemas.update(s.lower() for s in schemas)
+        self.schemas.update(_lower(s) for s in schemas)
 
     def __contains__(self, schema):
         """A schema is 'in' the relations cache if it is in the set of cached
@@ -176,7 +190,7 @@ class RelationsCache(object):
 
         :param str schema: The schema name to look up.
         """
-        return schema in self.schemas
+        return _lower(schema) in self.schemas
 
     def dump_graph(self):
         """Dump a key-only representation of the schema to a dictionary. Every
@@ -199,7 +213,7 @@ class RelationsCache(object):
         :return _CachedRelation: The relation stored under the given relation's
             key
         """
-        self.schemas.add(relation.schema)
+        self.add_schema(relation.schema)
         key = relation.key()
         return self.relations.setdefault(key, relation)
 
@@ -243,7 +257,7 @@ class RelationsCache(object):
         :param BaseRelation dependent: The dependent model.
         :raises InternalError: If either entry does not exist.
         """
-        referenced = _ReferenceKey(
+        referenced = _make_key(
             schema=referenced.schema,
             identifier=referenced.name
         )
@@ -257,7 +271,7 @@ class RelationsCache(object):
                 .format(dep=dependent, ref=referenced)
             )
             return
-        dependent = _ReferenceKey(
+        dependent = _make_key(
             schema=dependent.schema,
             identifier=dependent.name
         )
@@ -324,35 +338,19 @@ class RelationsCache(object):
         :param str schema: The schema of the relation to drop.
         :param str identifier: The identifier of the relation to drop.
         """
-        dropped = _ReferenceKey(schema=relation.schema,
-                                identifier=relation.identifier)
+        dropped = _make_key(schema=relation.schema,
+                            identifier=relation.identifier)
         logger.debug('Dropping relation: {!s}'.format(dropped))
         with self.lock:
             self._drop_cascade_relation(dropped)
 
     def _rename_relation(self, old_key, new_key):
         """Rename a relation named old_key to new_key, updating references.
-        If the new key is already present, that is an error.
-        If the old key is absent, we only debug log and return, assuming it's a
-        temp table being renamed.
+        Return whether or not there was a key to rename.
 
         :param _ReferenceKey old_key: The existing key, to rename from.
         :param _ReferenceKey new_key: The new key, to rename to.
-        :raises InternalError: If the new key is already present.
         """
-        if old_key not in self.relations:
-            logger.debug(
-                'old key {} not found in self.relations, assuming temporary'
-                .format(old_key)
-            )
-            return
-
-        if new_key in self.relations:
-            dbt.exceptions.raise_cache_inconsistent(
-                'in rename, new key {} already in cache: {}'
-                .format(new_key, list(self.relations.keys()))
-            )
-
         # On the database level, a rename updates all values that were
         # previously referenced by old_name to be referenced by new_name.
         # basically, the name changes but some underlying ID moves. Kind of
@@ -370,6 +368,34 @@ class RelationsCache(object):
                 cached.rename_key(old_key, new_key)
 
         self.relations[new_key] = relation
+        return True
+
+    def _check_rename_constraints(self, old_key, new_key):
+        """Check the rename constraints, and return whether or not the rename
+        can proceed.
+
+        If the new key is already present, that is an error.
+        If the old key is absent, we debug log and return False, assuming it's
+        a temp table being renamed.
+
+        :param _ReferenceKey old_key: The existing key, to rename from.
+        :param _ReferenceKey new_key: The new key, to rename to.
+        :return bool: If the old relation exists for renaming.
+        :raises InternalError: If the new key is already present.
+        """
+        if new_key in self.relations:
+            dbt.exceptions.raise_cache_inconsistent(
+                'in rename, new key {} already in cache: {}'
+                .format(new_key, list(self.relations.keys()))
+            )
+
+        if old_key not in self.relations:
+            logger.debug(
+                'old key {} not found in self.relations, assuming temporary'
+                .format(old_key)
+            )
+            return False
+        return True
 
     def rename(self, old, new):
         """Rename the old schema/identifier to the new schema/identifier and
@@ -383,11 +409,11 @@ class RelationsCache(object):
         :param BaseRelation new: The new relation name information.
         :raises InternalError: If the new key is already present.
         """
-        old_key = _ReferenceKey(
+        old_key = _make_key(
             schema=old.schema,
             identifier=old.identifier
         )
-        new_key = _ReferenceKey(
+        new_key = _make_key(
             schema=new.schema,
             identifier=new.identifier
         )
@@ -397,8 +423,13 @@ class RelationsCache(object):
         logger.debug('before rename: {}'.format(
             pprint.pformat(self.dump_graph()))
         )
+
         with self.lock:
-            self._rename_relation(old_key, new_key)
+            if self._check_rename_constraints(old_key, new_key):
+                self._rename_relation(old_key, new_key)
+            else:
+                self._setdefault(_CachedRelation(new))
+
         logger.debug('after rename: {}'.format(
             pprint.pformat(self.dump_graph()))
         )
@@ -410,11 +441,11 @@ class RelationsCache(object):
         :return List[BaseRelation]: The list of relations with the given
             schema
         """
-        schema = schema.lower()
+        schema = _lower(schema)
         with self.lock:
             results = [
                 r.inner for r in self.relations.values()
-                if r.schema.lower() == schema
+                if _lower(r.schema) == schema
             ]
 
         if None in results:

@@ -34,7 +34,10 @@ class PostgresAdapter(SQLAdapter):
                                               identifier=refed_name)
             dependent = self.Relation.create(schema=dep_schema,
                                              identifier=dep_name)
-            self.cache.add_link(dependent, referenced)
+
+            # don't record in cache if this relation isn't in a relevant schema
+            if refed_schema.lower() in schemas:
+                self.cache.add_link(dependent, referenced)
 
     def _relations_cache_for_schemas(self, manifest):
         super(PostgresAdapter, self)._relations_cache_for_schemas(manifest)

@@ -1,5 +1,5 @@
 from dbt.logger import initialize_logger, GLOBAL_LOGGER as logger, \
-    initialized as logger_initialized
+    logger_initialized, log_cache_events
 
 import argparse
 import os.path
@@ -19,11 +19,13 @@ import dbt.task.test as test_task
 import dbt.task.archive as archive_task
 import dbt.task.generate as generate_task
 import dbt.task.serve as serve_task
+from dbt.adapters.factory import reset_adapters
 
 import dbt.tracking
 import dbt.ui.printer
 import dbt.compat
 import dbt.deprecations
+import dbt.profiler
 
 from dbt.utils import ExitCodes
 from dbt.config import Project, RuntimeConfig, DbtProjectError, \
@@ -91,7 +93,7 @@ def main(args=None):
         logger.info("Encountered an error:")
         logger.info(str(e))
 
-        if logger_initialized:
+        if logger_initialized():
             logger.debug(traceback.format_exc())
         elif not isinstance(e, RuntimeException):
             # if it did not come from dbt proper and the logger is not
@@ -111,25 +113,36 @@ def handle(args):
 
 def handle_and_check(args):
     parsed = parse_args(args)
-    # this needs to happen after args are parsed so we can determine the
-    # correct profiles.yml file
-    profile_config = read_config(parsed.profiles_dir)
-    if not send_anonymous_usage_stats(profile_config):
-        dbt.tracking.do_not_track()
-    else:
-        dbt.tracking.initialize_tracking()
+    profiler_enabled = False
 
-    if colorize_output(profile_config):
-        dbt.ui.printer.use_colors()
+    if parsed.record_timing_info:
+        profiler_enabled = True
 
-    try:
-        task, res = run_from_args(parsed)
-    finally:
-        dbt.tracking.flush()
+    with dbt.profiler.profiler(
+        enable=profiler_enabled,
+        outfile=parsed.record_timing_info
+    ):
+        # this needs to happen after args are parsed so we can determine the
+        # correct profiles.yml file
+        profile_config = read_config(parsed.profiles_dir)
+        if not send_anonymous_usage_stats(profile_config):
+            dbt.tracking.do_not_track()
+        else:
+            dbt.tracking.initialize_tracking()
 
-    success = task.interpret_results(res)
+        if colorize_output(profile_config):
+            dbt.ui.printer.use_colors()
 
-    return res, success
+        reset_adapters()
+
+        try:
+            task, res = run_from_args(parsed)
+        finally:
+            dbt.tracking.flush()
+
+        success = task.interpret_results(res)
+
+        return res, success
 
 
 def get_nearest_project_dir():
@@ -209,6 +222,8 @@ def invoke_dbt(parsed):
     task = None
     cfg = None
 
+    log_cache_events(getattr(parsed, 'log_cache_events', False))
+
     try:
         if parsed.which in {'deps', 'clean'}:
             # deps doesn't need a profile, so don't require one.
@@ -251,7 +266,6 @@ def invoke_dbt(parsed):
         return None
 
     flags.NON_DESTRUCTIVE = getattr(parsed, 'non_destructive', False)
-    flags.LOG_CACHE_EVENTS = getattr(parsed, 'log_cache_events', False)
     flags.USE_CACHE = getattr(parsed, 'use_cache', True)
 
     arg_drop_existing = getattr(parsed, 'drop_existing', False)
@@ -287,6 +301,18 @@ def parse_args(args):
         help="Show version information")
 
     p.add_argument(
+        '-r',
+        '--record-timing-info',
+        default=None,
+        type=str,
+        help="""
+        When this option is passed, dbt will output low-level timing
+        stats to the specified file. Example:
+        `--record-timing-info output.profile`
+        """
+    )
+
+    p.add_argument(
         '-d',
         '--debug',
         action='store_true',
@@ -299,6 +325,17 @@ def parse_args(args):
         action='store_true',
         help='''Run schema validations at runtime. This will surface
         bugs in dbt, but may incur a performance penalty.''')
+
+    # if set, run dbt in single-threaded mode: thread count is ignored, and
+    # calls go through `map` instead of the thread pool. This is useful for
+    # getting performance information about aspects of dbt that normally run in
+    # a thread, as the profiler ignores child threads. Users should really
+    # never use this.
+    p.add_argument(
+        '--single-threaded',
+        action='store_true',
+        help=argparse.SUPPRESS,
+    )
 
     subs = p.add_subparsers(title="Available sub-commands")
 

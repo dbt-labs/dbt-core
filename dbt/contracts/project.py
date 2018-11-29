@@ -182,6 +182,34 @@ GIT_PACKAGE_CONTRACT = {
 }
 
 
+VERSION_SPECIFICATION_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'properties': {
+        'major': {
+            'type': ['string', 'null'],
+        },
+        'minor': {
+            'type': ['string', 'null'],
+        },
+        'patch': {
+            'type': ['string', 'null'],
+        },
+        'prerelease': {
+            'type': ['string', 'null'],
+        },
+        'build': {
+            'type': ['string', 'null'],
+        },
+        'matcher': {
+            'type': 'string',
+            'enum': ['=', '>=', '<=', '>', '<'],
+        },
+    },
+    'required': ['major', 'minor', 'patch', 'prerelease', 'build', 'matcher'],
+}
+
+
 REGISTRY_PACKAGE_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
@@ -191,28 +219,18 @@ REGISTRY_PACKAGE_CONTRACT = {
             'description': 'The name of the package',
         },
         'version': {
-            'type': 'string',
+            'type': ['string', 'array'],
+            'item': {
+                'anyOf': [
+                    VERSION_SPECIFICATION_CONTRACT,
+                    'string'
+                ],
+            },
             'description': 'The version of the package',
         },
     },
     'required': ['package'],
 }
-
-
-class Package(APIObject):
-    SCHEMA = NotImplemented
-
-
-class LocalPackage(Package):
-    SCHEMA = LOCAL_PACKAGE_CONTRACT
-
-
-class GitPackage(Package):
-    SCHEMA = GIT_PACKAGE_CONTRACT
-
-
-class RegistryPackage(Package):
-    SCHEMA = REGISTRY_PACKAGE_CONTRACT
 
 
 PACKAGE_FILE_CONTRACT = {
@@ -232,6 +250,31 @@ PACKAGE_FILE_CONTRACT = {
     },
     'required': ['packages'],
 }
+
+
+# the metadata from the registry has extra things that we don't care about.
+REGISTRY_PACKAGE_METADATA_CONTRACT = deep_merge(
+    PACKAGE_FILE_CONTRACT,
+    {
+        'additionalProperties': True,
+        'properties': {
+            'name': {
+                'type': 'string',
+            },
+            'downloads': {
+                'type': 'object',
+                'additionalProperties': True,
+                'properties': {
+                    'tarball': {
+                        'type': 'string',
+                    },
+                },
+                'required': ['tarball']
+            },
+        },
+        'required': PACKAGE_FILE_CONTRACT['required'][:] + ['downloads']
+    }
+)
 
 
 class PackageConfig(APIObject):

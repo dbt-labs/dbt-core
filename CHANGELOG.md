@@ -1,4 +1,15 @@
-## dbt 0.12.0 - Guion Bluford (Currently Unreleased)
+## dbt 0.12.1 - (November 15, 2018)
+
+### Overview
+
+This is a bugfix release.
+
+### Fixes
+
+- Fix for relation caching when views outside of a dbt schema depend on relations inside of a dbt schema ([#1119](https://github.com/fishtown-analytics/dbt/issues/1119))
+
+
+## dbt 0.12.0 - Guion Bluford (November 12, 2018)
 
 ### Overview
 

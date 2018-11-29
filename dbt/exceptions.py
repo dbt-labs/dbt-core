@@ -151,6 +151,8 @@ class DbtProfileError(DbtConfigError):
 class SemverException(Exception):
     def __init__(self, msg=None):
         self.msg = msg
+        if msg is not None:
+            super(SemverException, self).__init__(msg)
 
 
 class VersionsNotCompatibleException(SemverException):
@@ -163,6 +165,45 @@ class NotImplementedException(Exception):
 
 class FailedToConnectException(DatabaseException):
     pass
+
+
+class CommandError(RuntimeException):
+    def __init__(self, cwd, cmd, message='Error running command'):
+        super(CommandError, self).__init__(message)
+        self.cwd = cwd
+        self.cmd = cmd
+        self.args = (cwd, cmd, message)
+
+    def __str__(self):
+        if len(self.cmd) == 0:
+            return '{}: No arguments given'.format(self.msg)
+        return '{}: "{}"'.format(self.msg, self.cmd[0])
+
+
+class ExecutableError(CommandError):
+    def __init__(self, cwd, cmd, message):
+        super(ExecutableError, self).__init__(cwd, cmd, message)
+
+
+class WorkingDirectoryError(CommandError):
+    def __init__(self, cwd, cmd, message):
+        super(WorkingDirectoryError, self).__init__(cwd, cmd, message)
+
+    def __str__(self):
+        return '{}: "{}"'.format(self.msg, self.cwd)
+
+
+class CommandResultError(CommandError):
+    def __init__(self, cwd, cmd, returncode, stdout, stderr,
+                 message='Got a non-zero returncode'):
+        super(CommandResultError, self).__init__(cwd, cmd, message)
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+        self.args = (cwd, cmd, returncode, stdout, stderr, message)
+
+    def __str__(self):
+        return '{} running: {}'.format(self.msg, self.cmd)
 
 
 def raise_compiler_error(msg, node=None):

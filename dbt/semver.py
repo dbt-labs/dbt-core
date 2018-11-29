@@ -1,6 +1,8 @@
 import re
 import logging
 
+from dbt.api.object import APIObject
+from dbt.contracts.project import VERSION_SPECIFICATION_CONTRACT
 from dbt.exceptions import VersionsNotCompatibleException
 import dbt.utils
 
@@ -158,13 +160,14 @@ class VersionRange(dbt.utils.AttrDict):
         return to_return
 
 
-class VersionSpecifier(dbt.utils.AttrDict):
+class VersionSpecifier(APIObject):
+    SCHEMA = VERSION_SPECIFICATION_CONTRACT
 
     def __init__(self, *args, **kwargs):
-        super(VersionSpecifier, self).__init__(*args, **kwargs)
-
-        if self.matcher is None:
-            self.matcher = Matchers.EXACT
+        kwargs = dict(*args, **kwargs)
+        if kwargs.get('matcher') is None:
+            kwargs['matcher'] = Matchers.EXACT
+        super(VersionSpecifier, self).__init__(**kwargs)
 
     def to_version_string(self, skip_matcher=False):
         prerelease = ''
@@ -289,9 +292,15 @@ class VersionSpecifier(dbt.utils.AttrDict):
 
 
 class UnboundedVersionSpecifier(VersionSpecifier):
-
     def __init__(self, *args, **kwargs):
-        super(dbt.utils.AttrDict, self).__init__(*args, **kwargs)
+        super(UnboundedVersionSpecifier, self).__init__(
+            matcher='=',
+            major=None,
+            minor=None,
+            patch=None,
+            prerelease=None,
+            build=None
+        )
 
     def __str__(self):
         return "*"

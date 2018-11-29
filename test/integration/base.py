@@ -21,7 +21,7 @@ import warnings
 
 
 DBT_CONFIG_DIR = os.path.abspath(
-    os.path.expanduser(os.environ.get("DBT_CONFIG_DIR", '/root/.dbt'))
+    os.path.expanduser(os.environ.get("DBT_CONFIG_DIR", '/home/dbt_test_user/.dbt'))
 )
 
 DBT_PROFILES = os.path.join(DBT_CONFIG_DIR, 'profiles.yml')
@@ -35,11 +35,13 @@ class FakeArgs(object):
         self.full_refresh = False
         self.models = None
         self.exclude = None
+        self.single_threaded = False
 
 
 class TestArgs(object):
     def __init__(self, kwargs):
         self.which = 'run'
+        self.single_threaded = False
         self.__dict__.update(kwargs)
 
 
@@ -339,9 +341,10 @@ class DBTIntegrationTest(unittest.TestCase):
     def profile_config(self):
         return {}
 
-    def run_dbt(self, args=None, expect_pass=True, strict=True):
+    def run_dbt(self, args=None, expect_pass=True, strict=True, clear_adapters=True):
         # clear the adapter cache
-        reset_adapters()
+        if clear_adapters:
+            reset_adapters()
         if args is None:
             args = ["run"]
 

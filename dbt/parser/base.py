@@ -2,7 +2,6 @@ import os
 
 import dbt.exceptions
 import dbt.flags
-import dbt.model
 import dbt.utils
 import dbt.hooks
 import dbt.clients.jinja
@@ -11,7 +10,7 @@ import dbt.context.parser
 from dbt.utils import coalesce
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.contracts.graph.parsed import ParsedNode
-from dbt.contracts.graph.manifest import Manifest
+from dbt.parser.source_config import SourceConfig
 
 
 class BaseParser(object):
@@ -41,7 +40,8 @@ class BaseParser(object):
     def parse_node(cls, node, node_path, root_project_config,
                    package_project_config, all_projects,
                    tags=None, fqn_extra=None, fqn=None, macros=None,
-                   agate_table=None, archive_config=None, column_name=None):
+                   agate_table=None, archive_config=None, column_name=None,
+                   macro_manifest=None):
         """Parse a node, given an UnparsedNode and any other required information.
 
         agate_table should be set if the node came from a seed file.
@@ -71,7 +71,7 @@ class BaseParser(object):
             fqn = cls.get_fqn(node.get('path'), package_project_config,
                               fqn_extra)
 
-        config = dbt.model.SourceConfig(
+        config = SourceConfig(
             root_project_config,
             package_project_config,
             fqn,
@@ -103,13 +103,9 @@ class BaseParser(object):
         if column_name is not None:
             node['column_name'] = column_name
 
-        # make a manifest with just the macros to get the context
-        manifest = Manifest(macros=macros, nodes={}, docs={},
-                            generated_at=dbt.utils.timestring(), disabled=[])
-
         parsed_node = ParsedNode(**node)
         context = dbt.context.parser.generate(parsed_node, root_project_config,
-                                              manifest, config)
+                                              macro_manifest, config)
 
         dbt.clients.jinja.get_rendered(
             parsed_node.raw_sql, context, parsed_node.to_shallow_dict(),

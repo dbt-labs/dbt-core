@@ -7,6 +7,7 @@ import yaml
 
 import dbt.utils
 import dbt.deprecations
+import dbt.exceptions
 import dbt.clients.git
 import dbt.clients.system
 import dbt.clients.registry as registry
@@ -17,11 +18,30 @@ from dbt.semver import VersionSpecifier, UnboundedVersionSpecifier
 from dbt.utils import AttrDict
 from dbt.api.object import APIObject
 from dbt.contracts.project import LOCAL_PACKAGE_CONTRACT, \
-    GIT_PACKAGE_CONTRACT, REGISTRY_PACKAGE_CONTRACT
+    GIT_PACKAGE_CONTRACT, REGISTRY_PACKAGE_CONTRACT, \
+    REGISTRY_PACKAGE_METADATA_CONTRACT, PackageConfig
 
 from dbt.task.base_task import BaseTask
 
-DOWNLOADS_PATH = os.path.join(tempfile.gettempdir(), "dbt-downloads")
+DOWNLOADS_PATH = None
+REMOVE_DOWNLOADS = False
+
+
+def _initialize_downloads():
+    global DOWNLOADS_PATH, REMOVE_DOWNLOADS
+    # the user might have set an environment variable. Set it to None, and do
+    # not remove it when finished.
+    if DOWNLOADS_PATH is None:
+        DOWNLOADS_PATH = os.environ.get('DBT_DOWNLOADS_DIR', None)
+        REMOVE_DOWNLOADS = False
+    # if we are making a per-run temp directory, remove it at the end of
+    # successful runs
+    if DOWNLOADS_PATH is None:
+        DOWNLOADS_PATH = tempfile.mkdtemp(prefix='dbt-downloads-')
+        REMOVE_DOWNLOADS = True
+
+    dbt.clients.system.make_directory(DOWNLOADS_PATH)
+    logger.debug("Set downloads directory='{}'".format(DOWNLOADS_PATH))
 
 
 class Package(APIObject):
@@ -85,7 +105,7 @@ class Package(APIObject):
 
     def get_project_name(self, project):
         metadata = self.fetch_metadata(project)
-        return metadata.project_name
+        return metadata.name
 
     def get_installation_path(self, project):
         dest_dirname = self.get_project_name(project)
@@ -130,7 +150,10 @@ class RegistryPackage(Package):
         return "version {}".format(self.version_name())
 
     def incorporate(self, other):
-        return RegistryPackage(self.package, self.version + other.version)
+        return RegistryPackage(
+            package=self.package,
+            version=self.version + other.version
+        )
 
     def _check_in_index(self):
         index = registry.index_cached()
@@ -158,9 +181,8 @@ class RegistryPackage(Package):
 
     def _fetch_metadata(self, project):
         version_string = self.version_name()
-        # TODO(jeb): this needs to actually return a RuntimeConfig, instead of
-        # parsed json from a URL
-        return registry.package_version(self.package, version_string)
+        dct = registry.package_version(self.package, version_string)
+        return RegistryPackageMetadata(**dct)
 
     def install(self, project):
         version_string = self.version_name()
@@ -170,11 +192,22 @@ class RegistryPackage(Package):
         tar_path = os.path.realpath(os.path.join(DOWNLOADS_PATH, tar_name))
         dbt.clients.system.make_directory(os.path.dirname(tar_path))
 
-        download_url = metadata.get('downloads').get('tarball')
+        download_url = metadata['downloads']['tarball']
         dbt.clients.system.download(download_url, tar_path)
         deps_path = project.modules_path
         package_name = self.get_project_name(project)
         dbt.clients.system.untar_package(tar_path, deps_path, package_name)
+
+
+# the metadata is a package config with extra attributes we don't care about.
+class RegistryPackageMetadata(PackageConfig):
+    SCHEMA = REGISTRY_PACKAGE_METADATA_CONTRACT
+
+
+class ProjectPackageMetadata(object):
+    def __init__(self, project):
+        self.name = project.project_name
+        self.packages = project.packages.packages
 
 
 class GitPackage(Package):
@@ -230,14 +263,24 @@ class GitPackage(Package):
         if len(self.version) != 1:
             dbt.exceptions.raise_dependency_error(
                 'Cannot checkout repository until the version is pinned.')
-        dir_ = dbt.clients.git.clone_and_checkout(
-            self.git, DOWNLOADS_PATH, branch=self.version[0],
-            dirname=self._checkout_name)
+        try:
+            dir_ = dbt.clients.git.clone_and_checkout(
+                self.git, DOWNLOADS_PATH, branch=self.version[0],
+                dirname=self._checkout_name)
+        except dbt.exceptions.ExecutableError as exc:
+            if exc.cmd and exc.cmd[0] == 'git':
+                logger.error(
+                    'Make sure git is installed on your machine. More '
+                    'information: '
+                    'https://docs.getdbt.com/docs/package-management'
+                )
+            raise
         return os.path.join(DOWNLOADS_PATH, dir_)
 
     def _fetch_metadata(self, project):
         path = self._checkout(project)
-        return project.from_project_root(path, {})
+        loaded = project.from_project_root(path, {})
+        return ProjectPackageMetadata(loaded)
 
     def install(self, project):
         dest_path = self.get_installation_path(project)
@@ -246,7 +289,7 @@ class GitPackage(Package):
                 dbt.clients.system.remove_file(dest_path)
             else:
                 dbt.clients.system.rmdir(dest_path)
-        shutil.move(self._checkout(project), dest_path)
+        dbt.clients.system.move(self._checkout(project), dest_path)
 
 
 class LocalPackage(Package):
@@ -257,7 +300,7 @@ class LocalPackage(Package):
         return self.local
 
     def incorporate(self, _):
-        return LocalPackage(self.local)
+        return LocalPackage(local=self.local)
 
     def source_type(self):
         return 'local'
@@ -273,7 +316,8 @@ class LocalPackage(Package):
             self.local,
             project.project_root)
 
-        return project.from_project_root(project_file_path, {})
+        loaded = project.from_project_root(project_file_path, {})
+        return ProjectPackageMetadata(loaded)
 
     def install(self, project):
         src_path = dbt.clients.system.resolve_path_from_base(
@@ -396,6 +440,16 @@ def _read_packages(project_yaml):
 
 
 class DepsTask(BaseTask):
+    def __init__(self, args, config=None):
+        super(DepsTask, self).__init__(args=args, config=config)
+        self._downloads_path = None
+
+    @property
+    def downloads_path(self):
+        if self._downloads_path is None:
+            self._downloads_path = tempfile.mkdtemp(prefix='dbt-downloads')
+        return self._downloads_path
+
     def _check_for_duplicate_project_names(self, final_deps):
         seen = set()
         for _, package in final_deps.items():
@@ -421,7 +475,7 @@ class DepsTask(BaseTask):
 
     def run(self):
         dbt.clients.system.make_directory(self.config.modules_path)
-        dbt.clients.system.make_directory(DOWNLOADS_PATH)
+        _initialize_downloads()
 
         packages = self.config.packages.packages
         if not packages:
@@ -437,7 +491,7 @@ class DepsTask(BaseTask):
                 final_deps.incorporate(package)
                 final_deps[name].resolve_version()
                 target_config = final_deps[name].fetch_metadata(self.config)
-                sub_deps.incorporate_from_yaml(target_config.packages.packages)
+                sub_deps.incorporate_from_yaml(target_config.packages)
             pending_deps = sub_deps
 
         self._check_for_duplicate_project_names(final_deps)
@@ -451,3 +505,6 @@ class DepsTask(BaseTask):
                 package_name=package.name,
                 source_type=package.source_type(),
                 version=package.version_name())
+
+        if REMOVE_DOWNLOADS:
+            dbt.clients.system.rmtree(DOWNLOADS_PATH)

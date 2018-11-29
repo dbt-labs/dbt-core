@@ -40,6 +40,14 @@ class TestBigQueryAdapter(unittest.TestCase):
                     'keyfile': '/tmp/dummy-service-account.json',
                     'threads': 1,
                 },
+                'loc': {
+                    'type': 'bigquery',
+                    'method': 'oauth',
+                    'project': 'dbt-unit-000000',
+                    'schema': 'dummy_schema',
+                    'threads': 1,
+                    'location': 'Luna Station',
+                },
             },
             'target': 'oauth',
         }
@@ -48,15 +56,17 @@ class TestBigQueryAdapter(unittest.TestCase):
             'name': 'X',
             'version': '0.1',
             'project-root': '/tmp/dbt/does-not-exist',
+            'profile': 'default',
         }
 
-    def get_adapter(self, profile):
+    def get_adapter(self, target):
         project = self.project_cfg.copy()
-        project['profile'] = profile
+        profile = self.raw_profile.copy()
+        profile['target'] = target
 
         config = config_from_parts_or_dicts(
             project=project,
-            profile=self.raw_profile,
+            profile=profile,
         )
         return BigQueryAdapter(config)
 
@@ -73,7 +83,6 @@ class TestBigQueryAdapter(unittest.TestCase):
 
         except BaseException as e:
             raise
-            self.fail('validation failed with unknown exception: {}'.format(str(e)))
 
         mock_open_connection.assert_called_once()
 
@@ -89,27 +98,38 @@ class TestBigQueryAdapter(unittest.TestCase):
 
         except BaseException as e:
             raise
-            self.fail('validation failed with unknown exception: {}'.format(str(e)))
 
         mock_open_connection.assert_called_once()
 
     def test_cancel_open_connections_empty(self):
-        adapter = self.get_adapter('test')
+        adapter = self.get_adapter('oauth')
         self.assertEqual(adapter.cancel_open_connections(), None)
 
     def test_cancel_open_connections_master(self):
-        adapter = self.get_adapter('test')
+        adapter = self.get_adapter('oauth')
         adapter.connections.in_use['master'] = object()
         self.assertEqual(adapter.cancel_open_connections(), None)
 
     def test_cancel_open_connections_single(self):
-        adapter = self.get_adapter('test')
+        adapter = self.get_adapter('oauth')
         adapter.connections.in_use.update({
             'master': object(),
             'model': object(),
         })
         # actually does nothing
         self.assertEqual(adapter.cancel_open_connections(), None)
+
+    @patch('dbt.adapters.bigquery.impl.google.auth.default')
+    @patch('dbt.adapters.bigquery.impl.google.cloud.bigquery')
+    def test_location_value(self, mock_bq, mock_auth_default):
+        creds = MagicMock()
+        mock_auth_default.return_value = (creds, MagicMock())
+        adapter = self.get_adapter('loc')
+
+        adapter.acquire_connection('dummy')
+        mock_client = mock_bq.Client
+        mock_client.assert_called_once_with('dbt-unit-000000', creds,
+                                            location='Luna Station')
 
 
 class TestBigQueryRelation(unittest.TestCase):
