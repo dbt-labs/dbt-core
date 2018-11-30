@@ -477,6 +477,7 @@ def parse_args(args):
 
     for sub in [run_sub, compile_sub, generate_sub]:
         sub.add_argument(
+            '-m',
             '--models',
             required=False,
             nargs='+',
