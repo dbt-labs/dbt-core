@@ -2,6 +2,7 @@ import os
 
 import dbt.exceptions
 import dbt.flags
+import dbt.include
 import dbt.utils
 import dbt.hooks
 import dbt.clients.jinja
@@ -117,10 +118,23 @@ class BaseParser(object):
         runtime_config = db_wrapper.config
         adapter.release_connection(parsed_node.name)
 
-        # Special macro defined in the global project
+        # Special macro defined in the global project. Use the root project's
+        # definition, not the current package
         schema_override = config.config.get('schema')
-        get_schema = context.get('generate_schema_name',
-                                 lambda x: default_schema)
+        get_schema_macro = macro_manifest.find_macro_by_name(
+            'generate_schema_name',
+            root_project_config.project_name
+        )
+        if get_schema_macro is None:
+            get_schema_macro = macro_manifest.find_macro_by_name(
+                'generate_schema_name',
+                dbt.include.GLOBAL_PROJECT_NAME
+            )
+        if get_schema_macro is None:
+            def get_schema(_):
+                return default_schema
+        else:
+            get_schema = get_schema_macro.generator(context)
         parsed_node.schema = get_schema(schema_override)
         parsed_node.alias = config.config.get('alias', default_alias)
 

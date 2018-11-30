@@ -21,9 +21,28 @@ class TestSimpleDependency(DBTIntegrationTest):
             ]
         }
 
+    def expected_schema(self):
+        return self.unique_schema()
+
     @attr(type='postgres')
-    def test_local_dependency(self):
+    def test_postgres_local_dependency(self):
         self.run_dbt(["deps"])
         results = self.run_dbt(["run"])
         self.assertEqual(len(results),  2)
+        self.assertTrue(all(r.node.schema == self.expected_schema()
+                            for r in results))
 
+
+
+class TestSimpleDependencyWithSchema(TestSimpleDependency):
+    @property
+    def project_config(self):
+        return {
+            'macro-paths': ['test/integration/006_simple_dependency_test/schema_override_macros'],
+            'models': {
+                'schema': 'dbt_test',
+            }
+        }
+
+    def expected_schema(self):
+        return 'dbt_test_{}_macro'.format(self.unique_schema())
