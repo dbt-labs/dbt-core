@@ -121,7 +121,7 @@ class BaseParser(object):
         schema_override = config.config.get('schema')
         get_schema = context.get('generate_schema_name',
                                  lambda x: default_schema)
-        parsed_node.schema = get_schema(schema_override)
+        parsed_node.schema = get_schema(schema_override).strip()
         parsed_node.alias = config.config.get('alias', default_alias)
 
         # Set tags on node provided in config blocks
