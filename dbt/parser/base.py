@@ -178,8 +178,7 @@ class MacrosKnownParser(BaseParser):
         # definition, not the current package
         schema_override = config.config.get('schema')
         get_schema = self.get_schema_func()
-
-        parsed_node.schema = get_schema(schema_override)
+        parsed_node.schema = get_schema(schema_override).strip()
         parsed_node.alias = config.config.get('alias', default_alias)
 
         # Set tags on node provided in config blocks
