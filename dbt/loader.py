@@ -22,11 +22,10 @@ class GraphLoader(object):
         self.macro_manifest = None
 
     def _load_macro_nodes(self, resource_type):
+        parser = MacroParser(self.root_project, self.all_projects)
         for project_name, project in self.all_projects.items():
-            self.macros.update(MacroParser.load_and_parse(
+            self.macros.update(parser.load_and_parse(
                 package_name=project_name,
-                root_project=self.root_project,
-                all_projects=self.all_projects,
                 root_dir=project.project_root,
                 relative_dirs=project.macro_paths,
                 resource_type=resource_type,
@@ -36,19 +35,17 @@ class GraphLoader(object):
         self.macro_manifest = Manifest(macros=self.macros, nodes={}, docs={},
                                        generated_at=timestring(), disabled=[])
 
-    def _load_sql_nodes(self, parser, resource_type, relative_dirs_attr,
+    def _load_sql_nodes(self, parser_type, resource_type, relative_dirs_attr,
                         **kwargs):
+        parser = parser_type(self.root_project, self.all_projects,
+                             self.macro_manifest)
 
         for project_name, project in self.all_projects.items():
             nodes, disabled = parser.load_and_parse(
                 package_name=project_name,
-                root_project=self.root_project,
-                all_projects=self.all_projects,
                 root_dir=project.project_root,
                 relative_dirs=getattr(project, relative_dirs_attr),
                 resource_type=resource_type,
-                macros=self.macros,
-                macro_manifest=self.macro_manifest,
                 **kwargs
             )
             self.nodes.update(nodes)
@@ -59,15 +56,13 @@ class GraphLoader(object):
         self._load_macro_nodes(NodeType.Operation)
 
     def _load_seeds(self):
+        parser = SeedParser(self.root_project, self.all_projects,
+                            self.macro_manifest)
         for project_name, project in self.all_projects.items():
-            self.nodes.update(SeedParser.load_and_parse(
+            self.nodes.update(parser.load_and_parse(
                 package_name=project_name,
-                root_project=self.root_project,
-                all_projects=self.all_projects,
                 root_dir=project.project_root,
                 relative_dirs=project.data_paths,
-                macros=self.macros,
-                macro_manifest=self.macro_manifest,
             ))
 
     def _load_nodes(self):
@@ -77,37 +72,33 @@ class GraphLoader(object):
         self._load_sql_nodes(DataTestParser, NodeType.Test, 'test_paths',
                              tags=['data'])
 
-        self.nodes.update(HookParser.load_and_parse(
-            self.root_project, self.all_projects, self.macros,
-            self.macro_manifest
-        ))
-        self.nodes.update(ArchiveParser.load_and_parse(
-            self.root_project, self.all_projects, self.macros,
-            self.macro_manifest
-        ))
+        hook_parser = HookParser(self.root_project, self.all_projects,
+                                 self.macro_manifest)
+        self.nodes.update(hook_parser.load_and_parse())
+
+        archive_parser = ArchiveParser(self.root_project, self.all_projects,
+                                       self.macro_manifest)
+        self.nodes.update(archive_parser.load_and_parse())
 
         self._load_seeds()
 
     def _load_docs(self):
+        parser = DocumentationParser(self.root_project, self.all_projects)
         for project_name, project in self.all_projects.items():
-            self.docs.update(DocumentationParser.load_and_parse(
+            self.docs.update(parser.load_and_parse(
                 package_name=project_name,
-                root_project=self.root_project,
-                all_projects=self.all_projects,
                 root_dir=project.project_root,
                 relative_dirs=project.docs_paths
             ))
 
     def _load_schema_tests(self):
+        parser = SchemaParser(self.root_project, self.all_projects,
+                              self.macro_manifest)
         for project_name, project in self.all_projects.items():
-            tests, patches = SchemaParser.load_and_parse(
+            tests, patches = parser.load_and_parse(
                 package_name=project_name,
-                root_project=self.root_project,
-                all_projects=self.all_projects,
                 root_dir=project.project_root,
-                relative_dirs=project.source_paths,
-                macros=self.macros,
-                macro_manifest=self.macro_manifest,
+                relative_dirs=project.source_paths
             )
 
             for unique_id, test in tests.items():

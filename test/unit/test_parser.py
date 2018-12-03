@@ -69,6 +69,11 @@ class BaseParserTest(unittest.TestCase):
             project=snowplow_project, profile=profile_data
         )
 
+        self.all_projects = {
+            'root': self.root_project_config,
+            'snowplow': self.snowplow_project_config
+        }
+
 
 
 class SourceConfigTest(BaseParserTest):
@@ -172,14 +177,14 @@ class ParserTest(BaseParserTest):
             'path': 'model_one.sql',
             'raw_sql': ("select * from events"),
         }]
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
 
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config},
-                macro_manifest=self.macro_manifest),
+            parser.parse_sql_nodes(models),
             ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
@@ -235,13 +240,13 @@ class ParserTest(BaseParserTest):
             'materialized': 'ephemeral'
         })
 
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config},
-                macro_manifest=self.macro_manifest),
+            parser.parse_sql_nodes(models),
             ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
@@ -281,12 +286,15 @@ class ParserTest(BaseParserTest):
             'raw_sql': (" "),
         }]
 
+        del self.all_projects['snowplow']
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config},
-                macro_manifest=self.macro_manifest),
+            parser.parse_sql_nodes(models),
             ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
@@ -334,13 +342,14 @@ class ParserTest(BaseParserTest):
             'raw_sql': "select * from {{ref('base')}}"
         }]
 
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config},
-                macro_manifest=self.macro_manifest),
+            parser.parse_sql_nodes(models),
             ({
                 'model.root.base': ParsedNode(
                     alias='base',
@@ -441,13 +450,14 @@ class ParserTest(BaseParserTest):
                         "select * from e left join s on s.id = e.sid"),
         }]
 
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config},
-                macro_manifest=self.macro_manifest),
+            parser.parse_sql_nodes(models),
             ({
                 'model.root.events': ParsedNode(
                     alias='events',
@@ -621,13 +631,14 @@ class ParserTest(BaseParserTest):
                         "select * from e left join s on s.id = e.sid"),
         }]
 
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config},
-                macro_manifest=self.macro_manifest),
+            parser.parse_sql_nodes(models),
             ({
                 'model.snowplow.events': ParsedNode(
                     alias='events',
@@ -929,13 +940,14 @@ class ParserTest(BaseParserTest):
             'materialized': 'table'
         })
 
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config},
-                macro_manifest=self.macro_manifest),
+            parser.parse_sql_nodes(models),
             ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
@@ -1015,13 +1027,14 @@ class ParserTest(BaseParserTest):
             'materialized': 'view'
         })
 
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config},
-                macro_manifest=self.macro_manifest),
+            parser.parse_sql_nodes(models),
             ({
                 'model.root.table': ParsedNode(
                     alias='table',
@@ -1215,13 +1228,14 @@ class ParserTest(BaseParserTest):
             'sort': ['timestamp', 'id']
         })
 
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config},
-                macro_manifest=self.macro_manifest),
+            parser.parse_sql_nodes(models),
             ({
                 'model.root.table': ParsedNode(
                     alias='table',
@@ -1330,17 +1344,17 @@ class ParserTest(BaseParserTest):
             'relationships: [{from: id, to: ref(\'model_two\'), field: id}]' # noqa
             '}}}'
         )
-        results = list(SchemaParser.parse_v1_test_yml(
+
+        parser = SchemaParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+        results = list(parser.parse_v1_test_yml(
             original_file_path='test_one.yml',
             test_yml=test_yml,
             package_name='root',
-            root_project=self.root_project_config,
-            all_projects={
-                'root': self.root_project_config,
-                'snowplow': self.snowplow_project_config
-            },
-            root_dir=get_os_path('/usr/src/app'),
-            macro_manifest=self.macro_manifest
+            root_dir=get_os_path('/usr/src/app')
         ))
         results.sort(key=lambda n: n.name)
 
@@ -1460,18 +1474,16 @@ class ParserTest(BaseParserTest):
             '{relationships: {from: id, to: ref(\'model_two\')}}]'
             '}], tests: [some_test: { key: value }]}]}'
         )
-        results = list(SchemaParser.parse_v2_yml(
+        parser = SchemaParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+        results = list(parser.parse_v2_yml(
             original_file_path='test_one.yml',
             test_yml=test_yml,
             package_name='root',
-            root_project=self.root_project_config,
-            all_projects={
-                'root': self.root_project_config,
-                'snowplow': self.snowplow_project_config
-            },
-            root_dir=get_os_path('/usr/src/app'),
-            macros=None,
-            macro_manifest=self.macro_manifest
+            root_dir=get_os_path('/usr/src/app')
         ))
 
         # split this into tests and patches, assert there's nothing else
@@ -1629,9 +1641,10 @@ class ParserTest(BaseParserTest):
         all_projects = {}
         root_dir = '/some/path'
         relative_dirs = ['a', 'b']
+        parser = dbt.parser.schemas.SchemaParser(root_project, all_projects, None)
         with self.assertRaises(dbt.exceptions.CompilationException) as cm:
-            dbt.parser.schemas.SchemaParser.load_and_parse(
-                'test', root_project, all_projects, root_dir, relative_dirs
+            parser.load_and_parse(
+                'test', root_dir, relative_dirs
             )
             self.assertIn('https://docs.getdbt.com/v0.11/docs/schemayml-files',
                           str(cm.exception))
@@ -1652,8 +1665,9 @@ class ParserTest(BaseParserTest):
         all_projects = {}
         root_dir = '/some/path'
         relative_dirs = ['a', 'b']
-        dbt.parser.schemas.SchemaParser.load_and_parse(
-            'test', root_project, all_projects, root_dir, relative_dirs
+        parser = dbt.parser.schemas.SchemaParser(root_project, all_projects, None)
+        parser.load_and_parse(
+            'test', root_dir, relative_dirs
         )
 
     def test__simple_data_test(self):
@@ -1667,13 +1681,14 @@ class ParserTest(BaseParserTest):
             'raw_sql': "select * from {{ref('base')}}"
         }]
 
+        parser = DataTestParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+
         self.assertEqual(
-            DataTestParser.parse_sql_nodes(
-                tests,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config},
-                macro_manifest=self.macro_manifest),
+            parser.parse_sql_nodes(tests),
             ({
                 'test.root.no_events': ParsedNode(
                     alias='no_events',
@@ -1708,8 +1723,8 @@ class ParserTest(BaseParserTest):
   {{a}} + {{b}}
 {% endmacro %}
 """
-
-        result = MacroParser.parse_macro_file(
+        parser = MacroParser(None, None)
+        result = parser.parse_macro_file(
             macro_file_path='simple_macro.sql',
             macro_file_contents=macro_file_contents,
             root_path=get_os_path('/usr/src/app'),
@@ -1745,8 +1760,8 @@ class ParserTest(BaseParserTest):
   {{a}} + {{b}}
 {% endmacro %}
 """
-
-        result = MacroParser.parse_macro_file(
+        parser = MacroParser(None, None)
+        result = parser.parse_macro_file(
             macro_file_path='simple_macro.sql',
             macro_file_contents=macro_file_contents,
             root_path=get_os_path('/usr/src/app'),
@@ -1785,13 +1800,14 @@ class ParserTest(BaseParserTest):
             'raw_sql': ("select *, {{package.simple(1, 2)}} from events"),
         }]
 
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config},
-                macro_manifest=self.macro_manifest),
+            parser.parse_sql_nodes(models),
             ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
@@ -1831,13 +1847,14 @@ class ParserTest(BaseParserTest):
             'raw_sql': ("select *, {{ simple(1, 2) }} from events"),
         }]
 
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config},
-                macro_manifest=self.macro_manifest),
+            parser.parse_sql_nodes(models),
             ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',

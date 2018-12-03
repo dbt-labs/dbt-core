@@ -10,10 +10,10 @@ import dbt.exceptions
 from dbt.node_types import NodeType
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.contracts.graph.unparsed import UnparsedNode
-from dbt.parser.base import BaseParser
+from dbt.parser.base import MacrosKnownParser
 
 
-class SeedParser(BaseParser):
+class SeedParser(MacrosKnownParser):
     @classmethod
     def parse_seed_file(cls, file_match, root_dir, package_name, should_parse):
         """Parse the given seed file, returning an UnparsedNode and the agate
@@ -44,16 +44,13 @@ class SeedParser(BaseParser):
         table.original_abspath = abspath
         return node, table
 
-    @classmethod
-    def load_and_parse(cls, package_name, root_project, all_projects, root_dir,
-                       relative_dirs, tags=None, macros=None,
-                       macro_manifest=None):
+    def load_and_parse(self, package_name, root_dir, relative_dirs, tags=None):
         """Load and parse seed files in a list of directories. Returns a dict
            that maps unique ids onto ParsedNodes"""
 
         extension = "[!.#~]*.csv"
         if dbt.flags.STRICT_MODE:
-            dbt.contracts.project.ProjectList(**all_projects)
+            dbt.contracts.project.ProjectList(**self.all_projects)
 
         file_matches = dbt.clients.system.find_matching(
             root_dir,
@@ -61,18 +58,17 @@ class SeedParser(BaseParser):
             extension)
 
         # we only want to parse seeds if we're inside 'dbt seed'
-        should_parse = root_project.args.which == 'seed'
+        should_parse = self.root_project_config.args.which == 'seed'
 
         result = {}
         for file_match in file_matches:
-            node, agate_table = cls.parse_seed_file(file_match, root_dir,
-                                                    package_name, should_parse)
-            node_path = cls.get_path(NodeType.Seed, package_name, node.name)
-            parsed = cls.parse_node(node, node_path, root_project,
-                                    all_projects.get(package_name),
-                                    all_projects, tags=tags, macros=macros,
-                                    agate_table=agate_table,
-                                    macro_manifest=macro_manifest)
+            node, agate_table = self.parse_seed_file(file_match, root_dir,
+                                                     package_name,
+                                                     should_parse)
+            node_path = self.get_path(NodeType.Seed, package_name, node.name)
+            parsed = self.parse_node(node, node_path,
+                                     self.all_projects.get(package_name),
+                                     tags=tags, agate_table=agate_table)
             result[node_path] = parsed
 
         return result

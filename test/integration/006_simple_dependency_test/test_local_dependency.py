@@ -21,16 +21,24 @@ class TestSimpleDependency(DBTIntegrationTest):
             ]
         }
 
-    def expected_schema(self):
+    def base_schema(self):
         return self.unique_schema()
+
+    def configured_schema(self):
+        return self.unique_schema() + '_configured'
 
     @attr(type='postgres')
     def test_postgres_local_dependency(self):
         self.run_dbt(["deps"])
         results = self.run_dbt(["run"])
-        self.assertEqual(len(results),  2)
-        self.assertTrue(all(r.node.schema == self.expected_schema()
-                            for r in results))
+        self.assertEqual(len(results),  3)
+        self.assertEqual({r.node.schema for r in results},
+                         {self.base_schema(), self.configured_schema()})
+        self.assertEqual(
+            len([r.node for r in results
+                 if r.node.schema == self.base_schema()]),
+            2
+        )
 
 
 
@@ -44,5 +52,8 @@ class TestSimpleDependencyWithSchema(TestSimpleDependency):
             }
         }
 
-    def expected_schema(self):
+    def base_schema(self):
         return 'dbt_test_{}_macro'.format(self.unique_schema())
+
+    def configured_schema(self):
+        return 'configured_{}_macro'.format(self.unique_schema())
