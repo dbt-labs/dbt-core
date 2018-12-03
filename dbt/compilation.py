@@ -132,7 +132,7 @@ class Compiler(object):
 
         injected_node, _ = prepend_ctes(compiled_node, manifest)
 
-        should_wrap = {NodeType.Test, NodeType.Analysis, NodeType.Operation}
+        should_wrap = {NodeType.Test, NodeType.Operation}
         if injected_node.resource_type in should_wrap:
             # data tests get wrapped in count(*)
             # TODO : move this somewhere more reasonable
