@@ -14,7 +14,7 @@ import dbt.exceptions
 import dbt.flags
 
 from dbt.include import GLOBAL_DBT_MODULES_PATH
-from dbt.compat import basestring
+from dbt.compat import basestring, DECIMALS
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt.clients import yaml_helper
@@ -476,6 +476,6 @@ class JSONEncoder(json.JSONEncoder):
     converted to floats.
     """
     def default(self, obj):
-        if isinstance(obj, Decimal):
+        if isinstance(obj, DECIMALS):
             return float(obj)
         return super(JSONEncoder, self).default(obj)

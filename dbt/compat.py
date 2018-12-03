@@ -1,6 +1,14 @@
 import codecs
 import json
 import warnings
+import decimal
+
+try:
+    import cdecimal
+except ImportError:
+    DECIMALS = (decimal.Decimal,)
+else:
+    DECIMALS = (decimal.Decimal, cdecimal.Decimal)
 
 WHICH_PYTHON = None
 
