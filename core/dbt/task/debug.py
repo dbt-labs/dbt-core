@@ -25,21 +25,21 @@ PROFILE_DIR_MESSAGE = """To view your profiles.yml file, run:
 
 {open_cmd} {profiles_dir}"""
 
-ONLY_PROFILE_MESSAGE = '''
+ONLY_PROFILE_MESSAGE = """
 A `dbt_project.yml` file was not found in this directory.
 Using the only profile `{}`.
-'''.lstrip()
+""".lstrip()
 
-MULTIPLE_PROFILE_MESSAGE = '''
+MULTIPLE_PROFILE_MESSAGE = """
 A `dbt_project.yml` file was not found in this directory.
 dbt found the following profiles:
 {}
 
 To debug one of these profiles, run:
 dbt debug --profile [profile-name]
-'''.lstrip()
+""".lstrip()
 
-COULD_NOT_CONNECT_MESSAGE = '''
+COULD_NOT_CONNECT_MESSAGE = """
 dbt was unable to connect to the specified database.
 The database returned the following error:
 
@@ -47,17 +47,17 @@ The database returned the following error:
 
 Check your database credentials and try again. For more information, visit:
 {url}
-'''.lstrip()
+""".lstrip()
 
-MISSING_PROFILE_MESSAGE = '''
+MISSING_PROFILE_MESSAGE = """
 dbt looked for a profiles.yml file in {path}, but did
 not find one. For more information on configuring your profile, consult the
 documentation:
 
 {url}
-'''.lstrip()
+""".lstrip()
 
-FILE_NOT_FOUND = 'file not found'
+FILE_NOT_FOUND = "file not found"
 
 
 class QueryCommentedProfile(Profile):
@@ -70,7 +70,7 @@ class DebugTask(BaseTask):
     def __init__(self, args, config):
         super().__init__(args, config)
         self.profiles_dir = flags.PROFILES_DIR
-        self.profile_path = os.path.join(self.profiles_dir, 'profiles.yml')
+        self.profile_path = os.path.join(self.profiles_dir, "profiles.yml")
         try:
             self.project_dir = get_nearest_project_dir(self.args)
         except dbt.exceptions.Exception:
@@ -85,11 +85,11 @@ class DebugTask(BaseTask):
 
         # set by _load_*
         self.profile: Optional[Profile] = None
-        self.profile_fail_details = ''
+        self.profile_fail_details = ""
         self.raw_profile_data: Optional[Dict[str, Any]] = None
         self.profile_name: Optional[str] = None
         self.project: Optional[Project] = None
-        self.project_fail_details = ''
+        self.project_fail_details = ""
         self.any_failure = False
         self.messages: List[str] = []
 
@@ -109,13 +109,13 @@ class DebugTask(BaseTask):
             return not self.any_failure
 
         version = get_installed_version().to_version_string(skip_matcher=True)
-        print('dbt version: {}'.format(version))
-        print('python version: {}'.format(sys.version.split()[0]))
-        print('python path: {}'.format(sys.executable))
-        print('os info: {}'.format(platform.platform()))
-        print('Using profiles.yml file at {}'.format(self.profile_path))
+        print("dbt version: {}".format(version))
+        print("python version: {}".format(sys.version.split()[0]))
+        print("python path: {}".format(sys.executable))
+        print("os info: {}".format(platform.platform()))
+        print("Using profiles.yml file at {}".format(self.profile_path))
         print('Using dbt_project.yml file at {}'.format(self.project_path))
-        print('')
+        print("")
         self.test_configuration()
         self.test_dependencies()
         self.test_connection()
@@ -127,7 +127,7 @@ class DebugTask(BaseTask):
 
         for message in self.messages:
             print(message)
-            print('')
+            print("")
 
         return not self.any_failure
 
@@ -163,8 +163,7 @@ class DebugTask(BaseTask):
             return red('ERROR not found')
 
     def _target_found(self):
-        requirements = (self.raw_profile_data and self.profile_name and
-                        self.target_name)
+        requirements = self.raw_profile_data and self.profile_name and self.target_name
         if not requirements:
             return red('ERROR not found')
         # mypy appeasement, we checked just above
@@ -173,7 +172,7 @@ class DebugTask(BaseTask):
         assert self.target_name is not None
         if self.profile_name not in self.raw_profile_data:
             return red('ERROR not found')
-        profiles = self.raw_profile_data[self.profile_name]['outputs']
+        profiles = self.raw_profile_data[self.profile_name]["outputs"]
         if self.target_name not in profiles:
             return red('ERROR not found')
         return green('OK found')
@@ -201,17 +200,17 @@ class DebugTask(BaseTask):
 
         profiles = []
         if self.raw_profile_data:
-            profiles = [k for k in self.raw_profile_data if k != 'config']
+            profiles = [k for k in self.raw_profile_data if k != "config"]
             if project_profile is None:
                 self.messages.append("Could not load dbt_project.yml")
             elif len(profiles) == 0:
-                self.messages.append('The profiles.yml has no profiles')
+                self.messages.append("The profiles.yml has no profiles")
             elif len(profiles) == 1:
                 self.messages.append(ONLY_PROFILE_MESSAGE.format(profiles[0]))
             else:
-                self.messages.append(MULTIPLE_PROFILE_MESSAGE.format(
-                    '\n'.join(' - {}'.format(o) for o in profiles)
-                ))
+                self.messages.append(
+                    MULTIPLE_PROFILE_MESSAGE.format("\n".join(" - {}".format(o) for o in profiles))
+                )
         return profiles
 
     def _choose_target_name(self, profile_name: str):
@@ -279,31 +278,29 @@ class DebugTask(BaseTask):
 
     def test_git(self):
         try:
-            dbt.clients.system.run_cmd(os.getcwd(), ['git', '--help'])
+            dbt.clients.system.run_cmd(os.getcwd(), ["git", "--help"])
         except dbt.exceptions.ExecutableError as exc:
-            self.messages.append('Error from git --help: {!s}'.format(exc))
+            self.messages.append("Error from git --help: {!s}".format(exc))
             self.any_failure = True
             return red('ERROR')
         return green('OK found')
 
     def test_dependencies(self):
-        print('Required dependencies:')
-        print(' - git [{}]'.format(self.test_git()))
-        print('')
+        print("Required dependencies:")
+        print(" - git [{}]".format(self.test_git()))
+        print("")
 
     def test_configuration(self):
         profile_status = self._load_profile()
         project_status = self._load_project()
-        print('Configuration:')
-        print('  profiles.yml file [{}]'.format(profile_status))
-        print('  dbt_project.yml file [{}]'.format(project_status))
+        print("Configuration:")
+        print("  profiles.yml file [{}]".format(profile_status))
+        print("  dbt_project.yml file [{}]".format(project_status))
         # skip profile stuff if we can't find a profile name
         if self.profile_name is not None:
-            print('  profile: {} [{}]'.format(self.profile_name,
-                                              self._profile_found()))
-            print('  target: {} [{}]'.format(self.target_name,
-                                             self._target_found()))
-        print('')
+            print("  profile: {} [{}]".format(self.profile_name, self._profile_found()))
+            print("  target: {} [{}]".format(self.target_name, self._target_found()))
+        print("")
         self._log_project_fail()
         self._log_profile_fail()
 
@@ -364,11 +361,11 @@ class DebugTask(BaseTask):
     def test_connection(self):
         if not self.profile:
             return
-        print('Connection:')
+        print("Connection:")
         for k, v in self.profile.credentials.connection_info():
-            print('  {}: {}'.format(k, v))
+            print("  {}: {}".format(k, v))
         print('  Connection test: [{}]'.format(self._connection_result()))
-        print('')
+        print("")
 
     @classmethod
     def validate_connection(cls, target_dict):
