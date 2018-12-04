@@ -271,14 +271,20 @@ def doc_target_not_found(model, target_doc_name, target_doc_package):
     raise_compiler_error(msg, model)
 
 
-def get_target_not_found_msg(model, target_model_name, target_model_package):
+def get_target_not_found_msg(model, target_model_name, target_model_package,
+                             path=None):
     target_package_string = ''
 
     if target_model_package is not None:
         target_package_string = "in package '{}' ".format(target_model_package)
 
-    return ("Model '{}' depends on model '{}' {}which was not found or is"
+    source_path_string = ''
+    if path is not None:
+        source_path_string = ' ({})'.format(path)
+
+    return ("Model '{}'{} depends on model '{}' {}which was not found or is"
             " disabled".format(model.get('unique_id'),
+                               source_path_string,
                                target_model_name,
                                target_package_string))
 

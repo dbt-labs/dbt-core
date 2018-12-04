@@ -429,8 +429,9 @@ def invalid_ref_fail_unless_test(node, target_model_name,
         warning = dbt.exceptions.get_target_not_found_msg(
                     node,
                     target_model_name,
-                    target_model_package)
-        logger.debug("WARNING: {}".format(warning))
+                    target_model_package,
+                    node.get('original_file_path'))
+        logger.warning("WARNING: {}".format(warning))
     else:
         dbt.exceptions.ref_target_not_found(
             node,
