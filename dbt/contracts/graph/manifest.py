@@ -81,14 +81,8 @@ PARSED_MANIFEST_CONTRACT = {
         'docs': PARSED_DOCUMENTATIONS_CONTRACT,
         'disabled': {
             'type': 'array',
-            'items': {
-                'type': 'array',
-                'items': {
-                    'type': 'string',
-                },
-                'description': 'A disabled node FQN',
-            },
-            'description': 'An array of disabled node FQNs',
+            'items': PARSED_NODE_CONTRACT,
+            'description': 'An array of disabled nodes',
         },
         'generated_at': {
             'type': 'string',
@@ -221,8 +215,12 @@ class Manifest(APIObject):
             'child_map': forward_edges,
             'generated_at': self.generated_at,
             'metadata': self.metadata,
-            'disabled': self.disabled,
+            'disabled': [v.serialize() for v in self.disabled],
         }
+
+    def find_disabled_by_name(self, name, package=None):
+        return dbt.utils.find_in_list_by_name(self.disabled, name, package,
+                                              NodeType.refable())
 
     def _find_by_name(self, name, package, subgraph, nodetype):
         """

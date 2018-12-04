@@ -271,27 +271,46 @@ def doc_target_not_found(model, target_doc_name, target_doc_package):
     raise_compiler_error(msg, model)
 
 
-def get_target_not_found_msg(model, target_model_name, target_model_package,
-                             path=None):
+def _get_target_failure_msg(model, target_model_name, target_model_package,
+                            include_path, reason):
     target_package_string = ''
-
     if target_model_package is not None:
         target_package_string = "in package '{}' ".format(target_model_package)
 
     source_path_string = ''
-    if path is not None:
-        source_path_string = ' ({})'.format(path)
+    if include_path:
+        source_path_string = ' ({})'.format(model.get('original_file_path'))
 
-    return ("Model '{}'{} depends on model '{}' {}which was not found or is"
-            " disabled".format(model.get('unique_id'),
-                               source_path_string,
-                               target_model_name,
-                               target_package_string))
+    return ("Model '{}'{} depends on model '{}' {}which {}"
+            .format(model.get('unique_id'),
+                    source_path_string,
+                    target_model_name,
+                    target_package_string,
+                    reason))
+
+
+def get_target_disabled_msg(model, target_model_name, target_model_package):
+    return _get_target_failure_msg(model, target_model_name,
+                                   target_model_package, include_path=True,
+                                   reason='is disabled')
+
+
+def get_target_not_found_msg(model, target_model_name, target_model_package):
+    return _get_target_failure_msg(model, target_model_name,
+                                   target_model_package, include_path=True,
+                                   reason='was not found')
+
+
+def get_target_not_found_or_disabled_msg(model, target_model_name,
+                                         target_model_package):
+    return _get_target_failure_msg(model, target_model_name,
+                                   target_model_package, include_path=False,
+                                   reason='was not found or is disabled')
 
 
 def ref_target_not_found(model, target_model_name, target_model_package):
-    msg = get_target_not_found_msg(model, target_model_name,
-                                   target_model_package)
+    msg = get_target_not_found_or_disabled_msg(model, target_model_name,
+                                               target_model_package)
     raise_compiler_error(msg, model)
 
 
