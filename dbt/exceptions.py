@@ -281,8 +281,9 @@ def _get_target_failure_msg(model, target_model_name, target_model_package,
     if include_path:
         source_path_string = ' ({})'.format(model.get('original_file_path'))
 
-    return ("Model '{}'{} depends on model '{}' {}which {}"
-            .format(model.get('unique_id'),
+    return ("{} '{}'{} depends on model '{}' {}which {}"
+            .format(model.get('resource_type').title(),
+                    model.get('unique_id'),
                     source_path_string,
                     target_model_name,
                     target_package_string,
