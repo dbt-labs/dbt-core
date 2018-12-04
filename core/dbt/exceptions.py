@@ -571,7 +571,7 @@ def _get_target_failure_msg(
     if target_model_package is not None:
         target_package_string = "in package '{}' ".format(target_model_package)
 
-    source_path_string = ''
+    source_path_string = ""
     if include_path:
         source_path_string = " ({})".format(model.original_file_path)
 
