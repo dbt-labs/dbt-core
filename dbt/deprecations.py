@@ -26,6 +26,7 @@ class DBTRepositoriesDeprecation(DBTDeprecation):
 {recommendation}
   """
 
+
 class SqlWhereDeprecation(DBTDeprecation):
     name = "sql_where"
     description = """\
