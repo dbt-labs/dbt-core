@@ -240,9 +240,9 @@ class DebugTask(BaseTask):
     def _load_profile(self):
         if not os.path.exists(self.profile_path):
             self.profile_fail_details = FILE_NOT_FOUND
-            self.messages.append(MISSING_PROFILE_MESSAGE.format(
-                path=self.profile_path, url=ProfileConfigDocs
-            ))
+            self.messages.append(
+                MISSING_PROFILE_MESSAGE.format(path=self.profile_path, url=ProfileConfigDocs)
+            )
             self.any_failure = True
             return red('ERROR not found')
 
