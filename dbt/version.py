@@ -14,17 +14,9 @@ def get_latest_version():
     resp = requests.get(PYPI_VERSION_URL)
     try:
         data = resp.json()
-    except json.JSONDecodeError:
-        raise dbt.exceptions.RuntimeError(
-            'Got invalid data from pypi while querying versions: not json'
-        )
-
-    try:
         version_string = data['info']['version']
-    except KeyError:
-        raise dbt.exceptions.RuntimeError(
-            'Got invalid data from pypi while querying versions: bad data'
-        )
+    except (json.JSONDecodeError, KeyError):
+        return None
 
     return dbt.semver.VersionSpecifier.from_version_string(version_string)
 
@@ -49,7 +41,7 @@ def get_version_information():
     if latest is None:
         return ("{}The latest version of dbt could not be determined!\n"
                 "Make sure that the following URL is accessible:\n{}"
-                .format(version_msg, REMOTE_VERSION_FILE))
+                .format(version_msg, PYPI_VERSION_URL))
 
     if installed == latest:
         return "{}Up to date!".format(version_msg)
