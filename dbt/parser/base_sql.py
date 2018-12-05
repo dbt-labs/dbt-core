@@ -99,7 +99,7 @@ class BaseSqlParser(BaseParser):
 
             # Ignore disabled nodes
             if not node_parsed['config']['enabled']:
-                disabled.append(node_parsed['fqn'])
+                disabled.append(node_parsed)
                 continue
 
             # Check for duplicate model names

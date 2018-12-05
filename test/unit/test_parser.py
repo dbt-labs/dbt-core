@@ -1202,6 +1202,7 @@ class ParserTest(BaseParserTest):
             'materialized': 'ephemeral'
         })
 
+
         sort_config = self.model_config.copy()
         sort_config.update({
             'enabled': False,
@@ -1319,7 +1320,53 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 ),
-            }, [['snowplow', 'disabled'], ['snowplow', 'views', 'package']])
+            },
+            [
+                ParsedNode(
+                    name='disabled',
+                    resource_type='model',
+                    package_name='snowplow',
+                    path='disabled.sql',
+                    original_file_path='disabled.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    raw_sql=("select * from events"),
+                    schema='analytics',
+                    refs=[],
+                    depends_on={
+                        'nodes': [],
+                        'macros': []
+                    },
+                    config=disabled_config,
+                    tags=[],
+                    empty=False,
+                    alias='disabled',
+                    unique_id='model.snowplow.disabled',
+                    fqn=['snowplow', 'disabled'],
+                    columns={}
+                ),
+                ParsedNode(
+                    name='package',
+                    resource_type='model',
+                    package_name='snowplow',
+                    path=get_os_path('views/package.sql'),
+                    original_file_path=get_os_path('views/package.sql'),
+                    root_path=get_os_path('/usr/src/app'),
+                    raw_sql=("select * from events"),
+                    schema='analytics',
+                    refs=[],
+                    depends_on={
+                        'nodes': [],
+                        'macros': []
+                    },
+                    config=sort_config,
+                    tags=[],
+                    empty=False,
+                    alias='package',
+                    unique_id='model.snowplow.package',
+                    fqn=['snowplow', 'views', 'package'],
+                    columns={}
+                )
+            ])
         )
 
     def test__simple_schema_v1_test(self):
