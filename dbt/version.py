@@ -1,43 +1,31 @@
+import json
 import re
 
+import requests
+
+import dbt.exceptions
 import dbt.semver
 
-try:
-    # For Python 3.0 and later
-    from urllib.request import urlopen
-except ImportError:
-    # Fall back to Python 2's urllib2
-    from urllib2 import urlopen
 
-REMOTE_VERSION_FILE = \
-    'https://raw.githubusercontent.com/fishtown-analytics/dbt/' \
-    'master/.bumpversion.cfg'
-
-
-def get_version_string_from_text(contents):
-    matches = re.search(r"current_version = ([\.0-9a-z]+)", contents)
-    if matches is None or len(matches.groups()) != 1:
-        return ""
-    version = matches.groups()[0]
-    return version
-
-
-def get_remote_version_file_contents(url=REMOTE_VERSION_FILE):
-    try:
-        f = urlopen(url)
-        contents = f.read()
-    except Exception:
-        contents = ''
-    if hasattr(contents, 'decode'):
-        contents = contents.decode('utf-8')
-    return contents
+PYPI_VERSION_URL = 'https://pypi.org/pypi/dbt/json'
 
 
 def get_latest_version():
-    contents = get_remote_version_file_contents()
-    if contents == '':
-        return None
-    version_string = get_version_string_from_text(contents)
+    resp = requests.get(PYPI_VERSION_URL)
+    try:
+        data = resp.json()
+    except json.JSONDecodeError:
+        raise dbt.exceptions.RuntimeError(
+            'Got invalid data from pypi while querying versions: not json'
+        )
+
+    try:
+        version_string = data['info']['version']
+    except KeyError:
+        raise dbt.exceptions.RuntimeError(
+            'Got invalid data from pypi while querying versions: bad data'
+        )
+
     return dbt.semver.VersionSpecifier.from_version_string(version_string)
 
 
