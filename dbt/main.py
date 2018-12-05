@@ -162,8 +162,9 @@ def run_from_args(parsed):
     task = None
     cfg = None
 
-    if parsed.which == 'init':
-        # bypass looking for a project file if we're running `dbt init`
+    if parsed.which in ('init', 'debug'):
+        # bypass looking for a project file if we're running `dbt init` or
+        # `dbt debug`
         task = parsed.cls(args=parsed)
     else:
         nearest_project_dir = get_nearest_project_dir()
