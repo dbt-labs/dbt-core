@@ -124,9 +124,8 @@ class DocumentationParserTest(unittest.TestCase):
             'root': self.root_project_config,
             'some_package': self.subdir_project_config
         }
-        parsed = list(docs.DocumentationParser.parse(
-            all_projects, self.root_project_config, docfile
-        ))
+        parser = docs.DocumentationParser(self.root_project_config, all_projects)
+        parsed = list(parser.parse(docfile))
         parsed.sort(key=lambda x: x.name)
 
         self.assertEqual(len(parsed), 2)

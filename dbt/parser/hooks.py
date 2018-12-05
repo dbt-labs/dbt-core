@@ -26,25 +26,17 @@ class HookParser(BaseSqlParser):
 
         return hooks
 
-    @classmethod
-    def get_hooks(cls, all_projects, hook_type):
+    def get_hooks(self, hook_type):
         project_hooks = collections.defaultdict(list)
 
-        for project_name, project in all_projects.items():
-            hooks = cls.get_hooks_from_project(project, hook_type)
+        for project_name, project in self.all_projects.items():
+            hooks = self.get_hooks_from_project(project, hook_type)
             project_hooks[project_name].extend(hooks)
 
         return project_hooks
 
-    @classmethod
-    def load_and_parse_run_hook_type(cls, root_project, all_projects,
-                                     hook_type, macros=None,
-                                     macro_manifest=None):
-
-        if dbt.flags.STRICT_MODE:
-            dbt.contracts.project.ProjectList(**all_projects)
-
-        project_hooks = cls.get_hooks(all_projects, hook_type)
+    def load_and_parse_run_hook_type(self, hook_type):
+        project_hooks = self.get_hooks(hook_type)
 
         result = []
         for project_name, hooks in project_hooks.items():
@@ -64,25 +56,17 @@ class HookParser(BaseSqlParser):
                 })
 
         tags = [hook_type]
-        hooks, _ = cls.parse_sql_nodes(result, root_project, all_projects,
-                                       tags=tags, macros=macros,
-                                       macro_manifest=macro_manifest)
+        hooks, _ = self.parse_sql_nodes(result, tags=tags)
         return hooks
 
-    @classmethod
-    def load_and_parse(cls, root_project, all_projects, macros=None,
-                       macro_manifest=None):
-        if macros is None:
-            macros = {}
+    def load_and_parse(self):
+        if dbt.flags.STRICT_MODE:
+            dbt.contracts.project.ProjectList(**self.all_projects)
 
         hook_nodes = {}
         for hook_type in RunHookType.Both:
-            project_hooks = cls.load_and_parse_run_hook_type(
-                root_project,
-                all_projects,
+            project_hooks = self.load_and_parse_run_hook_type(
                 hook_type,
-                macros=macros,
-                macro_manifest=macro_manifest
             )
             hook_nodes.update(project_hooks)
 
