@@ -9,19 +9,9 @@ import sys
 class VersionTest(unittest.TestCase):
 
     @patch("dbt.version.__version__", "0.10.0")
-    def test_versions_equal(self):
-
-        dbt.version.get_remote_version_file_contents = MagicMock(
-            return_value="""
-                [bumpversion]
-                current_version = 0.10.0
-                commit = True
-                tag = True
-
-                [bumpversion:file:setup.py]
-
-                [bumpversion:file:dbt/version.py]
-            """)
+    @patch('dbt.version.requests.get')
+    def test_versions_equal(self, mock_get):
+        mock_get.return_value.json.return_value = {'info': {'version': '0.10.0'}}
 
         latest_version = dbt.version.get_latest_version()
         installed_version = dbt.version.get_installed_version()
@@ -37,18 +27,9 @@ class VersionTest(unittest.TestCase):
                                   expected_version_information)
 
     @patch("dbt.version.__version__", "0.10.2-a1")
-    def test_installed_version_greater(self):
-        dbt.version.get_remote_version_file_contents = MagicMock(
-            return_value="""
-                [bumpversion]
-                current_version = 0.10.1
-                commit = True
-                tag = True
-
-                [bumpversion:file:setup.py]
-
-                [bumpversion:file:dbt/version.py]
-            """)
+    @patch('dbt.version.requests.get')
+    def test_installed_version_greater(self, mock_get):
+        mock_get.return_value.json.return_value = {'info': {'version': '0.10.1'}}
 
         latest_version = dbt.version.get_latest_version()
         installed_version = dbt.version.get_installed_version()
@@ -63,18 +44,9 @@ class VersionTest(unittest.TestCase):
                                   expected_version_information)
 
     @patch("dbt.version.__version__", "0.9.5")
-    def test_installed_version_lower(self):
-        dbt.version.get_remote_version_file_contents = MagicMock(
-            return_value="""
-                [bumpversion]
-                current_version = 0.10.0
-                commit = True
-                tag = True
-
-                [bumpversion:file:setup.py]
-
-                [bumpversion:file:dbt/version.py]
-            """)
+    @patch('dbt.version.requests.get')
+    def test_installed_version_lower(self, mock_get):
+        mock_get.return_value.json.return_value = {'info': {'version': '0.10.0'}}
 
         latest_version = dbt.version.get_latest_version()
         installed_version = dbt.version.get_installed_version()
@@ -92,20 +64,10 @@ class VersionTest(unittest.TestCase):
 
     # suppress having version info printed to the screen during tests.
     @patch('sys.stderr')
-    def test_dbt_version_flag(self, stderr):
-        dbt.version.get_remote_version_file_contents = MagicMock(
-            return_value="""
-                [bumpversion]
-                current_version = 0.10.1
-                commit = True
-                tag = True
-
-                [bumpversion:file:setup.py]
-
-                [bumpversion:file:dbt/version.py]
-            """)
+    @patch('dbt.version.requests.get')
+    def test_dbt_version_flag(self, mock_get, stderr):
+        mock_get.return_value.json.return_value = {'info': {'version': '0.10.1'}}
 
         with self.assertRaises(SystemExit) as exc:
             dbt.main.handle_and_check(['--version'])
         self.assertEqual(exc.exception.code, 0)
-
