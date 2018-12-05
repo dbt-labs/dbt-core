@@ -20,7 +20,7 @@ def get_latest_version(version_url: str = PYPI_VERSION_URL):
     try:
         resp = requests.get(version_url)
         data = resp.json()
-        version_string = data['info']['version']
+        version_string = data["info"]["version"]
     except (json.JSONDecodeError, KeyError, requests.RequestException):
         return None
 
