@@ -60,7 +60,7 @@ from dbt.adapters.cache import RelationsCache, _make_key
 SeedModel = Union[ParsedSeedNode, CompiledSeedNode]
 
 
-GET_CATALOG_MACRO_NAME = 'get_catalog'
+GET_CATALOG_MACRO_NAME = "get_catalog"
 FRESHNESS_MACRO_NAME = "collect_freshness"
 
 
