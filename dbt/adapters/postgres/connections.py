@@ -58,6 +58,9 @@ class PostgresCredentials(Credentials):
         # we can't access this as 'pass' since that's reserved
         return self._contents['pass']
 
+    def _connection_keys(self):
+        return ('host', 'port', 'user', 'dbname', 'schema')
+
 
 class PostgresConnectionManager(SQLConnectionManager):
     DEFAULT_TCP_KEEPALIVE = 0  # 0 means to use the default value

@@ -232,6 +232,12 @@ class Compiler(object):
             names_resources[name] = node
             alias_resources[alias] = node
 
+    def warn_for_deprecated_configs(self, manifest):
+        for unique_id, node in manifest.nodes.items():
+            is_model = node.resource_type == NodeType.Model
+            if is_model and 'sql_where' in node.config:
+                dbt.deprecations.warn('sql_where')
+
     def compile(self):
         linker = Linker()
 
@@ -247,6 +253,7 @@ class Compiler(object):
         disabled_fqns = [n.fqn for n in manifest.disabled]
         self.config.warn_for_unused_resource_config_paths(resource_fqns,
                                                           disabled_fqns)
+        self.warn_for_deprecated_configs(manifest)
 
         self.link_graph(linker, manifest)
 

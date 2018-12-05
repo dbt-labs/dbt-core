@@ -51,6 +51,9 @@ class BigQueryCredentials(Credentials):
     def type(self):
         return 'bigquery'
 
+    def _connection_keys(self):
+        return ('method', 'project', 'schema', 'location')
+
 
 class BigQueryConnectionManager(BaseConnectionManager):
     TYPE = 'bigquery'

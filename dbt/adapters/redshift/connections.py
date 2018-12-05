@@ -74,6 +74,9 @@ class RedshiftCredentials(PostgresCredentials):
     def type(self):
         return 'redshift'
 
+    def _connection_keys(self):
+        return ('host', 'port', 'user', 'dbname', 'schema', 'method')
+
 
 class RedshiftConnectionManager(PostgresConnectionManager):
     DEFAULT_TCP_KEEPALIVE = 240

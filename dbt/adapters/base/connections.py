@@ -21,6 +21,19 @@ class Credentials(APIObject):
             'type not implemented for base credentials class'
         )
 
+    def connection_info(self):
+        """Return an ordered iterator of key/value pairs for pretty-printing.
+        """
+        for key in self._connection_keys():
+            if key in self._contents:
+                yield key, self._contents[key]
+
+    def _connection_keys(self):
+        """The credential object keys that should be printed to users in
+        'dbt debug' output. This is specific to each adapter.
+        """
+        raise NotImplementedError
+
 
 @six.add_metaclass(abc.ABCMeta)
 class BaseConnectionManager(object):

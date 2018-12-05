@@ -546,7 +546,7 @@ class Profile(object):
         return credentials
 
     @staticmethod
-    def _pick_profile_name(args_profile_name, project_profile_name=None):
+    def pick_profile_name(args_profile_name, project_profile_name=None):
         profile_name = project_profile_name
         if args_profile_name is not None:
             profile_name = args_profile_name
@@ -609,8 +609,8 @@ class Profile(object):
         return profile
 
     @classmethod
-    def _render_profile(cls, raw_profile, profile_name, target_override,
-                        cli_vars):
+    def render_profile(cls, raw_profile, profile_name, target_override,
+                       cli_vars):
         """This is a containment zone for the hateful way we're rendering
         profiles.
         """
@@ -667,7 +667,7 @@ class Profile(object):
         """
         # user_cfg is not rendered since it only contains booleans.
         # TODO: should it be, and the values coerced to bool?
-        target_name, profile_data = cls._render_profile(
+        target_name, profile_data = cls.render_profile(
             raw_profile, profile_name, target_override, cli_vars
         )
 
@@ -753,8 +753,8 @@ class Profile(object):
         profiles_dir = getattr(args, 'profiles_dir', PROFILES_DIR)
         target_override = getattr(args, 'target', None)
         raw_profiles = read_profile(profiles_dir)
-        profile_name = cls._pick_profile_name(args.profile,
-                                              project_profile_name)
+        profile_name = cls.pick_profile_name(args.profile,
+                                             project_profile_name)
 
         return cls.from_raw_profiles(
             raw_profiles=raw_profiles,

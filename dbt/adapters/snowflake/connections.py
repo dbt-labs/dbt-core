@@ -52,6 +52,9 @@ class SnowflakeCredentials(Credentials):
     def type(self):
         return 'snowflake'
 
+    def _connection_keys(self):
+        return ('account', 'user', 'database', 'schema', 'warehouse', 'role')
+
 
 class SnowflakeConnectionManager(SQLConnectionManager):
     TYPE = 'snowflake'
