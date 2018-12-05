@@ -28,9 +28,11 @@ else:
 if WHICH_PYTHON == 2:
     from SimpleHTTPServer import SimpleHTTPRequestHandler
     from SocketServer import TCPServer
+    from Queue import PriorityQueue
 else:
     from http.server import SimpleHTTPRequestHandler
     from socketserver import TCPServer
+    from queue import PriorityQueue
 
 
 def to_unicode(s):
