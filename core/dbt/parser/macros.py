@@ -53,10 +53,6 @@ class MacroParser(BaseParser):
                 node_type = NodeType.Macro
                 name = macro_name.replace(dbt.utils.MACRO_PREFIX, '')
 
-            elif macro_name.startswith(dbt.utils.OPERATION_PREFIX):
-                node_type = NodeType.Operation
-                name = macro_name.replace(dbt.utils.OPERATION_PREFIX, '')
-
             if node_type != resource_type:
                 continue
 

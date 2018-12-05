@@ -151,16 +151,11 @@ def find_in_list_by_name(haystack, target_name, target_package, nodetype):
 
 
 MACRO_PREFIX = 'dbt_macro__'
-OPERATION_PREFIX = 'dbt_operation__'
 DOCS_PREFIX = 'dbt_docs__'
 
 
 def get_dbt_macro_name(name):
     return '{}{}'.format(MACRO_PREFIX, name)
-
-
-def get_dbt_operation_name(name):
-    return '{}{}'.format(OPERATION_PREFIX, name)
 
 
 def get_dbt_docs_name(name):
@@ -178,13 +173,6 @@ def get_materialization_macro_name(materialization_name, adapter_type=None,
         return get_dbt_macro_name(name)
     else:
         return name
-
-
-def get_operation_macro_name(operation_name, with_prefix=True):
-    if with_prefix:
-        return get_dbt_operation_name(operation_name)
-    else:
-        return operation_name
 
 
 def get_docs_macro_name(docs_name, with_prefix=True):

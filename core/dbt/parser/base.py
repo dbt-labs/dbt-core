@@ -83,13 +83,8 @@ class MacrosKnownParser(BaseParser):
             def get_schema(_):
                 return self.default_schema
         else:
-            # use the macro itself as the 'parsed node' to pass into
-            # parser.generate() to get a context.
-            macro_node = get_schema_macro.incorporate(
-                resource_type=NodeType.Operation
-            )
             root_context = dbt.context.parser.generate(
-                macro_node, self.root_project_config,
+                get_schema_macro, self.root_project_config,
                 self.macro_manifest, self.root_project_config
             )
             get_schema = get_schema_macro.generator(root_context)

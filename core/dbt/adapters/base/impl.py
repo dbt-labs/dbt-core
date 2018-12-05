@@ -21,7 +21,7 @@ from dbt.adapters.base.meta import AdapterMeta, available, available_raw
 from dbt.adapters.base import BaseRelation
 from dbt.adapters.cache import RelationsCache
 
-GET_CATALOG_OPERATION_NAME = 'get_catalog_data'
+GET_CATALOG_MACRO_NAME = 'get_catalog'
 
 
 def _expect_row_value(key, row):
@@ -655,25 +655,29 @@ class BaseAdapter(object):
     ###
     # Operations involving the manifest
     ###
-    def run_operation(self, manifest, operation_name):
-        """Look the operation identified by operation_name up in the manifest
-        and run it.
+    def execute_macro(self, manifest, macro_name, project=None):
+        """Look macro_name up in the manifest and execute its results.
 
         Return an an AttrDict with three attributes: 'table', 'data', and
             'status'. 'table' is an agate.Table.
         """
-        operation = manifest.find_operation_by_name(operation_name, 'dbt')
+        macro = manifest.find_macro_by_name(macro_name, project)
+        if macro is None:
+            raise dbt.exceptions.RuntimeException(
+                'Could not find macro with name {} in project {}'
+                .format(macro_name, project)
+            )
 
         # This causes a reference cycle, as dbt.context.runtime.generate()
         # ends up calling get_adapter, so the import has to be here.
         import dbt.context.runtime
         context = dbt.context.runtime.generate(
-            operation,
+            macro,
             self.config,
             manifest,
         )
 
-        result = operation.generator(context)()
+        result = macro.generator(context)()
         return result
 
     @classmethod
@@ -684,13 +688,13 @@ class BaseAdapter(object):
         return table.where(_catalog_filter_schemas(manifest))
 
     def get_catalog(self, manifest):
-        """Get the catalog for this manifest by running the get catalog
-        operation. Returns an agate.Table of catalog information.
+        """Get the catalog for this manifest by running the get catalog macro.
+        Returns an agate.Table of catalog information.
         """
         try:
-            table = self.run_operation(manifest, GET_CATALOG_OPERATION_NAME)
+            table = self.execute_macro(manifest, GET_CATALOG_MACRO_NAME)
         finally:
-            self.release_connection(GET_CATALOG_OPERATION_NAME)
+            self.release_connection(GET_CATALOG_MACRO_NAME)
 
         results = self._catalog_filter_table(table, manifest)
         return results

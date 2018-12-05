@@ -92,10 +92,7 @@ def macro_generator(node):
             template = template_cache.get_node_template(node)
             module = template.make_module(context, False, context)
 
-            if node['resource_type'] == NodeType.Operation:
-                macro = module.__dict__[dbt.utils.get_dbt_operation_name(name)]
-            else:
-                macro = module.__dict__[dbt.utils.get_dbt_macro_name(name)]
+            macro = module.__dict__[dbt.utils.get_dbt_macro_name(name)]
             module.__dict__.update(context)
 
             try:
@@ -143,28 +140,6 @@ class MaterializationExtension(jinja2.ext.Extension):
             materialization_name, adapter_name)
 
         node.body = parser.parse_statements(('name:endmaterialization',),
-                                            drop_needle=True)
-
-        return node
-
-
-class OperationExtension(jinja2.ext.Extension):
-    tags = ['operation']
-
-    def parse(self, parser):
-        node = jinja2.nodes.Macro(lineno=next(parser.stream).lineno)
-        operation_name = \
-            parser.parse_assign_target(name_only=True).name
-
-        node.args = []
-        node.defaults = []
-
-        while parser.stream.skip_if('comma'):
-            target = parser.parse_assign_target(name_only=True)
-
-        node.name = dbt.utils.get_operation_macro_name(operation_name)
-
-        node.body = parser.parse_statements(('name:endoperation',),
                                             drop_needle=True)
 
         return node
@@ -253,7 +228,6 @@ def get_environment(node=None, capture_macros=False):
         args['undefined'] = create_macro_capture_env(node)
 
     args['extensions'].append(MaterializationExtension)
-    args['extensions'].append(OperationExtension)
     args['extensions'].append(DocumentationExtension)
 
     return MacroFuzzEnvironment(**args)
