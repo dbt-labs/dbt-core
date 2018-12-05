@@ -13,8 +13,15 @@
   /*
       See ../view/view.sql for more information about this relation.
   */
+
+  -- drop the backup relation if it exists, then make a new one that uses the old relation's type
+  {%- set backup_relation = adapter.get_relation(schema=schema, identifier=backup_identifier) -%}
+  {% if backup_relation is not none -%}
+    {{ adapter.drop_relation(backup_relation) }}
+  {%- endif %}
   {%- set backup_relation = api.Relation.create(identifier=backup_identifier,
-                                                schema=schema, type=(old_relation.type or 'table')) -%}
+                                                schema=schema,
+                                                type=(old_relation.type or 'table')) -%}
 
   {%- set exists_as_table = (old_relation is not none and old_relation.is_table) -%}
   {%- set exists_as_view = (old_relation is not none and old_relation.is_view) -%}
@@ -23,7 +30,6 @@
 
   -- drop the temp relations if they exists for some reason
   {{ adapter.drop_relation(intermediate_relation) }}
-  {{ adapter.drop_relation(backup_relation) }}
 
   -- setup: if the target relation already exists, truncate or drop it (if it's a view)
   {% if non_destructive_mode -%}

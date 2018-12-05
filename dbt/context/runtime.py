@@ -3,7 +3,7 @@ from dbt.utils import get_materialization, add_ephemeral_model_prefix
 import dbt.clients.jinja
 import dbt.context.common
 import dbt.flags
-import dbt.parser
+from dbt.parser import ParserUtils
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -26,14 +26,14 @@ def ref(db_wrapper, model, config, manifest):
         else:
             dbt.exceptions.ref_invalid_args(model, args)
 
-        target_model = dbt.parser.ParserUtils.resolve_ref(
+        target_model = ParserUtils.resolve_ref(
             manifest,
             target_model_name,
             target_model_package,
             current_project,
             model.get('package_name'))
 
-        if target_model is None:
+        if target_model is None or target_model is ParserUtils.DISABLED:
             dbt.exceptions.ref_target_not_found(
                 model,
                 target_model_name,

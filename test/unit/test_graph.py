@@ -12,6 +12,12 @@ import dbt.config
 import dbt.templates
 import dbt.utils
 
+try:
+    from queue import Empty
+except KeyError:
+    from Queue import Empty
+
+
 import networkx as nx
 
 from dbt.logger import GLOBAL_LOGGER as logger # noqa
@@ -166,7 +172,7 @@ class GraphTest(unittest.TestCase):
         }
 
         compiler = self.get_compiler(self.get_config(cfg))
-        graph, linker = compiler.compile()
+        manifest, linker = compiler.compile()
 
         expected_materialization = {
             "model_one": "table",
@@ -179,8 +185,8 @@ class GraphTest(unittest.TestCase):
 
         for model, expected in expected_materialization.items():
             key = 'model.test_models_compile.{}'.format(model)
-            actual = nodes[key].get('config', {}) \
-                               .get('materialized')
+            actual = manifest.nodes[key].get('config', {}) \
+                                             .get('materialized')
             self.assertEquals(actual, expected)
 
     def test__model_incremental(self):
@@ -200,8 +206,9 @@ class GraphTest(unittest.TestCase):
             }
         }
 
+
         compiler = self.get_compiler(self.get_config(cfg))
-        graph, linker = compiler.compile()
+        manifest, linker = compiler.compile()
 
         node = 'model.test_models_compile.model_one'
 
@@ -209,8 +216,9 @@ class GraphTest(unittest.TestCase):
         self.assertEqual(linker.edges(), [])
 
         self.assertEqual(
-                linker.graph.node[node].get('config', {}).get('materialized'),
-                'incremental')
+            manifest.nodes[node].get('config', {}).get('materialized'),
+            'incremental'
+        )
 
     def test__dependency_list(self):
         self.use_models({
@@ -227,13 +235,20 @@ class GraphTest(unittest.TestCase):
         compiler = self.get_compiler(self.get_config({}))
         graph, linker = compiler.compile()
 
-        actual_dep_list = linker.as_dependency_list()
+        models = ('model_1', 'model_2', 'model_3', 'model_4')
+        model_ids = ['model.test_models_compile.{}'.format(m) for m in models]
 
-        expected_dep_list = [
-            ['model.test_models_compile.model_1'],
-            ['model.test_models_compile.model_2'],
-            ['model.test_models_compile.model_3'],
-            ['model.test_models_compile.model_4'],
-        ]
+        manifest = MagicMock(nodes={
+            n: MagicMock(unique_id=n)
+            for n in model_ids
+        })
+        queue = linker.as_graph_queue(manifest)
 
-        self.assertEqual(actual_dep_list, expected_dep_list)
+        for model_id in model_ids:
+            self.assertFalse(queue.empty())
+            got = queue.get(block=False)
+            self.assertEqual(got.unique_id, model_id)
+            with self.assertRaises(Empty):
+                queue.get(block=False)
+            queue.mark_done(got.unique_id)
+        self.assertTrue(queue.empty())
