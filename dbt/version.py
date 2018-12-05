@@ -11,11 +11,11 @@ PYPI_VERSION_URL = 'https://pypi.org/pypi/dbt/json'
 
 
 def get_latest_version():
-    resp = requests.get(PYPI_VERSION_URL)
     try:
+        resp = requests.get(PYPI_VERSION_URL)
         data = resp.json()
         version_string = data['info']['version']
-    except (json.JSONDecodeError, KeyError):
+    except (json.JSONDecodeError, KeyError, requests.RequestException):
         return None
 
     return dbt.semver.VersionSpecifier.from_version_string(version_string)
