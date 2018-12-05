@@ -95,6 +95,10 @@ class DebugTask(BaseTask):
         logger.info(message)
 
     def run(self):
+        if self.args.config_dir:
+            self.path_info()
+            return
+
         version = get_installed_version().to_version_string(skip_matcher=True)
         print('dbt version: {}'.format(version))
         print('python version: {}'.format(sys.version.split()[0]))
