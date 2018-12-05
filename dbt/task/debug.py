@@ -9,6 +9,7 @@ import dbt.clients.system
 import dbt.config
 import dbt.utils
 import dbt.exceptions
+from dbt.links import ProfileConfigDocs
 from dbt.adapters.factory import get_adapter
 from dbt.version import get_installed_version
 from dbt.config import Project, Profile
@@ -39,19 +40,19 @@ COULD_NOT_CONNECT_MESSAGE = '''
 dbt was unable to connect to the specified database.
 The database returned the following error:
 
-  >{}
+  >{err}
 
 Check your database credentials and try again. For more information, visit:
-https://docs.getdbt.com/docs/configure-your-profile
+{url}
 '''.lstrip()
 
 
 MISSING_PROFILE_MESSAGE = '''
-dbt looked for a profiles.yml file in /Users/drew/.dbt/profiles.yml, but did
+dbt looked for a profiles.yml file in {path}, but did
 not find one. For more information on configuring your profile, consult the
 documentation:
 
-https://docs.getdbt.com/docs/configure-your-profile
+{url}
 '''.lstrip()
 
 FILE_NOT_FOUND = 'file not found'
@@ -187,7 +188,9 @@ class DebugTask(BaseTask):
     def _load_profile(self):
         if not os.path.exists(self.profile_path):
             self.profile_fail_details = FILE_NOT_FOUND
-            self.messages.append(MISSING_PROFILE_MESSAGE)
+            self.messages.append(MISSING_PROFILE_MESSAGE.format(
+                path=self.profile_path, url=ProfileConfigDocs
+            ))
             return red('✗ not found')
 
         try:
@@ -265,7 +268,10 @@ class DebugTask(BaseTask):
         try:
             adapter.execute('select 1 as id')
         except Exception as exc:
-            self.messages.append(COULD_NOT_CONNECT_MESSAGE.format(str(exc)))
+            self.messages.append(COULD_NOT_CONNECT_MESSAGE.format(
+                err=str(exc),
+                url=ProfileConfigDocs
+            ))
             return red('✗ error')
         return green('✓ connection ok')
 
