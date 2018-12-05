@@ -13,6 +13,7 @@ from dbt.adapters.factory import get_adapter
 from dbt.version import get_installed_version
 from dbt.config import Project, Profile
 from dbt.clients.yaml_helper import load_yaml_text
+from dbt.ui.printer import green, red
 
 from dbt.task.base_task import BaseTask
 
@@ -111,35 +112,35 @@ class DebugTask(BaseTask):
     def _load_project(self):
         if not os.path.exists(self.project_path):
             self.project_fail_details = FILE_NOT_FOUND
-            return '✗ not found'
+            return red('✗ not found')
 
         try:
             self.project = Project.from_current_directory(self.cli_vars)
         except dbt.exceptions.DbtConfigError as exc:
             self.project_fail_details = str(exc)
-            return '✗ invalid'
+            return red('✗ invalid')
 
-        return '✓ found and valid'
+        return green('✓ found and valid')
 
     def _profile_found(self):
         if not self.raw_profile_data:
-            return '✗ not found'
+            return red('✗ not found')
         if self.profile_name in self.raw_profile_data:
-            return '✓ found'
+            return green('✓ found')
         else:
-            return '✗ not found'
+            return red('✗ not found')
 
     def _target_found(self):
         requirements = (self.raw_profile_data and self.profile_name and
                         self.target_name)
         if not requirements:
-            return '✗ not found'
+            return red('✗ not found')
         if self.profile_name not in self.raw_profile_data:
-            return '✗ not found'
+            return red('✗ not found')
         profiles = self.raw_profile_data[self.profile_name]['outputs']
         if self.target_name not in profiles:
-            return '✗ not found'
-        return '✓ found'
+            return red('✗ not found')
+        return green('✓ found')
 
     def _choose_profile_name(self):
         assert self.project or self.project_fail_details, \
@@ -187,7 +188,7 @@ class DebugTask(BaseTask):
         if not os.path.exists(self.profile_path):
             self.profile_fail_details = FILE_NOT_FOUND
             self.messages.append(MISSING_PROFILE_MESSAGE)
-            return '✗ not found'
+            return red('✗ not found')
 
         try:
             raw_profile_data = load_yaml_text(
@@ -206,17 +207,17 @@ class DebugTask(BaseTask):
                                              self.cli_vars)
         except dbt.exceptions.DbtConfigError as exc:
             self.profile_fail_details = str(exc)
-            return '✗ invalid'
+            return red('✗ invalid')
 
-        return '✓ found and valid'
+        return green('✓ found and valid')
 
     def test_git(self):
         try:
             dbt.clients.system.run_cmd(os.getcwd(), ['git', '--help'])
         except dbt.exceptions.ExecutableError as exc:
             self.messages.append('Error from git --help: {!s}'.format(exc))
-            return '✗ error'
-        return '✓ found'
+            return red('✗ error')
+        return green('✓ found')
 
     def test_dependencies(self):
         print('Required dependencies:')
@@ -265,8 +266,8 @@ class DebugTask(BaseTask):
             adapter.execute('select 1 as id')
         except Exception as exc:
             self.messages.append(COULD_NOT_CONNECT_MESSAGE.format(str(exc)))
-            return '✗ error'
-        return '✓ connection ok'
+            return red('✗ error')
+        return green('✓ connection ok')
 
     def test_connection(self):
         if not self.profile:
