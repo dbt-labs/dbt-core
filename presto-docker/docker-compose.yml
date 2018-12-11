@@ -1,0 +1,53 @@
+version: '3.5'
+services:
+  presto:
+    build:
+      context: ./presto
+    ports:
+      - "8080:8080"
+    depends_on:
+      - hive-metastore
+    image: fishtownjacob/presto:latest
+
+  hive-metastore:
+    build:
+      context: ./hive
+      # dockerfile: Dockerfile
+    image: fishtownjacob/hive:latest
+    ports:
+      - "9083:9083"
+    depends_on:
+      - hive-metastore-db
+      - hadoop  # this is an image building dependency, not a service dependency, for now
+    command: ["hive", "--service", "metastore"]
+
+  hive-hiveserver:
+    image: fishtownjacob/hive:latest
+    environment:
+      HIVE_CORE_CONF_javax_jdo_option_ConnectionURL: "jdbc:postgresql://hive-metastore/metastore"
+    ports:
+      - "10000:10000"
+    depends_on:
+      - hive-metastore
+    command: ["run_hiveserver.sh"]
+    # command: ["./bin/hiveserver2"]
+
+  hive-metastore-db:
+    image: postgres
+    environment:
+      POSTGRES_USER: "root"
+      POSTGRES_PASSWORD: "password"
+      POSTGRES_DB: "metastore"
+
+  hadoop:
+    build:
+      context: ./hadoop
+      # dockerfile: Dockerfile
+    image: fishtownjacob/hadoop:latest
+    command: ["run_yarn.sh"]
+
+
+networks:
+  default:
+    external:
+      name: dbt-net

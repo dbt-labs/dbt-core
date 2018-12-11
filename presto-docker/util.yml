@@ -1,0 +1,25 @@
+version: "3.5"
+
+services:
+  hive-beeline:
+    build:
+      context: .
+      dockerfile: Dockerfile.hive
+    command: ["./bin/beeline", "-u", "jdbc:hive2://hive-hiveserver:10000"]
+
+  util:
+    build:
+      context: .
+      dockerfile: Dockerfile.util
+    environment:
+      # some helpful defaults for postgres
+      PGHOST: "hive-metastore-db"
+      PGUSER: "root"
+      PGPASSWORD: "password"
+      PGDATABASE: "public"
+
+
+networks:
+  default:
+    external:
+      name: dbt-net
