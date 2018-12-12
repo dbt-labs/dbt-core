@@ -62,60 +62,6 @@ model_fqns = frozenset((
 ))
 
 
-class ConfigTest(unittest.TestCase):
-    def setUp(self):
-        self.base_dir = tempfile.mkdtemp()
-        self.profiles_path = os.path.join(self.base_dir, 'profiles.yml')
-
-    def set_up_empty_config(self):
-        with open(self.profiles_path, 'w') as f:
-            f.write(yaml.dump({}))
-
-    def set_up_config_options(self, **kwargs):
-        config = {
-            'config': kwargs
-        }
-
-        with open(self.profiles_path, 'w') as f:
-            f.write(yaml.dump(config))
-
-    def tearDown(self):
-        try:
-            shutil.rmtree(self.base_dir)
-        except:
-            pass
-
-    def test__implicit_opt_in(self):
-        self.set_up_empty_config()
-        config = dbt.config.read_config(self.base_dir)
-        self.assertTrue(dbt.config.send_anonymous_usage_stats(config))
-
-    def test__explicit_opt_out(self):
-        self.set_up_config_options(send_anonymous_usage_stats=False)
-        config = dbt.config.read_config(self.base_dir)
-        self.assertFalse(dbt.config.send_anonymous_usage_stats(config))
-
-    def test__explicit_opt_in(self):
-        self.set_up_config_options(send_anonymous_usage_stats=True)
-        config = dbt.config.read_config(self.base_dir)
-        self.assertTrue(dbt.config.send_anonymous_usage_stats(config))
-
-    def test__implicit_colors(self):
-        self.set_up_empty_config()
-        config = dbt.config.read_config(self.base_dir)
-        self.assertTrue(dbt.config.colorize_output(config))
-
-    def test__explicit_opt_out(self):
-        self.set_up_config_options(use_colors=False)
-        config = dbt.config.read_config(self.base_dir)
-        self.assertFalse(dbt.config.colorize_output(config))
-
-    def test__explicit_opt_in(self):
-        self.set_up_config_options(use_colors=True)
-        config = dbt.config.read_config(self.base_dir)
-        self.assertTrue(dbt.config.colorize_output(config))
-
-
 class Args(object):
     def __init__(self, profiles_dir=None, threads=None, profile=None, cli_vars=None):
         self.profile = profile

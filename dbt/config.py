@@ -86,22 +86,6 @@ def read_profiles(profiles_dir=None):
     return profiles
 
 
-def read_config(profiles_dir):
-    profile = read_profile(profiles_dir)
-    if profile is None:
-        return {}
-    else:
-        return profile.get('config', {})
-
-
-def send_anonymous_usage_stats(config):
-    return config.get('send_anonymous_usage_stats', True)
-
-
-def colorize_output(config):
-    return config.get('use_colors', True)
-
-
 class ConfigRenderer(object):
     """A renderer provides configuration rendering for a given set of cli
     variables and a render type.

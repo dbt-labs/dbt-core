@@ -17,8 +17,6 @@ sp_logger.setLevel(100)
 COLLECTOR_URL = "fishtownanalytics.sinter-collect.com"
 COLLECTOR_PROTOCOL = "https"
 
-COOKIE_PATH = os.path.join(os.path.expanduser('~'), '.dbt/.user.yml')
-
 INVOCATION_SPEC = 'iglu:com.dbt/invocation/jsonschema/1-0-0'
 PLATFORM_SPEC = 'iglu:com.dbt/platform/jsonschema/1-0-0'
 RUN_MODEL_SPEC = 'iglu:com.dbt/run_model/jsonschema/1-0-0'
@@ -35,8 +33,9 @@ active_user = None
 
 class User(object):
 
-    def __init__(self):
+    def __init__(self, cookie_dir):
         self.do_not_track = True
+        self.cookie_dir = cookie_dir
 
         self.id = None
         self.invocation_id = str(uuid.uuid4())
@@ -44,6 +43,10 @@ class User(object):
 
     def state(self):
         return "do not track" if self.do_not_track else "tracking"
+
+    @property
+    def cookie_path(self):
+        return os.path.join(self.cookie_dir, '.user.yml')
 
     def initialize(self):
         self.do_not_track = False
@@ -56,21 +59,20 @@ class User(object):
         tracker.set_subject(subject)
 
     def set_cookie(self):
-        cookie_dir = os.path.dirname(COOKIE_PATH)
         user = {"id": str(uuid.uuid4())}
 
-        dbt.clients.system.make_directory(cookie_dir)
+        dbt.clients.system.make_directory(self.cookie_dir)
 
-        with open(COOKIE_PATH, "w") as fh:
+        with open(self.cookie_path, "w") as fh:
             yaml.dump(user, fh)
 
         return user
 
     def get_cookie(self):
-        if not os.path.isfile(COOKIE_PATH):
+        if not os.path.isfile(self.cookie_path):
             user = self.set_cookie()
         else:
-            with open(COOKIE_PATH, "r") as fh:
+            with open(self.cookie_path, "r") as fh:
                 try:
                     user = yaml.safe_load(fh)
                     if user is None:
@@ -266,10 +268,15 @@ def flush():
 
 def do_not_track():
     global active_user
-    active_user = User()
+    active_user = User(None)
 
 
-def initialize_tracking():
+def initialize_tracking(cookie_dir):
     global active_user
-    active_user = User()
-    active_user.initialize()
+    active_user = User(cookie_dir)
+    try:
+        active_user.initialize()
+    except Exception:
+        logger.debug('Got an exception trying to initialize tracking',
+                     exc_info=True)
+        active_user = User(None)
