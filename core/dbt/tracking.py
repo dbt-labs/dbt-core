@@ -121,7 +121,7 @@ class User:
 
     @property
     def cookie_path(self):
-        return os.path.join(self.cookie_dir, '.user.yml')
+        return os.path.join(self.cookie_dir, ".user.yml")
 
     def initialize(self):
         self.do_not_track = False
