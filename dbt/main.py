@@ -28,9 +28,9 @@ import dbt.deprecations
 import dbt.profiler
 
 from dbt.utils import ExitCodes
-from dbt.config import Project, Profile, RuntimeConfig, PROFILES_DIR, \
+from dbt.config import Project, UserConfig, RuntimeConfig, PROFILES_DIR, \
     read_profiles
-from dbt.exceptions import DbtProfileError, DbtProfileError, RuntimeException
+from dbt.exceptions import DbtProjectError, DbtProfileError, RuntimeException
 
 
 PROFILES_HELP_MESSAGE = """
@@ -118,16 +118,16 @@ def initialize_config_values(parsed):
     easy.
     """
     try:
-        profile = Profile.from_args(parsed)
+        cfg = UserConfig.from_directory(parsed.profiles_dir)
     except RuntimeException:
-        profile = None
+        cfg = UserConfig.from_dict(None)
 
-    if profile is None or profile.send_anonymous_usage_stats:
+    if cfg.send_anonymous_usage_stats:
         dbt.tracking.initialize_tracking(parsed.profiles_dir)
     else:
         dbt.tracking.do_not_track()
 
-    if profile is None or profile.use_colors:
+    if cfg.use_colors:
         dbt.ui.printer.use_colors()
 
 

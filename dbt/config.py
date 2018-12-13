@@ -460,13 +460,48 @@ class Project(object):
         logger.info(dbt.ui.printer.yellow(msg))
 
 
-class Profile(object):
-    def __init__(self, profile_name, target_name, send_anonymous_usage_stats,
-                 use_colors, threads, credentials):
-        self.profile_name = profile_name
-        self.target_name = target_name
+class UserConfig(object):
+    def __init__(self, send_anonymous_usage_stats, use_colors):
         self.send_anonymous_usage_stats = send_anonymous_usage_stats
         self.use_colors = use_colors
+
+    @classmethod
+    def from_dict(cls, cfg=None):
+        if cfg is None:
+            cfg = {}
+        send_anonymous_usage_stats = cfg.get(
+            'send_anonymous_usage_stats',
+            DEFAULT_SEND_ANONYMOUS_USAGE_STATS
+        )
+        use_colors = cfg.get(
+            'use_colors',
+            DEFAULT_USE_COLORS
+        )
+        return cls(send_anonymous_usage_stats, use_colors)
+
+    def to_dict(self):
+        return {
+            'send_anonymous_usage_stats': self.send_anonymous_usage_stats,
+            'use_colors': self.use_colors,
+        }
+
+    @classmethod
+    def from_directory(cls, directory):
+        user_cfg = None
+        profile = read_profile(directory)
+        if profile:
+            user_cfg = profile.get('config', {})
+        return cls.from_dict(user_cfg)
+
+
+class Profile(object):
+    def __init__(self, profile_name, target_name, config, threads,
+                 credentials):
+        self.profile_name = profile_name
+        self.target_name = target_name
+        if isinstance(config, dict):
+            config = UserConfig.from_dict(config)
+        self.config = config
         self.threads = threads
         self.credentials = credentials
 
@@ -482,8 +517,7 @@ class Profile(object):
         result = {
             'profile_name': self.profile_name,
             'target_name': self.target_name,
-            'send_anonymous_usage_stats': self.send_anonymous_usage_stats,
-            'use_colors': self.use_colors,
+            'config': self.config.to_dict(),
             'threads': self.threads,
             'credentials': self.credentials.incorporate(),
         }
@@ -568,21 +602,11 @@ class Profile(object):
         :raises DbtProfileError: If the profile is invalid.
         :returns Profile: The new Profile object.
         """
-        if user_cfg is None:
-            user_cfg = {}
-        send_anonymous_usage_stats = user_cfg.get(
-            'send_anonymous_usage_stats',
-            DEFAULT_SEND_ANONYMOUS_USAGE_STATS
-        )
-        use_colors = user_cfg.get(
-            'use_colors',
-            DEFAULT_USE_COLORS
-        )
+        config = UserConfig.from_dict(user_cfg)
         profile = cls(
             profile_name=profile_name,
             target_name=target_name,
-            send_anonymous_usage_stats=send_anonymous_usage_stats,
-            use_colors=use_colors,
+            config=config,
             threads=threads,
             credentials=credentials
         )
@@ -729,10 +753,8 @@ class Profile(object):
             cli_vars = dbt.utils.parse_cli_vars(getattr(args, 'vars', '{}'))
 
         threads_override = getattr(args, 'threads', None)
-        # TODO(jeb): is it even possible for this to not be set?
-        profiles_dir = getattr(args, 'profiles_dir', PROFILES_DIR)
         target_override = getattr(args, 'target', None)
-        raw_profiles = read_profile(profiles_dir)
+        raw_profiles = read_profile(args.profiles_dir)
         profile_name = cls.pick_profile_name(args.profile,
                                              project_profile_name)
 
@@ -781,9 +803,8 @@ class RuntimeConfig(Project, Profile):
                  macro_paths, data_paths, test_paths, analysis_paths,
                  docs_paths, target_path, clean_targets, log_path,
                  modules_path, quoting, models, on_run_start, on_run_end,
-                 archive, seeds, profile_name, target_name,
-                 send_anonymous_usage_stats, use_colors, threads, credentials,
-                 packages, args):
+                 archive, seeds, profile_name, target_name, config,
+                 threads, credentials, packages, args):
         # 'vars'
         self.args = args
         self.cli_vars = dbt.utils.parse_cli_vars(getattr(args, 'vars', '{}'))
@@ -817,8 +838,7 @@ class RuntimeConfig(Project, Profile):
             self,
             profile_name=profile_name,
             target_name=target_name,
-            send_anonymous_usage_stats=send_anonymous_usage_stats,
-            use_colors=use_colors,
+            config=config,
             threads=threads,
             credentials=credentials
         )
@@ -861,8 +881,7 @@ class RuntimeConfig(Project, Profile):
             packages=project.packages,
             profile_name=profile.profile_name,
             target_name=profile.target_name,
-            send_anonymous_usage_stats=profile.send_anonymous_usage_stats,
-            use_colors=profile.use_colors,
+            config=profile.config,
             threads=profile.threads,
             credentials=profile.credentials,
             args=args

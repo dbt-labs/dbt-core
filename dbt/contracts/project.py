@@ -284,6 +284,20 @@ class PackageConfig(APIObject):
     SCHEMA = PACKAGE_FILE_CONTRACT
 
 
+USER_CONFIG_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': True,
+    'properties': {
+        'send_anonymous_usage_stats': {
+            'type': 'boolean',
+        },
+        'use_colors': {
+            'type': 'boolean',
+        },
+    },
+}
+
+
 PROFILE_INFO_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
@@ -294,12 +308,7 @@ PROFILE_INFO_CONTRACT = {
         'target_name': {
             'type': 'string',
         },
-        'send_anonymous_usage_stats': {
-            'type': 'boolean',
-        },
-        'use_colors': {
-            'type': 'boolean',
-        },
+        'config': USER_CONFIG_CONTRACT,
         'threads': {
             'type': 'number',
         },
@@ -313,8 +322,7 @@ PROFILE_INFO_CONTRACT = {
         },
     },
     'required': [
-        'profile_name', 'target_name', 'send_anonymous_usage_stats',
-        'use_colors', 'threads', 'credentials'
+        'profile_name', 'target_name', 'config', 'threads', 'credentials'
     ],
 }
 
