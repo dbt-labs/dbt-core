@@ -22,6 +22,7 @@ class AdapterPlugin:
     :param dependencies: A list of adapter names that this adapter depends
         upon.
     """
+
     def __init__(
         self,
         adapter: Type[AdapterProtocol],

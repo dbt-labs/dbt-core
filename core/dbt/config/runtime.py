@@ -166,7 +166,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
         """
         result = self.to_project_config(with_packages=True)
         result.update(self.to_profile_info(serialize_credentials=True))
-        result['cli_vars'] = deepcopy(self.cli_vars)
+        result["cli_vars"] = deepcopy(self.cli_vars)
         return result
 
     def validate(self):

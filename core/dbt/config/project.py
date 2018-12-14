@@ -83,9 +83,7 @@ def _load_yaml(path):
 
 
 def package_data_from_root(project_root):
-    package_filepath = resolve_path_from_base(
-        'packages.yml', project_root
-    )
+    package_filepath = resolve_path_from_base("packages.yml", project_root)
 
     if path_exists(package_filepath):
         packages_dict = _load_yaml(package_filepath)
@@ -96,7 +94,7 @@ def package_data_from_root(project_root):
 
 def package_config_from_data(packages_data: Dict[str, Any]):
     if not packages_data:
-        packages_data = {'packages': []}
+        packages_data = {"packages": []}
 
     try:
         PackageConfig.validate(packages_data)
@@ -119,7 +117,7 @@ def _parse_versions(versions: Union[List[str], str]) -> List[VersionSpecifier]:
     Regardless, this will return a list of VersionSpecifiers
     """
     if isinstance(versions, str):
-        versions = versions.split(',')
+        versions = versions.split(",")
     return [VersionSpecifier.from_version_string(v) for v in versions]
 
 
@@ -581,11 +579,11 @@ class Project:
         return str(cfg)
 
     def __eq__(self, other):
-        if not (isinstance(other, self.__class__) and
-                isinstance(self, other.__class__)):
+        if not (isinstance(other, self.__class__) and isinstance(self, other.__class__)):
             return False
-        return self.to_project_config(with_packages=True) == \
-            other.to_project_config(with_packages=True)
+        return self.to_project_config(with_packages=True) == other.to_project_config(
+            with_packages=True
+        )
 
     def to_project_config(self, with_packages=False):
         """Return a dict representation of the config that could be written to
@@ -595,37 +593,37 @@ class Project:
             file in the root.
         :returns dict: The serialized profile.
         """
-        result = deepcopy({
-            'name': self.project_name,
-            'version': self.version,
-            'project-root': self.project_root,
-            'profile': self.profile_name,
+        result = deepcopy(
+            {
+                "name": self.project_name,
+                "version": self.version,
+                "project-root": self.project_root,
             'model-paths': self.model_paths,
-            'macro-paths': self.macro_paths,
+                "model-paths": self.model_paths,
             'seed-paths': self.seed_paths,
-            'test-paths': self.test_paths,
-            'analysis-paths': self.analysis_paths,
-            'docs-paths': self.docs_paths,
+                "seed-paths": self.seed_paths,
+                "test-paths": self.test_paths,
+                "analysis-paths": self.analysis_paths,
             'asset-paths': self.asset_paths,
-            'target-path': self.target_path,
+                "asset-paths": self.asset_paths,
             'snapshot-paths': self.snapshot_paths,
-            'clean-targets': self.clean_targets,
-            'log-path': self.log_path,
-            'quoting': self.quoting,
-            'models': self.models,
-            'on-run-start': self.on_run_start,
-            'on-run-end': self.on_run_end,
+                "snapshot-paths": self.snapshot_paths,
+                "clean-targets": self.clean_targets,
+                "log-path": self.log_path,
+                "quoting": self.quoting,
+                "models": self.models,
+                "on-run-start": self.on_run_start,
             'dispatch': self.dispatch,
-            'seeds': self.seeds,
+                "dispatch": self.dispatch,
             'snapshots': self.snapshots,
             'sources': self.sources,
             'tests': self.tests,
             'vars': self.vars.to_dict(),
-            'require-dbt-version': [
-                v.to_version_string() for v in self.dbt_version
-            ],
+                "vars": self.vars.to_dict(),
+                "require-dbt-version": [v.to_version_string() for v in self.dbt_version],
+                "config-version": self.config_version,
             'config-version': self.config_version,
-        })
+        )
         if self.query_comment:
             result['query-comment'] = \
                 self.query_comment.to_dict(omit_none=True)
@@ -662,7 +660,7 @@ class Project:
         return partial.render(renderer)
 
     def hashed_name(self):
-        return hashlib.md5(self.project_name.encode('utf-8')).hexdigest()
+        return hashlib.md5(self.project_name.encode("utf-8")).hexdigest()
 
     def get_selector(self, name: str) -> Union[SelectionSpec, bool]:
         if name not in self.selectors:

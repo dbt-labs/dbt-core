@@ -61,15 +61,15 @@ setup(
     url="https://github.com/dbt-labs/dbt-core",
     packages=find_namespace_packages(include=['dbt', 'dbt.*']),
     package_data={
-        'dbt': [
+        "dbt": [
             'include/postgres/dbt_project.yml',
             'include/postgres/sample_profiles.yml',
-            'include/postgres/macros/*.sql',
+            "include/postgres/macros/*.sql",
             'include/postgres/macros/**/*.sql',
         ]
     },
     install_requires=[
-        'dbt-core=={}'.format(package_version),
+        "dbt-core=={}".format(package_version),
         '{}~=2.8'.format(DBT_PSYCOPG2_NAME),
     ],
     zip_safe=False,
