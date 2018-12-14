@@ -475,7 +475,7 @@ class TestProfileFile(BaseFileTest):
         self.env_override['env_value_port'] = 'hello'
         self.args.target = 'with-vars'
         with mock.patch.dict(os.environ, self.env_override):
-            with self.assertRaises(dbt.config.DbtProfileError) as exc:
+            with self.assertRaises(dbt.exceptions.DbtProfileError) as exc:
                 self.from_args()
 
         self.assertIn("not of type 'integer'", str(exc.exception))
@@ -800,7 +800,7 @@ class TestProject(BaseConfigTest):
         ))}, [])
         self.assertEqual(len(unused), 0)
 
-    @mock.patch.object(dbt.config, 'logger')
+    @mock.patch.object(dbt.config.project, 'logger')
     def test__warn_for_unused_resource_config_paths_empty(self, mock_logger):
         project = dbt.config.Project.from_project_config(
             self.default_project_data
@@ -884,7 +884,7 @@ class TestProjectWithConfigs(BaseConfigTest):
         self.assertEqual(len(unused), 1)
         self.assertEqual(unused[0], ('models', 'my_test_project', 'baz'))
 
-    @mock.patch.object(dbt.config, 'logger')
+    @mock.patch.object(dbt.config.project, 'logger')
     def test__warn_for_unused_resource_config_paths(self, mock_logger):
         project = dbt.config.Project.from_project_config(
             self.default_project_data
@@ -892,7 +892,7 @@ class TestProjectWithConfigs(BaseConfigTest):
         unused = project.warn_for_unused_resource_config_paths(self.used, [])
         mock_logger.info.assert_called_once()
 
-    @mock.patch.object(dbt.config, 'logger')
+    @mock.patch.object(dbt.config.project, 'logger')
     def test__warn_for_unused_resource_config_paths_disabled(self, mock_logger):
         project = dbt.config.Project.from_project_config(
             self.default_project_data

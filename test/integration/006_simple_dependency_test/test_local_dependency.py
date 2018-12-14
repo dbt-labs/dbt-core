@@ -63,7 +63,7 @@ class TestSimpleDependencyWithSchema(TestSimpleDependency):
         return 'configured_{}_macro'.format(self.unique_schema())
 
     @attr(type='postgres')
-    @mock.patch('dbt.config.get_installed_version')
+    @mock.patch('dbt.config.project.get_installed_version')
     def test_postgres_local_dependency_out_of_date(self, mock_get):
         mock_get.return_value = dbt.semver.VersionSpecifier.from_version_string('0.0.1')
         self.run_dbt(['deps'])
@@ -72,7 +72,7 @@ class TestSimpleDependencyWithSchema(TestSimpleDependency):
             self.assertIn('--no-version-check', str(e.exception))
 
     @attr(type='postgres')
-    @mock.patch('dbt.config.get_installed_version')
+    @mock.patch('dbt.config.project.get_installed_version')
     def test_postgres_local_dependency_out_of_date_no_check(self, mock_get):
         mock_get.return_value = dbt.semver.VersionSpecifier.from_version_string('0.0.1')
         self.run_dbt(['deps'])
