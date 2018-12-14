@@ -209,11 +209,10 @@ def dependencies_for_path(config, module_path):
         try:
             yield config.new_project(full_obj)
         except dbt.exceptions.DbtProjectError as e:
-            logger.info(
-                "Error reading dependency project at {}".format(
-                    full_obj)
+            raise dbt.exceptions.DbtProjectError(
+                'Failed to read package at {}: {}'
+                .format(full_obj, e)
             )
-            logger.info(str(e))
 
 
 def dependency_projects(config):
