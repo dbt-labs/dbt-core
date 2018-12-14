@@ -530,6 +530,14 @@ def parse_args(args):
             If specified, DBT will drop incremental models and
             fully-recalculate the incremental table from the model definition.
             """)
+        sub.add_argument(
+            '--no-version-check',
+            dest='version_check',
+            action='store_false',
+            help="""
+            If set, skip ensuring dbt's version matches the one specified in
+            the dbt_project.yml file ('require-dbt-version')
+            """)
 
     seed_sub = subs.add_parser(
         'seed',

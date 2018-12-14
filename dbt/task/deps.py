@@ -152,7 +152,8 @@ class RegistryPackage(Package):
     def incorporate(self, other):
         return RegistryPackage(
             package=self.package,
-            version=self.version + other.version
+            version=[x.to_version_string() for x in
+                     self.version + other.version]
         )
 
     def _check_in_index(self):

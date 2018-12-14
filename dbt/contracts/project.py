@@ -24,7 +24,7 @@ ARCHIVE_CONFIG_CONTRACT = {
         'target_schema': {'type': 'string'},
         'tables': {
             'type': 'array',
-            'item': ARCHIVE_TABLE_CONFIG_CONTRACT,
+            'items': ARCHIVE_TABLE_CONFIG_CONTRACT,
         }
     },
     'required': ['source_schema', 'target_schema', 'tables'],
@@ -140,6 +140,11 @@ PROJECT_CONTRACT = {
             'type': 'object',
             'additionalProperties': True,
         },
+        # we validate the regex separately, using the pattern in dbt.semver
+        'require-dbt-version': {
+            'type': ['string', 'array'],
+            'items': {'type': 'string'},
+        },
     },
     'required': ['name', 'version'],
 }
@@ -174,7 +179,7 @@ GIT_PACKAGE_CONTRACT = {
         },
         'revision': {
             'type': ['string', 'array'],
-            'item': 'string',
+            'items': {'type': 'string'},
             'description': 'The git revision to use, if it is not tip',
         },
     },
@@ -220,10 +225,10 @@ REGISTRY_PACKAGE_CONTRACT = {
         },
         'version': {
             'type': ['string', 'array'],
-            'item': {
+            'items': {
                 'anyOf': [
                     VERSION_SPECIFICATION_CONTRACT,
-                    'string'
+                    {'type': 'string'}
                 ],
             },
             'description': 'The version of the package',
