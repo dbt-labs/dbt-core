@@ -28,10 +28,9 @@ import dbt.deprecations
 import dbt.profiler
 
 from dbt.utils import ExitCodes
-from dbt.config import Project, RuntimeConfig, DbtProjectError, \
-    DbtProfileError, PROFILES_DIR, read_config, \
-    send_anonymous_usage_stats, colorize_output, read_profiles
-from dbt.exceptions import DbtProfileError, DbtProfileError, RuntimeException
+from dbt.config import Project, UserConfig, RuntimeConfig, PROFILES_DIR, \
+    read_profiles
+from dbt.exceptions import DbtProjectError, DbtProfileError, RuntimeException
 
 
 PROFILES_HELP_MESSAGE = """
@@ -111,6 +110,27 @@ def handle(args):
     return res
 
 
+def initialize_config_values(parsed):
+    """Given the parsed args, initialize the dbt tracking code.
+
+    It would be nice to re-use this profile later on instead of parsing it
+    twice, but dbt's intialization is not structured in a way that makes that
+    easy.
+    """
+    try:
+        cfg = UserConfig.from_directory(parsed.profiles_dir)
+    except RuntimeException:
+        cfg = UserConfig.from_dict(None)
+
+    if cfg.send_anonymous_usage_stats:
+        dbt.tracking.initialize_tracking(parsed.profiles_dir)
+    else:
+        dbt.tracking.do_not_track()
+
+    if cfg.use_colors:
+        dbt.ui.printer.use_colors()
+
+
 def handle_and_check(args):
     parsed = parse_args(args)
     profiler_enabled = False
@@ -122,16 +142,8 @@ def handle_and_check(args):
         enable=profiler_enabled,
         outfile=parsed.record_timing_info
     ):
-        # this needs to happen after args are parsed so we can determine the
-        # correct profiles.yml file
-        profile_config = read_config(parsed.profiles_dir)
-        if not send_anonymous_usage_stats(profile_config):
-            dbt.tracking.do_not_track()
-        else:
-            dbt.tracking.initialize_tracking()
 
-        if colorize_output(profile_config):
-            dbt.ui.printer.use_colors()
+        initialize_config_values(parsed)
 
         reset_adapters()
 
@@ -599,6 +611,7 @@ def parse_args(args):
         sys.exit(1)
 
     parsed = p.parse_args(args)
+    parsed.profiles_dir = os.path.expanduser(parsed.profiles_dir)
 
     if not hasattr(parsed, 'which'):
         # the user did not provide a valid subcommand. trigger the help message
