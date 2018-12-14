@@ -575,6 +575,7 @@ def parse_args(args):
         """
     )
     sub.add_argument(
+        '-m',
         '--models',
         required=False,
         nargs='+',
