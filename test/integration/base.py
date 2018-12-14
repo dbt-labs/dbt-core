@@ -42,6 +42,7 @@ class TestArgs(object):
     def __init__(self, kwargs):
         self.which = 'run'
         self.single_threaded = False
+        self.profiles_dir = DBT_CONFIG_DIR
         self.__dict__.update(kwargs)
 
 

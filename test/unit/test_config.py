@@ -63,60 +63,6 @@ model_fqns = frozenset((
 ))
 
 
-class ConfigTest(unittest.TestCase):
-    def setUp(self):
-        self.base_dir = tempfile.mkdtemp()
-        self.profiles_path = os.path.join(self.base_dir, 'profiles.yml')
-
-    def set_up_empty_config(self):
-        with open(self.profiles_path, 'w') as f:
-            f.write(yaml.dump({}))
-
-    def set_up_config_options(self, **kwargs):
-        config = {
-            'config': kwargs
-        }
-
-        with open(self.profiles_path, 'w') as f:
-            f.write(yaml.dump(config))
-
-    def tearDown(self):
-        try:
-            shutil.rmtree(self.base_dir)
-        except:
-            pass
-
-    def test__implicit_opt_in(self):
-        self.set_up_empty_config()
-        config = dbt.config.read_config(self.base_dir)
-        self.assertTrue(dbt.config.send_anonymous_usage_stats(config))
-
-    def test__explicit_opt_out(self):
-        self.set_up_config_options(send_anonymous_usage_stats=False)
-        config = dbt.config.read_config(self.base_dir)
-        self.assertFalse(dbt.config.send_anonymous_usage_stats(config))
-
-    def test__explicit_opt_in(self):
-        self.set_up_config_options(send_anonymous_usage_stats=True)
-        config = dbt.config.read_config(self.base_dir)
-        self.assertTrue(dbt.config.send_anonymous_usage_stats(config))
-
-    def test__implicit_colors(self):
-        self.set_up_empty_config()
-        config = dbt.config.read_config(self.base_dir)
-        self.assertTrue(dbt.config.colorize_output(config))
-
-    def test__explicit_opt_out(self):
-        self.set_up_config_options(use_colors=False)
-        config = dbt.config.read_config(self.base_dir)
-        self.assertFalse(dbt.config.colorize_output(config))
-
-    def test__explicit_opt_in(self):
-        self.set_up_config_options(use_colors=True)
-        config = dbt.config.read_config(self.base_dir)
-        self.assertTrue(dbt.config.colorize_output(config))
-
-
 class Args(object):
     def __init__(self, profiles_dir=None, threads=None, profile=None, cli_vars=None):
         self.profile = profile
@@ -264,8 +210,8 @@ class TestProfile(BaseConfigTest):
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'postgres')
         self.assertEqual(profile.threads, 7)
-        self.assertTrue(profile.send_anonymous_usage_stats)
-        self.assertTrue(profile.use_colors)
+        self.assertTrue(profile.config.send_anonymous_usage_stats)
+        self.assertTrue(profile.config.use_colors)
         self.assertTrue(isinstance(profile.credentials, PostgresCredentials))
         self.assertEqual(profile.credentials.type, 'postgres')
         self.assertEqual(profile.credentials.host, 'postgres-db-hostname')
@@ -283,8 +229,8 @@ class TestProfile(BaseConfigTest):
         profile = self.from_raw_profiles()
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'postgres')
-        self.assertFalse(profile.send_anonymous_usage_stats)
-        self.assertFalse(profile.use_colors)
+        self.assertFalse(profile.config.send_anonymous_usage_stats)
+        self.assertFalse(profile.config.use_colors)
 
     def test_partial_config_override(self):
         self.default_profile_data['config'] = {
@@ -293,8 +239,8 @@ class TestProfile(BaseConfigTest):
         profile = self.from_raw_profiles()
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'postgres')
-        self.assertFalse(profile.send_anonymous_usage_stats)
-        self.assertTrue(profile.use_colors)
+        self.assertFalse(profile.config.send_anonymous_usage_stats)
+        self.assertTrue(profile.config.use_colors)
 
     def test_missing_type(self):
         del self.default_profile_data['default']['outputs']['postgres']['type']
@@ -419,8 +365,8 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'postgres')
         self.assertEqual(profile.threads, 7)
-        self.assertTrue(profile.send_anonymous_usage_stats)
-        self.assertTrue(profile.use_colors)
+        self.assertTrue(profile.config.send_anonymous_usage_stats)
+        self.assertTrue(profile.config.use_colors)
         self.assertTrue(isinstance(profile.credentials, PostgresCredentials))
         self.assertEqual(profile.credentials.type, 'postgres')
         self.assertEqual(profile.credentials.host, 'postgres-db-hostname')
@@ -444,8 +390,8 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.profile_name, 'other')
         self.assertEqual(profile.target_name, 'other-postgres')
         self.assertEqual(profile.threads, 3)
-        self.assertTrue(profile.send_anonymous_usage_stats)
-        self.assertTrue(profile.use_colors)
+        self.assertTrue(profile.config.send_anonymous_usage_stats)
+        self.assertTrue(profile.config.use_colors)
         self.assertTrue(isinstance(profile.credentials, PostgresCredentials))
         self.assertEqual(profile.credentials.type, 'postgres')
         self.assertEqual(profile.credentials.host, 'other-postgres-db-hostname')
@@ -466,8 +412,8 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'redshift')
         self.assertEqual(profile.threads, 1)
-        self.assertTrue(profile.send_anonymous_usage_stats)
-        self.assertTrue(profile.use_colors)
+        self.assertTrue(profile.config.send_anonymous_usage_stats)
+        self.assertTrue(profile.config.use_colors)
         self.assertTrue(isinstance(profile.credentials, RedshiftCredentials))
         self.assertEqual(profile.credentials.type, 'redshift')
         self.assertEqual(profile.credentials.host, 'redshift-db-hostname')
@@ -489,8 +435,8 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'with-vars')
         self.assertEqual(profile.threads, 1)
-        self.assertTrue(profile.send_anonymous_usage_stats)
-        self.assertTrue(profile.use_colors)
+        self.assertTrue(profile.config.send_anonymous_usage_stats)
+        self.assertTrue(profile.config.use_colors)
         self.assertEqual(profile.credentials.type, 'postgres')
         self.assertEqual(profile.credentials.host, 'env-postgres-host')
         self.assertEqual(profile.credentials.port, 6543)
@@ -511,8 +457,8 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'with-vars')
         self.assertEqual(profile.threads, 1)
-        self.assertTrue(profile.send_anonymous_usage_stats)
-        self.assertTrue(profile.use_colors)
+        self.assertTrue(profile.config.send_anonymous_usage_stats)
+        self.assertTrue(profile.config.use_colors)
         self.assertEqual(profile.credentials.type, 'postgres')
         self.assertEqual(profile.credentials.host, 'env-postgres-host')
         self.assertEqual(profile.credentials.port, 6543)
@@ -542,8 +488,8 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'cli-and-env-vars')
         self.assertEqual(profile.threads, 1)
-        self.assertTrue(profile.send_anonymous_usage_stats)
-        self.assertTrue(profile.use_colors)
+        self.assertTrue(profile.config.send_anonymous_usage_stats)
+        self.assertTrue(profile.config.use_colors)
         self.assertEqual(profile.credentials.type, 'postgres')
         self.assertEqual(profile.credentials.host, 'cli-postgres-host')
         self.assertEqual(profile.credentials.port, 6543)
@@ -1032,7 +978,7 @@ class TestRuntimeConfig(BaseConfigTest):
         project = self.get_project()
         profile = self.get_profile()
         # invalid - must be boolean
-        profile.use_colors = None
+        profile.config.use_colors = None
         with self.assertRaises(dbt.exceptions.DbtProjectError):
             dbt.config.RuntimeConfig.from_parts(project, profile, {})
 
