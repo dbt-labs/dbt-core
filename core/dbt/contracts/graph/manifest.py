@@ -256,13 +256,6 @@ class Manifest(APIObject):
                 return doc
         return None
 
-    def find_operation_by_name(self, name, package):
-        """Find a macro in the graph by its name and package name, or None for
-        any package.
-        """
-        return self._find_by_name(name, package, 'macros',
-                                  [NodeType.Operation])
-
     def find_macro_by_name(self, name, package):
         """Find a macro in the graph by its name and package name, or None for
         any package.

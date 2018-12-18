@@ -405,7 +405,6 @@ PARSED_MACRO_CONTRACT = deep_merge(
             'resource_type': {
                 'enum': [
                     NodeType.Macro,
-                    NodeType.Operation,
                 ],
             },
             'unique_id': {

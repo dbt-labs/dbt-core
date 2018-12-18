@@ -393,22 +393,6 @@ def generate_base(model, model_dict, config, manifest, source_config,
         "try_or_compiler_error": try_or_compiler_error(model)
     })
 
-    # Operations do not represent database relations, so there should be no
-    # 'this' variable in the context for operations. The Operation branch
-    # below should be removed in a future release. The fake relation below
-    # mirrors the historical implementation, without causing errors around
-    # the missing 'alias' attribute for operations
-    #
-    # https://github.com/fishtown-analytics/dbt/issues/878
-    if model.resource_type == NodeType.Operation:
-        this = db_wrapper.adapter.Relation.create(
-                schema=config.credentials.schema,
-                identifier=model.name
-        )
-    else:
-        this = get_this_relation(db_wrapper, config, model_dict)
-
-    context["this"] = this
     return context
 
 
@@ -431,9 +415,13 @@ def modify_generated_context(context, model, model_dict, config, manifest):
     return context
 
 
-def generate_operation_macro(model, config, manifest, provider):
-    """This is an ugly hack to support the fact that the `docs generate`
-    operation ends up in here, and macros are not nodes.
+def generate_execute_macro(model, config, manifest, provider):
+    """Internally, macros can be executed like nodes, with some restrictions:
+
+     - they don't have have all values available that nodes do:
+        - 'this', 'pre_hooks', 'post_hooks', and 'sql' are missing
+        - 'schema' does not use any 'model' information
+     - they can't be configured with config() directives
     """
     model_dict = model.serialize()
     context = generate_base(model, model_dict, config, manifest,
@@ -447,6 +435,10 @@ def generate_model(model, config, manifest, source_config, provider):
     model_dict = model.to_dict()
     context = generate_base(model, model_dict, config, manifest,
                             source_config, provider)
+    # operations (hooks) don't get a 'this'
+    if model.resource_type != NodeType.Operation:
+        this = get_this_relation(context['adapter'], config, model_dict)
+        context['this'] = this
     # overwrite schema if we have it, and hooks + sql
     context.update({
         'schema': model.get('schema', context['schema']),
@@ -467,7 +459,7 @@ def generate(model, config, manifest, source_config=None, provider=None):
         dbt.context.runtime.generate
     """
     if isinstance(model, ParsedMacro):
-        return generate_operation_macro(model, config, manifest, provider)
+        return generate_execute_macro(model, config, manifest, provider)
     else:
         return generate_model(model, config, manifest, source_config,
                               provider)

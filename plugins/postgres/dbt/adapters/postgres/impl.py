@@ -11,7 +11,7 @@ import agate
 from dbt.logger import GLOBAL_LOGGER as logger
 
 
-GET_RELATIONS_OPERATION_NAME = 'get_relations_data'
+GET_RELATIONS_MACRO_NAME = 'get_relations'
 
 
 class PostgresAdapter(SQLAdapter):
@@ -24,9 +24,9 @@ class PostgresAdapter(SQLAdapter):
     def _link_cached_relations(self, manifest):
         schemas = manifest.get_used_schemas()
         try:
-            table = self.run_operation(manifest, GET_RELATIONS_OPERATION_NAME)
+            table = self.execute_macro(manifest, GET_RELATIONS_MACRO_NAME)
         finally:
-            self.release_connection(GET_RELATIONS_OPERATION_NAME)
+            self.release_connection(GET_RELATIONS_MACRO_NAME)
         table = self._relations_filter_table(table, schemas)
 
         for (refed_schema, refed_name, dep_schema, dep_name) in table:
