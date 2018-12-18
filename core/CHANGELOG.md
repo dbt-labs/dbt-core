@@ -1,3 +1,12 @@
+## dbt dev/stephen-girard (0.13.0? - To be released)
+
+## Overview
+
+This release makes dbt and its adapters into a core-and-plugin architecture.
+
+### Breaking Changes
+- '{{this}}' is no longer respected in hooks [#1176](https://github.com/fishtown-analytics/dbt/pull/1176), implementing [#878](https://github.com/fishtown-analytics/dbt/issues/878)
+
 ## dbt 0.12.1 - (November 15, 2018)
 
 ### Overview
