@@ -174,11 +174,11 @@ class BigQueryConnectionManager(BaseConnectionManager):
         rows = [dict(row.items()) for row in resp]
         return dbt.clients.agate_helper.table_from_data(rows, column_names)
 
-    def raw_execute(self, sql, model_name=None, fetch=False, **kwargs):
-        conn = self.get(model_name)
+    def raw_execute(self, sql, name=None, fetch=False):
+        conn = self.get(name)
         client = conn.handle
 
-        logger.debug('On %s: %s', model_name, sql)
+        logger.debug('On %s: %s', name, sql)
 
         job_config = google.cloud.bigquery.QueryJobConfig()
         job_config.use_legacy_sql = False
@@ -190,8 +190,9 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         return query_job, iterator
 
-    def execute(self, sql, model_name=None, fetch=None, **kwargs):
-        _, iterator = self.raw_execute(sql, model_name, fetch, **kwargs)
+    def execute(self, sql, name=None, auto_begin=False, fetch=None):
+        # auto_begin is ignored on bigquery, and only included for consistency
+        _, iterator = self.raw_execute(sql, name=name, fetch=fetch)
 
         if fetch:
             res = self.get_table_from_response(iterator)

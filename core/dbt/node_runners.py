@@ -493,7 +493,7 @@ class TestRunner(CompileRunner):
     def execute_test(self, test):
         res, table = self.adapter.execute(
             test.wrapped_sql,
-            test.name,
+            model_name=test.name,
             auto_begin=True,
             fetch=True)
 
