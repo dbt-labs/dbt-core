@@ -236,6 +236,7 @@ def invoke_dbt(parsed):
     cfg = None
 
     log_cache_events(getattr(parsed, 'log_cache_events', False))
+    logger.info("Running with dbt{}".format(dbt.version.installed))
 
     try:
         if parsed.which in {'deps', 'clean'}:
