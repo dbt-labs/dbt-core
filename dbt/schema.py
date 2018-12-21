@@ -43,7 +43,7 @@ class Column(object):
             return self.dtype
 
     def is_string(self):
-        return self.dtype.lower() in ['text', 'character varying']
+        return self.dtype.lower() in ['text', 'character varying', 'character']
 
     def is_numeric(self):
         return self.dtype.lower() in ['numeric', 'number']

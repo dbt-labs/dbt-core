@@ -2,6 +2,17 @@ import unittest
 
 import dbt.schema
 
+class TestStringType(unittest.TestCase):
+
+    def test__character_type(self):
+        col = dbt.schema.Column(
+            'fieldname',
+            'character',
+            char_size=10
+        )
+
+        self.assertEqual(col.data_type, 'character varying(10)')
+
 
 class TestNumericType(unittest.TestCase):
 
