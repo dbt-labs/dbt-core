@@ -237,7 +237,8 @@ class BaseRelation(FakeAPIObject, Hashable):
             schema=node.schema,
             identifier=node.alias,
             quote_policy=quote_policy,
-            **kwargs)
+            **kwargs,
+        )
 
     @classmethod
     def create_from(

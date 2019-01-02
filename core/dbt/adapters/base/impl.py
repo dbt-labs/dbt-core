@@ -60,17 +60,17 @@ def _catalog_filter_schemas(manifest: Manifest) -> Callable[[agate.Row], bool]:
     """Return a function that takes a row and decides if the row should be
     included in the catalog output.
     """
-    schemas = frozenset((d.lower(), s.lower())
-                        for d, s in manifest.get_used_schemas())
+    schemas = frozenset((d.lower(), s.lower()) for d, s in manifest.get_used_schemas())
 
     def test(row: agate.Row) -> bool:
-        table_database = _expect_row_value('table_database', row)
+        table_database = _expect_row_value("table_database", row)
         table_schema = _expect_row_value('table_schema', row)
         # the schema may be present but None, which is not an error and should
         # be filtered out
         if table_schema is None:
             return False
         return (table_database.lower(), table_schema.lower()) in schemas
+
     return test
 
 
@@ -555,17 +555,19 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         if not isinstance(from_relation, self.Relation):
             invalid_type_error(
-                method_name='get_missing_columns',
-                arg_name='from_relation',
+                method_name="get_missing_columns",
+                arg_name="from_relation",
                 got_value=from_relation,
-                expected_type=self.Relation)
+                expected_type=self.Relation,
+            )
 
         if not isinstance(to_relation, self.Relation):
             invalid_type_error(
-                method_name='get_missing_columns',
-                arg_name='to_relation',
+                method_name="get_missing_columns",
+                arg_name="to_relation",
                 got_value=to_relation,
-                expected_type=self.Relation)
+                expected_type=self.Relation,
+            )
 
         from_columns = {
             col.name: col for col in
@@ -636,10 +638,11 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         if not isinstance(to_relation, self.Relation):
             invalid_type_error(
-                method_name='expand_target_column_types',
-                arg_name='to_relation',
+                method_name="expand_target_column_types",
+                arg_name="to_relation",
                 got_value=to_relation,
-                expected_type=self.Relation)
+                expected_type=self.Relation,
+            )
 
         self.expand_column_types(from_relation, to_relation)
 
@@ -676,11 +679,13 @@ class BaseAdapter(metaclass=AdapterMeta):
         if database is not None and quoting['database'] is False:
             database = database.lower()
 
-        return filter_null_values({
-            'database': database,
-            'identifier': identifier,
-            'schema': schema,
-        })
+        return filter_null_values(
+            {
+                "database": database,
+                "identifier": identifier,
+                "schema": schema,
+            }
+        )
 
     def _make_match(
         self,
@@ -704,14 +709,13 @@ class BaseAdapter(metaclass=AdapterMeta):
     def get_relation(self, database: str, schema: str, identifier: str) -> Optional[BaseRelation]:
         relations_list = self.list_relations(database, schema)
 
-        matches = self._make_match(relations_list, database, schema,
-                                   identifier)
+        matches = self._make_match(relations_list, database, schema, identifier)
 
         if len(matches) > 1:
             kwargs = {
-                'identifier': identifier,
-                'schema': schema,
-                'database': database,
+                "identifier": identifier,
+                "schema": schema,
+                "database": database,
             }
             get_relation_returned_multiple_results(
                 kwargs, matches

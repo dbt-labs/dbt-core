@@ -488,18 +488,27 @@ def disallow_secret_env_var(env_var_name) -> NoReturn:
     raise_parsing_error(msg.format(env_var_name=env_var_name))
 
 
-def invalid_type_error(method_name, arg_name, got_value, expected_type,
+def invalid_type_error(
                        version='0.13.0') -> NoReturn:
     """Raise a CompilationException when an adapter method available to macros
     has changed.
     """
     got_type = type(got_value)
-    msg = ("As of {version}, 'adapter.{method_name}' expects argument "
-           "'{arg_name}' to be of type '{expected_type}', instead got "
-           "{got_value} ({got_type})")
-    raise_compiler_error(msg.format(version=version, method_name=method_name,
-                         arg_name=arg_name, expected_type=expected_type,
-                         got_value=got_value, got_type=got_type))
+    msg = (
+        "As of {version}, 'adapter.{method_name}' expects argument "
+        "'{arg_name}' to be of type '{expected_type}', instead got "
+        "{got_value} ({got_type})"
+    )
+    raise_compiler_error(
+        msg.format(
+            version=version,
+            method_name=method_name,
+            arg_name=arg_name,
+            expected_type=expected_type,
+            got_value=got_value,
+            got_type=got_type,
+        )
+    )
 
 
 def invalid_bool_error(got_value, macro_name) -> NoReturn:

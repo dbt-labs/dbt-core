@@ -96,9 +96,7 @@ class PostgresAdapter(SQLAdapter):
 
         for (dep_schema, dep_name, refed_schema, refed_name) in table:
             dependent = self.Relation.create(
-                database=database,
-                schema=dep_schema,
-                identifier=dep_name
+                database=database, schema=dep_schema, identifier=dep_name
             )
             referenced = self.Relation.create(
                 database=database,

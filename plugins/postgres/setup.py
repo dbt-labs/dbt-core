@@ -62,7 +62,7 @@ setup(
     packages=find_namespace_packages(include=['dbt', 'dbt.*']),
     package_data={
         "dbt": [
-            'include/postgres/dbt_project.yml',
+            "include/postgres/dbt_project.yml",
             'include/postgres/sample_profiles.yml',
             "include/postgres/macros/*.sql",
             'include/postgres/macros/**/*.sql',
