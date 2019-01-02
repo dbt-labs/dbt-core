@@ -1,17 +1,15 @@
 
-
--- hack b/c bq model names are fully qualified, which doesn't work
--- with query_for_existing
 {% macro test_was_materialized(model, name, type) %}
 
     {#-- don't run this query in the parsing step #}
     {%- if model -%}
-        {%- set existing_tables = adapter.query_for_existing(schema) -%}
+        {%- set table = adapter.get_relation(database=model.database, schema=model.schema,
+                                             identifier=model.name) -%}
     {%- else -%}
-        {%- set existing_tables = {} -%}
+        {%- set table = {} -%}
     {%- endif -%}
 
-    {% if name in existing_tables and existing_tables[name] == type %}
+    {% if table and table.type == type %}
         select 0 as success
     {% else %}
         select 1 as error

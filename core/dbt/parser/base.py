@@ -26,6 +26,10 @@ class BaseParser(object):
         return getattr(self.root_project_config.credentials, 'schema',
                        'public')
 
+    @property
+    def default_database(self):
+        return getattr(self.root_project_config.credentials, 'database', 'dbt')
+
     def load_and_parse(self, *args, **kwargs):
         raise dbt.exceptions.NotImplementedException("Not implemented")
 
@@ -146,6 +150,7 @@ class MacrosKnownParser(BaseParser):
 
         # Set this temporarily so get_rendered() has access to a schema & alias
         node['schema'] = self.default_schema
+        node['database'] = self.default_database
         default_alias = node.get('name')
         node['alias'] = default_alias
 
@@ -176,6 +181,10 @@ class MacrosKnownParser(BaseParser):
         get_schema = self.get_schema_func()
         parsed_node.schema = get_schema(schema_override).strip()
         parsed_node.alias = config.config.get('alias', default_alias)
+        # no fancy macro for database (for now?)
+        parsed_node.database = config.config.get(
+            'database', self.default_database
+        ).strip()
 
         # Set tags on node provided in config blocks
         model_tags = config.config.get('tags', [])

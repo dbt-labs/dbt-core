@@ -147,7 +147,7 @@ class SQLAdapter(BaseAdapter):
         if dbt.flags.USE_CACHE:
             self.cache.rename(from_relation, to_relation)
         sql = 'alter table {} rename to {}'.format(
-            from_relation, to_relation.include(schema=False))
+            from_relation, to_relation.include(database=False, schema=False))
 
         connection, cursor = self.add_query(sql, model_name)
 
@@ -188,22 +188,35 @@ class SQLAdapter(BaseAdapter):
 
         return columns
 
-    def create_schema(self, schema, model_name=None):
-        logger.debug('Creating schema "%s".', schema)
+    def _create_schema_sql(self, database, schema):
         schema = self.quote_as_configured(schema, 'schema')
+        database = self.quote_as_configured(database, 'database')
+        return 'create schema if not exists {database}.{schema}'.format(
+            database=database, schema=schema
+        )
 
-        sql = 'create schema if not exists {schema}'.format(schema=schema)
+    def _drop_schema_sql(self, database, schema):
+        schema = self.quote_as_configured(schema, 'schema')
+        database = self.quote_as_configured(database, 'database')
+        return 'drop schema if exists {database}.{schema} cascade'.format(
+            database=database, schema=schema
+        )
+
+    def create_schema(self, database, schema, model_name=None):
+        logger.debug('Creating schema "%s".', schema)
+
+        sql = self._create_schema_sql(database, schema)
         res = self.add_query(sql, model_name)
 
         self.commit_if_has_connection(model_name)
 
         return res
 
-    def drop_schema(self, schema, model_name=None):
+    def drop_schema(self, database, schema, model_name=None):
         logger.debug('Dropping schema "%s".', schema)
-        schema = self.quote_as_configured(schema, 'schema')
 
-        sql = 'drop schema if exists {schema} cascade'.format(schema=schema)
+        sql = self._drop_schema_sql(database, schema)
+
         return self.add_query(sql, model_name)
 
     def quote(cls, identifier):

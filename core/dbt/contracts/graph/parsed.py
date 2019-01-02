@@ -151,10 +151,16 @@ PARSED_NODE_CONTRACT = deep_merge(
                     'type': 'string',
                 }
             },
-            'schema': {
+            'database': {
                 'type': 'string',
                 'description': (
                     'The actual database string that this will build into.'
+                )
+            },
+            'schema': {
+                'type': 'string',
+                'description': (
+                    'The actual schema string that this will build into.'
                 )
             },
             'alias': {
@@ -254,8 +260,8 @@ PARSED_NODE_CONTRACT = deep_merge(
             },
         },
         'required': UNPARSED_NODE_CONTRACT['required'] + [
-            'unique_id', 'fqn', 'schema', 'refs', 'depends_on', 'empty',
-            'config', 'tags', 'alias', 'columns', 'description'
+            'unique_id', 'fqn', 'database', 'schema', 'refs', 'depends_on',
+            'empty', 'config', 'tags', 'alias', 'columns', 'description'
         ]
     }
 )
@@ -318,6 +324,14 @@ class ParsedNode(APIObject):
     @build_path.setter
     def build_path(self, value):
         self._contents['build_path'] = value
+
+    @property
+    def database(self):
+        return self._contents['database']
+
+    @database.setter
+    def database(self, value):
+        self._contents['database'] = value
 
     @property
     def schema(self):

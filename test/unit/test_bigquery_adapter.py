@@ -140,7 +140,7 @@ class TestBigQueryRelation(unittest.TestCase):
         kwargs = {
             'type': None,
             'path': {
-                'project': 'test-project',
+                'database': 'test-project',
                 'schema': 'test_schema',
                 'identifier': 'my_view'
             },
@@ -155,7 +155,7 @@ class TestBigQueryRelation(unittest.TestCase):
         kwargs = {
             'type': 'view',
             'path': {
-                'project': 'test-project',
+                'database': 'test-project',
                 'schema': 'test_schema',
                 'identifier': 'my_view'
             },
@@ -171,7 +171,7 @@ class TestBigQueryRelation(unittest.TestCase):
         kwargs = {
             'type': 'table',
             'path': {
-                'project': 'test-project',
+                'database': 'test-project',
                 'schema': 'test_schema',
                 'identifier': 'generic_table'
             },
@@ -187,7 +187,7 @@ class TestBigQueryRelation(unittest.TestCase):
         kwargs = {
             'type': 'external',
             'path': {
-                'project': 'test-project',
+                'database': 'test-project',
                 'schema': 'test_schema',
                 'identifier': 'sheet'
             },
@@ -203,7 +203,7 @@ class TestBigQueryRelation(unittest.TestCase):
         kwargs = {
             'type': 'invalid-type',
             'path': {
-                'project': 'test-project',
+                'database': 'test-project',
                 'schema': 'test_schema',
                 'identifier': 'my_invalid_id'
             },

@@ -45,7 +45,7 @@ def docs(unparsed, docrefs, column_name=None):
     return do_docs
 
 
-class Config:
+class Config(object):
     def __init__(self, model, source_config):
         self.model = model
         self.source_config = source_config

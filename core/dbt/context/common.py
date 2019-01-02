@@ -346,14 +346,13 @@ def generate_base(model, model_dict, config, manifest, source_config,
     target_name = config.target_name
     target = config.to_profile_info()
     del target['credentials']
-    target.update(config.credentials.serialize())
+    target.update(config.credentials.serialize(with_aliases=True))
     target['type'] = config.credentials.type
     target.pop('pass', None)
     target['name'] = target_name
     adapter = get_adapter(config)
 
     context = {'env': target}
-    schema = config.credentials.schema
 
     pre_hooks = None
     post_hooks = None
@@ -368,6 +367,7 @@ def generate_base(model, model_dict, config, manifest, source_config,
         },
         "column": adapter.Column,
         "config": provider.Config(model_dict, source_config),
+        "database": config.credentials.database,
         "env_var": env_var,
         "exceptions": dbt.exceptions,
         "execute": provider.execute,
@@ -384,7 +384,7 @@ def generate_base(model, model_dict, config, manifest, source_config,
         "pre_hooks": pre_hooks,
         "ref": provider.ref(db_wrapper, model, config, manifest),
         "return": _return,
-        "schema": schema,
+        "schema": config.credentials.schema,
         "sql": None,
         "sql_now": adapter.date_function(),
         "fromjson": fromjson,
@@ -439,9 +439,10 @@ def generate_model(model, config, manifest, source_config, provider):
     if model.resource_type != NodeType.Operation:
         this = get_this_relation(context['adapter'], config, model_dict)
         context['this'] = this
-    # overwrite schema if we have it, and hooks + sql
+    # overwrite schema/database if we have them, and hooks + sql
     context.update({
         'schema': model.get('schema', context['schema']),
+        'database': model.get('database', context['database']),
         'pre_hooks': model.config.get('pre-hook'),
         'post_hooks': model.config.get('post-hook'),
         'sql': model.get('injected_sql'),

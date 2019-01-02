@@ -9,11 +9,18 @@ from dbt.api import APIObject
 from dbt.compat import abstractclassmethod
 from dbt.contracts.connection import Connection
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.utils import translate_aliases
 
 
 class Credentials(APIObject):
     """Common base class for credentials. This is not valid to instantiate"""
     SCHEMA = NotImplemented
+    # map credential aliases to their canonical names.
+    ALIASES = {}
+
+    def __init__(self, **kwargs):
+        renamed = self.translate_aliases(kwargs)
+        super(Credentials, self).__init__(**renamed)
 
     @property
     def type(self):
@@ -33,6 +40,26 @@ class Credentials(APIObject):
         'dbt debug' output. This is specific to each adapter.
         """
         raise NotImplementedError
+
+    def incorporate(self, **kwargs):
+        # implementation note: we have to do this here, or
+        # incorporate(alias_name=...) will result in duplicate keys in the
+        # merged dict that APIObject.incorporate() creates.
+        renamed = self.translate_aliases(kwargs)
+        return super(Credentials, self).incorporate(**renamed)
+
+    def serialize(self, with_aliases=False):
+        serialized = super(Credentials, self).serialize()
+        if with_aliases:
+            serialized.update({
+                new_name: serialized[canonical_name]
+                for new_name, canonical_name in self.ALIASES.items()
+            })
+        return serialized
+
+    @classmethod
+    def translate_aliases(cls, kwargs):
+        return translate_aliases(kwargs, cls.ALIASES)
 
 
 @six.add_metaclass(abc.ABCMeta)

@@ -17,6 +17,7 @@ setup(
     packages=find_packages(),
     package_data={
         'dbt': [
+            'include/postgres/dbt_project.yml',
             'include/postgres/macros/*.sql',
         ]
     },

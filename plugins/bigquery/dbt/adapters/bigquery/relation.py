@@ -11,35 +11,15 @@ class BigQueryRelation(BaseRelation):
         },
         'quote_character': '`',
         'quote_policy': {
-            'project': True,
+            'database': True,
             'schema': True,
             'identifier': True
         },
         'include_policy': {
-            'project': True,
+            'database': True,
             'schema': True,
             'identifier': True
         }
-    }
-
-    PATH_SCHEMA = {
-        'type': 'object',
-        'properties': {
-            'project': {'type': ['string', 'null']},
-            'schema': {'type': ['string', 'null']},
-            'identifier': {'type': 'string'},
-        },
-        'required': ['project', 'schema', 'identifier'],
-    }
-
-    POLICY_SCHEMA = {
-        'type': 'object',
-        'properties': {
-            'project': {'type': 'boolean'},
-            'schema': {'type': 'boolean'},
-            'identifier': {'type': 'boolean'},
-        },
-        'required': ['project', 'schema', 'identifier'],
     }
 
     SCHEMA = {
@@ -57,20 +37,18 @@ class BigQueryRelation(BaseRelation):
             'type': {
                 'enum': BaseRelation.RelationTypes + [External, None],
             },
-            'path': PATH_SCHEMA,
-            'include_policy': POLICY_SCHEMA,
-            'quote_policy': POLICY_SCHEMA,
+            'path': BaseRelation.PATH_SCHEMA,
+            'include_policy': BaseRelation.POLICY_SCHEMA,
+            'quote_policy': BaseRelation.POLICY_SCHEMA,
             'quote_character': {'type': 'string'},
         },
         'required': ['metadata', 'type', 'path', 'include_policy',
                      'quote_policy', 'quote_character']
     }
 
-    PATH_ELEMENTS = ['project', 'schema', 'identifier']
-
-    def matches(self, project=None, schema=None, identifier=None):
+    def matches(self, database=None, schema=None, identifier=None):
         search = filter_null_values({
-            'project': project,
+            'database': database,
             'schema': schema,
             'identifier': identifier
         })
@@ -86,15 +64,7 @@ class BigQueryRelation(BaseRelation):
         return True
 
     @classmethod
-    def _create_from_node(cls, config, node, **kwargs):
-        return cls.create(
-            project=config.credentials.project,
-            schema=node.get('schema'),
-            identifier=node.get('alias'),
-            **kwargs)
-
-    @classmethod
-    def create(cls, project=None, schema=None,
+    def create(cls, database=None, schema=None,
                identifier=None, table_name=None,
                type=None, **kwargs):
         if table_name is None:
@@ -102,34 +72,29 @@ class BigQueryRelation(BaseRelation):
 
         return cls(type=type,
                    path={
-                       'project': project,
+                       'database': database,
                        'schema': schema,
                        'identifier': identifier
                    },
                    table_name=table_name,
                    **kwargs)
 
-    def quote(self, project=None, schema=None, identifier=None):
+    def quote(self, database=None, schema=None, identifier=None):
         policy = filter_null_values({
-            'project': project,
+            'database': database,
             'schema': schema,
             'identifier': identifier
         })
 
         return self.incorporate(quote_policy=policy)
 
-    def include(self, project=None, schema=None, identifier=None):
-        policy = filter_null_values({
-            'project': project,
-            'schema': schema,
-            'identifier': identifier
-        })
-
-        return self.incorporate(include_policy=policy)
+    @property
+    def database(self):
+        return self.path.get('database')
 
     @property
     def project(self):
-        return self.path.get('project')
+        return self.path.get('database')
 
     @property
     def schema(self):

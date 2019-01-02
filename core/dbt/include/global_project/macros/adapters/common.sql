@@ -28,8 +28,8 @@
   {%- endif -%}
 {%- endmacro %}
 
-{% macro create_schema(schema_name) %}
-  {{ adapter.create_schema(schema_name) }}
+{% macro create_schema(database_name, schema_name) %}
+  {{ adapter.create_schema(database_name, schema_name) }}
 {% endmacro %}
 
 {% macro create_table_as(temporary, relation, sql) -%}
@@ -38,7 +38,7 @@
 
 {% macro default__create_table_as(temporary, relation, sql) -%}
   create {% if temporary: -%}temporary{%- endif %} table
-    {{ relation.include(schema=(not temporary)) }}
+    {{ relation.include(database=(not temporary), schema=(not temporary)) }}
   as (
     {{ sql }}
   );

@@ -14,7 +14,7 @@ class SnowflakeRelation(BaseRelation):
             'identifier': False,
         },
         'include_policy': {
-            'database': False,
+            'database': True,
             'schema': True,
             'identifier': True,
         }
@@ -47,7 +47,7 @@ class SnowflakeRelation(BaseRelation):
     @classmethod
     def _create_from_node(cls, config, node, **kwargs):
         return cls.create(
-            database=config.credentials.database,
+            database=node.get('database'),
             schema=node.get('schema'),
             identifier=node.get('alias'),
             **kwargs)

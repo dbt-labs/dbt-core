@@ -28,8 +28,9 @@ class TestExternalReference(DBTIntegrationTest):
     def tearDown(self):
         # This has to happen before we drop the external schema, because
         # otherwise postgres hangs forever.
-        self._drop_schema()
-        self.adapter.drop_schema(self.external_schema, '__test')
+        self._drop_schemas()
+        self.adapter.drop_schema(self.default_database, self.external_schema,
+                                 model_name='__test')
         super(TestExternalReference, self).tearDown()
 
     @use_profile('postgres')
@@ -52,8 +53,9 @@ class TestExternalDependency(DBTIntegrationTest):
     def tearDown(self):
         # This has to happen before we drop the external schema, because
         # otherwise postgres hangs forever.
-        self._drop_schema()
-        self.adapter.drop_schema(self.external_schema, '__test')
+        self._drop_schemas()
+        self.adapter.drop_schema(self.default_database, self.external_schema,
+                                 model_name='__test')
         super(TestExternalDependency, self).tearDown()
 
     @use_profile('postgres')

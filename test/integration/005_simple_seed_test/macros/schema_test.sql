@@ -1,7 +1,7 @@
 
 {% macro test_column_type(model, field, type) %}
 
-    {% set cols = adapter.get_columns_in_table(model.schema, model.name) %}
+    {% set cols = adapter.get_columns_in_relation(model) %}
 
     {% set col_types = {} %}
     {% for col in cols %}

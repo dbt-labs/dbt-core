@@ -21,7 +21,7 @@ REDSHIFT_CREDENTIALS_CONTRACT = {
                 'database: use user/pass creds; iam: use temporary creds'
             ),
         },
-        'dbname': {
+        'database': {
             'type': 'string',
         },
         'host': {
@@ -30,7 +30,7 @@ REDSHIFT_CREDENTIALS_CONTRACT = {
         'user': {
             'type': 'string',
         },
-        'pass': {
+        'password': {
             'type': 'string',
         },
         'port': {
@@ -58,7 +58,7 @@ REDSHIFT_CREDENTIALS_CONTRACT = {
         'keepalives_idle': {
             'type': 'integer',
         },
-        'required': ['dbname', 'host', 'user', 'port', 'schema']
+        'required': ['database', 'host', 'user', 'port', 'schema']
     }
 }
 
@@ -75,7 +75,7 @@ class RedshiftCredentials(PostgresCredentials):
         return 'redshift'
 
     def _connection_keys(self):
-        return ('host', 'port', 'user', 'dbname', 'schema', 'method')
+        return ('host', 'port', 'user', 'database', 'schema', 'method')
 
 
 class RedshiftConnectionManager(PostgresConnectionManager):
@@ -141,7 +141,7 @@ class RedshiftConnectionManager(PostgresConnectionManager):
 
         cluster_creds = cls.fetch_cluster_credentials(
             credentials.user,
-            credentials.dbname,
+            credentials.database,
             credentials.cluster_id,
             iam_duration_s,
         )

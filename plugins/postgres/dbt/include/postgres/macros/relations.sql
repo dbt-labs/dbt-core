@@ -4,7 +4,8 @@
     -- in pg_depend, objid is the dependent, refobjid is the referenced object
     -- "a pg_depend entry indicates that the referenced object cannot be dropped without also dropping the dependent object."
     -- #}
-with relation as (
+    -- {# this only works with the current database #}
+    with relation as (
         select
             pg_rewrite.ev_class as class,
             pg_rewrite.oid as id

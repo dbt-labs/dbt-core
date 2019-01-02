@@ -38,7 +38,7 @@
           validator=validation.any[list, basestring]) -%}
 
   create {% if temporary -%}temporary{%- endif %} table
-    {{ relation.include(schema=(not temporary)) }}
+    {{ relation.include(database=(not temporary), schema=(not temporary)) }}
     {{ dist(_dist) }}
     {{ sort(_sort_type, _sort) }}
   as (

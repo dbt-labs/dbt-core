@@ -18,6 +18,7 @@ setup(
     packages=find_packages(),
     package_data={
         'dbt': [
+            'include/redshift/dbt_project.yml',
             'include/redshift/macros/*.sql',
         ]
     },

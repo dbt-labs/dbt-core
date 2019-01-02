@@ -1,8 +1,13 @@
 
 {% macro redshift__get_base_catalog() -%}
   {%- call statement('base_catalog', fetch_result=True) -%}
+    {% if (databases | length) != 1 %}
+        exceptions.raise_compiler_error('postgres get_catalog requires exactly one database')
+    {% endif %}
+    {% set database = databases[0] %}
     with late_binding as (
       select
+        '{{ database }}'::varchar as table_database,
         table_schema,
         table_name,
         'LATE BINDING VIEW'::varchar as table_type,
@@ -19,20 +24,10 @@
         order by "column_index"
     ),
 
-    tables as (
-
-      select
-          table_schema,
-          table_name,
-          table_type
-
-      from information_schema.tables
-
-    ),
-
     table_owners as (
 
         select
+            '{{ database }}'::varchar as table_database,
             schemaname as table_schema,
             tablename as table_name,
             tableowner as table_owner
@@ -42,6 +37,7 @@
         union all
 
         select
+            '{{ database }}'::varchar as table_database,
             schemaname as table_schema,
             viewname as table_name,
             viewowner as table_owner
@@ -50,9 +46,22 @@
 
     ),
 
+    tables as (
+
+      select
+        table_catalog as table_database,
+        table_schema,
+        table_name,
+        table_type
+
+      from information_schema.tables
+
+    ),
+
     columns as (
 
         select
+            '{{ database }}'::varchar as table_database,
             table_schema,
             table_name,
             null::varchar as table_comment,
@@ -71,7 +80,7 @@
 
         select *
         from tables
-        join columns using (table_schema, table_name)
+        join columns using (table_database, table_schema, table_name)
 
         union all
 
@@ -81,10 +90,10 @@
     )
 
     select *,
-        table_schema || '.' || table_name as table_id
+        table_database || '.' || table_schema || '.' || table_name as table_id
 
     from unioned
-    join table_owners using (table_schema, table_name)
+    join table_owners using (table_database, table_schema, table_name)
 
     where table_schema != 'information_schema'
       and table_schema not like 'pg_%'
@@ -99,7 +108,7 @@
   {%- call statement('extended_catalog', fetch_result=True) -%}
 
     select
-        "schema" || '.' || "table" as table_id,
+        "database" || '.' || "schema" || '.' || "table" as table_id,
 
         'Encoded'::text as "stats:encoded:label",
         encoded as "stats:encoded:value",
