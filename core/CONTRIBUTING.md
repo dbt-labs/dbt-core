@@ -50,6 +50,7 @@ Set up a fresh virtualenv with pyenv-virtualenv for dbt:
 pyenv virtualenv 3.6.5 dbt36
 cd ~/git/dbt
 pyenv local dbt36
+pyenv activate
 ```
 
 This makes a new virtualenv based on python 3.6.5 named `dbt36`, and tells pyenv that when you're in the `dbt` directory it should automatically use that virtualenv.
@@ -131,7 +132,11 @@ Sometimes, you're going to have to pretend to be an end user to reproduce bugs a
 
 ### installation
 
-First, from the `dbt` directory, install dbt in 'editable' mode. There are a couple ways to do it, but I'm in the habit of `pip install -e .`, which tells pip to install the package in the current directory in "editable" mode. What's cool about this mode is any changes you make to the current dbt directory will be reflected immediately in your next `dbt` run.
+First make sure that you setup your `virtualenv` as described in section _Setting up your environment_.
+
+From the `dbt` directory, install dbt in 'editable' mode. There are a couple ways to do it, but I'm in the habit of `pip install -e .`, which tells pip to install the package in the current directory in "editable" mode. Since you are running `pip install` in virtualenv, this will not change your normal dbt installation, if you have one.
+
+What's cool about this mode is any changes you make to the current dbt directory will be reflected immediately in your next `dbt` run.
 
 ### Profile
 
@@ -204,7 +209,7 @@ Found 2 models, 0 tests, 0 archives, 0 analyses, 59 macros, 1 operations, 1 seed
 So what does that mean? Well:
 
 - `2 models` refers to the contents of the `models` directory
-- `59 macros` are the builtin global macros defind by dbt itself
+- `59 macros` are the builtin global macros defined by dbt itself
 - `1 operations` is the catalog generation operation that runs by default
 - `1 seed files` refers to the seed data in `data/moby_dick.csv`
 
