@@ -133,8 +133,8 @@ class TestPostgresAdapter(unittest.TestCase):
             port=5432,
             connect_timeout=10)
 
-    @mock.patch.object(PostgresAdapter, 'run_operation')
-    def test_get_catalog_various_schemas(self, mock_run):
+    @mock.patch.object(PostgresAdapter, 'execute_macro')
+    def test_get_catalog_various_schemas(self, mock_execute):
         column_names = ['table_schema', 'table_name']
         rows = [
             ('foo', 'bar'),
@@ -143,8 +143,8 @@ class TestPostgresAdapter(unittest.TestCase):
             ('quux', 'bar'),
             ('skip', 'bar')
         ]
-        mock_run.return_value = agate.Table(rows=rows,
-                                            column_names=column_names)
+        mock_execute.return_value = agate.Table(rows=rows,
+                                                column_names=column_names)
 
         mock_manifest = mock.MagicMock()
         mock_manifest.get_used_schemas.return_value = {'foo', 'quux'}

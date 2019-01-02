@@ -30,6 +30,19 @@ def _read_file(path):
         return fp.read()
 
 
+def _normalize(path):
+    """On windows, neither is enough on its own:
+
+    >>> normcase('C:\\documents/ALL CAPS/subdir\\..')
+    'c:\\documents\\all caps\\subdir\\..'
+    >>> normpath('C:\\documents/ALL CAPS/subdir\\..')
+    'C:\\documents\\ALL CAPS'
+    >>> normpath(normcase('C:\\documents/ALL CAPS/subdir\\..'))
+    'c:\\documents\\all caps'
+    """
+    return os.path.normcase(os.path.normpath(path))
+
+
 class TestDocsGenerate(DBTIntegrationTest):
     def setUp(self):
         super(TestDocsGenerate,self).setUp()
@@ -41,8 +54,9 @@ class TestDocsGenerate(DBTIntegrationTest):
 
     @staticmethod
     def dir(path):
-        return os.path.normpath(
-            os.path.join('test/integration/029_docs_generate_tests', path))
+        return _normalize(
+            os.path.join('test/integration/029_docs_generate_tests', path)
+        )
 
     @property
     def models(self):
@@ -77,8 +91,8 @@ class TestDocsGenerate(DBTIntegrationTest):
 
         self.assertEqual(len(self.run_dbt(["seed"])), seed_count)
         self.assertEqual(len(self.run_dbt()), model_count)
-        os.remove(os.path.normpath('target/manifest.json'))
-        os.remove(os.path.normpath('target/run_results.json'))
+        os.remove(_normalize('target/manifest.json'))
+        os.remove(_normalize('target/run_results.json'))
         self.generate_start_time = datetime.utcnow()
         self.run_dbt(['docs', 'generate'])
 
@@ -717,15 +731,16 @@ class TestDocsGenerate(DBTIntegrationTest):
         self.assertTrue(len(macro['raw_sql']) > 10)
         without_sql = {k: v for k, v in macro.items() if k != 'raw_sql'}
         # Windows means we can't hard-code this.
-        helpers_path = os.path.normpath('macros/materializations/helpers.sql')
+        helpers_path = _normalize('macros/materializations/helpers.sql')
         self.assertEqual(
             without_sql,
             {
                 'path': helpers_path,
                 'original_file_path': helpers_path,
                 'package_name': 'dbt',
-                'root_path': os.path.join(os.getcwd(), 'dbt','include',
-                                          'global_project'),
+                'root_path': _normalize(os.path.join(
+                    os.getcwd(), 'core', 'dbt','include', 'global_project'
+                )),
                 'name': 'column_list',
                 'unique_id': 'macro.dbt.column_list',
                 'tags': [],
@@ -843,7 +858,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'not_null_model_id',
                     'original_file_path': self.dir('models/schema.yml'),
                     'package_name': 'test',
-                    'path': os.path.normpath('schema_test/not_null_model_id.sql'),
+                    'path': _normalize('schema_test/not_null_model_id.sql'),
                     'raw_sql': "{{ test_not_null(model=ref('model'), column_name='id') }}",
                     'refs': [['model']],
                     'resource_type': 'test',
@@ -872,7 +887,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'nothing_model_',
                     'original_file_path': self.dir('models/schema.yml'),
                     'package_name': 'test',
-                    'path': os.path.normpath('schema_test/nothing_model_.sql'),
+                    'path': _normalize('schema_test/nothing_model_.sql'),
                     'raw_sql': "{{ test_nothing(model=ref('model'), ) }}",
                     'refs': [['model']],
                     'resource_type': 'test',
@@ -902,7 +917,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'unique_model_id',
                     'original_file_path': self.dir('models/schema.yml'),
                     'package_name': 'test',
-                    'path': os.path.normpath('schema_test/unique_model_id.sql'),
+                    'path': _normalize('schema_test/unique_model_id.sql'),
                     'raw_sql': "{{ test_unique(model=ref('model'), column_name='id') }}",
                     'refs': [['model']],
                     'resource_type': 'test',
@@ -1633,7 +1648,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'fail': None,
                 'node': {
                     'alias': 'model',
-                    'build_path': os.path.normpath(
+                    'build_path': _normalize(
                         'target/compiled/test/model.sql'
                     ),
                     'columns': {
@@ -1689,7 +1704,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'fail': None,
                 'node': {
                     'alias': 'seed',
-                    'build_path': os.path.normpath(
+                    'build_path': _normalize(
                         'target/compiled/test/seed.csv'
                     ),
                     'columns': {},
@@ -1734,7 +1749,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'fail': None,
                 'node': {
                     'alias': 'not_null_model_id',
-                     'build_path': os.path.normpath('target/compiled/test/schema_test/not_null_model_id.sql'),
+                     'build_path': _normalize('target/compiled/test/schema_test/not_null_model_id.sql'),
                      'column_name': 'id',
                      'columns': {},
                      'compiled': True,
@@ -1759,7 +1774,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'not_null_model_id',
                     'original_file_path': self.dir('models/schema.yml'),
                     'package_name': 'test',
-                    'path': os.path.normpath('schema_test/not_null_model_id.sql'),
+                    'path': _normalize('schema_test/not_null_model_id.sql'),
                     'raw_sql': "{{ test_not_null(model=ref('model'), column_name='id') }}",
                     'refs': [['model']],
                     'resource_type': 'test',
@@ -1778,7 +1793,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'fail': None,
                 'node': {
                     'alias': 'nothing_model_',
-                    'build_path': os.path.normpath('target/compiled/test/schema_test/nothing_model_.sql'),
+                    'build_path': _normalize('target/compiled/test/schema_test/nothing_model_.sql'),
                     'columns': {},
                     'compiled': True,
                     'compiled_sql': AnyStringWith('select 0'),
@@ -1802,7 +1817,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'nothing_model_',
                     'original_file_path': self.dir('models/schema.yml'),
                     'package_name': 'test',
-                    'path': os.path.normpath('schema_test/nothing_model_.sql'),
+                    'path': _normalize('schema_test/nothing_model_.sql'),
                     'raw_sql': "{{ test_nothing(model=ref('model'), ) }}",
                     'refs': [['model']],
                     'resource_type': 'test',
@@ -1821,7 +1836,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'fail': None,
                 'node': {
                     'alias': 'unique_model_id',
-                    'build_path': os.path.normpath('target/compiled/test/schema_test/unique_model_id.sql'),
+                    'build_path': _normalize('target/compiled/test/schema_test/unique_model_id.sql'),
                     'column_name': 'id',
                     'columns': {},
                     'compiled': True,
@@ -1846,7 +1861,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'unique_model_id',
                     'original_file_path': self.dir('models/schema.yml'),
                     'package_name': 'test',
-                    'path': os.path.normpath('schema_test/unique_model_id.sql'),
+                    'path': _normalize('schema_test/unique_model_id.sql'),
                     'raw_sql': "{{ test_unique(model=ref('model'), column_name='id') }}",
                     'refs': [['model']],
                     'resource_type': 'test',
@@ -1890,7 +1905,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'fail': None,
                 'node': {
                     'alias': 'ephemeral_summary',
-                    'build_path': os.path.normpath(
+                    'build_path': _normalize(
                         'target/compiled/test/ephemeral_summary.sql'
                     ),
                     'columns': {
@@ -1973,7 +1988,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'fail': None,
                 'node': {
                     'alias': 'view_summary',
-                    'build_path': os.path.normpath(
+                    'build_path': _normalize(
                         'target/compiled/test/view_summary.sql'
                     ),
                     'alias': 'view_summary',
@@ -2055,7 +2070,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'fail': None,
                 'node': {
                     'alias': 'seed',
-                    'build_path': os.path.normpath(
+                    'build_path': _normalize(
                         'target/compiled/test/seed.csv'
                     ),
                     'columns': {},
