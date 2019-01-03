@@ -72,7 +72,8 @@ class BigQueryAdapter(BaseAdapter):
         conn = self.connections.get(model_name)
         client = conn.handle
 
-        dataset = self.connections.dataset(relation.schema, conn)
+        dataset = self.connections.dataset(relation.database, relation.schema,
+                                           conn)
         relation_object = dataset.table(relation.identifier)
         client.delete_table(relation_object)
 
@@ -118,8 +119,8 @@ class BigQueryAdapter(BaseAdapter):
         connection = self.connections.get(model_name)
         client = connection.handle
 
-        bigquery_dataset = self.connections.dataset(schema, connection,
-                                                    project=database)
+        bigquery_dataset = self.connections.dataset(database, schema,
+                                                    connection)
 
         all_tables = client.list_tables(
             bigquery_dataset,
@@ -152,8 +153,7 @@ class BigQueryAdapter(BaseAdapter):
             )
 
         try:
-            table = self.connections.get_bq_table(schema, identifier,
-                                                  database=database)
+            table = self.connections.get_bq_table(database, schema, identifier)
         except google.api_core.exceptions.NotFound:
             table = None
         return self._bq_table_to_relation(table)
@@ -227,6 +227,7 @@ class BigQueryAdapter(BaseAdapter):
         return bq_schema
 
     def _materialize_as_view(self, model):
+        model_database = model.get('database')
         model_schema = model.get('schema')
         model_name = model.get('name')
         model_alias = model.get('alias')
@@ -234,7 +235,8 @@ class BigQueryAdapter(BaseAdapter):
 
         logger.debug("Model SQL ({}):\n{}".format(model_name, model_sql))
         self.connections.create_view(
-            dataset_name=model_schema,
+            database=model_database,
+            schema=model_schema,
             table_name=model_alias,
             conn_name=model_name,
             sql=model_sql
@@ -242,6 +244,7 @@ class BigQueryAdapter(BaseAdapter):
         return "CREATE VIEW"
 
     def _materialize_as_table(self, model, model_sql, decorator=None):
+        model_database = model.get('database')
         model_schema = model.get('schema')
         model_name = model.get('name')
         model_alias = model.get('alias')
@@ -253,7 +256,8 @@ class BigQueryAdapter(BaseAdapter):
 
         logger.debug("Model SQL ({}):\n{}".format(table_name, model_sql))
         self.connections.create_table(
-            dataset_name=model_schema,
+            database=model_database,
+            schema=model_schema,
             conn_name=model_name,
             table_name=table_name,
             sql=model_sql
@@ -312,10 +316,11 @@ class BigQueryAdapter(BaseAdapter):
     # Special bigquery adapter methods
     ###
     @available
-    def make_date_partitioned_table(self, schema, identifier, model_name=None):
+    def make_date_partitioned_table(self, relation, model_name=None):
         return self.connections.create_date_partitioned_table(
-            dataset_name=schema,
-            table_name=identifier,
+            database=relation.database,
+            schema=relation.schema,
+            table_name=relation.identifier,
             conn_name=model_name
         )
 
@@ -366,9 +371,9 @@ class BigQueryAdapter(BaseAdapter):
         conn = self.connections.get(model_name)
         client = conn.handle
 
-        table_ref = self.connections.table_ref(relation.schema,
-                                               relation.identifier, conn,
-                                               project=relation.database)
+        table_ref = self.connections.table_ref(relation.database,
+                                               relation.schema,
+                                               relation.identifier, conn)
         table = client.get_table(table_ref)
 
         new_columns = [column_to_bq_schema(col) for col in columns]
@@ -384,8 +389,7 @@ class BigQueryAdapter(BaseAdapter):
         conn = self.connections.get(model_name)
         client = conn.handle
 
-        table = self.connections.table_ref(schema, table_name, conn,
-                                           project=database)
+        table = self.connections.table_ref(database, schema, table_name, conn)
 
         load_config = google.cloud.bigquery.LoadJobConfig()
         load_config.skip_leading_rows = 1
@@ -495,10 +499,10 @@ class BigQueryAdapter(BaseAdapter):
                 # This relation contains a subset of the info we care about.
                 # Fetch the full table object here
                 table_ref = self.connections.table_ref(
+                    database_name,
                     relation.schema,
                     relation.identifier,
-                    connection,
-                    project=database_name
+                    connection
                 )
                 table = client.get_table(table_ref)
 

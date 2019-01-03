@@ -21,8 +21,15 @@ class PostgresAdapter(SQLAdapter):
     def date_function(cls):
         return 'datenow()'
 
-    def _link_cached_database_relations(self, manifest, database, schemas):
+    def _verify_database(self, database):
+        if database != self.config.credentials.database:
+            raise dbt.exceptions.NotImplementedException(
+                'Cross-db references not allowed in {}'.format(self.type())
+            )
+
+    def _link_cached_database_relations(self, manifest, schemas):
         table = self.execute_macro(manifest, GET_RELATIONS_MACRO_NAME)
+        database = self.config.credentials.database
 
         for (refed_schema, refed_name, dep_schema, dep_name) in table:
             referenced = self.Relation.create(
@@ -42,15 +49,13 @@ class PostgresAdapter(SQLAdapter):
                 self.cache.add_link(dependent, referenced)
 
     def _link_cached_relations(self, manifest):
-        schemas = manifest.get_used_schemas()
-        # make a map of {db: [schemas]}
-        schema_map = {}
-        for db, schema in schemas:
-            schema_map.setdefault(db, []).append(schema.lower())
+        schemas = set()
+        for db, schema in manifest.get_used_schemas():
+            self._verify_database(db)
+            schemas.add(schema)
 
         try:
-            for db, schemas in schema_map.items():
-                self._link_cached_database_relations(manifest, db, schemas)
+            self._link_cached_database_relations(manifest, schemas)
         finally:
             self.release_connection(GET_RELATIONS_MACRO_NAME)
 
@@ -60,8 +65,7 @@ class PostgresAdapter(SQLAdapter):
 
     def list_relations_without_caching(self, database, schema,
                                        model_name=None):
-        assert database is not None
-        assert schema is not None
+        self._verify_database(database)
         sql = """
         select
           table_catalog as database,
@@ -73,7 +77,6 @@ class PostgresAdapter(SQLAdapter):
           end as table_type
         from information_schema.tables
         where table_schema ilike '{schema}'
-          and table_catalog ilike '{database}'
         """.format(database=database, schema=schema).strip()  # noqa
 
         connection, cursor = self.add_query(sql, model_name, auto_begin=False)
@@ -92,10 +95,10 @@ class PostgresAdapter(SQLAdapter):
                 for (_database, name, _schema, _type) in results]
 
     def list_schemas(self, database, model_name=None):
+        self._verify_database(database)
         sql = """
         select distinct schema_name
         from information_schema.schemata
-        where catalog_name='{database}'
         """.format(database=database).strip()  # noqa
 
         connection, cursor = self.add_query(sql, model_name, auto_begin=False)
@@ -104,11 +107,11 @@ class PostgresAdapter(SQLAdapter):
         return [row[0] for row in results]
 
     def check_schema_exists(self, database, schema, model_name=None):
+        self._verify_database(database)
         sql = """
         select count(*)
         from information_schema.schemata
-        where catalog_name='{database}'
-          and schema_name='{schema}'
+        where schema_name='{schema}'
         """.format(database=database, schema=schema).strip()  # noqa
 
         connection, cursor = self.add_query(sql, model_name,
@@ -146,22 +149,14 @@ class PostgresAdapter(SQLAdapter):
         return sql
 
     def _create_schema_sql(self, database, schema):
-        if self.config.credentials.database != database:
-            raise dbt.exceptions.NotImplementedException(
-                'Can only create schemas on the active database in {}'
-                .format(self.type())
-            )
+        self._verify_database(database)
 
         schema = self.quote_as_configured(schema, 'schema')
 
         return 'create schema if not exists {schema}'.format(schema=schema)
 
     def _drop_schema_sql(self, database, schema):
-        if self.config.credentials.database != database:
-            raise dbt.exceptions.NotImplementedException(
-                'Can only drop schemas on the active database in {}'
-                .format(self.type())
-            )
+        self._verify_database(database)
 
         schema = self.quote_as_configured(schema, 'schema')
 

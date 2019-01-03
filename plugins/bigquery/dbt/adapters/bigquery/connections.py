@@ -132,10 +132,10 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
     @classmethod
     def get_bigquery_client(cls, profile_credentials):
-        project_name = profile_credentials.database
+        database = profile_credentials.database
         creds = cls.get_bigquery_credentials(profile_credentials)
         location = getattr(profile_credentials, 'location', None)
-        return google.cloud.bigquery.Client(project_name, creds,
+        return google.cloud.bigquery.Client(database, creds,
                                             location=location)
 
     @classmethod
@@ -207,7 +207,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
         status = 'OK'
         return status, res
 
-    def create_bigquery_table(self, dataset_name, table_name, conn_name,
+    def create_bigquery_table(self, database, schema, table_name, conn_name,
                               callback, sql):
         """Create a bigquery table. The caller must supply a callback
         that takes one argument, a `google.cloud.bigquery.Table`, and mutates
@@ -216,26 +216,26 @@ class BigQueryConnectionManager(BaseConnectionManager):
         conn = self.get(conn_name)
         client = conn.handle
 
-        view_ref = self.table_ref(dataset_name, table_name, conn)
+        view_ref = self.table_ref(database, schema, table_name, conn)
         view = google.cloud.bigquery.Table(view_ref)
         callback(view)
 
         with self.exception_handler(sql, conn.name):
             client.create_table(view)
 
-    def create_view(self, dataset_name, table_name, conn_name, sql):
+    def create_view(self, database, schema, table_name, conn_name, sql):
         def callback(table):
             table.view_query = sql
             table.view_use_legacy_sql = False
 
-        self.create_bigquery_table(dataset_name, table_name, conn_name,
+        self.create_bigquery_table(database, schema, table_name, conn_name,
                                    callback, sql)
 
-    def create_table(self, dataset_name, table_name, conn_name, sql):
+    def create_table(self, database, schema, table_name, conn_name, sql):
         conn = self.get(conn_name)
         client = conn.handle
 
-        table_ref = self.table_ref(dataset_name, table_name, conn)
+        table_ref = self.table_ref(database, schema, table_name, conn)
         job_config = google.cloud.bigquery.QueryJobConfig()
         job_config.destination = table_ref
         job_config.write_disposition = 'WRITE_TRUNCATE'
@@ -246,32 +246,32 @@ class BigQueryConnectionManager(BaseConnectionManager):
         with self.exception_handler(sql, conn_name):
             query_job.result(timeout=self.get_timeout(conn))
 
-    def create_date_partitioned_table(self, dataset_name, table_name,
+    def create_date_partitioned_table(self, database, schema, table_name,
                                       conn_name):
         def callback(table):
             table.partitioning_type = 'DAY'
 
-        self.create_bigquery_table(dataset_name, table_name, conn_name,
+        self.create_bigquery_table(database, schema, table_name, conn_name,
                                    callback, 'CREATE DAY PARTITIONED TABLE')
 
     @staticmethod
-    def dataset(dataset_name, conn, project=None):
-        dataset_ref = conn.handle.dataset(dataset_name, project)
+    def dataset(database, schema, conn):
+        dataset_ref = conn.handle.dataset(schema, database)
         return google.cloud.bigquery.Dataset(dataset_ref)
 
-    def table_ref(self, dataset_name, table_name, conn, project=None):
-        dataset = self.dataset(dataset_name, conn, project=project)
+    def table_ref(self, database, schema, table_name, conn):
+        dataset = self.dataset(database, schema, conn)
         return dataset.table(table_name)
 
-    def get_bq_table(self, schema, identifier, conn_name=None, database=None):
+    def get_bq_table(self, database, schema, identifier, conn_name=None):
         """Get a bigquery table for a schema/model."""
         conn = self.get(conn_name)
-        table_ref = self.table_ref(schema, identifier, conn, project=database)
+        table_ref = self.table_ref(database, schema, identifier, conn)
         return conn.handle.get_table(table_ref)
 
-    def drop_dataset(self, project_name, dataset_name, conn_name=None):
+    def drop_dataset(self, database, schema, conn_name=None):
         conn = self.get(conn_name)
-        dataset = self.dataset(dataset_name, conn, project=project_name)
+        dataset = self.dataset(database, schema, conn)
         client = conn.handle
 
         with self.exception_handler('drop dataset', conn.name):
@@ -279,10 +279,10 @@ class BigQueryConnectionManager(BaseConnectionManager):
                 client.delete_table(table.reference)
             client.delete_dataset(dataset)
 
-    def create_dataset(self, project_name, dataset_name, conn_name=None):
+    def create_dataset(self, database, schema, conn_name=None):
         conn = self.get(conn_name)
         client = conn.handle
-        dataset = self.dataset(dataset_name, conn, project=project_name)
+        dataset = self.dataset(database, schema, conn)
 
         # Emulate 'create schema if not exists ...'
         try:

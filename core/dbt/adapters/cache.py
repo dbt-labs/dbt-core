@@ -118,7 +118,7 @@ class _CachedRelation(object):
         Note that this will change the output of key(), all refs must be
         updated!
 
-        :param _ReferenceKey new_relation: The new name to apply to the
+        :param _CachedRelation new_relation: The new name to apply to the
             relation
         """
         # Relations store this stuff inside their `path` dict. But they
@@ -127,11 +127,11 @@ class _CachedRelation(object):
         # table_name is ever anything but the identifier (via .create())
         self.inner = self.inner.incorporate(
             path={
-                'database': new_relation.database,
-                'schema': new_relation.schema,
-                'identifier': new_relation.identifier
+                'database': new_relation.inner.database,
+                'schema': new_relation.inner.schema,
+                'identifier': new_relation.inner.identifier
             },
-            table_name=new_relation.identifier
+            table_name=new_relation.inner.identifier
         )
 
     def rename_key(self, old_key, new_key):
@@ -180,9 +180,21 @@ class RelationsCache(object):
     def add_schema(self, database, schema):
         """Add a schema to the set of known schemas (case-insensitive)
 
+        :param str database: The database name to add.
         :param str schema: The schema name to add.
         """
         self.schemas.add((_lower(database), _lower(schema)))
+
+    def remove_schema(self, database, schema):
+        """Remove a schema from the set of known schemas (case-insensitive)
+
+        If the schema does not exist, it will be ignored - it could just be a
+        temporary table.
+
+        :param str database: The database name to remove.
+        :param str schema: The schema name to remove.
+        """
+        self.schemas.discard((_lower(database), _lower(schema)))
 
     def update_schemas(self, schemas):
         """Add multiple schemas to the set of known schemas (case-insensitive)
@@ -345,20 +357,22 @@ class RelationsCache(object):
         with self.lock:
             self._drop_cascade_relation(dropped)
 
-    def _rename_relation(self, old_key, new_key):
+    def _rename_relation(self, old_key, new_relation):
         """Rename a relation named old_key to new_key, updating references.
         Return whether or not there was a key to rename.
 
         :param _ReferenceKey old_key: The existing key, to rename from.
-        :param _ReferenceKey new_key: The new key, to rename to.
+        :param _CachedRelation new_key: The new relation, to rename to.
         """
         # On the database level, a rename updates all values that were
         # previously referenced by old_name to be referenced by new_name.
         # basically, the name changes but some underlying ID moves. Kind of
         # like an object reference!
         relation = self.relations.pop(old_key)
+        new_key = new_relation.key()
 
-        relation.rename(new_key)
+        # relaton has to rename its innards, so it needs the _CachedRelation.
+        relation.rename(new_relation)
         # update all the relations that refer to it
         for cached in self.relations.values():
             if cached.is_referenced_by(old_key):
@@ -369,6 +383,10 @@ class RelationsCache(object):
                 cached.rename_key(old_key, new_key)
 
         self.relations[new_key] = relation
+        # also fixup the schemas!
+        self.remove_schema(old_key.database, old_key.schema)
+        self.add_schema(new_key.database, new_key.schema)
+
         return True
 
     def _check_rename_constraints(self, old_key, new_key):
@@ -421,7 +439,7 @@ class RelationsCache(object):
 
         with self.lock:
             if self._check_rename_constraints(old_key, new_key):
-                self._rename_relation(old_key, new_key)
+                self._rename_relation(old_key, _CachedRelation(new))
             else:
                 self._setdefault(_CachedRelation(new))
 
@@ -440,7 +458,8 @@ class RelationsCache(object):
         with self.lock:
             results = [
                 r.inner for r in self.relations.values()
-                if _lower(r.schema) == schema
+                if (r.schema == _lower(schema) and
+                    r.database == _lower(database))
             ]
 
         if None in results:

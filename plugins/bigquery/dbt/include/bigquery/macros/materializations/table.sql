@@ -1,7 +1,7 @@
 {% macro make_date_partitioned_table(model, relation, dates, should_create, verbose=False) %}
 
   {% if should_create %}
-      {{ adapter.make_date_partitioned_table(relation.schema, relation.identifier) }}
+      {{ adapter.make_date_partitioned_table(relation) }}
   {% endif %}
 
   {% for date in dates %}

@@ -8,13 +8,13 @@ import random
 import time
 
 
-def make_relation(schema, identifier):
-    return BaseRelation.create(database='dbt', schema=schema,
+def make_relation(database, schema, identifier):
+    return BaseRelation.create(database=database, schema=schema,
                                identifier=identifier)
 
-def make_mock_relationship(schema, identifier):
+def make_mock_relationship(database, schema, identifier):
     return BaseRelation.create(
-        database='test_db', schema=schema, identifier=identifier,
+        database=database, schema=schema, identifier=identifier,
         table_name=identifier, type='view'
     )
 
@@ -23,97 +23,236 @@ class TestCache(TestCase):
     def setUp(self):
         self.cache = RelationsCache()
 
+    def assert_relations_state(self, database, schema, identifiers):
+        relations = self.cache.get_relations(database, schema)
+        for identifier, expect in identifiers.items():
+            found = any(
+                (r.identifier == identifier and \
+                 r.schema == schema and \
+                 r.database == database)
+                for r in relations
+            )
+            msg = '{}.{}.{} was{} found in the cache!'.format(
+                database, schema, identifier, '' if found else ' not'
+            )
+            self.assertEqual(expect, found, msg)
+
+    def assert_relations_exist(self, database, schema, *identifiers):
+        self.assert_relations_state(database, schema, {k: True for k in identifiers})
+
+    def assert_relations_do_not_exist(self, database, schema, *identifiers):
+        self.assert_relations_state(database, schema, {k: False for k in identifiers})
+
+
+class TestEmpty(TestCache):
     def test_empty(self):
         self.assertEqual(len(self.cache.relations), 0)
-        relations = self.cache.get_relations('dbt', 'test')
-        self.assertEqual(len(relations), 0)
+        self.assertEqual(len(self.cache.get_relations('dbt', 'test')), 0)
 
-    def test_bad_drop(self):
-        self.cache.drop(make_relation('foo', 'bar'))
+class TestDrop(TestCache):
+    def setUp(self):
+        super(TestDrop, self).setUp()
+        self.cache.add(make_relation('dbt', 'foo', 'bar'))
 
-    def test_bad_link(self):
-        self.cache.add(make_relation('schema', 'foo'))
-        # src does not exist
-        with self.assertRaises(dbt.exceptions.InternalException):
-            self.cache.add_link(make_relation('schema', 'bar'),
-                                make_relation('schema', 'foo'))
-
-        # dst does not exist
-        with self.assertRaises(dbt.exceptions.InternalException):
-            self.cache.add_link(make_relation('schema', 'foo'),
-                                make_relation('schema', 'bar'))
-
-    def test_bad_rename(self):
-        # foo does not exist - should be ignored
-        self.cache.rename(make_relation('schema', 'foo'),
-                          make_relation('schema', 'bar'))
-
-        self.cache.add(make_relation('schema', 'foo'))
-        self.cache.add(make_relation('schema', 'bar'))
-        # bar exists
-        with self.assertRaises(dbt.exceptions.InternalException):
-            self.cache.rename(make_relation('schema', 'foo'),
-                              make_relation('schema', 'bar'))
-
-    def test_get_relations(self):
-        relation = make_relation('foo', 'bar')
-        self.cache.add(relation)
+    def test_missing_identifier_ignored(self):
+        self.cache.drop(make_relation('dbt', 'foo', 'bar1'))
+        self.assert_relations_exist('dbt', 'foo', 'bar')
         self.assertEqual(len(self.cache.relations), 1)
 
+    def test_missing_schema_ignored(self):
+        self.cache.drop(make_relation('dbt', 'foo1', 'bar'))
+        self.assert_relations_exist('dbt', 'foo', 'bar')
+        self.assertEqual(len(self.cache.relations), 1)
+
+    def test_missing_db_ignored(self):
+        self.cache.drop(make_relation('dbt1', 'foo', 'bar'))
+        self.assert_relations_exist('dbt', 'foo', 'bar')
+        self.assertEqual(len(self.cache.relations), 1)
+
+    def test_drop(self):
+        self.cache.drop(make_relation('dbt', 'foo', 'bar'))
+        self.assert_relations_do_not_exist('dbt', 'foo', 'bar')
+        self.assertEqual(len(self.cache.relations), 0)
+
+
+class TestAddLink(TestCache):
+    def setUp(self):
+        super(TestAddLink, self).setUp()
+        self.cache.add(make_relation('dbt', 'schema', 'foo'))
+        self.cache.add(make_relation('dbt_2', 'schema', 'bar'))
+        self.cache.add(make_relation('dbt', 'schema_2', 'bar'))
+
+    def test_no_src(self):
+        # src does not exist (but similar names do)
+        with self.assertRaises(dbt.exceptions.InternalException):
+            self.cache.add_link(make_relation('dbt', 'schema', 'bar'),
+                                make_relation('dbt', 'schema', 'foo'))
+
+    def test_no_dst(self):
+        # dst does not exist (but similar names do)
+        with self.assertRaises(dbt.exceptions.InternalException):
+            self.cache.add_link(make_relation('dbt', 'schema', 'foo'),
+                                make_relation('dbt', 'schema', 'bar'))
+
+
+class TestRename(TestCache):
+    def setUp(self):
+        super(TestRename, self).setUp()
+        self.cache.add(make_relation('DBT', 'schema', 'foo'))
+        self.assert_relations_exist('DBT', 'schema', 'foo')
+        self.assertEqual(self.cache.schemas, {('dbt', 'schema')})
+
+    def test_no_source_error(self):
+        # dest should be created anyway (it's probably a temp table)
+        self.cache.rename(make_relation('DBT', 'schema', 'bar'),
+                          make_relation('DBT', 'schema', 'baz'))
+
+        self.assertEqual(len(self.cache.relations), 2)
+        self.assert_relations_exist('DBT', 'schema', 'foo', 'baz')
+
+    def test_dest_exists_error(self):
+        foo = make_relation('DBT', 'schema', 'foo')
+        bar = make_relation('DBT', 'schema', 'bar')
+        self.cache.add(bar)
+        self.assert_relations_exist('DBT', 'schema', 'foo', 'bar')
+
+        with self.assertRaises(dbt.exceptions.InternalException):
+            self.cache.rename(foo, bar)
+
+        self.assert_relations_exist('DBT', 'schema', 'foo', 'bar')
+
+    def test_dest_different_db(self):
+        self.cache.rename(make_relation('DBT', 'schema', 'foo'),
+                          make_relation('DBT_2', 'schema', 'foo'))
+        self.assert_relations_exist('DBT_2', 'schema', 'foo')
+        self.assert_relations_do_not_exist('DBT', 'schema', 'foo')
+        self.assertEqual(self.cache.schemas, {('dbt_2', 'schema')})
+        self.assertEqual(len(self.cache.relations), 1)
+
+    def test_rename_identifier(self):
+        self.cache.rename(make_relation('DBT', 'schema', 'foo'),
+                          make_relation('DBT', 'schema', 'bar'))
+
+        self.assert_relations_exist('DBT', 'schema', 'bar')
+        self.assert_relations_do_not_exist('DBT', 'schema', 'foo')
+        self.assertEqual(self.cache.schemas, {('dbt', 'schema')})
+
+        relation = self.cache.relations[('dbt', 'schema', 'bar')]
+        self.assertEqual(relation.inner.schema, 'schema')
+        self.assertEqual(relation.inner.identifier, 'bar')
+        self.assertEqual(relation.schema, 'schema')
+        self.assertEqual(relation.identifier, 'bar')
+
+    def test_rename_db(self):
+        self.cache.rename(make_relation('DBT', 'schema', 'foo'),
+                          make_relation('DBT_2', 'schema', 'foo'))
+
+        self.assertEqual(len(self.cache.get_relations('DBT', 'schema')), 0)
+        self.assertEqual(len(self.cache.get_relations('DBT_2', 'schema')), 1)
+        self.assert_relations_exist('DBT_2', 'schema', 'foo')
+        self.assert_relations_do_not_exist('DBT', 'schema', 'foo')
+        self.assertEqual(self.cache.schemas, {('dbt_2', 'schema')})
+
+        relation = self.cache.relations[('dbt_2', 'schema', 'foo')]
+        self.assertEqual(relation.inner.database, 'DBT_2')
+        self.assertEqual(relation.inner.schema, 'schema')
+        self.assertEqual(relation.inner.identifier, 'foo')
+        self.assertEqual(relation.database, 'dbt_2')
+        self.assertEqual(relation.schema, 'schema')
+        self.assertEqual(relation.identifier, 'foo')
+
+    def test_rename_schema(self):
+        self.cache.rename(make_relation('DBT', 'schema', 'foo'),
+                          make_relation('DBT', 'schema_2', 'foo'))
+
+        self.assertEqual(len(self.cache.get_relations('DBT', 'schema')), 0)
+        self.assertEqual(len(self.cache.get_relations('DBT', 'schema_2')), 1)
+        self.assert_relations_exist('DBT', 'schema_2', 'foo')
+        self.assert_relations_do_not_exist('DBT', 'schema', 'foo')
+        self.assertEqual(self.cache.schemas, {('dbt', 'schema_2')})
+
+        relation = self.cache.relations[('dbt', 'schema_2', 'foo')]
+        self.assertEqual(relation.inner.database, 'DBT')
+        self.assertEqual(relation.inner.schema, 'schema_2')
+        self.assertEqual(relation.inner.identifier, 'foo')
+        self.assertEqual(relation.database, 'dbt')
+        self.assertEqual(relation.schema, 'schema_2')
+        self.assertEqual(relation.identifier, 'foo')
+
+
+class TestGetRelations(TestCache):
+    def setUp(self):
+        super(TestGetRelations, self).setUp()
+        self.relation = make_relation('dbt', 'foo', 'bar')
+        self.cache.add(self.relation)
+
+    def test_get_by_name(self):
         relations = self.cache.get_relations('dbt', 'foo')
         self.assertEqual(len(relations), 1)
-        self.assertIs(relations[0], relation)
+        self.assertIs(relations[0], self.relation)
 
+    def test_get_by_uppercase_schema(self):
         relations = self.cache.get_relations('dbt', 'FOO')
         self.assertEqual(len(relations), 1)
-        self.assertIs(relations[0], relation)
+        self.assertIs(relations[0], self.relation)
+
+    def test_get_by_uppercase_db(self):
+        relations = self.cache.get_relations('DBT', 'foo')
+        self.assertEqual(len(relations), 1)
+        self.assertIs(relations[0], self.relation)
+
+    def test_get_by_uppercase_schema_and_db(self):
+        relations = self.cache.get_relations('DBT', 'FOO')
+        self.assertEqual(len(relations), 1)
+        self.assertIs(relations[0], self.relation)
+
+    def test_get_by_wrong_db(self):
+        relations = self.cache.get_relations('dbt_2', 'foo')
+        self.assertEqual(len(relations), 0)
+
+    def test_get_by_wrong_schema(self):
+        relations = self.cache.get_relations('dbt', 'foo_2')
+        self.assertEqual(len(relations), 0)
+
+
+class TestAdd(TestCache):
+    def setUp(self):
+        super(TestAdd, self).setUp()
+        self.relation = make_relation('dbt', 'foo', 'bar')
+        self.cache.add(self.relation)
 
     def test_add(self):
-        rel = make_relation('foo', 'bar')
-        self.cache.add(rel)
-
         relations = self.cache.get_relations('dbt', 'foo')
         self.assertEqual(len(relations), 1)
-        self.assertIs(relations[0], rel)
+        self.assertEqual(len(self.cache.relations), 1)
+        self.assertIs(relations[0], self.relation)
 
+    def test_add_twice(self):
         # add a new relation with same name
-        self.cache.add(make_relation('foo', 'bar'))
+        self.cache.add(make_relation('dbt', 'foo', 'bar'))
         self.assertEqual(len(self.cache.relations), 1)
         self.assertEqual(self.cache.schemas, {('dbt', 'foo')})
+        self.assert_relations_exist('dbt', 'foo', 'bar')
 
-        relations = self.cache.get_relations('dbt', 'foo')
-        self.assertEqual(len(relations), 1)
-        self.assertIs(relations[0], rel)
+    def add_uppercase_schema(self):
+        self.cache.add(make_relation('dbt', 'FOO', 'baz'))
 
-        self.cache.add(make_relation('FOO', 'baz'))
         self.assertEqual(len(self.cache.relations), 2)
-
         relations = self.cache.get_relations('dbt', 'foo')
         self.assertEqual(len(relations), 2)
-
         self.assertEqual(self.cache.schemas, {('dbt', 'foo')})
         self.assertIsNot(self.cache.relations[('dbt', 'foo', 'bar')].inner, None)
         self.assertIsNot(self.cache.relations[('dbt', 'foo', 'baz')].inner, None)
 
-    def test_rename(self):
-        self.cache.add(make_relation('foo', 'bar'))
+    def add_different_db(self):
+        self.cache.add(make_relation('dbt_2', 'foo', 'bar'))
+
+        self.assertEqual(len(self.cache.relations), 2)
+        self.assertEqual(len(self.cache.get_relations('dbt_2', 'foo')), 1)
+        self.assertEqual(len(self.cache.get_relations('dbt', 'foo')), 1)
+        self.assertEqual(self.cache.schemas, {('dbt', 'foo'), ('dbt_2', 'foo')})
         self.assertIsNot(self.cache.relations[('dbt', 'foo', 'bar')].inner, None)
-        self.cache.rename(make_relation('foo', 'bar'),
-                          make_relation('foo', 'baz'))
-
-        relations = self.cache.get_relations('dbt', 'foo')
-        self.assertEqual(len(relations), 1)
-        self.assertEqual(relations[0].schema, 'foo')
-        self.assertEqual(relations[0].identifier, 'baz')
-
-        relation = self.cache.relations[('dbt', 'foo', 'baz')]
-        self.assertEqual(relation.inner.schema, 'foo')
-        self.assertEqual(relation.inner.identifier, 'baz')
-        self.assertEqual(relation.schema, 'foo')
-        self.assertEqual(relation.identifier, 'baz')
-
-        with self.assertRaises(KeyError):
-            self.cache.relations[('dbt', 'foo', 'bar')]
+        self.assertIsNot(self.cache.relations[('dbt_2', 'foo', 'bar')].inner, None)
 
 
 class TestLikeDbt(TestCase):
@@ -123,22 +262,22 @@ class TestLikeDbt(TestCase):
 
         # add a bunch of cache entries
         for ident in 'abcdef':
-            self.cache.add(make_relation('schema', ident))
+            self.cache.add(make_relation('dbt', 'schema', ident))
         # 'b' references 'a'
-        self.cache.add_link(make_relation('schema', 'a'),
-                            make_relation('schema', 'b'))
+        self.cache.add_link(make_relation('dbt', 'schema', 'a'),
+                            make_relation('dbt', 'schema', 'b'))
         # and 'c' references 'b'
-        self.cache.add_link(make_relation('schema', 'b'),
-                            make_relation('schema', 'c'))
+        self.cache.add_link(make_relation('dbt', 'schema', 'b'),
+                            make_relation('dbt', 'schema', 'c'))
         # and 'd' references 'b'
-        self.cache.add_link(make_relation('schema', 'b'),
-                            make_relation('schema', 'd'))
+        self.cache.add_link(make_relation('dbt', 'schema', 'b'),
+                            make_relation('dbt', 'schema', 'd'))
         # and 'e' references 'a'
-        self.cache.add_link(make_relation('schema', 'a'),
-                            make_relation('schema', 'e'))
+        self.cache.add_link(make_relation('dbt', 'schema', 'a'),
+                            make_relation('dbt', 'schema', 'e'))
         # and 'f' references 'd'
-        self.cache.add_link(make_relation('schema', 'd'),
-                            make_relation('schema', 'f'))
+        self.cache.add_link(make_relation('dbt', 'schema', 'd'),
+                            make_relation('dbt', 'schema', 'f'))
         # so drop propagation goes (a -> (b -> (c (d -> f))) e)
 
     def assert_has_relations(self, expected):
@@ -147,30 +286,30 @@ class TestLikeDbt(TestCase):
 
     def test_drop_inner(self):
         self.assert_has_relations(set('abcdef'))
-        self.cache.drop(make_relation('schema', 'b'))
+        self.cache.drop(make_relation('dbt', 'schema', 'b'))
         self.assert_has_relations({'a', 'e'})
 
     def test_rename_and_drop(self):
         self.assert_has_relations(set('abcdef'))
         # drop the backup/tmp
-        self.cache.drop(make_relation('schema', 'b__backup'))
-        self.cache.drop(make_relation('schema', 'b__tmp'))
+        self.cache.drop(make_relation('dbt', 'schema', 'b__backup'))
+        self.cache.drop(make_relation('dbt', 'schema', 'b__tmp'))
         self.assert_has_relations(set('abcdef'))
         # create a new b__tmp
-        self.cache.add(make_relation('schema', 'b__tmp',))
+        self.cache.add(make_relation('dbt', 'schema', 'b__tmp',))
         self.assert_has_relations(set('abcdef') | {'b__tmp'})
         # rename b -> b__backup
-        self.cache.rename(make_relation('schema', 'b'),
-                          make_relation('schema', 'b__backup'))
+        self.cache.rename(make_relation('dbt', 'schema', 'b'),
+                          make_relation('dbt', 'schema', 'b__backup'))
         self.assert_has_relations(set('acdef') | {'b__tmp', 'b__backup'})
         # rename temp to b
-        self.cache.rename(make_relation('schema', 'b__tmp'),
-                          make_relation('schema', 'b'))
+        self.cache.rename(make_relation('dbt', 'schema', 'b__tmp'),
+                          make_relation('dbt', 'schema', 'b'))
         self.assert_has_relations(set('abcdef') | {'b__backup'})
 
         # drop backup, everything that used to depend on b should be gone, but
         # b itself should still exist
-        self.cache.drop(make_relation('schema', 'b__backup'))
+        self.cache.drop(make_relation('dbt', 'schema', 'b__backup'))
         self.assert_has_relations(set('abe'))
         relation = self.cache.relations[('dbt', 'schema', 'a')]
         self.assertEqual(len(relation.referenced_by), 1)
@@ -182,44 +321,44 @@ class TestLikeDbt(TestCase):
 
     def _target(self, ident):
         self._rand_sleep()
-        self.cache.rename(make_relation('schema', ident),
-                          make_relation('schema', ident+'__backup'))
+        self.cache.rename(make_relation('dbt', 'schema', ident),
+                          make_relation('dbt', 'schema', ident+'__backup'))
         self._rand_sleep()
-        self.cache.add(make_relation('schema', ident+'__tmp')
+        self.cache.add(make_relation('dbt', 'schema', ident+'__tmp')
         )
         self._rand_sleep()
-        self.cache.rename(make_relation('schema', ident+'__tmp'),
-                          make_relation('schema', ident))
+        self.cache.rename(make_relation('dbt', 'schema', ident+'__tmp'),
+                          make_relation('dbt', 'schema', ident))
         self._rand_sleep()
-        self.cache.drop(make_relation('schema', ident+'__backup'))
+        self.cache.drop(make_relation('dbt', 'schema', ident+'__backup'))
         return ident, self.cache.get_relations('dbt', 'schema')
 
     def test_threaded(self):
         # add three more short subchains for threads to test on
         for ident in 'ghijklmno':
-            obj = make_mock_relationship('schema', ident)
-            self.cache.add(make_relation('schema', ident))
+            obj = make_mock_relationship('test_db', 'schema', ident)
+            self.cache.add(make_relation('dbt', 'schema', ident))
 
-        self.cache.add_link(make_relation('schema', 'a'),
-                            make_relation('schema', 'g'))
-        self.cache.add_link(make_relation('schema', 'g'),
-                            make_relation('schema', 'h'))
-        self.cache.add_link(make_relation('schema', 'h'),
-                            make_relation('schema', 'i'))
+        self.cache.add_link(make_relation('dbt', 'schema', 'a'),
+                            make_relation('dbt', 'schema', 'g'))
+        self.cache.add_link(make_relation('dbt', 'schema', 'g'),
+                            make_relation('dbt', 'schema', 'h'))
+        self.cache.add_link(make_relation('dbt', 'schema', 'h'),
+                            make_relation('dbt', 'schema', 'i'))
 
-        self.cache.add_link(make_relation('schema', 'a'),
-                            make_relation('schema', 'j'))
-        self.cache.add_link(make_relation('schema', 'j'),
-                            make_relation('schema', 'k'))
-        self.cache.add_link(make_relation('schema', 'k'),
-                            make_relation('schema', 'l'))
+        self.cache.add_link(make_relation('dbt', 'schema', 'a'),
+                            make_relation('dbt', 'schema', 'j'))
+        self.cache.add_link(make_relation('dbt', 'schema', 'j'),
+                            make_relation('dbt', 'schema', 'k'))
+        self.cache.add_link(make_relation('dbt', 'schema', 'k'),
+                            make_relation('dbt', 'schema', 'l'))
 
-        self.cache.add_link(make_relation('schema', 'a'),
-                            make_relation('schema', 'm'))
-        self.cache.add_link(make_relation('schema', 'm'),
-                            make_relation('schema', 'n'))
-        self.cache.add_link(make_relation('schema', 'n'),
-                            make_relation('schema', 'o'))
+        self.cache.add_link(make_relation('dbt', 'schema', 'a'),
+                            make_relation('dbt', 'schema', 'm'))
+        self.cache.add_link(make_relation('dbt', 'schema', 'm'),
+                            make_relation('dbt', 'schema', 'n'))
+        self.cache.add_link(make_relation('dbt', 'schema', 'n'),
+                            make_relation('dbt', 'schema', 'o'))
 
         pool = ThreadPool(4)
         results = list(pool.imap_unordered(self._target, ('b', 'g', 'j', 'm')))
@@ -247,82 +386,98 @@ class TestLikeDbt(TestCase):
             self.test_threaded()
 
 
-
 class TestComplexCache(TestCase):
     def setUp(self):
         self.cache = RelationsCache()
         inputs = [
-            ('foo', 'table1'),
-            ('bar', 'table2'),
-            ('foo', 'table3'),
-            ('foo', 'table4'),
-            ('bar', 'table3'),
+            ('dbt', 'foo', 'table1'),
+            ('dbt', 'foo', 'table3'),
+            ('dbt', 'foo', 'table4'),
+            ('dbt', 'bar', 'table2'),
+            ('dbt', 'bar', 'table3'),
+            ('dbt_2', 'foo', 'table1'),
+            ('dbt_2', 'foo', 'table2'),
         ]
-        self.inputs = [make_relation(s, i) for s, i in inputs]
+        self.inputs = [make_relation(d, s, i) for d, s, i in inputs]
         for relation in self.inputs:
             self.cache.add(relation)
 
-        # foo.table3 references foo.table1
-        # (create view table3 as (select * from table1...))
+        # dbt.foo.table3 references dbt.foo.table1
+        # (create view dbt.foo.table3 as (select * from dbt.foo.table1...))
         self.cache.add_link(
-            make_relation('foo', 'table1'),
-            make_relation('foo', 'table3')
+            make_relation('dbt', 'foo', 'table1'),
+            make_relation('dbt', 'foo', 'table3')
         )
-        # bar.table3 references foo.table3
-        # (create view bar.table5 as (select * from foo.table3...))
+        # dbt.bar.table3 references dbt.foo.table3
+        # (create view dbt.bar.table5 as (select * from dbt.foo.table3...))
         self.cache.add_link(
-            make_relation('foo', 'table3'),
-            make_relation('bar', 'table3')
+            make_relation('dbt', 'foo', 'table3'),
+            make_relation('dbt', 'bar', 'table3')
         )
 
-        # foo.table2 also references foo.table1
+        # dbt.foo.table4 also references dbt.foo.table1
         self.cache.add_link(
-            make_relation('foo', 'table1'),
-            make_relation('foo', 'table4')
+            make_relation('dbt', 'foo', 'table1'),
+            make_relation('dbt', 'foo', 'table4')
+        )
+
+        # and dbt_2.foo.table1 references dbt.foo.table1
+        self.cache.add_link(
+            make_relation('dbt', 'foo', 'table1'),
+            make_relation('dbt_2', 'foo', 'table1'),
         )
 
     def test_get_relations(self):
         self.assertEqual(len(self.cache.get_relations('dbt', 'foo')), 3)
         self.assertEqual(len(self.cache.get_relations('dbt', 'bar')), 2)
-        self.assertEqual(len(self.cache.relations), 5)
+        self.assertEqual(len(self.cache.get_relations('dbt_2', 'foo')), 2)
+        self.assertEqual(len(self.cache.relations), 7)
 
     def test_drop_one(self):
-        # dropping bar.table2 should only drop itself
-        self.cache.drop(make_relation('bar', 'table2'))
+        # dropping dbt.bar.table2 should only drop itself
+        self.cache.drop(make_relation('dbt', 'bar', 'table2'))
         self.assertEqual(len(self.cache.get_relations('dbt', 'foo')), 3)
         self.assertEqual(len(self.cache.get_relations('dbt', 'bar')), 1)
-        self.assertEqual(len(self.cache.relations), 4)
+        self.assertEqual(len(self.cache.get_relations('dbt_2', 'foo')), 2)
+        self.assertEqual(len(self.cache.relations), 6)
 
     def test_drop_many(self):
-        # dropping foo.table1 should drop everything but bar.table2.
-        self.cache.drop(make_relation('foo', 'table1'))
+        # dropping dbt.foo.table1 should drop everything but dbt.bar.table2 and
+        # dbt_2.foo.table2
+        self.cache.drop(make_relation('dbt', 'foo', 'table1'))
         self.assertEqual(len(self.cache.get_relations('dbt', 'foo')), 0)
         self.assertEqual(len(self.cache.get_relations('dbt', 'bar')), 1)
-        self.assertEqual(len(self.cache.relations), 1)
+        self.assertEqual(len(self.cache.get_relations('dbt_2', 'foo')), 1)
+        self.assertEqual(len(self.cache.relations), 2)
 
     def test_rename_root(self):
-        self.cache.rename(make_relation('foo', 'table1'),
-                          make_relation('bar', 'table1'))
+        self.cache.rename(make_relation('dbt', 'foo', 'table1'),
+                          make_relation('dbt', 'bar', 'table1'))
         retrieved = self.cache.relations[('dbt', 'bar', 'table1')].inner
         self.assertEqual(retrieved.schema, 'bar')
         self.assertEqual(retrieved.identifier, 'table1')
         self.assertEqual(len(self.cache.get_relations('dbt', 'foo')), 2)
         self.assertEqual(len(self.cache.get_relations('dbt', 'bar')), 3)
+        self.assertEqual(len(self.cache.get_relations('dbt_2', 'foo')), 2)
+        self.assertEqual(len(self.cache.relations), 7)
 
         # make sure drops still cascade from the renamed table
-        self.cache.drop(make_relation('bar', 'table1'))
+        self.cache.drop(make_relation('dbt', 'bar', 'table1'))
         self.assertEqual(len(self.cache.get_relations('dbt', 'foo')), 0)
         self.assertEqual(len(self.cache.get_relations('dbt', 'bar')), 1)
-        self.assertEqual(len(self.cache.relations), 1)
+        self.assertEqual(len(self.cache.get_relations('dbt_2', 'foo')), 1)
+        self.assertEqual(len(self.cache.relations), 2)
 
     def test_rename_branch(self):
-        self.cache.rename(make_relation('foo', 'table3'),
-                          make_relation('foo', 'table2'))
+        self.cache.rename(make_relation('dbt', 'foo', 'table3'),
+                          make_relation('dbt', 'foo', 'table2'))
         self.assertEqual(len(self.cache.get_relations('dbt', 'foo')), 3)
         self.assertEqual(len(self.cache.get_relations('dbt', 'bar')), 2)
+        self.assertEqual(len(self.cache.get_relations('dbt_2', 'foo')), 2)
 
         # make sure drops still cascade through the renamed table
-        self.cache.drop(make_relation('foo', 'table1'))
+        self.cache.drop(make_relation('dbt', 'foo', 'table1'))
         self.assertEqual(len(self.cache.get_relations('dbt', 'foo')), 0)
         self.assertEqual(len(self.cache.get_relations('dbt', 'bar')), 1)
-        self.assertEqual(len(self.cache.relations), 1)
+        self.assertEqual(len(self.cache.get_relations('dbt_2', 'foo')), 1)
+        self.assertEqual(len(self.cache.relations), 2)

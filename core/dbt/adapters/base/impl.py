@@ -427,8 +427,6 @@ class BaseAdapter(object):
         self.expand_column_types(goal, to_relation, model_name)
 
     def list_relations(self, database, schema, model_name=None):
-        assert schema is not None
-        assert database is not None
         if self._schema_is_cached(database, schema, model_name):
             return self.cache.get_relations(database, schema)
 
@@ -473,8 +471,6 @@ class BaseAdapter(object):
 
     @available
     def get_relation(self, database, schema, identifier, model_name=None):
-        assert schema is not None
-        assert database is not None
         relations_list = self.list_relations(database, schema, model_name)
 
         matches = self._make_match(relations_list, database, schema,
@@ -671,7 +667,8 @@ class BaseAdapter(object):
     ###
     # Operations involving the manifest
     ###
-    def execute_macro(self, manifest, macro_name, project=None, context=None):
+    def execute_macro(self, manifest, macro_name, project=None,
+                      context_override=None):
         """Look macro_name up in the manifest and execute its results.
 
         :param Manifest manifest: The manifest to use for generating the base
@@ -679,8 +676,8 @@ class BaseAdapter(object):
         :param str macro_name: The name of the macro to execute.
         :param Optional[str] project: The name of the project to search in, or
             None for the first match.
-        :param Optional[dict] context: An optional dict to update() the macro
-            execution context.
+        :param Optional[dict] context_override: An optional dict to update()
+            the macro execution context.
 
         Return an an AttrDict with three attributes: 'table', 'data', and
             'status'. 'table' is an agate.Table.
@@ -695,15 +692,15 @@ class BaseAdapter(object):
         # This causes a reference cycle, as dbt.context.runtime.generate()
         # ends up calling get_adapter, so the import has to be here.
         import dbt.context.runtime
-        ctx = dbt.context.runtime.generate(
+        macro_context = dbt.context.runtime.generate(
             macro,
             self.config,
             manifest
         )
-        if context:
-            ctx.update(context)
+        if context_override:
+            macro_context.update(context_override)
 
-        result = macro.generator(ctx)()
+        result = macro.generator(macro_context)()
         return result
 
     @classmethod
@@ -718,10 +715,10 @@ class BaseAdapter(object):
         Returns an agate.Table of catalog information.
         """
         # make it a list so macros can index into it.
-        databases = list(manifest.get_used_databases())
+        context = {'databases': list(manifest.get_used_databases())}
         try:
             table = self.execute_macro(manifest, GET_CATALOG_MACRO_NAME,
-                                       context={'databases': databases})
+                                       context_override=context)
         finally:
             self.release_connection(GET_CATALOG_MACRO_NAME)
 
