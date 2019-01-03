@@ -6,3 +6,4 @@ pytz==2017.2
 bumpversion==0.5.3
 coverage==4.2
 tox==2.5.0
+ipdb

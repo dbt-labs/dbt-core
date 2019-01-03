@@ -14,6 +14,7 @@ import dbt.exceptions
 from dbt.adapters.postgres import PostgresCredentials
 from dbt.adapters.redshift import RedshiftCredentials
 from dbt.contracts.project import PackageConfig
+from dbt.semver import VersionSpecifier
 
 
 @contextmanager
@@ -63,62 +64,9 @@ model_fqns = frozenset((
 ))
 
 
-class ConfigTest(unittest.TestCase):
-    def setUp(self):
-        self.base_dir = tempfile.mkdtemp()
-        self.profiles_path = os.path.join(self.base_dir, 'profiles.yml')
-
-    def set_up_empty_config(self):
-        with open(self.profiles_path, 'w') as f:
-            f.write(yaml.dump({}))
-
-    def set_up_config_options(self, **kwargs):
-        config = {
-            'config': kwargs
-        }
-
-        with open(self.profiles_path, 'w') as f:
-            f.write(yaml.dump(config))
-
-    def tearDown(self):
-        try:
-            shutil.rmtree(self.base_dir)
-        except:
-            pass
-
-    def test__implicit_opt_in(self):
-        self.set_up_empty_config()
-        config = dbt.config.read_config(self.base_dir)
-        self.assertTrue(dbt.config.send_anonymous_usage_stats(config))
-
-    def test__explicit_opt_out(self):
-        self.set_up_config_options(send_anonymous_usage_stats=False)
-        config = dbt.config.read_config(self.base_dir)
-        self.assertFalse(dbt.config.send_anonymous_usage_stats(config))
-
-    def test__explicit_opt_in(self):
-        self.set_up_config_options(send_anonymous_usage_stats=True)
-        config = dbt.config.read_config(self.base_dir)
-        self.assertTrue(dbt.config.send_anonymous_usage_stats(config))
-
-    def test__implicit_colors(self):
-        self.set_up_empty_config()
-        config = dbt.config.read_config(self.base_dir)
-        self.assertTrue(dbt.config.colorize_output(config))
-
-    def test__explicit_opt_out(self):
-        self.set_up_config_options(use_colors=False)
-        config = dbt.config.read_config(self.base_dir)
-        self.assertFalse(dbt.config.colorize_output(config))
-
-    def test__explicit_opt_in(self):
-        self.set_up_config_options(use_colors=True)
-        config = dbt.config.read_config(self.base_dir)
-        self.assertTrue(dbt.config.colorize_output(config))
-
-
 class Args(object):
-    def __init__(self, profiles_dir=None, threads=None, profile=None, cli_vars=None):
+    def __init__(self, profiles_dir=None, threads=None, profile=None,
+                 cli_vars=None, version_check=None):
         self.profile = profile
         if threads is not None:
             self.threads = threads
@@ -126,6 +74,8 @@ class Args(object):
             self.profiles_dir = profiles_dir
         if cli_vars is not None:
             self.vars = cli_vars
+        if version_check is not None:
+            self.version_check = version_check
 
 
 class BaseConfigTest(unittest.TestCase):
@@ -197,7 +147,8 @@ class BaseConfigTest(unittest.TestCase):
                 'target': 'other-postgres',
             }
         }
-        self.args = Args(profiles_dir=self.profiles_dir, cli_vars='{}')
+        self.args = Args(profiles_dir=self.profiles_dir, cli_vars='{}',
+                         version_check=True)
         self.env_override = {
             'env_value_type': 'postgres',
             'env_value_host': 'env-postgres-host',
@@ -264,8 +215,8 @@ class TestProfile(BaseConfigTest):
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'postgres')
         self.assertEqual(profile.threads, 7)
-        self.assertTrue(profile.send_anonymous_usage_stats)
-        self.assertTrue(profile.use_colors)
+        self.assertTrue(profile.config.send_anonymous_usage_stats)
+        self.assertTrue(profile.config.use_colors)
         self.assertTrue(isinstance(profile.credentials, PostgresCredentials))
         self.assertEqual(profile.credentials.type, 'postgres')
         self.assertEqual(profile.credentials.host, 'postgres-db-hostname')
@@ -283,8 +234,8 @@ class TestProfile(BaseConfigTest):
         profile = self.from_raw_profiles()
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'postgres')
-        self.assertFalse(profile.send_anonymous_usage_stats)
-        self.assertFalse(profile.use_colors)
+        self.assertFalse(profile.config.send_anonymous_usage_stats)
+        self.assertFalse(profile.config.use_colors)
 
     def test_partial_config_override(self):
         self.default_profile_data['config'] = {
@@ -293,8 +244,8 @@ class TestProfile(BaseConfigTest):
         profile = self.from_raw_profiles()
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'postgres')
-        self.assertFalse(profile.send_anonymous_usage_stats)
-        self.assertTrue(profile.use_colors)
+        self.assertFalse(profile.config.send_anonymous_usage_stats)
+        self.assertTrue(profile.config.use_colors)
 
     def test_missing_type(self):
         del self.default_profile_data['default']['outputs']['postgres']['type']
@@ -419,8 +370,8 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'postgres')
         self.assertEqual(profile.threads, 7)
-        self.assertTrue(profile.send_anonymous_usage_stats)
-        self.assertTrue(profile.use_colors)
+        self.assertTrue(profile.config.send_anonymous_usage_stats)
+        self.assertTrue(profile.config.use_colors)
         self.assertTrue(isinstance(profile.credentials, PostgresCredentials))
         self.assertEqual(profile.credentials.type, 'postgres')
         self.assertEqual(profile.credentials.host, 'postgres-db-hostname')
@@ -444,8 +395,8 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.profile_name, 'other')
         self.assertEqual(profile.target_name, 'other-postgres')
         self.assertEqual(profile.threads, 3)
-        self.assertTrue(profile.send_anonymous_usage_stats)
-        self.assertTrue(profile.use_colors)
+        self.assertTrue(profile.config.send_anonymous_usage_stats)
+        self.assertTrue(profile.config.use_colors)
         self.assertTrue(isinstance(profile.credentials, PostgresCredentials))
         self.assertEqual(profile.credentials.type, 'postgres')
         self.assertEqual(profile.credentials.host, 'other-postgres-db-hostname')
@@ -466,8 +417,8 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'redshift')
         self.assertEqual(profile.threads, 1)
-        self.assertTrue(profile.send_anonymous_usage_stats)
-        self.assertTrue(profile.use_colors)
+        self.assertTrue(profile.config.send_anonymous_usage_stats)
+        self.assertTrue(profile.config.use_colors)
         self.assertTrue(isinstance(profile.credentials, RedshiftCredentials))
         self.assertEqual(profile.credentials.type, 'redshift')
         self.assertEqual(profile.credentials.host, 'redshift-db-hostname')
@@ -489,8 +440,8 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'with-vars')
         self.assertEqual(profile.threads, 1)
-        self.assertTrue(profile.send_anonymous_usage_stats)
-        self.assertTrue(profile.use_colors)
+        self.assertTrue(profile.config.send_anonymous_usage_stats)
+        self.assertTrue(profile.config.use_colors)
         self.assertEqual(profile.credentials.type, 'postgres')
         self.assertEqual(profile.credentials.host, 'env-postgres-host')
         self.assertEqual(profile.credentials.port, 6543)
@@ -511,8 +462,8 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'with-vars')
         self.assertEqual(profile.threads, 1)
-        self.assertTrue(profile.send_anonymous_usage_stats)
-        self.assertTrue(profile.use_colors)
+        self.assertTrue(profile.config.send_anonymous_usage_stats)
+        self.assertTrue(profile.config.use_colors)
         self.assertEqual(profile.credentials.type, 'postgres')
         self.assertEqual(profile.credentials.host, 'env-postgres-host')
         self.assertEqual(profile.credentials.port, 6543)
@@ -524,7 +475,7 @@ class TestProfileFile(BaseFileTest):
         self.env_override['env_value_port'] = 'hello'
         self.args.target = 'with-vars'
         with mock.patch.dict(os.environ, self.env_override):
-            with self.assertRaises(dbt.config.DbtProfileError) as exc:
+            with self.assertRaises(dbt.exceptions.DbtProfileError) as exc:
                 self.from_args()
 
         self.assertIn("not of type 'integer'", str(exc.exception))
@@ -542,8 +493,8 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'cli-and-env-vars')
         self.assertEqual(profile.threads, 1)
-        self.assertTrue(profile.send_anonymous_usage_stats)
-        self.assertTrue(profile.use_colors)
+        self.assertTrue(profile.config.send_anonymous_usage_stats)
+        self.assertTrue(profile.config.use_colors)
         self.assertEqual(profile.credentials.type, 'postgres')
         self.assertEqual(profile.credentials.host, 'cli-postgres-host')
         self.assertEqual(profile.credentials.port, 6543)
@@ -588,6 +539,8 @@ class TestProject(BaseConfigTest):
         self.assertEqual(project.on_run_end, [])
         self.assertEqual(project.archive, [])
         self.assertEqual(project.seeds, {})
+        self.assertEqual(project.dbt_version,
+                         [VersionSpecifier.from_version_string('>=0.0.0')])
         self.assertEqual(project.packages, PackageConfig(packages=[]))
         # just make sure str() doesn't crash anything, that's always
         # embarrassing
@@ -671,7 +624,7 @@ class TestProject(BaseConfigTest):
                     'tables': [
                         {
                             'source_table': 'my_table',
-                            'target_Table': 'my_table_archived',
+                            'target_table': 'my_table_archived',
                             'updated_at': 'updated_at_field',
                             'unique_key': 'table_id',
                         },
@@ -685,6 +638,7 @@ class TestProject(BaseConfigTest):
                     'post-hook': 'grant select on {{ this }} to bi_user',
                 },
             },
+            'require-dbt-version': '>=0.1.0',
         })
         packages = {
             'packages': [
@@ -743,7 +697,7 @@ class TestProject(BaseConfigTest):
             'tables': [
                 {
                     'source_table': 'my_table',
-                    'target_Table': 'my_table_archived',
+                    'target_table': 'my_table_archived',
                     'updated_at': 'updated_at_field',
                     'unique_key': 'table_id',
                 },
@@ -756,6 +710,8 @@ class TestProject(BaseConfigTest):
                 'post-hook': 'grant select on {{ this }} to bi_user',
             },
         })
+        self.assertEqual(project.dbt_version,
+                         [VersionSpecifier.from_version_string('>=0.1.0')])
         self.assertEqual(project.packages, PackageConfig(packages=[
             {
                 'local': 'foo',
@@ -798,6 +754,16 @@ class TestProject(BaseConfigTest):
 
         self.assertIn('no dbt_project.yml', str(exc.exception))
 
+    def test_invalid_version(self):
+        self.default_project_data['require-dbt-version'] = 'hello!'
+        with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
+            dbt.config.Project.from_project_config(self.default_project_data)
+
+    def test_unsupported_version(self):
+        self.default_project_data['require-dbt-version'] = '>99999.0.0'
+        # allowed, because the RuntimeConfig checks, not the Project itself
+        dbt.config.Project.from_project_config(self.default_project_data)
+
     def test__no_unused_resource_config_paths(self):
         self.default_project_data.update({
             'models': model_config,
@@ -834,7 +800,7 @@ class TestProject(BaseConfigTest):
         ))}, [])
         self.assertEqual(len(unused), 0)
 
-    @mock.patch.object(dbt.config, 'logger')
+    @mock.patch.object(dbt.config.project, 'logger')
     def test__warn_for_unused_resource_config_paths_empty(self, mock_logger):
         project = dbt.config.Project.from_project_config(
             self.default_project_data
@@ -918,7 +884,7 @@ class TestProjectWithConfigs(BaseConfigTest):
         self.assertEqual(len(unused), 1)
         self.assertEqual(unused[0], ('models', 'my_test_project', 'baz'))
 
-    @mock.patch.object(dbt.config, 'logger')
+    @mock.patch.object(dbt.config.project, 'logger')
     def test__warn_for_unused_resource_config_paths(self, mock_logger):
         project = dbt.config.Project.from_project_config(
             self.default_project_data
@@ -926,7 +892,7 @@ class TestProjectWithConfigs(BaseConfigTest):
         unused = project.warn_for_unused_resource_config_paths(self.used, [])
         mock_logger.info.assert_called_once()
 
-    @mock.patch.object(dbt.config, 'logger')
+    @mock.patch.object(dbt.config.project, 'logger')
     def test__warn_for_unused_resource_config_paths_disabled(self, mock_logger):
         project = dbt.config.Project.from_project_config(
             self.default_project_data
@@ -937,7 +903,6 @@ class TestProjectWithConfigs(BaseConfigTest):
         )
 
         self.assertEqual(len(unused), 0)
-
 
 
 class TestProjectFile(BaseFileTest):
@@ -1000,10 +965,21 @@ class TestRuntimeConfig(BaseConfigTest):
             self.default_profile_data, self.default_project_data['profile'], {}
         )
 
+    def from_parts(self, exc=None):
+        project = self.get_project()
+        profile = self.get_profile()
+        if exc is None:
+            return dbt.config.RuntimeConfig.from_parts(project, profile, self.args)
+
+        with self.assertRaises(exc) as raised:
+            err = raised
+            dbt.config.RuntimeConfig.from_parts(project, profile, self.args)
+        return err
+
     def test_from_parts(self):
         project = self.get_project()
         profile = self.get_profile()
-        config = dbt.config.RuntimeConfig.from_parts(project, profile, {})
+        config = dbt.config.RuntimeConfig.from_parts(project, profile, self.args)
 
         self.assertEqual(config.cli_vars, {})
         self.assertEqual(config.to_profile_info(), profile.to_profile_info())
@@ -1032,9 +1008,47 @@ class TestRuntimeConfig(BaseConfigTest):
         project = self.get_project()
         profile = self.get_profile()
         # invalid - must be boolean
-        profile.use_colors = None
+        profile.config.use_colors = None
         with self.assertRaises(dbt.exceptions.DbtProjectError):
             dbt.config.RuntimeConfig.from_parts(project, profile, {})
+
+    def test_supported_version(self):
+        self.default_project_data['require-dbt-version'] = '>0.0.0'
+        conf = self.from_parts()
+        self.assertEqual(set(x.to_version_string() for x in conf.dbt_version), {'>0.0.0'})
+
+    def test_unsupported_version(self):
+        self.default_project_data['require-dbt-version'] = '>99999.0.0'
+        raised = self.from_parts(dbt.exceptions.DbtProjectError)
+        self.assertIn('This version of dbt is not supported', str(raised.exception))
+
+    def test_unsupported_version_no_check(self):
+        self.default_project_data['require-dbt-version'] = '>99999.0.0'
+        self.args.version_check = False
+        conf = self.from_parts()
+        self.assertEqual(set(x.to_version_string() for x in conf.dbt_version), {'>99999.0.0'})
+
+    def test_supported_version_range(self):
+        self.default_project_data['require-dbt-version'] = ['>0.0.0', '<=99999.0.0']
+        conf = self.from_parts()
+        self.assertEqual(set(x.to_version_string() for x in conf.dbt_version), {'>0.0.0', '<=99999.0.0'})
+
+    def test_unsupported_version_range(self):
+        self.default_project_data['require-dbt-version'] = ['>0.0.0', '<=0.0.1']
+        raised = self.from_parts(dbt.exceptions.DbtProjectError)
+        self.assertIn('This version of dbt is not supported', str(raised.exception))
+
+    def test_unsupported_version_range_no_check(self):
+        self.default_project_data['require-dbt-version'] = ['>0.0.0', '<=0.0.1']
+        self.args.version_check = False
+        conf = self.from_parts()
+        self.assertEqual(set(x.to_version_string() for x in conf.dbt_version), {'>0.0.0', '<=0.0.1'})
+
+    def test_impossible_version_range(self):
+        self.default_project_data['require-dbt-version'] = ['>99999.0.0', '<=0.0.1']
+        raised = self.from_parts(dbt.exceptions.DbtProjectError)
+        self.assertIn('The package version requirement can never be satisfied', str(raised.exception))
+
 
 
 class TestRuntimeConfigFiles(BaseFileTest):

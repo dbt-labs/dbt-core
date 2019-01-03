@@ -1,0 +1,5 @@
+
+name: dbt_redshift
+version: 1.0
+
+macro-paths: ["macros"]

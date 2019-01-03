@@ -9,7 +9,6 @@ import dbt.exceptions
 import dbt.flags
 import dbt.linker
 import dbt.config
-import dbt.templates
 import dbt.utils
 
 try:

@@ -1,0 +1,5 @@
+
+name: dbt_bigquery
+version: 1.0
+
+macro-paths: ["macros"]
