@@ -331,7 +331,7 @@ class BaseConnectionManager(object):
 
         :param str name: The name of the connection to use.
         """
-        connection = self.get_if_exists(name)
+        connection = self.in_use.get(name)
         if connection:
             self.commit(connection)
 

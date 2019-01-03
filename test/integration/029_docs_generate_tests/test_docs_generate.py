@@ -46,7 +46,7 @@ def _normalize(path):
 class TestDocsGenerate(DBTIntegrationTest):
     setup_alternate_db = True
     def setUp(self):
-        super(TestDocsGenerate,self).setUp()
+        super(TestDocsGenerate, self).setUp()
         self.maxDiff = None
 
     @property

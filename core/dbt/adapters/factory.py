@@ -81,5 +81,6 @@ def reset_adapters():
     """Clear the adapters. This is useful for tests, which change configs.
     """
     with _ADAPTER_LOCK:
+        for adapter in _ADAPTERS.values():
+            adapter.cleanup_connections()
         _ADAPTERS.clear()
-        ADAPTER_TYPES.clear()

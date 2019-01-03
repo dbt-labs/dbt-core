@@ -10,7 +10,7 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from psycopg2 import extensions as psycopg2_extensions
 import agate
 
-from .utils import config_from_parts_or_dicts
+from .utils import config_from_parts_or_dicts, inject_adapter
 
 
 class TestPostgresAdapter(unittest.TestCase):
@@ -45,6 +45,7 @@ class TestPostgresAdapter(unittest.TestCase):
     def adapter(self):
         if self._adapter is None:
             self._adapter = PostgresAdapter(self.config)
+            inject_adapter('postgres', self._adapter)
         return self._adapter
 
     def test_acquire_connection_validations(self):
@@ -196,6 +197,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
 
         self.psycopg2.connect.return_value = self.handle
         self.adapter = PostgresAdapter(self.config)
+        inject_adapter('postgres', self.adapter)
 
     def tearDown(self):
         # we want a unique self.handle every time.

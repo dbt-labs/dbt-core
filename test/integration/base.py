@@ -320,8 +320,14 @@ class DBTIntegrationTest(unittest.TestCase):
     def tearDown(self):
         self._clean_files()
 
+        # get any current run adapter and clean up its connections before we
+        # reset them. It'll probably be different from ours because
+        # handle_and_check() calls reset_adapters().
+        adapter = get_adapter(self.config)
+        if adapter is not self.adapter:
+            adapter.cleanup_connections()
         if not hasattr(self, 'adapter'):
-            self.adapter = get_adapter(self.config)
+            self.adapter = adapter
 
         self._drop_schemas()
 
@@ -382,7 +388,6 @@ class DBTIntegrationTest(unittest.TestCase):
 
         self._created_schemas.clear()
 
-
     def _drop_schemas(self):
         if self.adapter_type == 'bigquery':
             self._drop_schemas_bigquery()
@@ -397,10 +402,7 @@ class DBTIntegrationTest(unittest.TestCase):
     def profile_config(self):
         return {}
 
-    def run_dbt(self, args=None, expect_pass=True, strict=True, clear_adapters=True):
-        # clear the adapter cache
-        if clear_adapters:
-            reset_adapters()
+    def run_dbt(self, args=None, expect_pass=True, strict=True):
         if args is None:
             args = ["run"]
 
@@ -463,7 +465,10 @@ class DBTIntegrationTest(unittest.TestCase):
         else:
             return list(res)
 
-    def run_sql(self, query, fetch='None', kwargs=None):
+    def run_sql(self, query, fetch='None', kwargs=None, connection_name=None):
+        if connection_name is None:
+            connection_name = '__test'
+
         if query.strip() == "":
             return
 
@@ -471,7 +476,7 @@ class DBTIntegrationTest(unittest.TestCase):
         if self.adapter_type == 'bigquery':
             return self.run_sql_bigquery(sql, fetch)
 
-        conn = self.adapter.acquire_connection('__test')
+        conn = self.adapter.acquire_connection(connection_name)
         with conn.handle.cursor() as cursor:
             try:
                 cursor.execute(sql)

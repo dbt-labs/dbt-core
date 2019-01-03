@@ -12,20 +12,35 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.compat import abstractclassmethod
 
 
+LIST_RELATIONS_MACRO_NAME = 'list_relations_without_caching'
+GET_COLUMNS_IN_RELATION_MACRO_NAME = 'get_columns_in_relation'
+LIST_SCHEMAS_MACRO_NAME = 'list_schemas'
+CHECK_SCHEMA_EXISTS_MACRO_NAME = 'check_schema_exists'
+CREATE_SCHEMA_MACRO_NAME = 'create_schema'
+DROP_SCHEMA_MACRO_NAME = 'drop_schema'
+RENAME_RELATION_MACRO_NAME = 'rename_relation'
+TRUNCATE_RELATION_MACRO_NAME = 'truncate_relation'
+DROP_RELATION_MACRO_NAME = 'drop_relation'
+ALTER_COLUMN_TYPE_MACRO_NAME = 'alter_column_type'
+
+
 class SQLAdapter(BaseAdapter):
     """The default adapter with the common agate conversions and some SQL
-    methods implemented. This adapter has a different (much shorter) list of
-    methods to implement, but it may not be possible to implement all of them
-    on all databases.
+    methods implemented. This adapter has a different much shorter list of
+    methods to implement, but some more macros that must be implemented.
+
+    To implement a macro, implement "${adapter_type}__${macro_name}". in the
+    adapter's internal project.
 
     Methods to implement:
         - exception_handler
         - type
         - date_function
-        - list_schemas
-        - list_relations_without_caching
-        - get_columns_in_relation_sql
 
+    Macros to implement:
+        - get_catalog
+        - list_relations_without_caching
+        - get_columns_in_relation
     """
     @available
     def add_query(self, sql, model_name=None, auto_begin=True, bindings=None,
@@ -78,12 +93,12 @@ class SQLAdapter(BaseAdapter):
     def expand_column_types(self, goal, current, model_name=None):
         reference_columns = {
             c.name: c for c in
-            self.get_columns_in_relation(goal, model_name)
+            self.get_columns_in_relation(goal, model_name=model_name)
         }
 
         target_columns = {
             c.name: c for c
-            in self.get_columns_in_relation(current, model_name)
+            in self.get_columns_in_relation(current, model_name=model_name)
         }
 
         for column_name, reference_column in reference_columns.items():
@@ -96,20 +111,11 @@ class SQLAdapter(BaseAdapter):
                 logger.debug("Changing col type from %s to %s in table %s",
                              target_column.data_type, new_type, current)
 
-                self.alter_column_type(current, column_name,
-                                       new_type, model_name)
+                self.alter_column_type(current, column_name, new_type,
+                                       model_name=model_name)
 
-    def drop_relation(self, relation, model_name=None):
-        if dbt.flags.USE_CACHE:
-            self.cache.drop(relation)
-        if relation.type is None:
-            dbt.exceptions.raise_compiler_error(
-                'Tried to drop relation {}, but its type is null.'
-                .format(relation))
-
-        sql = 'drop {} if exists {} cascade'.format(relation.type, relation)
-
-        connection, cursor = self.add_query(sql, model_name, auto_begin=False)
+        if model_name is None:
+            self.release_connection('master')
 
     def alter_column_type(self, relation, column_name, new_column_type,
                           model_name=None):
@@ -119,105 +125,124 @@ class SQLAdapter(BaseAdapter):
         3. Drop the existing column (cascade!)
         4. Rename the new column to existing column
         """
-
-        opts = {
-            "relation": relation,
-            "old_column": column_name,
-            "tmp_column": "{}__dbt_alter".format(column_name),
-            "dtype": new_column_type
+        kwargs = {
+            'relation': relation,
+            'column_name': column_name,
+            'new_column_type': new_column_type,
         }
+        self.execute_macro(
+            ALTER_COLUMN_TYPE_MACRO_NAME,
+            kwargs=kwargs,
+            connection_name=model_name
+        )
 
-        sql = """
-        alter table {relation} add column "{tmp_column}" {dtype};
-        update {relation} set "{tmp_column}" = "{old_column}";
-        alter table {relation} drop column "{old_column}" cascade;
-        alter table {relation} rename column "{tmp_column}" to "{old_column}";
-        """.format(**opts).strip()  # noqa
+    def drop_relation(self, relation, model_name=None):
+        if dbt.flags.USE_CACHE:
+            self.cache.drop(relation)
+        if relation.type is None:
+            dbt.exceptions.raise_compiler_error(
+                'Tried to drop relation {}, but its type is null.'
+                .format(relation))
 
-        connection, cursor = self.add_query(sql, model_name)
-
-        return connection, cursor
+        self.execute_macro(
+            DROP_RELATION_MACRO_NAME,
+            kwargs={'relation': relation},
+            connection_name=model_name
+        )
 
     def truncate_relation(self, relation, model_name=None):
-        sql = 'truncate table {}'.format(relation)
-
-        connection, cursor = self.add_query(sql, model_name)
+        self.execute_macro(
+            TRUNCATE_RELATION_MACRO_NAME,
+            kwargs={'relation': relation},
+            connection_name=model_name
+        )
 
     def rename_relation(self, from_relation, to_relation, model_name=None):
         if dbt.flags.USE_CACHE:
             self.cache.rename(from_relation, to_relation)
-        sql = 'alter table {} rename to {}'.format(
-            from_relation, to_relation.include(database=False, schema=False))
 
-        connection, cursor = self.add_query(sql, model_name)
-
-    @abstractclassmethod
-    def get_columns_in_relation_sql(cls, relation):
-        """Return the sql string to execute on this adapter that will return
-        information about the columns in this relation. The query should result
-        in a table with the following type information:
-
-            column_name: text
-            data_type: text
-            character_maximum_length: number
-            numeric_precision: text
-
-        numeric_precision should be two integers separated by a comma,
-        representing the precision and the scale, respectively.
-
-        :param self.Relation relation: The relation to get columns for.
-        :return: The column information query
-        :rtype: str
-        """
-        raise dbt.exceptions.NotImplementedException(
-            '`get_columns_in_relation_sql` is not implemented for this '
-            'adapter!'
+        kwargs = {'from_relation': from_relation, 'to_relation': to_relation}
+        self.execute_macro(
+            RENAME_RELATION_MACRO_NAME,
+            kwargs=kwargs,
+            connection_name=model_name
         )
 
     def get_columns_in_relation(self, relation, model_name=None):
-        sql = self.get_columns_in_relation_sql(relation)
-        connection, cursor = self.add_query(sql, model_name)
-
-        data = cursor.fetchall()
-        columns = []
-
-        for row in data:
-            name, data_type, char_size, numeric_size = row
-            column = self.Column(name, data_type, char_size, numeric_size)
-            columns.append(column)
-
-        return columns
-
-    def _create_schema_sql(self, database, schema):
-        schema = self.quote_as_configured(schema, 'schema')
-        database = self.quote_as_configured(database, 'database')
-        return 'create schema if not exists {database}.{schema}'.format(
-            database=database, schema=schema
-        )
-
-    def _drop_schema_sql(self, database, schema):
-        schema = self.quote_as_configured(schema, 'schema')
-        database = self.quote_as_configured(database, 'database')
-        return 'drop schema if exists {database}.{schema} cascade'.format(
-            database=database, schema=schema
+        return self.execute_macro(
+            GET_COLUMNS_IN_RELATION_MACRO_NAME,
+            kwargs={'relation': relation},
+            connection_name=model_name
         )
 
     def create_schema(self, database, schema, model_name=None):
-        logger.debug('Creating schema "%s".', schema)
-
-        sql = self._create_schema_sql(database, schema)
-        res = self.add_query(sql, model_name)
-
+        logger.debug('Creating schema "%s"."%s".', database, schema)
+        if model_name is None:
+            model_name = 'master'
+        kwargs = {
+            'database_name': self.quote_as_configured(database, 'database'),
+            'schema_name': self.quote_as_configured(schema, 'schema'),
+        }
+        self.execute_macro(CREATE_SCHEMA_MACRO_NAME,
+                           kwargs=kwargs,
+                           connection_name=model_name)
         self.commit_if_has_connection(model_name)
 
-        return res
-
     def drop_schema(self, database, schema, model_name=None):
-        logger.debug('Dropping schema "%s".', schema)
+        logger.debug('Dropping schema "%s"."%s".', database, schema)
+        kwargs = {
+            'database_name': self.quote_as_configured(database, 'database'),
+            'schema_name': self.quote_as_configured(schema, 'schema'),
+        }
+        self.execute_macro(DROP_SCHEMA_MACRO_NAME,
+                           kwargs=kwargs,
+                           connection_name=model_name)
 
-        sql = self._drop_schema_sql(database, schema)
+    def list_relations_without_caching(self, database, schema,
+                                       model_name=None):
+        assert database is not None
+        assert schema is not None
+        results = self.execute_macro(
+            LIST_RELATIONS_MACRO_NAME,
+            kwargs={'database': database, 'schema': schema},
+            connection_name=model_name,
+            release=True
+        )
 
-        return self.add_query(sql, model_name)
+        relations = []
+        quote_policy = {
+            'schema': True,
+            'identifier': True
+        }
+        for _database, name, _schema, _type in results:
+            relations.append(self.Relation.create(
+                database=_database,
+                schema=_schema,
+                identifier=name,
+                quote_policy=quote_policy,
+                type=_type
+            ))
+        return relations
 
     def quote(cls, identifier):
         return '"{}"'.format(identifier)
+
+    def list_schemas(self, database, model_name=None):
+        results = self.execute_macro(
+            LIST_SCHEMAS_MACRO_NAME,
+            kwargs={'database': database},
+            connection_name=model_name,
+            # release when the model_name is none, as that implies we were
+            # called by node_runners.py.
+            release=(model_name is None)
+        )
+
+        return [row[0] for row in results]
+
+    def check_schema_exists(self, database, schema, model_name=None):
+        results = self.execute_macro(
+            CHECK_SCHEMA_EXISTS_MACRO_NAME,
+            kwargs={'database': database, 'schema': schema},
+            connection_name=model_name
+        )
+        return results[0] > 0

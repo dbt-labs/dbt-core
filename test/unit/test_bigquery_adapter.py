@@ -9,7 +9,7 @@ from dbt.adapters.bigquery import BigQueryRelation
 import dbt.exceptions
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
-from .utils import config_from_parts_or_dicts
+from .utils import config_from_parts_or_dicts, inject_adapter
 
 
 def _bq_conn():
@@ -68,7 +68,9 @@ class TestBigQueryAdapter(unittest.TestCase):
             project=project,
             profile=profile,
         )
-        return BigQueryAdapter(config)
+        adapter = BigQueryAdapter(config)
+        inject_adapter('bigquery', adapter)
+        return adapter
 
 
     @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())

@@ -6,6 +6,7 @@
         exceptions.raise_compiler_error('postgres get_catalog requires exactly one database')
     {% endif %}
     {% set database = databases[0] %}
+    {{ adapter.verify_database(database) }}
 
     with table_owners as (
 

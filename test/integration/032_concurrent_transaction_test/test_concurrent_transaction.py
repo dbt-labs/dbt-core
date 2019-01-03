@@ -24,8 +24,9 @@ class BaseTestConcurrentTransaction(DBTIntegrationTest):
         }
 
     def run_select_and_check(self, rel, sql):
+        connection_name = '__test_{}'.format(id(threading.current_thread()))
         try:
-            res = self.run_sql(sql, fetch='one')
+            res = self.run_sql(sql, fetch='one', connection_name=connection_name)
 
             # The result is the output of f_sleep(), which is True
             if res[0] == True:

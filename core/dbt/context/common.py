@@ -48,8 +48,8 @@ class DatabaseWrapper(object):
     """
     Wrapper for runtime database interaction. Mostly a compatibility layer now.
     """
-    def __init__(self, model, adapter):
-        self.model = model
+    def __init__(self, connection_name, adapter):
+        self.connection_name = connection_name
         self.adapter = adapter
         self.Relation = RelationProxy(adapter)
 
@@ -58,7 +58,7 @@ class DatabaseWrapper(object):
 
         @functools.wraps(func)
         def wrapped(*args, **kwargs):
-            kwargs['model_name'] = self.model.get('name')
+            kwargs['model_name'] = self.connection_name
             return func(*args, **kwargs)
 
         return wrapped
@@ -83,7 +83,7 @@ class DatabaseWrapper(object):
         return self.adapter.type()
 
     def commit(self):
-        return self.adapter.commit_if_has_connection(self.model.get('name'))
+        return self.adapter.commit_if_has_connection(self.connection_name)
 
 
 def _add_macro_map(context, package_name, macro_map):
@@ -337,7 +337,7 @@ def get_this_relation(db_wrapper, config, model):
 
 
 def generate_base(model, model_dict, config, manifest, source_config,
-                  provider):
+                  provider, connection_name):
     """Generate the common aspects of the config dict."""
     if provider is None:
         raise dbt.exceptions.InternalException(
@@ -357,7 +357,7 @@ def generate_base(model, model_dict, config, manifest, source_config,
     pre_hooks = None
     post_hooks = None
 
-    db_wrapper = DatabaseWrapper(model_dict, adapter)
+    db_wrapper = DatabaseWrapper(connection_name, adapter)
 
     context = dbt.utils.merge(context, {
         "adapter": db_wrapper,
@@ -415,7 +415,7 @@ def modify_generated_context(context, model, model_dict, config, manifest):
     return context
 
 
-def generate_execute_macro(model, config, manifest, provider):
+def generate_execute_macro(model, config, manifest, provider, connection_name):
     """Internally, macros can be executed like nodes, with some restrictions:
 
      - they don't have have all values available that nodes do:
@@ -425,7 +425,7 @@ def generate_execute_macro(model, config, manifest, provider):
     """
     model_dict = model.serialize()
     context = generate_base(model, model_dict, config, manifest,
-                            None, provider)
+                            None, provider, connection_name)
 
     return modify_generated_context(context, model, model_dict, config,
                                     manifest)
@@ -434,7 +434,7 @@ def generate_execute_macro(model, config, manifest, provider):
 def generate_model(model, config, manifest, source_config, provider):
     model_dict = model.to_dict()
     context = generate_base(model, model_dict, config, manifest,
-                            source_config, provider)
+                            source_config, provider, model.get('name'))
     # operations (hooks) don't get a 'this'
     if model.resource_type != NodeType.Operation:
         this = get_this_relation(context['adapter'], config, model_dict)
@@ -459,8 +459,5 @@ def generate(model, config, manifest, source_config=None, provider=None):
     or
         dbt.context.runtime.generate
     """
-    if isinstance(model, ParsedMacro):
-        return generate_execute_macro(model, config, manifest, provider)
-    else:
-        return generate_model(model, config, manifest, source_config,
-                              provider)
+    return generate_model(model, config, manifest, source_config,
+                          provider)

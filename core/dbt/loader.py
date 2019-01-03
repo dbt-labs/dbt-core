@@ -1,4 +1,9 @@
+import os
+import itertools
+
+from dbt.include.global_project import PACKAGES
 import dbt.exceptions
+import dbt.flags
 
 from dbt.node_types import NodeType
 from dbt.contracts.graph.manifest import Manifest
@@ -7,6 +12,8 @@ from dbt.utils import timestring
 from dbt.parser import MacroParser, ModelParser, SeedParser, AnalysisParser, \
     DocumentationParser, DataTestParser, HookParser, ArchiveParser, \
     SchemaParser, ParserUtils
+
+from dbt.contracts.project import ProjectList
 
 
 class GraphLoader(object):
@@ -20,20 +27,6 @@ class GraphLoader(object):
         self.patches = {}
         self.disabled = []
         self.macro_manifest = None
-
-    def _load_macro_nodes(self, resource_type):
-        parser = MacroParser(self.root_project, self.all_projects)
-        for project_name, project in self.all_projects.items():
-            self.macros.update(parser.load_and_parse(
-                package_name=project_name,
-                root_dir=project.project_root,
-                relative_dirs=project.macro_paths,
-                resource_type=resource_type,
-            ))
-
-        # make a manifest with just the macros to get the context
-        self.macro_manifest = Manifest(macros=self.macros, nodes={}, docs={},
-                                       generated_at=timestring(), disabled=[])
 
     def _load_sql_nodes(self, parser_type, resource_type, relative_dirs_attr,
                         **kwargs):
@@ -51,9 +44,24 @@ class GraphLoader(object):
             self.nodes.update(nodes)
             self.disabled.extend(disabled)
 
-    def _load_macros(self):
-        self._load_macro_nodes(NodeType.Macro)
-        self._load_macro_nodes(NodeType.Operation)
+    def _load_macros(self, internal_manifest=None):
+        # skip any projects in the internal manifest
+        all_projects = self.all_projects.copy()
+        if internal_manifest is not None:
+            for name in internal_project_names():
+                all_projects.pop(name, None)
+            self.macros.update(internal_manifest.macros)
+
+        # give the macroparser all projects but then only load what we haven't
+        # loaded already
+        parser = MacroParser(self.root_project, self.all_projects)
+        for project_name, project in all_projects.items():
+            self.macros.update(parser.load_and_parse(
+                package_name=project_name,
+                root_dir=project.project_root,
+                relative_dirs=project.macro_paths,
+                resource_type=NodeType.Macro,
+            ))
 
     def _load_seeds(self):
         parser = SeedParser(self.root_project, self.all_projects,
@@ -115,11 +123,16 @@ class GraphLoader(object):
                     )
                 self.patches[name] = patch
 
-    def load(self):
-        self._load_macros()
+    def load(self, internal_manifest=None):
+        self._load_macros(internal_manifest=internal_manifest)
+        # make a manifest with just the macros to get the context
+        self.macro_manifest = Manifest(macros=self.macros, nodes={}, docs={},
+                                       generated_at=timestring(), disabled=[])
         self._load_nodes()
         self._load_docs()
         self._load_schema_tests()
+
+    def create_manifest(self):
         manifest = Manifest(
             nodes=self.nodes,
             macros=self.macros,
@@ -136,5 +149,71 @@ class GraphLoader(object):
         return manifest
 
     @classmethod
-    def load_all(cls, project_config, all_projects):
-        return cls(project_config, all_projects).load()
+    def _load_from_projects(cls, root_config, projects, internal_manifest):
+        if dbt.flags.STRICT_MODE:
+            ProjectList(**projects)
+
+        loader = cls(root_config, projects)
+        loader.load(internal_manifest=internal_manifest)
+        return loader.create_manifest()
+
+    @classmethod
+    def load_all(cls, root_config, internal_manifest=None):
+        projects = load_all_projects(root_config)
+        return cls._load_from_projects(root_config, projects,
+                                       internal_manifest)
+
+    @classmethod
+    def load_internal(cls, root_config):
+        projects = load_internal_projects(root_config)
+        return cls._load_from_projects(root_config, projects, None)
+
+
+def internal_project_names():
+    return iter(PACKAGES.values())
+
+
+def _load_projects(config, paths):
+    for path in paths:
+        try:
+            project = config.new_project(path)
+        except dbt.exceptions.DbtProjectError as e:
+            raise dbt.exceptions.DbtProjectError(
+                'Failed to read package at {}: {}'
+                .format(path, e)
+            )
+        else:
+            yield project.project_name, project
+
+
+def _project_directories(config):
+    root = os.path.join(config.project_root, config.modules_path)
+
+    dependencies = []
+    if os.path.exists(root):
+        dependencies = os.listdir(root)
+
+    for name in dependencies:
+        full_obj = os.path.join(root, name)
+
+        if not os.path.isdir(full_obj) or name.startswith('__'):
+            # exclude non-dirs and dirs that start with __
+            # the latter could be something like __pycache__
+            # for the global dbt modules dir
+            continue
+
+        yield full_obj
+
+
+def load_all_projects(config):
+    all_projects = {config.project_name: config}
+    project_paths = itertools.chain(
+        internal_project_names(),
+        _project_directories(config)
+    )
+    all_projects.update(_load_projects(config, project_paths))
+    return all_projects
+
+
+def load_internal_projects(config):
+    return dict(_load_projects(config, internal_project_names()))

@@ -91,3 +91,10 @@ class Config(object):
 def generate(model, runtime_config, manifest, source_config):
     return dbt.context.common.generate(
         model, runtime_config, manifest, source_config, dbt.context.parser)
+
+
+def generate_macro(model, runtime_config, manifest, connection_name):
+    return dbt.context.common.generate_execute_macro(
+        model, runtime_config, manifest, dbt.context.parser,
+        connection_name
+    )

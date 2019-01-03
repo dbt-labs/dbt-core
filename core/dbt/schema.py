@@ -10,11 +10,13 @@ class Column(object):
         'INTEGER': 'INT'
     }
 
-    def __init__(self, column, dtype, char_size=None, numeric_size=None):
+    def __init__(self, column, dtype, char_size=None, numeric_precision=None,
+                 numeric_scale=None):
         self.column = column
         self.dtype = dtype
         self.char_size = char_size
-        self.numeric_size = numeric_size
+        self.numeric_precision = numeric_precision
+        self.numeric_scale = numeric_scale
 
     @classmethod
     def translate_type(cls, dtype):
@@ -38,7 +40,8 @@ class Column(object):
         if self.is_string():
             return Column.string_type(self.string_size())
         elif self.is_numeric():
-            return Column.numeric_type(self.dtype, self.numeric_size)
+            return Column.numeric_type(self.dtype, self.numeric_precision,
+                                       self.numeric_scale)
         else:
             return self.dtype
 
@@ -74,13 +77,13 @@ class Column(object):
         return "character varying({})".format(size)
 
     @classmethod
-    def numeric_type(cls, dtype, size):
+    def numeric_type(cls, dtype, precision, scale):
         # This could be decimal(...), numeric(...), number(...)
         # Just use whatever was fed in here -- don't try to get too clever
-        if size is None:
+        if precision is None or scale is None:
             return dtype
         else:
-            return "{}({})".format(dtype, size)
+            return "{}({},{})".format(dtype, precision, scale)
 
     def __repr__(self):
         return "<Column {} ({})>".format(self.name, self.data_type)

@@ -13,6 +13,7 @@ import dbt.clients.agate_helper
 
 from dbt.compat import abstractclassmethod, classmethod
 from dbt.contracts.connection import Connection
+from dbt.loader import GraphLoader
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.schema import Column
 from dbt.utils import filter_null_values, translate_aliases
@@ -20,6 +21,7 @@ from dbt.utils import filter_null_values, translate_aliases
 from dbt.adapters.base.meta import AdapterMeta, available, available_raw
 from dbt.adapters.base import BaseRelation
 from dbt.adapters.cache import RelationsCache
+
 
 GET_CATALOG_MACRO_NAME = 'get_catalog'
 
@@ -68,11 +70,14 @@ def _catalog_filter_schemas(manifest):
 class BaseAdapter(object):
     """The BaseAdapter provides an abstract base class for adapters.
 
-    Adapters must implement the following methods. Some of these methods can be
-    safely overridden as a noop, where it makes sense (transactions on
-    databases that don't support them, for instance). Those methods are marked
-    with a (passable) in their docstrings. Check docstrings for type
-    information, etc.
+    Adapters must implement the following methods and macros. Some of the
+    methods can be safely overridden as a noop, where it makes sense
+    (transactions on databases that don't support them, for instance). Those
+    methods are marked with a (passable) in their docstrings. Check docstrings
+    for type information, etc.
+
+    To implement a macro, implement "${adapter_type}__${macro_name}". in the
+    adapter's internal project.
 
     Methods:
         - exception_handler
@@ -94,6 +99,9 @@ class BaseAdapter(object):
         - convert_datetime_type
         - convert_date_type
         - convert_time_type
+
+    Macros:
+        - get_catalog
     """
     requires = {}
 
@@ -106,6 +114,7 @@ class BaseAdapter(object):
         self.config = config
         self.cache = RelationsCache()
         self.connections = self.ConnectionManager(config)
+        self._internal_manifest_lazy = None
 
     ###
     # Methods that pass through to the connection manager
@@ -158,6 +167,19 @@ class BaseAdapter(object):
         :rtype: str
         """
         return cls.ConnectionManager.TYPE
+
+    @property
+    def _internal_manifest(self):
+        if self._internal_manifest_lazy is None:
+            manifest = GraphLoader.load_internal(self.config)
+            self._internal_manifest_lazy = manifest
+        return self._internal_manifest_lazy
+
+    def check_internal_manifest(self):
+        """Return the internal manifest (used for executing macros) if it's
+        been initialized, otherwise return None.
+        """
+        return self._internal_manifest_lazy
 
     ###
     # Caching methods
@@ -667,21 +689,38 @@ class BaseAdapter(object):
     ###
     # Operations involving the manifest
     ###
-    def execute_macro(self, manifest, macro_name, project=None,
-                      context_override=None):
+    def execute_macro(self, macro_name, manifest=None, project=None,
+                      context_override=None, kwargs=None, release=False,
+                      connection_name=None):
         """Look macro_name up in the manifest and execute its results.
 
-        :param Manifest manifest: The manifest to use for generating the base
-            macro execution context.
         :param str macro_name: The name of the macro to execute.
+        :param Optional[Manifest] manifest: The manifest to use for generating
+            the base macro execution context. If none is provided, use the
+            internal manifest.
         :param Optional[str] project: The name of the project to search in, or
             None for the first match.
         :param Optional[dict] context_override: An optional dict to update()
             the macro execution context.
+        :param Optional[dict] kwargs: An optional dict of keyword args used to
+            pass to the macro.
+        :param bool release: If True, release the connection after executing.
+        :param Optional[str] connection_name: The connection name to use, or
+            use the macro name.
 
         Return an an AttrDict with three attributes: 'table', 'data', and
             'status'. 'table' is an agate.Table.
         """
+        if kwargs is None:
+            kwargs = {}
+        if context_override is None:
+            context_override = {}
+        if connection_name is None:
+            connection_name = macro_name
+
+        if manifest is None:
+            manifest = self._internal_manifest
+
         macro = manifest.find_macro_by_name(macro_name, project)
         if macro is None:
             raise dbt.exceptions.RuntimeException(
@@ -692,15 +731,21 @@ class BaseAdapter(object):
         # This causes a reference cycle, as dbt.context.runtime.generate()
         # ends up calling get_adapter, so the import has to be here.
         import dbt.context.runtime
-        macro_context = dbt.context.runtime.generate(
+        macro_context = dbt.context.runtime.generate_macro(
             macro,
             self.config,
-            manifest
+            manifest,
+            connection_name
         )
-        if context_override:
-            macro_context.update(context_override)
+        macro_context.update(context_override)
 
-        result = macro.generator(macro_context)()
+        macro_function = macro.generator(macro_context)
+
+        try:
+            result = macro_function(**kwargs)
+        finally:
+            if release:
+                self.release_connection(connection_name)
         return result
 
     @classmethod
@@ -716,11 +761,9 @@ class BaseAdapter(object):
         """
         # make it a list so macros can index into it.
         context = {'databases': list(manifest.get_used_databases())}
-        try:
-            table = self.execute_macro(manifest, GET_CATALOG_MACRO_NAME,
-                                       context_override=context)
-        finally:
-            self.release_connection(GET_CATALOG_MACRO_NAME)
+        table = self.execute_macro(GET_CATALOG_MACRO_NAME,
+                                   context_override=context,
+                                   release=True)
 
         results = self._catalog_filter_table(table, manifest)
         return results
