@@ -127,9 +127,9 @@ class _CachedRelation:
         # table_name is ever anything but the identifier (via .create())
         self.inner = self.inner.incorporate(
             path={
-                'database': new_relation.inner.database,
-                'schema': new_relation.inner.schema,
-                'identifier': new_relation.inner.identifier
+                "database": new_relation.inner.database,
+                "schema": new_relation.inner.schema,
+                "identifier": new_relation.inner.identifier,
             },
         )
 
