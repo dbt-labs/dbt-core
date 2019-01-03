@@ -13,16 +13,16 @@ from dbt.events.types import ColTypeChange, SchemaCreation, SchemaDrop
 
 from dbt.adapters.base.relation import BaseRelation
 
-LIST_RELATIONS_MACRO_NAME = 'list_relations_without_caching'
-GET_COLUMNS_IN_RELATION_MACRO_NAME = 'get_columns_in_relation'
-LIST_SCHEMAS_MACRO_NAME = 'list_schemas'
-CHECK_SCHEMA_EXISTS_MACRO_NAME = 'check_schema_exists'
-CREATE_SCHEMA_MACRO_NAME = 'create_schema'
-DROP_SCHEMA_MACRO_NAME = 'drop_schema'
-RENAME_RELATION_MACRO_NAME = 'rename_relation'
-TRUNCATE_RELATION_MACRO_NAME = 'truncate_relation'
-DROP_RELATION_MACRO_NAME = 'drop_relation'
-ALTER_COLUMN_TYPE_MACRO_NAME = 'alter_column_type'
+LIST_RELATIONS_MACRO_NAME = "list_relations_without_caching"
+GET_COLUMNS_IN_RELATION_MACRO_NAME = "get_columns_in_relation"
+LIST_SCHEMAS_MACRO_NAME = "list_schemas"
+CHECK_SCHEMA_EXISTS_MACRO_NAME = "check_schema_exists"
+CREATE_SCHEMA_MACRO_NAME = "create_schema"
+DROP_SCHEMA_MACRO_NAME = "drop_schema"
+RENAME_RELATION_MACRO_NAME = "rename_relation"
+TRUNCATE_RELATION_MACRO_NAME = "truncate_relation"
+DROP_RELATION_MACRO_NAME = "drop_relation"
+ALTER_COLUMN_TYPE_MACRO_NAME = "alter_column_type"
 
 
 class SQLAdapter(BaseAdapter):
@@ -137,9 +137,9 @@ class SQLAdapter(BaseAdapter):
         4. Rename the new column to existing column
         """
         kwargs = {
-            'relation': relation,
-            'column_name': column_name,
-            'new_column_type': new_column_type,
+            "relation": relation,
+            "column_name": column_name,
+            "new_column_type": new_column_type,
         }
         self.execute_macro(
             ALTER_COLUMN_TYPE_MACRO_NAME,
@@ -149,8 +149,8 @@ class SQLAdapter(BaseAdapter):
     def drop_relation(self, relation):
         if relation.type is None:
             dbt.exceptions.raise_compiler_error(
-                'Tried to drop relation {}, but its type is null.'
-                .format(relation))
+                "Tried to drop relation {}, but its type is null.".format(relation)
+            )
 
         self.cache_dropped(relation)
         self.execute_macro(
@@ -167,7 +167,7 @@ class SQLAdapter(BaseAdapter):
     def rename_relation(self, from_relation, to_relation):
         self.cache_renamed(from_relation, to_relation)
 
-        kwargs = {'from_relation': from_relation, 'to_relation': to_relation}
+        kwargs = {"from_relation": from_relation, "to_relation": to_relation}
         self.execute_macro(
             RENAME_RELATION_MACRO_NAME,
             kwargs=kwargs
@@ -221,13 +221,15 @@ class SQLAdapter(BaseAdapter):
                 _type = self.Relation.get_relation_type(_type)
             except ValueError:
                 _type = self.Relation.External
-            relations.append(self.Relation.create(
-                database=_database,
-                schema=_schema,
-                identifier=name,
-                quote_policy=quote_policy,
-                type=_type
-            ))
+            relations.append(
+                self.Relation.create(
+                    database=_database,
+                    schema=_schema,
+                    identifier=name,
+                    quote_policy=quote_policy,
+                    type=_type,
+                )
+            )
         return relations
 
     def quote(self, identifier):

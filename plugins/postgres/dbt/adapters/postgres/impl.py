@@ -13,7 +13,7 @@ import dbt.utils
 
 
 # note that this isn't an adapter macro, so just a single underscore
-GET_RELATIONS_MACRO_NAME = 'postgres_get_relations'
+GET_RELATIONS_MACRO_NAME = "postgres_get_relations"
 
 
 @dataclass
@@ -77,11 +77,12 @@ class PostgresAdapter(SQLAdapter):
         expected = self.config.credentials.database
         if database.lower() != expected.lower():
             raise dbt.exceptions.NotImplementedException(
-                'Cross-db references not allowed in {} ({} vs {})'
-                .format(self.type(), database, expected)
+                "Cross-db references not allowed in {} ({} vs {})".format(
+                    self.type(), database, expected
+                )
             )
         # return an empty string on success so macros can call this
-        return ''
+        return ""
 
     @available
     def parse_index(self, raw_index: Any) -> Optional[PostgresIndexConfig]:
