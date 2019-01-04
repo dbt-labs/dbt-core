@@ -11,7 +11,7 @@ class TestInit(DBTIntegrationTest):
         if os.path.exists(project_name):
             shutil.rmtree(project_name)
 
-        DBTIntegrationTest.tearDown(self)
+        super(TestInit, self).tearDown()
 
     def get_project_name(self):
         return "my_project_{}".format(self.unique_schema())
@@ -25,7 +25,7 @@ class TestInit(DBTIntegrationTest):
         return "test/integration/040_init_test/models"
 
     @use_profile('postgres')
-    def test_init_task(self):
+    def test_postgres_init_task(self):
         project_name = self.get_project_name()
         self.run_dbt(['init', project_name])
 
@@ -33,5 +33,9 @@ class TestInit(DBTIntegrationTest):
         project_file = os.path.join(project_name, 'dbt_project.yml')
         project_file_exists = os.path.exists(project_file)
 
+        git_dir = os.path.join(project_name, '.git')
+        git_dir_exists = os.path.exists(git_dir)
+
         self.assertTrue(dir_exists)
         self.assertTrue(project_file_exists)
+        self.assertFalse(git_dir_exists)
