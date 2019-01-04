@@ -57,7 +57,7 @@ Plugin = AdapterPlugin(
 """.lstrip()
 
 
-ADAPTER_CONNECTIONS_TEMPLATE = '''
+ADAPTER_CONNECTIONS_TEMPLATE = """
 from dataclasses import dataclass
 
 from dbt.adapters.base import Credentials
@@ -84,17 +84,17 @@ class {title_adapter}Credentials(Credentials):
 
 class {title_adapter}ConnectionManager({connection_cls}):
     TYPE = '{adapter}'
-'''.lstrip()
+""".lstrip()
 
 
-ADAPTER_IMPL_TEMPLATE = '''
+ADAPTER_IMPL_TEMPLATE = """
 from dbt.adapters.{adapter_src} import {adapter_cls}
 from dbt.adapters.{adapter} import {title_adapter}ConnectionManager
 
 
 class {title_adapter}Adapter({adapter_cls}):
     ConnectionManager = {title_adapter}ConnectionManager
-'''.lstrip()
+""".lstrip()
 
 
 CATALOG_MACRO_TEMPLATE = """
@@ -163,7 +163,7 @@ class Builder:
         self.adapters = self.dbt_dir / 'adapters' / self.adapter
         self.include = self.dbt_dir / 'include' / self.adapter
         if self.dest.exists():
-            raise Exception('path exists')
+            raise Exception("path exists")
 
     def go(self):
         self.write_setup()
@@ -208,15 +208,21 @@ class Builder:
     def _make_adapter_kwargs(self):
         if self.args.sql:
             kwargs = {
-                'adapter_src': 'sql',
-                'adapter_cls': 'SQLAdapter',
-                'connection_cls': 'SQLConnectionManager',
+                "adapter_src": "sql",
+                "adapter_cls": "SQLAdapter",
+                "connection_cls": "SQLConnectionManager",
             }
         else:
             kwargs = {
-                'adapter_src': 'base',
-                'adapter_cls': 'BaseAdapter',
-                'connection_cls': 'BaseConnectionManager',
+                "adapter_src": "base",
+                "adapter_cls": "BaseAdapter",
+                "connection_cls": "BaseConnectionManager",
+            }
+        kwargs.update(
+            {
+                "upper_adapter": self.adapter.upper(),
+                "title_adapter": self.args.title_case,
+                "adapter": self.adapter,
             }
         kwargs.update({
             'upper_adapter': self.adapter.upper(),
@@ -288,7 +294,7 @@ def parse_args(argv=None):
     parser.add_argument("--email")
     parser.add_argument("--author")
     parser.add_argument("--url")
-    parser.add_argument('--sql', action='store_true')
+    parser.add_argument("--sql", action="store_true")
     parser.add_argument('--package-version', default='1.0.1')
     parser.add_argument("--project-version", default="1.0")
     parser.add_argument(
