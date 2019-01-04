@@ -200,8 +200,6 @@ class SQLAdapter(BaseAdapter):
 
     def list_relations_without_caching(self, database, schema,
                                        model_name=None):
-        assert database is not None
-        assert schema is not None
         results = self.execute_macro(
             LIST_RELATIONS_MACRO_NAME,
             kwargs={'database': database, 'schema': schema},

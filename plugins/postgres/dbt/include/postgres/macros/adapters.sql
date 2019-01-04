@@ -42,16 +42,20 @@
 {% macro postgres__list_relations_without_caching(database, schema) %}
   {% call statement('list_relations_without_caching', fetch_result=True) -%}
     select
-      table_catalog as database,
-      table_name as name,
-      table_schema as schema,
-      case when table_type = 'BASE TABLE' then 'table'
-           when table_type = 'VIEW' then 'view'
-           else table_type
-      end as table_type
-    from {{ information_schema_name(database) }}.tables
-    where table_schema ilike '{{ schema }}'
-      and table_catalog ilike '{{ database }}'
+      '{{ database }}' as database,
+      tablename as name,
+      schemaname as schema,
+      'table' as type
+    from pg_tables
+    where schemaname ilike '{{ schema }}'
+    union all
+    select
+      '{{ database }}' as database,
+      viewname as name,
+      schemaname as schema,
+      'view' as type
+    from pg_views
+    where schemaname ilike '{{ schema }}'
   {% endcall %}
   {{ return(load_result('list_relations_without_caching').table) }}
 {% endmacro %}
@@ -62,3 +66,19 @@
   {%- endif -%}
   information_schema
 {%- endmacro %}
+
+{% macro postgres__list_schemas(database) %}
+  {% if database -%}
+    {{ adapter.verify_database(database) }}
+  {%- endif -%}
+  "select distinct nspname from pg_namespace"
+{% endmacro %}
+
+{% macro postgres__check_schema_exists(database, schema) -%}
+  {% if database -%}
+    {{ adapter.verify_database(database) }}
+  {%- endif -%}
+  {% call statement('check_schema_exists', fetch_result=True, auto_begin=False) %}
+    select count(*) from pg_namespace where nspname = '{{ schema }}'
+  {% endcall %}
+{% endmacro %}

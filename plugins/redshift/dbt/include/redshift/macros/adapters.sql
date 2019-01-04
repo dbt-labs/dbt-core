@@ -70,6 +70,7 @@
   {{ postgres__create_schema(database_name, schema_name) }}
 {% endmacro %}
 
+
 {% macro redshift__drop_schema(database_name, schema_name) -%}
   {{ postgres__drop_schema(database_name, schema_name) }}
 {% endmacro %}
@@ -160,3 +161,14 @@
 {% macro redshift__information_schema_name(database) -%}
   {{ return(postgres__information_schema_name(database)) }}
 {%- endmacro %}
+
+
+{% macro redshift__list_schemas(database) -%}
+  {{ return(postgres__list_schemas(database)) }}
+{%- endmacro %}
+
+
+{% macro redshift__check_schema_exists(database, schema) -%}
+  {{ return(postgres__check_schema_exists(database, schema)) }}
+{%- endmacro %}
+list_schemas
