@@ -19,10 +19,11 @@ setup(
         'dbt': [
             'include/presto/dbt_project.yml',
             'include/presto/macros/*.sql',
+            'include/presto/macros/*/*.sql',
         ]
     },
     install_requires=[
         'dbt-core=={}'.format(package_version),
-        'pyhive',
+        'presto-python-client',
     ]
 )
