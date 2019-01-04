@@ -36,8 +36,14 @@ setup(
     author_email={author_email},
     url={url},
     packages=find_packages(),
+    package_data={{
+        'dbt': [
+            'include/{adapter}/dbt_project.yml',
+            'include/{adapter}/macros/*.sql',
+        ]
+    }},
     install_requires=[
-        'dbt-core=={dbt_core_version}',
+        {dbt_core_str},
         {dependencies}
     ]
 )
@@ -53,6 +59,7 @@ from dbt.adapters.{adapter}.impl import {title_adapter}Adapter
 from dbt.adapters.base import AdapterPlugin
 from dbt.include import {adapter}
 
+
 Plugin = AdapterPlugin(
     adapter={title_adapter}Adapter,
     credentials={title_adapter}Credentials,
@@ -60,11 +67,161 @@ Plugin = AdapterPlugin(
 '''.lstrip()
 
 
-INCLUDE_INIT_TEMPLATE = '''
-import os
-PACKAGE_PATH = os.path.dirname(os.path.dirname(__file__))
+
+ADAPTER_CONNECTIONS_TEMPLATE = '''
+from contextlib import contextmanager
+
+from dbt.adapters.base import Credentials
+from dbt.adapters.{adapter_src} import {connection_cls}
+
+
+{upper_adapter}_CREDENTIALS_CONTRACT = {{
+    'type': 'object',
+    'additionalProperties': False,
+    'properties': {{
+        'database': {{
+            'type': 'string',
+        }},
+        'schema': {{
+            'type': 'string',
+        }},
+    }},
+    'required': ['database', 'schema'],
+}}
+
+
+class {title_adapter}Credentials(Credentials):
+    SCHEMA = {upper_adapter}_CREDENTIALS_CONTRACT
+
+    @property
+    def type(self):
+        return '{adapter}'
+
+    def _connection_keys(self):
+        # return an iterator of keys to pretty-print in 'dbt debug'
+        raise NotImplementedError
+
+
+class {title_adapter}ConnectionManager({connection_cls}):
+    TYPE = '{adapter}'
 '''.lstrip()
 
+
+ADAPTER_IMPL_TEMPLATE = '''
+from dbt.adapters.{adapter_src} import {adapter_cls}
+from dbt.adapters.{adapter} import {title_adapter}ConnectionManager
+
+
+class {title_adapter}Adapter({adapter_cls}):
+    ConnectionManager = {title_adapter}ConnectionManager
+'''.lstrip()
+
+
+INCLUDE_INIT_TEMPLATE = '''
+import os
+PACKAGE_PATH = os.path.dirname(__file__)
+'''.lstrip()
+
+
+class Builder(object):
+    def __init__(self, args):
+        self.args = args
+        self.dest = pj(self.args.root, self.args.adapter)
+        self.dbt_dir = pj(self.dest, 'dbt')
+        self.adapters_path = pj(self.dbt_dir, 'adapters', self.args.adapter)
+        self.include_path = pj(self.dbt_dir, 'include', self.args.adapter)
+        if os.path.exists(self.dest):
+            raise Exception('path exists')
+
+    def go(self):
+        self.build_namespace()
+        self.write_setup()
+        self.write_include()
+        self.write_adapter()
+
+    def build_namespace(self):
+        """Build out the directory skeleton and python namespace files:
+
+            dbt/
+                __init__.py
+                adapters/
+                    ${adapter_name}
+                    __init__.py
+                include/
+                    ${adapter_name}
+                    __init__.py
+        """
+        os.makedirs(self.adapters_path)
+        os.makedirs(pj(self.include_path, 'macros'))
+        with open(pj(self.dbt_dir, '__init__.py'), 'w') as fp:
+            fp.write(NAMESPACE_INIT_TEMPLATE)
+        with open(pj(self.dbt_dir, 'adapters', '__init__.py'), 'w') as fp:
+            fp.write(NAMESPACE_INIT_TEMPLATE)
+        with open(pj(self.dbt_dir, 'include', '__init__.py'), 'w') as fp:
+            fp.write(NAMESPACE_INIT_TEMPLATE)
+
+    def write_setup(self):
+        if self.args.dbt_core_version == self.args.package_version:
+            dbt_core_str = "'dbt-core=={}'.format(package_version)"
+        else:
+            dbt_core_str = 'dbt-core=={}'.format(self.args.dbt_core_version)
+        setup_py_contents = SETUP_PY_TEMPLATE.format(
+            adapter=self.args.adapter,
+            version=self.args.package_version,
+            author_name=self.args.author,
+            author_email=self.args.email,
+            url=self.args.url,
+            dbt_core_str=dbt_core_str,
+            dependencies=self.args.dependency
+        )
+        with open(pj(self.dest, 'setup.py'), 'w') as fp:
+            fp.write(setup_py_contents)
+
+    def write_adapter(self):
+        adapter_init_contents = ADAPTER_INIT_TEMPLATE.format(
+            adapter=self.args.adapter,
+            title_adapter=self.args.title_case
+        )
+        with open(pj(self.adapters_path, '__init__.py'), 'w') as fp:
+            fp.write(adapter_init_contents)
+
+        if self.args.sql:
+            kwargs = {
+                'adapter_src': 'sql',
+                'adapter_cls': 'SQLAdapter',
+                'connection_cls': 'SQLConnectionManager',
+            }
+        else:
+            kwargs = {
+                'adapter_src': 'base',
+                'adapter_cls': 'BaseAdapter',
+                'connection_cls': 'BaseConnectionManager',
+            }
+        kwargs.update({
+            'upper_adapter': self.args.adapter.upper(),
+            'title_adapter': self.args.title_case,
+            'adapter': self.args.adapter,
+        })
+
+        adapter_connections_contents = ADAPTER_CONNECTIONS_TEMPLATE.format(
+            **kwargs
+        )
+        with open(pj(self.adapters_path, 'connections.py'), 'w') as fp:
+            fp.write(adapter_connections_contents)
+
+        adapter_impl_contents = ADAPTER_IMPL_TEMPLATE.format(
+            **kwargs
+        )
+        with open(pj(self.adapters_path, 'impl.py'), 'w') as fp:
+            fp.write(adapter_impl_contents)
+
+    def write_include(self):
+        with open(pj(self.include_path, '__init__.py'), 'w') as fp:
+            fp.write(INCLUDE_INIT_TEMPLATE)
+
+        with open(pj(self.include_path, 'dbt_project.yml'), 'w') as fp:
+            fp.write(PROJECT_TEMPLATE.format(adapter=self.args.adapter,
+                                             version=self.args.project_version))
 
 def parse_args(argv=None):
     if argv is None:
@@ -78,6 +235,7 @@ def parse_args(argv=None):
     parser.add_argument('--email')
     parser.add_argument('--author')
     parser.add_argument('--url')
+    parser.add_argument('--sql', action='store_true')
     parser.add_argument('--package-version', default='0.0.1')
     parser.add_argument('--project-version', default='1.0')
     parsed = parser.parse_args()
@@ -110,52 +268,8 @@ def parse_args(argv=None):
 
 
 def main():
-    parsed = parse_args()
-    dest = pj(parsed.root, parsed.adapter)
-    if os.path.exists(dest):
-        raise Exception('path exists')
-
-    adapters_path = pj(dest, 'dbt', 'adapters', parsed.adapter)
-    include_path = pj(dest, 'dbt', 'include', parsed.adapter)
-    os.makedirs(adapters_path)
-    os.makedirs(pj(include_path, 'macros'))
-
-    # namespaces!
-    with open(pj(dest, 'dbt', '__init__.py'), 'w') as fp:
-        fp.write(NAMESPACE_INIT_TEMPLATE)
-    with open(pj(dest, 'dbt', 'adapters', '__init__.py'), 'w') as fp:
-        fp.write(NAMESPACE_INIT_TEMPLATE)
-    with open(pj(dest, 'dbt', 'include', '__init__.py'), 'w') as fp:
-        fp.write(NAMESPACE_INIT_TEMPLATE)
-
-    # setup script!
-    with open(pj(dest, 'setup.py'), 'w') as fp:
-        fp.write(SETUP_PY_TEMPLATE.format(adapter=parsed.adapter,
-                                          version=parsed.package_version,
-                                          author_name=parsed.author,
-                                          author_email=parsed.email,
-                                          url=parsed.url,
-                                          dbt_core_version=parsed.dbt_core_version,
-                                          dependencies=parsed.dependency))
-
-
-    # adapter stuff!
-    with open(pj(adapters_path, '__init__.py'), 'w') as fp:
-        fp.write(ADAPTER_INIT_TEMPLATE.format(adapter=parsed.adapter,
-                                              title_adapter=parsed.title_case))
-
-    # macro/project stuff!
-    with open(pj(include_path, '__init__.py'), 'w') as fp:
-        fp.write(INCLUDE_INIT_TEMPLATE)
-
-    with open(pj(include_path, 'dbt_project.yml'), 'w') as fp:
-        fp.write(PROJECT_TEMPLATE.format(adapter=parsed.adapter,
-                                         version=parsed.project_version))
-
-    # TODO:
-    # - bare class impls for mandatory subclasses
-    #       (ConnectionManager, Credentials, Adapter)
-    # - impls of mandatory abstract methods w/explicit NotImplementedErrors
+    builder = Builder(parse_args())
+    builder.go()
 
 
 if __name__ == '__main__':
