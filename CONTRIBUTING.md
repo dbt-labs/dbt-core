@@ -118,6 +118,12 @@ And then to actually run them, you can do `make test-quick`.
 
 If you want to see what exactly is getting run on these commands, look at the `Makefile`. Note that the commands start with an `@` which you can ignore, just makefile magic. If you want to see what the involved `tox` commands are using, look at the corresponding `tox.ini` section - hopefully it's pretty self-explanatory.
 
+To run just one integration test at a time, you can run something like:
+
+```
+docker-compose run test tox -e explicit-py36 -- -x --nocapture -a type="postgres" test/integration/040_compare_test/
+```
+
 ### Running tests in CI
 
 When a contributor to dbt pushes code, GitHub will trigger a series of CI builds on CircleCI and Appveyor (Windows) to test all of dbt's code. The CI builds trigger all the integration tests, not just postgres+python3.6.

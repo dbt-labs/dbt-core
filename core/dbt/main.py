@@ -13,6 +13,7 @@ import dbt.task.compile as compile_task
 import dbt.task.debug as debug_task
 import dbt.task.clean as clean_task
 import dbt.task.deps as deps_task
+import dbt.task.compare as compare_task
 import dbt.task.init as init_task
 import dbt.task.seed as seed_task
 import dbt.task.test as test_task
@@ -439,6 +440,13 @@ def parse_args(args):
         help="Pull the most recent version of the dependencies "
         "listed in packages.yml")
     sub.set_defaults(cls=deps_task.DepsTask, which='deps')
+
+    compare_sub = subs.add_parser(
+        'compare',
+        parents=[base_subparser],
+        help="Compare your project specifications with what's in "
+        "the database.")
+    compare_sub.set_defaults(cls=compare_task.CompareTask, which='compare')
 
     sub = subs.add_parser(
         'archive',
