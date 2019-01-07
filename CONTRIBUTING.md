@@ -134,7 +134,7 @@ Sometimes, you're going to have to pretend to be an end user to reproduce bugs a
 
 First make sure that you setup your `virtualenv` as described in section _Setting up your environment_.
 
-From the `dbt` directory, install dbt in 'editable' mode. There are a couple ways to do it, but I'm in the habit of `pip install -e .`, which tells pip to install the package in the current directory in "editable" mode. Since you are running `pip install` in virtualenv, this will not change your normal dbt installation, if you have one.
+Install dbt (and it's dependencies) with `pip install -r requirements.txt`
 
 What's cool about this mode is any changes you make to the current dbt directory will be reflected immediately in your next `dbt` run.
 
