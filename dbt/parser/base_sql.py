@@ -8,17 +8,16 @@ import dbt.utils
 import dbt.flags
 
 from dbt.contracts.graph.unparsed import UnparsedNode
-from dbt.parser.base import BaseParser
+from dbt.parser.base import MacrosKnownParser
 
 
-class BaseSqlParser(BaseParser):
+class BaseSqlParser(MacrosKnownParser):
     @classmethod
     def get_compiled_path(cls, name, relative_path):
         raise dbt.exceptions.NotImplementedException("Not implemented")
 
-    @classmethod
-    def load_and_parse(cls, package_name, root_project, all_projects, root_dir,
-                       relative_dirs, resource_type, tags=None, macros=None):
+    def load_and_parse(self, package_name, root_dir, relative_dirs,
+                       resource_type, tags=None):
         """Load and parse models in a list of directories. Returns a dict
            that maps unique ids onto ParsedNodes"""
 
@@ -27,11 +26,8 @@ class BaseSqlParser(BaseParser):
         if tags is None:
             tags = []
 
-        if macros is None:
-            macros = {}
-
         if dbt.flags.STRICT_MODE:
-            dbt.contracts.project.ProjectList(**all_projects)
+            dbt.contracts.project.ProjectList(**self.all_projects)
 
         file_matches = dbt.clients.system.find_matching(
             root_dir,
@@ -47,7 +43,8 @@ class BaseSqlParser(BaseParser):
             parts = dbt.utils.split_path(file_match.get('relative_path', ''))
             name, _ = os.path.splitext(parts[-1])
 
-            path = cls.get_compiled_path(name, file_match.get('relative_path'))
+            path = self.get_compiled_path(name,
+                                          file_match.get('relative_path'))
 
             original_file_path = os.path.join(
                 file_match.get('searched_path'),
@@ -63,41 +60,30 @@ class BaseSqlParser(BaseParser):
                 'raw_sql': file_contents
             })
 
-        return cls.parse_sql_nodes(result, root_project, all_projects, tags,
-                                   macros)
+        return self.parse_sql_nodes(result, tags)
 
-    @classmethod
-    def parse_sql_nodes(cls, nodes, root_project, projects,
-                        tags=None, macros=None):
+    def parse_sql_nodes(self, nodes, tags=None):
 
         if tags is None:
             tags = []
-
-        if macros is None:
-            macros = {}
 
         to_return = {}
         disabled = []
 
         for n in nodes:
             node = UnparsedNode(**n)
-            package_name = node.get('package_name')
+            package_name = node.package_name
 
-            node_path = cls.get_path(node.get('resource_type'),
-                                     package_name,
-                                     node.get('name'))
+            node_path = self.get_path(node.resource_type,
+                                      package_name,
+                                      node.name)
 
-            node_parsed = cls.parse_node(node,
-                                         node_path,
-                                         root_project,
-                                         projects.get(package_name),
-                                         projects,
-                                         tags=tags,
-                                         macros=macros)
+            project = self.all_projects.get(package_name)
+            node_parsed = self.parse_node(node, node_path, project, tags=tags)
 
             # Ignore disabled nodes
             if not node_parsed['config']['enabled']:
-                disabled.append(node_parsed['fqn'])
+                disabled.append(node_parsed)
                 continue
 
             # Check for duplicate model names

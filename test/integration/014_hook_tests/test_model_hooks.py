@@ -1,5 +1,6 @@
 from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
+from dbt.exceptions import CompilationException
 
 
 MODEL_PRE_HOOK = """
@@ -64,7 +65,6 @@ MODEL_POST_HOOK = """
 
 class BaseTestPrePost(DBTIntegrationTest):
     def setUp(self):
-        self.adapter_type = 'bigquery'
         DBTIntegrationTest.setUp(self)
 
         self.run_sql_file("test/integration/014_hook_tests/seed_model.sql")
@@ -147,7 +147,7 @@ class TestPrePostModelHooks(BaseTestPrePost):
         return "test/integration/014_hook_tests/models"
 
     @attr(type='postgres')
-    def test_pre_and_post_model_hooks(self):
+    def test_postgres_pre_and_post_model_hooks(self):
         self.run_dbt(['run'])
 
         self.check_hooks('start')
@@ -177,7 +177,7 @@ class TestPrePostModelHooksOnSeeds(DBTIntegrationTest):
         }
 
     @attr(type='postgres')
-    def test_hooks_on_seeds(self):
+    def test_postgres_hooks_on_seeds(self):
         res = self.run_dbt(['seed'])
         self.assertEqual(len(res), 1, 'Expected exactly one item')
         res = self.run_dbt(['test'])
@@ -196,14 +196,14 @@ class TestPrePostModelHooksInConfig(BaseTestPrePost):
         return "test/integration/014_hook_tests/configured-models"
 
     @attr(type='postgres')
-    def test_pre_and_post_model_hooks_model(self):
+    def test_postgres_pre_and_post_model_hooks_model(self):
         self.run_dbt(['run'])
 
         self.check_hooks('start')
         self.check_hooks('end')
 
     @attr(type='postgres')
-    def test_pre_and_post_model_hooks_model_and_project(self):
+    def test_postgres_pre_and_post_model_hooks_model_and_project(self):
         self.use_default_project({
             'models': {
                 'test': {
@@ -230,3 +230,27 @@ class TestPrePostModelHooksInConfig(BaseTestPrePost):
         self.check_hooks('start', count=2)
         self.check_hooks('end', count=2)
 
+class TestPrePostModelHooksInConfigKwargs(TestPrePostModelHooksInConfig):
+
+    @property
+    def models(self):
+        return "test/integration/014_hook_tests/kwargs-models"
+
+
+
+class TestDuplicateHooksInConfigs(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "model_hooks_014"
+
+    @property
+    def models(self):
+        return "test/integration/014_hook_tests/error-models"
+
+    @attr(type='postgres')
+    def test_postgres_run_duplicate_hook_defs(self):
+        with self.assertRaises(CompilationException) as exc:
+            self.run_dbt(['run'])
+
+            self.assertIn('pre_hook', str(exc.exception))
+            self.assertIn('pre-hook', str(exc.exception))

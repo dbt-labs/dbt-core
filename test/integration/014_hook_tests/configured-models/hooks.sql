@@ -1,7 +1,7 @@
 
 {{
     config({
-        "pre-hook": "\
+        "pre_hook": "\
             insert into {{this.schema}}.on_model_hook (\
                 \"state\",\
                 \"target.dbname\",\

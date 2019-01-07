@@ -139,6 +139,9 @@ BIGQUERY_CREDENTIALS_CONTRACT = {
         'timeout_seconds': {
             'type': 'integer',
         },
+        'location': {
+            'type': 'string',
+        },
     },
     'required': ['method', 'project', 'schema'],
 }
@@ -193,6 +196,19 @@ class Credentials(APIObject):
             'type not implemented for base credentials class'
         )
 
+    def connection_info(self):
+        """Return an ordered iterator of key/value pairs for pretty-printing.
+        """
+        for key in self._connection_keys():
+            if key in self._contents:
+                yield key, self._contents[key]
+
+    def _connection_keys(self):
+        """The credential object keys that should be printed to users in
+        'dbt debug' output. This is specific to each adapter.
+        """
+        raise NotImplementedError
+
 
 class PostgresCredentials(Credentials):
     SCHEMA = POSTGRES_CREDENTIALS_CONTRACT
@@ -211,6 +227,9 @@ class PostgresCredentials(Credentials):
         # we can't access this as 'pass' since that's reserved
         return self._contents['pass']
 
+    def _connection_keys(self):
+        return ('host', 'port', 'user', 'dbname', 'schema')
+
 
 class RedshiftCredentials(PostgresCredentials):
     SCHEMA = REDSHIFT_CREDENTIALS_CONTRACT
@@ -223,6 +242,9 @@ class RedshiftCredentials(PostgresCredentials):
     def type(self):
         return 'redshift'
 
+    def _connection_keys(self):
+        return ('host', 'port', 'user', 'dbname', 'schema', 'method')
+
 
 class SnowflakeCredentials(Credentials):
     SCHEMA = SNOWFLAKE_CREDENTIALS_CONTRACT
@@ -231,6 +253,9 @@ class SnowflakeCredentials(Credentials):
     def type(self):
         return 'snowflake'
 
+    def _connection_keys(self):
+        return ('account', 'user', 'database', 'schema', 'warehouse', 'role')
+
 
 class BigQueryCredentials(Credentials):
     SCHEMA = BIGQUERY_CREDENTIALS_CONTRACT
@@ -238,6 +263,9 @@ class BigQueryCredentials(Credentials):
     @property
     def type(self):
         return 'bigquery'
+
+    def _connection_keys(self):
+        return ('method', 'project', 'schema', 'location')
 
 
 CREDENTIALS_MAPPING = {

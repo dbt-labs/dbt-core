@@ -18,8 +18,7 @@ from dbt.contracts.graph.parsed import ParsedMacro
 
 
 class MacroParser(BaseParser):
-    @classmethod
-    def parse_macro_file(cls, macro_file_path, macro_file_contents, root_path,
+    def parse_macro_file(self, macro_file_path, macro_file_contents, root_path,
                          package_name, resource_type, tags=None, context=None):
 
         logger.debug("Parsing {}".format(macro_file_path))
@@ -61,7 +60,7 @@ class MacroParser(BaseParser):
             if node_type != resource_type:
                 continue
 
-            unique_id = cls.get_path(resource_type, package_name, name)
+            unique_id = self.get_path(resource_type, package_name, name)
 
             merged = dbt.utils.deep_merge(
                 base_node.serialize(),
@@ -79,16 +78,15 @@ class MacroParser(BaseParser):
 
         return to_return
 
-    @classmethod
-    def load_and_parse(cls, package_name, root_project, all_projects, root_dir,
-                       relative_dirs, resource_type, tags=None):
+    def load_and_parse(self, package_name, root_dir, relative_dirs,
+                       resource_type, tags=None):
         extension = "[!.#~]*.sql"
 
         if tags is None:
             tags = []
 
         if dbt.flags.STRICT_MODE:
-            dbt.contracts.project.ProjectList(**all_projects)
+            dbt.contracts.project.ProjectList(**self.all_projects)
 
         file_matches = dbt.clients.system.find_matching(
             root_dir,
@@ -107,7 +105,7 @@ class MacroParser(BaseParser):
             )
 
             result.update(
-                cls.parse_macro_file(
+                self.parse_macro_file(
                     original_file_path,
                     file_contents,
                     root_dir,

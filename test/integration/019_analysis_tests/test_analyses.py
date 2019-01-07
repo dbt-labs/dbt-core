@@ -24,13 +24,26 @@ class TestAnalyses(DBTIntegrationTest):
 
     @attr(type='postgres')
     def test_analyses(self):
+        compiled_analysis_path = os.path.normpath('target/compiled/test/analysis')
+        path_1 = os.path.join(compiled_analysis_path, 'analysis.sql')
+        path_2 = os.path.join(compiled_analysis_path, 'raw_stuff.sql')
 
-        results = self.run_dbt(["run"])
-        self.assertEqual(len(results), 1)
+        self.run_dbt(['clean'])
+        self.assertFalse(os.path.exists(compiled_analysis_path))
+        results = self.run_dbt(["compile"])
+        self.assertEqual(len(results), 3)
 
-        compiled_analysis_path = os.path.normpath(os.path.join(
-            'target/build-analysis',
-            self.analysis_path()
-        ))
+        self.assertTrue(os.path.exists(path_1))
+        self.assertTrue(os.path.exists(path_2))
 
-        # TODO  test that analysis file is in the right place
+        with open(path_1) as fp:
+            self.assertEqual(
+                fp.read().strip(),
+                'select * from "{}"."my_model"'.format(self.unique_schema())
+            )
+        with open(path_2) as fp:
+            self.assertEqual(
+                fp.read().strip(),
+                '{% invalid jinja stuff %}'
+            )
+

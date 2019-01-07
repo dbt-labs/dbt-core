@@ -42,16 +42,13 @@ class DocumentationParser(BaseParser):
                 file_contents=file_contents
             )
 
-    @classmethod
-    def parse(cls, all_projects, root_project_config, docfile):
+    def parse(self, docfile):
         try:
             template = dbt.clients.jinja.get_template(docfile.file_contents,
                                                       {})
         except dbt.exceptions.CompilationException as e:
             e.node = docfile
             raise
-
-        schema = getattr(root_project_config.credentials, 'schema', 'public')
 
         for key, item in template.module.__dict__.items():
             if type(item) != jinja2.runtime.Macro:
@@ -65,8 +62,8 @@ class DocumentationParser(BaseParser):
             # because docs are in their own graph namespace, node type doesn't
             # need to be part of the unique ID.
             unique_id = '{}.{}'.format(docfile.package_name, name)
-            fqn = cls.get_fqn(docfile.path,
-                              all_projects[docfile.package_name])
+            fqn = self.get_fqn(docfile.path,
+                               self.all_projects[docfile.package_name])
 
             merged = dbt.utils.deep_merge(
                 docfile.serialize(),
@@ -78,12 +75,10 @@ class DocumentationParser(BaseParser):
             )
             yield ParsedDocumentation(**merged)
 
-    @classmethod
-    def load_and_parse(cls, package_name, root_project, all_projects, root_dir,
-                       relative_dirs):
+    def load_and_parse(self, package_name, root_dir, relative_dirs):
         to_return = {}
-        for docfile in cls.load_file(package_name, root_dir, relative_dirs):
-                for parsed in cls.parse(all_projects, root_project, docfile):
+        for docfile in self.load_file(package_name, root_dir, relative_dirs):
+                for parsed in self.parse(docfile):
                     if parsed.unique_id in to_return:
                         dbt.exceptions.raise_duplicate_resource_name(
                             to_return[parsed.unique_id], parsed

@@ -12,7 +12,7 @@
 {%- endmacro %}
 
 {% materialization incremental, default -%}
-  {%- set sql_where = config.require('sql_where') -%}
+  {%- set sql_where = config.get('sql_where') -%}
   {%- set unique_key = config.get('unique_key') -%}
 
   {%- set identifier = model['alias'] -%}
@@ -61,8 +61,11 @@
          select * from (
            {{ sql }}
          ) as dbt_incr_sbq
+
+         {% if sql_where %}
          where ({{ sql_where }})
            or ({{ sql_where }}) is null
+         {% endif %}
        {%- endset %}
 
        {{ dbt.create_table_as(True, tmp_relation, tmp_table_sql) }}

@@ -1,12 +1,12 @@
 
 from dbt.contracts.graph.unparsed import UnparsedNode
 from dbt.node_types import NodeType
-from dbt.parser.base import BaseParser
+from dbt.parser.base import MacrosKnownParser
 
 import os
 
 
-class ArchiveParser(BaseParser):
+class ArchiveParser(MacrosKnownParser):
     @classmethod
     def parse_archives_from_project(cls, config):
         archives = []
@@ -37,16 +37,15 @@ class ArchiveParser(BaseParser):
 
         return archives
 
-    @classmethod
-    def load_and_parse(cls, root_project, all_projects, macros=None):
+    def load_and_parse(self):
         """Load and parse archives in a list of projects. Returns a dict
            that maps unique ids onto ParsedNodes"""
 
         archives = []
         to_return = {}
 
-        for name, project in all_projects.items():
-            archives = archives + cls.parse_archives_from_project(project)
+        for name, project in self.all_projects.items():
+            archives = archives + self.parse_archives_from_project(project)
 
         # We're going to have a similar issue with parsed nodes, if we want to
         # make parse_node return those.
@@ -56,17 +55,14 @@ class ArchiveParser(BaseParser):
             # argument.
             archive_config = a.pop('config')
             archive = UnparsedNode(**a)
-            node_path = cls.get_path(archive.get('resource_type'),
-                                     archive.get('package_name'),
-                                     archive.get('name'))
+            node_path = self.get_path(archive.resource_type,
+                                      archive.package_name,
+                                      archive.name)
 
-            to_return[node_path] = cls.parse_node(
+            to_return[node_path] = self.parse_node(
                 archive,
                 node_path,
-                root_project,
-                all_projects.get(archive.get('package_name')),
-                all_projects,
-                macros=macros,
+                self.all_projects.get(archive.package_name),
                 archive_config=archive_config)
 
         return to_return

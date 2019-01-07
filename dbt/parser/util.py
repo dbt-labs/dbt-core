@@ -35,6 +35,8 @@ def docs(node, manifest, config, column_name=None):
 
 
 class ParserUtils(object):
+    DISABLED = object()
+
     @classmethod
     def resolve_ref(cls, manifest, target_model_name, target_model_package,
                     current_project, node_package):
@@ -44,6 +46,7 @@ class ParserUtils(object):
                 target_model_package)
 
         target_model = None
+        disabled_target = None
 
         # first pass: look for models in the current_project
         # second pass: look for models in the node's package
@@ -58,6 +61,15 @@ class ParserUtils(object):
 
             if target_model is not None and dbt.utils.is_enabled(target_model):
                 return target_model
+
+            # it's possible that the node is disabled
+            if disabled_target is None:
+                disabled_target = manifest.find_disabled_by_name(
+                    target_model_name, candidate
+                )
+
+        if disabled_target is not None:
+            return cls.DISABLED
         return None
 
     @classmethod
@@ -147,12 +159,14 @@ class ParserUtils(object):
                     current_project,
                     node.get('package_name'))
 
-                if target_model is None:
+                if target_model is None or target_model is cls.DISABLED:
                     # This may raise. Even if it doesn't, we don't want to add
                     # this node to the graph b/c there is no destination node
                     node.config['enabled'] = False
                     dbt.utils.invalid_ref_fail_unless_test(
-                            node, target_model_name, target_model_package)
+                            node, target_model_name, target_model_package,
+                            disabled=(target_model is cls.DISABLED)
+                    )
 
                     continue
 
