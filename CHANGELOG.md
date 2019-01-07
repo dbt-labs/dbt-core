@@ -1,4 +1,4 @@
-## dbt 0.12.2 - Grace Kelly (Currently Unreleased)
+## dbt 0.12.2 - Grace Kelly (January 8, 2019)
 
 ### Overview
 
@@ -10,9 +10,9 @@ This release reduces the runtime of dbt projects by improving dbt's approach to 
 ### Features
 - More intelligently order and execute nodes in the graph. This _significantly_ speeds up the runtime of most dbt projects ([#813](https://github.com/fishtown-analytics/dbt/issues/813))
 - Add `-m` flag as an alias for `--models` ([#1160](https://github.com/fishtown-analytics/dbt/issues/1160))
-- Add `post_hook` and `pre_hook` as aliases for `post-hook` and `pre-hook`, respectively ([#1124](https://github.com/fishtown-analytics/dbt/issues/1124))
+- Add `post_hook` and `pre_hook` as aliases for `post-hook` and `pre-hook`, respectively ([#1124](https://github.com/fishtown-analytics/dbt/issues/1124)) ([docs](https://docs.getdbt.com/v0.12/docs/using-hooks))
 - Better handling of git errors in `dbt deps` + full support for Windows ([#994](https://github.com/fishtown-analytics/dbt/issues/994), [#778](https://github.com/fishtown-analytics/dbt/issues/778), [#895](https://github.com/fishtown-analytics/dbt/issues/895))
-- Add support for specifying a `location` in BigQuery datasets ([#969](https://github.com/fishtown-analytics/dbt/issues/969))
+- Add support for specifying a `location` in BigQuery datasets ([#969](https://github.com/fishtown-analytics/dbt/issues/969)) ([docs](https://docs.getdbt.com/v0.12/docs/supported-databases#section-dataset-locations))
 - Add support for Jinja expressions using the `{% do ... %}` block ([#1113](https://github.com/fishtown-analytics/dbt/issues/1113))
 - The `dbt debug` command is actually useful now ([#1061](https://github.com/fishtown-analytics/dbt/issues/1061))
 - The `config` function can now be called multiple times in a model ([#558](https://github.com/fishtown-analytics/dbt/issues/558))
