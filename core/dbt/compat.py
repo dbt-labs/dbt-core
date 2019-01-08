@@ -22,9 +22,11 @@ except NameError:
 if WHICH_PYTHON == 2:
     basestring = basestring
     bigint = long
+    import __builtin__ as builtins
 else:
     basestring = str
     bigint = int
+    import builtins
 
 if WHICH_PYTHON == 2:
     from SimpleHTTPServer import SimpleHTTPRequestHandler
