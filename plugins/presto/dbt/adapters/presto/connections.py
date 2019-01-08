@@ -118,9 +118,7 @@ class PrestoConnectionManager(SQLConnectionManager):
             catalog=credentials.database,
             schema=credentials.schema,
             auth=auth,
-            # we just need it to be anything but 'autocommit', this is what
-            # snowflake is. TODO: should this be toggle-able?
-            isolation_level=IsolationLevel.REPEATABLE_READ,
+            isolation_level=IsolationLevel.SERIALIZABLE,
         )
         connection.state = 'open'
         connection.handle = handle

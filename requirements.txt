@@ -3,3 +3,4 @@
 -e ./plugins/redshift
 -e ./plugins/snowflake
 -e ./plugins/bigquery
+-e ./plugins/presto

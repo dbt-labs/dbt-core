@@ -77,3 +77,19 @@ class TestChangingRelationType(DBTIntegrationTest):
         results = self.run_dbt(['run', '--vars', 'materialized: view', "--full-refresh"])
         self.assertEquals(results[0].node['config']['materialized'], 'view')
         self.assertEqual(len(results),  1)
+
+    @use_profile('presto')
+    def test__presto__switch_materialization(self):
+        # presto can't do incremental materializations so there's less to this
+
+        results = self.run_dbt(['run', '--vars', 'materialized: view'])
+        self.assertEquals(results[0].node['config']['materialized'], 'view')
+        self.assertEqual(len(results),  1)
+
+        results = self.run_dbt(['run', '--vars', 'materialized: table'])
+        self.assertEquals(results[0].node['config']['materialized'], 'table')
+        self.assertEqual(len(results),  1)
+
+        results = self.run_dbt(['run', '--vars', 'materialized: view'])
+        self.assertEquals(results[0].node['config']['materialized'], 'view')
+        self.assertEqual(len(results),  1)

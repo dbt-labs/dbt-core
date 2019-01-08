@@ -353,10 +353,10 @@ class TestDocsGenerate(DBTIntegrationTest):
             profile = self.get_profile(self.adapter_type)
             target_name = profile['test']['target']
             return profile['test']['outputs'][target_name]['user']
-        elif self.adapter_type == 'bigquery':
-            return None
-        else:  # snowflake
+        elif self.adapter_type == 'snowflake':
             return self.run_sql('select current_role()', fetch='one')[0]
+        else:  # bigquery, presto, other dbs that have no 'role'
+            return None
 
     def expected_postgres_references_catalog(self):
         model_database = self.default_database
@@ -473,6 +473,19 @@ class TestDocsGenerate(DBTIntegrationTest):
             seed_stats=self._bigquery_stats(True),
             model_database=self.alternative_database
         )
+
+    def expected_presto_catalog(self):
+        return self._expected_catalog(
+            id_type='integer',
+            text_type='varchar',
+            time_type='timestamp',
+            view_type='VIEW',
+            table_type='BASE TABLE',
+            model_stats=self._no_stats(),
+            seed_stats=self._no_stats(),
+            model_database=self.default_database
+        )
+
 
     @staticmethod
     def _clustered_bigquery_columns(update_type):
@@ -2304,3 +2317,14 @@ class TestDocsGenerate(DBTIntegrationTest):
         )
         self.verify_catalog(self.expected_redshift_incremental_catalog())
         self.verify_manifest(self.expected_redshift_incremental_view_manifest())
+
+    @use_profile('presto')
+    def test__presto__run_and_generate(self):
+        self.run_and_generate(alternate_db=self.default_database)
+        self.verify_catalog(self.expected_presto_catalog())
+        self.verify_manifest(self.expected_seeded_manifest(
+            model_database=self.default_database
+        ))
+        self.verify_run_results(self.expected_run_results(
+            model_database=self.default_database
+        ))
