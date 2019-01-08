@@ -7,6 +7,39 @@ This release makes dbt and its adapters into a core-and-plugin architecture.
 ### Breaking Changes
 - '{{this}}' is no longer respected in hooks [#1176](https://github.com/fishtown-analytics/dbt/pull/1176), implementing [#878](https://github.com/fishtown-analytics/dbt/issues/878)
 
+## dbt 0.12.2 - Grace Kelly (January 8, 2019)
+
+### Overview
+
+This release reduces the runtime of dbt projects by improving dbt's approach to model running. Additionally, a number of workflow improvements have been added. 
+
+### Deprecations
+- Deprecate `sql_where` ([#744](https://github.com/fishtown-analytics/dbt/issues/744)) ([docs](https://docs.getdbt.com/v0.12/docs/configuring-incremental-models))
+
+### Features
+- More intelligently order and execute nodes in the graph. This _significantly_ speeds up the runtime of most dbt projects ([#813](https://github.com/fishtown-analytics/dbt/issues/813))
+- Add `-m` flag as an alias for `--models` ([#1160](https://github.com/fishtown-analytics/dbt/issues/1160))
+- Add `post_hook` and `pre_hook` as aliases for `post-hook` and `pre-hook`, respectively ([#1124](https://github.com/fishtown-analytics/dbt/issues/1124)) ([docs](https://docs.getdbt.com/v0.12/docs/using-hooks))
+- Better handling of git errors in `dbt deps` + full support for Windows ([#994](https://github.com/fishtown-analytics/dbt/issues/994), [#778](https://github.com/fishtown-analytics/dbt/issues/778), [#895](https://github.com/fishtown-analytics/dbt/issues/895))
+- Add support for specifying a `location` in BigQuery datasets ([#969](https://github.com/fishtown-analytics/dbt/issues/969)) ([docs](https://docs.getdbt.com/v0.12/docs/supported-databases#section-dataset-locations))
+- Add support for Jinja expressions using the `{% do ... %}` block ([#1113](https://github.com/fishtown-analytics/dbt/issues/1113))
+- The `dbt debug` command is actually useful now ([#1061](https://github.com/fishtown-analytics/dbt/issues/1061))
+- The `config` function can now be called multiple times in a model ([#558](https://github.com/fishtown-analytics/dbt/issues/558))
+- Source the latest version of dbt from PyPi instead of GitHub ([#1122](https://github.com/fishtown-analytics/dbt/issues/1122))
+- Add a peformance profiling mechnanism to dbt ([#1001](https://github.com/fishtown-analytics/dbt/issues/1001))
+- Add caching for dbt's macros-only manifest to speedup parsing ([#1098](https://github.com/fishtown-analytics/dbt/issues/1098))
+
+### Fixes
+- Fix for custom schemas used alongside the `generate_schema_name` macro ([#801](https://github.com/fishtown-analytics/dbt/issues/801))
+- Fix for silent failure of tests that reference nonexistent models ([#968](https://github.com/fishtown-analytics/dbt/issues/968))
+- Fix for `generate_schema_name` macros that return whitespace-padded schema names ([#1074](https://github.com/fishtown-analytics/dbt/issues/1074))
+- Fix for incorrect relation type for backup tables on Snowflake ([#1103](https://github.com/fishtown-analytics/dbt/issues/1103))
+- Fix for incorrectly cased values in the relation cache ([#1140](https://github.com/fishtown-analytics/dbt/issues/1140))
+- Fix for JSON decoding error on Python2 installed with Anaconda ([#1155](https://github.com/fishtown-analytics/dbt/issues/1155))
+- Fix for unhandled exceptions that occur in anonymous event tracking ([#1180](https://github.com/fishtown-analytics/dbt/issues/1180))
+- Fix for analysis files that contain `raw` tags ([#1152](https://github.com/fishtown-analytics/dbt/issues/1152))
+- Fix for packages which reference the [hubsite](hub.getdbt.com) ([#1095](https://github.com/fishtown-analytics/dbt/issues/1095))
+
 ## dbt 0.12.1 - (November 15, 2018)
 
 ### Overview

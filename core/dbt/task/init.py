@@ -64,7 +64,6 @@ class InitTask(BaseTask):
         dbt.clients.git.clone(
             STARTER_REPO, '.', project_name,
             remove_git_dir=True)
-        dbt.clients.git.remove_remote(project_name)
 
     def create_profiles_dir(self, profiles_dir):
         if not os.path.exists(profiles_dir):
