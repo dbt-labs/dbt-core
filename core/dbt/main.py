@@ -13,6 +13,7 @@ import dbt.task.compile as compile_task
 import dbt.task.debug as debug_task
 import dbt.task.clean as clean_task
 import dbt.task.deps as deps_task
+import dbt.task.bootstrap as bootstrap_task
 import dbt.task.init as init_task
 import dbt.task.seed as seed_task
 import dbt.task.test as test_task
@@ -439,6 +440,35 @@ def parse_args(args):
         help="Pull the most recent version of the dependencies "
         "listed in packages.yml")
     sub.set_defaults(cls=deps_task.DepsTask, which='deps')
+
+    bootstrap_sub = subs.add_parser(
+        'bootstrap',
+        parents=[base_subparser],
+        help="Bootstrap schema.yml files from database catalog")
+    bootstrap_sub.set_defaults(cls=bootstrap_task.BootstrapTask, which='bootsrap')
+
+    bootstrap_sub.add_argument(
+        '--schemas',
+        required=True,
+        nargs='+',
+        help="""
+        Required. Specify the schemas to inspect when bootstrapping
+        schema.yml files.
+        """
+    )
+    bootstrap_sub.add_argument(
+        '--single-file',
+        action='store_true',
+        dest='single_file',
+        help='Store all of the schema information in a single schema.yml file'
+    )
+    bootstrap_sub.add_argument(
+        '--print-only',
+        action='store_true',
+        dest='print_only',
+        help="Print generated yml to console. Don't attempt to create schema.yml files."
+    )
+
 
     sub = subs.add_parser(
         'archive',
