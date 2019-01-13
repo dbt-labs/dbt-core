@@ -37,7 +37,6 @@ class TestCompare(DBTIntegrationTest):
                 self.unique_schema()
                 )
         created_models = [rel.table.lower() for rel in relations]
-
         return created_models
 
     def compare_switch_to_ephemeral(self):
@@ -65,7 +64,7 @@ class TestCompare(DBTIntegrationTest):
         self.assertTrue("test_view" in created_models)
         self.assertTrue("downstream" in created_models)
         # Assert dbt compare fails
-        results = self.run_dbt(["compare"])
+        results = self.run_dbt(["compare"], expect_pass=False)
         self.assertTrue(len(results) == 1)
 
     @use_profile("postgres")

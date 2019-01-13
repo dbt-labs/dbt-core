@@ -81,5 +81,5 @@ class CompareTask(BaseTask):
 
         return problem_relation_list
 
-        def interpret_results(self, results):
-            return len(results) == 0
+    def interpret_results(self, results):
+        return len(results) == 0
