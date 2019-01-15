@@ -7,6 +7,7 @@ import yaml
 import dbt.flags
 import dbt.parser
 from dbt.parser import ModelParser, MacroParser, DataTestParser, SchemaParser, ParserUtils
+from dbt.parser.source_config import SourceConfig
 from dbt.utils import timestring
 from dbt.config import RuntimeConfig
 
@@ -21,12 +22,7 @@ def get_os_path(unix_path):
     return os.path.normpath(unix_path)
 
 
-class ParserTest(unittest.TestCase):
-
-    def find_input_by_name(self, models, name):
-        return next(
-            (model for model in models if model.get('name') == name),
-            {})
+class BaseParserTest(unittest.TestCase):
 
     def setUp(self):
         dbt.flags.STRICT_MODE = True
@@ -73,6 +69,81 @@ class ParserTest(unittest.TestCase):
             project=snowplow_project, profile=profile_data
         )
 
+        self.all_projects = {
+            'root': self.root_project_config,
+            'snowplow': self.snowplow_project_config
+        }
+
+
+
+class SourceConfigTest(BaseParserTest):
+    def test__source_config_single_call(self):
+        cfg = SourceConfig(self.root_project_config, self.root_project_config,
+                           ['root', 'x'], NodeType.Model)
+        cfg.update_in_model_config({
+            'materialized': 'something',
+            'sort': 'my sort key',
+            'pre-hook': 'my pre run hook',
+            'vars': {'a': 1, 'b': 2},
+        })
+        expect = {
+            'column_types': {},
+            'enabled': True,
+            'materialized': 'something',
+            'post-hook': [],
+            'pre-hook': ['my pre run hook'],
+            'quoting': {},
+            'sort': 'my sort key',
+            'tags': [],
+            'vars': {'a': 1, 'b': 2},
+        }
+        self.assertEqual(cfg.config, expect)
+
+    def test__source_config_multiple_calls(self):
+        cfg = SourceConfig(self.root_project_config, self.root_project_config,
+                           ['root', 'x'], NodeType.Model)
+        cfg.update_in_model_config({
+            'materialized': 'something',
+            'sort': 'my sort key',
+            'pre-hook': 'my pre run hook',
+            'vars': {'a': 1, 'b': 2},
+        })
+        cfg.update_in_model_config({
+            'materialized': 'something else',
+            'pre-hook': ['my other pre run hook', 'another pre run hook'],
+            'vars': {'a': 4, 'c': 3},
+        })
+        expect = {
+            'column_types': {},
+            'enabled': True,
+            'materialized': 'something else',
+            'post-hook': [],
+            'pre-hook': [
+                'my pre run hook',
+                'my other pre run hook',
+                'another pre run hook',
+            ],
+            'quoting': {},
+            'sort': 'my sort key',
+            'tags': [],
+            'vars': {'a': 4, 'b': 2, 'c': 3},
+        }
+        self.assertEqual(cfg.config, expect)
+
+
+class ParserTest(BaseParserTest):
+
+    def find_input_by_name(self, models, name):
+        return next(
+            (model for model in models if model.get('name') == name),
+            {})
+
+    def setUp(self):
+        super(ParserTest, self).setUp()
+
+        self.macro_manifest = Manifest(macros={}, nodes={}, docs={},
+                                       generated_at=timestring(), disabled=[])
+
         self.model_config = {
             'enabled': True,
             'materialized': 'view',
@@ -95,6 +166,7 @@ class ParserTest(unittest.TestCase):
             'tags': [],
         }
 
+
     def test__single_model(self):
         models = [{
             'name': 'model_one',
@@ -105,13 +177,14 @@ class ParserTest(unittest.TestCase):
             'path': 'model_one.sql',
             'raw_sql': ("select * from events"),
         }]
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
 
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+            parser.parse_sql_nodes(models),
             ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
@@ -167,12 +240,13 @@ class ParserTest(unittest.TestCase):
             'materialized': 'ephemeral'
         })
 
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+            parser.parse_sql_nodes(models),
             ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
@@ -212,11 +286,15 @@ class ParserTest(unittest.TestCase):
             'raw_sql': (" "),
         }]
 
+        del self.all_projects['snowplow']
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config}),
+            parser.parse_sql_nodes(models),
             ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
@@ -264,12 +342,14 @@ class ParserTest(unittest.TestCase):
             'raw_sql': "select * from {{ref('base')}}"
         }]
 
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+            parser.parse_sql_nodes(models),
             ({
                 'model.root.base': ParsedNode(
                     alias='base',
@@ -370,12 +450,14 @@ class ParserTest(unittest.TestCase):
                         "select * from e left join s on s.id = e.sid"),
         }]
 
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+            parser.parse_sql_nodes(models),
             ({
                 'model.root.events': ParsedNode(
                     alias='events',
@@ -549,12 +631,14 @@ class ParserTest(unittest.TestCase):
                         "select * from e left join s on s.id = e.sid"),
         }]
 
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+            parser.parse_sql_nodes(models),
             ({
                 'model.snowplow.events': ParsedNode(
                     alias='events',
@@ -856,12 +940,14 @@ class ParserTest(unittest.TestCase):
             'materialized': 'table'
         })
 
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+            parser.parse_sql_nodes(models),
             ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
@@ -941,12 +1027,14 @@ class ParserTest(unittest.TestCase):
             'materialized': 'view'
         })
 
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+            parser.parse_sql_nodes(models),
             ({
                 'model.root.table': ParsedNode(
                     alias='table',
@@ -1127,6 +1215,7 @@ class ParserTest(unittest.TestCase):
             'materialized': 'ephemeral'
         })
 
+
         sort_config = self.model_config.copy()
         sort_config.update({
             'enabled': False,
@@ -1140,12 +1229,14 @@ class ParserTest(unittest.TestCase):
             'sort': ['timestamp', 'id']
         })
 
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+            parser.parse_sql_nodes(models),
             ({
                 'model.root.table': ParsedNode(
                     alias='table',
@@ -1243,7 +1334,53 @@ class ParserTest(unittest.TestCase):
                     description='',
                     columns={}
                 ),
-            }, [['snowplow', 'disabled'], ['snowplow', 'views', 'package']])
+            },
+            [
+                ParsedNode(
+                    name='disabled',
+                    resource_type='model',
+                    package_name='snowplow',
+                    path='disabled.sql',
+                    original_file_path='disabled.sql',
+                    root_path=get_os_path('/usr/src/app'),
+                    raw_sql=("select * from events"),
+                    schema='analytics',
+                    refs=[],
+                    depends_on={
+                        'nodes': [],
+                        'macros': []
+                    },
+                    config=disabled_config,
+                    tags=[],
+                    empty=False,
+                    alias='disabled',
+                    unique_id='model.snowplow.disabled',
+                    fqn=['snowplow', 'disabled'],
+                    columns={}
+                ),
+                ParsedNode(
+                    name='package',
+                    resource_type='model',
+                    package_name='snowplow',
+                    path=get_os_path('views/package.sql'),
+                    original_file_path=get_os_path('views/package.sql'),
+                    root_path=get_os_path('/usr/src/app'),
+                    raw_sql=("select * from events"),
+                    schema='analytics',
+                    refs=[],
+                    depends_on={
+                        'nodes': [],
+                        'macros': []
+                    },
+                    config=sort_config,
+                    tags=[],
+                    empty=False,
+                    alias='package',
+                    unique_id='model.snowplow.package',
+                    fqn=['snowplow', 'views', 'package'],
+                    columns={}
+                )
+            ])
         )
 
     def test__simple_schema_v1_test(self):
@@ -1254,15 +1391,16 @@ class ParserTest(unittest.TestCase):
             'relationships: [{from: id, to: ref(\'model_two\'), field: id}]' # noqa
             '}}}'
         )
-        results = list(SchemaParser.parse_v1_test_yml(
+
+        parser = SchemaParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+        results = list(parser.parse_v1_test_yml(
             original_file_path='test_one.yml',
             test_yml=test_yml,
             package_name='root',
-            root_project=self.root_project_config,
-            all_projects={
-                'root': self.root_project_config,
-                'snowplow': self.snowplow_project_config
-            },
             root_dir=get_os_path('/usr/src/app')
         ))
         results.sort(key=lambda n: n.name)
@@ -1383,17 +1521,16 @@ class ParserTest(unittest.TestCase):
             '{relationships: {from: id, to: ref(\'model_two\')}}]'
             '}], tests: [some_test: { key: value }]}]}'
         )
-        results = list(SchemaParser.parse_v2_yml(
+        parser = SchemaParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+        results = list(parser.parse_v2_yml(
             original_file_path='test_one.yml',
             test_yml=test_yml,
             package_name='root',
-            root_project=self.root_project_config,
-            all_projects={
-                'root': self.root_project_config,
-                'snowplow': self.snowplow_project_config
-            },
-            root_dir=get_os_path('/usr/src/app'),
-            macros=None
+            root_dir=get_os_path('/usr/src/app')
         ))
 
         # split this into tests and patches, assert there's nothing else
@@ -1551,9 +1688,10 @@ class ParserTest(unittest.TestCase):
         all_projects = {}
         root_dir = '/some/path'
         relative_dirs = ['a', 'b']
+        parser = dbt.parser.schemas.SchemaParser(root_project, all_projects, None)
         with self.assertRaises(dbt.exceptions.CompilationException) as cm:
-            dbt.parser.schemas.SchemaParser.load_and_parse(
-                'test', root_project, all_projects, root_dir, relative_dirs
+            parser.load_and_parse(
+                'test', root_dir, relative_dirs
             )
             self.assertIn('https://docs.getdbt.com/v0.11/docs/schemayml-files',
                           str(cm.exception))
@@ -1574,8 +1712,9 @@ class ParserTest(unittest.TestCase):
         all_projects = {}
         root_dir = '/some/path'
         relative_dirs = ['a', 'b']
-        dbt.parser.schemas.SchemaParser.load_and_parse(
-            'test', root_project, all_projects, root_dir, relative_dirs
+        parser = dbt.parser.schemas.SchemaParser(root_project, all_projects, None)
+        parser.load_and_parse(
+            'test', root_dir, relative_dirs
         )
 
     def test__simple_data_test(self):
@@ -1589,12 +1728,14 @@ class ParserTest(unittest.TestCase):
             'raw_sql': "select * from {{ref('base')}}"
         }]
 
+        parser = DataTestParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+
         self.assertEqual(
-            DataTestParser.parse_sql_nodes(
-                tests,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+            parser.parse_sql_nodes(tests),
             ({
                 'test.root.no_events': ParsedNode(
                     alias='no_events',
@@ -1629,8 +1770,8 @@ class ParserTest(unittest.TestCase):
   {{a}} + {{b}}
 {% endmacro %}
 """
-
-        result = MacroParser.parse_macro_file(
+        parser = MacroParser(None, None)
+        result = parser.parse_macro_file(
             macro_file_path='simple_macro.sql',
             macro_file_contents=macro_file_contents,
             root_path=get_os_path('/usr/src/app'),
@@ -1666,8 +1807,8 @@ class ParserTest(unittest.TestCase):
   {{a}} + {{b}}
 {% endmacro %}
 """
-
-        result = MacroParser.parse_macro_file(
+        parser = MacroParser(None, None)
+        result = parser.parse_macro_file(
             macro_file_path='simple_macro.sql',
             macro_file_contents=macro_file_contents,
             root_path=get_os_path('/usr/src/app'),
@@ -1706,12 +1847,14 @@ class ParserTest(unittest.TestCase):
             'raw_sql': ("select *, {{package.simple(1, 2)}} from events"),
         }]
 
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+            parser.parse_sql_nodes(models),
             ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
@@ -1751,12 +1894,14 @@ class ParserTest(unittest.TestCase):
             'raw_sql': ("select *, {{ simple(1, 2) }} from events"),
         }]
 
+        parser = ModelParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+
         self.assertEqual(
-            ModelParser.parse_sql_nodes(
-                models,
-                self.root_project_config,
-                {'root': self.root_project_config,
-                 'snowplow': self.snowplow_project_config}),
+            parser.parse_sql_nodes(models),
             ({
                 'model.root.model_one': ParsedNode(
                     alias='model_one',

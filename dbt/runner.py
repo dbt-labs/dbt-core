@@ -12,7 +12,6 @@ import dbt.compilation
 import dbt.exceptions
 import dbt.linker
 import dbt.tracking
-import dbt.model
 import dbt.ui.printer
 import dbt.utils
 from dbt.clients.system import write_json
@@ -26,49 +25,51 @@ RESULT_FILE_NAME = 'run_results.json'
 
 
 class RunManager(object):
-    def __init__(self, config):
+    def __init__(self, config, query, Runner):
+        """
+        Runner is a type (not instance!) derived from
+            dbt.node_runners.BaseRunner
+        """
         self.config = config
+        self.query = query
+        self.Runner = Runner
 
-    def deserialize_graph(self):
-        logger.info("Loading dependency graph file.")
+        manifest, linker = self.compile(self.config)
+        self.manifest = manifest
+        self.linker = linker
 
-        base_target_path = self.config.target_path
-        graph_file = os.path.join(
-            base_target_path,
-            dbt.compilation.graph_file_name
-        )
+        selector = dbt.graph.selector.NodeSelector(linker, manifest)
+        selected_nodes = selector.select(query)
+        self.job_queue = self.linker.as_graph_queue(manifest, selected_nodes)
 
-        return dbt.linker.from_file(graph_file)
+        # we use this a couple times. order does not matter.
+        self._flattened_nodes = [
+            self.manifest.nodes[uid] for uid in selected_nodes
+        ]
 
-    def get_dependent(self, linker, node_id):
-        dependent_nodes = linker.get_dependent_nodes(node_id)
-        for node_id in dependent_nodes:
-            yield node_id
-
-    def get_runners(self, Runner, adapter, node_dependency_list):
-        all_nodes = dbt.utils.flatten_nodes(node_dependency_list)
-
-        num_nodes = len([
-            n for n in all_nodes if not Runner.is_ephemeral_model(n)
+        self.run_count = 0
+        self.num_nodes = len([
+            n for n in self._flattened_nodes
+            if not Runner.is_ephemeral_model(n)
         ])
+        self.node_results = []
+        self._skipped_children = {}
+        self._raise_next_tick = None
 
-        node_runners = {}
-        i = 0
-        for node in all_nodes:
-            uid = node.get('unique_id')
-            if Runner.is_ephemeral_model(node):
-                runner = Runner(self.config, adapter, node, 0, 0)
-            else:
-                i += 1
-                runner = Runner(self.config, adapter, node, i, num_nodes)
-            node_runners[uid] = runner
+    def get_runner(self, node):
+        adapter = get_adapter(self.config)
 
-        return node_runners
+        if self.Runner.is_ephemeral_model(node):
+            run_count = 0
+            num_nodes = 0
+        else:
+            self.run_count += 1
+            run_count = self.run_count
+            num_nodes = self.num_nodes
 
-    def call_runner(self, data):
-        runner = data['runner']
-        manifest = data['manifest']
+        return self.Runner(self.config, adapter, node, run_count, num_nodes)
 
+    def call_runner(self, runner):
         if runner.skip:
             return runner.on_skip()
 
@@ -76,27 +77,88 @@ class RunManager(object):
         if not runner.is_ephemeral_model(runner.node):
             runner.before_execute()
 
-        result = runner.safe_run(manifest)
+        result = runner.safe_run(self.manifest)
 
         if not runner.is_ephemeral_model(runner.node):
             runner.after_execute(result)
 
         if result.errored and runner.raise_on_first_error():
-            raise dbt.exceptions.RuntimeException(result.error)
+            # if we raise inside a thread, it'll just get silently swallowed.
+            # stash the error message we want on the RunManager, and it will
+            # check the next 'tick' - should be soon since our thread is about
+            # to finish!
+            self._raise_next_tick = result.error
 
         return result
 
-    def get_relevant_runners(self, node_runners, node_subset):
-        runners = []
-        for node in node_subset:
-            unique_id = node.get('unique_id')
-            if unique_id in node_runners:
-                runners.append(node_runners[unique_id])
-        return runners
+    def _submit(self, pool, args, callback):
+        """If the caller has passed the magic 'single-threaded' flag, call the
+        function directly instead of pool.apply_async. The single-threaded flag
+         is intended for gathering more useful performance information about
+        what appens beneath `call_runner`, since python's default profiling
+        tools ignore child threads.
 
-    def execute_nodes(self, linker, Runner, manifest, node_dependency_list):
-        adapter = get_adapter(self.config)
+        This does still go through the callback path for result collection.
+        """
+        if self.config.args.single_threaded:
+            callback(self.call_runner(*args))
+        else:
+            pool.apply_async(self.call_runner, args=args, callback=callback)
 
+    def _raise_set_error(self):
+        if self._raise_next_tick is not None:
+            raise dbt.exceptions.RuntimeException(self._raise_next_tick)
+
+    def run_queue(self, pool):
+        """Given a pool, submit jobs from the queue to the pool.
+        """
+        def callback(result):
+            """Note: mark_done, at a minimum, must happen here or dbt will
+            deadlock during ephemeral result error handling!
+            """
+            self._handle_result(result)
+            self.job_queue.mark_done(result.node.unique_id)
+
+        while not self.job_queue.empty():
+            node = self.job_queue.get()
+            self._raise_set_error()
+            runner = self.get_runner(node)
+            # we finally know what we're running! Make sure we haven't decided
+            # to skip it due to upstream failures
+            if runner.node.unique_id in self._skipped_children:
+                cause = self._skipped_children.pop(runner.node.unique_id)
+                runner.do_skip(cause=cause)
+            args = (runner,)
+            self._submit(pool, args, callback)
+
+        # block on completion
+        self.job_queue.join()
+        # if an error got set during join(), raise it.
+        self._raise_set_error()
+
+        return
+
+    def _handle_result(self, result):
+        """Mark the result as completed, insert the `CompiledResultNode` into
+        the manifest, and mark any descendants (potentially with a 'cause' if
+        the result was an ephemeral model) as skipped.
+        """
+        is_ephemeral = self.Runner.is_ephemeral_model(result.node)
+        if not is_ephemeral:
+            self.node_results.append(result)
+
+        node = CompileResultNode(**result.node)
+        node_id = node.unique_id
+        self.manifest.nodes[node_id] = node
+
+        if result.errored:
+            if is_ephemeral:
+                cause = result
+            else:
+                cause = None
+            self._mark_dependent_errors(node_id, result, cause)
+
+    def execute_nodes(self):
         num_threads = self.config.threads
         target_name = self.config.target_name
 
@@ -105,76 +167,44 @@ class RunManager(object):
         dbt.ui.printer.print_timestamped_line(concurrency_line)
         dbt.ui.printer.print_timestamped_line("")
 
-        schemas = list(Runner.get_model_schemas(manifest))
-        node_runners = self.get_runners(Runner, adapter, node_dependency_list)
+        schemas = list(self.Runner.get_model_schemas(self.manifest))
 
         pool = ThreadPool(num_threads)
-        node_results = []
-        for node_list in node_dependency_list:
-            runners = self.get_relevant_runners(node_runners, node_list)
+        try:
+            self.run_queue(pool)
 
-            args_list = []
-            for runner in runners:
-                args_list.append({
-                    'manifest': manifest,
-                    'runner': runner
-                })
+        except KeyboardInterrupt:
+            pool.close()
+            pool.terminate()
 
-            try:
-                for result in pool.imap_unordered(self.call_runner, args_list):
-                    is_ephemeral = Runner.is_ephemeral_model(result.node)
-                    if not is_ephemeral:
-                        node_results.append(result)
+            adapter = get_adapter(self.config)
 
-                    node = CompileResultNode(**result.node)
-                    node_id = node.unique_id
-                    manifest.nodes[node_id] = node
+            if not adapter.is_cancelable():
+                msg = ("The {} adapter does not support query "
+                       "cancellation. Some queries may still be "
+                       "running!".format(adapter.type()))
 
-                    if result.errored:
-                        dependents = self.get_dependent(linker, node_id)
-                        self._mark_dependent_errors(node_runners, dependents,
-                                                    result, is_ephemeral)
-
-            except KeyboardInterrupt:
-                pool.close()
-                pool.terminate()
-
-                adapter = get_adapter(self.config)
-
-                if not adapter.is_cancelable():
-                    msg = ("The {} adapter does not support query "
-                           "cancellation. Some queries may still be "
-                           "running!".format(adapter.type()))
-
-                    yellow = dbt.ui.printer.COLOR_FG_YELLOW
-                    dbt.ui.printer.print_timestamped_line(msg, yellow)
-                    raise
-
-                for conn_name in adapter.cancel_open_connections():
-                    dbt.ui.printer.print_cancel_line(conn_name)
-
-                dbt.ui.printer.print_run_end_messages(node_results,
-                                                      early_exit=True)
-
-                pool.join()
+                yellow = dbt.ui.printer.COLOR_FG_YELLOW
+                dbt.ui.printer.print_timestamped_line(msg, yellow)
                 raise
+
+            for conn_name in adapter.cancel_open_connections():
+                dbt.ui.printer.print_cancel_line(conn_name)
+
+            dbt.ui.printer.print_run_end_messages(self.node_results,
+                                                  early_exit=True)
+
+            pool.join()
+            raise
 
         pool.close()
         pool.join()
 
-        return node_results
+        return self.node_results
 
-    @staticmethod
-    def _mark_dependent_errors(node_runners, dependents, result, is_ephemeral):
-        for dep_node_id in dependents:
-            runner = node_runners.get(dep_node_id)
-            if not runner:
-                continue
-            if is_ephemeral:
-                cause = result
-            else:
-                cause = None
-            runner.do_skip(cause=result)
+    def _mark_dependent_errors(self, node_id, result, cause):
+        for dep_node_id in self.linker.get_dependent_nodes(node_id):
+            self._skipped_children[dep_node_id] = cause
 
     def write_results(self, execution_result):
         filepath = os.path.join(self.config.target_path, RESULT_FILE_NAME)
@@ -185,30 +215,18 @@ class RunManager(object):
         compiler.initialize()
         return compiler.compile()
 
-    def run_from_graph(self, Selector, Runner, query):
+    def run(self):
         """
         Run dbt for the query, based on the graph.
-        Selector is a type (not instance!) derived from
-            dbt.graph.selector.NodeSelector
-        Runner is a type (not instance!) derived from
-            dbt.node_runners.BaseRunner
-
         """
-        manifest, linker = self.compile(self.config)
-
-        selector = Selector(linker, manifest)
-        selected_nodes = selector.select(query)
-        dep_list = selector.as_node_list(selected_nodes)
-
         adapter = get_adapter(self.config)
 
-        flat_nodes = dbt.utils.flatten_nodes(dep_list)
-        if len(flat_nodes) == 0:
+        if len(self._flattened_nodes) == 0:
             logger.info("WARNING: Nothing to do. Try checking your model "
                         "configs and model specification args")
             return []
-        elif Runner.print_header:
-            stat_line = dbt.ui.printer.get_counts(flat_nodes)
+        elif self.Runner.print_header:
+            stat_line = dbt.ui.printer.get_counts(self._flattened_nodes)
             logger.info("")
             dbt.ui.printer.print_timestamped_line(stat_line)
             dbt.ui.printer.print_timestamped_line("")
@@ -216,13 +234,14 @@ class RunManager(object):
             logger.info("")
 
         try:
-            Runner.before_hooks(self.config, adapter, manifest)
+            self.Runner.before_hooks(self.config, adapter, self.manifest)
             started = time.time()
-            Runner.before_run(self.config, adapter, manifest)
-            res = self.execute_nodes(linker, Runner, manifest, dep_list)
-            Runner.after_run(self.config, adapter, res, manifest)
+            self.Runner.before_run(self.config, adapter, self.manifest)
+            res = self.execute_nodes()
+            self.Runner.after_run(self.config, adapter, res, self.manifest)
             elapsed = time.time() - started
-            Runner.after_hooks(self.config, adapter, res, manifest, elapsed)
+            self.Runner.after_hooks(self.config, adapter, res, self.manifest,
+                                    elapsed)
 
         finally:
             adapter.cleanup_connections()
@@ -235,13 +254,3 @@ class RunManager(object):
         self.write_results(result)
 
         return res
-
-    # ------------------------------------
-
-    def run(self, query, Runner):
-        Selector = dbt.graph.selector.NodeSelector
-        return self.run_from_graph(Selector, Runner, query)
-
-    def run_flat(self, query, Runner):
-        Selector = dbt.graph.selector.FlatNodeSelector
-        return self.run_from_graph(Selector, Runner, query)

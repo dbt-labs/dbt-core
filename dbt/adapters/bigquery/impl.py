@@ -142,8 +142,9 @@ class BigQueryAdapter(PostgresAdapter):
     def get_bigquery_client(cls, profile_credentials):
         project_name = profile_credentials.project
         creds = cls.get_bigquery_credentials(profile_credentials)
-
-        return google.cloud.bigquery.Client(project_name, creds)
+        location = getattr(profile_credentials, 'location', None)
+        return google.cloud.bigquery.Client(project_name, creds,
+                                            location=location)
 
     @classmethod
     def open_connection(cls, connection):
@@ -447,13 +448,6 @@ class BigQueryAdapter(PostgresAdapter):
             with self.exception_handler('create dataset', model_name):
                 client.create_dataset(dataset)
 
-    def drop_tables_in_schema(self, dataset):
-        conn = self.get_connection()
-        client = conn.handle
-
-        for table in client.list_tables(dataset):
-            client.delete_table(table.reference)
-
     def drop_schema(self, schema, model_name=None):
         logger.debug('Dropping schema "%s".', schema)
 
@@ -465,8 +459,7 @@ class BigQueryAdapter(PostgresAdapter):
 
         dataset = self.get_dataset(schema, model_name)
         with self.exception_handler('drop dataset', model_name):
-            self.drop_tables_in_schema(dataset)
-            client.delete_dataset(dataset)
+            client.delete_dataset(dataset, delete_contents=True)
 
     def get_existing_schemas(self, model_name=None):
         conn = self.get_connection(model_name)

@@ -1,5 +1,5 @@
 from dbt.logger import initialize_logger, GLOBAL_LOGGER as logger, \
-    initialized as logger_initialized
+    logger_initialized, log_cache_events
 
 import argparse
 import os.path
@@ -19,17 +19,18 @@ import dbt.task.test as test_task
 import dbt.task.archive as archive_task
 import dbt.task.generate as generate_task
 import dbt.task.serve as serve_task
+from dbt.adapters.factory import reset_adapters
 
 import dbt.tracking
 import dbt.ui.printer
 import dbt.compat
 import dbt.deprecations
+import dbt.profiler
 
 from dbt.utils import ExitCodes
-from dbt.config import Project, RuntimeConfig, DbtProjectError, \
-    DbtProfileError, PROFILES_DIR, read_config, \
-    send_anonymous_usage_stats, colorize_output, read_profiles
-from dbt.exceptions import DbtProfileError, DbtProfileError, RuntimeException
+from dbt.config import Project, UserConfig, RuntimeConfig, PROFILES_DIR, \
+    read_profiles
+from dbt.exceptions import DbtProjectError, DbtProfileError, RuntimeException
 
 
 PROFILES_HELP_MESSAGE = """
@@ -91,7 +92,7 @@ def main(args=None):
         logger.info("Encountered an error:")
         logger.info(str(e))
 
-        if logger_initialized:
+        if logger_initialized():
             logger.debug(traceback.format_exc())
         elif not isinstance(e, RuntimeException):
             # if it did not come from dbt proper and the logger is not
@@ -109,27 +110,51 @@ def handle(args):
     return res
 
 
-def handle_and_check(args):
-    parsed = parse_args(args)
-    # this needs to happen after args are parsed so we can determine the
-    # correct profiles.yml file
-    profile_config = read_config(parsed.profiles_dir)
-    if not send_anonymous_usage_stats(profile_config):
-        dbt.tracking.do_not_track()
-    else:
-        dbt.tracking.initialize_tracking()
+def initialize_config_values(parsed):
+    """Given the parsed args, initialize the dbt tracking code.
 
-    if colorize_output(profile_config):
+    It would be nice to re-use this profile later on instead of parsing it
+    twice, but dbt's intialization is not structured in a way that makes that
+    easy.
+    """
+    try:
+        cfg = UserConfig.from_directory(parsed.profiles_dir)
+    except RuntimeException:
+        cfg = UserConfig.from_dict(None)
+
+    if cfg.send_anonymous_usage_stats:
+        dbt.tracking.initialize_tracking(parsed.profiles_dir)
+    else:
+        dbt.tracking.do_not_track()
+
+    if cfg.use_colors:
         dbt.ui.printer.use_colors()
 
-    try:
-        task, res = run_from_args(parsed)
-    finally:
-        dbt.tracking.flush()
 
-    success = task.interpret_results(res)
+def handle_and_check(args):
+    parsed = parse_args(args)
+    profiler_enabled = False
 
-    return res, success
+    if parsed.record_timing_info:
+        profiler_enabled = True
+
+    with dbt.profiler.profiler(
+        enable=profiler_enabled,
+        outfile=parsed.record_timing_info
+    ):
+
+        initialize_config_values(parsed)
+
+        reset_adapters()
+
+        try:
+            task, res = run_from_args(parsed)
+        finally:
+            dbt.tracking.flush()
+
+        success = task.interpret_results(res)
+
+        return res, success
 
 
 def get_nearest_project_dir():
@@ -149,8 +174,9 @@ def run_from_args(parsed):
     task = None
     cfg = None
 
-    if parsed.which == 'init':
-        # bypass looking for a project file if we're running `dbt init`
+    if parsed.which in ('init', 'debug'):
+        # bypass looking for a project file if we're running `dbt init` or
+        # `dbt debug`
         task = parsed.cls(args=parsed)
     else:
         nearest_project_dir = get_nearest_project_dir()
@@ -209,6 +235,8 @@ def invoke_dbt(parsed):
     task = None
     cfg = None
 
+    log_cache_events(getattr(parsed, 'log_cache_events', False))
+
     try:
         if parsed.which in {'deps', 'clean'}:
             # deps doesn't need a profile, so don't require one.
@@ -251,7 +279,6 @@ def invoke_dbt(parsed):
         return None
 
     flags.NON_DESTRUCTIVE = getattr(parsed, 'non_destructive', False)
-    flags.LOG_CACHE_EVENTS = getattr(parsed, 'log_cache_events', False)
     flags.USE_CACHE = getattr(parsed, 'use_cache', True)
 
     arg_drop_existing = getattr(parsed, 'drop_existing', False)
@@ -287,6 +314,18 @@ def parse_args(args):
         help="Show version information")
 
     p.add_argument(
+        '-r',
+        '--record-timing-info',
+        default=None,
+        type=str,
+        help="""
+        When this option is passed, dbt will output low-level timing
+        stats to the specified file. Example:
+        `--record-timing-info output.profile`
+        """
+    )
+
+    p.add_argument(
         '-d',
         '--debug',
         action='store_true',
@@ -299,6 +338,17 @@ def parse_args(args):
         action='store_true',
         help='''Run schema validations at runtime. This will surface
         bugs in dbt, but may incur a performance penalty.''')
+
+    # if set, run dbt in single-threaded mode: thread count is ignored, and
+    # calls go through `map` instead of the thread pool. This is useful for
+    # getting performance information about aspects of dbt that normally run in
+    # a thread, as the profiler ignores child threads. Users should really
+    # never use this.
+    p.add_argument(
+        '--single-threaded',
+        action='store_true',
+        help=argparse.SUPPRESS,
+    )
 
     subs = p.add_subparsers(title="Available sub-commands")
 
@@ -440,6 +490,7 @@ def parse_args(args):
 
     for sub in [run_sub, compile_sub, generate_sub]:
         sub.add_argument(
+            '-m',
             '--models',
             required=False,
             nargs='+',
@@ -536,6 +587,7 @@ def parse_args(args):
         """
     )
     sub.add_argument(
+        '-m',
         '--models',
         required=False,
         nargs='+',
@@ -559,6 +611,7 @@ def parse_args(args):
         sys.exit(1)
 
     parsed = p.parse_args(args)
+    parsed.profiles_dir = os.path.expanduser(parsed.profiles_dir)
 
     if not hasattr(parsed, 'which'):
         # the user did not provide a valid subcommand. trigger the help message

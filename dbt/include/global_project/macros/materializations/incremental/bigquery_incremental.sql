@@ -37,7 +37,9 @@
         select * from (
             {{ sql }}
         )
-        where ({{ sql_where }}) or ({{ sql_where }}) is null
+        {% if sql_where %}
+            where ({{ sql_where }}) or ({{ sql_where }}) is null
+        {% endif %}
     )
   {%- endset -%}
 

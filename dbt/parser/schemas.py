@@ -16,7 +16,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import get_pseudo_test_path
 from dbt.contracts.graph.unparsed import UnparsedNode, UnparsedNodeUpdate
 from dbt.contracts.graph.parsed import ParsedNodePatch
-from dbt.parser.base import BaseParser
+from dbt.parser.base import MacrosKnownParser
 
 
 def get_nice_schema_test_name(test_type, test_name, args):
@@ -89,7 +89,7 @@ def build_test_raw_sql(test_namespace, model_name, test_type, test_args):
     return raw_sql
 
 
-class SchemaParser(BaseParser):
+class SchemaParser(MacrosKnownParser):
     """This is the original schema parser but with everything in one huge CF of
     a method so I can refactor it more nicely.
     """
@@ -176,16 +176,15 @@ class SchemaParser(BaseParser):
             raw_sql=raw_sql
         )
 
-    @classmethod
-    def build_parsed_node(cls, unparsed, model_name, test_namespace, test_type,
-                          root_project, all_projects, macros, column_name):
+    def build_parsed_node(self, unparsed, model_name, test_namespace,
+                          test_type, column_name):
         """Given an UnparsedNode with a node type of Test and some extra
         information, build a ParsedNode representing the test.
         """
 
         test_path = os.path.basename(unparsed.original_file_path)
 
-        source_package = all_projects.get(unparsed.package_name)
+        source_package = self.all_projects.get(unparsed.package_name)
         if source_package is None:
             desc = '"{}" test on model "{}"'.format(test_type,
                                                     model_name)
@@ -194,45 +193,40 @@ class SchemaParser(BaseParser):
         # supply our own fqn which overrides the hashed version from the path
         full_path = get_pseudo_test_path(unparsed.name, test_path,
                                          'schema_test')
-        fqn_override = cls.get_fqn(full_path, source_package)
+        fqn_override = self.get_fqn(full_path, source_package)
 
-        node_path = cls.get_path(NodeType.Test, unparsed.package_name,
-                                 unparsed.name)
+        node_path = self.get_path(NodeType.Test, unparsed.package_name,
+                                  unparsed.name)
 
-        return cls.parse_node(unparsed,
-                              node_path,
-                              root_project,
-                              source_package,
-                              all_projects,
-                              tags=['schema'],
-                              fqn_extra=None,
-                              fqn=fqn_override,
-                              macros=macros,
-                              column_name=column_name)
+        return self.parse_node(unparsed,
+                               node_path,
+                               source_package,
+                               tags=['schema'],
+                               fqn_extra=None,
+                               fqn=fqn_override,
+                               column_name=column_name)
 
-    @classmethod
-    def build_node(cls, model_name, package_name, test_type, test_args,
-                   root_dir, original_file_path, root_project, all_projects,
-                   macros, column_name=None):
+    def build_node(self, model_name, package_name, test_type, test_args,
+                   root_dir, original_file_path, column_name=None):
         """From the various components that are common to both v1 and v2 schema,
         build a ParsedNode representing a test case.
         """
         original_test_type = test_type
-        test_namespace, test_type, package_name = cls.calculate_namespace(
+        test_namespace, test_type, package_name = self.calculate_namespace(
             test_type, package_name
         )
 
-        test_namespace, test_type, package_name = cls.calculate_namespace(
+        test_namespace, test_type, package_name = self.calculate_namespace(
             test_type, package_name
         )
 
-        unparsed = cls.build_unparsed_node(model_name, package_name, test_type,
-                                           test_args, test_namespace, root_dir,
-                                           original_file_path)
+        unparsed = self.build_unparsed_node(model_name, package_name,
+                                            test_type, test_args,
+                                            test_namespace, root_dir,
+                                            original_file_path)
 
-        parsed = cls.build_parsed_node(unparsed, model_name, test_namespace,
-                                       original_test_type, root_project,
-                                       all_projects, macros, column_name)
+        parsed = self.build_parsed_node(unparsed, model_name, test_namespace,
+                                        original_test_type, column_name)
         return parsed
 
     @classmethod
@@ -270,9 +264,8 @@ class SchemaParser(BaseParser):
 
             yield original_file_path, test_yml
 
-    @classmethod
-    def parse_v1_test_yml(cls, original_file_path, test_yml, package_name,
-                          root_project, all_projects, root_dir, macros=None):
+    def parse_v1_test_yml(self, original_file_path, test_yml, package_name,
+                          root_dir):
         """Parse v1 yml contents, yielding parsed nodes.
 
         A v1 yml file is laid out like this ('variables' written
@@ -323,17 +316,15 @@ class SchemaParser(BaseParser):
                     continue
 
                 for config in configs:
-                    test_args = cls._build_v1_test_args(config)
-                    to_add = cls.build_node(
+                    test_args = self._build_v1_test_args(config)
+                    to_add = self.build_node(
                         model_name, package_name, test_type, test_args,
-                        root_dir, original_file_path,
-                        root_project, all_projects, macros)
+                        root_dir, original_file_path)
                     if to_add is not None:
                         yield to_add
 
-    @classmethod
-    def parse_v2_yml(cls, original_file_path, test_yml, package_name,
-                     root_project, all_projects, root_dir, macros):
+    def parse_v2_yml(self, original_file_path, test_yml, package_name,
+                     root_dir):
         """Parse v2 yml contents, yielding both parsed nodes and node patches.
 
         A v2 yml file is laid out like this ('variables' written
@@ -384,16 +375,13 @@ class SchemaParser(BaseParser):
                 dbt.utils.compiler_warning(model.get('name'), msg)
                 continue
 
-            iterator = cls.parse_model(model, package_name, root_dir,
-                                       original_file_path, root_project,
-                                       all_projects, macros)
+            iterator = self.parse_model(model, package_name, root_dir,
+                                        original_file_path)
 
             for node_type, node in iterator:
                 yield node_type, node
 
-    @classmethod
-    def parse_model(cls, model, package_name, root_dir, path, root_project,
-                    all_projects, macros):
+    def parse_model(self, model, package_name, root_dir, path):
         """Given an UnparsedNodeUpdate, return column info about the model
 
             - column info (name and maybe description) as a dict
@@ -416,22 +404,21 @@ class SchemaParser(BaseParser):
             }
             dbt.clients.jinja.get_rendered(description, context)
             for test in column.get('tests', []):
-                test_type, test_args = cls._build_v2_test_args(
+                test_type, test_args = self._build_v2_test_args(
                     test, column_name
                 )
-                node = cls.build_node(
+                node = self.build_node(
                     model_name, package_name, test_type, test_args, root_dir,
-                    path, root_project, all_projects, macros, column_name
+                    path, column_name
                 )
                 yield 'test', node
 
         for test in model.get('tests', []):
             # table tests don't inject any extra values, model name is
             # available via `model.name`
-            test_type, test_args = cls._build_v2_test_args(test, None)
-            node = cls.build_node(model_name, package_name, test_type,
-                                  test_args, root_dir, path, root_project,
-                                  all_projects, macros)
+            test_type, test_args = self._build_v2_test_args(test, None)
+            node = self.build_node(model_name, package_name, test_type,
+                                   test_args, root_dir, path)
             yield 'test', node
 
         context = {'doc': dbt.context.parser.docs(model, docrefs)}
@@ -447,32 +434,28 @@ class SchemaParser(BaseParser):
         )
         yield 'patch', patch
 
-    @classmethod
-    def load_and_parse(cls, package_name, root_project, all_projects, root_dir,
-                       relative_dirs, macros=None):
+    def load_and_parse(self, package_name, root_dir, relative_dirs):
         if dbt.flags.STRICT_MODE:
-            dbt.contracts.project.ProjectList(**all_projects)
+            dbt.contracts.project.ProjectList(**self.all_projects)
         new_tests = {}  # test unique ID -> ParsedNode
         node_patches = {}  # model name -> dict
 
-        iterator = cls.find_schema_yml(package_name, root_dir, relative_dirs)
+        iterator = self.find_schema_yml(package_name, root_dir, relative_dirs)
 
         for original_file_path, test_yml in iterator:
             version = test_yml.get('version', 1)
             # the version will not be an int if it's a v1 model that has a
             # model named 'version'.
             if version == 1 or not isinstance(version, int):
-                cls.check_v2_missing_version(original_file_path, test_yml)
+                self.check_v2_missing_version(original_file_path, test_yml)
                 new_tests.update(
                     (t.get('unique_id'), t)
-                    for t in cls.parse_v1_test_yml(
-                        original_file_path, test_yml, package_name,
-                        root_project, all_projects, root_dir, macros)
+                    for t in self.parse_v1_test_yml(
+                        original_file_path, test_yml, package_name, root_dir)
                 )
             elif version == 2:
-                v2_results = cls.parse_v2_yml(
-                        original_file_path, test_yml, package_name,
-                        root_project, all_projects, root_dir, macros)
+                v2_results = self.parse_v2_yml(
+                        original_file_path, test_yml, package_name, root_dir)
                 for result_type, node in v2_results:
                     if result_type == 'patch':
                         node_patches[node.name] = node

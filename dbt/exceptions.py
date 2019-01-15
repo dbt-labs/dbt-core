@@ -151,6 +151,8 @@ class DbtProfileError(DbtConfigError):
 class SemverException(Exception):
     def __init__(self, msg=None):
         self.msg = msg
+        if msg is not None:
+            super(SemverException, self).__init__(msg)
 
 
 class VersionsNotCompatibleException(SemverException):
@@ -163,6 +165,45 @@ class NotImplementedException(Exception):
 
 class FailedToConnectException(DatabaseException):
     pass
+
+
+class CommandError(RuntimeException):
+    def __init__(self, cwd, cmd, message='Error running command'):
+        super(CommandError, self).__init__(message)
+        self.cwd = cwd
+        self.cmd = cmd
+        self.args = (cwd, cmd, message)
+
+    def __str__(self):
+        if len(self.cmd) == 0:
+            return '{}: No arguments given'.format(self.msg)
+        return '{}: "{}"'.format(self.msg, self.cmd[0])
+
+
+class ExecutableError(CommandError):
+    def __init__(self, cwd, cmd, message):
+        super(ExecutableError, self).__init__(cwd, cmd, message)
+
+
+class WorkingDirectoryError(CommandError):
+    def __init__(self, cwd, cmd, message):
+        super(WorkingDirectoryError, self).__init__(cwd, cmd, message)
+
+    def __str__(self):
+        return '{}: "{}"'.format(self.msg, self.cwd)
+
+
+class CommandResultError(CommandError):
+    def __init__(self, cwd, cmd, returncode, stdout, stderr,
+                 message='Got a non-zero returncode'):
+        super(CommandResultError, self).__init__(cwd, cmd, message)
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+        self.args = (cwd, cmd, returncode, stdout, stderr, message)
+
+    def __str__(self):
+        return '{} running: {}'.format(self.msg, self.cmd)
 
 
 def raise_compiler_error(msg, node=None):
@@ -230,21 +271,47 @@ def doc_target_not_found(model, target_doc_name, target_doc_package):
     raise_compiler_error(msg, model)
 
 
-def get_target_not_found_msg(model, target_model_name, target_model_package):
+def _get_target_failure_msg(model, target_model_name, target_model_package,
+                            include_path, reason):
     target_package_string = ''
-
     if target_model_package is not None:
         target_package_string = "in package '{}' ".format(target_model_package)
 
-    return ("Model '{}' depends on model '{}' {}which was not found or is"
-            " disabled".format(model.get('unique_id'),
-                               target_model_name,
-                               target_package_string))
+    source_path_string = ''
+    if include_path:
+        source_path_string = ' ({})'.format(model.get('original_file_path'))
+
+    return ("{} '{}'{} depends on model '{}' {}which {}"
+            .format(model.get('resource_type').title(),
+                    model.get('unique_id'),
+                    source_path_string,
+                    target_model_name,
+                    target_package_string,
+                    reason))
+
+
+def get_target_disabled_msg(model, target_model_name, target_model_package):
+    return _get_target_failure_msg(model, target_model_name,
+                                   target_model_package, include_path=True,
+                                   reason='is disabled')
+
+
+def get_target_not_found_msg(model, target_model_name, target_model_package):
+    return _get_target_failure_msg(model, target_model_name,
+                                   target_model_package, include_path=True,
+                                   reason='was not found')
+
+
+def get_target_not_found_or_disabled_msg(model, target_model_name,
+                                         target_model_package):
+    return _get_target_failure_msg(model, target_model_name,
+                                   target_model_package, include_path=False,
+                                   reason='was not found or is disabled')
 
 
 def ref_target_not_found(model, target_model_name, target_model_package):
-    msg = get_target_not_found_msg(model, target_model_name,
-                                   target_model_package)
+    msg = get_target_not_found_or_disabled_msg(model, target_model_name,
+                                               target_model_package)
     raise_compiler_error(msg, model)
 
 

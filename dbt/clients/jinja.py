@@ -246,7 +246,7 @@ def create_macro_capture_env(node):
 
 def get_environment(node=None, capture_macros=False):
     args = {
-        'extensions': []
+        'extensions': ['jinja2.ext.do']
     }
 
     if capture_macros:

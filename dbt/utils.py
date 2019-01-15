@@ -14,7 +14,7 @@ import dbt.exceptions
 import dbt.flags
 
 from dbt.include import GLOBAL_DBT_MODULES_PATH
-from dbt.compat import basestring
+from dbt.compat import basestring, DECIMALS
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt.clients import yaml_helper
@@ -100,6 +100,30 @@ def find_by_name(flat_graph, target_name, target_package, subgraph,
         nodetype)
 
 
+def id_matches(unique_id, target_name, target_package, nodetypes, model):
+    """Return True if the unique ID matches the given name, package, and type.
+
+    If package is None, any package is allowed.
+    nodetypes should be a container of NodeTypes that implements the 'in'
+    operator.
+    """
+    node_parts = unique_id.split('.')
+    if len(node_parts) != 3:
+        node_type = model.get('resource_type', 'node')
+        msg = "{} names cannot contain '.' characters".format(node_type)
+        dbt.exceptions.raise_compiler_error(msg, model)
+
+    resource_type, package_name, node_name = node_parts
+
+    if resource_type not in nodetypes:
+        return False
+
+    if target_name != node_name:
+        return False
+
+    return target_package is None or target_package == package_name
+
+
 def find_in_subgraph_by_name(subgraph, target_name, target_package, nodetype):
     """Find an entry in a subgraph by name. Any mapping that implements
     .items() and maps unique id -> something can be used as the subgraph.
@@ -110,18 +134,17 @@ def find_in_subgraph_by_name(subgraph, target_name, target_package, nodetype):
     You can use `None` for the package name as a wildcard.
     """
     for name, model in subgraph.items():
-        node_parts = name.split('.')
-        if len(node_parts) != 3:
-            node_type = model.get('resource_type', 'node')
-            msg = "{} names cannot contain '.' characters".format(node_type)
-            dbt.exceptions.raise_compiler_error(msg, model)
+        if id_matches(name, target_name, target_package, nodetype, model):
+            return model
 
-        resource_type, package_name, node_name = node_parts
+    return None
 
-        if (resource_type in nodetype and
-            ((target_name == node_name) and
-             (target_package is None or
-              target_package == package_name))):
+
+def find_in_list_by_name(haystack, target_name, target_package, nodetype):
+    """Find an entry in the given list by name."""
+    for model in haystack:
+        name = model.get('unique_id')
+        if id_matches(name, target_name, target_package, nodetype, model):
             return model
 
     return None
@@ -338,10 +361,6 @@ def to_string(s):
         return s
 
 
-def is_blocking_dependency(node):
-    return (is_type(node, NodeType.Model))
-
-
 def get_materialization(node):
     return node.get('config', {}).get('materialized')
 
@@ -423,14 +442,29 @@ class memoized(object):
         return functools.partial(self.__call__, obj)
 
 
+def invalid_ref_test_message(node, target_model_name, target_model_package,
+                             disabled):
+    if disabled:
+        msg = dbt.exceptions.get_target_disabled_msg(
+            node, target_model_name, target_model_package
+        )
+    else:
+        msg = dbt.exceptions.get_target_not_found_msg(
+            node, target_model_name, target_model_package
+        )
+    return 'WARNING: {}'.format(msg)
+
+
 def invalid_ref_fail_unless_test(node, target_model_name,
-                                 target_model_package):
+                                 target_model_package, disabled):
     if node.get('resource_type') == NodeType.Test:
-        warning = dbt.exceptions.get_target_not_found_msg(
-                    node,
-                    target_model_name,
-                    target_model_package)
-        logger.debug("WARNING: {}".format(warning))
+        msg = invalid_ref_test_message(node, target_model_name,
+                                       target_model_package, disabled)
+        if disabled:
+            logger.debug(msg)
+        else:
+            logger.warning(msg)
+
     else:
         dbt.exceptions.ref_target_not_found(
             node,
@@ -476,6 +510,6 @@ class JSONEncoder(json.JSONEncoder):
     converted to floats.
     """
     def default(self, obj):
-        if isinstance(obj, Decimal):
+        if isinstance(obj, DECIMALS):
             return float(obj)
         return super(JSONEncoder, self).default(obj)

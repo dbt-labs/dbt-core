@@ -17,7 +17,7 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
         return "test/integration/017_runtime_materialization_tests/models"
 
     @attr(type='postgres')
-    def test_full_refresh(self):
+    def test_postgres_full_refresh(self):
         # initial full-refresh should have no effect
         results = self.run_dbt(['run', '--full-refresh'])
         self.assertEqual(len(results), 3)
@@ -42,7 +42,7 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
         self.assertTablesEqual("seed","materialized")
 
     @attr(type='postgres')
-    def test_non_destructive(self):
+    def test_postgres_non_destructive(self):
         results = self.run_dbt(['run', '--non-destructive'])
         self.assertEqual(len(results), 3)
 
@@ -62,7 +62,7 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
         self.assertTablesEqual("seed","materialized")
 
     @attr(type='postgres')
-    def test_full_refresh_and_non_destructive(self):
+    def test_postgres_full_refresh_and_non_destructive(self):
         results = self.run_dbt(['run', '--full-refresh', '--non-destructive'])
         self.assertEqual(len(results), 3)
 
@@ -84,11 +84,24 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
 
 
     @attr(type='postgres')
-    def test_delete__dbt_tmp_relation(self):
+    def test_postgres_delete__dbt_tmp_relation(self):
         # This creates a __dbt_tmp view - make sure it doesn't interfere with the dbt run
         self.run_sql_file("test/integration/017_runtime_materialization_tests/create_view__dbt_tmp.sql")
         results = self.run_dbt(['run', '--model', 'view'])
         self.assertEqual(len(results), 1)
 
-        self.assertTableDoesNotExist('view__model_dbt_tmp')
+        self.assertTableDoesNotExist('view__dbt_tmp')
         self.assertTablesEqual("seed","view")
+
+
+    @attr(type='snowflake')
+    def test_snowflake_backup_different_type(self):
+        self.run_sql_file(
+            'test/integration/017_runtime_materialization_tests/create_backup_and_original.sql'
+        )
+        results = self.run_dbt(['run', '--model', 'materialized'])
+        self.assertEqual(len(results), 1)
+
+        self.assertTableDoesNotExist('materialized__dbt_tmp')
+        self.assertTableDoesNotExist('materialized__dbt_backup')
+        self.assertTablesEqual("seed", "materialized")

@@ -132,7 +132,7 @@ class Compiler(object):
 
         injected_node, _ = prepend_ctes(compiled_node, manifest)
 
-        should_wrap = {NodeType.Test, NodeType.Analysis, NodeType.Operation}
+        should_wrap = {NodeType.Test, NodeType.Operation}
         if injected_node.resource_type in should_wrap:
             # data tests get wrapped in count(*)
             # TODO : move this somewhere more reasonable
@@ -169,17 +169,13 @@ class Compiler(object):
         manifest_path = os.path.join(self.config.target_path, filename)
         write_json(manifest_path, manifest.serialize())
 
-    def write_graph_file(self, linker):
+    def write_graph_file(self, linker, manifest):
         filename = graph_file_name
         graph_path = os.path.join(self.config.target_path, filename)
-        linker.write_graph(graph_path)
+        linker.write_graph(graph_path, manifest)
 
     def link_node(self, linker, node, manifest):
         linker.add_node(node.unique_id)
-
-        linker.update_node_data(
-            node.unique_id,
-            node.to_dict())
 
         for dependency in node.depends_on_nodes:
             if manifest.nodes.get(dependency):
@@ -236,6 +232,12 @@ class Compiler(object):
             names_resources[name] = node
             alias_resources[alias] = node
 
+    def warn_for_deprecated_configs(self, manifest):
+        for unique_id, node in manifest.nodes.items():
+            is_model = node.resource_type == NodeType.Model
+            if is_model and 'sql_where' in node.config:
+                dbt.deprecations.warn('sql_where')
+
     def compile(self):
         linker = Linker()
 
@@ -248,8 +250,10 @@ class Compiler(object):
         self._check_resource_uniqueness(manifest)
 
         resource_fqns = manifest.get_resource_fqns()
+        disabled_fqns = [n.fqn for n in manifest.disabled]
         self.config.warn_for_unused_resource_config_paths(resource_fqns,
-                                                          manifest.disabled)
+                                                          disabled_fqns)
+        self.warn_for_deprecated_configs(manifest)
 
         self.link_graph(linker, manifest)
 
@@ -260,7 +264,7 @@ class Compiler(object):
                 manifest.macros.items()):
             stats[node.resource_type] += 1
 
-        self.write_graph_file(linker)
+        self.write_graph_file(linker, manifest)
         print_compile_stats(stats)
 
         return manifest, linker
