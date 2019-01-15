@@ -25,6 +25,10 @@ SNOWFLAKE_CREDENTIALS_CONTRACT = {
         'password': {
             'type': 'string',
         },
+        'authenticator': {
+            'type': 'string',
+            'description': "Either 'externalbrowser', or a valid Okta url"
+        },
         'database': {
             'type': 'string',
         },
@@ -41,7 +45,7 @@ SNOWFLAKE_CREDENTIALS_CONTRACT = {
             'type': 'boolean',
         }
     },
-    'required': ['account', 'user', 'password', 'database', 'schema'],
+    'required': ['account', 'user', 'database', 'schema'],
 }
 
 
@@ -95,17 +99,21 @@ class SnowflakeConnectionManager(SQLConnectionManager):
 
         try:
             credentials = connection.credentials
+            # Pull all of the optional authentication args for the connector,
+            # let connector handle the actual arg validation
+            auth_args = {auth_key: credentials[auth_key]
+                         for auth_key in ['user', 'password', 'authenticator']
+                         if auth_key in credentials}
             handle = snowflake.connector.connect(
                 account=credentials.account,
-                user=credentials.user,
-                password=credentials.password,
                 database=credentials.database,
                 schema=credentials.schema,
                 warehouse=credentials.warehouse,
                 role=credentials.get('role', None),
                 autocommit=False,
                 client_session_keep_alive=credentials.get(
-                    'client_session_keep_alive', False)
+                    'client_session_keep_alive', False),
+                **auth_args
             )
 
             connection.handle = handle
