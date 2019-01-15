@@ -478,6 +478,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
         conn = self.adapter.acquire_connection(connection_name)
         with conn.handle.cursor() as cursor:
+            logger.debug('test connection "{}" executing: {}'.format(connection_name, sql))
             try:
                 cursor.execute(sql)
                 conn.handle.commit()

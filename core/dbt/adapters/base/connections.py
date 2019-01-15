@@ -321,6 +321,9 @@ class BaseConnectionManager(object):
         # On windows, sometimes connection handles don't have a close() attr.
         if hasattr(connection.handle, 'close'):
             connection.handle.close()
+        else:
+            logger.debug('On {}: No close available on handle'
+                         .format(connection.name))
 
         connection.state = 'closed'
 
