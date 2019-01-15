@@ -74,7 +74,6 @@
 {% endmacro %}
 
 
-{# TODO: manually cascade these drops #}
 {% macro presto__drop_relation(relation) -%}
   {% call statement('drop_relation', auto_begin=False) -%}
     drop {{ relation.type }} if exists {{ relation }}
@@ -82,7 +81,6 @@
 {% endmacro %}
 
 
-{# TODO: manually cascade these drops #}
 {% macro presto__drop_schema(database_name, schema_name) -%}
   {%- call statement('drop_schema') -%}
     drop schema if exists {{database_name}}.{{schema_name}}

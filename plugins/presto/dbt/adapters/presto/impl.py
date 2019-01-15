@@ -24,10 +24,6 @@ class PrestoAdapter(SQLAdapter):
     def convert_datetime_type(cls, agate_table, col_idx):
         return "TIMESTAMP"
 
-    @classmethod
-    def is_cancelable(cls):
-        return False
-
     def drop_schema(self, database, schema, model_name=None):
         """On Presto, 'cascade' isn't supported so we have to manually cascade.
 

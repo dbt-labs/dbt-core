@@ -61,16 +61,84 @@ class PrestoCredentials(Credentials):
         return ('host', 'port', 'database', 'username')
 
 
-class PrefetchingCursorWrapper(object):
-    def __init__(self, cursor):
-        self.cursor = cursor
-        self._stored = cursor.fetchall()
+class ConnectionWrapper(object):
+    """Wrap a Presto connection in a way that accomplishes two tasks:
+
+        - prefetch results from execute() calls so that presto calls actually
+            persist to the db but then present the usual cursor interface
+        - provide `cancel()` on the same object as `commit()`/`rollback()`/...
+
+    """
+    def __init__(self, handle):
+        self.handle = handle
+        self._cursor = None
+        self._fetch_result = None
+
+    def cursor(self):
+        self._cursor = self.handle.cursor()
+        return self
+
+    def cancel(self):
+        if self._cursor is not None:
+            self._cursor.cancel()
+
+    def close(self):
+        # this is a noop on presto, but pass it through anyway
+        self.handle.close()
+
+    def commit(self):
+        self.handle.commit()
+
+    def rollback(self):
+        self.handle.rollback()
+
+    def start_transaction(self):
+        self.handle.start_transaction()
 
     def fetchall(self):
-        return self._stored
+        if self._cursor is None:
+            return None
 
-    def __getattr__(self, name):
-        return getattr(self.cursor, name)
+        if self._fetch_result is not None:
+            ret = self._fetch_result
+            self._fetch_result = None
+            return ret
+
+        return None
+
+    def execute(self, sql, bindings=None):
+
+        if bindings is not None:
+            # presto doesn't actually pass bindings along so we have to do the
+            # escaping and formatting ourselves
+            bindings = tuple(self._escape_value(b) for b in bindings)
+            sql = sql % bindings
+
+        result = self._cursor.execute(sql)
+        self._fetch_result = self._cursor.fetchall()
+        return result
+
+    @property
+    def description(self):
+        return self._cursor.description
+
+    @classmethod
+    def _escape_value(cls, value):
+        """A not very comprehensive system for escaping bindings.
+
+        I think "'" (a single quote) is the only character that matters.
+        """
+        if value is None:
+            return 'NULL'
+        elif isinstance(value, basestring):
+            return "'{}'".format(value.replace("'", "''"))
+        elif isinstance(value, NUMBERS):
+            return value
+        elif isinstance(value, datetime):
+            time_formatted = value.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            return "TIMESTAMP '{}'".format(time_formatted)
+        else:
+            raise ValueError('Cannot escape {}'.format(type(value)))
 
 
 class PrestoConnectionManager(SQLConnectionManager):
@@ -111,7 +179,7 @@ class PrestoConnectionManager(SQLConnectionManager):
 
         # it's impossible for presto to fail here as 'connections' are actually
         # just cursor factories.
-        handle = prestodb.dbapi.connect(
+        presto_conn = prestodb.dbapi.connect(
             host=credentials.host,
             port=credentials.get('port', 8080),
             user=credentials.get('username', getuser()),
@@ -121,7 +189,7 @@ class PrestoConnectionManager(SQLConnectionManager):
             isolation_level=IsolationLevel.SERIALIZABLE,
         )
         connection.state = 'open'
-        connection.handle = handle
+        connection.handle = ConnectionWrapper(presto_conn)
         return connection
 
     @classmethod
@@ -130,36 +198,13 @@ class PrestoConnectionManager(SQLConnectionManager):
         return 'OK'
 
     def cancel(self, connection):
-        pass
-
-    @classmethod
-    def _escape_value(cls, value):
-        """A not very comprehensive system for escaping bindings.
-
-        I think "'" (a single quote) is the only character that matters.
-        """
-        if value is None:
-            return 'NULL'
-        elif isinstance(value, basestring):
-            return "'{}'".format(value.replace("'", "''"))
-        elif isinstance(value, NUMBERS):
-            return value
-        elif isinstance(value, datetime):
-            time_formatted = value.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-            return "TIMESTAMP '{}'".format(time_formatted)
-        else:
-            raise ValueError('Cannot escape {}'.format(type(value)))
+        connection.handle.cancel()
 
     def add_query(self, sql, model_name=None, auto_begin=True,
                   bindings=None, abridge_sql_log=False):
 
         connection = None
         cursor = None
-
-        if bindings is not None:
-            # presto doesn't actually pass bindings along so we have to do the
-            # escaping and formatting ourselves
-            bindings = tuple(self._escape_value(b) for b in bindings)
 
         # TODO: is this sufficient? Largely copy+pasted from snowflake, so
         # there's some common behavior here we can maybe factor out into the
@@ -177,15 +222,11 @@ class PrestoConnectionManager(SQLConnectionManager):
             if without_comments == "":
                 continue
 
-            if bindings is not None:
-                individual_query = individual_query % bindings
-
             parent = super(PrestoConnectionManager, self)
             connection, cursor = parent.add_query(
-                individual_query, model_name, auto_begin,
-                abridge_sql_log=abridge_sql_log
+                individual_query, model_name, auto_begin, bindings,
+                abridge_sql_log
             )
-            cursor = PrefetchingCursorWrapper(cursor)
 
         if cursor is None:
             raise RuntimeException(
