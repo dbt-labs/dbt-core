@@ -47,14 +47,14 @@
 {% endmacro %}
 
 
-{% macro default__load_csv_rows(model) %}
+{% macro basic_load_csv_rows(model, batch_size) %}
     {% set agate_table = model['agate_table'] %}
     {% set cols_sql = ", ".join(agate_table.column_names) %}
     {% set bindings = [] %}
 
     {% set statements = [] %}
 
-    {% for chunk in agate_table.rows | batch(10000) %}
+    {% for chunk in agate_table.rows | batch(batch_size) %}
         {% set bindings = [] %}
 
         {% for row in chunk %}
@@ -81,6 +81,11 @@
 
     {# Return SQL so we can render it out into the compiled files #}
     {{ return(statements[0]) }}
+{% endmacro %}
+
+
+{% macro default__load_csv_rows(model) %}
+  {{ return(basic_load_csv_rows(model, 10000) )}}
 {% endmacro %}
 
 

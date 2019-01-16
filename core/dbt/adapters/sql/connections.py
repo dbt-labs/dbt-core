@@ -18,7 +18,7 @@ class SQLConnectionManager(BaseConnectionManager):
         - open
     """
     @abc.abstractmethod
-    def cancel(connection):
+    def cancel(self, connection):
         """Cancel the given connection.
 
         :param Connection connection: The connection to cancel.
@@ -89,8 +89,7 @@ class SQLConnectionManager(BaseConnectionManager):
 
         return dbt.clients.agate_helper.table_from_data(data, column_names)
 
-    def execute(self, sql, name=None, auto_begin=False,
-                fetch=False):
+    def execute(self, sql, name=None, auto_begin=False, fetch=False):
         self.get(name)
         _, cursor = self.add_query(sql, name, auto_begin)
         status = self.get_status(cursor)
