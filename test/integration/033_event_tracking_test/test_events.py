@@ -141,6 +141,11 @@ class TestEventTracking(DBTIntegrationTest):
         status,
         error=None
     ):
+        timing = []
+
+        if status != 'ERROR':
+            timing = [ANY, ANY]
+
         def populate(project_id, user_id, invocation_id, version):
             return [{
                 'schema': 'iglu:com.dbt/run_model/jsonschema/1-0-0',
@@ -160,7 +165,7 @@ class TestEventTracking(DBTIntegrationTest):
                     'run_error': error,
                     'run_skipped': False,
 
-                    'timing': [ANY, ANY],
+                    'timing': timing,
                 },
             }]
 
