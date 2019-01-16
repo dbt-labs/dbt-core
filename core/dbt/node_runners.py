@@ -4,7 +4,7 @@ from dbt.exceptions import NotImplementedException
 from dbt.utils import get_nodes_by_tags
 from dbt.node_types import NodeType, RunHookType
 from dbt.adapters.factory import get_adapter
-from dbt.contracts.results import RunModelResult
+from dbt.contracts.results import RunModelResult, TimingInfo
 
 import dbt.clients.jinja
 import dbt.context.runtime
@@ -39,6 +39,7 @@ def track_model_run(index, num_nodes, run_model_result):
         "model_materialization": dbt.utils.get_materialization(run_model_result.node),  # noqa
         "model_id": dbt.utils.get_hash(run_model_result.node),
         "hashed_contents": dbt.utils.get_hashed_contents(run_model_result.node),  # noqa
+        "timing": run_model_result.timing,
     })
 
 
@@ -81,12 +82,25 @@ class BaseRunner(object):
         try:
             # if we fail here, we still have a compiled node to return
             # this has the benefit of showing a build path for the errant model
+            compile_timing_info = TimingInfo.create('compile')
+            compile_timing_info.begin()
+
             compiled_node = self.compile(manifest)
             result.node = compiled_node
 
+            compile_timing_info.end()
+
             # for ephemeral nodes, we only want to compile, not run
             if not self.is_ephemeral_model(self.node):
+                execute_timing_info = TimingInfo.create('execute')
+                execute_timing_info.begin()
+
                 result = self.run(compiled_node, manifest)
+
+                execute_timing_info.end()
+
+            result = result.add_timing_info(compile_timing_info)
+            result = result.add_timing_info(execute_timing_info)
 
         except catchable_errors as e:
             if e.node is None:

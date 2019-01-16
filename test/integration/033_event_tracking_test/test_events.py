@@ -159,6 +159,8 @@ class TestEventTracking(DBTIntegrationTest):
                     'run_status': status,
                     'run_error': error,
                     'run_skipped': False,
+
+                    'timing': [ANY, ANY],
                 },
             }]
 
@@ -272,6 +274,8 @@ class TestEventTrackingSuccess(TestEventTracking):
                     'run_status': 'INSERT 1',
                     'run_error': None,
                     'run_skipped': False,
+
+                    'timing': [ANY, ANY],
                 },
             }]
 
