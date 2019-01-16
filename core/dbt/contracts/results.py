@@ -114,6 +114,10 @@ class RunModelResult(APIObject):
         'thread_id',
         'ID of the executing thread, e.g. Thread-3'
     )
+    timing = named_property(
+        'timing',
+        'List of TimingInfo objects'
+    )
 
     @property
     def errored(self):
