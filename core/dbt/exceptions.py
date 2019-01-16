@@ -1,13 +1,13 @@
-from dbt.compat import basestring
+from dbt.compat import basestring, builtins
 from dbt.logger import GLOBAL_LOGGER as logger
 import re
 
 
-class Exception(BaseException):
+class Exception(builtins.Exception):
     pass
 
 
-class MacroReturn(BaseException):
+class MacroReturn(builtins.BaseException):
     """
     Hack of all hacks
     """
