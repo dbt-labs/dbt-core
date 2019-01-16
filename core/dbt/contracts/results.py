@@ -84,7 +84,7 @@ RUN_MODEL_RESULT_CONTRACT = {
             'items': TIMING_INFO_CONTRACT,
         },
         'thread_id': {
-            'type': 'string',
+            'type': ['string', 'null'],
             'description': 'ID of the executing thread, e.g. Thread-3',
         },
         'node': COMPILE_RESULT_NODE_CONTRACT,
@@ -98,9 +98,16 @@ class RunModelResult(APIObject):
 
     def __init__(self, node, error=None, skip=False, status=None, failed=None,
                  execution_time=0):
-        super(RunModelResult, self).__init__(node=node, error=error, skip=skip,
-                                             status=status, fail=failed,
-                                             execution_time=execution_time)
+        super(RunModelResult, self).__init__(
+            node=node,
+            error=error,
+            skip=skip,
+            status=status,
+            fail=failed,
+            execution_time=execution_time,
+            thread_id=None,
+            timing=[],
+        )
 
     # these all get set after the fact, generally
     error = named_property('error',
