@@ -5,11 +5,11 @@
   {%- set backup_identifier = identifier + '__dbt_backup' -%}
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
 
-  {%- set old_relation = adapter.get_relation(schema=schema, identifier=identifier) -%}
-  {%- set target_relation = api.Relation.create(identifier=identifier, schema=schema,
+  {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) -%}
+  {%- set target_relation = api.Relation.create(identifier=identifier, schema=schema, database=database,
                                                 type='view') -%}
   {%- set intermediate_relation = api.Relation.create(identifier=tmp_identifier,
-                                                      schema=schema, type='view') -%}
+                                                      schema=schema, database=database, type='view') -%}
 
   /*
      This relation (probably) doesn't exist yet. If it does exist, it's a leftover from
@@ -25,7 +25,8 @@
      this relation will be effectively unused.
   */
   {%- set backup_relation = api.Relation.create(identifier=backup_identifier,
-                                                schema=schema, type=(old_relation.type or 'view')) -%}
+                                                schema=schema, database=database,
+                                                type=(old_relation.type or 'view')) -%}
 
   {%- set exists_as_view = (old_relation is not none and old_relation.is_view) -%}
 

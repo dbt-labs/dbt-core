@@ -45,7 +45,7 @@ def docs(unparsed, docrefs, column_name=None):
     return do_docs
 
 
-class Config:
+class Config(object):
     def __init__(self, model, source_config):
         self.model = model
         self.source_config = source_config
@@ -91,3 +91,10 @@ class Config:
 def generate(model, runtime_config, manifest, source_config):
     return dbt.context.common.generate(
         model, runtime_config, manifest, source_config, dbt.context.parser)
+
+
+def generate_macro(model, runtime_config, manifest, connection_name):
+    return dbt.context.common.generate_execute_macro(
+        model, runtime_config, manifest, dbt.context.parser,
+        connection_name
+    )

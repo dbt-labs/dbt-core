@@ -224,7 +224,7 @@ class TestProfile(BaseConfigTest):
         self.assertEqual(profile.credentials.user, 'db_user')
         self.assertEqual(profile.credentials.password, 'db_pass')
         self.assertEqual(profile.credentials.schema, 'postgres-schema')
-        self.assertEqual(profile.credentials.dbname, 'postgres-db-name')
+        self.assertEqual(profile.credentials.database, 'postgres-db-name')
 
     def test_config_override(self):
         self.default_profile_data['config'] = {
@@ -379,7 +379,7 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.credentials.user, 'db_user')
         self.assertEqual(profile.credentials.password, 'db_pass')
         self.assertEqual(profile.credentials.schema, 'postgres-schema')
-        self.assertEqual(profile.credentials.dbname, 'postgres-db-name')
+        self.assertEqual(profile.credentials.database, 'postgres-db-name')
         self.assertEqual(profile, from_raw)
 
     def test_profile_override(self):
@@ -404,7 +404,7 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.credentials.user, 'other_db_user')
         self.assertEqual(profile.credentials.password, 'other_db_pass')
         self.assertEqual(profile.credentials.schema, 'other-postgres-schema')
-        self.assertEqual(profile.credentials.dbname, 'other-postgres-db-name')
+        self.assertEqual(profile.credentials.database, 'other-postgres-db-name')
         self.assertEqual(profile, from_raw)
 
     def test_target_override(self):
@@ -426,7 +426,7 @@ class TestProfileFile(BaseFileTest):
         self.assertEqual(profile.credentials.user, 'db_user')
         self.assertEqual(profile.credentials.password, 'db_pass')
         self.assertEqual(profile.credentials.schema, 'redshift-schema')
-        self.assertEqual(profile.credentials.dbname, 'redshift-db-name')
+        self.assertEqual(profile.credentials.database, 'redshift-db-name')
         self.assertEqual(profile, from_raw)
 
     def test_env_vars(self):

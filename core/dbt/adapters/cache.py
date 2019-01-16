@@ -6,7 +6,7 @@ from dbt.logger import CACHE_LOGGER as logger
 import dbt.exceptions
 
 
-_ReferenceKey = namedtuple('_ReferenceKey', 'schema identifier')
+_ReferenceKey = namedtuple('_ReferenceKey', 'database schema identifier')
 
 
 def _lower(value):
@@ -16,11 +16,13 @@ def _lower(value):
     return value.lower()
 
 
-def _make_key(schema, identifier):
+def _make_key(relation):
     """Make _ReferenceKeys with lowercase values for the cache so we don't have
     to keep track of quoting
     """
-    return _ReferenceKey(_lower(schema), _lower(identifier))
+    return _ReferenceKey(_lower(relation.database),
+                         _lower(relation.schema),
+                         _lower(relation.identifier))
 
 
 def dot_separated(key):
@@ -46,8 +48,12 @@ class _CachedRelation(object):
 
     def __str__(self):
         return (
-            '_CachedRelation(schema={}, identifier={}, inner={})'
-        ).format(self.schema, self.identifier, self.inner)
+            '_CachedRelation(database={}, schema={}, identifier={}, inner={})'
+        ).format(self.database, self.schema, self.identifier, self.inner)
+
+    @property
+    def database(self):
+        return _lower(self.inner.database)
 
     @property
     def schema(self):
@@ -75,7 +81,7 @@ class _CachedRelation(object):
 
         :return _ReferenceKey: A key for this relation.
         """
-        return _make_key(self.schema, self.identifier)
+        return _make_key(self)
 
     def add_reference(self, referrer):
         """Add a reference from referrer to self, indicating that if this node
@@ -112,7 +118,7 @@ class _CachedRelation(object):
         Note that this will change the output of key(), all refs must be
         updated!
 
-        :param _ReferenceKey new_relation: The new name to apply to the
+        :param _CachedRelation new_relation: The new name to apply to the
             relation
         """
         # Relations store this stuff inside their `path` dict. But they
@@ -121,10 +127,11 @@ class _CachedRelation(object):
         # table_name is ever anything but the identifier (via .create())
         self.inner = self.inner.incorporate(
             path={
-                'schema': new_relation.schema,
-                'identifier': new_relation.identifier
+                'database': new_relation.inner.database,
+                'schema': new_relation.inner.schema,
+                'identifier': new_relation.inner.identifier
             },
-            table_name=new_relation.identifier
+            table_name=new_relation.inner.identifier
         )
 
     def rename_key(self, old_key, new_key):
@@ -170,27 +177,40 @@ class RelationsCache(object):
         self.lock = threading.RLock()
         self.schemas = set()
 
-    def add_schema(self, schema):
+    def add_schema(self, database, schema):
         """Add a schema to the set of known schemas (case-insensitive)
 
+        :param str database: The database name to add.
         :param str schema: The schema name to add.
         """
-        self.schemas.add(_lower(schema))
+        self.schemas.add((_lower(database), _lower(schema)))
+
+    def remove_schema(self, database, schema):
+        """Remove a schema from the set of known schemas (case-insensitive)
+
+        If the schema does not exist, it will be ignored - it could just be a
+        temporary table.
+
+        :param str database: The database name to remove.
+        :param str schema: The schema name to remove.
+        """
+        self.schemas.discard((_lower(database), _lower(schema)))
 
     def update_schemas(self, schemas):
         """Add multiple schemas to the set of known schemas (case-insensitive)
 
         :param Iterable[str] schemas: An iterable of the schema names to add.
         """
-        self.schemas.update(_lower(s) for s in schemas)
+        self.schemas.update((_lower(d), _lower(s)) for (d, s) in schemas)
 
-    def __contains__(self, schema):
+    def __contains__(self, schema_id):
         """A schema is 'in' the relations cache if it is in the set of cached
         schemas.
 
-        :param str schema: The schema name to look up.
+        :param Tuple[str, str] schema: The db name and schema name to look up.
         """
-        return _lower(schema) in self.schemas
+        db, schema = schema_id
+        return (_lower(db), _lower(schema)) in self.schemas
 
     def dump_graph(self):
         """Dump a key-only representation of the schema to a dictionary. Every
@@ -213,7 +233,7 @@ class RelationsCache(object):
         :return _CachedRelation: The relation stored under the given relation's
             key
         """
-        self.add_schema(relation.schema)
+        self.add_schema(relation.database, relation.schema)
         key = relation.key()
         return self.relations.setdefault(key, relation)
 
@@ -257,24 +277,18 @@ class RelationsCache(object):
         :param BaseRelation dependent: The dependent model.
         :raises InternalError: If either entry does not exist.
         """
-        referenced = _make_key(
-            schema=referenced.schema,
-            identifier=referenced.name
-        )
-        if referenced.schema not in self:
+        referenced = _make_key(referenced)
+        if (referenced.database, referenced.schema) not in self:
             # if we have not cached the referenced schema at all, we must be
             # referring to a table outside our control. There's no need to make
             # a link - we will never drop the referenced relation during a run.
             logger.debug(
-                '{dep!s} references {ref!s} but {ref.schema} is not in the '
-                'cache, skipping assumed external relation'
+                '{dep!s} references {ref!s} but {ref.database}.{ref.schema} '
+                'is not in the cache, skipping assumed external relation'
                 .format(dep=dependent, ref=referenced)
             )
             return
-        dependent = _make_key(
-            schema=dependent.schema,
-            identifier=dependent.name
-        )
+        dependent = _make_key(dependent)
         logger.debug(
             'adding link, {!s} references {!s}'.format(dependent, referenced)
         )
@@ -338,26 +352,27 @@ class RelationsCache(object):
         :param str schema: The schema of the relation to drop.
         :param str identifier: The identifier of the relation to drop.
         """
-        dropped = _make_key(schema=relation.schema,
-                            identifier=relation.identifier)
+        dropped = _make_key(relation)
         logger.debug('Dropping relation: {!s}'.format(dropped))
         with self.lock:
             self._drop_cascade_relation(dropped)
 
-    def _rename_relation(self, old_key, new_key):
+    def _rename_relation(self, old_key, new_relation):
         """Rename a relation named old_key to new_key, updating references.
         Return whether or not there was a key to rename.
 
         :param _ReferenceKey old_key: The existing key, to rename from.
-        :param _ReferenceKey new_key: The new key, to rename to.
+        :param _CachedRelation new_key: The new relation, to rename to.
         """
         # On the database level, a rename updates all values that were
         # previously referenced by old_name to be referenced by new_name.
         # basically, the name changes but some underlying ID moves. Kind of
         # like an object reference!
         relation = self.relations.pop(old_key)
+        new_key = new_relation.key()
 
-        relation.rename(new_key)
+        # relaton has to rename its innards, so it needs the _CachedRelation.
+        relation.rename(new_relation)
         # update all the relations that refer to it
         for cached in self.relations.values():
             if cached.is_referenced_by(old_key):
@@ -368,6 +383,10 @@ class RelationsCache(object):
                 cached.rename_key(old_key, new_key)
 
         self.relations[new_key] = relation
+        # also fixup the schemas!
+        self.remove_schema(old_key.database, old_key.schema)
+        self.add_schema(new_key.database, new_key.schema)
+
         return True
 
     def _check_rename_constraints(self, old_key, new_key):
@@ -409,14 +428,8 @@ class RelationsCache(object):
         :param BaseRelation new: The new relation name information.
         :raises InternalError: If the new key is already present.
         """
-        old_key = _make_key(
-            schema=old.schema,
-            identifier=old.identifier
-        )
-        new_key = _make_key(
-            schema=new.schema,
-            identifier=new.identifier
-        )
+        old_key = _make_key(old)
+        new_key = _make_key(new)
         logger.debug('Renaming relation {!s} to {!s}'.format(
             old_key, new_key)
         )
@@ -426,7 +439,7 @@ class RelationsCache(object):
 
         with self.lock:
             if self._check_rename_constraints(old_key, new_key):
-                self._rename_relation(old_key, new_key)
+                self._rename_relation(old_key, _CachedRelation(new))
             else:
                 self._setdefault(_CachedRelation(new))
 
@@ -434,7 +447,7 @@ class RelationsCache(object):
             pprint.pformat(self.dump_graph()))
         )
 
-    def get_relations(self, schema):
+    def get_relations(self, database, schema):
         """Case-insensitively yield all relations matching the given schema.
 
         :param str schema: The case-insensitive schema name to list from.
@@ -445,7 +458,8 @@ class RelationsCache(object):
         with self.lock:
             results = [
                 r.inner for r in self.relations.values()
-                if _lower(r.schema) == schema
+                if (r.schema == _lower(schema) and
+                    r.database == _lower(database))
             ]
 
         if None in results:

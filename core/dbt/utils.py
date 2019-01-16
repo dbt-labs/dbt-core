@@ -37,6 +37,7 @@ DBTConfigKeys = [
     'bind',
     'quoting',
     'tags',
+    'database',
 ]
 
 
@@ -84,20 +85,6 @@ def compiler_warning(model, msg, resource_type='model'):
         "* Compilation warning while compiling {} {}:\n* {}\n"
         .format(resource_type, name, msg)
     )
-
-
-def find_operation_by_name(flat_graph, target_name, target_package):
-    return find_by_name(flat_graph, target_name, target_package,
-                        'macros', [NodeType.Operation])
-
-
-def find_by_name(flat_graph, target_name, target_package, subgraph,
-                 nodetype):
-    return find_in_subgraph_by_name(
-        flat_graph.get(subgraph),
-        target_name,
-        target_package,
-        nodetype)
 
 
 def id_matches(unique_id, target_name, target_package, nodetypes, model):
@@ -180,36 +167,6 @@ def get_docs_macro_name(docs_name, with_prefix=True):
         return get_dbt_docs_name(docs_name)
     else:
         return docs_name
-
-
-def dependencies_for_path(config, module_path):
-    """Given a module path, yield all dependencies in that path."""
-    logger.debug("Loading dependency project from {}".format(module_path))
-    for obj in os.listdir(module_path):
-        full_obj = os.path.join(module_path, obj)
-
-        if not os.path.isdir(full_obj) or obj.startswith('__'):
-            # exclude non-dirs and dirs that start with __
-            # the latter could be something like __pycache__
-            # for the global dbt modules dir
-            continue
-
-        try:
-            yield config.new_project(full_obj)
-        except dbt.exceptions.DbtProjectError as e:
-            raise dbt.exceptions.DbtProjectError(
-                'Failed to read package at {}: {}'
-                .format(full_obj, e)
-            )
-
-
-def dependency_projects(config):
-    module_paths = list(PACKAGES.values())
-    module_paths.append(os.path.join(config.project_root, config.modules_path))
-
-    for module_path in module_paths:
-        for entry in dependencies_for_path(config, module_path):
-            yield entry
 
 
 def split_path(path):
@@ -498,3 +455,28 @@ class JSONEncoder(json.JSONEncoder):
         if isinstance(obj, DECIMALS):
             return float(obj)
         return super(JSONEncoder, self).default(obj)
+
+
+def translate_aliases(kwargs, aliases):
+    """Given a dict of keyword arguments and a dict mapping aliases to their
+    canonical values, canonicalize the keys in the kwargs dict.
+
+    :return: A dict continaing all the values in kwargs referenced by their
+        canonical key.
+    :raises: `AliasException`, if a canonical key is defined more than once.
+    """
+    result = {}
+
+    for given_key, value in kwargs.items():
+        canonical_key = aliases.get(given_key, given_key)
+        if canonical_key in result:
+            # dupe found: go through the dict so we can have a nice-ish error
+            key_names = ', '.join("{}".format(k) for k in kwargs if
+                                  aliases.get(k) == canonical_key)
+
+            raise AliasException('Got duplicate keys: ({}) all map to "{}"'
+                                 .format(key_names, canonical_key))
+
+        result[canonical_key] = value
+
+    return result

@@ -27,3 +27,12 @@ def config_from_parts_or_dicts(project, profile, packages=None, cli_vars='{}'):
         profile=profile,
         args=args
     )
+
+
+def inject_adapter(key, value):
+    """Inject the given adapter into the adapter factory, so your hand-crafted
+    artisanal adapter will be available from get_adapter() as if dbt loaded it.
+    """
+    from dbt.adapters import factory
+    factory._ADAPTERS[key] = value
+    factory.ADAPTER_TYPES[key] = type(value)

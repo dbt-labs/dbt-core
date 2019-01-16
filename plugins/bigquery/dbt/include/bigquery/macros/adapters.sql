@@ -13,7 +13,7 @@
 
 {% macro cluster_by(raw_cluster_by) %}
   {%- if raw_cluster_by is not none -%}
-  cluster by 
+  cluster by
   {% if raw_cluster_by is string -%}
     {% set raw_cluster_by = [raw_cluster_by] %}
   {%- endif -%}
@@ -44,4 +44,21 @@
   create or replace view {{ relation }} as (
     {{ sql }}
   );
+{% endmacro %}
+
+{% macro bigquery__create_schema(database_name, schema_name) -%}
+  {{ adapter.create_schema(database_name, schema_name) }}
+{% endmacro %}
+
+{% macro bigquery__drop_schema(database_name, schema_name) -%}
+  {{ adapter.drop_schema(database_name, schema_name) }}
+{% endmacro %}
+
+{% macro bigquery__get_columns_in_relation(relation) -%}
+  {{ return(adapter.get_columns_in_relation(relation)) }}
+{% endmacro %}
+
+
+{% macro bigquery__list_relations_without_caching(database, schema) -%}
+  {{ return(adapter.list_relations_without_caching(database, schema)) }}
 {% endmacro %}

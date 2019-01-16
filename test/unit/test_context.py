@@ -10,6 +10,7 @@ class TestVar(unittest.TestCase):
         self.model = ParsedNode(
             alias='model_one',
             name='model_one',
+            database='dbt',
             schema='analytics',
             resource_type='model',
             unique_id='model.root.model_one',

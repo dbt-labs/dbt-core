@@ -9,7 +9,7 @@ from dbt.adapters.bigquery import BigQueryRelation
 import dbt.exceptions
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
-from .utils import config_from_parts_or_dicts
+from .utils import config_from_parts_or_dicts, inject_adapter
 
 
 def _bq_conn():
@@ -68,7 +68,9 @@ class TestBigQueryAdapter(unittest.TestCase):
             project=project,
             profile=profile,
         )
-        return BigQueryAdapter(config)
+        adapter = BigQueryAdapter(config)
+        inject_adapter('bigquery', adapter)
+        return adapter
 
 
     @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
@@ -140,7 +142,7 @@ class TestBigQueryRelation(unittest.TestCase):
         kwargs = {
             'type': None,
             'path': {
-                'project': 'test-project',
+                'database': 'test-project',
                 'schema': 'test_schema',
                 'identifier': 'my_view'
             },
@@ -155,7 +157,7 @@ class TestBigQueryRelation(unittest.TestCase):
         kwargs = {
             'type': 'view',
             'path': {
-                'project': 'test-project',
+                'database': 'test-project',
                 'schema': 'test_schema',
                 'identifier': 'my_view'
             },
@@ -171,7 +173,7 @@ class TestBigQueryRelation(unittest.TestCase):
         kwargs = {
             'type': 'table',
             'path': {
-                'project': 'test-project',
+                'database': 'test-project',
                 'schema': 'test_schema',
                 'identifier': 'generic_table'
             },
@@ -187,7 +189,7 @@ class TestBigQueryRelation(unittest.TestCase):
         kwargs = {
             'type': 'external',
             'path': {
-                'project': 'test-project',
+                'database': 'test-project',
                 'schema': 'test_schema',
                 'identifier': 'sheet'
             },
@@ -203,7 +205,7 @@ class TestBigQueryRelation(unittest.TestCase):
         kwargs = {
             'type': 'invalid-type',
             'path': {
-                'project': 'test-project',
+                'database': 'test-project',
                 'schema': 'test_schema',
                 'identifier': 'my_invalid_id'
             },

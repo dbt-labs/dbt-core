@@ -20,6 +20,8 @@ ARCHIVE_CONFIG_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
     'properties': {
+        'source_database': {'type': 'string'},
+        'target_database': {'type': 'string'},
         'source_schema': {'type': 'string'},
         'target_schema': {'type': 'string'},
         'tables': {

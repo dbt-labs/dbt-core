@@ -6,6 +6,15 @@ This release makes dbt and its adapters into a core-and-plugin architecture.
 
 ### Breaking Changes
 - '{{this}}' is no longer respected in hooks [#1176](https://github.com/fishtown-analytics/dbt/pull/1176), implementing [#878](https://github.com/fishtown-analytics/dbt/issues/878)
+- A number of widely-used adapter methods previously available in macros/materializations have changed in breaking ways:
+  - get_missing_columns - takes Relations instead of schemas and identifiers
+  - get_columns_in_table - removed in favor of get_columns_in_relation (takes a Relation instead of schema, identifier)
+  - expand_target_column_types - takes a Relation instead of schema, identifier
+  - query_for_existing - removed
+  - get_relation - database parameter added
+  - create_schema - database parameter added
+  - drop_schema - database parameter added
+  - already_exists - changed to take a relation
 
 ## dbt 0.12.2 - Grace Kelly (January 8, 2019)
 
@@ -80,8 +89,8 @@ This release adds caching for some introspective queries on all adapters. Additi
 - Improved error handling and messaging on Redshift ([#997](https://github.com/fishtown-analytics/dbt/issues/997))
 - Include datasets with underscores when listing BigQuery datasets ([#954](https://github.com/fishtown-analytics/dbt/pull/954))
 - Forgo validating the user's profile for `dbt deps` and `dbt clean` commands ([#947](https://github.com/fishtown-analytics/dbt/issues/947), [#1022](https://github.com/fishtown-analytics/dbt/issues/1022))
-- Don't read/parse CSV files outside of the `dbt seed` command ([#1046](https://github.com/fishtown-analytics/dbt/pull/1046))  
-  
+- Don't read/parse CSV files outside of the `dbt seed` command ([#1046](https://github.com/fishtown-analytics/dbt/pull/1046))
+
 ### Fixes
 
 - Fix for incorrect model selection with the `--models` CLI flag when projects and directories share the same name ([#1023](https://github.com/fishtown-analytics/dbt/issues/1023))
@@ -90,13 +99,13 @@ This release adds caching for some introspective queries on all adapters. Additi
 - Fix for unwieldly Jinja errors regarding undefined variables at parse time ([#1086](https://github.com/fishtown-analytics/dbt/pull/1086), [#1080](https://github.com/fishtown-analytics/dbt/issues/1080), [#935](https://github.com/fishtown-analytics/dbt/issues/935))
 - Fix for incremental models that have a line comment on the last line of the file ([#1018](https://github.com/fishtown-analytics/dbt/issues/1018))
 - Fix for error messages when ephemeral models fail to compile ([#1053](https://github.com/fishtown-analytics/dbt/pull/1053))
-  
+
 
 ### Under the hood
 - Create adapters as singleton objects instead of classes ([#961](https://github.com/fishtown-analytics/dbt/issues/961))
 - Combine project and profile into a single, coherent object ([#973](https://github.com/fishtown-analytics/dbt/pull/973))
 - Investigate approaches for providing more complete compilation output ([#588](https://github.com/fishtown-analytics/dbt/issues/588))
-  
+
 
 ### Contributors
 

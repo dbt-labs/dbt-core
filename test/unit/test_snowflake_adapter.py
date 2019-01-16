@@ -9,7 +9,7 @@ from dbt.exceptions import ValidationException
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from snowflake import connector as snowflake_connector
 
-from .utils import config_from_parts_or_dicts
+from .utils import config_from_parts_or_dicts, inject_adapter
 
 
 class TestSnowflakeAdapter(unittest.TestCase):
@@ -22,7 +22,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
                     'type': 'snowflake',
                     'account': 'test_account',
                     'user': 'test_user',
-                    'database': 'test_databse',
+                    'database': 'test_database',
                     'warehouse': 'test_warehouse',
                     'schema': 'public',
                 },
@@ -52,6 +52,8 @@ class TestSnowflakeAdapter(unittest.TestCase):
 
         self.snowflake.return_value = self.handle
         self.adapter = SnowflakeAdapter(self.config)
+        # patch our new adapter into the factory so macros behave
+        inject_adapter('snowflake', self.adapter)
 
     def tearDown(self):
         # we want a unique self.handle every time.
@@ -60,47 +62,55 @@ class TestSnowflakeAdapter(unittest.TestCase):
 
     def test_quoting_on_drop_schema(self):
         self.adapter.drop_schema(
+            database='test_database',
             schema='test_schema'
         )
 
         self.mock_execute.assert_has_calls([
-            mock.call('drop schema if exists "test_schema" cascade', None)
+            mock.call('drop schema if exists "test_database"."test_schema" cascade', None)
         ])
 
     def test_quoting_on_drop(self):
         relation = self.adapter.Relation.create(
+            database='test_database',
             schema='test_schema',
             identifier='test_table',
             type='table',
             quote_policy=self.adapter.config.quoting,
         )
         self.adapter.drop_relation(relation)
+
         self.mock_execute.assert_has_calls([
             mock.call(
-                'drop table if exists "test_schema".test_table cascade',
-                None)
+                'drop table if exists "test_database"."test_schema".test_table cascade',
+                None
+            )
         ])
 
     def test_quoting_on_truncate(self):
         relation = self.adapter.Relation.create(
+            database='test_database',
             schema='test_schema',
             identifier='test_table',
             type='table',
             quote_policy=self.adapter.config.quoting,
         )
         self.adapter.truncate_relation(relation)
+
         self.mock_execute.assert_has_calls([
-            mock.call('truncate table "test_schema".test_table', None)
+            mock.call('truncate table "test_database"."test_schema".test_table', None)
         ])
 
     def test_quoting_on_rename(self):
         from_relation = self.adapter.Relation.create(
+            database='test_database',
             schema='test_schema',
             identifier='table_a',
             type='table',
             quote_policy=self.adapter.config.quoting,
         )
         to_relation = self.adapter.Relation.create(
+            database='test_database',
             schema='test_schema',
             identifier='table_b',
             type='table',
@@ -113,8 +123,9 @@ class TestSnowflakeAdapter(unittest.TestCase):
         )
         self.mock_execute.assert_has_calls([
             mock.call(
-                'alter table "test_schema".table_a rename to table_b',
-                None)
+                'alter table "test_database"."test_schema".table_a rename to table_b',
+                None
+            )
         ])
 
     def test_cancel_open_connections_empty(self):
@@ -148,7 +159,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         self.snowflake.assert_has_calls([
             mock.call(
                 account='test_account', autocommit=False,
-                client_session_keep_alive=False, database='test_databse',
+                client_session_keep_alive=False, database='test_database',
                 role=None, schema='public', user='test_user',
                 warehouse='test_warehouse')
         ])
@@ -162,7 +173,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         self.snowflake.assert_has_calls([
             mock.call(
                 account='test_account', autocommit=False,
-                client_session_keep_alive=True, database='test_databse',
+                client_session_keep_alive=True, database='test_database',
                 role=None, schema='public', user='test_user',
                 warehouse='test_warehouse')
         ])
@@ -176,7 +187,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         self.snowflake.assert_has_calls([
             mock.call(
                 account='test_account', autocommit=False,
-                client_session_keep_alive=False, database='test_databse',
+                client_session_keep_alive=False, database='test_database',
                 password='test_password', role=None, schema='public',
                 user='test_user', warehouse='test_warehouse')
         ])
@@ -190,7 +201,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         self.snowflake.assert_has_calls([
             mock.call(
                 account='test_account', autocommit=False,
-                client_session_keep_alive=False, database='test_databse',
+                client_session_keep_alive=False, database='test_database',
                 password='test_password', role=None, schema='public',
                 user='test_user', warehouse='test_warehouse',
                 authenticator='test_sso_url')
@@ -205,7 +216,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         self.snowflake.assert_has_calls([
             mock.call(
                 account='test_account', autocommit=False,
-                client_session_keep_alive=False, database='test_databse',
+                client_session_keep_alive=False, database='test_database',
                 role=None, schema='public', user='test_user',
                 warehouse='test_warehouse', authenticator='externalbrowser')
         ])
