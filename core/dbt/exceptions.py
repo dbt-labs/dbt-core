@@ -563,3 +563,7 @@ def raise_unrecognized_credentials_type(typename, supported_types):
         'Unrecognized credentials type "{}" - supported types are ({})'
         .format(typename, ', '.join('"{}"'.format(t) for t in supported_types))
     )
+
+
+def raise_not_implemented(msg):
+    raise NotImplementedException(msg)

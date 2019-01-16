@@ -87,9 +87,9 @@ class MacrosKnownParser(BaseParser):
             def get_schema(_):
                 return self.default_schema
         else:
-            root_context = dbt.context.parser.generate(
+            root_context = dbt.context.parser.generate_macro(
                 get_schema_macro, self.root_project_config,
-                self.macro_manifest, self.root_project_config
+                self.macro_manifest, 'generate_schema_name'
             )
             get_schema = get_schema_macro.generator(root_context)
 

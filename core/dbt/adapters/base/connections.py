@@ -321,6 +321,9 @@ class BaseConnectionManager(object):
         # On windows, sometimes connection handles don't have a close() attr.
         if hasattr(connection.handle, 'close'):
             connection.handle.close()
+        else:
+            logger.debug('On {}: No close available on handle'
+                         .format(connection.name))
 
         connection.state = 'closed'
 
@@ -331,7 +334,7 @@ class BaseConnectionManager(object):
 
         :param str name: The name of the connection to use.
         """
-        connection = self.get_if_exists(name)
+        connection = self.in_use.get(name)
         if connection:
             self.commit(connection)
 

@@ -187,12 +187,7 @@ def incorporate_catalog_unique_ids(catalog, manifest):
 
 class GenerateTask(CompileTask):
     def _get_manifest(self):
-        compiler = dbt.compilation.Compiler(self.config)
-        compiler.initialize()
-
-        all_projects = compiler.get_all_projects()
-
-        manifest = dbt.loader.GraphLoader.load_all(self.config, all_projects)
+        manifest = dbt.loader.GraphLoader.load_all(self.config)
         return manifest
 
     def run(self):

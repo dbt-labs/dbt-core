@@ -31,7 +31,7 @@
                     'Approximate size of the table as reported by Snowflake' as "stats:bytes:description",
                     (bytes is not null) as "stats:bytes:include"
 
-                from {{ adapter.quote_as_configured(database, "database") }}.information_schema.tables
+                from {{ information_schema_name(database) }}.tables
 
             ),
 

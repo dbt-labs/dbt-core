@@ -9,7 +9,7 @@ from dbt.exceptions import ValidationException
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from snowflake import connector as snowflake_connector
 
-from .utils import config_from_parts_or_dicts
+from .utils import config_from_parts_or_dicts, inject_adapter
 
 
 class TestSnowflakeAdapter(unittest.TestCase):
@@ -52,6 +52,8 @@ class TestSnowflakeAdapter(unittest.TestCase):
 
         self.snowflake.return_value = self.handle
         self.adapter = SnowflakeAdapter(self.config)
+        # patch our new adapter into the factory so macros behave
+        inject_adapter('snowflake', self.adapter)
 
     def tearDown(self):
         # we want a unique self.handle every time.
@@ -77,6 +79,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
             quote_policy=self.adapter.config.quoting,
         )
         self.adapter.drop_relation(relation)
+
         self.mock_execute.assert_has_calls([
             mock.call(
                 'drop table if exists "test_database"."test_schema".test_table cascade',
@@ -93,6 +96,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
             quote_policy=self.adapter.config.quoting,
         )
         self.adapter.truncate_relation(relation)
+
         self.mock_execute.assert_has_calls([
             mock.call('truncate table "test_database"."test_schema".test_table', None)
         ])
