@@ -40,6 +40,18 @@ class TimingInfo(APIObject):
         self.set('completed_at', timestring())
 
 
+class collect_timing_info:
+    def __init__(self, name):
+        self.timing_info = TimingInfo.create(name)
+
+    def __enter__(self):
+        self.timing_info.begin()
+        return self.timing_info
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.timing_info.end()
+
+
 RUN_MODEL_RESULT_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
