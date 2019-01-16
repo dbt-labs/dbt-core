@@ -83,6 +83,10 @@ RUN_MODEL_RESULT_CONTRACT = {
             'type': 'array',
             'items': TIMING_INFO_CONTRACT,
         },
+        'thread_id': {
+            'type': 'string',
+            'description': 'ID of the executing thread, e.g. Thread-3',
+        },
         'node': COMPILE_RESULT_NODE_CONTRACT,
     },
     'required': ['node'],
@@ -106,6 +110,10 @@ class RunModelResult(APIObject):
     status = named_property('status', 'The status of the model execution')
     execution_time = named_property('execution_time',
                                     'The time in seconds to execute the model')
+    thread_id = named_property(
+        'thread_id',
+        'ID of the executing thread, e.g. Thread-3'
+    )
 
     @property
     def errored(self):

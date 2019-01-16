@@ -1,4 +1,3 @@
-
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.exceptions import NotImplementedException
 from dbt.utils import get_nodes_by_tags
@@ -17,6 +16,7 @@ import dbt.writer
 
 import six
 import sys
+import threading
 import time
 import traceback
 
@@ -148,6 +148,7 @@ class BaseRunner(object):
                 result.status = 'ERROR'
 
         result.execution_time = time.time() - started
+        result.thread_id = threading.current_thread().name
         return result
 
     def _safe_release_connection(self):
