@@ -59,9 +59,10 @@ def read_profile(profiles_dir):
 
 
 class UserConfig(object):
-    def __init__(self, send_anonymous_usage_stats, use_colors):
+    def __init__(self, send_anonymous_usage_stats, use_colors, printer_width):
         self.send_anonymous_usage_stats = send_anonymous_usage_stats
         self.use_colors = use_colors
+        self.printer_width = printer_width
 
     @classmethod
     def from_dict(cls, cfg=None):
@@ -75,7 +76,10 @@ class UserConfig(object):
             'use_colors',
             DEFAULT_USE_COLORS
         )
-        return cls(send_anonymous_usage_stats, use_colors)
+        printer_width = cfg.get(
+            'printer_width'
+        )
+        return cls(send_anonymous_usage_stats, use_colors, printer_width)
 
     def to_dict(self):
         return {
