@@ -83,7 +83,8 @@ class BaseRunner(object):
 
             with collect_timing_info('compile') as timing_info:
                 # if we fail here, we still have a compiled node to return
-                # this has the benefit of showing a build path for the errant model
+                # this has the benefit of showing a build path for the errant
+                # model
                 compiled_node = self.compile(manifest)
                 result.node = compiled_node
 
