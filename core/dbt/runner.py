@@ -6,6 +6,9 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.contracts.graph.parsed import ParsedNode
 from dbt.contracts.graph.manifest import CompileResultNode
 from dbt.contracts.results import ExecutionResult
+from dbt import deprecations
+from dbt.loader import GraphLoader
+from dbt.node_types import NodeType
 
 import dbt.clients.jinja
 import dbt.compilation
@@ -22,6 +25,7 @@ from multiprocessing.dummy import Pool as ThreadPool
 
 
 RESULT_FILE_NAME = 'run_results.json'
+MANIFEST_FILE_NAME = 'manifest.json'
 
 
 class RunManager(object):
@@ -34,13 +38,13 @@ class RunManager(object):
         self.query = query
         self.Runner = Runner
 
-        manifest, linker = self.compile(self.config)
-        self.manifest = manifest
-        self.linker = linker
+        self.manifest = self.load_manifest()
+        self.linker = self.compile()
 
-        selector = dbt.graph.selector.NodeSelector(linker, manifest)
+        selector = dbt.graph.selector.NodeSelector(self.linker, self.manifest)
         selected_nodes = selector.select(query)
-        self.job_queue = self.linker.as_graph_queue(manifest, selected_nodes)
+        self.job_queue = self.linker.as_graph_queue(self.manifest,
+                                                    selected_nodes)
 
         # we use this a couple times. order does not matter.
         self._flattened_nodes = [
@@ -211,10 +215,75 @@ class RunManager(object):
         filepath = os.path.join(self.config.target_path, RESULT_FILE_NAME)
         write_json(filepath, execution_result.serialize())
 
-    def compile(self, config):
-        compiler = dbt.compilation.Compiler(config)
+    def write_manifest_file(self, manifest):
+        """Write the manifest file to disk.
+
+        manifest should be a Manifest.
+        """
+        manifest_path = os.path.join(self.config.target_path,
+                                     MANIFEST_FILE_NAME)
+        write_json(manifest_path, manifest.serialize())
+
+    @staticmethod
+    def _check_resource_uniqueness(manifest):
+        names_resources = {}
+        alias_resources = {}
+
+        for resource, node in manifest.nodes.items():
+            if node.resource_type not in NodeType.refable():
+                continue
+
+            name = node.name
+            alias = "{}.{}".format(node.schema, node.alias)
+
+            existing_node = names_resources.get(name)
+            if existing_node is not None:
+                dbt.exceptions.raise_duplicate_resource_name(
+                        existing_node, node)
+
+            existing_alias = alias_resources.get(alias)
+            if existing_alias is not None:
+                dbt.exceptions.raise_ambiguous_alias(
+                        existing_alias, node)
+
+            names_resources[name] = node
+            alias_resources[alias] = node
+
+    def _warn_for_unused_resource_config_paths(self, manifest):
+        resource_fqns = manifest.get_resource_fqns()
+        disabled_fqns = [n.fqn for n in manifest.disabled]
+        self.config.warn_for_unused_resource_config_paths(resource_fqns,
+                                                          disabled_fqns)
+
+    @staticmethod
+    def _warn_for_deprecated_configs(manifest):
+        for unique_id, node in manifest.nodes.items():
+            is_model = node.resource_type == NodeType.Model
+            if is_model and 'sql_where' in node.config:
+                deprecations.warn('sql_where')
+
+    def _check_manifest(self, manifest):
+        # TODO: maybe this belongs in the GraphLoader, too?
+        self._check_resource_uniqueness(manifest)
+        self._warn_for_unused_resource_config_paths(manifest)
+        self._warn_for_deprecated_configs(manifest)
+
+    def load_manifest(self):
+        # performance trick: if the adapter has a manifest loaded, use that to
+        # avoid parsing internal macros twice.
+        internal_manifest = get_adapter(self.config).check_internal_manifest()
+        manifest = GraphLoader.load_all(self.config,
+                                        internal_manifest=internal_manifest)
+
+        self.write_manifest_file(manifest)
+        self._check_manifest(manifest)
+        return manifest
+
+    def compile(self):
+        compiler = dbt.compilation.Compiler(self.config)
         compiler.initialize()
-        return compiler.compile()
+
+        return compiler.compile(self.manifest)
 
     def run(self):
         """

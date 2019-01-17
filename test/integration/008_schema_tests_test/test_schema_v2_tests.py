@@ -111,7 +111,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
             'packages': [
                 {
                     'git': 'https://github.com/fishtown-analytics/dbt-utils',
-                    'revision': 'macros-v2',
+                    'revision': '0.13-support',
                 },
                 {
                     'git': 'https://github.com/fishtown-analytics/dbt-integration-project',

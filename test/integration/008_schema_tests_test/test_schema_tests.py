@@ -100,7 +100,10 @@ class TestCustomSchemaTests(DBTIntegrationTest):
     def packages_config(self):
         return {
             "packages": [
-                {'git': 'https://github.com/fishtown-analytics/dbt-utils'},
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-utils',
+                    'revision': '0.13-support',
+                },
                 {'git': 'https://github.com/fishtown-analytics/dbt-integration-project'},
             ]
         }

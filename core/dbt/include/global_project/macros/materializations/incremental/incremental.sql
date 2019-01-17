@@ -6,7 +6,7 @@
   from {{ target_relation }}
   where ({{ unique_key }}) in (
     select ({{ unique_key }})
-    from {{ tmp_relation.include(schema=False) }}
+    from {{ tmp_relation.include(schema=False, database=False) }}
   );
 
 {%- endmacro %}
@@ -18,10 +18,11 @@
   {%- set identifier = model['alias'] -%}
   {%- set tmp_identifier = identifier + '__dbt_incremental_tmp' -%}
 
-  {%- set old_relation = adapter.get_relation(schema=schema, identifier=identifier) -%}
-  {%- set target_relation = api.Relation.create(identifier=identifier, schema=schema, type='table') -%}
+  {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) -%}
+  {%- set target_relation = api.Relation.create(identifier=identifier, schema=schema, database=database,  type='table') -%}
   {%- set tmp_relation = api.Relation.create(identifier=tmp_identifier,
-                                                 schema=schema, type='table') -%}
+                                             schema=schema,
+                                             database=database, type='table') -%}
 
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
   {%- set full_refresh_mode = (flags.FULL_REFRESH == True) -%}
@@ -73,11 +74,10 @@
      {%- endcall -%}
 
      {{ adapter.expand_target_column_types(temp_table=tmp_identifier,
-                                           to_schema=schema,
-                                           to_table=identifier) }}
+                                           to_relation=target_relation) }}
 
      {%- call statement('main') -%}
-       {% set dest_columns = adapter.get_columns_in_table(schema, identifier) %}
+       {% set dest_columns = adapter.get_columns_in_relation(target_relation) %}
        {% set dest_cols_csv = dest_columns | map(attribute='quoted') | join(', ') %}
 
        {% if unique_key is not none -%}
@@ -89,7 +89,7 @@
        insert into {{ target_relation }} ({{ dest_cols_csv }})
        (
          select {{ dest_cols_csv }}
-         from {{ tmp_relation.include(schema=False) }}
+         from {{ tmp_relation.include(schema=False, database=False) }}
        );
      {% endcall %}
   {%- endif %}

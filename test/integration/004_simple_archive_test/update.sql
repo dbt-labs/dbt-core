@@ -1,6 +1,6 @@
 -- insert v2 of the 11 - 21 records
 
-insert into {schema}.archive_expected (
+insert into {database}.{schema}.archive_expected (
     "id",
     "first_name",
     "last_name",
@@ -27,12 +27,12 @@ select
     null::timestamp as "valid_to",
     "updated_at" as "dbt_updated_at",
     md5("id" || '-' || "first_name" || '|' || "updated_at"::text) as "scd_id"
-from {schema}.seed
+from {database}.{schema}.seed
 where "id" >= 10 and "id" <= 20;
 
 
 -- insert 10 new records
-insert into {schema}.seed ("id", "first_name", "last_name", "email", "gender", "ip_address", "updated_at") values
+insert into {database}.{schema}.seed ("id", "first_name", "last_name", "email", "gender", "ip_address", "updated_at") values
 (21, 'Judy', 'Robinson', 'jrobinsonk@blogs.com', 'Female', '208.21.192.232', '2016-09-18 08:27:38'),
 (22, 'Kevin', 'Alvarez', 'kalvarezl@buzzfeed.com', 'Male', '228.106.146.9', '2016-07-29 03:07:37'),
 (23, 'Barbara', 'Carr', 'bcarrm@pen.io', 'Female', '106.165.140.17', '2015-09-24 13:27:23'),
@@ -46,7 +46,7 @@ insert into {schema}.seed ("id", "first_name", "last_name", "email", "gender", "
 
 
 -- add these new records to the archive table
-insert into {schema}.archive_expected (
+insert into {database}.{schema}.archive_expected (
     "id",
     "first_name",
     "last_name",
@@ -73,5 +73,5 @@ select
     null::timestamp as "valid_to",
     "updated_at" as "dbt_updated_at",
     md5("id" || '-' || "first_name" || '|' || "updated_at"::text) as "scd_id"
-from {schema}.seed
+from {database}.{schema}.seed
 where "id" > 20;

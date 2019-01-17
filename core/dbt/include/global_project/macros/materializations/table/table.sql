@@ -4,17 +4,23 @@
   {%- set backup_identifier = identifier + '__dbt_backup' -%}
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
 
-  {%- set old_relation = adapter.get_relation(schema=schema, identifier=identifier) -%}
+  {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) -%}
   {%- set target_relation = api.Relation.create(identifier=identifier,
-                                                schema=schema, type='table') -%}
+                                                schema=schema,
+                                                database=database,
+                                                type='table') -%}
   {%- set intermediate_relation = api.Relation.create(identifier=tmp_identifier,
-                                                      schema=schema, type='table') -%}
+                                                      schema=schema,
+                                                      database=database,
+                                                      type='table') -%}
 
   /*
       See ../view/view.sql for more information about this relation.
   */
   {%- set backup_relation = api.Relation.create(identifier=backup_identifier,
-                                                schema=schema, type=(old_relation.type or 'table')) -%}
+                                                schema=schema,
+                                                database=database,
+                                                type=(old_relation.type or 'table')) -%}
 
   {%- set exists_as_table = (old_relation is not none and old_relation.is_table) -%}
   {%- set exists_as_view = (old_relation is not none and old_relation.is_view) -%}
@@ -46,12 +52,13 @@
       {%- if old_relation is not none -%}
         {{ create_table_as(create_as_temporary, intermediate_relation, sql) }}
 
-        {% set dest_columns = adapter.get_columns_in_table(schema, identifier) %}
+        {% set dest_columns = adapter.get_columns_in_relation(target_relation) %}
         {% set dest_cols_csv = dest_columns | map(attribute='quoted') | join(', ') %}
 
         insert into {{ target_relation }} ({{ dest_cols_csv }}) (
           select {{ dest_cols_csv }}
-          from {{ intermediate_relation.include(schema=(not create_as_temporary)) }}
+          from {{ intermediate_relation.include(database=(not create_as_temporary),
+                                                schema=(not create_as_temporary)) }}
         );
       {%- else -%}
         {{ create_table_as(create_as_temporary, target_relation, sql) }}

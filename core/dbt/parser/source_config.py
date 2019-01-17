@@ -20,10 +20,12 @@ class SourceConfig(object):
         'unique_key',
         'sort_type',
         'bind',
+        'database',
     }
 
     def __init__(self, active_project, own_project, fqn, node_type):
         self._config = None
+        # active_project is a RuntimeConfig, not a Project
         self.active_project = active_project
         self.own_project = own_project
         self.fqn = fqn
@@ -85,7 +87,11 @@ class SourceConfig(object):
 
         return cfg
 
+    def _translate_adapter_aliases(self, config):
+        return self.active_project.credentials.translate_aliases(config)
+
     def update_in_model_config(self, config):
+        config = self._translate_adapter_aliases(config)
         for key, value in config.items():
             if key in self.AppendListFields:
                 current = self.in_model_config.get(key, [])
@@ -104,7 +110,8 @@ class SourceConfig(object):
             else:  # key in self.ClobberFields
                 self.in_model_config[key] = value
 
-    def __get_as_list(self, relevant_configs, key):
+    @staticmethod
+    def __get_as_list(relevant_configs, key):
         if key not in relevant_configs:
             return []
 
@@ -114,23 +121,24 @@ class SourceConfig(object):
 
         return items
 
-    def smart_update(self, mutable_config, new_configs):
+    @classmethod
+    def smart_update(cls, mutable_config, new_configs):
         relevant_configs = {
             key: new_configs[key] for key
-            in new_configs if key in self.ConfigKeys
+            in new_configs if key in cls.ConfigKeys
         }
 
-        for key in self.AppendListFields:
-            append_fields = self.__get_as_list(relevant_configs, key)
+        for key in cls.AppendListFields:
+            append_fields = cls.__get_as_list(relevant_configs, key)
             mutable_config[key].extend([
                 f for f in append_fields if f not in mutable_config[key]
             ])
 
-        for key in self.ExtendDictFields:
+        for key in cls.ExtendDictFields:
             dict_val = relevant_configs.get(key, {})
             mutable_config[key].update(dict_val)
 
-        for key in self.ClobberFields:
+        for key in cls.ClobberFields:
             if key in relevant_configs:
                 mutable_config[key] = relevant_configs[key]
 

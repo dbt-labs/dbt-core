@@ -25,13 +25,12 @@
   {%- set identifier = model['alias'] -%}
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
 
-  {%- set old_relation = adapter.get_relation(
-      schema=schema, identifier=identifier) -%}
+  {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) -%}
 
   {%- set exists_as_view = (old_relation is not none and old_relation.is_view) -%}
 
   {%- set target_relation = api.Relation.create(
-      identifier=identifier, schema=schema,
+      identifier=identifier, schema=schema, database=database,
       type='view') -%}
 
   {%- set should_ignore = non_destructive_mode and exists_as_view %}

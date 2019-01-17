@@ -18,7 +18,7 @@ class TestBaseCaching(DBTIntegrationTest):
     def run_and_get_adapter(self):
         # we want to inspect the adapter that dbt used for the run, which is
         # not self.adapter. You can't do this until after you've run dbt once.
-        self.run_dbt(['run'], clear_adapters=False)
+        self.run_dbt(['run'])
         return factory._ADAPTERS[self.adapter_type]
 
     def cache_run(self):
@@ -28,7 +28,7 @@ class TestBaseCaching(DBTIntegrationTest):
         self.assertEqual(relation.inner.schema, self.unique_schema())
         self.assertEqual(relation.schema, self.unique_schema().lower())
 
-        self.run_dbt(['run'], clear_adapters=False)
+        self.run_dbt(['run'])
         self.assertEqual(len(adapter.cache.relations), 1)
         second_relation = next(iter(adapter.cache.relations.values()))
         self.assertEqual(relation, second_relation)

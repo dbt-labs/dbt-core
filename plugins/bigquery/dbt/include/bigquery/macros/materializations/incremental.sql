@@ -13,9 +13,9 @@
 
   {%- set identifier = model['alias'] -%}
 
-  {%- set old_relation = adapter.get_relation(schema=schema, identifier=identifier) -%}
+  {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) -%}
 
-  {%- set target_relation = api.Relation.create(identifier=identifier, schema=schema, type='table') -%}
+  {%- set target_relation = api.Relation.create(database=database, identifier=identifier, schema=schema, type='table') -%}
 
   {%- set exists_as_table = (old_relation is not none and old_relation.is_table) -%}
   {%- set exists_not_as_table = (old_relation is not none and not old_relation.is_table) -%}
@@ -52,7 +52,7 @@
       {{ create_table_as(False, target_relation, sql) }}
     {%- endcall -%}
   {%- else -%}
-     {% set dest_columns = adapter.get_columns_in_table(schema, identifier) %}
+     {% set dest_columns = adapter.get_columns_in_relation(target_relation) %}
      {%- call statement('main') -%}
        {{ get_merge_sql(target_relation, source_sql, unique_key, dest_columns) }}
      {% endcall %}

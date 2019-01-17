@@ -8,8 +8,8 @@ import dbt.utils
 import dbt.include
 import dbt.tracking
 
+from dbt import deprecations
 from dbt.utils import get_materialization, NodeType, is_type
-
 from dbt.linker import Linker
 
 import dbt.compat
@@ -25,7 +25,6 @@ from dbt.clients.system import write_json
 from dbt.logger import GLOBAL_LOGGER as logger
 
 graph_file_name = 'graph.gpickle'
-manifest_file_name = 'manifest.json'
 
 
 def print_compile_stats(stats):
@@ -160,15 +159,6 @@ class Compiler(object):
 
         return injected_node
 
-    def write_manifest_file(self, manifest):
-        """Write the manifest file to disk.
-
-        manifest should be a Manifest.
-        """
-        filename = manifest_file_name
-        manifest_path = os.path.join(self.config.target_path, filename)
-        write_json(manifest_path, manifest.serialize())
-
     def write_graph_file(self, linker, manifest):
         filename = graph_file_name
         graph_path = os.path.join(self.config.target_path, filename)
@@ -195,65 +185,8 @@ class Compiler(object):
         if cycle:
             raise RuntimeError("Found a cycle: {}".format(cycle))
 
-    def get_all_projects(self):
-        all_projects = {self.config.project_name: self.config}
-        dependency_projects = dbt.utils.dependency_projects(self.config)
-
-        for project_cfg in dependency_projects:
-            name = project_cfg.project_name
-            all_projects[name] = project_cfg
-
-        if dbt.flags.STRICT_MODE:
-            dbt.contracts.project.ProjectList(**all_projects)
-
-        return all_projects
-
-    def _check_resource_uniqueness(cls, manifest):
-        names_resources = {}
-        alias_resources = {}
-
-        for resource, node in manifest.nodes.items():
-            if node.resource_type not in NodeType.refable():
-                continue
-
-            name = node.name
-            alias = "{}.{}".format(node.schema, node.alias)
-
-            existing_node = names_resources.get(name)
-            if existing_node is not None:
-                dbt.exceptions.raise_duplicate_resource_name(
-                        existing_node, node)
-
-            existing_alias = alias_resources.get(alias)
-            if existing_alias is not None:
-                dbt.exceptions.raise_ambiguous_alias(
-                        existing_alias, node)
-
-            names_resources[name] = node
-            alias_resources[alias] = node
-
-    def warn_for_deprecated_configs(self, manifest):
-        for unique_id, node in manifest.nodes.items():
-            is_model = node.resource_type == NodeType.Model
-            if is_model and 'sql_where' in node.config:
-                dbt.deprecations.warn('sql_where')
-
-    def compile(self):
+    def compile(self, manifest):
         linker = Linker()
-
-        all_projects = self.get_all_projects()
-
-        manifest = dbt.loader.GraphLoader.load_all(self.config, all_projects)
-
-        self.write_manifest_file(manifest)
-
-        self._check_resource_uniqueness(manifest)
-
-        resource_fqns = manifest.get_resource_fqns()
-        disabled_fqns = [n.fqn for n in manifest.disabled]
-        self.config.warn_for_unused_resource_config_paths(resource_fqns,
-                                                          disabled_fqns)
-        self.warn_for_deprecated_configs(manifest)
 
         self.link_graph(linker, manifest)
 
@@ -267,4 +200,4 @@ class Compiler(object):
         self.write_graph_file(linker, manifest)
         print_compile_stats(stats)
 
-        return manifest, linker
+        return linker

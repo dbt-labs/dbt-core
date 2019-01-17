@@ -125,6 +125,10 @@ class JSONValidationException(ValidationException):
         return (JSONValidationException, (self.typename, self.errors))
 
 
+class AliasException(ValidationException):
+    pass
+
+
 class ParsingException(Exception):
     pass
 
@@ -216,6 +220,20 @@ def raise_database_error(msg, node=None):
 
 def raise_dependency_error(msg):
     raise DependencyException(msg)
+
+
+def invalid_type_error(method_name, arg_name, got_value, expected_type,
+                       version='0.13.0'):
+    """Raise a CompilationException when an adapter method available to macros
+    has changed.
+    """
+    got_type = type(got_value)
+    msg = ("As of {version}, 'adapter.{method_name}' expects argument "
+           "'{arg_name}' to be of type '{expected_type}', instead got "
+           "{got_value} ({got_type})")
+    raise_compiler_error(msg.format(version=version, method_name=method_name,
+                         arg_name=arg_name, expected_type=expected_type,
+                         got_value=got_value, got_type=got_type))
 
 
 def ref_invalid_args(model, args):
@@ -545,3 +563,7 @@ def raise_unrecognized_credentials_type(typename, supported_types):
         'Unrecognized credentials type "{}" - supported types are ({})'
         .format(typename, ', '.join('"{}"'.format(t) for t in supported_types))
     )
+
+
+def raise_not_implemented(msg):
+    raise NotImplementedException(msg)

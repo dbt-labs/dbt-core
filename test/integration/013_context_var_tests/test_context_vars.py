@@ -90,9 +90,9 @@ class TestContextVars(DBTIntegrationTest):
         self.assertEqual(len(results), 1)
         ctx = self.get_ctx_vars()
 
-        self.assertEqual(
-            ctx['this'],
-            '"{}"."context"'.format(self.unique_schema()))
+        this = '"{}"."{}"."context"'.format(self.default_database,
+                                            self.unique_schema())
+        self.assertEqual(ctx['this'], this)
 
         self.assertEqual(ctx['this.name'], 'context')
         self.assertEqual(ctx['this.schema'], self.unique_schema())
@@ -116,9 +116,9 @@ class TestContextVars(DBTIntegrationTest):
         self.assertEqual(len(results), 1)
         ctx = self.get_ctx_vars()
 
-        self.assertEqual(
-            ctx['this'],
-            '"{}"."context"'.format(self.unique_schema()))
+        this = '"{}"."{}"."context"'.format(self.default_database,
+                                            self.unique_schema())
+        self.assertEqual(ctx['this'], this)
 
         self.assertEqual(ctx['this.name'], 'context')
         self.assertEqual(ctx['this.schema'], self.unique_schema())

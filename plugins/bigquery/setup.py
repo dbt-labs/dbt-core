@@ -18,6 +18,7 @@ setup(
     packages=find_packages(),
     package_data={
         'dbt': [
+            'include/bigquery/dbt_project.yml',
             'include/bigquery/macros/*.sql',
             'include/bigquery/macros/**/*.sql',
         ]

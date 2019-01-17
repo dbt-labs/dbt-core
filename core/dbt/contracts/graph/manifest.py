@@ -389,6 +389,9 @@ class Manifest(APIObject):
 
     def get_used_schemas(self):
         return frozenset({
-            node.schema
+            (node.database, node.schema)
             for node in self.nodes.values()
         })
+
+    def get_used_databases(self):
+        return frozenset(node.database for node in self.nodes.values())

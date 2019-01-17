@@ -1,10 +1,11 @@
-{% macro postgres__get_relations () -%}
+{% macro postgres_get_relations () -%}
   {%- call statement('relations', fetch_result=True) -%}
     -- {#
     -- in pg_depend, objid is the dependent, refobjid is the referenced object
     -- "a pg_depend entry indicates that the referenced object cannot be dropped without also dropping the dependent object."
     -- #}
-with relation as (
+    -- {# this only works with the current database #}
+    with relation as (
         select
             pg_rewrite.ev_class as class,
             pg_rewrite.oid as id
@@ -39,7 +40,7 @@ with relation as (
             referenced_class.kind
         from relation
         join class as referenced_class on relation.class=referenced_class.id
-        where referenced_class.kind in ('r', 'v') 
+        where referenced_class.kind in ('r', 'v')
     ),
     relationships as (
         select

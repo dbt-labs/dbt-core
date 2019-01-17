@@ -22,6 +22,10 @@ class TestAnalyses(DBTIntegrationTest):
             "analysis-paths": [self.analysis_path()]
         }
 
+    def assert_contents_equal(self, path, expected):
+        with open(path) as fp:
+            self.assertEqual(fp.read().strip(), expected)
+
     @attr(type='postgres')
     def test_analyses(self):
         compiled_analysis_path = os.path.normpath('target/compiled/test/analysis')
@@ -36,14 +40,9 @@ class TestAnalyses(DBTIntegrationTest):
         self.assertTrue(os.path.exists(path_1))
         self.assertTrue(os.path.exists(path_2))
 
-        with open(path_1) as fp:
-            self.assertEqual(
-                fp.read().strip(),
-                'select * from "{}"."my_model"'.format(self.unique_schema())
-            )
-        with open(path_2) as fp:
-            self.assertEqual(
-                fp.read().strip(),
-                '{% invalid jinja stuff %}'
-            )
+        expected_sql = 'select * from "{}"."{}"."my_model"'.format(
+            self.default_database, self.unique_schema()
+        )
+        self.assert_contents_equal(path_1, expected_sql)
+        self.assert_contents_equal(path_2, '{% invalid jinja stuff %}')
 

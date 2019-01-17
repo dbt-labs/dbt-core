@@ -13,7 +13,7 @@ POSTGRES_CREDENTIALS_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
     'properties': {
-        'dbname': {
+        'database': {
             'type': 'string',
         },
         'host': {
@@ -22,7 +22,7 @@ POSTGRES_CREDENTIALS_CONTRACT = {
         'user': {
             'type': 'string',
         },
-        'pass': {
+        'password': {
             'type': 'string',
         },
         'port': {
@@ -37,29 +37,23 @@ POSTGRES_CREDENTIALS_CONTRACT = {
             'type': 'integer',
         },
     },
-    'required': ['dbname', 'host', 'user', 'pass', 'port', 'schema'],
+    'required': ['database', 'host', 'user', 'password', 'port', 'schema'],
 }
 
 
 class PostgresCredentials(Credentials):
     SCHEMA = POSTGRES_CREDENTIALS_CONTRACT
+    ALIASES = {
+        'dbname': 'database',
+        'pass': 'password'
+    }
 
     @property
     def type(self):
         return 'postgres'
 
-    def incorporate(self, **kwargs):
-        if 'password' in kwargs:
-            kwargs['pass'] = kwargs.pop('password')
-        return super(PostgresCredentials, self).incorporate(**kwargs)
-
-    @property
-    def password(self):
-        # we can't access this as 'pass' since that's reserved
-        return self._contents['pass']
-
     def _connection_keys(self):
-        return ('host', 'port', 'user', 'dbname', 'schema')
+        return ('host', 'port', 'user', 'database', 'schema')
 
 
 class PostgresConnectionManager(SQLConnectionManager):
@@ -108,7 +102,7 @@ class PostgresConnectionManager(SQLConnectionManager):
 
         try:
             handle = psycopg2.connect(
-                dbname=credentials.dbname,
+                dbname=credentials.database,
                 user=credentials.user,
                 host=credentials.host,
                 password=credentials.password,

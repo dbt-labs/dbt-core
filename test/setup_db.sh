@@ -34,7 +34,7 @@ fi
 createdb dbt
 psql -c "CREATE ROLE root WITH PASSWORD 'password';"
 psql -c "ALTER ROLE root WITH LOGIN;"
-psql -c "GRANT CREATE, CONNECT ON DATABASE dbt TO root;"
+psql -c "GRANT CREATE, CONNECT ON DATABASE dbt TO root WITH GRANT OPTION;"
 
 psql -c "CREATE ROLE noaccess WITH PASSWORD 'password' NOSUPERUSER;"
 psql -c "ALTER ROLE noaccess WITH LOGIN;"

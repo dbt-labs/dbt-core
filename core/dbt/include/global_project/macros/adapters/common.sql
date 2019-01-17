@@ -28,8 +28,24 @@
   {%- endif -%}
 {%- endmacro %}
 
-{% macro create_schema(schema_name) %}
-  {{ adapter.create_schema(schema_name) }}
+{% macro create_schema(database_name, schema_name) -%}
+  {{ adapter_macro('create_schema', database_name, schema_name) }}
+{% endmacro %}
+
+{% macro default__create_schema(database_name, schema_name) -%}
+  {%- call statement('create_schema') -%}
+    create schema if not exists {{database_name}}.{{schema_name}}
+  {% endcall %}
+{% endmacro %}
+
+{% macro drop_schema(database_name, schema_name) -%}
+  {{ adapter_macro('drop_schema', database_name, schema_name) }}
+{% endmacro %}
+
+{% macro default__drop_schema(database_name, schema_name) -%}
+  {%- call statement('drop_schema') -%}
+    drop schema if exists {{database_name}}.{{schema_name}} cascade
+  {% endcall %}
 {% endmacro %}
 
 {% macro create_table_as(temporary, relation, sql) -%}
@@ -38,7 +54,7 @@
 
 {% macro default__create_table_as(temporary, relation, sql) -%}
   create {% if temporary: -%}temporary{%- endif %} table
-    {{ relation.include(schema=(not temporary)) }}
+    {{ relation.include(database=(not temporary), schema=(not temporary)) }}
   as (
     {{ sql }}
   );
@@ -81,16 +97,130 @@
   {{ exceptions.raise_compiler_error(msg) }}
 {% endmacro %}
 
-{% macro get_relations() -%}
-  {{ return(adapter_macro('get_relations')) }}
+
+{% macro get_columns_in_relation(relation) -%}
+  {{ return(adapter_macro('get_columns_in_relation', relation)) }}
+{% endmacro %}
+
+{% macro sql_convert_columns_in_relation(table) -%}
+  {% set columns = [] %}
+  {% for row in table %}
+    {% do columns.append(api.Column(*row)) %}
+  {% endfor %}
+  {{ return(columns) }}
+{% endmacro %}
+
+{% macro default__get_columns_in_relation(relation) -%}
+  {{ dbt.exceptions.raise_not_implemented(
+    'get_columns_in_relation macro not implemented for adapter '+adapter.type()) }}
+{% endmacro %}
+
+{% macro alter_column_type(relation, column_name, new_column_type) -%}
+  {{ return(adapter_macro('alter_column_type', relation, column_name, new_column_type)) }}
+{% endmacro %}
+
+{% macro default__alter_column_type(relation, column_name, new_column_type) -%}
+  {#
+    1. Create a new column (w/ temp name and correct type)
+    2. Copy data over to it
+    3. Drop the existing column (cascade!)
+    4. Rename the new column to existing column
+  #}
+  {%- set tmp_column = column_name + "__dbt_alter" -%}
+
+  {% call statement('alter_column_type') %}
+    alter table {{ relation }} add column {{ tmp_column }} {{ new_column_type }};
+    update {{ relation }} set {{ tmp_column }} = {{ column_name }};
+    alter table {{ relation }} drop column {{ column_name }} cascade;
+    alter table {{ relation }} rename column {{ tmp_column }} to {{ column_name }}
+  {% endcall %}
+
 {% endmacro %}
 
 
-{% macro default__get_relations() -%}
-  {% set typename = adapter.type() %}
-  {% set msg -%}
-    get_relations not implemented for {{ typename }}
-  {%- endset %}
-
-  {{ exceptions.raise_compiler_error(msg) }}
+{% macro drop_relation(relation) -%}
+  {{ return(adapter_macro('drop_relation', relation)) }}
 {% endmacro %}
+
+
+{% macro default__drop_relation(relation) -%}
+  {% call statement('drop_relation', auto_begin=False) -%}
+    drop {{ relation.type }} if exists {{ relation }} cascade
+  {%- endcall %}
+{% endmacro %}
+
+{% macro truncate_relation(relation) -%}
+  {{ return(adapter_macro('truncate_relation', relation)) }}
+{% endmacro %}
+
+
+{% macro default__truncate_relation(relation) -%}
+  {% call statement('truncate_relation') -%}
+    truncate table {{ relation }}
+  {%- endcall %}
+{% endmacro %}
+
+{% macro rename_relation(from_relation, to_relation) -%}
+  {{ return(adapter_macro('rename_relation', from_relation, to_relation)) }}
+{% endmacro %}
+
+{% macro default__rename_relation(from_relation, to_relation) -%}
+  {% set target_name = adapter.quote_as_configured(to_relation.identifier, 'identifier') %}
+  {% call statement('rename_relation') -%}
+    alter table {{ from_relation }} rename to {{ target_name }}
+  {%- endcall %}
+{% endmacro %}
+
+
+{% macro information_schema_name(database) %}
+  {{ return(adapter_macro('information_schema_name', database)) }}
+{% endmacro %}
+
+{% macro default__information_schema_name(database) -%}
+  {%- if database -%}
+    {{ adapter.quote_as_configured(database, 'database') }}.information_schema
+  {%- else -%}
+    information_schema
+  {%- endif -%}
+{%- endmacro %}
+
+
+{% macro list_schemas(database) -%}
+  {{ return(adapter_macro('list_schemas', database)) }}
+{% endmacro %}
+
+{% macro default__list_schemas(database) -%}
+  {% call statement('list_schemas', fetch_result=True, auto_begin=False) %}
+    select distinct schema_name
+    from {{ information_schema_name(database) }}.schemata
+    where catalog_name='{{ database }}'
+  {% endcall %}
+  {{ return(load_result('list_schemas').table) }}
+{% endmacro %}
+
+
+{% macro check_schema_exists(database, schema) -%}
+  {{ return(adapter_macro('check_schema_exists', database)) }}
+{% endmacro %}
+
+{% macro default__check_schema_exists(database, schema) -%}
+  {% call statement('check_schema_exists', fetch_result=True, auto_begin=False) -%}
+        select count(*)
+        from {{ information_schema_name(database) }}.schemata
+        where catalog_name='{{ database }}'
+          and schema_name='{{ schema }}'
+  {%- endcall %}
+  {{ return(load_result('check_schema_exists').table) }}
+{% endmacro %}
+
+
+{% macro list_relations_without_caching(database, schema) %}
+  {{ return(adapter_macro('list_relations_without_caching', database, schema)) }}
+{% endmacro %}
+
+
+{% macro default__list_relations_without_caching(database, schema) %}
+  {{ dbt.exceptions.raise_not_implemented(
+    'list_relations_without_caching macro not implemented for adapter '+adapter.type()) }}
+{% endmacro %}
+

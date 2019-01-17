@@ -20,10 +20,20 @@ class ArchiveParser(MacrosKnownParser):
 
             for table in tables:
                 cfg = table.copy()
+                cfg['source_database'] = archive_config.get(
+                    'source_database',
+                    config.credentials.database
+                )
+                cfg['target_database'] = archive_config.get(
+                    'target_database',
+                    config.credentials.database
+                )
+
                 cfg['source_schema'] = archive_config.get('source_schema')
                 cfg['target_schema'] = archive_config.get('target_schema')
 
-                fake_path = [cfg['target_schema'], cfg['target_table']]
+                fake_path = [cfg['target_database'], cfg['target_schema'],
+                             cfg['target_table']]
                 archives.append({
                     'name': table.get('target_table'),
                     'root_path': config.project_root,
