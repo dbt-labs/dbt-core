@@ -51,6 +51,20 @@ class TestSimpleCopy(BaseTestSimpleCopy):
         self.assertFalse("empty" in models.keys())
         self.assertFalse("disabled" in models.keys())
 
+    @use_profile("presto")
+    def test__presto__simple_copy(self):
+        self.use_default_project({"data-paths": [self.dir("seed-initial")]})
+
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        results = self.run_dbt(expect_pass=False)
+        self.assertEqual(len(results),  7)
+        for result in results:
+            if 'incremental' in result.node.name:
+                self.assertIn('not implemented for presto', result.error)
+
+        self.assertManyTablesEqual(["seed", "view_model", "materialized"])
+
     @use_profile("snowflake")
     def test__snowflake__simple_copy(self):
         self.use_default_project({"data-paths": [self.dir("seed-initial")]})

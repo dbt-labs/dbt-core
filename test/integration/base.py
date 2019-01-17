@@ -896,18 +896,30 @@ class DBTIntegrationTest(unittest.TestCase):
         table_a_result = self.get_relation_columns(relation_a)
         table_b_result = self.get_relation_columns(relation_b)
 
+        text_types = {'text', 'character varying', 'character', 'varchar'}
+
         self.assertEqual(len(table_a_result), len(table_b_result))
         for a_column, b_column in zip(table_a_result, table_b_result):
             a_name, a_type, a_size = a_column
             b_name, b_type, b_size = b_column
-            self.assertEqual(a_name, b_name)
-            self.assertEqual(a_type, b_type)
+            self.assertEqual(a_name, b_name,
+                '{} vs {}: column "{}" != "{}"'.format(
+                    relation_a, relation_b, a_name, b_name
+                ))
+
+            self.assertEqual(a_type, b_type,
+                '{} vs {}: column "{}" has type "{}" != "{}"'.format(
+                    relation_a, relation_b, a_name, a_type, b_type
+                ))
 
             if self.adapter_type == 'presto' and None in (a_size, b_size):
                 # None is compatible with any size
                 continue
 
-            self.assertEqual(a_size, b_size)
+            self.assertEqual(a_size, b_size,
+                '{} vs {}: column "{}" has size "{}" != "{}"'.format(
+                    relation_a, relation_b, a_name, a_size, b_size
+                ))
 
     def assertEquals(self, *args, **kwargs):
         # assertEquals is deprecated. This makes the warnings less chatty
