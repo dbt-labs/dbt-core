@@ -54,6 +54,7 @@ class Credentials(APIObject):
             serialized.update({
                 new_name: serialized[canonical_name]
                 for new_name, canonical_name in self.ALIASES.items()
+                if canonical_name in serialized
             })
         return serialized
 
