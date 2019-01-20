@@ -34,7 +34,7 @@ class BaseParserTest(unittest.TestCase):
             'quoting': {},
             'outputs': {
                 'test': {
-                    'type': 'postgres',
+                    'type': 'redshift',
                     'host': 'localhost',
                     'schema': 'analytics',
                     'user': 'test',

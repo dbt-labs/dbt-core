@@ -14,6 +14,8 @@ class SnowflakeAdapter(SQLAdapter):
     Relation = SnowflakeRelation
     ConnectionManager = SnowflakeConnectionManager
 
+    AdapterSpecificConfigs = {"transient"}
+
     @classmethod
     def date_function(cls):
         return 'CURRENT_TIMESTAMP()'

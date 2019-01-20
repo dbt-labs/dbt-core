@@ -1,12 +1,11 @@
 import dbt.exceptions
 
-from dbt.utils import deep_merge, DBTConfigKeys
+from dbt.utils import deep_merge
 from dbt.node_types import NodeType
+from dbt.adapters.factory import get_adapter_class_by_name
 
 
 class SourceConfig(object):
-    ConfigKeys = DBTConfigKeys
-
     AppendListFields = {'pre-hook', 'post-hook', 'tags'}
     ExtendDictFields = {'vars', 'column_types', 'quoting'}
     ClobberFields = {
@@ -14,14 +13,12 @@ class SourceConfig(object):
         'schema',
         'enabled',
         'materialized',
-        'dist',
-        'sort',
         'sql_where',
         'unique_key',
-        'sort_type',
-        'bind',
         'database',
     }
+
+    ConfigKeys = AppendListFields | ExtendDictFields | ClobberFields
 
     def __init__(self, active_project, own_project, fqn, node_type):
         self._config = None
@@ -31,15 +28,12 @@ class SourceConfig(object):
         self.fqn = fqn
         self.node_type = node_type
 
+        adapter_type = active_project.credentials.type
+        adapter_class = get_adapter_class_by_name(adapter_type)
+        self.AdapterSpecificConfigs = adapter_class.AdapterSpecificConfigs
+
         # the config options defined within the model
         self.in_model_config = {}
-
-        # make sure we categorize all configs
-        all_configs = self.AppendListFields | self.ExtendDictFields | \
-            self.ClobberFields
-
-        for config in self.ConfigKeys:
-            assert config in all_configs, config
 
     def _merge(self, *configs):
         merged_config = {}
@@ -107,7 +101,7 @@ class SourceConfig(object):
                     )
                 current.update(value)
                 self.in_model_config[key] = current
-            else:  # key in self.ClobberFields
+            else:  # key in self.ClobberFields or self.AdapterSpecificConfigs
                 self.in_model_config[key] = value
 
     @staticmethod
@@ -121,24 +115,25 @@ class SourceConfig(object):
 
         return items
 
-    @classmethod
-    def smart_update(cls, mutable_config, new_configs):
+    def smart_update(self, mutable_config, new_configs):
+        config_keys = self.ConfigKeys | self.AdapterSpecificConfigs
+
         relevant_configs = {
             key: new_configs[key] for key
-            in new_configs if key in cls.ConfigKeys
+            in new_configs if key in config_keys
         }
 
-        for key in cls.AppendListFields:
-            append_fields = cls.__get_as_list(relevant_configs, key)
+        for key in self.AppendListFields:
+            append_fields = self.__get_as_list(relevant_configs, key)
             mutable_config[key].extend([
                 f for f in append_fields if f not in mutable_config[key]
             ])
 
-        for key in cls.ExtendDictFields:
+        for key in self.ExtendDictFields:
             dict_val = relevant_configs.get(key, {})
             mutable_config[key].update(dict_val)
 
-        for key in cls.ClobberFields:
+        for key in (self.ClobberFields | self.AdapterSpecificConfigs):
             if key in relevant_configs:
                 mutable_config[key] = relevant_configs[key]
 

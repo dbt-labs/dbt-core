@@ -110,6 +110,8 @@ class BaseAdapter(object):
     # This should be an implementation of BaseConnectionManager
     ConnectionManager = None
 
+    AdapterSpecificConfigs = set()
+
     def __init__(self, config):
         self.config = config
         self.cache = RelationsCache()
