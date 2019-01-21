@@ -7,6 +7,8 @@ import snowflake.connector.errors
 
 import dbt.compat
 import dbt.exceptions
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 from dbt.adapters.base import Credentials
 from dbt.adapters.sql import SQLConnectionManager
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -28,6 +30,12 @@ SNOWFLAKE_CREDENTIALS_CONTRACT = {
         'authenticator': {
             'type': 'string',
             'description': "Either 'externalbrowser', or a valid Okta url"
+        },
+        'private_key_path': {
+            'type': 'string',
+        },
+        'private_key_passphrase': {
+            'type': 'string',
         },
         'database': {
             'type': 'string',
@@ -104,6 +112,11 @@ class SnowflakeConnectionManager(SQLConnectionManager):
             auth_args = {auth_key: credentials[auth_key]
                          for auth_key in ['user', 'password', 'authenticator']
                          if auth_key in credentials}
+
+            auth_args['private_key'] = cls._get_private_key(
+                credentials.get('private_key_path'),
+                credentials.get('private_key_passphrase'))
+
             handle = snowflake.connector.connect(
                 account=credentials.account,
                 database=credentials.database,
@@ -162,6 +175,23 @@ class SnowflakeConnectionManager(SQLConnectionManager):
         sql_buf = StringIO(sql_s)
         split_query = snowflake.connector.util_text.split_statements(sql_buf)
         return [part[0] for part in split_query]
+
+    @classmethod
+    def _get_private_key(cls, private_key_path, private_key_passphrase):
+        """Get Snowflake private key by path or None."""
+        if private_key_path is None or private_key_passphrase is None:
+            return None
+
+        with open(private_key_path, 'rb') as key:
+            p_key = serialization.load_pem_private_key(
+                key.read(),
+                password=private_key_passphrase.encode(),
+                backend=default_backend())
+
+        return p_key.private_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption())
 
     def add_query(self, sql, model_name=None, auto_begin=True,
                   bindings=None, abridge_sql_log=False):
