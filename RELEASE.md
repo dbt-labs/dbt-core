@@ -11,19 +11,21 @@ dbt has three types of branches:
 #### Git & PyPI
 
 1. Update CHANGELOG.md with the most recent changes
-2. If this is a release candidate, you want to create it off of your release branch. If it's an actual release, you must first merge to master. Open a Pull Request in Github to merge it.
+2. If this is a release candidate, you want to create it off of your release branch. If it's an actual release, you must first merge to a master branch. Open a Pull Request in Github to merge it.
 3. Bump the version using `bumpversion`:
   - Dry run first by running `bumpversion --new-version <desired-version> <part>` and checking the diff. If it looks correct, clean up the chanages and move on:
   - Alpha releases: `bumpversion --commit --tag --new-version 0.10.2a1 num`
   - Patch releases: `bumpversion --commit --tag --new-version 0.10.2 patch`
   - Minor releases: `bumpversion --commit --tag --new-version 0.11.0 minor`
   - Major releases: `bumpversion --commit --tag --new-version 1.0.0 major`
-4. Deploy to pypi
+4. (If this is a not a release candidate) Merge to x.x.latest and master.
+5. Update the default branch to the next dev release branch.
+6. Deploy to pypi
   - `python setup.py sdist upload -r pypi`
-5. Deploy to homebrew (see below)
-6. Deploy to conda-forge (see below)
-7. Git release notes (points to changelog)
-8. Post to slack (point to changelog)
+7. Deploy to homebrew (see below)
+8. Deploy to conda-forge (see below)
+9. Git release notes (points to changelog)
+10. Post to slack (point to changelog)
 
 After releasing a new version, it's important to merge the changes back into the other outstanding release branches. This avoids merge conflicts moving forward.
 
