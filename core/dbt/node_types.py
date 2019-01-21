@@ -14,7 +14,7 @@ class NodeType(StrEnum):
     RPCCall = "rpc"
     SqlOperation = "sql"
     Documentation = "docs"
-    Source = 'source'
+    Source = "source"
     Macro = "macro"
     Exposure = "exposure"
     Metric = "metric"

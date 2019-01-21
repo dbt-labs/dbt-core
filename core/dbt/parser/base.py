@@ -219,8 +219,8 @@ class ConfiguredParser(
             name = block.name
         dct = {
             "alias": name,
-            'schema': self.default_schema,
-            'database': self.default_database,
+            "schema": self.default_schema,
+            "database": self.default_database,
             "fqn": fqn,
             "name": name,
             "root_path": self.project.project_root,

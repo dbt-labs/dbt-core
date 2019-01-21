@@ -76,7 +76,7 @@ def get_model_name_or_none(model):
     elif isinstance(model, str):
         name = model
     elif isinstance(model, dict):
-        name = model.get('alias', model.get('name'))
+        name = model.get("alias", model.get("name"))
     elif hasattr(model, "alias"):
         name = model.alias
     elif hasattr(model, "name"):
