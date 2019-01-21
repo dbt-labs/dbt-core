@@ -60,8 +60,9 @@ class ConfigRenderer(object):
         # if it wasn't read as a string, ignore it
         if not isinstance(value, compat.basestring):
             return value
-
-        return get_rendered(value, self.context)
+        # force the result of rendering into this python version's native
+        # string type
+        return compat.to_native_string(get_rendered(value, self.context))
 
     def _render_profile_data(self, value, keypath):
         result = self.render_value(value)
@@ -72,6 +73,14 @@ class ConfigRenderer(object):
                 # let the validator or connection handle this
                 pass
         return result
+
+    def _render_schema_source_data(self, value, keypath):
+        # things to not render:
+        # - descriptions
+        if len(keypath) > 0 and keypath[-1] == 'description':
+            return value
+
+        return self.render_value(value)
 
     def render_project(self, as_parsed):
         """Render the parsed data, returning a new dict (or whatever was read).
@@ -91,5 +100,14 @@ class ConfigRenderer(object):
         except RecursionException:
             raise DbtProfileError(
                 'Cycle detected: Profile input has a reference to itself',
+                project=as_parsed
+            )
+
+    def render_schema_source(self, as_parsed):
+        try:
+            return deep_map(self._render_schema_source_data, as_parsed)
+        except RecursionException:
+            raise DbtProfileError(
+                'Cycle detected: schema.yml input has a reference to itself',
                 project=as_parsed
             )

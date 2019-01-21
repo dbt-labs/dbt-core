@@ -116,6 +116,7 @@ class BaseRunner(object):
                          error=str(e).strip())
 
             logger.error(error)
+            logger.debug('', exc_info=True)
             result.error = dbt.compat.to_string(e)
             result.status = 'ERROR'
 

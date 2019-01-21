@@ -63,6 +63,7 @@ class CompilerTest(unittest.TestCase):
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [
                             'model.root.ephemeral'
@@ -96,6 +97,7 @@ class CompilerTest(unittest.TestCase):
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -152,6 +154,7 @@ class CompilerTest(unittest.TestCase):
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -181,6 +184,7 @@ class CompilerTest(unittest.TestCase):
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -249,6 +253,7 @@ class CompilerTest(unittest.TestCase):
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [
                             'model.root.ephemeral'
@@ -280,6 +285,7 @@ class CompilerTest(unittest.TestCase):
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -342,6 +348,7 @@ class CompilerTest(unittest.TestCase):
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [
                             'model.root.ephemeral'
@@ -373,6 +380,7 @@ class CompilerTest(unittest.TestCase):
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -402,6 +410,7 @@ class CompilerTest(unittest.TestCase):
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []

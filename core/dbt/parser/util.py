@@ -38,6 +38,22 @@ class ParserUtils(object):
     DISABLED = object()
 
     @classmethod
+    def resolve_source(cls, manifest, target_source_name,
+                       target_table_name, current_project, node_package):
+        candidate_targets = [current_project, node_package, None]
+        target_source = None
+        for candidate in candidate_targets:
+            target_source = manifest.find_source_by_name(
+                target_source_name,
+                target_table_name,
+                candidate
+            )
+            if target_source is not None:
+                return target_source
+
+        return None
+
+    @classmethod
     def resolve_ref(cls, manifest, target_model_name, target_model_package,
                     current_project, node_package):
         if target_model_package is not None:
@@ -175,4 +191,31 @@ class ParserUtils(object):
                 node.depends_on['nodes'].append(target_model_id)
                 manifest.nodes[node['unique_id']] = node
 
+        return manifest
+
+    @classmethod
+    def process_sources(cls, manifest, current_project):
+        for _, node in manifest.nodes.items():
+            target_source = None
+            for source_name, table_name in node.sources:
+                target_source = cls.resolve_source(
+                    manifest,
+                    source_name,
+                    table_name,
+                    current_project,
+                    node.get('package_name'))
+
+                if target_source is None:
+                    # this folows the same pattern as refs as
+                    node.config['enabled'] = False
+                    dbt.utils.invalid_ref_fail_unless_test(
+                            node,
+                            '{}.{}'.format(source_name, table_name),
+                            target_model_package,
+                            disabled=False
+                    )
+                    continue
+                target_source_id = target_source.unique_id
+                node.depends_on['nodes'].append(target_source_id)
+                manifest.nodes[node['unique_id']] = node
         return manifest

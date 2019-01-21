@@ -60,6 +60,30 @@ def ref(db_wrapper, model, config, manifest):
     return do_ref
 
 
+def source(db_wrapper, model, config, manifest):
+    current_project = config.project_name
+
+    def do_source(source_name, table_name):
+        target_source = ParserUtils.resolve_source(
+            manifest,
+            source_name,
+            table_name,
+            current_project,
+            model.get('package_name')
+        )
+
+        if target_source is None:
+            dbt.exceptions.ref_target_not_found(
+                model,
+                '{}.{}'.format(source_name, table_name),
+                None)
+
+        model.sources.append([source_name, table_name])
+        return target_source.sql_table_name
+
+    return do_source
+
+
 class Config:
     def __init__(self, model, source_config=None):
         self.model = model

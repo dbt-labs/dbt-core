@@ -236,7 +236,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         self.snowflake.assert_has_calls([
             mock.call(
                 account='test_account', autocommit=False,
-                client_session_keep_alive=False, database='test_databse',
+                client_session_keep_alive=False, database='test_database',
                 role=None, schema='public', user='test_user',
                 warehouse='test_warehouse', private_key='test_key')
         ])

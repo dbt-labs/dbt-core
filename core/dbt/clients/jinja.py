@@ -52,8 +52,13 @@ class MacroFuzzEnvironment(jinja2.sandbox.SandboxedEnvironment):
             )
             # encode, though I don't think this matters
             filename = jinja2._compat.encode_filename(filename)
-            # put ourselves in the cache using the 'lazycache' method
-            linecache.cache[filename] = (lambda: source,)
+            # put ourselves in the cache
+            linecache.cache[filename] = (
+                len(source),
+                None,
+                [line+'\n' for line in source.splitlines()],
+                filename
+            )
 
         return super(MacroFuzzEnvironment, self)._compile(source, filename)
 

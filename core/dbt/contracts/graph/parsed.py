@@ -7,7 +7,8 @@ from dbt.exceptions import raise_duplicate_resource_name, \
 import dbt.clients.jinja
 
 from dbt.contracts.graph.unparsed import UNPARSED_NODE_CONTRACT, \
-    UNPARSED_MACRO_CONTRACT, UNPARSED_DOCUMENTATION_FILE_CONTRACT
+    UNPARSED_MACRO_CONTRACT, UNPARSED_DOCUMENTATION_FILE_CONTRACT, \
+    UNPARSED_BASE_CONTRACT, FRESHNESS_CONTRACT
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -137,20 +138,153 @@ DOCREF_CONTRACT = {
 }
 
 
+HAS_FQN_CONTRACT = {
+    'properties': {
+        'fqn': {
+            'type': 'array',
+            'items': {
+                'type': 'string',
+            }
+        },
+    },
+    'required': ['fqn'],
+}
+
+
+HAS_UNIQUE_ID_CONTRACT = {
+    'properties': {
+        'unique_id': {
+            'type': 'string',
+            'minLength': 1,
+        },
+    },
+    'required': ['unique_id'],
+}
+
+CAN_REF_CONTRACT = {
+    'properties': {
+        'refs': {
+            'type': 'array',
+            'items': {
+                'type': 'array',
+                'description': (
+                    'The list of arguments passed to a single ref call.'
+                ),
+            },
+            'description': (
+                'The list of call arguments, one list of arguments per '
+                'call.'
+            )
+        },
+        'sources': {
+            'type': 'array',
+            'items': {
+                'type': 'array',
+                'description': (
+                    'The list of arguments passed to a single source call.'
+                ),
+            },
+            'description': (
+                'The list of call arguments, one list of arguments per '
+                'call.'
+            )
+        },
+        'depends_on': {
+            'type': 'object',
+            'additionalProperties': False,
+            'properties': {
+                'nodes': {
+                    'type': 'array',
+                    'items': {
+                        'type': 'string',
+                        'minLength': 1,
+                        'description': (
+                            'A node unique ID that this depends on.'
+                        )
+                    }
+                },
+                'macros': {
+                    'type': 'array',
+                    'items': {
+                        'type': 'string',
+                        'minLength': 1,
+                        'description': (
+                            'A macro unique ID that this depends on.'
+                        )
+                    }
+                },
+            },
+            'description': (
+                'A list of unique IDs for nodes and macros that this '
+                'node depends upon.'
+            ),
+            'required': ['nodes', 'macros'],
+        },
+    },
+    'required': ['refs', 'sources', 'depends_on'],
+}
+
+
+HAS_DOCREFS_CONTRACT = {
+    'properties': {
+        'docrefs': {
+            'type': 'array',
+            'items': DOCREF_CONTRACT,
+        },
+    },
+}
+
+
+HAS_DESCRIPTION_CONTRACT = {
+    'properties': {
+        'description': {
+            'type': 'string',
+            'description': 'A user-supplied description of the model',
+        },
+        'columns': {
+            'type': 'object',
+            'properties': {
+                '.*': COLUMN_INFO_CONTRACT,
+            },
+        },
+    },
+    'required': ['description', 'columns'],
+}
+
+# does this belong inside another contract?
+HAS_CONFIG_CONTRACT = {
+    'properties': {
+        'config': CONFIG_CONTRACT,
+    },
+    'required': ['config'],
+}
+
+
+COLUMN_TEST_CONTRACT = {
+    'properties': {
+        'column_name': {
+            'type': 'string',
+            'description': (
+                'In tests parsed from a v2 schema, the column the test is '
+                'associated with (if there is one)'
+            )
+        },
+    }
+}
+
+
 PARSED_NODE_CONTRACT = deep_merge(
     UNPARSED_NODE_CONTRACT,
+    HAS_UNIQUE_ID_CONTRACT,
+    HAS_FQN_CONTRACT,
+    CAN_REF_CONTRACT,
+    HAS_DOCREFS_CONTRACT,
+    HAS_DESCRIPTION_CONTRACT,
+    HAS_CONFIG_CONTRACT,
+    COLUMN_TEST_CONTRACT,
     {
         'properties': {
-            'unique_id': {
-                'type': 'string',
-                'minLength': 1,
-            },
-            'fqn': {
-                'type': 'array',
-                'items': {
-                    'type': 'string',
-                }
-            },
+            # these next 3 make sense as a contract
             'database': {
                 'type': 'string',
                 'description': (
@@ -169,81 +303,23 @@ PARSED_NODE_CONTRACT = deep_merge(
                     'The name of the relation that this will build into'
                 )
             },
-            'refs': {
-                'type': 'array',
-                'items': {
-                    'type': 'array',
-                    'description': (
-                        'The list of arguments passed to a single ref call.'
-                    ),
-                },
-                'description': (
-                    'The list of call arguments, one list of arguments per '
-                    'call.'
-                )
-            },
-            'depends_on': {
-                'type': 'object',
-                'additionalProperties': False,
-                'properties': {
-                    'nodes': {
-                        'type': 'array',
-                        'items': {
-                            'type': 'string',
-                            'minLength': 1,
-                            'description': (
-                                'A node unique ID that this depends on.'
-                            )
-                        }
-                    },
-                    'macros': {
-                        'type': 'array',
-                        'items': {
-                            'type': 'string',
-                            'minLength': 1,
-                            'description': (
-                                'A macro unique ID that this depends on.'
-                            )
-                        }
-                    },
-                },
-                'description': (
-                    'A list of unique IDs for nodes and macros that this '
-                    'node depends upon.'
-                ),
-                'required': ['nodes', 'macros'],
-            },
             # TODO: move this into a class property.
             'empty': {
                 'type': 'boolean',
                 'description': 'True if the SQL is empty',
             },
-            'config': CONFIG_CONTRACT,
             'tags': {
                 'type': 'array',
                 'items': {
                     'type': 'string',
                 }
             },
-            'description': {
-                'type': 'string',
-                'description': 'A user-supplied description of the model',
-            },
-            'columns': {
-                'type': 'object',
-                'properties': {
-                    '.*': COLUMN_INFO_CONTRACT,
-                }
-            },
+            # this is really nodes-only
             'patch_path': {
                 'type': 'string',
                 'description': (
                     'The path to the patch source if the node was patched'
                 ),
-            },
-            'docrefs': {
-                'type': 'array',
-                'items': DOCREF_CONTRACT,
             },
             'build_path': {
                 'type': 'string',
@@ -251,18 +327,8 @@ PARSED_NODE_CONTRACT = deep_merge(
                     'In seeds, the path to the source file used during build.'
                 ),
             },
-            'column_name': {
-                'type': 'string',
-                'description': (
-                    'In tests parsed from a v2 schema, the column the test is '
-                    'associated with (if there is one)'
-                )
-            },
         },
-        'required': UNPARSED_NODE_CONTRACT['required'] + [
-            'unique_id', 'fqn', 'database', 'schema', 'refs', 'depends_on',
-            'empty', 'config', 'tags', 'alias', 'columns', 'description'
-        ]
+        'required': ['database', 'schema', 'empty', 'tags', 'alias'],
     }
 )
 
@@ -392,8 +458,9 @@ PARSED_NODE_PATCH_CONTRACT = {
             'items': DOCREF_CONTRACT,
         }
     },
-    'required': ['name', 'original_file_path', 'description', 'columns',
-                 'docrefs'],
+    'required': [
+        'name', 'original_file_path', 'description', 'columns', 'docrefs'
+    ],
 }
 
 
@@ -453,7 +520,7 @@ PARSED_MACRO_CONTRACT = deep_merge(
                 'required': ['macros'],
             },
         },
-        'required': UNPARSED_MACRO_CONTRACT['required'] + [
+        'required': [
             'resource_type', 'unique_id', 'tags', 'depends_on', 'name',
         ]
     }
@@ -471,7 +538,6 @@ class ParsedMacro(APIObject):
         # TODO: we can generate self.template from the other properties
         # available in this class. should we just generate this here?
         return dbt.clients.jinja.macro_generator(self._contents)
-
 
 # This is just the file + its ID
 PARSED_DOCUMENTATION_CONTRACT = deep_merge(
@@ -497,9 +563,7 @@ PARSED_DOCUMENTATION_CONTRACT = deep_merge(
                 'description': 'The contents of just the docs block',
             },
         },
-        'required': UNPARSED_DOCUMENTATION_FILE_CONTRACT['required'] + [
-            'name', 'unique_id', 'block_contents',
-        ],
+        'required': ['name', 'unique_id', 'block_contents'],
     }
 )
 
@@ -526,3 +590,78 @@ class ParsedDocumentation(APIObject):
 
 class Hook(APIObject):
     SCHEMA = HOOK_CONTRACT
+
+
+PARSED_SOURCE_DEFINITION_CONTRACT = deep_merge(
+    UNPARSED_BASE_CONTRACT,
+    FRESHNESS_CONTRACT,
+    HAS_DESCRIPTION_CONTRACT,
+    HAS_UNIQUE_ID_CONTRACT,
+    HAS_DOCREFS_CONTRACT,
+    {
+        'description': (
+            'A source table definition, as parsed from the one provided in the'
+            '"tables" subsection of the "sources" section of schema.yml'
+        ),
+        'properties': {
+            'name': {
+                'type': 'string',
+                'description': (
+                    'The name of this node, which is the name of the model it'
+                    'refers to'
+                ),
+                'minLength': 1,
+            },
+            'source_name': {
+                'type': 'string',
+                'description': 'The reference name of the source definition',
+                'minLength': 1,
+            },
+            'source_description': {
+                'type': 'string',
+                'description': 'The user-supplied description of the source',
+            },
+            'loader': {
+                'type': 'string',
+                'description': 'The user-defined loader for this source',
+                'minLength': 1,
+            },
+            'sql_table_name': {
+                'type': 'string',
+                'description': 'The exact identifier for the source table',
+                'minLength': 1,
+            },
+            # the manifest search stuff really requires this, sadly
+            'resource_type': {
+                'enum': [NodeType.Source],
+            }
+        },
+        # note that while required, loaded_at_field and freshness may be null
+        # (and either of freshness's members may be null as well!)
+        'required': [
+            'source_name', 'source_description', 'loader', 'loaded_at_field',
+            'freshness', 'description', 'columns', 'docrefs', 'sql_table_name',
+        ],
+    }
+)
+
+
+class ParsedSourceDefinition(APIObject):
+    SCHEMA = PARSED_SOURCE_DEFINITION_CONTRACT
+
+    def to_shallow_dict(self):
+        return self._contents.copy()
+
+    # provide some emtpy/meaningless properties so these look more like
+    # ParsedNodes
+    @property
+    def depends_on_nodes(self):
+        return []
+
+    @property
+    def refs(self):
+        return []
+
+    @property
+    def sources(self):
+        return []

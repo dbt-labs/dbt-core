@@ -1,6 +1,12 @@
-
-seed_enabled:
-    constraints:
-        column_type:
-            - {field: id, type: 'character varying(255)' }
-            - {field: birthday, type: 'date' }
+version: 2
+models:
+- name: seed_enabled
+  columns:
+  - name: birthday
+    tests:
+    - column_type:
+        type: date
+  - name: id
+    tests:
+    - column_type:
+        type: character varying(255)

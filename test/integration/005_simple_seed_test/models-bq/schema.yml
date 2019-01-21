@@ -1,6 +1,12 @@
-
-seed_enabled:
-    constraints:
-        column_type:
-            - {field: id, type: 'FLOAT64' }
-            - {field: birthday, type: 'STRING' }
+version: 2
+models:
+- name: seed_enabled
+  columns:
+  - name: birthday
+    tests:
+    - column_type:
+        type: STRING
+  - name: id
+    tests:
+    - column_type:
+        type: FLOAT64

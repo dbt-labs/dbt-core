@@ -1,5 +1,9 @@
-
-simple_model:
-    constraints:
-        accepted_values:
-            - {field: simple, values: ["abc"]}
+version: 2
+models:
+- name: simple_model
+  columns:
+  - name: simple
+    tests:
+    - accepted_values:
+        values:
+        - abc

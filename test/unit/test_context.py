@@ -20,6 +20,7 @@ class TestVar(unittest.TestCase):
             original_file_path='model_one.sql',
             root_path='/usr/src/app',
             refs=[],
+            sources=[],
             depends_on={
                 'nodes': [],
                 'macros': []

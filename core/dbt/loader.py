@@ -103,7 +103,7 @@ class GraphLoader(object):
         parser = SchemaParser(self.root_project, self.all_projects,
                               self.macro_manifest)
         for project_name, project in self.all_projects.items():
-            tests, patches = parser.load_and_parse(
+            tests, patches, sources = parser.load_and_parse(
                 package_name=project_name,
                 root_dir=project.project_root,
                 relative_dirs=project.source_paths
@@ -115,6 +115,13 @@ class GraphLoader(object):
                         test, self.tests[unique_id],
                     )
                 self.tests[unique_id] = test
+
+            for unique_id, source in sources.items():
+                if unique_id in self.nodes:
+                    dbt.exceptions.raise_duplicate_resource_name(
+                        source, self.nodes[unique_id],
+                    )
+                self.nodes[unique_id] = source
 
             for name, patch in patches.items():
                 if name in self.patches:
@@ -143,6 +150,7 @@ class GraphLoader(object):
         )
         manifest.add_nodes(self.tests)
         manifest.patch_nodes(self.patches)
+        manifest = ParserUtils.process_sources(manifest, self.root_project)
         manifest = ParserUtils.process_refs(manifest,
                                             self.root_project.project_name)
         manifest = ParserUtils.process_docs(manifest, self.root_project)

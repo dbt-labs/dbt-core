@@ -807,6 +807,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'raw_sql': _read_file(model_sql_path).rstrip('\n'),
                     'refs': [['seed']],
+                    'sources': [],
                     'depends_on': {'nodes': ['seed.test.seed'], 'macros': []},
                     'unique_id': 'model.test.model',
                     'empty': False,
@@ -852,6 +853,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': self.dir(os.path.join('seed',
                                                                 'seed.csv')),
                     'refs': [],
+                    'sources': [],
                     'depends_on': {'nodes': [], 'macros': []},
                     'unique_id': 'seed.test.seed',
                     'empty': False,
@@ -887,6 +889,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': config_vars,
                         'tags': [],
                     },
+                    'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['model.test.model']},
                     'description': '',
                     'empty': False,
@@ -917,6 +920,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': config_vars,
                         'tags': [],
                     },
+                    'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['model.test.model']},
                     'description': '',
                     'empty': False,
@@ -925,7 +929,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': schema_yml_path,
                     'package_name': 'test',
                     'path': _normalize('schema_test/nothing_model_.sql'),
-                    'raw_sql': "{{ test_nothing(model=ref('model'), ) }}",
+                    'raw_sql': "{{ test.test_nothing(model=ref('model'), ) }}",
                     'refs': [['model']],
                     'resource_type': 'test',
                     'root_path': os.getcwd(),
@@ -948,6 +952,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': config_vars,
                         'tags': [],
                     },
+                    'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['model.test.model']},
                     'description': '',
                     'empty': False,
@@ -1017,6 +1022,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': config_vars,
                         'tags': [],
                     },
+                    'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},
                     'description': '',
                     'empty': False,
@@ -1059,6 +1065,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': config_vars,
                         'tags': [],
                     },
+                    'sources': [],
                     'depends_on': {
                         'macros': [],
                         'nodes': ['model.test.ephemeral_copy']
@@ -1123,6 +1130,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': config_vars,
                         'tags': [],
                     },
+                    'sources': [],
                     'depends_on': {
                         'macros': [],
                         'nodes': ['model.test.ephemeral_summary']
@@ -1177,6 +1185,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': {},
                         'tags': [],
                     },
+                    'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},
                     'description': '',
                     'empty': False,
@@ -1290,6 +1299,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': config_vars,
                         'tags': [],
                     },
+                    'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['seed.test.seed']},
                     'empty': False,
                     'fqn': ['test', 'clustered'],
@@ -1345,6 +1355,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'tags': [],
                         'vars': config_vars
                     },
+                    'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['seed.test.seed']},
                     'empty': False,
                     'fqn': ['test', 'multi_clustered'],
@@ -1398,6 +1409,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': config_vars,
                         'tags': [],
                     },
+                    'sources': [],
                     'depends_on': {
                         'macros': [],
                         'nodes': ['model.test.nested_table']
@@ -1454,6 +1466,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': config_vars,
                         'tags': [],
                     },
+                    'sources': [],
                     'depends_on': {
                         'macros': [],
                         'nodes': []
@@ -1484,6 +1497,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'original_file_path': self.dir('seed/seed.csv'),
                     'refs': [],
+                    'sources': [],
                     'depends_on': {
                         'nodes': [],
                         'macros': [],
@@ -1549,6 +1563,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     "package_name": "test",
                     "raw_sql": _read_file(model_sql_path).rstrip('\n'),
                     "refs": [["seed"]],
+                    "sources": [],
                     "depends_on": {
                         "nodes": ["seed.test.seed"],
                         "macros": [],
@@ -1606,6 +1621,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     "package_name": "test",
                     "original_file_path": self.dir("seed/seed.csv"),
                     "refs": [],
+                    "sources": [],
                     "depends_on": {
                         "nodes": [],
                         "macros": [],
@@ -1740,6 +1756,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'compiled': True,
                     'compiled_sql': compiled_sql,
                     'config': model_config,
+                    'sources': [],
                     'depends_on': {
                         'macros': [],
                         'nodes': ['seed.test.seed']
@@ -1791,6 +1808,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': {},
                         'tags': [],
                     },
+                    'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},
                     'description': '',
                     'empty': False,
@@ -1836,6 +1854,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': config_vars,
                         'tags': [],
                     },
+                    'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['model.test.model']},
                     'description': '',
                     'empty': False,
@@ -1880,6 +1899,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': config_vars,
                         'tags': [],
                     },
+                    'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['model.test.model']},
                     'description': '',
                     'empty': False,
@@ -1891,7 +1911,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': schema_yml_path,
                     'package_name': 'test',
                     'path': _normalize('schema_test/nothing_model_.sql'),
-                    'raw_sql': "{{ test_nothing(model=ref('model'), ) }}",
+                    'raw_sql': "{{ test.test_nothing(model=ref('model'), ) }}",
                     'refs': [['model']],
                     'resource_type': 'test',
                     'root_path': os.getcwd(),
@@ -1925,6 +1945,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': config_vars,
                         'tags': [],
                     },
+                    'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['model.test.model']},
                     'description': '',
                     'empty': False,
@@ -2007,6 +2028,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'quoting': {},
                         'tags': [],
                     },
+                    'sources': [],
                     'depends_on': {
                         'nodes': ['model.test.ephemeral_copy'],
                         'macros': []
@@ -2092,6 +2114,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'quoting': {},
                         'tags': [],
                     },
+                    'sources': [],
                     'depends_on': {
                         'nodes': ['model.test.ephemeral_summary'],
                         'macros': []
@@ -2165,6 +2188,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': {},
                         'tags': [],
                     },
+                    'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},
                     'description': '',
                     'empty': False,

@@ -60,6 +60,21 @@ def to_string(s):
             return str(s)
 
 
+def to_native_string(s):
+    if WHICH_PYTHON == 2:
+        if isinstance(s, unicode):
+            return str(s)
+        elif isinstance(s, basestring):
+            return s
+        else:
+            return str(s)
+    else:
+        if isinstance(s, basestring):
+            return s
+        else:
+            return str(s)
+
+
 def write_file(path, s):
     if WHICH_PYTHON == 2:
         with codecs.open(path, 'w', encoding='utf-8') as f:

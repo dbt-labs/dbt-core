@@ -1,5 +1,5 @@
 
-{% macro test_column_type(model, field, type) %}
+{% macro test_column_type(model, column_name, type) %}
 
     {% set cols = adapter.get_columns_in_relation(model) %}
 
@@ -8,7 +8,7 @@
         {% set _ = col_types.update({col.name: col.data_type}) %}
     {% endfor %}
 
-    {% set val = 0 if col_types[field] == type else 1 %}
+    {% set val = 0 if col_types[column_name] == type else 1 %}
 
     select {{ val }} as pass_fail
 

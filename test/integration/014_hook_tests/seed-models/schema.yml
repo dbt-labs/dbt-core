@@ -1,5 +1,7 @@
-
-example_seed:
-    constraints:
-        not_null:
-            - new_col
+version: 2
+models:
+- name: example_seed
+  columns:
+  - name: new_col
+    tests:
+    - not_null
