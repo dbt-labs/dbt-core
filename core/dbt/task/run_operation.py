@@ -19,7 +19,7 @@ from dbt.events.types import (
 class RunOperationTask(ManifestTask):
     def _get_macro_parts(self):
         macro_name = self.args.macro
-        if '.' in macro_name:
+        if "." in macro_name:
             package_name, macro_name = macro_name.split(".", 1)
         else:
             package_name = None

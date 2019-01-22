@@ -892,13 +892,14 @@ class BaseAdapter(metaclass=AdapterMeta):
         macro = manifest.find_macro_by_name(macro_name, self.config.project_name, project)
         if macro is None:
             if project is None:
-                package_name = 'any package'
+                package_name = "any package"
             else:
                 package_name = 'the "{}" package'.format(project)
 
             raise RuntimeException(
-                'dbt could not find a macro with the name "{}" in {}'
-                .format(macro_name, package_name)
+                'dbt could not find a macro with the name "{}" in {}'.format(
+                    macro_name, package_name
+                )
             )
         # This causes a reference cycle, as generate_runtime_macro_context()
         # ends up calling get_adapter, so the import has to be here.
