@@ -20,6 +20,7 @@ import dbt.task.archive as archive_task
 import dbt.task.generate as generate_task
 import dbt.task.serve as serve_task
 import dbt.task.freshness as freshness_task
+import dbt.task.run_operation as run_operation_task
 from dbt.adapters.factory import reset_adapters
 
 import dbt.tracking
@@ -722,6 +723,33 @@ def parse_args(args):
     _build_docs_serve_subparser(docs_subs, base_subparser)
     _build_test_subparser(subs, base_subparser)
     _build_source_snapshot_freshness_subparser(source_subs, base_subparser)
+
+    sub = subs.add_parser(
+        'run-operation',
+        parents=[base_subparser],
+        help="""
+            (beta) Run the named macro with any supplied arguments. This
+            subcommand is unstable and subject to change in a future release
+            of dbt. Please use it with caution"""
+    )
+    sub.add_argument(
+        '--macro',
+        required=True,
+        help="""
+            Specify the macro to invoke. dbt will call this macro with the
+            supplied arguments and then exit"""
+    )
+    sub.add_argument(
+        '--args',
+        type=str,
+        default='{}',
+        help="""
+            Supply arguments to the macro. This dictionary will be mapped
+            to the keyword arguments defined in the selected macro. This
+            argument should be a YAML string, eg. '{my_variable: my_value}'"""
+    )
+    sub.set_defaults(cls=run_operation_task.RunOperationTask,
+                     which='run-operation')
 
     if len(args) == 0:
         p.print_help()
