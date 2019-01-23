@@ -19,6 +19,7 @@ class TestSimpleArchive(DBTIntegrationTest):
             source_table = source_table.upper()
 
         return {
+            "data-paths": ['test/integration/004_simple_archive_test/data'],
             "archive": [
                 {
                     "source_schema": self.unique_schema(),
@@ -29,20 +30,22 @@ class TestSimpleArchive(DBTIntegrationTest):
                             "target_table": "archive_actual",
                             "updated_at": '"updated_at"',
                             "unique_key": '''"id" || '-' || "first_name"'''
-                        }
-                    ]
-                }
-            ]
+                        },
+                    ],
+                },
+            ],
         }
 
-    @attr(type='postgres')
-    def test__postgres__simple_archive(self):
-        self.use_profile('postgres')
-        self.use_default_project()
-        self.run_sql_file("test/integration/004_simple_archive_test/seed.sql")
+    def dbt_run_seed_archive(self):
+        self.run_sql_file('test/integration/004_simple_archive_test/seed.sql')
 
         results = self.run_dbt(["archive"])
         self.assertEqual(len(results),  1)
+
+
+    @attr(type='postgres')
+    def test__postgres__simple_archive(self):
+        self.dbt_run_seed_archive()
 
         self.assertTablesEqual("archive_expected","archive_actual")
 
@@ -56,12 +59,7 @@ class TestSimpleArchive(DBTIntegrationTest):
 
     @attr(type='snowflake')
     def test__snowflake__simple_archive(self):
-        self.use_profile('snowflake')
-        self.use_default_project()
-        self.run_sql_file("test/integration/004_simple_archive_test/seed.sql")
-
-        results = self.run_dbt(["archive"])
-        self.assertEqual(len(results),  1)
+        self.dbt_run_seed_archive()
 
         self.assertTablesEqual("ARCHIVE_EXPECTED", "ARCHIVE_ACTUAL")
 
@@ -75,12 +73,7 @@ class TestSimpleArchive(DBTIntegrationTest):
 
     @attr(type='redshift')
     def test__redshift__simple_archive(self):
-        self.use_profile('redshift')
-        self.use_default_project()
-        self.run_sql_file("test/integration/004_simple_archive_test/seed.sql")
-
-        results = self.run_dbt(["archive"])
-        self.assertEqual(len(results),  1)
+        self.dbt_run_seed_archive()
 
         self.assertTablesEqual("archive_expected","archive_actual")
 
@@ -91,6 +84,16 @@ class TestSimpleArchive(DBTIntegrationTest):
         self.assertEqual(len(results),  1)
 
         self.assertTablesEqual("archive_expected","archive_actual")
+
+    @attr(type='presto')
+    def test__presto__simple_archive_disabled(self):
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        # presto does not run archives
+        results = self.run_dbt(["archive"], expect_pass=False)
+        self.assertEqual(len(results),  1)
+        self.assertIn('not implemented for presto', results[0].error)
+
 
 
 class TestSimpleArchiveBigquery(DBTIntegrationTest):
