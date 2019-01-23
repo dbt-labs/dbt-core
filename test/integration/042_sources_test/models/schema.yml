@@ -4,7 +4,8 @@ sources:
     loader: custom
     tables:
       - name: test_table
-        sql_table_name: "{{ var('test_run_schema') }}.source"
+        # I don't know what would compel you to do this, but the important thing is that you can
+        sql_table_name: "{{ var(env_var('DBT_TEST_SCHEMA_NAME_VARIABLE')) }}.source"
         columns:
           - name: favorite_color
             description: The favorite color
