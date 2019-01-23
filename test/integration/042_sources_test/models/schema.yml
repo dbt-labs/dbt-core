@@ -1,0 +1,24 @@
+version: 2
+sources:
+  - name: test_source
+    loader: custom
+    tables:
+      - name: test_table
+        sql_table_name: "{{ var('test_run_schema') }}.source"
+        columns:
+          - name: favorite_color
+            description: The favorite color
+          - name: id
+            description: The user ID
+            tests:
+              - unique
+              - not_null
+          - name: first_name
+            description: The first name of the user
+            tests: []
+          - name: email
+            description: The email address of the user
+          - name: ip_address
+            description: The last IP address the user logged in from
+          - name: updated_at
+            description: The last update time for this user
