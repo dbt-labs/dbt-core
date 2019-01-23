@@ -14,4 +14,10 @@ The number of instances of the first name
 A view of the summary of the ephemeral copy of the seed data
 {% enddocs %}
 
+{% docs source_info %}
+My source
+{% enddocs %}
 
+{% docs table_info %}
+My table
+{% enddocs %}

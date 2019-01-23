@@ -329,6 +329,8 @@ class Manifest(APIObject):
         return to_return
 
     def _model_matches_schema_and_table(self, schema, table, model):
+        if model.resource_type == NodeType.Source:
+            return False
         return (model.schema.lower() == schema.lower() and
                 model.alias.lower() == table.lower())
 
