@@ -318,6 +318,10 @@ class BaseConnectionManager(object):
         if connection.state in {'closed', 'init'}:
             return connection
 
+        if connection.transaction_open and connection.handle:
+            connection.handle.rollback()
+        connection.transaction_open = False
+
         # On windows, sometimes connection handles don't have a close() attr.
         if hasattr(connection.handle, 'close'):
             connection.handle.close()

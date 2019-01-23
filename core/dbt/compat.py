@@ -22,10 +22,12 @@ except NameError:
 if WHICH_PYTHON == 2:
     basestring = basestring
     bigint = long
+    NUMBERS = DECIMALS + (int, float, long)
     import __builtin__ as builtins
 else:
     basestring = str
     bigint = int
+    NUMBERS = DECIMALS + (int, float)
     import builtins
 
 if WHICH_PYTHON == 2:

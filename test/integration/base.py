@@ -47,7 +47,7 @@ class TestArgs(object):
 
 
 def _profile_from_test_name(test_name):
-    adapter_names = ('postgres', 'snowflake', 'redshift', 'bigquery')
+    adapter_names = ('postgres', 'snowflake', 'redshift', 'bigquery', 'presto')
     adapters_in_name =  sum(x in test_name for x in adapter_names)
     if adapters_in_name > 1:
         raise ValueError('test names must only have 1 profile choice embedded')
@@ -179,6 +179,27 @@ class DBTIntegrationTest(unittest.TestCase):
             }
         }
 
+    def presto_profile(self):
+        return {
+            'config': {
+                'send_anonymous_usage_stats': False
+            },
+            'test': {
+                'outputs': {
+                    'default2': {
+                        'type': 'presto',
+                        'method': 'none',
+                        'threads': 1,
+                        'schema': self.unique_schema(),
+                        'database': 'hive',
+                        'host': 'presto',
+                        'port': 8080,
+                    },
+                },
+                'target': 'default2'
+            }
+        }
+
     @property
     def packages_config(self):
         return None
@@ -217,6 +238,8 @@ class DBTIntegrationTest(unittest.TestCase):
             return self.bigquery_profile()
         elif adapter_type == 'redshift':
             return self.redshift_profile()
+        elif adapter_type == 'presto':
+            return self.presto_profile()
         else:
             raise ValueError('invalid adapter type {}'.format(adapter_type))
 
@@ -290,10 +313,8 @@ class DBTIntegrationTest(unittest.TestCase):
         config = RuntimeConfig.from_args(TestArgs(kwargs))
 
         adapter = get_adapter(config)
-
         adapter.cleanup_connections()
-        connection = adapter.acquire_connection('__test')
-        self.adapter_type = connection.type
+        self.adapter_type = adapter.type()
         self.adapter = adapter
         self.config = config
 
@@ -350,7 +371,7 @@ class DBTIntegrationTest(unittest.TestCase):
             self._created_schemas.add(schema_fqn)
 
     def _drop_schema_named(self, database, schema):
-        if self.adapter_type == 'bigquery':
+        if self.adapter_type == 'bigquery' or self.adapter_type == 'presto':
             self.adapter.drop_schema(
                 database, schema, '__test'
             )
@@ -364,11 +385,11 @@ class DBTIntegrationTest(unittest.TestCase):
         if self.setup_alternate_db and self.adapter_type == 'snowflake':
             self._create_schema_named(self.alternative_database, schema)
 
-    def _drop_schemas_bigquery(self):
+    def _drop_schemas_adapter(self):
         schema = self.unique_schema()
-        if self.adapter_type == 'bigquery':
+        if self.adapter_type == 'bigquery' or self.adapter_type == 'presto':
             self._drop_schema_named(self.default_database, schema)
-            if self.setup_alternate_db:
+            if self.setup_alternate_db and self.alternative_database:
                 self._drop_schema_named(self.alternative_database, schema)
 
     def _drop_schemas_sql(self):
@@ -378,7 +399,10 @@ class DBTIntegrationTest(unittest.TestCase):
             self._get_schema_fqn(self.default_database, schema)
         )
         # on postgres/redshift, this will make you sad
-        if self.setup_alternate_db and self.adapter_type == 'snowflake':
+        drop_alternative = self.setup_alternate_db and \
+                self.adapter_type not in {'postgres', 'redshift'} and \
+                self.alternative_database
+        if drop_alternative:
             self._created_schemas.add(
                 self._get_schema_fqn(self.alternative_database, schema)
             )
@@ -389,8 +413,8 @@ class DBTIntegrationTest(unittest.TestCase):
         self._created_schemas.clear()
 
     def _drop_schemas(self):
-        if self.adapter_type == 'bigquery':
-            self._drop_schemas_bigquery()
+        if self.adapter_type == 'bigquery' or self.adapter_type == 'presto':
+            self._drop_schemas_adapter()
         else:
             self._drop_schemas_sql()
 
@@ -465,6 +489,29 @@ class DBTIntegrationTest(unittest.TestCase):
         else:
             return list(res)
 
+    def run_sql_presto(self, sql, fetch, connection_name=None):
+        conn = self.adapter.acquire_connection(connection_name)
+        cursor = conn.handle.cursor()
+        try:
+            cursor.execute(sql)
+            if fetch == 'one':
+                return cursor.fetchall()[0]
+            elif fetch == 'all':
+                return cursor.fetchall()
+            else:
+                # we have to fetch.
+                cursor.fetchall()
+        except Exception as e:
+            conn.handle.rollback()
+            conn.transaction_open = False
+            print(sql)
+            print(e)
+            raise
+        else:
+            conn.handle.commit()
+            conn.transaction_open = False
+
+
     def run_sql(self, query, fetch='None', kwargs=None, connection_name=None):
         if connection_name is None:
             connection_name = '__test'
@@ -475,6 +522,8 @@ class DBTIntegrationTest(unittest.TestCase):
         sql = self.transform_sql(query, kwargs=kwargs)
         if self.adapter_type == 'bigquery':
             return self.run_sql_bigquery(sql, fetch)
+        elif self.adapter_type == 'presto':
+            return self.run_sql_presto(sql, fetch, connection_name)
 
         conn = self.adapter.acquire_connection(connection_name)
         with conn.handle.cursor() as cursor:
@@ -493,6 +542,15 @@ class DBTIntegrationTest(unittest.TestCase):
                 print(query)
                 print(e)
                 raise e
+            finally:
+                conn.transaction_open = False
+
+    def _ilike(self, target, value):
+        # presto has this regex substitution monstrosity instead of 'ilike'
+        if self.adapter_type == 'presto':
+            return r"regexp_like({}, '(?i)\A{}\Z')".format(target, value)
+        else:
+            return "{} ilike '{}'".format(target, value)
 
     def get_many_table_columns(self, tables, schema, database=None):
         if self.adapter_type == 'bigquery':
@@ -504,22 +562,29 @@ class DBTIntegrationTest(unittest.TestCase):
                     result.append((table, col.column, col.dtype, col.char_size))
             result.sort(key=lambda x: '{}.{}'.format(x[0], x[1]))
             return result
+        elif self.adapter_type == 'presto':
+            columns = 'table_name, column_name, data_type'
+        else:
+            columns = 'table_name, column_name, data_type, character_maximum_length'
 
         sql = """
-                select table_name, column_name, data_type, character_maximum_length
+                select {columns}
                 from {db_string}information_schema.columns
-                where table_schema ilike '{schema_filter}'
+                where {schema_filter}
                   and ({table_filter})
                 order by column_name asc"""
 
         db_string = '' if database is None else database + '.'
 
-
-        table_filters = ["table_name ilike '{}'".format(table.replace('"', '')) for table in tables]
-        table_filters_s = " OR ".join(table_filters)
+        table_filters_s = " OR ".join(
+            self._ilike('table_name', table.replace('"', ''))
+            for table in tables
+        )
+        schema_filter = self._ilike('table_schema', schema)
 
         sql = sql.format(
-                schema_filter=schema,
+                columns=columns,
+                schema_filter=schema_filter,
                 table_filter=table_filters_s,
                 db_string=db_string)
 
@@ -528,7 +593,11 @@ class DBTIntegrationTest(unittest.TestCase):
                       key=lambda x: "{}.{}".format(x[0], x[1]))
 
     def filter_many_columns(self, column):
-        table_name, column_name, data_type, char_size = column
+        if len(column) == 3:
+            table_name, column_name, data_type = column
+            char_size = None
+        else:
+            table_name, column_name, data_type, char_size = column
         # in snowflake, all varchar widths are created equal
         if self.adapter_type == 'snowflake':
             if char_size and char_size < 16777216:
@@ -576,11 +645,12 @@ class DBTIntegrationTest(unittest.TestCase):
                              else table_type
                         end as materialization
                 from information_schema.tables
-                where table_schema ilike '{}'
+                where {}
                 order by table_name
                 """
 
-        result = self.run_sql(sql.format(schema), fetch='all')
+        sql = sql.format(self._ilike('table_schema', schema))
+        result = self.run_sql(sql, fetch='all')
 
         return {model_name: materialization for (model_name, materialization) in result}
 
@@ -826,10 +896,18 @@ class DBTIntegrationTest(unittest.TestCase):
         table_a_result = self.get_relation_columns(relation_a)
         table_b_result = self.get_relation_columns(relation_b)
 
-        self.assertEquals(
-            table_a_result,
-            table_b_result
-        )
+        self.assertEqual(len(table_a_result), len(table_b_result))
+        for a_column, b_column in zip(table_a_result, table_b_result):
+            a_name, a_type, a_size = a_column
+            b_name, b_type, b_size = b_column
+            self.assertEqual(a_name, b_name)
+            self.assertEqual(a_type, b_type)
+
+            if self.adapter_type == 'presto' and None in (a_size, b_size):
+                # None is compatible with any size
+                continue
+
+            self.assertEqual(a_size, b_size)
 
     def assertEquals(self, *args, **kwargs):
         # assertEquals is deprecated. This makes the warnings less chatty

@@ -1,4 +1,4 @@
-version: '2'
+version: '3.5'
 services:
 
   database:
@@ -22,3 +22,7 @@ services:
     working_dir: /usr/src/app
     depends_on:
       - database
+
+networks:
+  default:
+    name: dbt-net

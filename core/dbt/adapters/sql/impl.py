@@ -33,8 +33,6 @@ class SQLAdapter(BaseAdapter):
     adapter's internal project.
 
     Methods to implement:
-        - exception_handler
-        - type
         - date_function
 
     Macros to implement:
