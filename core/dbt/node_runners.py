@@ -205,9 +205,11 @@ class BaseRunner(object):
         self.skip_cause = cause
 
     @classmethod
-    def get_model_schemas(cls, manifest):
+    def get_model_schemas(cls, manifest, selected_uids):
         schemas = set()
         for node in manifest.nodes.values():
+            if node.unique_id not in selected_uids:
+                continue
             if cls.is_refable(node) and not cls.is_ephemeral(node):
                 schemas.add((node.database, node.schema))
 
@@ -218,7 +220,7 @@ class BaseRunner(object):
         pass
 
     @classmethod
-    def before_run(self, config, adapter, manifest):
+    def before_run(self, config, adapter, manifest, selected_uids):
         pass
 
     @classmethod
@@ -339,8 +341,8 @@ class ModelRunner(CompileRunner):
             raise
 
     @classmethod
-    def create_schemas(cls, config, adapter, manifest):
-        required_schemas = cls.get_model_schemas(manifest)
+    def create_schemas(cls, config, adapter, manifest, selected_uids):
+        required_schemas = cls.get_model_schemas(manifest, selected_uids)
 
         # Snowflake needs to issue a "use {schema}" query, where schema
         # is the one defined in the profile. Create this schema if it
@@ -364,10 +366,10 @@ class ModelRunner(CompileRunner):
         adapter.set_relations_cache(manifest)
 
     @classmethod
-    def before_run(cls, config, adapter, manifest):
+    def before_run(cls, config, adapter, manifest, selected_uids):
         cls.populate_adapter_cache(config, adapter, manifest)
         cls.safe_run_hooks(config, adapter, manifest, RunHookType.Start, {})
-        cls.create_schemas(config, adapter, manifest)
+        cls.create_schemas(config, adapter, manifest, selected_uids)
 
     @classmethod
     def print_results_line(cls, results, execution_time):
