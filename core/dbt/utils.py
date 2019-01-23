@@ -423,6 +423,16 @@ def invalid_ref_fail_unless_test(node, target_model_name,
             target_model_package)
 
 
+def invalid_source_fail_unless_test(node, target_name, target_table_name):
+    if node.get('resource_type') == NodeType.Test:
+        msg = dbt.exceptions.source_disabled_message(node, target_name,
+                                                     target_table_name)
+        logger.warning('WARNING: {}'.format(msg))
+    else:
+        dbt.exceptions.source_target_not_found(node, target_name,
+                                               target_table_name)
+
+
 def parse_cli_vars(var_string):
     try:
         cli_vars = yaml_helper.load_yaml_text(var_string)

@@ -206,14 +206,12 @@ class ParserUtils(object):
                     node.get('package_name'))
 
                 if target_source is None:
-                    # this folows the same pattern as refs as
+                    # this folows the same pattern as refs
                     node.config['enabled'] = False
-                    dbt.utils.invalid_ref_fail_unless_test(
-                            node,
-                            '{}.{}'.format(source_name, table_name),
-                            target_model_package,
-                            disabled=False
-                    )
+                    dbt.utils.invalid_source_fail_unless_test(
+                        node,
+                        source_name,
+                        table_name)
                     continue
                 target_source_id = target_source.unique_id
                 node.depends_on['nodes'].append(target_source_id)

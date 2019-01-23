@@ -333,6 +333,19 @@ def ref_target_not_found(model, target_model_name, target_model_package):
     raise_compiler_error(msg, model)
 
 
+def source_disabled_message(model, target_name, target_table_name):
+    return ("{} '{}' ({}) depends on source '{}.{}' which was not found"
+            .format(model.get('resource_type').title(),
+                    model.get('unique_id'),
+                    model.get('original_file_path'),
+                    target_name,
+                    target_table_name))
+
+
+def source_target_not_found(model, target_name, target_table_name):
+    raise_compiler_error(msg, model)
+
+
 def ref_disabled_dependency(model, target_model):
     raise_compiler_error(
         "Model '{}' depends on model '{}' which is disabled in "

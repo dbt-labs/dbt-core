@@ -1,6 +1,6 @@
 from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest, use_profile
-
+import os
 
 class TestSources(DBTIntegrationTest):
     @property
@@ -27,4 +27,5 @@ class TestSources(DBTIntegrationTest):
             '--vars',
             '{{test_run_schema: {}}}'.format(self.unique_schema())
         ])
-        self.assertEqual(len(results), 2)
+        self.assertEqual(len(results), 3)
+        del os.environ['DBT_TEST_SCHEMA_NAME_VARIABLE']

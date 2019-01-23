@@ -23,3 +23,9 @@ sources:
             description: The last IP address the user logged in from
           - name: updated_at
             description: The last update time for this user
+        tests:
+          - relationships:
+              # do this as a table-level test, just to test out that aspect
+              column_name: favorite_color
+              to: ref('descendant_model')
+              field: favorite_color
