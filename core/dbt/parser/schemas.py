@@ -160,10 +160,10 @@ def _build_test_args(test, name):
     return test_name, test_args
 
 
-def warn_invalid(filepath, key, value):
+def warn_invalid(filepath, key, value, explain):
     msg = (
-        "Invalid test config given in {} @ {}: {} (expected a dict)"
-    ).format(filepath, key, value)
+        "Invalid test config given in {} @ {}: {} {}"
+    ).format(filepath, key, value, explain)
     if dbt.flags.STRICT_MODE:
         dbt.exceptions.raise_compiler_error(msg, value)
     dbt.utils.compiler_warning(value, msg)
@@ -176,14 +176,14 @@ def _filter_validate(filepath, location, values, validate):
     """
     for value in values:
         if not isinstance(value, dict):
-            warn_invalid(filepath, location, value)
+            warn_invalid(filepath, location, value, '(expected a dict)')
             continue
         try:
             yield validate(**value)
         except dbt.exceptions.JSONValidationException as exc:
             # we don't want to fail the full run, but we do want to fail
             # parsing this file
-            warn_invalid(filepath, location, value)
+            warn_invalid(filepath, location, value, '- '+exc.msg)
             continue
 
 
@@ -290,7 +290,6 @@ class SchemaModelParser(SchemaBaseTestParser):
         return get_nice_schema_test_name(test_type, target['name'], test_args)
 
     def parse_models_entry(self, model_dict, path, package_name, root_dir):
-        # TODO: this is soooo similar to the source tests
         model_name = model_dict['name']
         refs = ParserRef()
         for column in model_dict.get('columns', []):
@@ -379,7 +378,6 @@ class SchemaSourceParser(SchemaBaseTestParser):
         return ParsedSourceDefinition(
             package_name=package_name,
             root_path=root_dir,
-            # TODO: Do I need to change this?
             path=path,
             original_file_path=path,
             columns=refs.column_info,

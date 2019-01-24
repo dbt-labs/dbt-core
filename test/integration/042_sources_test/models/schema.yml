@@ -1,4 +1,12 @@
 version: 2
+models:
+  - name: descendant_model
+    columns:
+      - name: favorite_color
+        tests:
+          - relationships:
+             to: source('test_source', 'test_table')
+             field: favorite_color
 sources:
   - name: test_source
     loader: custom

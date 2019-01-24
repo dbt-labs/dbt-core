@@ -639,7 +639,7 @@ PARSED_SOURCE_DEFINITION_CONTRACT = deep_merge(
         # note that while required, loaded_at_field and freshness may be null
         # (and either of freshness's members may be null as well!)
         'required': [
-            'source_name', 'source_description', 'loader', 'loaded_at_field',
+            'source_name', 'source_description', 'loaded_at_field',
             'freshness', 'description', 'columns', 'docrefs', 'sql_table_name',
         ],
     }

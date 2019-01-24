@@ -27,5 +27,5 @@ class TestSources(DBTIntegrationTest):
             '--vars',
             '{{test_run_schema: {}}}'.format(self.unique_schema())
         ])
-        self.assertEqual(len(results), 3)
+        self.assertEqual(len(results), 4)
         del os.environ['DBT_TEST_SCHEMA_NAME_VARIABLE']

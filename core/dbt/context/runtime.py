@@ -73,10 +73,10 @@ def source(db_wrapper, model, config, manifest):
         )
 
         if target_source is None:
-            dbt.exceptions.ref_target_not_found(
+            dbt.exceptions.source_target_not_found(
                 model,
-                '{}.{}'.format(source_name, table_name),
-                None)
+                source_name,
+                table_name)
 
         model.sources.append([source_name, table_name])
         return target_source.sql_table_name

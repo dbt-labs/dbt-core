@@ -343,6 +343,7 @@ def source_disabled_message(model, target_name, target_table_name):
 
 
 def source_target_not_found(model, target_name, target_table_name):
+    msg = source_disabled_message(model, target_name, target_table_name)
     raise_compiler_error(msg, model)
 
 
@@ -563,7 +564,7 @@ def raise_invalid_schema_yml_version(path, issue):
     raise_compiler_error(
         'The schema file at {} is invalid because {}. Please consult the '
         'documentation for more information on schema.yml syntax:\n\n'
-        'https://docs.getdbt.com/v0.11/docs/schemayml-files'
+        'https://docs.getdbt.com/docs/schemayml-filesf'
         .format(path, issue)
     )
 
