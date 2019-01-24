@@ -273,13 +273,20 @@ def run_cmd(cwd, cmd, env=None):
     if len(cmd) == 0:
         raise dbt.exceptions.CommandError(cwd, cmd)
 
+    # the env argument replaces the environment entirely, which has exciting
+    # consequences on Windows! Do an update instead.
+    full_env = env
+    if env is not None:
+        full_env = os.environ.copy()
+        full_env.update(env)
+
     try:
         proc = subprocess.Popen(
             cmd,
             cwd=cwd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            env=env)
+            env=full_env)
 
         out, err = proc.communicate()
     except OSError as exc:
