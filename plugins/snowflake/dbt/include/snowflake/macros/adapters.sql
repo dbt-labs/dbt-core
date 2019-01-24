@@ -62,7 +62,7 @@
 {% macro snowflake__check_schema_exists(database, schema) -%}
   {% call statement('check_schema_exists', fetch_result=True) -%}
         select count(*)
-        from {{ information_schema_name(database) }}
+        from {{ information_schema_name(database) }}.schemata
         where upper(schema_name) = upper('{{ schema }}')
             and upper(catalog_name) = upper('{{ database }}')
   {%- endcall %}
