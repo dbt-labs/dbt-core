@@ -81,7 +81,7 @@ def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirec
 
 
 def list_tags(cwd):
-    out, err = run_cmd(cwd, ['git', 'tag', '--list'], env={'LC_ALL': 'C'})
+    out, err = run_cmd(cwd, ["git", "tag", "--list"], env={"LC_ALL": "C"})
     tags = out.decode('utf-8').strip().split("\n")
     return tags
 
@@ -105,8 +105,7 @@ def _checkout(cwd, repo, revision):
     else:
         spec = "origin/{}".format(revision)
 
-    out, err = run_cmd(cwd, ['git', 'reset', '--hard', spec],
-                       env={'LC_ALL': 'C'})
+    out, err = run_cmd(cwd, ["git", "reset", "--hard", spec], env={"LC_ALL": "C"})
     return out, err
 
 
@@ -121,13 +120,13 @@ def checkout(cwd, repo, revision=None):
 
 
 def get_current_sha(cwd):
-    out, err = run_cmd(cwd, ['git', 'rev-parse', 'HEAD'], env={'LC_ALL': 'C'})
+    out, err = run_cmd(cwd, ["git", "rev-parse", "HEAD"], env={"LC_ALL": "C"})
 
     return out.decode('utf-8')
 
 
 def remove_remote(cwd):
-    return run_cmd(cwd, ['git', 'remote', 'rm', 'origin'], env={'LC_ALL': 'C'})
+    return run_cmd(cwd, ["git", "remote", "rm", "origin"], env={"LC_ALL": "C"})
 
 
 def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
