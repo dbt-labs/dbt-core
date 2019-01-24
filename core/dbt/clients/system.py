@@ -420,10 +420,7 @@ def run_cmd(cwd: str, cmd: List[str], env: Optional[Dict[str, Any]] = None) -> T
             cmd = [os.path.abspath(exe_pth)] + list(cmd[1:])
         proc = subprocess.Popen(
             cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=full_env
-            cwd=cwd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=full_env)
+        )
 
         out, err = proc.communicate()
     except OSError as exc:
