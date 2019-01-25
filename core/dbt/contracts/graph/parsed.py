@@ -624,7 +624,6 @@ PARSED_SOURCE_DEFINITION_CONTRACT = deep_merge(
             'loader': {
                 'type': 'string',
                 'description': 'The user-defined loader for this source',
-                'minLength': 1,
             },
             'sql_table_name': {
                 'type': 'string',
@@ -639,7 +638,7 @@ PARSED_SOURCE_DEFINITION_CONTRACT = deep_merge(
         # note that while required, loaded_at_field and freshness may be null
         # (and either of freshness's members may be null as well!)
         'required': [
-            'source_name', 'source_description', 'loaded_at_field',
+            'source_name', 'source_description', 'loaded_at_field', 'loader',
             'freshness', 'description', 'columns', 'docrefs', 'sql_table_name',
         ],
     }

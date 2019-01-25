@@ -386,7 +386,7 @@ class SchemaSourceParser(SchemaBaseTestParser):
             description=description,
             source_name=source.name,
             source_description=source_description,
-            loader=source.loader,
+            loader=source.get('loader', ''),
             sql_table_name=table.sql_table_name,
             docrefs=refs.docrefs,
             loaded_at_field=loaded_at_field,
