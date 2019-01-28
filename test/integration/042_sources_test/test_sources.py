@@ -1,6 +1,7 @@
 from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest, use_profile
 import os
+import dbt.exceptions
 
 class TestSources(DBTIntegrationTest):
     @property
@@ -11,21 +12,61 @@ class TestSources(DBTIntegrationTest):
     def models(self):
         return "test/integration/042_sources_test/models"
 
-    @use_profile('postgres')
-    def test_basic_source_def(self):
+    def setUp(self):
+        super(TestSources, self).setUp()
         os.environ['DBT_TEST_SCHEMA_NAME_VARIABLE'] = 'test_run_schema'
         self.run_sql_file('test/integration/042_sources_test/source.sql',
                           kwargs={'schema':self.unique_schema()})
-        self.run_dbt([
-            'run',
-            '--vars',
-            '{{test_run_schema: {}}}'.format(self.unique_schema())
-        ])
+
+    def tearDown(self):
+        del os.environ['DBT_TEST_SCHEMA_NAME_VARIABLE']
+        super(TestSources, self).tearDown()
+
+    def run_dbt_with_vars(self, cmd, *args, **kwargs):
+        cmd.extend(['--vars',
+                    '{{test_run_schema: {}}}'.format(self.unique_schema())])
+        return self.run_dbt(cmd, *args, **kwargs)
+
+    @use_profile('postgres')
+    def test_basic_source_def(self):
+        results = self.run_dbt_with_vars(['run'])
+        self.assertEqual(len(results), 2)
         self.assertTablesEqual('source', 'descendant_model')
-        results = self.run_dbt([
+        self.assertTablesEqual('descendant_model', 'nonsource_descendant')
+        results = self.run_dbt_with_vars(['test'])
+        self.assertEqual(len(results), 4)
+
+    @use_profile('postgres')
+    def test_source_selector(self):
+        # only one of our models explicitly depends upon a source
+        results = self.run_dbt_with_vars([
+            'run',
+            '--models',
+            'source:test_source.test_table+'
+        ])
+        self.assertEqual(len(results), 1)
+        self.assertTablesEqual('source', 'descendant_model')
+        results = self.run_dbt_with_vars([
             'test',
-            '--vars',
-            '{{test_run_schema: {}}}'.format(self.unique_schema())
+            '--models',
+            'source:test_source.test_table+'
         ])
         self.assertEqual(len(results), 4)
-        del os.environ['DBT_TEST_SCHEMA_NAME_VARIABLE']
+
+    @use_profile('postgres')
+    def test_empty_source_def(self):
+        # sources themselves can never be selected, so nothing should be run
+        results = self.run_dbt_with_vars([
+            'run',
+            '--models',
+            'source:test_source.test_table'
+        ])
+        self.assertEqual(len(results), 0)
+
+    @use_profile('postgres')
+    def test_invalid_source_def(self):
+        with self.assertRaises(dbt.exceptions.RuntimeException) as exc:
+            self.run_dbt_with_vars([
+                'run', '--models', 'source:test_source+'
+            ])
+            self.assertIn('Invalid source selector value', str(exc))

@@ -172,7 +172,6 @@ class Compiler(object):
                 linker.dependency(
                     node.unique_id,
                     (manifest.nodes.get(dependency).unique_id))
-
             else:
                 dbt.exceptions.dependency_not_found(node, dependency)
 

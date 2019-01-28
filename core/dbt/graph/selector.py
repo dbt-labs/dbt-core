@@ -15,6 +15,7 @@ SELECTOR_DELIMITER = ':'
 class SELECTOR_FILTERS(object):
     FQN = 'fqn'
     TAG = 'tag'
+    SOURCE = 'source'
 
 
 def split_specs(node_specs):
@@ -135,6 +136,27 @@ class NodeSelector(object):
         self.linker = linker
         self.manifest = manifest
 
+    def _node_iterator(self, graph, exclude, include):
+        for node in graph.nodes():
+            real_node = self.manifest.nodes[node]
+            if include is not None and real_node.resource_type not in include:
+                continue
+            if exclude is not None and real_node.resource_type in exclude:
+                continue
+            yield node, real_node
+
+    def parsed_nodes(self, graph):
+        return self._node_iterator(
+            graph,
+            exclude=(NodeType.Source,),
+            include=None)
+
+    def source_nodes(self, graph):
+        return self._node_iterator(
+            graph,
+            exclude=None,
+            include=(NodeType.Source,))
+
     def get_nodes_by_qualified_name(self, graph, qualified_name_selector):
         """Yield all nodes in the graph that match the qualified_name_selector.
 
@@ -142,23 +164,29 @@ class NodeSelector(object):
         """
         qualified_name = qualified_name_selector.split(".")
         package_names = get_package_names(graph)
-        for node in graph.nodes():
-            real_node = self.manifest.nodes[node]
-            if real_node.resource_type == NodeType.Source:
-                continue
-            fqn_ish = real_node.fqn
-            if _node_is_match(qualified_name, package_names, fqn_ish):
+        for node, real_node in self.parsed_nodes(graph):
+            if _node_is_match(qualified_name, package_names, real_node.fqn):
                 yield node
 
     def get_nodes_by_tag(self, graph, tag_name):
         """ yields nodes from graph that have the specified tag """
-        for node in graph.nodes():
-            real_node = self.manifest.nodes[node]
-            if real_node.resource_type == NodeType.Source:
-                continue
-            tags = real_node.tags
+        for node, real_node in self.parsed_nodes(graph):
+            if tag_name in real_node.tags:
+                yield node
 
-            if tag_name in tags:
+    def get_nodes_by_source(self, graph, source_full_name):
+        """yields nodes from graph are the specified source."""
+        if source_full_name.count('.') != 1:
+            msg = (
+                'Invalid source selector value "{}". Sources must be of the '
+                'form `${{source_name}}.${{target_name}}`'
+            ).format(source_full_name)
+            raise dbt.exceptions.RuntimeException(msg)
+
+        target = tuple(source_full_name.split('.'))
+
+        for node, real_node in self.source_nodes(graph):
+            if (real_node.source_name, real_node.name) == target:
                 yield node
 
     def get_nodes_from_spec(self, graph, spec):
@@ -168,6 +196,7 @@ class NodeSelector(object):
         filter_map = {
             SELECTOR_FILTERS.FQN: self.get_nodes_by_qualified_name,
             SELECTOR_FILTERS.TAG: self.get_nodes_by_tag,
+            SELECTOR_FILTERS.SOURCE: self.get_nodes_by_source,
         }
 
         node_filter = spec['filter']
@@ -209,7 +238,11 @@ class NodeSelector(object):
                            NodeType.Test]
             test_nodes.update(child_tests)
 
-        return model_nodes | test_nodes
+        # filter out all actual source nodes now that we've calculated any
+        # children specifiers
+        source_nodes = set(uid for uid, _ in self.source_nodes(graph))
+
+        return (model_nodes | test_nodes).difference(source_nodes)
 
     def select_nodes(self, graph, raw_include_specs, raw_exclude_specs):
         selected_nodes = set()
@@ -232,14 +265,17 @@ class NodeSelector(object):
 
         return selected_nodes
 
-    def get_valid_nodes(self, graph):
-        valid = []
-        for node_name in graph.nodes():
-            node = self.manifest.nodes[node_name]
+    def _is_graph_member(self, node_name):
+        node = self.manifest.nodes[node_name]
+        if node.resource_type == NodeType.Source:
+            return True
+        return not node.get('empty') and is_enabled(node)
 
-            if not node.get('empty') and is_enabled(node):
-                valid.append(node_name)
-        return valid
+    def get_valid_nodes(self, graph):
+        return [
+            node_name for node_name in graph.nodes()
+            if self._is_graph_member(node_name)
+        ]
 
     def get_selected(self, include, exclude, resource_types, tags):
         graph = self.linker.graph
