@@ -171,8 +171,6 @@ class RunManager(object):
         dbt.ui.printer.print_timestamped_line(concurrency_line)
         dbt.ui.printer.print_timestamped_line("")
 
-        schemas = list(self.Runner.get_model_schemas(self.manifest))
-
         pool = ThreadPool(num_threads)
         try:
             self.run_queue(pool)
@@ -303,10 +301,12 @@ class RunManager(object):
         else:
             logger.info("")
 
+        selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
         try:
             self.Runner.before_hooks(self.config, adapter, self.manifest)
             started = time.time()
-            self.Runner.before_run(self.config, adapter, self.manifest)
+            self.Runner.before_run(self.config, adapter, self.manifest,
+                                   selected_uids)
             res = self.execute_nodes()
             self.Runner.after_run(self.config, adapter, res, self.manifest)
             elapsed = time.time() - started

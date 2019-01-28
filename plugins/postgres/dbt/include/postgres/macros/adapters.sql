@@ -71,7 +71,10 @@
   {% if database -%}
     {{ adapter.verify_database(database) }}
   {%- endif -%}
-  "select distinct nspname from pg_namespace"
+  {% call statement('list_schemas', fetch_result=True, auto_begin=False) %}
+    select distinct nspname from pg_namespace
+  {% endcall %}
+  {{ return(load_result('list_schemas').table) }}
 {% endmacro %}
 
 {% macro postgres__check_schema_exists(database, schema) -%}
@@ -81,4 +84,5 @@
   {% call statement('check_schema_exists', fetch_result=True, auto_begin=False) %}
     select count(*) from pg_namespace where nspname = '{{ schema }}'
   {% endcall %}
+  {{ return(load_result('check_schema_exists').table) }}
 {% endmacro %}

@@ -241,4 +241,4 @@ class SQLAdapter(BaseAdapter):
             kwargs={'database': database, 'schema': schema},
             connection_name=model_name
         )
-        return results[0] > 0
+        return results[0][0] > 0

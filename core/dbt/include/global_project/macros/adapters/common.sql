@@ -200,7 +200,7 @@
 
 
 {% macro check_schema_exists(database, schema) -%}
-  {{ return(adapter_macro('check_schema_exists', database)) }}
+  {{ return(adapter_macro('check_schema_exists', database, schema)) }}
 {% endmacro %}
 
 {% macro default__check_schema_exists(database, schema) -%}
