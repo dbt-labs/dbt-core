@@ -13,7 +13,8 @@ from dbt.config import RuntimeConfig
 
 from dbt.node_types import NodeType
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.parsed import ParsedNode, ParsedMacro, ParsedNodePatch
+from dbt.contracts.graph.parsed import ParsedNode, ParsedMacro, \
+    ParsedNodePatch, ParsedSourceDefinition
 from dbt.contracts.graph.unparsed import UnparsedNode
 
 from .utils import config_from_parts_or_dicts
@@ -55,7 +56,8 @@ class BaseParserTest(unittest.TestCase):
 
         self.root_project_config = config_from_parts_or_dicts(
             project=root_project,
-            profile=profile_data
+            profile=profile_data,
+            cli_vars='{"test_schema_name": "foo"}'
         )
 
         snowplow_project = {
@@ -138,6 +140,605 @@ class SourceConfigTest(BaseParserTest):
         self.assertEqual(used_keys, frozenset(SourceConfig.ConfigKeys))
 
 
+class SchemaParserTest(BaseParserTest):
+    maxDiff = None
+
+    def setUp(self):
+        super(SchemaParserTest, self).setUp()
+        self.maxDiff = None
+
+
+        self.macro_manifest = Manifest(macros={}, nodes={}, docs={},
+                                       generated_at=timestring(), disabled=[])
+
+        self.model_config = {
+            'enabled': True,
+            'materialized': 'view',
+            'post-hook': [],
+            'pre-hook': [],
+            'vars': {},
+            'quoting': {},
+            'column_types': {},
+            'tags': [],
+        }
+
+        self.disabled_config = {
+            'enabled': False,
+            'materialized': 'view',
+            'post-hook': [],
+            'pre-hook': [],
+            'vars': {},
+            'quoting': {},
+            'column_types': {},
+            'tags': [],
+        }
+
+        self._expected_source = ParsedSourceDefinition(
+            unique_id='source.root.my_source.my_table',
+            name='my_table',
+            description='my table description',
+            source_name='my_source',
+            source_description='my source description',
+            loader='some_loader',
+            package_name='root',
+            root_path=get_os_path('/usr/src/app'),
+            path='test_one.yml',
+            original_file_path='test_one.yml',
+            columns={
+                'id': {
+                    'name': 'id',
+                    'description': 'user ID',
+                },
+            },
+            docrefs=[],
+            freshness={
+                'warn_after': {
+                    'count': 7,
+                    'period': 'hour'
+                },
+                'error_after': {
+                    'count': 20,
+                    'period': 'hour'
+                },
+            },
+            loaded_at_field='something',
+            sql_table_name='foo.bar',
+            resource_type='source'
+        )
+
+        self._expected_source_tests = [
+            ParsedNode(
+                alias='source_accepted_values_my_source_my_table_id__a__b',
+                name='source_accepted_values_my_source_my_table_id__a__b',
+                database='test',
+                schema='analytics',
+                resource_type='test',
+                unique_id='test.root.source_accepted_values_my_source_my_table_id__a__b',
+                fqn=['root', 'schema_test',
+                        'source_accepted_values_my_source_my_table_id__a__b'],
+                empty=False,
+                package_name='root',
+                original_file_path='test_one.yml',
+                root_path=get_os_path('/usr/src/app'),
+                refs=[],
+                sources=[['my_source', 'my_table']],
+                depends_on={'nodes': [], 'macros': []},
+                config=self.model_config,
+                path=get_os_path(
+                    'schema_test/source_accepted_values_my_source_my_table_id__a__b.sql'),
+                tags=['schema'],
+                raw_sql="{{ test_accepted_values(model=source('my_source', 'my_table'), column_name='id', values=['a', 'b']) }}",
+                description='',
+                columns={},
+                column_name='id'
+            ),
+            ParsedNode(
+                alias='source_not_null_my_source_my_table_id',
+                name='source_not_null_my_source_my_table_id',
+                database='test',
+                schema='analytics',
+                resource_type='test',
+                unique_id='test.root.source_not_null_my_source_my_table_id',
+                fqn=['root', 'schema_test', 'source_not_null_my_source_my_table_id'],
+                empty=False,
+                package_name='root',
+                root_path=get_os_path('/usr/src/app'),
+                refs=[],
+                sources=[['my_source', 'my_table']],
+                depends_on={'nodes': [], 'macros': []},
+                config=self.model_config,
+                original_file_path='test_one.yml',
+                path=get_os_path('schema_test/source_not_null_my_source_my_table_id.sql'),
+                tags=['schema'],
+                raw_sql="{{ test_not_null(model=source('my_source', 'my_table'), column_name='id') }}",
+                description='',
+                columns={},
+                column_name='id'
+            ),
+            ParsedNode(
+                alias='source_relationships_my_source_my_table_id__id__ref_model_two_',
+                name='source_relationships_my_source_my_table_id__id__ref_model_two_',
+                database='test',
+                schema='analytics',
+                resource_type='test',
+                unique_id='test.root.source_relationships_my_source_my_table_id__id__ref_model_two_', # noqa
+                fqn=['root', 'schema_test',
+                        'source_relationships_my_source_my_table_id__id__ref_model_two_'],
+                empty=False,
+                package_name='root',
+                original_file_path='test_one.yml',
+                root_path=get_os_path('/usr/src/app'),
+                refs=[['model_two']],
+                sources=[['my_source', 'my_table']],
+                depends_on={'nodes': [], 'macros': []},
+                config=self.model_config,
+                path=get_os_path('schema_test/source_relationships_my_source_my_table_id__id__ref_model_two_.sql'), # noqa
+                tags=['schema'],
+                raw_sql="{{ test_relationships(model=source('my_source', 'my_table'), column_name='id', from='id', to=ref('model_two')) }}",
+                description='',
+                columns={},
+                column_name='id'
+            ),
+            ParsedNode(
+                alias='source_some_test_my_source_my_table_value',
+                name='source_some_test_my_source_my_table_value',
+                database='test',
+                schema='analytics',
+                resource_type='test',
+                unique_id='test.root.source_some_test_my_source_my_table_value',
+                fqn=['root', 'schema_test', 'source_some_test_my_source_my_table_value'],
+                empty=False,
+                package_name='root',
+                original_file_path='test_one.yml',
+                root_path=get_os_path('/usr/src/app'),
+                refs=[],
+                sources=[['my_source', 'my_table']],
+                depends_on={'nodes': [], 'macros': []},
+                config=self.model_config,
+                path=get_os_path('schema_test/source_some_test_my_source_my_table_value.sql'),
+                tags=['schema'],
+                raw_sql="{{ test_some_test(model=source('my_source', 'my_table'), key='value') }}",
+                description='',
+                columns={}
+            ),
+            ParsedNode(
+                alias='source_unique_my_source_my_table_id',
+                name='source_unique_my_source_my_table_id',
+                database='test',
+                schema='analytics',
+                resource_type='test',
+                unique_id='test.root.source_unique_my_source_my_table_id',
+                fqn=['root', 'schema_test', 'source_unique_my_source_my_table_id'],
+                empty=False,
+                package_name='root',
+                root_path=get_os_path('/usr/src/app'),
+                refs=[],
+                sources=[['my_source', 'my_table']],
+                depends_on={'nodes': [], 'macros': []},
+                config=self.model_config,
+                original_file_path='test_one.yml',
+                path=get_os_path('schema_test/source_unique_my_source_my_table_id.sql'),
+                tags=['schema'],
+                raw_sql="{{ test_unique(model=source('my_source', 'my_table'), column_name='id') }}",
+                description='',
+                columns={},
+                column_name='id'
+            ),
+        ]
+
+        self._expected_model_tests = [
+            ParsedNode(
+                alias='accepted_values_model_one_id__a__b',
+                name='accepted_values_model_one_id__a__b',
+                database='test',
+                schema='analytics',
+                resource_type='test',
+                unique_id='test.root.accepted_values_model_one_id__a__b',
+                fqn=['root', 'schema_test',
+                        'accepted_values_model_one_id__a__b'],
+                empty=False,
+                package_name='root',
+                original_file_path='test_one.yml',
+                root_path=get_os_path('/usr/src/app'),
+                refs=[['model_one']],
+                sources=[],
+                depends_on={'nodes': [], 'macros': []},
+                config=self.model_config,
+                path=get_os_path(
+                    'schema_test/accepted_values_model_one_id__a__b.sql'),
+                tags=['schema'],
+                raw_sql="{{ test_accepted_values(model=ref('model_one'), column_name='id', values=['a', 'b']) }}",
+                description='',
+                columns={},
+                column_name='id'
+            ),
+            ParsedNode(
+                alias='not_null_model_one_id',
+                name='not_null_model_one_id',
+                database='test',
+                schema='analytics',
+                resource_type='test',
+                unique_id='test.root.not_null_model_one_id',
+                fqn=['root', 'schema_test', 'not_null_model_one_id'],
+                empty=False,
+                package_name='root',
+                root_path=get_os_path('/usr/src/app'),
+                refs=[['model_one']],
+                sources=[],
+                depends_on={'nodes': [], 'macros': []},
+                config=self.model_config,
+                original_file_path='test_one.yml',
+                path=get_os_path('schema_test/not_null_model_one_id.sql'),
+                tags=['schema'],
+                raw_sql="{{ test_not_null(model=ref('model_one'), column_name='id') }}",
+                description='',
+                columns={},
+                column_name='id'
+            ),
+            ParsedNode(
+                alias='relationships_model_one_id__id__ref_model_two_',
+                name='relationships_model_one_id__id__ref_model_two_',
+                database='test',
+                schema='analytics',
+                resource_type='test',
+                unique_id='test.root.relationships_model_one_id__id__ref_model_two_', # noqa
+                fqn=['root', 'schema_test',
+                        'relationships_model_one_id__id__ref_model_two_'],
+                empty=False,
+                package_name='root',
+                original_file_path='test_one.yml',
+                root_path=get_os_path('/usr/src/app'),
+                refs=[['model_one'], ['model_two']],
+                sources=[],
+                depends_on={'nodes': [], 'macros': []},
+                config=self.model_config,
+                path=get_os_path('schema_test/relationships_model_one_id__id__ref_model_two_.sql'), # noqa
+                tags=['schema'],
+                raw_sql="{{ test_relationships(model=ref('model_one'), column_name='id', from='id', to=ref('model_two')) }}",
+                description='',
+                columns={},
+                column_name='id'
+            ),
+            ParsedNode(
+                alias='some_test_model_one_value',
+                name='some_test_model_one_value',
+                database='test',
+                schema='analytics',
+                resource_type='test',
+                unique_id='test.root.some_test_model_one_value',
+                fqn=['root', 'schema_test', 'some_test_model_one_value'],
+                empty=False,
+                package_name='root',
+                original_file_path='test_one.yml',
+                root_path=get_os_path('/usr/src/app'),
+                refs=[['model_one']],
+                sources=[],
+                depends_on={'nodes': [], 'macros': []},
+                config=self.model_config,
+                path=get_os_path('schema_test/some_test_model_one_value.sql'),
+                tags=['schema'],
+                raw_sql="{{ test_some_test(model=ref('model_one'), key='value') }}",
+                description='',
+                columns={}
+            ),
+            ParsedNode(
+                alias='unique_model_one_id',
+                name='unique_model_one_id',
+                database='test',
+                schema='analytics',
+                resource_type='test',
+                unique_id='test.root.unique_model_one_id',
+                fqn=['root', 'schema_test', 'unique_model_one_id'],
+                empty=False,
+                package_name='root',
+                root_path=get_os_path('/usr/src/app'),
+                refs=[['model_one']],
+                sources=[],
+                depends_on={'nodes': [], 'macros': []},
+                config=self.model_config,
+                original_file_path='test_one.yml',
+                path=get_os_path('schema_test/unique_model_one_id.sql'),
+                tags=['schema'],
+                raw_sql="{{ test_unique(model=ref('model_one'), column_name='id') }}",
+                description='',
+                columns={},
+                column_name='id'
+            ),
+        ]
+
+        self._expected_patch = ParsedNodePatch(
+            name='model_one',
+            description='blah blah',
+            original_file_path='test_one.yml',
+            columns={
+                'id': {
+                'name': 'id',
+                'description': 'user ID',
+            }},
+            docrefs=[],
+        )
+
+    def test__source_schema(self):
+        test_yml = yaml.safe_load('''
+            version: 2
+            sources:
+                - name: my_source
+                  loader: some_loader
+                  description: my source description
+                  freshness:
+                    warn_after:
+                        count: 10
+                        period: hour
+                    error_after:
+                        count: 20
+                        period: hour
+                  loaded_at_field: something
+                  tables:
+                    - name: my_table
+                      description: "my table description"
+                      sql_table_name: foo.bar
+                      freshness:
+                        warn_after:
+                            count: 7
+                            period: hour
+                      columns:
+                        - name: id
+                          description: user ID
+                          tests:
+                            - unique
+                            - not_null
+                            - accepted_values:
+                                values:
+                                  - a
+                                  - b
+                            - relationships:
+                                from: id
+                                to: ref('model_two')
+                      tests:
+                        - some_test:
+                            key: value
+        ''')
+        parser = SchemaParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+        root_dir = get_os_path('/usr/src/app')
+        results = list(parser.parse_schema(
+            path='test_one.yml',
+            test_yml=test_yml,
+            package_name='root',
+            root_dir=root_dir
+        ))
+
+        tests = sorted((node for t, node in results if t == 'test'),
+                       key=lambda n: n.name)
+        patches = sorted((node for t, node in results if t == 'patch'),
+                         key=lambda n: n.name)
+        sources = sorted((node for t, node in results if t == 'source'),
+                         key=lambda n: n.name)
+        self.assertEqual(len(tests), 5)
+        self.assertEqual(len(patches), 0)
+        self.assertEqual(len(sources), 1)
+        self.assertEqual(len(results), 6)
+
+        for test, expected in zip(tests, self._expected_source_tests):
+            self.assertEqual(test, expected)
+
+        self.assertEqual(sources[0], self._expected_source)
+
+    def test__model_schema(self):
+        test_yml = yaml.safe_load('''
+            version: 2
+            models:
+                - name: model_one
+                  description: blah blah
+                  columns:
+                    - name: id
+                      description: user ID
+                      tests:
+                        - unique
+                        - not_null
+                        - accepted_values:
+                            values:
+                              - a
+                              - b
+                        - relationships:
+                            from: id
+                            to: ref('model_two')
+                  tests:
+                    - some_test:
+                        key: value
+        ''')
+        parser = SchemaParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+        results = list(parser.parse_schema(
+            path='test_one.yml',
+            test_yml=test_yml,
+            package_name='root',
+            root_dir=get_os_path('/usr/src/app')
+        ))
+
+        tests = sorted((node for t, node in results if t == 'test'),
+                       key=lambda n: n.name)
+        patches = sorted((node for t, node in results if t == 'patch'),
+                         key=lambda n: n.name)
+        sources = sorted((node for t, node in results if t == 'source'),
+                         key=lambda n: n.name)
+        self.assertEqual(len(tests), 5)
+        self.assertEqual(len(patches), 1)
+        self.assertEqual(len(sources), 0)
+        self.assertEqual(len(results), 6)
+
+        for test, expected in zip(tests, self._expected_model_tests):
+            self.assertEqual(test, expected)
+
+
+        self.assertEqual(patches[0], self._expected_patch)
+
+    def test__mixed_schema(self):
+        test_yml = yaml.safe_load('''
+            version: 2
+            models:
+                - name: model_one
+                  description: blah blah
+                  columns:
+                    - name: id
+                      description: user ID
+                      tests:
+                        - unique
+                        - not_null
+                        - accepted_values:
+                            values:
+                              - a
+                              - b
+                        - relationships:
+                            from: id
+                            to: ref('model_two')
+                  tests:
+                    - some_test:
+                        key: value
+            sources:
+                - name: my_source
+                  loader: some_loader
+                  description: my source description
+                  freshness:
+                    warn_after:
+                        count: 10
+                        period: hour
+                    error_after:
+                        count: 20
+                        period: hour
+                  loaded_at_field: something
+                  tables:
+                    - name: my_table
+                      description: "my table description"
+                      sql_table_name: '{{ var("test_schema_name") }}.bar'
+                      freshness:
+                        warn_after:
+                            count: 7
+                            period: hour
+                      columns:
+                        - name: id
+                          description: user ID
+                          tests:
+                            - unique
+                            - not_null
+                            - accepted_values:
+                                values:
+                                  - a
+                                  - b
+                            - relationships:
+                                from: id
+                                to: ref('model_two')
+                      tests:
+                        - some_test:
+                            key: value
+        ''')
+        parser = SchemaParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+        results = list(parser.parse_schema(
+            path='test_one.yml',
+            test_yml=test_yml,
+            package_name='root',
+            root_dir=get_os_path('/usr/src/app')
+        ))
+
+        tests = sorted((node for t, node in results if t == 'test'),
+                       key=lambda n: n.name)
+        patches = sorted((node for t, node in results if t == 'patch'),
+                         key=lambda n: n.name)
+        sources = sorted((node for t, node in results if t == 'source'),
+                         key=lambda n: n.name)
+        self.assertEqual(len(tests), 10)
+        self.assertEqual(len(patches), 1)
+        self.assertEqual(len(sources), 1)
+        self.assertEqual(len(results), 12)
+
+        expected_tests = self._expected_model_tests + self._expected_source_tests
+        expected_tests.sort(key=lambda n: n.name)
+        for test, expected in zip(tests, expected_tests):
+            self.assertEqual(test, expected)
+
+        self.assertEqual(patches[0], self._expected_patch)
+        self.assertEqual(sources[0], self._expected_source)
+
+    @mock.patch.object(SchemaParser, 'find_schema_yml')
+    @mock.patch.object(dbt.parser.schemas, 'logger')
+    def test__schema_v2_as_v1(self, mock_logger, find_schema_yml):
+        test_yml = yaml.safe_load(
+            '{models: [{name: model_one, description: "blah blah", columns: ['
+            '{name: id, description: "user ID", tests: [unique, not_null, '
+            '{accepted_values: {values: ["a", "b"]}},'
+            '{relationships: {from: id, to: ref(\'model_two\')}}]'
+            '}], tests: [some_test: { key: value }]}]}'
+        )
+        find_schema_yml.return_value = [('/some/path/schema.yml', test_yml)]
+        root_project = {}
+        all_projects = {}
+        root_dir = '/some/path'
+        relative_dirs = ['a', 'b']
+        parser = dbt.parser.schemas.SchemaParser(root_project, all_projects, None)
+        with self.assertRaises(dbt.exceptions.CompilationException) as cm:
+            parser.load_and_parse(
+                'test', root_dir, relative_dirs
+            )
+            self.assertIn('https://docs.getdbt.com/v0.11/docs/schemayml-files',
+                          str(cm.exception))
+
+    @mock.patch.object(SchemaParser, 'find_schema_yml')
+    @mock.patch.object(dbt.parser.schemas, 'logger')
+    def test__schema_v1_version_model(self, mock_logger, find_schema_yml):
+        test_yml = yaml.safe_load(
+            '{model_one: {constraints: {not_null: [id],'
+            'unique: [id],'
+            'accepted_values: [{field: id, values: ["a","b"]}],'
+            'relationships: [{from: id, to: ref(\'model_two\'), field: id}]' # noqa
+            '}}, version: {constraints: {not_null: [id]}}}'
+        )
+        find_schema_yml.return_value = [('/some/path/schema.yml', test_yml)]
+        root_project = {}
+        all_projects = {}
+        root_dir = '/some/path'
+        relative_dirs = ['a', 'b']
+        parser = dbt.parser.schemas.SchemaParser(root_project, all_projects, None)
+        with self.assertRaises(dbt.exceptions.CompilationException) as cm:
+            parser.load_and_parse(
+                'test', root_dir, relative_dirs
+            )
+            self.assertIn('https://docs.getdbt.com/v0.11/docs/schemayml-files',
+                          str(cm.exception))
+
+    @mock.patch.object(SchemaParser, 'find_schema_yml')
+    @mock.patch.object(dbt.parser.schemas, 'logger')
+    def test__schema_v1_version_1(self, mock_logger, find_schema_yml):
+        test_yml = yaml.safe_load(
+            '{model_one: {constraints: {not_null: [id],'
+            'unique: [id],'
+            'accepted_values: [{field: id, values: ["a","b"]}],'
+            'relationships: [{from: id, to: ref(\'model_two\'), field: id}]' # noqa
+            '}}, version: 1}'
+        )
+        find_schema_yml.return_value = [('/some/path/schema.yml', test_yml)]
+        root_project = {}
+        all_projects = {}
+        root_dir = '/some/path'
+        relative_dirs = ['a', 'b']
+        parser = dbt.parser.schemas.SchemaParser(root_project, all_projects, None)
+        with self.assertRaises(dbt.exceptions.CompilationException) as cm:
+            parser.load_and_parse(
+                'test', root_dir, relative_dirs
+            )
+            self.assertIn('https://docs.getdbt.com/v0.11/docs/schemayml-files',
+                          str(cm.exception))
+
+
 class ParserTest(BaseParserTest):
 
     def find_input_by_name(self, models, name):
@@ -206,6 +807,7 @@ class ParserTest(BaseParserTest):
                     original_file_path='model_one.sql',
                     root_path=get_os_path('/usr/src/app'),
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -269,6 +871,7 @@ class ParserTest(BaseParserTest):
                     original_file_path='nested/path/model_one.sql',
                     root_path=get_os_path('/usr/src/app'),
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -316,6 +919,7 @@ class ParserTest(BaseParserTest):
                     empty=True,
                     package_name='root',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': [],
@@ -372,6 +976,7 @@ class ParserTest(BaseParserTest):
                     empty=False,
                     package_name='root',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -398,6 +1003,7 @@ class ParserTest(BaseParserTest):
                     empty=False,
                     package_name='root',
                     refs=[['base']],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -482,6 +1088,7 @@ class ParserTest(BaseParserTest):
                     empty=False,
                     package_name='root',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -507,6 +1114,7 @@ class ParserTest(BaseParserTest):
                     empty=False,
                     package_name='root',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -532,6 +1140,7 @@ class ParserTest(BaseParserTest):
                     empty=False,
                     package_name='root',
                     refs=[['events']],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -557,6 +1166,7 @@ class ParserTest(BaseParserTest):
                     empty=False,
                     package_name='root',
                     refs=[['sessions']],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -582,6 +1192,7 @@ class ParserTest(BaseParserTest):
                     empty=False,
                     package_name='root',
                     refs=[['sessions_tx'], ['events_tx']],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -668,6 +1279,7 @@ class ParserTest(BaseParserTest):
                     empty=False,
                     package_name='snowplow',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -693,6 +1305,7 @@ class ParserTest(BaseParserTest):
                     empty=False,
                     package_name='snowplow',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -718,6 +1331,7 @@ class ParserTest(BaseParserTest):
                     empty=False,
                     package_name='snowplow',
                     refs=[['events']],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -743,6 +1357,7 @@ class ParserTest(BaseParserTest):
                     empty=False,
                     package_name='snowplow',
                     refs=[['sessions']],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -769,6 +1384,7 @@ class ParserTest(BaseParserTest):
                     package_name='root',
                     refs=[['snowplow', 'sessions_tx'],
                              ['snowplow', 'events_tx']],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -801,6 +1417,7 @@ class ParserTest(BaseParserTest):
                     'empty': False,
                     'package_name': 'snowplow',
                     'refs': [],
+                    'sources': [],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -823,6 +1440,7 @@ class ParserTest(BaseParserTest):
                     'empty': False,
                     'package_name': 'root',
                     'refs': [],
+                    'sources': [],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -845,6 +1463,7 @@ class ParserTest(BaseParserTest):
                     'empty': False,
                     'package_name': 'root',
                     'refs': [['events']],
+                    'sources': [],
                     'depends_on': {
                         'nodes': [],
                         'macros': []
@@ -884,6 +1503,7 @@ class ParserTest(BaseParserTest):
                         'empty': False,
                         'package_name': 'snowplow',
                         'refs': [],
+                        'sources': [],
                         'depends_on': {
                             'nodes': [],
                             'macros': []
@@ -909,6 +1529,7 @@ class ParserTest(BaseParserTest):
                         'empty': False,
                         'package_name': 'root',
                         'refs': [],
+                        'sources': [],
                         'depends_on': {
                             'nodes': [],
                             'macros': []
@@ -934,6 +1555,7 @@ class ParserTest(BaseParserTest):
                         'empty': False,
                         'package_name': 'root',
                         'refs': [['events']],
+                        'sources': [],
                         'depends_on': {
                             'nodes': ['model.root.events'],
                             'macros': []
@@ -988,6 +1610,7 @@ class ParserTest(BaseParserTest):
                     empty=False,
                     package_name='root',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': [],
@@ -1076,6 +1699,7 @@ class ParserTest(BaseParserTest):
                     empty=False,
                     package_name='root',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -1101,6 +1725,7 @@ class ParserTest(BaseParserTest):
                     empty=False,
                     package_name='root',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -1126,6 +1751,7 @@ class ParserTest(BaseParserTest):
                     empty=False,
                     package_name='root',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -1281,6 +1907,7 @@ class ParserTest(BaseParserTest):
                     empty=False,
                     package_name='root',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -1306,6 +1933,7 @@ class ParserTest(BaseParserTest):
                     empty=False,
                     package_name='root',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -1331,6 +1959,7 @@ class ParserTest(BaseParserTest):
                     empty=False,
                     package_name='root',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -1356,6 +1985,7 @@ class ParserTest(BaseParserTest):
                     empty=False,
                     package_name='snowplow',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -1383,6 +2013,7 @@ class ParserTest(BaseParserTest):
                     database='test',
                     schema='analytics',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -1406,6 +2037,7 @@ class ParserTest(BaseParserTest):
                     database='test',
                     schema='analytics',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -1419,349 +2051,6 @@ class ParserTest(BaseParserTest):
                     columns={}
                 )
             ])
-        )
-
-    def test__simple_schema_v1_test(self):
-        test_yml = yaml.safe_load(
-            '{model_one: {constraints: {not_null: [id],'
-            'unique: [id],'
-            'accepted_values: [{field: id, values: ["a","b"]}],'
-            'relationships: [{from: id, to: ref(\'model_two\'), field: id}]' # noqa
-            '}}}'
-        )
-
-        parser = SchemaParser(
-            self.root_project_config,
-            self.all_projects,
-            self.macro_manifest
-        )
-        results = list(parser.parse_v1_test_yml(
-            original_file_path='test_one.yml',
-            test_yml=test_yml,
-            package_name='root',
-            root_dir=get_os_path('/usr/src/app')
-        ))
-        results.sort(key=lambda n: n.name)
-
-        not_null_sql = "{{ test_not_null(model=ref('model_one'), arg='id') }}"
-        unique_sql = "{{ test_unique(model=ref('model_one'), arg='id') }}"
-        accepted_values_sql = "{{ test_accepted_values(model=ref('model_one'), field='id', values=['a', 'b']) }}" # noqa
-        relationships_sql = "{{ test_relationships(model=ref('model_one'), field='id', from='id', to=ref('model_two')) }}" # noqa
-
-        expected = [
-            ParsedNode(
-                alias='accepted_values_model_one_id__a__b',
-                name='accepted_values_model_one_id__a__b',
-                database='test',
-                schema='analytics',
-                resource_type='test',
-                unique_id='test.root.accepted_values_model_one_id__a__b', # noqa
-                fqn=['root', 'schema_test',
-                        'accepted_values_model_one_id__a__b'],
-                empty=False,
-                package_name='root',
-                original_file_path='test_one.yml',
-                root_path=get_os_path('/usr/src/app'),
-                refs=[['model_one']],
-                depends_on={
-                    'nodes': [],
-                    'macros': []
-                },
-                config=self.model_config,
-                path=get_os_path(
-                    'schema_test/accepted_values_model_one_id__a__b.sql'),
-                tags=['schema'],
-                raw_sql=accepted_values_sql,
-                description='',
-                columns={}
-            ),
-            ParsedNode(
-                alias='not_null_model_one_id',
-                name='not_null_model_one_id',
-                database='test',
-                schema='analytics',
-                resource_type='test',
-                unique_id='test.root.not_null_model_one_id',
-                fqn=['root', 'schema_test', 'not_null_model_one_id'],
-                empty=False,
-                package_name='root',
-                root_path=get_os_path('/usr/src/app'),
-                refs=[['model_one']],
-                depends_on={
-                    'nodes': [],
-                    'macros': []
-                },
-                config=self.model_config,
-                original_file_path='test_one.yml',
-                path=get_os_path(
-                    'schema_test/not_null_model_one_id.sql'),
-                tags=['schema'],
-                raw_sql=not_null_sql,
-                description='',
-                columns={}
-            ),
-            ParsedNode(
-                alias='relationships_model_one_id__id__ref_model_two_',
-                name='relationships_model_one_id__id__ref_model_two_',
-                database='test',
-                schema='analytics',
-                resource_type='test',
-                unique_id='test.root.relationships_model_one_id__id__ref_model_two_', # noqa
-                fqn=['root', 'schema_test',
-                        'relationships_model_one_id__id__ref_model_two_'],
-                empty=False,
-                package_name='root',
-                original_file_path='test_one.yml',
-                root_path=get_os_path('/usr/src/app'),
-                refs=[['model_one'], ['model_two']],
-                depends_on={
-                    'nodes': [],
-                    'macros': []
-                },
-                config=self.model_config,
-                path=get_os_path('schema_test/relationships_model_one_id__id__ref_model_two_.sql'), # noqa
-                tags=['schema'],
-                raw_sql=relationships_sql,
-                description='',
-                columns={}
-            ),
-            ParsedNode(
-                alias='unique_model_one_id',
-                name='unique_model_one_id',
-                database='test',
-                schema='analytics',
-                resource_type='test',
-                unique_id='test.root.unique_model_one_id',
-                fqn=['root', 'schema_test', 'unique_model_one_id'],
-                empty=False,
-                package_name='root',
-                root_path=get_os_path('/usr/src/app'),
-                refs=[['model_one']],
-                depends_on={
-                    'nodes': [],
-                    'macros': []
-                },
-                config=self.model_config,
-                original_file_path='test_one.yml',
-                path=get_os_path('schema_test/unique_model_one_id.sql'),
-                tags=['schema'],
-                raw_sql=unique_sql,
-                description='',
-                columns={}
-            ),
-        ]
-        self.assertEqual(
-            results,
-            expected,
-        )
-
-    def test__simple_schema_v2(self):
-        test_yml = yaml.safe_load(
-            '{models: [{name: model_one, description: "blah blah", columns: ['
-            '{name: id, description: "user ID", tests: [unique, not_null, '
-            '{accepted_values: {values: ["a", "b"]}},'
-            '{relationships: {from: id, to: ref(\'model_two\')}}]'
-            '}], tests: [some_test: { key: value }]}]}'
-        )
-        parser = SchemaParser(
-            self.root_project_config,
-            self.all_projects,
-            self.macro_manifest
-        )
-        results = list(parser.parse_v2_yml(
-            original_file_path='test_one.yml',
-            test_yml=test_yml,
-            package_name='root',
-            root_dir=get_os_path('/usr/src/app')
-        ))
-
-        # split this into tests and patches, assert there's nothing else
-        tests = sorted((node for t, node in results if t == 'test'),
-                       key=lambda n: n.name)
-        patches = sorted((node for t, node in results if t == 'patch'),
-                         key=lambda n: n.name)
-        self.assertEqual(len(tests)+len(patches), len(results))
-
-        not_null_sql = "{{ test_not_null(model=ref('model_one'), column_name='id') }}"
-        unique_sql = "{{ test_unique(model=ref('model_one'), column_name='id') }}"
-        accepted_values_sql = "{{ test_accepted_values(model=ref('model_one'), column_name='id', values=['a', 'b']) }}" # noqa
-        relationships_sql = "{{ test_relationships(model=ref('model_one'), column_name='id', from='id', to=ref('model_two')) }}" # noqa
-        some_test_sql = "{{ test_some_test(model=ref('model_one'), key='value') }}"
-
-        expected_tests = [
-            ParsedNode(
-                alias='accepted_values_model_one_id__a__b',
-                name='accepted_values_model_one_id__a__b',
-                database='test',
-                schema='analytics',
-                resource_type='test',
-                unique_id='test.root.accepted_values_model_one_id__a__b',
-                fqn=['root', 'schema_test',
-                        'accepted_values_model_one_id__a__b'],
-                empty=False,
-                package_name='root',
-                original_file_path='test_one.yml',
-                root_path=get_os_path('/usr/src/app'),
-                refs=[['model_one']],
-                depends_on={'nodes': [], 'macros': []},
-                config=self.model_config,
-                path=get_os_path(
-                    'schema_test/accepted_values_model_one_id__a__b.sql'),
-                tags=['schema'],
-                raw_sql=accepted_values_sql,
-                description='',
-                columns={},
-                column_name='id'
-            ),
-            ParsedNode(
-                alias='not_null_model_one_id',
-                name='not_null_model_one_id',
-                database='test',
-                schema='analytics',
-                resource_type='test',
-                unique_id='test.root.not_null_model_one_id',
-                fqn=['root', 'schema_test', 'not_null_model_one_id'],
-                empty=False,
-                package_name='root',
-                root_path=get_os_path('/usr/src/app'),
-                refs=[['model_one']],
-                depends_on={'nodes': [], 'macros': []},
-                config=self.model_config,
-                original_file_path='test_one.yml',
-                path=get_os_path('schema_test/not_null_model_one_id.sql'),
-                tags=['schema'],
-                raw_sql=not_null_sql,
-                description='',
-                columns={},
-                column_name='id'
-            ),
-            ParsedNode(
-                alias='relationships_model_one_id__id__ref_model_two_',
-                name='relationships_model_one_id__id__ref_model_two_',
-                database='test',
-                schema='analytics',
-                resource_type='test',
-                unique_id='test.root.relationships_model_one_id__id__ref_model_two_', # noqa
-                fqn=['root', 'schema_test',
-                        'relationships_model_one_id__id__ref_model_two_'],
-                empty=False,
-                package_name='root',
-                original_file_path='test_one.yml',
-                root_path=get_os_path('/usr/src/app'),
-                refs=[['model_one'], ['model_two']],
-                depends_on={'nodes': [], 'macros': []},
-                config=self.model_config,
-                path=get_os_path('schema_test/relationships_model_one_id__id__ref_model_two_.sql'), # noqa
-                tags=['schema'],
-                raw_sql=relationships_sql,
-                description='',
-                columns={},
-                column_name='id'
-            ),
-            ParsedNode(
-                alias='some_test_model_one_value',
-                name='some_test_model_one_value',
-                database='test',
-                schema='analytics',
-                resource_type='test',
-                unique_id='test.root.some_test_model_one_value',
-                fqn=['root', 'schema_test', 'some_test_model_one_value'],
-                empty=False,
-                package_name='root',
-                original_file_path='test_one.yml',
-                root_path=get_os_path('/usr/src/app'),
-                refs=[['model_one']],
-                depends_on={'nodes': [], 'macros': []},
-                config=self.model_config,
-                path=get_os_path('schema_test/some_test_model_one_value.sql'),
-                tags=['schema'],
-                raw_sql=some_test_sql,
-                description='',
-                columns={}
-            ),
-            ParsedNode(
-                alias='unique_model_one_id',
-                name='unique_model_one_id',
-                database='test',
-                schema='analytics',
-                resource_type='test',
-                unique_id='test.root.unique_model_one_id',
-                fqn=['root', 'schema_test', 'unique_model_one_id'],
-                empty=False,
-                package_name='root',
-                root_path=get_os_path('/usr/src/app'),
-                refs=[['model_one']],
-                depends_on={'nodes': [], 'macros': []},
-                config=self.model_config,
-                original_file_path='test_one.yml',
-                path=get_os_path('schema_test/unique_model_one_id.sql'),
-                tags=['schema'],
-                raw_sql=unique_sql,
-                description='',
-                columns={},
-                column_name='id'
-            ),
-        ]
-        for test, expected in zip(tests, expected_tests):
-            self.assertEqual(test, expected)
-
-        expected_patches = [
-            ParsedNodePatch(name='model_one',
-                description='blah blah',
-                original_file_path='test_one.yml',
-                columns={
-                    'id': {
-                    'name': 'id',
-                    'description': 'user ID',
-                }},
-                docrefs=[],
-            ),
-        ]
-        for patch, expected in zip(patches, expected_patches):
-            self.assertEqual(patch, expected)
-
-    @mock.patch.object(SchemaParser, 'find_schema_yml')
-    @mock.patch.object(dbt.parser.schemas, 'logger')
-    def test__schema_v2_as_v1(self, mock_logger, find_schema_yml):
-        test_yml = yaml.safe_load(
-            '{models: [{name: model_one, description: "blah blah", columns: ['
-            '{name: id, description: "user ID", tests: [unique, not_null, '
-            '{accepted_values: {values: ["a", "b"]}},'
-            '{relationships: {from: id, to: ref(\'model_two\')}}]'
-            '}], tests: [some_test: { key: value }]}]}'
-        )
-        find_schema_yml.return_value = [('/some/path/schema.yml', test_yml)]
-        root_project = {}
-        all_projects = {}
-        root_dir = '/some/path'
-        relative_dirs = ['a', 'b']
-        parser = dbt.parser.schemas.SchemaParser(root_project, all_projects, None)
-        with self.assertRaises(dbt.exceptions.CompilationException) as cm:
-            parser.load_and_parse(
-                'test', root_dir, relative_dirs
-            )
-            self.assertIn('https://docs.getdbt.com/v0.11/docs/schemayml-files',
-                          str(cm.exception))
-
-    @mock.patch.object(SchemaParser, 'build_node')
-    @mock.patch.object(SchemaParser, 'find_schema_yml')
-    @mock.patch.object(dbt.parser.schemas, 'logger')
-    def test__schema_v1_version_model(self, mock_logger, find_schema_yml, build_node):
-        test_yml = yaml.safe_load(
-            '{model_one: {constraints: {not_null: [id],'
-            'unique: [id],'
-            'accepted_values: [{field: id, values: ["a","b"]}],'
-            'relationships: [{from: id, to: ref(\'model_two\'), field: id}]' # noqa
-            '}}, version: {constraints: {not_null: [id]}}}'
-        )
-        find_schema_yml.return_value = [('/some/path/schema.yml', test_yml)]
-        root_project = {}
-        all_projects = {}
-        root_dir = '/some/path'
-        relative_dirs = ['a', 'b']
-        parser = dbt.parser.schemas.SchemaParser(root_project, all_projects, None)
-        parser.load_and_parse(
-            'test', root_dir, relative_dirs
         )
 
     def test__simple_data_test(self):
@@ -1795,6 +2084,7 @@ class ParserTest(BaseParserTest):
                     empty=False,
                     package_name='root',
                     refs=[['base']],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -1917,6 +2207,7 @@ class ParserTest(BaseParserTest):
                     original_file_path='model_one.sql',
                     root_path=get_os_path('/usr/src/app'),
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -1964,6 +2255,7 @@ class ParserTest(BaseParserTest):
                     package_name='root',
                     root_path=get_os_path('/usr/src/app'),
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []

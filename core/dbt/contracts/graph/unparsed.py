@@ -27,8 +27,14 @@ UNPARSED_BASE_CONTRACT = {
             'type': 'string',
             'description': (
                 'Relative path to the originating file from the project root.'
-                ),
-        },
+            ),
+        }
+    },
+    'required': ['package_name', 'root_path', 'path', 'original_file_path']
+}
+
+UNPARSED_HAS_SQL_CONTRACT = {
+    'properties': {
         'raw_sql': {
             'type': 'string',
             'description': (
@@ -40,14 +46,17 @@ UNPARSED_BASE_CONTRACT = {
             'type': 'integer',
         }
     },
-    'required': ['package_name', 'root_path', 'path', 'original_file_path',
-                 'raw_sql']
+    'required': ['raw_sql']
 }
 
-UNPARSED_MACRO_CONTRACT = UNPARSED_BASE_CONTRACT
+UNPARSED_MACRO_CONTRACT = deep_merge(
+    UNPARSED_BASE_CONTRACT,
+    UNPARSED_HAS_SQL_CONTRACT
+)
 
 UNPARSED_NODE_CONTRACT = deep_merge(
     UNPARSED_BASE_CONTRACT,
+    UNPARSED_HAS_SQL_CONTRACT,
     {
         'properties': {
             'name': {
@@ -69,8 +78,7 @@ UNPARSED_NODE_CONTRACT = deep_merge(
                 ]
             },
         },
-        'required': UNPARSED_BASE_CONTRACT['required'] + [
-            'resource_type', 'name']
+        'required': ['resource_type', 'name']
     }
 )
 
@@ -112,13 +120,17 @@ COLUMN_TEST_CONTRACT = {
 }
 
 
-UNPARSED_NODE_UPDATE_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': (
-        'A collection of the unparsed node updates, as provided in the '
-        '"models" section of schema.yml'
-    ),
+UNPARSED_COLUMN_DESCRIPTION_CONTRACT = {
+    'properties': {
+        'columns': {
+            'type': 'array',
+            'items': COLUMN_TEST_CONTRACT,
+        },
+    },
+}
+
+
+UNPARSED_NODE_DESCRIPTION_CONTRACT = {
     'properties': {
         'name': {
             'type': 'string',
@@ -134,10 +146,6 @@ UNPARSED_NODE_UPDATE_CONTRACT = {
                 'The raw string description of the node after parsing the yaml'
             ),
         },
-        'columns': {
-            'type': 'array',
-            'items': COLUMN_TEST_CONTRACT,
-        },
         'tests': {
             'type': 'array',
             'items': {
@@ -152,11 +160,147 @@ UNPARSED_NODE_UPDATE_CONTRACT = {
 }
 
 
+UNPARSED_NODE_UPDATE_CONTRACT = deep_merge(
+    UNPARSED_NODE_DESCRIPTION_CONTRACT,
+    UNPARSED_COLUMN_DESCRIPTION_CONTRACT,
+    {
+        'type': 'object',
+        'additionalProperties': False,
+        'description': (
+            'A collection of the unparsed node updates, as provided in the '
+            '"models" section of schema.yml'
+        ),
+    }
+)
+
+
 class UnparsedNodeUpdate(APIObject):
     """An unparsed node update is the blueprint for tests to be added and nodes
-    to be updated, referencing a certain node (specifically, a Model).
+    to be updated, referencing a certain node (specifically, a Model or
+    Source).
     """
     SCHEMA = UNPARSED_NODE_UPDATE_CONTRACT
+
+
+_TIME_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'properties': {
+        'count': {
+            'type': 'integer',
+        },
+        'period': {
+            'enum': ['minute', 'hour', 'day'],
+        },
+    },
+    'required': ['count', 'period'],
+}
+
+
+_FRESHNESS_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'properties': {
+        'warn_after': {
+            'anyOf': [
+                {'type': 'null'},
+                _TIME_CONTRACT,
+            ]
+        },
+        'error_after': {
+            'anyOf': [
+                {'type': 'null'},
+                _TIME_CONTRACT,
+
+            ]
+        },
+    },
+}
+
+
+FRESHNESS_CONTRACT = {
+    'properties': {
+        'loaded_at_field': {
+            'type': ['null', 'string'],
+            'description': 'The field to use as the "loaded at" timestamp',
+        },
+        'freshness': {
+            'anyOf': [
+                {'type': 'null'},
+                _FRESHNESS_CONTRACT,
+            ],
+        },
+    },
+}
+
+
+UNPARSED_SOURCE_TABLE_DEFINITION_CONTRACT = deep_merge(
+    UNPARSED_NODE_DESCRIPTION_CONTRACT,
+    UNPARSED_COLUMN_DESCRIPTION_CONTRACT,
+    FRESHNESS_CONTRACT,
+    {
+        'description': (
+            'A source table definition, as provided in the "tables" '
+            'subsection of the "sources" section of schema.yml'
+        ),
+        'properties': {
+            'sql_table_name': {
+                'type': 'string',
+                'description': 'The exact identifier for the source table',
+                'minLength': 1,
+            },
+        },
+        'required': ['sql_table_name'],
+    }
+)
+
+
+UNPARSED_SOURCE_DEFINITION_CONTRACT = deep_merge(
+    FRESHNESS_CONTRACT,
+    {
+        'type': 'object',
+        'additionalProperties': False,
+        'description': (
+            'A collection of the unparsed sources, as provided in the '
+            '"sources" section of schema.yml'
+        ),
+        'properties': {
+            'name': {
+                'type': 'string',
+                'description': 'The reference name of the source definition',
+                'minLength': 1,
+            },
+            'loader': {
+                'type': 'string',
+                'description': 'The user-defined loader for this source',
+                'minLength': 1,
+            },
+            'description': {
+                'type': 'string',
+                'description': 'The user-supplied description of the source',
+            },
+            'tables': {
+                'type': 'array',
+                'items': UNPARSED_SOURCE_TABLE_DEFINITION_CONTRACT,
+                'description': 'The tables for this source',
+                'minLength': 1,
+            },
+        },
+        'required': ['name'],
+    }
+)
+
+
+class UnparsedTableDefinition(APIObject):
+    SCHEMA = UNPARSED_SOURCE_TABLE_DEFINITION_CONTRACT
+
+
+class UnparsedSourceDefinition(APIObject):
+    SCHEMA = UNPARSED_SOURCE_DEFINITION_CONTRACT
+
+    @property
+    def tables(self):
+        return [UnparsedTableDefinition(**t) for t in self.get('tables', [])]
 
 
 UNPARSED_DOCUMENTATION_FILE_CONTRACT = {

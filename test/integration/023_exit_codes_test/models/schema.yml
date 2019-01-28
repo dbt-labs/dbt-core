@@ -1,15 +1,17 @@
-
-good:
-    constraints:
-        not_null:
-            - updated_at
-
-bad:
-    constraints:
-        not_null:
-            - updated_at
-
-dupe:
-    constraints:
-        unique:
-            - updated_at # fails
+version: 2
+models:
+- name: good
+  columns:
+  - name: updated_at
+    tests:
+    - not_null
+- name: bad
+  columns:
+  - name: updated_at
+    tests:
+    - not_null
+- name: dupe
+  columns:
+  - name: updated_at
+    tests:
+    - unique

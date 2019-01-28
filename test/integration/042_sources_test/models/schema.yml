@@ -1,0 +1,39 @@
+version: 2
+models:
+  - name: descendant_model
+    columns:
+      - name: favorite_color
+        tests:
+          - relationships:
+             to: source('test_source', 'test_table')
+             field: favorite_color
+sources:
+  - name: test_source
+    loader: custom
+    tables:
+      - name: test_table
+        # I don't know what would compel you to do this, but the important thing is that you can
+        sql_table_name: "{{ var(env_var('DBT_TEST_SCHEMA_NAME_VARIABLE')) }}.source"
+        columns:
+          - name: favorite_color
+            description: The favorite color
+          - name: id
+            description: The user ID
+            tests:
+              - unique
+              - not_null
+          - name: first_name
+            description: The first name of the user
+            tests: []
+          - name: email
+            description: The email address of the user
+          - name: ip_address
+            description: The last IP address the user logged in from
+          - name: updated_at
+            description: The last update time for this user
+        tests:
+          - relationships:
+              # do this as a table-level test, just to test out that aspect
+              column_name: favorite_color
+              to: ref('descendant_model')
+              field: favorite_color

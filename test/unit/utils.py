@@ -21,7 +21,7 @@ def config_from_parts_or_dicts(project, profile, packages=None, cli_vars='{}'):
                                                 project.profile_name,
                                                 cli_vars)
     args = Obj()
-    args.cli_vars = cli_vars
+    args.vars = repr(cli_vars)
     return RuntimeConfig.from_parts(
         project=project,
         profile=profile,

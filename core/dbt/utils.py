@@ -73,9 +73,11 @@ def get_model_name_or_none(model):
     elif isinstance(model, basestring):
         name = model
     elif isinstance(model, dict):
-        name = model['alias']
-    else:
+        name = model.get('alias', model.get('name'))
+    elif hasattr(model, 'nice_name'):
         name = model.nice_name
+    else:
+        name = str(model)
     return name
 
 
@@ -94,13 +96,22 @@ def id_matches(unique_id, target_name, target_package, nodetypes, model):
     nodetypes should be a container of NodeTypes that implements the 'in'
     operator.
     """
-    node_parts = unique_id.split('.')
+    node_type = model.get('resource_type', 'node')
+    node_parts = unique_id.split('.', 2)
     if len(node_parts) != 3:
-        node_type = model.get('resource_type', 'node')
-        msg = "{} names cannot contain '.' characters".format(node_type)
+        msg = "unique_id {} is malformed".format(unique_id)
         dbt.exceptions.raise_compiler_error(msg, model)
 
     resource_type, package_name, node_name = node_parts
+    if node_type == NodeType.Source:
+        if node_name.count('.') != 1:
+            msg = "{} names must contain exactly 1 '.' character"\
+                .format(node_type)
+            dbt.exceptions.raise_compiler_error(msg, model)
+    else:
+        if '.' in node_name:
+            msg = "{} names cannot contain '.' characters".format(node_type)
+            dbt.exceptions.raise_compiler_error(msg, model)
 
     if resource_type not in nodetypes:
         return False
@@ -412,6 +423,16 @@ def invalid_ref_fail_unless_test(node, target_model_name,
             node,
             target_model_name,
             target_model_package)
+
+
+def invalid_source_fail_unless_test(node, target_name, target_table_name):
+    if node.get('resource_type') == NodeType.Test:
+        msg = dbt.exceptions.source_disabled_message(node, target_name,
+                                                     target_table_name)
+        logger.warning('WARNING: {}'.format(msg))
+    else:
+        dbt.exceptions.source_target_not_found(node, target_name,
+                                               target_table_name)
 
 
 def parse_cli_vars(var_string):

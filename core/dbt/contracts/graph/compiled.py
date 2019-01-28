@@ -76,6 +76,7 @@ COMPILED_NODE_CONTRACT = deep_merge(
     }
 )
 
+
 COMPILED_NODES_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
@@ -87,7 +88,9 @@ COMPILED_NODES_CONTRACT = {
     },
 }
 
+
 COMPILED_MACRO_CONTRACT = PARSED_MACRO_CONTRACT
+
 
 COMPILED_MACROS_CONTRACT = {
     'type': 'object',
@@ -99,6 +102,7 @@ COMPILED_MACROS_CONTRACT = {
         '.*': COMPILED_MACRO_CONTRACT
     },
 }
+
 
 COMPILED_GRAPH_CONTRACT = {
     'type': 'object',

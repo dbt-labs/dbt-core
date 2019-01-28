@@ -1,6 +1,12 @@
-
-seed_enabled:
-    constraints:
-        column_type:
-            - {field: ID, type: 'FLOAT' }
-            - {field: BIRTHDAY, type: 'character varying(16777216)' }
+version: 2
+models:
+- name: seed_enabled
+  columns:
+  - name: BIRTHDAY
+    tests:
+    - column_type:
+        type: character varying(16777216)
+  - name: ID
+    tests:
+    - column_type:
+        type: FLOAT

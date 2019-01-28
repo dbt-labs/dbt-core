@@ -333,6 +333,20 @@ def ref_target_not_found(model, target_model_name, target_model_package):
     raise_compiler_error(msg, model)
 
 
+def source_disabled_message(model, target_name, target_table_name):
+    return ("{} '{}' ({}) depends on source '{}.{}' which was not found"
+            .format(model.get('resource_type').title(),
+                    model.get('unique_id'),
+                    model.get('original_file_path'),
+                    target_name,
+                    target_table_name))
+
+
+def source_target_not_found(model, target_name, target_table_name):
+    msg = source_disabled_message(model, target_name, target_table_name)
+    raise_compiler_error(msg, model)
+
+
 def ref_disabled_dependency(model, target_model):
     raise_compiler_error(
         "Model '{}' depends on model '{}' which is disabled in "
@@ -546,15 +560,12 @@ def raise_duplicate_patch_name(name, patch_1, patch_2):
     )
 
 
-def raise_incorrect_version(path):
+def raise_invalid_schema_yml_version(path, issue):
     raise_compiler_error(
-        'The schema file at {} does not contain a valid version specifier. '
-        'dbt assumes that schema.yml files without version specifiers are '
-        'version 1 schemas, but this file looks like a version 2 schema. If '
-        'this is the case, you can fix this error by adding `version: 2` to '
-        'the top of the file.\n\nOtherwise, please consult the documentation '
-        'for more information on schema.yml syntax:\n\n'
-        'https://docs.getdbt.com/v0.11/docs/schemayml-files'.format(path)
+        'The schema file at {} is invalid because {}. Please consult the '
+        'documentation for more information on schema.yml syntax:\n\n'
+        'https://docs.getdbt.com/docs/schemayml-filesf'
+        .format(path, issue)
     )
 
 

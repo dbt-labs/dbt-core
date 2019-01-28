@@ -1,8 +1,7 @@
-
-
-# Confirm that this does not throw an exception for
-# a missing ref to the disabled model
-disabled:
-    constraints:
-        unique:
-            - id
+version: 2
+models:
+- name: disabled
+  columns:
+  - name: id
+    tests:
+    - unique

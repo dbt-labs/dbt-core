@@ -69,7 +69,6 @@ class MacrosKnownParser(BaseParser):
             - if neither of those exist (unit tests?), a function that returns
                 the 'default schema' as set in the root project's 'credentials'
                 is used
-
         """
         if self._get_schema_func is not None:
             return self._get_schema_func
@@ -96,49 +95,17 @@ class MacrosKnownParser(BaseParser):
         self._get_schema_func = get_schema
         return self._get_schema_func
 
-    def parse_node(self, node, node_path, package_project_config, tags=None,
-                   fqn_extra=None, fqn=None, agate_table=None,
-                   archive_config=None, column_name=None):
-        """Parse a node, given an UnparsedNode and any other required information.
-
-        agate_table should be set if the node came from a seed file.
-        archive_config should be set if the node is an Archive node.
-        column_name should be set if the node is a Test node associated with a
-        particular column.
+    def _build_intermediate_node_dict(self, config, node_dict, node_path,
+                                      package_project_config, tags, fqn,
+                                      agate_table, archive_config,
+                                      column_name):
+        """Update the unparsed node dictionary and build the basis for an
+        intermediate ParsedNode that will be passed into the renderer
         """
-        logger.debug("Parsing {}".format(node_path))
-
-        node = node.serialize()
-
+        # because this takes and returns dicts, subclasses can safely override
+        # this and mutate its results using super() both before and after.
         if agate_table is not None:
-            node['agate_table'] = agate_table
-        tags = coalesce(tags, [])
-        fqn_extra = coalesce(fqn_extra, [])
-
-        node.update({
-            'refs': [],
-            'depends_on': {
-                'nodes': [],
-                'macros': [],
-            }
-        })
-
-        if fqn is None:
-            fqn = self.get_fqn(node.get('path'), package_project_config,
-                               fqn_extra)
-
-        config = SourceConfig(
-            self.root_project_config,
-            package_project_config,
-            fqn,
-            node['resource_type'])
-
-        node['unique_id'] = node_path
-        node['empty'] = (
-            'raw_sql' in node and len(node['raw_sql'].strip()) == 0
-        )
-        node['fqn'] = fqn
-        node['tags'] = tags
+            node_dict['agate_table'] = agate_table
 
         # Set this temporarily. Not the full config yet (as config() hasn't
         # been called from jinja yet). But the Var() call below needs info
@@ -146,19 +113,42 @@ class MacrosKnownParser(BaseParser):
         # TODO: Restructure this?
         config_dict = coalesce(archive_config, {})
         config_dict.update(config.config)
-        node['config'] = config_dict
 
-        # Set this temporarily so get_rendered() has access to a schema & alias
-        node['schema'] = self.default_schema
-        node['database'] = self.default_database
-        default_alias = node.get('name')
-        node['alias'] = default_alias
+        empty = (
+            'raw_sql' in node_dict and len(node_dict['raw_sql'].strip()) == 0
+        )
+
+        node_dict.update({
+            'refs': [],
+            'sources': [],
+            'depends_on': {
+                'nodes': [],
+                'macros': [],
+            },
+            'unique_id': node_path,
+            'empty': empty,
+            'fqn': fqn,
+            'tags': tags,
+            'config': config_dict,
+            # Set these temporarily so get_rendered() has access to a schema,
+            # database, and alias.
+            'schema': self.default_schema,
+            'database': self.default_database,
+            'alias': node_dict.get('name'),
+        })
 
         # if there's a column, it should end up part of the ParsedNode
         if column_name is not None:
-            node['column_name'] = column_name
+            node_dict['column_name'] = column_name
 
-        parsed_node = ParsedNode(**node)
+        return node_dict
+
+    def _render_with_context(self, parsed_node, config):
+        """Given the parsed node and a SourceConfig to use during parsing,
+        render the node's sql wtih macro capture enabled.
+
+        Note: this mutates the config object when config() calls are rendered.
+        """
         context = dbt.context.parser.generate(
             parsed_node,
             self.root_project_config,
@@ -171,17 +161,19 @@ class MacrosKnownParser(BaseParser):
 
         # Clean up any open conns opened by adapter functions that hit the db
         db_wrapper = context['adapter']
-        adapter = db_wrapper.adapter
-        runtime_config = db_wrapper.config
-        adapter.release_connection(parsed_node.name)
+        db_wrapper.adapter.release_connection(parsed_node.name)
 
+    def _update_parsed_node_info(self, parsed_node, config):
+        """Given the SourceConfig used for parsing and the parsed node,
+        generate and set the true values to use, overriding the temporary parse
+        values set in _build_intermediate_parsed_node.
+        """
         # Special macro defined in the global project. Use the root project's
         # definition, not the current package
         schema_override = config.config.get('schema')
         get_schema = self.get_schema_func()
         parsed_node.schema = get_schema(schema_override).strip()
-        parsed_node.alias = config.config.get('alias', default_alias)
-        # no fancy macro for database (for now?)
+        parsed_node.alias = config.config.get('alias', parsed_node.get('name'))
         parsed_node.database = config.config.get(
             'database', self.default_database
         ).strip()
@@ -198,6 +190,39 @@ class MacrosKnownParser(BaseParser):
         for hook_type in dbt.hooks.ModelHookType.Both:
             parsed_node.config[hook_type] = dbt.hooks.get_hooks(parsed_node,
                                                                 hook_type)
+
+    def parse_node(self, node, node_path, package_project_config, tags=None,
+                   fqn_extra=None, fqn=None, agate_table=None,
+                   archive_config=None, column_name=None):
+        """Parse a node, given an UnparsedNode and any other required information.
+
+        agate_table should be set if the node came from a seed file.
+        archive_config should be set if the node is an Archive node.
+        column_name should be set if the node is a Test node associated with a
+        particular column.
+        """
+        logger.debug("Parsing {}".format(node_path))
+
+        tags = coalesce(tags, [])
+        fqn_extra = coalesce(fqn_extra, [])
+
+        if fqn is None:
+            fqn = self.get_fqn(node.path, package_project_config, fqn_extra)
+
+        config = SourceConfig(
+            self.root_project_config,
+            package_project_config,
+            fqn,
+            node.resource_type)
+
+        parsed_dict = self._build_intermediate_node_dict(
+            config, node.serialize(), node_path, config, tags, fqn,
+            agate_table, archive_config, column_name
+        )
+        parsed_node = ParsedNode(**parsed_dict)
+
+        self._render_with_context(parsed_node, config)
+        self._update_parsed_node_info(parsed_node, config)
 
         parsed_node.validate()
 

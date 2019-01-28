@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+import itertools
 import os
 import re
 import hashlib
@@ -10,13 +12,16 @@ import dbt.clients.yaml_helper
 import dbt.context.parser
 import dbt.contracts.project
 
+from dbt.clients.jinja import get_rendered
 from dbt.node_types import NodeType
-from dbt.compat import basestring, to_string
+from dbt.compat import basestring, to_string, to_native_string
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import get_pseudo_test_path
-from dbt.contracts.graph.unparsed import UnparsedNode, UnparsedNodeUpdate
-from dbt.contracts.graph.parsed import ParsedNodePatch
+from dbt.contracts.graph.unparsed import UnparsedNode, UnparsedNodeUpdate, \
+    UnparsedSourceDefinition
+from dbt.contracts.graph.parsed import ParsedNodePatch, ParsedSourceDefinition
 from dbt.parser.base import MacrosKnownParser
+from dbt.config.renderer import ConfigRenderer
 
 
 def get_nice_schema_test_name(test_type, test_name, args):
@@ -50,7 +55,8 @@ def get_nice_schema_test_name(test_type, test_name, args):
 
 def as_kwarg(key, value):
     test_value = to_string(value)
-    is_function = re.match(r'^\s*(ref|var)\s*\(.+\)\s*$', test_value)
+    is_function = re.match(r'^\s*(env_var|ref|var|source|doc)\s*\(.+\)\s*$',
+                           test_value)
 
     # if the value is a function, don't wrap it in quotes!
     if is_function:
@@ -61,11 +67,11 @@ def as_kwarg(key, value):
     return "{key}={value}".format(key=key, value=formatted_value)
 
 
-def build_test_raw_sql(test_namespace, model_name, test_type, test_args):
+def build_test_raw_sql(test_namespace, model, test_type, test_args):
     """Build the raw SQL from a test definition.
 
     :param test_namespace: The test's namespace, if one exists
-    :param model_name: The model name under test
+    :param model: The model under test
     :param test_type: The type of the test (unique_id, etc)
     :param test_args: The arguments passed to the test as a list of `key=value`
         strings
@@ -81,7 +87,7 @@ def build_test_raw_sql(test_namespace, model_name, test_type, test_args):
 
     raw_sql = "{{{{ {macro}(model=ref('{model}'), {kwargs}) }}}}".format(
         **{
-            'model': model_name,
+            'model': model['name'],
             'macro': macro_name,
             'kwargs': ", ".join(kwargs)
         }
@@ -89,110 +95,179 @@ def build_test_raw_sql(test_namespace, model_name, test_type, test_args):
     return raw_sql
 
 
-class SchemaParser(MacrosKnownParser):
-    """This is the original schema parser but with everything in one huge CF of
-    a method so I can refactor it more nicely.
+def build_source_test_raw_sql(test_namespace, source, table, test_type,
+                              test_args):
+    """Build the raw SQL from a source test definition.
+
+    :param test_namespace: The test's namespace, if one exists
+    :param source: The source under test.
+    :param table: The table under test
+    :param test_type: The type of the test (unique_id, etc)
+    :param test_args: The arguments passed to the test as a list of `key=value`
+        strings
+    :return: A string of raw sql for the test node.
     """
-    @staticmethod
-    def check_v2_missing_version(path, test_yml):
-        """Given the loaded yaml from a file, return True if it looks like the
-        file is probably a v2 schema.yml with a missing `version: 2`.
-        """
-        # in v1, it's Dict[str, dict] instead of Dict[str, list]
-        if 'models' in test_yml and isinstance(test_yml['models'], list):
-            dbt.exceptions.raise_incorrect_version(path)
+    # sort the dict so the keys are rendered deterministically (for tests)
+    kwargs = [as_kwarg(key, test_args[key]) for key in sorted(test_args)]
 
-    @classmethod
-    def _build_v1_test_args(cls, config):
-        if isinstance(config, (basestring, int, float, bool)):
-            return {'arg': config}
-        else:
-            return config
+    if test_namespace is None:
+        macro_name = "test_{}".format(test_type)
+    else:
+        macro_name = "{}.test_{}".format(test_namespace, test_type)
 
-    @classmethod
-    def _build_v2_test_args(cls, test, name):
-        if isinstance(test, basestring):
-            test_name = test
-            test_args = {}
-        elif isinstance(test, dict):
-            test = list(test.items())
-            if len(test) != 1:
-                dbt.exceptions.raise_compiler_error(
-                    'test definition dictionary must have exactly one key, got'
-                    ' {} instead ({} keys)'.format(test, len(test))
-                )
-            test_name, test_args = test[0]
-        else:
+    raw_sql = (
+        "{{{{ {macro}(model=source('{source}', '{table}'), {kwargs}) }}}}"
+        .format(
+            source=source['name'],
+            table=table['name'],
+            macro=macro_name,
+            kwargs=", ".join(kwargs))
+    )
+    return raw_sql
+
+
+def calculate_test_namespace(test_type, package_name):
+    test_namespace = None
+    split = test_type.split('.')
+    if len(split) > 1:
+        test_type = split[1]
+        package_name = split[0]
+        test_namespace = package_name
+
+    return test_namespace, test_type, package_name
+
+
+def _build_test_args(test, name):
+    if isinstance(test, basestring):
+        test_name = test
+        test_args = {}
+    elif isinstance(test, dict):
+        test = list(test.items())
+        if len(test) != 1:
             dbt.exceptions.raise_compiler_error(
-                'test must be dict or str, got {} (value {})'.format(
-                    type(test), test
-                )
+                'test definition dictionary must have exactly one key, got'
+                ' {} instead ({} keys)'.format(test, len(test))
             )
-        if name is not None:
-            test_args['column_name'] = name
-        return test_name, test_args
+        test_name, test_args = test[0]
+    else:
+        dbt.exceptions.raise_compiler_error(
+            'test must be dict or str, got {} (value {})'.format(
+                type(test), test
+            )
+        )
+    if name is not None:
+        test_args['column_name'] = name
+    return test_name, test_args
 
-    @classmethod
-    def calculate_namespace(cls, test_type, package_name):
-        test_namespace = None
-        split = test_type.split('.')
-        if len(split) > 1:
-            test_type = split[1]
-            package_name = split[0]
-            test_namespace = package_name
 
-        return test_namespace, test_type, package_name
+def warn_invalid(filepath, key, value, explain):
+    msg = (
+        "Invalid test config given in {} @ {}: {} {}"
+    ).format(filepath, key, value, explain)
+    if dbt.flags.STRICT_MODE:
+        dbt.exceptions.raise_compiler_error(msg, value)
+    dbt.utils.compiler_warning(value, msg)
 
-    @classmethod
-    def build_unparsed_node(cls, model_name, package_name, test_type,
-                            test_args, test_namespace, root_dir,
-                            original_file_path):
-        """Given a model name (for the model under test), a pacakge name,
-        a test type (identifying the test macro to use), arguments dictionary,
-        the root directory of the search, and the original file path to the
-        schema.yml file that specified the test, build an UnparsedNode
-        representing the test.
+
+def _filter_validate(filepath, location, values, validate):
+    """Generator for validate() results called against all given values. On
+    errors, fields are warned about and ignored, unless strict mode is set in
+    which case a compiler error is raised.
+    """
+    for value in values:
+        if not isinstance(value, dict):
+            warn_invalid(filepath, location, value, '(expected a dict)')
+            continue
+        try:
+            yield validate(**value)
+        except dbt.exceptions.JSONValidationException as exc:
+            # we don't want to fail the full run, but we do want to fail
+            # parsing this file
+            warn_invalid(filepath, location, value, '- '+exc.msg)
+            continue
+
+
+class ParserRef(object):
+    """A helper object to hold parse-time references."""
+    def __init__(self):
+        self.column_info = {}
+        self.docrefs = []
+
+    def add(self, column_name, description):
+        self.column_info[column_name] = {
+            'name': column_name,
+            'description': description,
+        }
+
+
+class SchemaBaseTestParser(MacrosKnownParser):
+    def _parse_column(self, target, column, package_name, root_dir, path,
+                      refs):
+        # this should yield ParsedNodes where resource_type == NodeType.Test
+        column_name = column['name']
+        description = column.get('description', '')
+
+        refs.add(column_name, description)
+        context = {
+            'doc': dbt.context.parser.docs(target, refs.docrefs, column_name)
+        }
+        get_rendered(description, context)
+
+        for test in column.get('tests', []):
+            yield self.build_test_node(
+                target, package_name, test, root_dir,
+                path, column_name
+            )
+
+    def _build_raw_sql(self, test_namespace, target, test_type, test_args):
+        raise NotImplementedError
+
+    def _generate_test_name(self, target, test_type, test_args):
+        """Returns a hashed_name, full_name pair."""
+        raise NotImplementedError
+
+    def build_test_node(self, test_target, package_name, test, root_dir, path,
+                        column_name=None):
+        """Build a test node against the given target (a model or a source).
+
+        :param test_target: An unparsed form of the target.
         """
-        test_path = os.path.basename(original_file_path)
+        test_type, test_args = _build_test_args(test, column_name)
 
-        raw_sql = build_test_raw_sql(test_namespace, model_name, test_type,
-                                     test_args)
-
-        hashed_name, full_name = get_nice_schema_test_name(test_type,
-                                                           model_name,
-                                                           test_args)
-
-        hashed_path = get_pseudo_test_path(hashed_name, test_path,
-                                           'schema_test')
-        full_path = get_pseudo_test_path(full_name, test_path,
-                                         'schema_test')
-        return UnparsedNode(
-            name=full_name,
-            resource_type=NodeType.Test,
-            package_name=package_name,
-            root_path=root_dir,
-            path=hashed_path,
-            original_file_path=original_file_path,
-            raw_sql=raw_sql
+        test_namespace, test_type, package_name = calculate_test_namespace(
+            test_type, package_name
         )
 
-    def build_parsed_node(self, unparsed, model_name, test_namespace,
-                          test_type, column_name):
-        """Given an UnparsedNode with a node type of Test and some extra
-        information, build a ParsedNode representing the test.
-        """
-
-        test_path = os.path.basename(unparsed.original_file_path)
-
-        source_package = self.all_projects.get(unparsed.package_name)
+        source_package = self.all_projects.get(package_name)
         if source_package is None:
             desc = '"{}" test on model "{}"'.format(test_type,
                                                     model_name)
             dbt.exceptions.raise_dep_not_found(None, desc, test_namespace)
 
+        test_path = os.path.basename(path)
+
+        hashed_name, full_name = self._generate_test_name(test_target,
+                                                          test_type,
+                                                          test_args)
+
+        hashed_path = get_pseudo_test_path(hashed_name, test_path,
+                                           'schema_test')
+
+        full_path = get_pseudo_test_path(full_name, test_path, 'schema_test')
+        raw_sql = self._build_raw_sql(test_namespace, test_target, test_type,
+                                      test_args)
+        unparsed = UnparsedNode(
+            name=full_name,
+            resource_type=NodeType.Test,
+            package_name=package_name,
+            root_path=root_dir,
+            path=hashed_path,
+            original_file_path=path,
+            raw_sql=raw_sql
+        )
+
         # supply our own fqn which overrides the hashed version from the path
-        full_path = get_pseudo_test_path(unparsed.name, test_path,
-                                         'schema_test')
+        # TODO: is this necessary even a little bit for tests?
         fqn_override = self.get_fqn(full_path, source_package)
 
         node_path = self.get_path(NodeType.Test, unparsed.package_name,
@@ -206,28 +281,176 @@ class SchemaParser(MacrosKnownParser):
                                fqn=fqn_override,
                                column_name=column_name)
 
-    def build_node(self, model_name, package_name, test_type, test_args,
-                   root_dir, original_file_path, column_name=None):
-        """From the various components that are common to both v1 and v2 schema,
-        build a ParsedNode representing a test case.
+
+class SchemaModelParser(SchemaBaseTestParser):
+    def _build_raw_sql(self, test_namespace, target, test_type, test_args):
+        return build_test_raw_sql(test_namespace, target, test_type, test_args)
+
+    def _generate_test_name(self, target, test_type, test_args):
+        return get_nice_schema_test_name(test_type, target['name'], test_args)
+
+    def parse_models_entry(self, model_dict, path, package_name, root_dir):
+        model_name = model_dict['name']
+        refs = ParserRef()
+        for column in model_dict.get('columns', []):
+            column_tests = self._parse_column(model_dict, column, package_name,
+                                              root_dir, path, refs)
+            for node in column_tests:
+                yield 'test', node
+
+        for test in model_dict.get('tests', []):
+            node = self.build_test_node(model_dict, package_name, test,
+                                        root_dir, path)
+            yield 'test', node
+
+        context = {'doc': dbt.context.parser.docs(model_dict, refs.docrefs)}
+        description = model_dict.get('description', '')
+        get_rendered(description, context)
+
+        patch = ParsedNodePatch(
+            name=model_name,
+            original_file_path=path,
+            description=description,
+            columns=refs.column_info,
+            docrefs=refs.docrefs
+        )
+        yield 'patch', patch
+
+    def parse_all(self, models, path, package_name, root_dir):
+        """Parse all the model dictionaries in models.
+
+        :param List[dict] models: The `models` section of the schema.yml, as a
+            list of dicts.
+        :param str path: The path to the schema.yml file
+        :param str package_name: The name of the current package
+        :param str root_dir: The root directory of the search
         """
-        original_test_type = test_type
-        test_namespace, test_type, package_name = self.calculate_namespace(
-            test_type, package_name
+        filtered = _filter_validate(path, 'models', models, UnparsedNodeUpdate)
+        nodes = itertools.chain.from_iterable(
+            self.parse_models_entry(model, path, package_name, root_dir)
+            for model in filtered
+        )
+        for node_type, node in nodes:
+            yield node_type, node
+
+
+class SchemaSourceParser(SchemaBaseTestParser):
+    def __init__(self, root_project_config, all_projects, macro_manifest):
+        super(SchemaSourceParser, self).__init__(
+            root_project_config=root_project_config,
+            all_projects=all_projects,
+            macro_manifest=macro_manifest
+        )
+        self._renderer = ConfigRenderer(self.root_project_config.cli_vars)
+
+    def _build_raw_sql(self, test_namespace, target, test_type, test_args):
+        return build_source_test_raw_sql(test_namespace, target['source'],
+                                         target['table'], test_type,
+                                         test_args)
+
+    def _generate_test_name(self, target, test_type, test_args):
+        return get_nice_schema_test_name(
+            'source_'+test_type,
+            '{}_{}'.format(target['source']['name'], target['table']['name']),
+            test_args
         )
 
-        test_namespace, test_type, package_name = self.calculate_namespace(
-            test_type, package_name
+    def get_path(self, *parts):
+        return '.'.join(str(s) for s in parts)
+
+    def generate_source_node(self, source, table, path, package_name, root_dir,
+                             refs):
+        unique_id = self.get_path(NodeType.Source, package_name,
+                                  source.name, table.name)
+
+        context = {'doc': dbt.context.parser.docs(source, refs.docrefs)}
+        description = table.get('description', '')
+        source_description = source.get('description', '')
+        get_rendered(description, context)
+        get_rendered(source_description, context)
+
+        # we'll fill columns in later.
+        freshness = dbt.utils.deep_merge(source.get('freshness', {}),
+                                         table.get('freshness', {}))
+
+        loaded_at_field = table.get('loaded_at_field',
+                                    source.get('loaded_at_field'))
+        return ParsedSourceDefinition(
+            package_name=package_name,
+            root_path=root_dir,
+            path=path,
+            original_file_path=path,
+            columns=refs.column_info,
+            unique_id=unique_id,
+            name=table.name,
+            description=description,
+            source_name=source.name,
+            source_description=source_description,
+            loader=source.get('loader', ''),
+            sql_table_name=table.sql_table_name,
+            docrefs=refs.docrefs,
+            loaded_at_field=loaded_at_field,
+            freshness=freshness,
+            resource_type=NodeType.Source
         )
 
-        unparsed = self.build_unparsed_node(model_name, package_name,
-                                            test_type, test_args,
-                                            test_namespace, root_dir,
-                                            original_file_path)
+    def parse_source_table(self, source, table, path, package_name, root_dir):
+        refs = ParserRef()
+        test_target = {'source': source, 'table': table}
+        for column in table.get('columns', []):
+            column_tests = self._parse_column(test_target, column,
+                                              package_name, root_dir, path,
+                                              refs)
+            for node in column_tests:
+                yield 'test', node
 
-        parsed = self.build_parsed_node(unparsed, model_name, test_namespace,
-                                        original_test_type, column_name)
-        return parsed
+        for test in table.get('tests', []):
+            node = self.build_test_node(test_target, package_name, test,
+                                        root_dir, path)
+            yield 'test', node
+
+        node = self.generate_source_node(source, table, path, package_name,
+                                         root_dir, refs)
+        yield 'source', node
+
+    def parse_source_entry(self, source, path, package_name, root_dir):
+        nodes = itertools.chain.from_iterable(
+            self.parse_source_table(source, table, path, package_name,
+                                    root_dir)
+            for table in source.tables
+        )
+        for node_type, node in nodes:
+            yield node_type, node
+
+    def _sources_validate(self, **kwargs):
+        kwargs = self._renderer.render_schema_source(kwargs)
+        return UnparsedSourceDefinition(**kwargs)
+
+    def parse_all(self, sources, path, package_name, root_dir):
+        """Parse all the model dictionaries in sources.
+
+        :param List[dict] sources: The `sources` section of the schema.yml, as
+            a list of dicts.
+        :param str path: The path to the schema.yml file
+        :param str package_name: The name of the current package
+        :param str root_dir: The root directory of the search
+        """
+        filtered = _filter_validate(path, 'sources', sources,
+                                    self._sources_validate)
+        nodes = itertools.chain.from_iterable(
+            self.parse_source_entry(source, path, package_name, root_dir)
+            for source in filtered
+        )
+
+        for node_type, node in nodes:
+            yield node_type, node
+
+
+class SchemaParser(object):
+    def __init__(self, root_project_config, all_projects, macro_manifest):
+        self.root_project_config = root_project_config
+        self.all_projects = all_projects
+        self.macro_manifest = macro_manifest
 
     @classmethod
     def find_schema_yml(cls, package_name, root_dir, relative_dirs):
@@ -264,211 +487,63 @@ class SchemaParser(MacrosKnownParser):
 
             yield original_file_path, test_yml
 
-    def parse_v1_test_yml(self, original_file_path, test_yml, package_name,
-                          root_dir):
-        """Parse v1 yml contents, yielding parsed nodes.
-
-        A v1 yml file is laid out like this ('variables' written
-        bash-curly-brace style):
-
-            ${model_name}:
-                constraints:
-                    ${constraint_type}:
-                        - ${column_1}
-                        - ${column_2}
-                    ${other_constraint_type}:
-                        - ...
-            ${other_model_name}:
-                constraints:
-                    ...
-        """
-        for model_name, test_spec in test_yml.items():
-            # in v1 we can really only have constraints, so not having any is
-            # a concern
-            no_tests_warning = (
-                "* WARNING: No constraints found for model '{}' in file {}\n"
-            )
-            if not isinstance(test_spec, dict):
-                msg = (
-                    "Invalid test config given in {} near {} (expected a dict)"
-                ).format(original_file_path, test_spec)
-                if dbt.flags.STRICT_MODE:
-                    dbt.exceptions.raise_compiler_error(msg)
-                dbt.utils.compiler_warning(model_name, msg,
-                                           resource_type='test')
-                continue
-
-            if test_spec is None or test_spec.get('constraints') is None:
-                logger.warning(no_tests_warning.format(model_name,
-                               original_file_path))
-                continue
-            constraints = test_spec.get('constraints', {})
-            for test_type, configs in constraints.items():
-                if configs is None:
-                    continue
-
-                if not isinstance(configs, (list, tuple)):
-                    dbt.utils.compiler_warning(
-                        model_name,
-                        "Invalid test config given in {}".format(
-                            original_file_path)
-                    )
-                    continue
-
-                for config in configs:
-                    test_args = self._build_v1_test_args(config)
-                    to_add = self.build_node(
-                        model_name, package_name, test_type, test_args,
-                        root_dir, original_file_path)
-                    if to_add is not None:
-                        yield to_add
-
-    def parse_v2_yml(self, original_file_path, test_yml, package_name,
-                     root_dir):
-        """Parse v2 yml contents, yielding both parsed nodes and node patches.
-
-        A v2 yml file is laid out like this ('variables' written
-        bash-curly-brace style):
-
-            models:
-                - name: ${model_name}
-                  description: ${node_description}
-                  columns:
-                    - name: ${column_1}
-                      description: ${column_1_description}
-                      tests:
-                          - ${constraint_type}
-                          - ${other_constraint_type}
-                    - name: ${column_2}
-                      description: ${column_2_description}
-                      tests:
-                          - ${constraint_type}: {$keyword_args_dict}
-                          ...
-                - name: ${other_model_name}
-                  ...
-        """
-        if 'models' not in test_yml:
-            # You could legitimately not have any models in your schema.yml, if
-            # sources were supported
-            return
-
-        for model in test_yml['models']:
-            if not isinstance(model, dict):
-                msg = (
-                    "Invalid test config given in {} near {} (expected a dict)"
-                ).format(original_file_path, model)
-                if dbt.flags.STRICT_MODE:
-                    dbt.exceptions.raise_compiler_error(msg, model)
-                dbt.utils.compiler_warning(model, msg)
-                continue
-            try:
-                model = UnparsedNodeUpdate(**model)
-            except dbt.exceptions.JSONValidationException as exc:
-                # we don't want to fail the full run, but we do want to fail
-                # parsing this file
-                msg = "Invalid test config given in {}: {}".format(
-                        original_file_path, exc.errors_message
-                )
-                if dbt.flags.STRICT_MODE:
-                    dbt.exceptions.raise_compiler_error(msg, model)
-
-                dbt.utils.compiler_warning(model.get('name'), msg)
-                continue
-
-            iterator = self.parse_model(model, package_name, root_dir,
-                                        original_file_path)
-
-            for node_type, node in iterator:
-                yield node_type, node
-
-    def parse_model(self, model, package_name, root_dir, path):
-        """Given an UnparsedNodeUpdate, return column info about the model
-
-            - column info (name and maybe description) as a dict
-            - a list of ParsedNodes repreenting tests
-
-        This is only used in parsing the v2 schema.
-        """
-        model_name = model['name']
-        docrefs = []
-        column_info = {}
-        for column in model.get('columns', []):
-            column_name = column['name']
-            description = column.get('description', '')
-            column_info[column_name] = {
-                'name': column_name,
-                'description': description,
-            }
-            context = {
-                'doc': dbt.context.parser.docs(model, docrefs, column_name)
-            }
-            dbt.clients.jinja.get_rendered(description, context)
-            for test in column.get('tests', []):
-                test_type, test_args = self._build_v2_test_args(
-                    test, column_name
-                )
-                node = self.build_node(
-                    model_name, package_name, test_type, test_args, root_dir,
-                    path, column_name
-                )
-                yield 'test', node
-
-        for test in model.get('tests', []):
-            # table tests don't inject any extra values, model name is
-            # available via `model.name`
-            test_type, test_args = self._build_v2_test_args(test, None)
-            node = self.build_node(model_name, package_name, test_type,
-                                   test_args, root_dir, path)
-            yield 'test', node
-
-        context = {'doc': dbt.context.parser.docs(model, docrefs)}
-        description = model.get('description', '')
-        dbt.clients.jinja.get_rendered(description, context)
-
-        patch = ParsedNodePatch(
-            name=model_name,
-            original_file_path=path,
-            description=description,
-            columns=column_info,
-            docrefs=docrefs
+    def parse_schema(self, path, test_yml, package_name, root_dir):
+        model_parser = SchemaModelParser(self.root_project_config,
+                                         self.all_projects,
+                                         self.macro_manifest)
+        source_parser = SchemaSourceParser(self.root_project_config,
+                                           self.all_projects,
+                                           self.macro_manifest)
+        models = test_yml.get('models', [])
+        sources = test_yml.get('sources', [])
+        return itertools.chain(
+            model_parser.parse_all(models, path, package_name, root_dir),
+            source_parser.parse_all(sources, path, package_name, root_dir),
         )
-        yield 'patch', patch
+
+    def _parse_format_version(self, path, test_yml):
+        if 'version' not in test_yml:
+            dbt.exceptions.raise_invalid_schema_yml_version(
+                path, 'no version is specified'
+            )
+
+        version = test_yml['version']
+        # if it's not an integer, the version is malformed, or not
+        # set. Either way, only 'version: 2' is supported.
+        if not isinstance(version, int):
+            dbt.exceptions.raise_invalid_schema_yml_version(
+                path, 'the version is not an integer'
+            )
+        return version
 
     def load_and_parse(self, package_name, root_dir, relative_dirs):
         if dbt.flags.STRICT_MODE:
             dbt.contracts.project.ProjectList(**self.all_projects)
         new_tests = {}  # test unique ID -> ParsedNode
         node_patches = {}  # model name -> dict
+        new_sources = {}  # source unique ID -> ParsedSourceDefinition
 
         iterator = self.find_schema_yml(package_name, root_dir, relative_dirs)
 
-        for original_file_path, test_yml in iterator:
-            version = test_yml.get('version', 1)
-            # the version will not be an int if it's a v1 model that has a
-            # model named 'version'.
-            if version == 1 or not isinstance(version, int):
-                self.check_v2_missing_version(original_file_path, test_yml)
-                new_tests.update(
-                    (t.get('unique_id'), t)
-                    for t in self.parse_v1_test_yml(
-                        original_file_path, test_yml, package_name, root_dir)
-                )
-            elif version == 2:
-                v2_results = self.parse_v2_yml(
-                        original_file_path, test_yml, package_name, root_dir)
-                for result_type, node in v2_results:
-                    if result_type == 'patch':
-                        node_patches[node.name] = node
-                    elif result_type == 'test':
-                        new_tests[node.unique_id] = node
-                    else:
-                        raise dbt.exceptions.InternalException(
-                            'Got invalid result type {} '.format(result_type)
-                        )
-            else:
-                dbt.exceptions.raise_compiler_error((
-                    'Got an invalid schema.yml version {} in {}, only 1 and 2 '
-                    'are supported').format(version, original_file_path)
+        for path, test_yml in iterator:
+            version = self._parse_format_version(path, test_yml)
+            if version != 2:
+                dbt.exceptions.raise_invalid_schema_yml_version(
+                    path,
+                    'version {} is not supported'.format(version)
                 )
 
-        return new_tests, node_patches
+            results = self.parse_schema(path, test_yml, package_name, root_dir)
+            for result_type, node in results:
+                if result_type == 'patch':
+                    node_patches[node.name] = node
+                elif result_type == 'test':
+                    new_tests[node.unique_id] = node
+                elif result_type == 'source':
+                    new_sources[node.unique_id] = node
+                else:
+                    raise dbt.exceptions.InternalException(
+                        'Got invalid result type {} '.format(result_type)
+                    )
+
+        return new_tests, node_patches, new_sources

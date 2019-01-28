@@ -143,14 +143,20 @@ class NodeSelector(object):
         qualified_name = qualified_name_selector.split(".")
         package_names = get_package_names(graph)
         for node in graph.nodes():
-            fqn_ish = self.manifest.nodes[node].fqn
+            real_node = self.manifest.nodes[node]
+            if real_node.resource_type == NodeType.Source:
+                continue
+            fqn_ish = real_node.fqn
             if _node_is_match(qualified_name, package_names, fqn_ish):
                 yield node
 
     def get_nodes_by_tag(self, graph, tag_name):
         """ yields nodes from graph that have the specified tag """
         for node in graph.nodes():
-            tags = self.manifest.nodes[node].tags
+            real_node = self.manifest.nodes[node]
+            if real_node.resource_type == NodeType.Source:
+                continue
+            tags = real_node.tags
 
             if tag_name in tags:
                 yield node

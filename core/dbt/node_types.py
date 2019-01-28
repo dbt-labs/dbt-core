@@ -9,6 +9,7 @@ class NodeType(object):
     Operation = 'operation'
     Seed = 'seed'
     Documentation = 'documentation'
+    Source = 'source'
 
     @classmethod
     def executable(cls):
@@ -20,6 +21,7 @@ class NodeType(object):
             cls.Operation,
             cls.Seed,
             cls.Documentation,
+            cls.Source,
         ]
 
     @classmethod

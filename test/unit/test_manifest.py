@@ -41,6 +41,7 @@ class ManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='snowplow',
                 refs=[],
+                sources=[],
                 depends_on={
                     'nodes': [],
                     'macros': []
@@ -63,6 +64,7 @@ class ManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='root',
                 refs=[],
+                sources=[],
                 depends_on={
                     'nodes': [],
                     'macros': []
@@ -85,6 +87,7 @@ class ManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='root',
                 refs=[['events']],
+                sources=[],
                 depends_on={
                     'nodes': ['model.root.events'],
                     'macros': []
@@ -107,6 +110,7 @@ class ManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='root',
                 refs=[['events']],
+                sources=[],
                 depends_on={
                     'nodes': ['model.root.dep'],
                     'macros': []
@@ -129,6 +133,7 @@ class ManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='root',
                 refs=[['events']],
+                sources=[],
                 depends_on={
                     'nodes': ['model.root.events'],
                     'macros': []
@@ -151,6 +156,7 @@ class ManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='root',
                 refs=[['events']],
+                sources=[],
                 depends_on={
                     'nodes': ['model.root.nested', 'model.root.sibling'],
                     'macros': []
@@ -332,6 +338,7 @@ class ManifestTest(unittest.TestCase):
             empty=False,
             package_name='root',
             refs=[['events']],
+            sources=[],
             depends_on={
                 'nodes': [],
                 'macros': []
@@ -389,6 +396,7 @@ class MixedManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='snowplow',
                 refs=[],
+                sources=[],
                 depends_on={
                     'nodes': [],
                     'macros': []
@@ -416,6 +424,7 @@ class MixedManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='root',
                 refs=[],
+                sources=[],
                 depends_on={
                     'nodes': [],
                     'macros': []
@@ -443,6 +452,7 @@ class MixedManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='root',
                 refs=[['events']],
+                sources=[],
                 depends_on={
                     'nodes': ['model.root.events'],
                     'macros': []
@@ -465,6 +475,7 @@ class MixedManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='root',
                 refs=[['events']],
+                sources=[],
                 depends_on={
                     'nodes': ['model.root.dep'],
                     'macros': []
@@ -487,6 +498,7 @@ class MixedManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='root',
                 refs=[['events']],
+                sources=[],
                 depends_on={
                     'nodes': ['model.root.events'],
                     'macros': []
@@ -509,6 +521,7 @@ class MixedManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='root',
                 refs=[['events']],
+                sources=[],
                 depends_on={
                     'nodes': ['model.root.nested', 'model.root.sibling'],
                     'macros': []

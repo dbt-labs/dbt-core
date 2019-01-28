@@ -1,7 +1,8 @@
 from dbt.api import APIObject
 from dbt.contracts.graph.unparsed import UNPARSED_NODE_CONTRACT
 from dbt.contracts.graph.parsed import PARSED_NODE_CONTRACT, \
-    PARSED_MACRO_CONTRACT, PARSED_DOCUMENTATION_CONTRACT, ParsedNode
+    PARSED_MACRO_CONTRACT, PARSED_DOCUMENTATION_CONTRACT, ParsedNode, \
+    PARSED_SOURCE_DEFINITION_CONTRACT
 from dbt.contracts.graph.compiled import COMPILED_NODE_CONTRACT, CompiledNode
 from dbt.exceptions import ValidationException
 from dbt.node_types import NodeType
@@ -9,10 +10,15 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt import tracking
 import dbt.utils
 
-# We allow either parsed or compiled nodes, as some 'compile()' calls in the
-# runner actually just return the original parsed node they were given.
+# We allow either parsed or compiled nodes, or parsed sources, as some
+# 'compile()' calls in the runner actually just return the original parsed
+# node they were given.
 COMPILE_RESULT_NODE_CONTRACT = {
-    'anyOf': [PARSED_NODE_CONTRACT, COMPILED_NODE_CONTRACT]
+    'anyOf': [
+        PARSED_NODE_CONTRACT,
+        COMPILED_NODE_CONTRACT,
+        PARSED_SOURCE_DEFINITION_CONTRACT,
+    ]
 }
 
 
@@ -268,6 +274,13 @@ class Manifest(APIObject):
         """
         return self._find_by_name(name, package, 'nodes', NodeType.refable())
 
+    def find_source_by_name(self, source_name, table_name, package):
+        """Find any valid target for "source()" in the graph by its name and
+        package name, or None for any package.
+        """
+        name = '{}.{}'.format(source_name, table_name)
+        return self._find_by_name(name, package, 'nodes', [NodeType.Source])
+
     def get_materialization_macro(self, materialization_name,
                                   adapter_type=None):
         macro_name = dbt.utils.get_materialization_macro_name(
@@ -293,6 +306,8 @@ class Manifest(APIObject):
     def get_resource_fqns(self):
         resource_fqns = {}
         for unique_id, node in self.nodes.items():
+            if node.resource_type == NodeType.Source:
+                continue  # sources have no FQNs and can't be configured
             resource_type_plural = node.resource_type + 's'
             if resource_type_plural not in resource_fqns:
                 resource_fqns[resource_type_plural] = set()
@@ -314,6 +329,8 @@ class Manifest(APIObject):
         return to_return
 
     def _model_matches_schema_and_table(self, schema, table, model):
+        if model.resource_type == NodeType.Source:
+            return False
         return (model.schema.lower() == schema.lower() and
                 model.alias.lower() == table.lower())
 
@@ -387,11 +404,17 @@ class Manifest(APIObject):
             type(self).__name__, name)
         )
 
+    def parsed_nodes(self):
+        for node in self.nodes.values():
+            if node.resource_type == NodeType.Source:
+                continue
+            yield node
+
     def get_used_schemas(self):
         return frozenset({
             (node.database, node.schema)
-            for node in self.nodes.values()
+            for node in self.parsed_nodes()
         })
 
     def get_used_databases(self):
-        return frozenset(node.database for node in self.nodes.values())
+        return frozenset(node.database for node in self.parsed_nodes())

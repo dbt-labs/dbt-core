@@ -45,6 +45,14 @@ def docs(unparsed, docrefs, column_name=None):
     return do_docs
 
 
+def source(db_wrapper, model, config, manifest):
+    def do_source(source_name, table_name):
+        model.sources.append([source_name, table_name])
+        return ''
+
+    return do_source
+
+
 class Config(object):
     def __init__(self, model, source_config):
         self.model = model
