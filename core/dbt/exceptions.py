@@ -578,3 +578,27 @@ def raise_unrecognized_credentials_type(typename, supported_types):
 
 def raise_not_implemented(msg):
     raise NotImplementedException(msg)
+
+
+# Update this when a new function should be added to the
+# dbt context's `exceptions` key!
+CONTEXT_EXPORTS = {
+    fn.__name__: fn
+    for fn in
+    [
+        missing_config,
+        missing_materialization,
+        missing_relation,
+        raise_ambiguous_alias,
+        raise_ambiguous_catalog_match,
+        raise_cache_inconsistent,
+        raise_compiler_error,
+        raise_database_error,
+        raise_dep_not_found,
+        raise_dependency_error,
+        raise_duplicate_patch_name,
+        raise_duplicate_resource_name,
+        raise_invalid_schema_yml_version,
+        relation_wrong_type,
+    ]
+}
