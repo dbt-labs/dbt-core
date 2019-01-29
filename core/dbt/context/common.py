@@ -355,7 +355,7 @@ def get_datetime_module_context():
     ]
 
     return {
-        name: getattr(pytz, name) for name in context_exports
+        name: getattr(datetime, name) for name in context_exports
     }
 
 
