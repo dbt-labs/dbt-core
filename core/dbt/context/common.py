@@ -336,6 +336,29 @@ def get_this_relation(db_wrapper, config, model):
     return db_wrapper.Relation.create_from_node(config, model)
 
 
+def get_pytz_module_context():
+    context_exports = pytz.__all__
+
+    return {
+        name: getattr(pytz, name) for name in context_exports
+    }
+
+
+def get_datetime_module_context():
+    context_exports = [
+        'date',
+        'datetime',
+        'time',
+        'timedelta',
+        'tzinfo',
+        'timezone'
+    ]
+
+    return {
+        name: getattr(pytz, name) for name in context_exports
+    }
+
+
 def generate_base(model, model_dict, config, manifest, source_config,
                   provider, connection_name):
     """Generate the common aspects of the config dict."""
@@ -377,8 +400,8 @@ def generate_base(model, model_dict, config, manifest, source_config,
         "log": log,
         "model": model_dict,
         "modules": {
-            "pytz": pytz,
-            "datetime": datetime
+            "pytz": get_pytz_module_context(),
+            "datetime": get_datetime_module_context(),
         },
         "post_hooks": post_hooks,
         "pre_hooks": pre_hooks,
