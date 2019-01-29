@@ -37,3 +37,9 @@ sources:
               column_name: favorite_color
               to: ref('descendant_model')
               field: favorite_color
+      - name: other_test_table
+        sql_table_name: "{{ var('test_run_schema') }}.other_table"
+  - name: other_source
+    tables:
+      - name: test_table
+        sql_table_name: "{{ var('test_run_schema') }}.other_source_table"

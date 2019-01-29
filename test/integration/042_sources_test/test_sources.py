@@ -1,7 +1,6 @@
 from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest, use_profile
 import os
-import dbt.exceptions
 
 class TestSources(DBTIntegrationTest):
     @property
@@ -30,9 +29,10 @@ class TestSources(DBTIntegrationTest):
     @use_profile('postgres')
     def test_basic_source_def(self):
         results = self.run_dbt_with_vars(['run'])
-        self.assertEqual(len(results), 2)
-        self.assertTablesEqual('source', 'descendant_model')
-        self.assertTablesEqual('descendant_model', 'nonsource_descendant')
+        self.assertEqual(len(results), 3)
+        self.assertManyTablesEqual(
+            ['source', 'descendant_model', 'nonsource_descendant'],
+            ['expected_multi_source', 'multi_source_model'])
         results = self.run_dbt_with_vars(['test'])
         self.assertEqual(len(results), 4)
 
@@ -46,6 +46,8 @@ class TestSources(DBTIntegrationTest):
         ])
         self.assertEqual(len(results), 1)
         self.assertTablesEqual('source', 'descendant_model')
+        self.assertTableDoesNotExist('nonsource_descendant')
+        self.assertTableDoesNotExist('multi_source_model')
         results = self.run_dbt_with_vars([
             'test',
             '--models',
@@ -61,12 +63,26 @@ class TestSources(DBTIntegrationTest):
             '--models',
             'source:test_source.test_table'
         ])
+        self.assertTableDoesNotExist('nonsource_descendant')
+        self.assertTableDoesNotExist('multi_source_model')
+        self.assertTableDoesNotExist('descendant_model')
         self.assertEqual(len(results), 0)
 
     @use_profile('postgres')
-    def test_invalid_source_def(self):
-        with self.assertRaises(dbt.exceptions.RuntimeException) as exc:
-            self.run_dbt_with_vars([
-                'run', '--models', 'source:test_source+'
-            ])
-            self.assertIn('Invalid source selector value', str(exc))
+    def test_source_only_def(self):
+        results = self.run_dbt_with_vars([
+            'run', '--models', 'source:other_source+'
+        ])
+        self.assertEqual(len(results), 1)
+        self.assertTablesEqual('expected_multi_source', 'multi_source_model')
+        self.assertTableDoesNotExist('nonsource_descendant')
+        self.assertTableDoesNotExist('descendant_model')
+
+        results = self.run_dbt_with_vars([
+            'run', '--models', 'source:test_source+'
+        ])
+        self.assertEqual(len(results), 2)
+        self.assertManyTablesEqual(
+            ['source', 'descendant_model'],
+            ['expected_multi_source', 'multi_source_model'])
+        self.assertTableDoesNotExist('nonsource_descendant')

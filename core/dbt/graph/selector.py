@@ -176,17 +176,23 @@ class NodeSelector(object):
 
     def get_nodes_by_source(self, graph, source_full_name):
         """yields nodes from graph are the specified source."""
-        if source_full_name.count('.') != 1:
+        parts = source_full_name.split('.')
+        if len(parts) == 1:
+            target_source, target_table = parts[0], None
+        elif len(parts) == 2:
+            target_source, target_table = parts
+        else:  # len(parts) > 2 or len(parts) == 0
             msg = (
                 'Invalid source selector value "{}". Sources must be of the '
-                'form `${{source_name}}.${{target_name}}`'
+                'form `${{source_name}}` or '
+                '`${{source_name}}.${{target_name}}`'
             ).format(source_full_name)
             raise dbt.exceptions.RuntimeException(msg)
 
-        target = tuple(source_full_name.split('.'))
-
         for node, real_node in self.source_nodes(graph):
-            if (real_node.source_name, real_node.name) == target:
+            if real_node.source_name != target_source:
+                continue
+            if target_table is None or target_table == real_node.name:
                 yield node
 
     def get_nodes_from_spec(self, graph, spec):
