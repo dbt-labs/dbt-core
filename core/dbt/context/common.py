@@ -369,7 +369,7 @@ def generate_base(model, model_dict, config, manifest, source_config,
         "config": provider.Config(model_dict, source_config),
         "database": config.credentials.database,
         "env_var": env_var,
-        "exceptions": dbt.exceptions,
+        "exceptions": dbt.exceptions.CONTEXT_EXPORTS,
         "execute": provider.execute,
         "flags": dbt.flags,
         # TODO: Do we have to leave this in?
