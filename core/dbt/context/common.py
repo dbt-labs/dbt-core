@@ -350,8 +350,7 @@ def get_datetime_module_context():
         'datetime',
         'time',
         'timedelta',
-        'tzinfo',
-        'timezone'
+        'tzinfo'
     ]
 
     return {
