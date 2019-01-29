@@ -1033,8 +1033,7 @@ def warn(msg, node=None):
 # dbt context's `exceptions` key!
 CONTEXT_EXPORTS = {
     fn.__name__: fn
-    for fn in
-    [
+    for fn in [
         warn,
         missing_config,
         missing_materialization,
