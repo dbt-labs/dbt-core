@@ -86,3 +86,8 @@
   {% endcall %}
   {{ return(load_result('check_schema_exists').table) }}
 {% endmacro %}
+
+
+{% macro postgres__current_timestamp() -%}
+  now()
+{%- endmacro %}

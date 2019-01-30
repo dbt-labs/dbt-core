@@ -182,7 +182,7 @@ class UnparsedNodeUpdate(APIObject):
     SCHEMA = UNPARSED_NODE_UPDATE_CONTRACT
 
 
-_TIME_CONTRACT = {
+TIME_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
     'properties': {
@@ -204,13 +204,13 @@ _FRESHNESS_CONTRACT = {
         'warn_after': {
             'anyOf': [
                 {'type': 'null'},
-                _TIME_CONTRACT,
+                TIME_CONTRACT,
             ]
         },
         'error_after': {
             'anyOf': [
                 {'type': 'null'},
-                _TIME_CONTRACT,
+                TIME_CONTRACT,
 
             ]
         },

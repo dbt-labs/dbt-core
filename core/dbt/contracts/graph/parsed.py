@@ -8,7 +8,7 @@ import dbt.clients.jinja
 
 from dbt.contracts.graph.unparsed import UNPARSED_NODE_CONTRACT, \
     UNPARSED_MACRO_CONTRACT, UNPARSED_DOCUMENTATION_FILE_CONTRACT, \
-    UNPARSED_BASE_CONTRACT, FRESHNESS_CONTRACT
+    UNPARSED_BASE_CONTRACT, TIME_CONTRACT
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -604,6 +604,29 @@ class Hook(APIObject):
     SCHEMA = HOOK_CONTRACT
 
 
+FRESHNESS_CONTRACT = {
+    'properties': {
+        'loaded_at_field': {
+            'type': ['null', 'string'],
+            'description': 'The field to use as the "loaded at" timestamp',
+        },
+        'freshness': {
+            'anyOf': [
+                {'type': 'null'},
+                {
+                    'type': 'object',
+                    'additionalProperties': False,
+                    'properties': {
+                        'warn_after': TIME_CONTRACT,
+                        'error_after': TIME_CONTRACT,
+                    },
+                },
+            ],
+        },
+    },
+}
+
+
 PARSED_SOURCE_DEFINITION_CONTRACT = deep_merge(
     UNPARSED_BASE_CONTRACT,
     FRESHNESS_CONTRACT,
@@ -648,7 +671,6 @@ PARSED_SOURCE_DEFINITION_CONTRACT = deep_merge(
             }
         },
         # note that while required, loaded_at_field and freshness may be null
-        # (and either of freshness's members may be null as well!)
         'required': [
             'source_name', 'source_description', 'loaded_at_field', 'loader',
             'freshness', 'description', 'columns', 'docrefs', 'sql_table_name',
@@ -676,3 +698,11 @@ class ParsedSourceDefinition(APIObject):
     @property
     def sources(self):
         return []
+
+    @property
+    def tags(self):
+        return []
+
+    @property
+    def has_freshness(self):
+        return self.freshness is not None and self.loaded_at_field is not None

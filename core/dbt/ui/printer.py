@@ -194,6 +194,36 @@ def print_seed_result_line(result, schema_name, index, total):
         result.execution_time)
 
 
+def print_freshness_result_line(result, index, total):
+    source = result.node
+
+    if result.errored or result.status == 'ERROR':
+        info = 'ERROR'
+        color = red
+    elif result.status == 'WARN':
+        # if we upgrade to colorama >= 0.4.0 this can become lightred_ex
+        # (aka orange)
+        info = 'WARN'
+        color = red
+    else:
+        info = 'PASS'
+        color = green
+
+    msg = "{info} source {source_name}.{table_name}".format(
+        info=info,
+        source_name=source.source_name,
+        table_name=source.name,
+    )
+
+    print_fancy_output_line(
+        info,
+        color(info),
+        index,
+        total,
+        execution_time=result.execution_time
+    )
+
+
 def interpret_run_result(result):
     if result.errored or result.failed:
         return 'error'

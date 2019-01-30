@@ -1,5 +1,6 @@
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.exceptions import NotImplementedException
+from dbt.exceptions import NotImplementedException, CompilationException, \
+    RuntimeException, InternalException, missing_materialization
 from dbt.utils import get_nodes_by_tags
 from dbt.node_types import NodeType, RunHookType
 from dbt.adapters.factory import get_adapter
@@ -8,6 +9,7 @@ from dbt.compilation import compile_node
 
 import dbt.clients.jinja
 import dbt.context.runtime
+import dbt.exceptions
 import dbt.utils
 import dbt.tracking
 import dbt.ui.printer
@@ -20,6 +22,7 @@ import sys
 import threading
 import time
 import traceback
+from datetime import timedelta
 
 
 INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If \
@@ -72,8 +75,7 @@ class BaseRunner(object):
         return result
 
     def safe_run(self, manifest):
-        catchable_errors = (dbt.exceptions.CompilationException,
-                            dbt.exceptions.RuntimeException)
+        catchable_errors = (CompilationException, RuntimeException)
 
         result = self.DefaultResult(self.node)
         started = time.time()
@@ -107,7 +109,7 @@ class BaseRunner(object):
             result.error = dbt.compat.to_string(e)
             result.status = 'ERROR'
 
-        except dbt.exceptions.InternalException as e:
+        except InternalException as e:
             build_path = self.node.build_path
             prefix = 'Internal error executing {}'.format(build_path)
 
@@ -121,8 +123,11 @@ class BaseRunner(object):
             result.status = 'ERROR'
 
         except Exception as e:
-            prefix = "Unhandled error while executing {filepath}".format(
-                        filepath=self.node.build_path)
+            node_description = self.node.get('build_path')
+            if node_description is None:
+                node_description = self.node.unique_id
+            prefix = "Unhandled error while executing {description}".format(
+                        description=node_description)
 
             error = "{prefix}\n{error}".format(
                          prefix=dbt.ui.printer.red(prefix),
@@ -269,9 +274,7 @@ class ModelRunner(CompileRunner):
             self.adapter.type())
 
         if materialization_macro is None:
-            dbt.exceptions.missing_materialization(
-                model,
-                self.adapter.type())
+            missing_materialization(model, self.adapter.type())
 
         materialization_macro.generator(context)()
 
@@ -282,6 +285,64 @@ class ModelRunner(CompileRunner):
         result = context['load_result']('main')
 
         return RunModelResult(model, status=result.status)
+
+
+class FreshnessRunner(BaseRunner):
+    def before_execute(self):
+        description = 'freshness of {0.source_name}.{0.name}'.format(self.node)
+        dbt.ui.printer.print_start_line(description, self.node_index,
+                                        self.num_nodes)
+
+    def after_execute(self, result):
+        dbt.ui.printer.print_freshness_result_line(result,
+                                                   self.node_index,
+                                                   self.num_nodes)
+
+    @staticmethod
+    def _freshness_delta(freshness):
+        # timedelta makes this convenient!
+        kwargs = {freshness['period']+'s': freshness['count']}
+        return timedelta(**kwargs)
+
+    def _calculate_status(self, target_freshness, freshness):
+        """Calculate the status of a run.
+
+        :param dict target_freshness: The target freshness dictionary. It must
+            match the freshness spec.
+        :param timedelta freshness: The actual freshness of the data, as
+            calculated from the database's timestamps
+        """
+        warn_after = self._freshness_delta(target_freshness['warn_after'])
+        error_after = self._freshness_delta(target_freshness['error_after'])
+        # if freshness > warn_after > error_after, you'll get an error, not a
+        # warning
+        if freshness > error_after:
+            return 'ERROR'
+        elif freshness > warn_after:
+            return 'WARN'
+        else:
+            return 'PASS'
+
+    def execute(self, compiled_node, manifest):
+        # given a Source, calculate its fresnhess.
+        freshness = self.adapter.calculate_freshness(
+            compiled_node.sql_table_name,
+            compiled_node.loaded_at_field,
+            manifest=manifest
+        )
+        status = self._calculate_status(compiled_node.freshness, freshness)
+        failed = status == 'ERROR'
+
+        # TODO: return something good here
+        return RunModelResult(compiled_node, status=status, failed=failed)
+
+    def compile(self, manifest):
+        if self.node.resource_type != NodeType.Source:
+            # should be unreachable...
+            raise RuntimeException('fresnhess runner: got a non-Source')
+        # we don't do anything interesting when we compile a source node
+        return self.node
+
 
 
 class TestRunner(CompileRunner):
