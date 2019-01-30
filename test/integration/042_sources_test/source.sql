@@ -111,3 +111,43 @@ VALUES
     ('green', 98,'Gloria','gwalker2p@usa.gov','156.140.7.128','1997-10-04 07:58:58'),
     ('green', 99,'Paul','pjohnson2q@umn.edu','183.59.198.197','1991-11-14 12:33:55'),
     ('green', 100,'Frank','fgreene2r@blogspot.com','150.143.68.121','2010-06-12 23:55:39');
+
+create table {schema}.other_table (
+    id INTEGER,
+    first_name VARCHAR(11)
+);
+
+
+INSERT INTO {schema}.other_table
+    (id, first_name)
+VALUES
+    (1, 'Larry'),
+    (2, 'Curly'),
+    (3, 'Moe');
+
+create table {schema}.other_source_table (
+    id INTEGER,
+    color VARCHAR(10)
+);
+
+
+INSERT INTO {schema}.other_source_table
+    (id, color)
+VALUES
+    (1, 'blue'),
+    (2, 'red'),
+    (3, 'green');
+
+
+create table {schema}.expected_multi_source(
+    id INTEGER,
+    first_name VARCHAR(11),
+    color VARCHAR(10)
+);
+
+INSERT INTO {schema}.expected_multi_source
+    (id, first_name, color)
+VALUES
+    (1, 'Larry', 'blue'),
+    (2, 'Curly', 'red'),
+    (3, 'Moe', 'green');
