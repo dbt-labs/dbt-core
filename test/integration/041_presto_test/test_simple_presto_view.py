@@ -30,13 +30,13 @@ class TestBasePrestoRun(DBTIntegrationTest):
 
         for result in test_results:
             if 'dupe' in result.node.get('name'):
-                self.assertFalse(result.errored)
+                self.assertIsNone(result.error)
                 self.assertFalse(result.skipped)
                 self.assertTrue(result.status > 0)
 
             # assert that actual tests pass
             else:
-                self.assertFalse(result.errored)
+                self.assertIsNone(result.error)
                 self.assertFalse(result.skipped)
                 # status = # of failing rows
                 self.assertEqual(result.status, 0)

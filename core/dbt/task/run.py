@@ -92,7 +92,7 @@ class RunTask(CompileTask):
         # errored failed skipped
         schemas = list(set(
             r.node.schema for r in results
-            if not any((r.errored, r.failed, r.skipped))
+            if not any((r.error is not None, r.failed, r.skipped))
         ))
         self.safe_run_hooks(adapter, RunHookType.End,
                             {'schemas': schemas, 'results': results})

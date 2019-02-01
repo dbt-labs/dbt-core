@@ -193,7 +193,7 @@ class GenerateTask(CompileTask):
         compile_results = None
         if self.args.compile:
             compile_results = super(GenerateTask, self).run()
-            if any(r.errored for r in compile_results):
+            if any(r.error is not None for r in compile_results):
                 dbt.ui.printer.print_timestamped_line(
                     'compile failed, cannot generate docs'
                 )

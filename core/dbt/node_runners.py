@@ -4,7 +4,8 @@ from dbt.exceptions import NotImplementedException, CompilationException, \
 from dbt.utils import get_nodes_by_tags
 from dbt.node_types import NodeType, RunHookType
 from dbt.adapters.factory import get_adapter
-from dbt.contracts.results import RunModelResult, collect_timing_info
+from dbt.contracts.results import RunModelResult, collect_timing_info, \
+    SourceFreshnessResult, PartialResult
 from dbt.compilation import compile_node
 
 import dbt.clients.jinja
@@ -48,7 +49,6 @@ def track_model_run(index, num_nodes, run_model_result):
 
 
 class BaseRunner(object):
-    DefaultResult = RunModelResult
     def __init__(self, config, adapter, node, node_index, num_nodes):
         self.config = config
         self.adapter = adapter
@@ -74,40 +74,85 @@ class BaseRunner(object):
 
         return result
 
+    def _build_run_result(self, node, start_time, error, status, timing_info,
+                          skip=False, failed=None):
+        execution_time = time.time() - start_time
+        thread_id = threading.current_thread().name
+        timing = [t.serialize() for t in timing_info]
+        return RunModelResult(
+            node=node,
+            error=error,
+            skip=skip,
+            status=status,
+            failed=failed,
+            execution_time=execution_time,
+            thread_id=thread_id,
+            timing=timing
+        )
+
+    def error_result(self, node, error, start_time, timing_info):
+        return self._build_run_result(
+            node=node,
+            start_time=start_time,
+            error=error,
+            status='ERROR',
+            timing_info=timing_info
+        )
+
+    def ephemeral_result(self, node, start_time, timing_info):
+        return self._build_run_result(
+            node=node,
+            start_time=start_time,
+            error=None,
+            status=None,
+            timing_info=timing_info
+        )
+
+    def from_run_result(self, result, start_time, timing_info):
+        return self._build_run_result(
+            node=result.node,
+            start_time=start_time,
+            error=result.error,
+            skip=result.skip,
+            status=result.status,
+            failed=result.failed,
+            timing_info=timing_info
+        )
+
     def safe_run(self, manifest):
         catchable_errors = (CompilationException, RuntimeException)
 
-        result = self.DefaultResult(self.node)
+        # result = self.DefaultResult(self.node)
         started = time.time()
+        timing = []
+        error = None
+        node = self.node
+        result = None
 
         try:
-            timing = []
-
             with collect_timing_info('compile') as timing_info:
                 # if we fail here, we still have a compiled node to return
                 # this has the benefit of showing a build path for the errant
                 # model
-                compiled_node = self.compile(manifest)
-                result.node = compiled_node
+                node = self.compile(manifest)
 
             timing.append(timing_info)
 
             # for ephemeral nodes, we only want to compile, not run
-            if not self.node.is_ephemeral_model:
+            if not node.is_ephemeral_model:
                 with collect_timing_info('execute') as timing_info:
-                    result = self.run(compiled_node, manifest)
+                    result = self.run(node, manifest)
+                    node = result.node
 
                 timing.append(timing_info)
 
-            for item in timing:
-                result = result.add_timing_info(item)
+            # result.extend(item.serialize() for item in timing)
 
         except catchable_errors as e:
             if e.node is None:
-                e.node = result.node
+                e.node = node
 
-            result.error = dbt.compat.to_string(e)
-            result.status = 'ERROR'
+            error = dbt.compat.to_string(e)
 
         except InternalException as e:
             build_path = self.node.build_path
@@ -118,9 +163,7 @@ class BaseRunner(object):
                          error=str(e).strip(),
                          note=INTERNAL_ERROR_STRING)
             logger.debug(error)
-
-            result.error = dbt.compat.to_string(e)
-            result.status = 'ERROR'
+            error = dbt.compat.to_string(e)
 
         except Exception as e:
             node_description = self.node.get('build_path')
@@ -135,8 +178,7 @@ class BaseRunner(object):
 
             logger.error(error)
             logger.debug('', exc_info=True)
-            result.error = dbt.compat.to_string(e)
-            result.status = 'ERROR'
+            error = dbt.compat.to_string(e)
 
         finally:
             exc_str = self._safe_release_connection()
@@ -144,11 +186,14 @@ class BaseRunner(object):
             # if releasing failed and the result doesn't have an error yet, set
             # an error
             if exc_str is not None and result.error is None:
-                result.error = exc_str
-                result.status = 'ERROR'
+                error = exc_str
 
-        result.execution_time = time.time() - started
-        result.thread_id = threading.current_thread().name
+        if error is not None:
+            result = self.error_result(node, error, started, timing)
+        elif result is not None:
+            result = self.from_run_result(result, started, timing)
+        else:
+            result = self.ephemeral_result(node, started, timing)
         return result
 
     def _safe_release_connection(self):
@@ -288,6 +333,11 @@ class ModelRunner(CompileRunner):
 
 
 class FreshnessRunner(BaseRunner):
+    def on_skip(self):
+        raise dbt.exceptions.RuntimeException(
+            'Freshness: nodes cannot be skipped!'
+        )
+
     def before_execute(self):
         description = 'freshness of {0.source_name}.{0.name}'.format(self.node)
         dbt.ui.printer.print_start_line(description, self.node_index,
@@ -302,7 +352,7 @@ class FreshnessRunner(BaseRunner):
     def _freshness_delta(freshness):
         # timedelta makes this convenient!
         kwargs = {freshness['period']+'s': freshness['count']}
-        return timedelta(**kwargs)
+        return timedelta(**kwargs).total_seconds()
 
     def _calculate_status(self, target_freshness, freshness):
         """Calculate the status of a run.
@@ -317,11 +367,32 @@ class FreshnessRunner(BaseRunner):
         # if freshness > warn_after > error_after, you'll get an error, not a
         # warning
         if freshness > error_after:
-            return 'ERROR'
+            return 'error'
         elif freshness > warn_after:
-            return 'WARN'
+            return 'warn'
         else:
-            return 'PASS'
+            return 'pass'
+
+    def _build_run_result(self, node, start_time, error, status, timing_info,
+                          skip=False, failed=None):
+        execution_time = time.time() - start_time
+        thread_id = threading.current_thread().name
+        timing = [t.serialize() for t in timing_info]
+        if status is not None:
+            status = status.lower()
+        return PartialResult(
+            node=node,
+            status=status,
+            error=error,
+            execution_time=execution_time,
+            thread_id=thread_id,
+            timing=timing
+        )
+
+    def from_run_result(self, result, start_time, timing_info):
+        result.execution_time = (time.time() - start_time)
+        result.timing.extend(t.serialize() for t in timing_info)
+        return result
 
     def execute(self, compiled_node, manifest):
         # given a Source, calculate its fresnhess.
@@ -330,11 +401,17 @@ class FreshnessRunner(BaseRunner):
             compiled_node.loaded_at_field,
             manifest=manifest
         )
-        status = self._calculate_status(compiled_node.freshness, freshness)
-        failed = status == 'ERROR'
+        status = self._calculate_status(
+            compiled_node.freshness,
+            freshness['age']
+        )
 
-        # TODO: return something good here
-        return RunModelResult(compiled_node, status=status, failed=failed)
+        return SourceFreshnessResult(
+            node=compiled_node,
+            status=status,
+            thread_id=threading.current_thread().name,
+            **freshness
+        )
 
     def compile(self, manifest):
         if self.node.resource_type != NodeType.Source:
@@ -342,7 +419,6 @@ class FreshnessRunner(BaseRunner):
             raise RuntimeException('fresnhess runner: got a non-Source')
         # we don't do anything interesting when we compile a source node
         return self.node
-
 
 
 class TestRunner(CompileRunner):

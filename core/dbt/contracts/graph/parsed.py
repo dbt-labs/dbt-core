@@ -681,6 +681,7 @@ PARSED_SOURCE_DEFINITION_CONTRACT = deep_merge(
 
 class ParsedSourceDefinition(APIObject):
     SCHEMA = PARSED_SOURCE_DEFINITION_CONTRACT
+    is_ephemeral_model = False
 
     def to_shallow_dict(self):
         return self._contents.copy()

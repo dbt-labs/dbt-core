@@ -25,7 +25,7 @@ class TestBigqueryAdapterFunctions(DBTIntegrationTest):
 
         self.assertTrue(len(test_results) > 0)
         for result in test_results:
-            self.assertFalse(result.errored)
+            self.assertIsNone(result.error)
             self.assertFalse(result.skipped)
             # status = # of failing rows
             self.assertEqual(result.status, 0)

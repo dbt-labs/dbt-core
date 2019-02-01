@@ -42,5 +42,5 @@ class SeedTask(RunTask):
 
     def show_tables(self, results):
         for result in results:
-            if not result.errored:
+            if result.error is None:
                 self.show_table(result)

@@ -48,4 +48,4 @@ class TestEphemeralErrorHandling(DBTIntegrationTest):
 
         results = self.run_dbt(expect_pass=False)
         self.assertEqual(len(results), 1)
-        self.assertTrue(results[0].errored)
+        self.assertTrue(results[0].error is not None)

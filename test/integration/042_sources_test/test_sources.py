@@ -123,14 +123,13 @@ class TestSourceFreshness(BaseSourcesTest):
             }
         )
 
-    @use_profile('postgres')
-    def test_postgres_source_freshness(self):
+    def _run_source_freshness(self):
         results = self.run_dbt_with_vars(
-            ['source', 'snapshot-freshness'],
+            ['--single-threaded', 'source', 'snapshot-freshness'],
             expect_pass=False
         )
         self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].status, 'ERROR')
+        self.assertEqual(results[0].status, 'error')
         self.assertTrue(results[0].failed)
 
         self._set_updated_at_to(timedelta(hours=-12))
@@ -138,7 +137,7 @@ class TestSourceFreshness(BaseSourcesTest):
             ['source', 'snapshot-freshness'],
         )
         self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].status, 'WARN')
+        self.assertEqual(results[0].status, 'warn')
         self.assertFalse(results[0].failed)
 
         self._set_updated_at_to(timedelta(hours=-2))
@@ -146,83 +145,21 @@ class TestSourceFreshness(BaseSourcesTest):
             ['source', 'snapshot-freshness'],
         )
         self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].status, 'PASS')
+        self.assertEqual(results[0].status, 'pass')
         self.assertFalse(results[0].failed)
+
+    @use_profile('postgres')
+    def test_postgres_source_freshness(self):
+        self._run_source_freshness()
 
     @use_profile('snowflake')
     def test_snowflake_source_freshness(self):
-        results = self.run_dbt_with_vars(
-            ['source', 'snapshot-freshness'],
-            expect_pass=False
-        )
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].status, 'ERROR')
-        self.assertTrue(results[0].failed)
-
-        self._set_updated_at_to(timedelta(hours=-12))
-        results = self.run_dbt_with_vars(
-            ['source', 'snapshot-freshness'],
-        )
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].status, 'WARN')
-        self.assertFalse(results[0].failed)
-
-        self._set_updated_at_to(timedelta(hours=-2))
-        results = self.run_dbt_with_vars(
-            ['source', 'snapshot-freshness'],
-        )
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].status, 'PASS')
-        self.assertFalse(results[0].failed)
+        self._run_source_freshness()
 
     @use_profile('redshift')
     def test_redshift_source_freshness(self):
-        results = self.run_dbt_with_vars(
-            ['source', 'snapshot-freshness'],
-            expect_pass=False
-        )
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].status, 'ERROR')
-        self.assertTrue(results[0].failed)
-
-        self._set_updated_at_to(timedelta(hours=-12))
-        results = self.run_dbt_with_vars(
-            ['source', 'snapshot-freshness'],
-        )
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].status, 'WARN')
-        self.assertFalse(results[0].failed)
-
-        self._set_updated_at_to(timedelta(hours=-2))
-        results = self.run_dbt_with_vars(
-            ['source', 'snapshot-freshness'],
-        )
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].status, 'PASS')
-        self.assertFalse(results[0].failed)
+        self._run_source_freshness()
 
     @use_profile('bigquery')
     def test_bigquery_source_freshness(self):
-        results = self.run_dbt_with_vars(
-            ['source', 'snapshot-freshness'],
-            expect_pass=False
-        )
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].status, 'ERROR')
-        self.assertTrue(results[0].failed)
-
-        self._set_updated_at_to(timedelta(hours=-12))
-        results = self.run_dbt_with_vars(
-            ['source', 'snapshot-freshness'],
-        )
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].status, 'WARN')
-        self.assertFalse(results[0].failed)
-
-        self._set_updated_at_to(timedelta(hours=-2))
-        results = self.run_dbt_with_vars(
-            ['source', 'snapshot-freshness'],
-        )
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].status, 'PASS')
-        self.assertFalse(results[0].failed)
+        self._run_source_freshness()

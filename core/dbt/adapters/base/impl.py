@@ -807,9 +807,9 @@ class BaseAdapter(object):
             raise ValueError('TODO: fill this out!')
 
         max_loaded_at, snapshotted_at = map(_utc, table[0])
-        freshness = (snapshotted_at - max_loaded_at).total_seconds()
+        age = (snapshotted_at - max_loaded_at).total_seconds()
         return {
             'max_loaded_at': max_loaded_at,
             'snapshotted_at': snapshotted_at,
-            'max_loaded_at_time_ago_in_s': freshness,
+            'age': age,
         }

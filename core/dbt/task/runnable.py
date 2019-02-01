@@ -17,7 +17,6 @@ import dbt.graph.selector
 
 from multiprocessing.dummy import Pool as ThreadPool
 
-
 RESULT_FILE_NAME = 'run_results.json'
 MANIFEST_FILE_NAME = 'manifest.json'
 
@@ -33,9 +32,9 @@ def load_manifest(config):
     return manifest
 
 
-class RunnableTask(BaseTask):
+class BaseRunnableTask(BaseTask):
     def __init__(self, args, config):
-        super(RunnableTask, self).__init__(args, config)
+        super(BaseRunnableTask, self).__init__(args, config)
         self.manifest = None
         self.linker = None
         self.job_queue = None
@@ -69,41 +68,14 @@ class RunnableTask(BaseTask):
     def raise_on_first_error(self):
         return False
 
-    def get_model_schemas(self, selected_uids):
-        schemas = set()
-        for node in self.manifest.nodes.values():
-            if node.unique_id not in selected_uids:
-                continue
-            if node.is_refable and not node.is_ephemeral:
-                schemas.add((node.database, node.schema))
-
-        return schemas
-
-    def create_schemas(self, adapter, selected_uids):
-        required_schemas = self.get_model_schemas(selected_uids)
-
-        # Snowflake needs to issue a "use {schema}" query, where schema
-        # is the one defined in the profile. Create this schema if it
-        # does not exist, otherwise subsequent queries will fail. Generally,
-        # dbt expects that this schema will exist anyway.
-        required_schemas.add(
-            (self.config.credentials.database, self.config.credentials.schema)
-        )
-
-        required_databases = set(db for db, _ in required_schemas)
-
-        existing_schemas = set()
-        for db in required_databases:
-            existing_schemas.update((db, s) for s in adapter.list_schemas(db))
-
-        for database, schema in (required_schemas - existing_schemas):
-            adapter.create_schema(database, schema)
-
     def build_query(self):
         raise dbt.exceptions.NotImplementedException('Not Implemented')
 
     def get_runner_type(self):
         raise dbt.exceptions.NotImplementedException('Not Implemented')
+
+    def result_path(self):
+        return os.path.join(self.config.target_path, RESULT_FILE_NAME)
 
     def get_runner(self, node):
         adapter = get_adapter(self.config)
@@ -123,7 +95,7 @@ class RunnableTask(BaseTask):
         # TODO: create+enforce an actual contracts for what `result` is instead
         # of the current free-for-all
         result = runner.run_with_hooks(self.manifest)
-        if result.errored and self.raise_on_first_error():
+        if result.error is not None and self.raise_on_first_error():
             # if we raise inside a thread, it'll just get silently swallowed.
             # stash the error message we want here, and it will check the
             # next 'tick' - should be soon since our thread is about to finish!
@@ -191,7 +163,7 @@ class RunnableTask(BaseTask):
         node_id = node.unique_id
         self.manifest.nodes[node_id] = node
 
-        if result.errored:
+        if result.error is not None:
             if is_ephemeral:
                 cause = result
             else:
@@ -258,7 +230,10 @@ class RunnableTask(BaseTask):
         pass
 
     def task_end_messages(self, results):
-        dbt.ui.printer.print_run_end_messages(results)
+        raise dbt.exceptions.NotImplementedException('Not Implemented')
+
+    def get_result(self, results, elapsed_time, generated_at):
+        raise dbt.exceptions.NotImplementedException('Not Implemented')
 
     def run(self):
         """
@@ -287,12 +262,12 @@ class RunnableTask(BaseTask):
         finally:
             adapter.cleanup_connections()
 
-        result = ExecutionResult(
+        result = self.get_result(
             results=res,
             elapsed_time=elapsed,
-            generated_at=dbt.utils.timestring(),
+            generated_at=dbt.utils.timestring()
         )
-        result.write(os.path.join(self.config.target_path, RESULT_FILE_NAME))
+        result.write(self.result_path())
 
         self.task_end_messages(res)
         return res
@@ -301,5 +276,47 @@ class RunnableTask(BaseTask):
         if results is None:
             return False
 
-        failures = [r for r in results if r.error or r.fail]
+        failures = [r for r in results if r.error or r.failed]
         return len(failures) == 0
+
+
+class RunnableTask(BaseRunnableTask):
+    def get_model_schemas(self, selected_uids):
+        schemas = set()
+        for node in self.manifest.nodes.values():
+            if node.unique_id not in selected_uids:
+                continue
+            if node.is_refable and not node.is_ephemeral:
+                schemas.add((node.database, node.schema))
+
+        return schemas
+
+    def create_schemas(self, adapter, selected_uids):
+        required_schemas = self.get_model_schemas(selected_uids)
+
+        # Snowflake needs to issue a "use {schema}" query, where schema
+        # is the one defined in the profile. Create this schema if it
+        # does not exist, otherwise subsequent queries will fail. Generally,
+        # dbt expects that this schema will exist anyway.
+        required_schemas.add(
+            (self.config.credentials.database, self.config.credentials.schema)
+        )
+
+        required_databases = set(db for db, _ in required_schemas)
+
+        existing_schemas = set()
+        for db in required_databases:
+            existing_schemas.update((db, s) for s in adapter.list_schemas(db))
+
+        for database, schema in (required_schemas - existing_schemas):
+            adapter.create_schema(database, schema)
+
+    def get_result(self, results, elapsed_time, generated_at):
+        return ExecutionResult(
+            results=results,
+            elapsed_time=elapsed_time,
+            generated_at=generated_at
+        )
+
+    def task_end_messages(self, results):
+        dbt.ui.printer.print_run_end_messages(results)
