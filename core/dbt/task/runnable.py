@@ -165,10 +165,7 @@ class GraphRunnableTask(ManifestTask):
                     f"Node selection returned {uid}, expected a node or a " f"source"
                 )
 
-        self.num_nodes = len([
-            n for n in self._flattened_nodes
-            if not n.is_ephemeral_model
-        ])
+        self.num_nodes = len([n for n in self._flattened_nodes if not n.is_ephemeral_model])
 
     def raise_on_first_error(self):
         return False
