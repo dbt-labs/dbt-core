@@ -343,6 +343,18 @@ class ParsedNode(APIObject):
         super(ParsedNode, self).__init__(**kwargs)
 
     @property
+    def is_refable(self):
+        return self.resource_type in NodeType.refable()
+
+    @property
+    def is_ephemeral(self):
+        return self.get('config', {}).get('materialized') == 'ephemeral'
+
+    @property
+    def is_ephemeral_model(self):
+        return self.is_refable and self.is_ephemeral
+
+    @property
     def depends_on_nodes(self):
         """Return the list of node IDs that this node depends on."""
         return self.depends_on['nodes']

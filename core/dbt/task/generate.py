@@ -11,7 +11,6 @@ import dbt.utils
 import dbt.compilation
 import dbt.exceptions
 
-from dbt.task.base_task import BaseTask
 from dbt.task.compile import CompileTask
 
 

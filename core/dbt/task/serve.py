@@ -6,10 +6,10 @@ from dbt.include.global_project import DOCS_INDEX_FILE_PATH
 from dbt.compat import SimpleHTTPRequestHandler, TCPServer
 from dbt.logger import GLOBAL_LOGGER as logger
 
-from dbt.task.base_task import RunnableTask
+from dbt.task.base_task import BaseTask
 
 
-class ServeTask(RunnableTask):
+class ServeTask(BaseTask):
     def run(self):
         os.chdir(self.config.target_path)
 
