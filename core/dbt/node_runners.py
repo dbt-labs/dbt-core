@@ -1,12 +1,16 @@
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.exceptions import NotImplementedException
+from dbt.exceptions import NotImplementedException, CompilationException, \
+    RuntimeException, InternalException, missing_materialization
 from dbt.utils import get_nodes_by_tags
 from dbt.node_types import NodeType, RunHookType
 from dbt.adapters.factory import get_adapter
-from dbt.contracts.results import RunModelResult, collect_timing_info
+from dbt.contracts.results import RunModelResult, collect_timing_info, \
+    SourceFreshnessResult, PartialResult
+from dbt.compilation import compile_node
 
 import dbt.clients.jinja
 import dbt.context.runtime
+import dbt.exceptions
 import dbt.utils
 import dbt.tracking
 import dbt.ui.printer
@@ -19,6 +23,7 @@ import sys
 import threading
 import time
 import traceback
+from datetime import timedelta
 
 
 INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If \
@@ -44,8 +49,6 @@ def track_model_run(index, num_nodes, run_model_result):
 
 
 class BaseRunner(object):
-    print_header = True
-
     def __init__(self, config, adapter, node, node_index, num_nodes):
         self.config = config
         self.adapter = adapter
@@ -56,58 +59,102 @@ class BaseRunner(object):
         self.skip = False
         self.skip_cause = None
 
-    def raise_on_first_error(self):
-        return False
+    def run_with_hooks(self, manifest):
+        if self.skip:
+            return self.on_skip()
 
-    @classmethod
-    def is_refable(cls, node):
-        return node.resource_type in NodeType.refable()
+        # no before/after printing for ephemeral mdoels
+        if not self.node.is_ephemeral_model:
+            self.before_execute()
 
-    @classmethod
-    def is_ephemeral(cls, node):
-        return dbt.utils.get_materialization(node) == 'ephemeral'
+        result = self.safe_run(manifest)
 
-    @classmethod
-    def is_ephemeral_model(cls, node):
-        return cls.is_refable(node) and cls.is_ephemeral(node)
+        if not self.node.is_ephemeral_model:
+            self.after_execute(result)
+
+        return result
+
+    def _build_run_result(self, node, start_time, error, status, timing_info,
+                          skip=False, failed=None):
+        execution_time = time.time() - start_time
+        thread_id = threading.current_thread().name
+        timing = [t.serialize() for t in timing_info]
+        return RunModelResult(
+            node=node,
+            error=error,
+            skip=skip,
+            status=status,
+            failed=failed,
+            execution_time=execution_time,
+            thread_id=thread_id,
+            timing=timing
+        )
+
+    def error_result(self, node, error, start_time, timing_info):
+        return self._build_run_result(
+            node=node,
+            start_time=start_time,
+            error=error,
+            status='ERROR',
+            timing_info=timing_info
+        )
+
+    def ephemeral_result(self, node, start_time, timing_info):
+        return self._build_run_result(
+            node=node,
+            start_time=start_time,
+            error=None,
+            status=None,
+            timing_info=timing_info
+        )
+
+    def from_run_result(self, result, start_time, timing_info):
+        return self._build_run_result(
+            node=result.node,
+            start_time=start_time,
+            error=result.error,
+            skip=result.skip,
+            status=result.status,
+            failed=result.failed,
+            timing_info=timing_info
+        )
 
     def safe_run(self, manifest):
-        catchable_errors = (dbt.exceptions.CompilationException,
-                            dbt.exceptions.RuntimeException)
+        catchable_errors = (CompilationException, RuntimeException)
 
-        result = RunModelResult(self.node)
+        # result = self.DefaultResult(self.node)
         started = time.time()
+        timing = []
+        error = None
+        node = self.node
+        result = None
 
         try:
-            timing = []
-
             with collect_timing_info('compile') as timing_info:
                 # if we fail here, we still have a compiled node to return
                 # this has the benefit of showing a build path for the errant
                 # model
-                compiled_node = self.compile(manifest)
-                result.node = compiled_node
+                node = self.compile(manifest)
 
             timing.append(timing_info)
 
             # for ephemeral nodes, we only want to compile, not run
-            if not self.is_ephemeral_model(self.node):
+            if not node.is_ephemeral_model:
                 with collect_timing_info('execute') as timing_info:
-                    result = self.run(compiled_node, manifest)
+                    result = self.run(node, manifest)
+                    node = result.node
 
                 timing.append(timing_info)
 
-            for item in timing:
-                result = result.add_timing_info(item)
+            # result.extend(item.serialize() for item in timing)
 
         except catchable_errors as e:
             if e.node is None:
-                e.node = result.node
+                e.node = node
 
-            result.error = dbt.compat.to_string(e)
-            result.status = 'ERROR'
+            error = dbt.compat.to_string(e)
 
-        except dbt.exceptions.InternalException as e:
+        except InternalException as e:
             build_path = self.node.build_path
             prefix = 'Internal error executing {}'.format(build_path)
 
@@ -116,13 +163,14 @@ class BaseRunner(object):
                          error=str(e).strip(),
                          note=INTERNAL_ERROR_STRING)
             logger.debug(error)
-
-            result.error = dbt.compat.to_string(e)
-            result.status = 'ERROR'
+            error = dbt.compat.to_string(e)
 
         except Exception as e:
-            prefix = "Unhandled error while executing {filepath}".format(
-                        filepath=self.node.build_path)
+            node_description = self.node.get('build_path')
+            if node_description is None:
+                node_description = self.node.unique_id
+            prefix = "Unhandled error while executing {description}".format(
+                        description=node_description)
 
             error = "{prefix}\n{error}".format(
                          prefix=dbt.ui.printer.red(prefix),
@@ -130,8 +178,7 @@ class BaseRunner(object):
 
             logger.error(error)
             logger.debug('', exc_info=True)
-            result.error = dbt.compat.to_string(e)
-            result.status = 'ERROR'
+            error = dbt.compat.to_string(e)
 
         finally:
             exc_str = self._safe_release_connection()
@@ -139,11 +186,15 @@ class BaseRunner(object):
             # if releasing failed and the result doesn't have an error yet, set
             # an error
             if exc_str is not None and result.error is None:
-                result.error = exc_str
-                result.status = 'ERROR'
+                error = exc_str
 
-        result.execution_time = time.time() - started
-        result.thread_id = threading.current_thread().name
+        if error is not None:
+            # we could include compile time for runtime errors here
+            result = self.error_result(node, error, started, [])
+        elif result is not None:
+            result = self.from_run_result(result, started, timing)
+        else:
+            result = self.ephemeral_result(node, started, timing)
         return result
 
     def _safe_release_connection(self):
@@ -177,14 +228,14 @@ class BaseRunner(object):
     def _skip_caused_by_ephemeral_failure(self):
         if self.skip_cause is None or self.skip_cause.node is None:
             return False
-        return self.is_ephemeral_model(self.skip_cause.node)
+        return self.skip_cause.node.is_ephemeral_model
 
     def on_skip(self):
         schema_name = self.node.schema
         node_name = self.node.name
 
         error = None
-        if not self.is_ephemeral_model(self.node):
+        if not self.node.is_ephemeral_model:
             # if this model was skipped due to an upstream ephemeral model
             # failure, print a special 'error skip' message.
             if self._skip_caused_by_ephemeral_failure():
@@ -219,40 +270,8 @@ class BaseRunner(object):
         self.skip = True
         self.skip_cause = cause
 
-    @classmethod
-    def get_model_schemas(cls, manifest, selected_uids):
-        schemas = set()
-        for node in manifest.nodes.values():
-            if node.unique_id not in selected_uids:
-                continue
-            if cls.is_refable(node) and not cls.is_ephemeral(node):
-                schemas.add((node.database, node.schema))
-
-        return schemas
-
-    @classmethod
-    def before_hooks(self, config, adapter, manifest):
-        pass
-
-    @classmethod
-    def before_run(self, config, adapter, manifest, selected_uids):
-        pass
-
-    @classmethod
-    def after_run(self, config, adapter, results, manifest):
-        pass
-
-    @classmethod
-    def after_hooks(self, config, adapter, results, manifest, elapsed):
-        pass
-
 
 class CompileRunner(BaseRunner):
-    print_header = False
-
-    def raise_on_first_error(self):
-        return True
-
     def before_execute(self):
         pass
 
@@ -263,161 +282,10 @@ class CompileRunner(BaseRunner):
         return RunModelResult(compiled_node)
 
     def compile(self, manifest):
-        return self._compile_node(self.adapter, self.config, self.node,
-                                  manifest, {})
-
-    @classmethod
-    def _compile_node(cls, adapter, config, node, manifest, extra_context):
-        compiler = dbt.compilation.Compiler(config)
-        node = compiler.compile_node(node, manifest, extra_context)
-        node = cls._inject_runtime_config(adapter, node, extra_context)
-
-        if(node.injected_sql is not None and
-           not (dbt.utils.is_type(node, NodeType.Archive))):
-            logger.debug('Writing injected SQL for node "{}"'.format(
-                node.unique_id))
-
-            written_path = dbt.writer.write_node(
-                node,
-                config.target_path,
-                'compiled',
-                node.injected_sql)
-
-            node.build_path = written_path
-
-        return node
-
-    @classmethod
-    def _inject_runtime_config(cls, adapter, node, extra_context):
-        wrapped_sql = node.wrapped_sql
-        context = cls._node_context(adapter, node)
-        context.update(extra_context)
-        sql = dbt.clients.jinja.get_rendered(wrapped_sql, context)
-        node.wrapped_sql = sql
-        return node
-
-    @classmethod
-    def _node_context(cls, adapter, node):
-        return {
-            "run_started_at": dbt.tracking.active_user.run_started_at,
-            "invocation_id": dbt.tracking.active_user.invocation_id,
-        }
+        return compile_node(self.adapter, self.config, self.node, manifest, {})
 
 
 class ModelRunner(CompileRunner):
-
-    def raise_on_first_error(self):
-        return False
-
-    @classmethod
-    def run_hooks(cls, config, adapter, manifest, hook_type, extra_context):
-
-        nodes = manifest.nodes.values()
-        hooks = get_nodes_by_tags(nodes, {hook_type}, NodeType.Operation)
-
-        ordered_hooks = sorted(hooks, key=lambda h: h.get('index', len(hooks)))
-
-        for i, hook in enumerate(ordered_hooks):
-            model_name = hook.get('name')
-
-            # This will clear out an open transaction if there is one.
-            # on-run-* hooks should run outside of a transaction. This happens
-            # b/c psycopg2 automatically begins a transaction when a connection
-            # is created. TODO : Move transaction logic out of here, and
-            # implement a for-loop over these sql statements in jinja-land.
-            # Also, consider configuring psycopg2 (and other adapters?) to
-            # ensure that a transaction is only created if dbt initiates it.
-            adapter.clear_transaction(model_name)
-            compiled = cls._compile_node(adapter, config, hook, manifest,
-                                         extra_context)
-            statement = compiled.wrapped_sql
-
-            hook_index = hook.get('index', len(hooks))
-            hook_dict = dbt.hooks.get_hook_dict(statement, index=hook_index)
-
-            if dbt.flags.STRICT_MODE:
-                dbt.contracts.graph.parsed.Hook(**hook_dict)
-
-            sql = hook_dict.get('sql', '')
-
-            if len(sql.strip()) > 0:
-                adapter.execute(sql, model_name=model_name, auto_begin=False,
-                                fetch=False)
-
-            adapter.release_connection(model_name)
-
-    @classmethod
-    def safe_run_hooks(cls, config, adapter, manifest, hook_type,
-                       extra_context):
-        try:
-            cls.run_hooks(config, adapter, manifest, hook_type, extra_context)
-        except dbt.exceptions.RuntimeException:
-            logger.info("Database error while running {}".format(hook_type))
-            raise
-
-    @classmethod
-    def create_schemas(cls, config, adapter, manifest, selected_uids):
-        required_schemas = cls.get_model_schemas(manifest, selected_uids)
-
-        # Snowflake needs to issue a "use {schema}" query, where schema
-        # is the one defined in the profile. Create this schema if it
-        # does not exist, otherwise subsequent queries will fail. Generally,
-        # dbt expects that this schema will exist anyway.
-        required_schemas.add(
-            (config.credentials.database, config.credentials.schema)
-        )
-
-        required_databases = set(db for db, _ in required_schemas)
-
-        existing_schemas = set()
-        for db in required_databases:
-            existing_schemas.update((db, s) for s in adapter.list_schemas(db))
-
-        for database, schema in (required_schemas - existing_schemas):
-            adapter.create_schema(database, schema)
-
-    @classmethod
-    def populate_adapter_cache(cls, config, adapter, manifest):
-        adapter.set_relations_cache(manifest)
-
-    @classmethod
-    def before_run(cls, config, adapter, manifest, selected_uids):
-        cls.populate_adapter_cache(config, adapter, manifest)
-        cls.safe_run_hooks(config, adapter, manifest, RunHookType.Start, {})
-        cls.create_schemas(config, adapter, manifest, selected_uids)
-
-    @classmethod
-    def print_results_line(cls, results, execution_time):
-        nodes = [r.node for r in results]
-        stat_line = dbt.ui.printer.get_counts(nodes)
-
-        execution = ""
-
-        if execution_time is not None:
-            execution = " in {execution_time:0.2f}s".format(
-                execution_time=execution_time)
-
-        dbt.ui.printer.print_timestamped_line("")
-        dbt.ui.printer.print_timestamped_line(
-            "Finished running {stat_line}{execution}."
-            .format(stat_line=stat_line, execution=execution))
-
-    @classmethod
-    def after_run(cls, config, adapter, results, manifest):
-        # in on-run-end hooks, provide the value 'schemas', which is a list of
-        # unique schemas that successfully executed models were in
-        # errored failed skipped
-        schemas = list(set(
-            r.node.schema for r in results
-            if not any((r.errored, r.failed, r.skipped))
-        ))
-        cls.safe_run_hooks(config, adapter, manifest, RunHookType.End,
-                           {'schemas': schemas, 'results': results})
-
-    @classmethod
-    def after_hooks(cls, config, adapter, results, manifest, elapsed):
-        cls.print_results_line(results, elapsed)
-
     def describe_node(self):
         materialization = dbt.utils.get_materialization(self.node)
         return "{0} model {1.database}.{1.schema}.{1.alias}".format(
@@ -452,9 +320,7 @@ class ModelRunner(CompileRunner):
             self.adapter.type())
 
         if materialization_macro is None:
-            dbt.exceptions.missing_materialization(
-                model,
-                self.adapter.type())
+            missing_materialization(model, self.adapter.type())
 
         materialization_macro.generator(context)()
 
@@ -467,11 +333,93 @@ class ModelRunner(CompileRunner):
         return RunModelResult(model, status=result.status)
 
 
+class FreshnessRunner(BaseRunner):
+    def on_skip(self):
+        raise dbt.exceptions.RuntimeException(
+            'Freshness: nodes cannot be skipped!'
+        )
+
+    def before_execute(self):
+        description = 'freshness of {0.source_name}.{0.name}'.format(self.node)
+        dbt.ui.printer.print_start_line(description, self.node_index,
+                                        self.num_nodes)
+
+    def after_execute(self, result):
+        dbt.ui.printer.print_freshness_result_line(result,
+                                                   self.node_index,
+                                                   self.num_nodes)
+
+    def _calculate_status(self, target_freshness, freshness):
+        """Calculate the status of a run.
+
+        :param dict target_freshness: The target freshness dictionary. It must
+            match the freshness spec.
+        :param timedelta freshness: The actual freshness of the data, as
+            calculated from the database's timestamps
+        """
+        # if freshness > warn_after > error_after, you'll get an error, not a
+        # warning
+        for key in ('error', 'warn'):
+            fullkey = '{}_after'.format(key)
+            if fullkey not in target_freshness:
+                continue
+
+            target = target_freshness[fullkey]
+            kwargs = {target['period']+'s': target['count']}
+            if freshness > timedelta(**kwargs).total_seconds():
+                return key
+        return 'pass'
+
+    def _build_run_result(self, node, start_time, error, status, timing_info,
+                          skip=False, failed=None):
+        execution_time = time.time() - start_time
+        thread_id = threading.current_thread().name
+        timing = [t.serialize() for t in timing_info]
+        if status is not None:
+            status = status.lower()
+        return PartialResult(
+            node=node,
+            status=status,
+            error=error,
+            execution_time=execution_time,
+            thread_id=thread_id,
+            timing=timing
+        )
+
+    def from_run_result(self, result, start_time, timing_info):
+        result.execution_time = (time.time() - start_time)
+        result.timing.extend(t.serialize() for t in timing_info)
+        return result
+
+    def execute(self, compiled_node, manifest):
+        relation = self.adapter.Relation.create_from_source(compiled_node)
+        # given a Source, calculate its fresnhess.
+        freshness = self.adapter.calculate_freshness(
+            relation,
+            compiled_node.loaded_at_field,
+            manifest=manifest
+        )
+        status = self._calculate_status(
+            compiled_node.freshness,
+            freshness['age']
+        )
+
+        return SourceFreshnessResult(
+            node=compiled_node,
+            status=status,
+            thread_id=threading.current_thread().name,
+            **freshness
+        )
+
+    def compile(self, manifest):
+        if self.node.resource_type != NodeType.Source:
+            # should be unreachable...
+            raise RuntimeException('fresnhess runner: got a non-Source')
+        # we don't do anything interesting when we compile a source node
+        return self.node
+
+
 class TestRunner(CompileRunner):
-
-    def raise_on_first_error(self):
-        return False
-
     def describe_node(self):
         node_name = self.node.name
         return "test {}".format(node_name)
@@ -516,10 +464,6 @@ class TestRunner(CompileRunner):
 
 
 class ArchiveRunner(ModelRunner):
-
-    def raise_on_first_error(self):
-        return False
-
     def describe_node(self):
         cfg = self.node.get('config', {})
         return "archive {source_database}.{source_schema}.{source_table} --> "\
@@ -531,7 +475,6 @@ class ArchiveRunner(ModelRunner):
 
 
 class SeedRunner(ModelRunner):
-
     def describe_node(self):
         return "seed file {0.database}.{0.schema}.{0.alias}".format(self.node)
 

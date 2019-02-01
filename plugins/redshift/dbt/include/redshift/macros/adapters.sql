@@ -172,3 +172,9 @@
   {{ return(postgres__check_schema_exists(database, schema)) }}
 {%- endmacro %}
 list_schemas
+
+%}
+
+{% macro redshift__current_timestamp() -%}
+  getdate()
+{%- endmacro %}

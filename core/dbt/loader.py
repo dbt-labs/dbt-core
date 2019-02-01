@@ -1,6 +1,7 @@
 import os
 import itertools
 
+from dbt import deprecations
 from dbt.include.global_project import PACKAGES
 import dbt.exceptions
 import dbt.flags
@@ -168,13 +169,59 @@ class GraphLoader(object):
     @classmethod
     def load_all(cls, root_config, internal_manifest=None):
         projects = load_all_projects(root_config)
-        return cls._load_from_projects(root_config, projects,
-                                       internal_manifest)
+        manifest = cls._load_from_projects(root_config, projects,
+                                           internal_manifest)
+        _check_manifest(manifest, root_config)
+        return manifest
 
     @classmethod
     def load_internal(cls, root_config):
         projects = load_internal_projects(root_config)
         return cls._load_from_projects(root_config, projects, None)
+
+
+def _check_resource_uniqueness(manifest):
+    names_resources = {}
+    alias_resources = {}
+
+    for resource, node in manifest.nodes.items():
+        if node.resource_type not in NodeType.refable():
+            continue
+
+        name = node.name
+        alias = "{}.{}".format(node.schema, node.alias)
+
+        existing_node = names_resources.get(name)
+        if existing_node is not None:
+            dbt.exceptions.raise_duplicate_resource_name(
+                    existing_node, node)
+
+        existing_alias = alias_resources.get(alias)
+        if existing_alias is not None:
+            dbt.exceptions.raise_ambiguous_alias(
+                    existing_alias, node)
+
+        names_resources[name] = node
+        alias_resources[alias] = node
+
+
+def _warn_for_unused_resource_config_paths(manifest, config):
+    resource_fqns = manifest.get_resource_fqns()
+    disabled_fqns = [n.fqn for n in manifest.disabled]
+    config.warn_for_unused_resource_config_paths(resource_fqns, disabled_fqns)
+
+
+def _warn_for_deprecated_configs(manifest):
+    for unique_id, node in manifest.nodes.items():
+        is_model = node.resource_type == NodeType.Model
+        if is_model and 'sql_where' in node.config:
+            deprecations.warn('sql_where')
+
+
+def _check_manifest(manifest, config):
+    _check_resource_uniqueness(manifest)
+    _warn_for_unused_resource_config_paths(manifest, config)
+    _warn_for_deprecated_configs(manifest)
 
 
 def internal_project_names():

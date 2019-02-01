@@ -224,3 +224,29 @@
     'list_relations_without_caching macro not implemented for adapter '+adapter.type()) }}
 {% endmacro %}
 
+
+{% macro current_timestamp() -%}
+  {{ adapter_macro('current_timestamp') }}
+{%- endmacro %}
+
+
+{% macro default__current_timestamp() -%}
+  {{ dbt.exceptions.raise_not_implemented(
+    'current_timestamp macro not implemented for adapter '+adapter.type()) }}
+{%- endmacro %}
+
+
+{% macro collect_freshness(source, loaded_at_field) %}
+  {{ return(adapter_macro('collect_freshness', source, loaded_at_field))}}
+{% endmacro %}
+
+
+{% macro default__collect_freshness(source, loaded_at_field) %}
+  {% call statement('check_schema_exists', fetch_result=True, auto_begin=False) -%}
+    select
+      max({{ loaded_at_field }}) as max_loaded_at,
+      {{ current_timestamp() }} as snapshotted_at
+    from {{ source }}
+  {% endcall %}
+  {{ return(load_result('check_schema_exists').table) }}
+{% endmacro %}

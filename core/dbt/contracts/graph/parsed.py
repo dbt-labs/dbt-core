@@ -8,7 +8,7 @@ import dbt.clients.jinja
 
 from dbt.contracts.graph.unparsed import UNPARSED_NODE_CONTRACT, \
     UNPARSED_MACRO_CONTRACT, UNPARSED_DOCUMENTATION_FILE_CONTRACT, \
-    UNPARSED_BASE_CONTRACT, FRESHNESS_CONTRACT
+    UNPARSED_BASE_CONTRACT, TIME_CONTRACT
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -273,6 +273,25 @@ COLUMN_TEST_CONTRACT = {
 }
 
 
+HAS_RELATION_METADATA_CONTRACT = {
+    'properties': {
+        'database': {
+            'type': 'string',
+            'description': (
+                'The actual database string that this will build into.'
+            )
+        },
+        'schema': {
+            'type': 'string',
+            'description': (
+                'The actual schema string that this will build into.'
+            )
+        },
+    },
+    'required': ['database', 'schema'],
+}
+
+
 PARSED_NODE_CONTRACT = deep_merge(
     UNPARSED_NODE_CONTRACT,
     HAS_UNIQUE_ID_CONTRACT,
@@ -282,21 +301,9 @@ PARSED_NODE_CONTRACT = deep_merge(
     HAS_DESCRIPTION_CONTRACT,
     HAS_CONFIG_CONTRACT,
     COLUMN_TEST_CONTRACT,
+    HAS_RELATION_METADATA_CONTRACT,
     {
         'properties': {
-            # these next 3 make sense as a contract
-            'database': {
-                'type': 'string',
-                'description': (
-                    'The actual database string that this will build into.'
-                )
-            },
-            'schema': {
-                'type': 'string',
-                'description': (
-                    'The actual schema string that this will build into.'
-                )
-            },
             'alias': {
                 'type': 'string',
                 'description': (
@@ -328,7 +335,7 @@ PARSED_NODE_CONTRACT = deep_merge(
                 ),
             },
         },
-        'required': ['database', 'schema', 'empty', 'tags', 'alias'],
+        'required': ['empty', 'tags', 'alias'],
     }
 )
 
@@ -341,6 +348,18 @@ class ParsedNode(APIObject):
         kwargs.setdefault('columns', {})
         kwargs.setdefault('description', '')
         super(ParsedNode, self).__init__(**kwargs)
+
+    @property
+    def is_refable(self):
+        return self.resource_type in NodeType.refable()
+
+    @property
+    def is_ephemeral(self):
+        return self.get('config', {}).get('materialized') == 'ephemeral'
+
+    @property
+    def is_ephemeral_model(self):
+        return self.is_refable and self.is_ephemeral
 
     @property
     def depends_on_nodes(self):
@@ -592,12 +611,36 @@ class Hook(APIObject):
     SCHEMA = HOOK_CONTRACT
 
 
+FRESHNESS_CONTRACT = {
+    'properties': {
+        'loaded_at_field': {
+            'type': ['null', 'string'],
+            'description': 'The field to use as the "loaded at" timestamp',
+        },
+        'freshness': {
+            'anyOf': [
+                {'type': 'null'},
+                {
+                    'type': 'object',
+                    'additionalProperties': False,
+                    'properties': {
+                        'warn_after': TIME_CONTRACT,
+                        'error_after': TIME_CONTRACT,
+                    },
+                },
+            ],
+        },
+    },
+}
+
+
 PARSED_SOURCE_DEFINITION_CONTRACT = deep_merge(
     UNPARSED_BASE_CONTRACT,
     FRESHNESS_CONTRACT,
     HAS_DESCRIPTION_CONTRACT,
     HAS_UNIQUE_ID_CONTRACT,
     HAS_DOCREFS_CONTRACT,
+    HAS_RELATION_METADATA_CONTRACT,
     {
         'description': (
             'A source table definition, as parsed from the one provided in the'
@@ -625,9 +668,9 @@ PARSED_SOURCE_DEFINITION_CONTRACT = deep_merge(
                 'type': 'string',
                 'description': 'The user-defined loader for this source',
             },
-            'sql_table_name': {
+            'identifier': {
                 'type': 'string',
-                'description': 'The exact identifier for the source table',
+                'description': 'The identifier for the source table',
                 'minLength': 1,
             },
             # the manifest search stuff really requires this, sadly
@@ -636,10 +679,9 @@ PARSED_SOURCE_DEFINITION_CONTRACT = deep_merge(
             }
         },
         # note that while required, loaded_at_field and freshness may be null
-        # (and either of freshness's members may be null as well!)
         'required': [
             'source_name', 'source_description', 'loaded_at_field', 'loader',
-            'freshness', 'description', 'columns', 'docrefs', 'sql_table_name',
+            'freshness', 'description', 'columns', 'docrefs', 'identifier',
         ],
     }
 )
@@ -647,6 +689,7 @@ PARSED_SOURCE_DEFINITION_CONTRACT = deep_merge(
 
 class ParsedSourceDefinition(APIObject):
     SCHEMA = PARSED_SOURCE_DEFINITION_CONTRACT
+    is_ephemeral_model = False
 
     def to_shallow_dict(self):
         return self._contents.copy()
@@ -664,3 +707,11 @@ class ParsedSourceDefinition(APIObject):
     @property
     def sources(self):
         return []
+
+    @property
+    def tags(self):
+        return []
+
+    @property
+    def has_freshness(self):
+        return bool(self.freshness) and self.loaded_at_field is not None

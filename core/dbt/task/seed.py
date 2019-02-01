@@ -2,25 +2,29 @@ import random
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_runners import SeedRunner
 from dbt.node_types import NodeType
-from dbt.runner import RunManager
-from dbt.task.base_task import RunnableTask
+from dbt.task.run import RunTask
 import dbt.ui.printer
 
 
-class SeedTask(RunnableTask):
-    def run(self):
-        query = {
+class SeedTask(RunTask):
+    def raise_on_first_error(self):
+        return False
+
+    def build_query(self):
+        return {
             "include": ["*"],
             "exclude": [],
             "resource_types": [NodeType.Seed],
         }
-        results = RunManager(self.config, query, SeedRunner).run()
 
+    def get_runner_type(self):
+        return SeedRunner
+
+    def task_end_messages(self, results):
         if self.args.show:
             self.show_tables(results)
 
         dbt.ui.printer.print_run_end_messages(results)
-        return results
 
     def show_table(self, result):
         table = result.node['agate_table']
@@ -38,5 +42,5 @@ class SeedTask(RunnableTask):
 
     def show_tables(self, results):
         for result in results:
-            if not result.errored:
+            if result.error is None:
                 self.show_table(result)

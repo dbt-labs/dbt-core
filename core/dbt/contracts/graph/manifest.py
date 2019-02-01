@@ -1,7 +1,7 @@
 from dbt.api import APIObject
 from dbt.contracts.graph.unparsed import UNPARSED_NODE_CONTRACT
 from dbt.contracts.graph.parsed import PARSED_NODE_CONTRACT, \
-    PARSED_MACRO_CONTRACT, PARSED_DOCUMENTATION_CONTRACT, ParsedNode, \
+    PARSED_MACRO_CONTRACT, PARSED_DOCUMENTATION_CONTRACT, \
     PARSED_SOURCE_DEFINITION_CONTRACT
 from dbt.contracts.graph.compiled import COMPILED_NODE_CONTRACT, CompiledNode
 from dbt.exceptions import ValidationException
@@ -330,25 +330,22 @@ class Manifest(APIObject):
 
     def _model_matches_schema_and_table(self, schema, table, model):
         if model.resource_type == NodeType.Source:
-            return False
+            return (model.schema.lower() == schema.lower() and
+                    model.identifier.lower() == table.lower())
         return (model.schema.lower() == schema.lower() and
                 model.alias.lower() == table.lower())
 
-    def get_unique_id_for_schema_and_table(self, schema, table):
+    def get_unique_ids_for_schema_and_table(self, schema, table):
         """
-        Given a schema and table, find a matching model, and return
-        the unique_id for that model. If more than one matching
-        model is found, raise an exception.
+        Given a schema and table, find matching models, and return
+        their unique_ids. A schema and table may have more than one
+        match if the relation matches both a source and a seed, for instance.
         """
         def predicate(model):
             return self._model_matches_schema_and_table(schema, table, model)
 
         matching = list(self._filter_subgraph(self.nodes, predicate))
-
-        if not matching:
-            return None
-
-        return matching[0].get('unique_id')
+        return [match.get('unique_id') for match in matching]
 
     def add_nodes(self, new_nodes):
         """Add the given dict of new nodes to the manifest."""
@@ -404,17 +401,11 @@ class Manifest(APIObject):
             type(self).__name__, name)
         )
 
-    def parsed_nodes(self):
-        for node in self.nodes.values():
-            if node.resource_type == NodeType.Source:
-                continue
-            yield node
-
     def get_used_schemas(self):
         return frozenset({
             (node.database, node.schema)
-            for node in self.parsed_nodes()
+            for node in self.nodes.values()
         })
 
     def get_used_databases(self):
-        return frozenset(node.database for node in self.parsed_nodes())
+        return frozenset(node.database for node in self.nodes.values())
