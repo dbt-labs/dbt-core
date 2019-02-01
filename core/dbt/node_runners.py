@@ -1,10 +1,9 @@
-
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.exceptions import NotImplementedException
 from dbt.utils import get_nodes_by_tags
 from dbt.node_types import NodeType, RunHookType
 from dbt.adapters.factory import get_adapter
-from dbt.contracts.results import RunModelResult
+from dbt.contracts.results import RunModelResult, collect_timing_info
 
 import dbt.clients.jinja
 import dbt.context.runtime
@@ -17,6 +16,7 @@ import dbt.writer
 
 import six
 import sys
+import threading
 import time
 import traceback
 
@@ -39,6 +39,7 @@ def track_model_run(index, num_nodes, run_model_result):
         "model_materialization": dbt.utils.get_materialization(run_model_result.node),  # noqa
         "model_id": dbt.utils.get_hash(run_model_result.node),
         "hashed_contents": dbt.utils.get_hashed_contents(run_model_result.node),  # noqa
+        "timing": run_model_result.timing,
     })
 
 
@@ -78,14 +79,26 @@ class BaseRunner(object):
         started = time.time()
 
         try:
-            # if we fail here, we still have a compiled node to return
-            # this has the benefit of showing a build path for the errant model
-            compiled_node = self.compile(manifest)
-            result.node = compiled_node
+            timing = []
+
+            with collect_timing_info('compile') as timing_info:
+                # if we fail here, we still have a compiled node to return
+                # this has the benefit of showing a build path for the errant
+                # model
+                compiled_node = self.compile(manifest)
+                result.node = compiled_node
+
+            timing.append(timing_info)
 
             # for ephemeral nodes, we only want to compile, not run
             if not self.is_ephemeral_model(self.node):
-                result = self.run(compiled_node, manifest)
+                with collect_timing_info('execute') as timing_info:
+                    result = self.run(compiled_node, manifest)
+
+                timing.append(timing_info)
+
+            for item in timing:
+                result = result.add_timing_info(item)
 
         except catchable_errors as e:
             if e.node is None:
@@ -130,6 +143,7 @@ class BaseRunner(object):
                 result.status = 'ERROR'
 
         result.execution_time = time.time() - started
+        result.thread_id = threading.current_thread().name
         return result
 
     def _safe_release_connection(self):

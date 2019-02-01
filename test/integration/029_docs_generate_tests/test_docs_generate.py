@@ -1857,6 +1857,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unique_id': 'model.test.model',
                     'wrapped_sql': 'None'
                 },
+                'thread_id': ANY,
+                'timing': [ANY, ANY],
                 'skip': False,
                 'status': None,
             },
@@ -1904,6 +1906,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unique_id': 'seed.test.seed',
                     'wrapped_sql': 'None'
                 },
+                'thread_id': ANY,
+                'timing': [ANY, ANY],
                 'skip': False,
                 'status': None,
             },
@@ -1950,6 +1954,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unique_id': 'test.test.not_null_model_id',
                     'wrapped_sql': AnyStringWith('id is null')
                 },
+                'thread_id': ANY,
+                'timing': [ANY, ANY],
                 'skip': False,
                 'status': None,
             },
@@ -1995,6 +2001,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unique_id': 'test.test.nothing_model_',
                     'wrapped_sql':  AnyStringWith('select 0'),
                 },
+                'thread_id': ANY,
+                'timing': [ANY, ANY],
                 'skip': False,
                 'status': None
             },
@@ -2041,6 +2049,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unique_id': 'test.test.unique_model_id',
                     'wrapped_sql': AnyStringWith('count(*)')
                 },
+                'thread_id': ANY,
+                'timing': [ANY, ANY],
                 'skip': False,
                 'status': None,
             },
@@ -2153,6 +2163,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unique_id': 'model.test.ephemeral_summary',
                     'wrapped_sql': 'None',
                 },
+                'thread_id': ANY,
+                'timing': [ANY, ANY],
                 'skip': False,
                 'status': None,
             },
@@ -2237,6 +2249,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unique_id': 'model.test.view_summary',
                     'wrapped_sql': 'None',
                 },
+                'thread_id': ANY,
+                'timing': [ANY, ANY],
                 'skip': False,
                 'status': None,
             },
@@ -2284,6 +2298,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unique_id': 'seed.test.seed',
                     'wrapped_sql': 'None'
                 },
+                'thread_id': ANY,
+                'timing': [ANY, ANY],
                 'skip': False,
                 'status': None,
             },

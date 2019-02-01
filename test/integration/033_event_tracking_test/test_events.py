@@ -141,9 +141,14 @@ class TestEventTracking(DBTIntegrationTest):
         status,
         error=None
     ):
+        timing = []
+
+        if status != 'ERROR':
+            timing = [ANY, ANY]
+
         def populate(project_id, user_id, invocation_id, version):
             return [{
-                'schema': 'iglu:com.dbt/run_model/jsonschema/1-0-0',
+                'schema': 'iglu:com.dbt/run_model/jsonschema/1-0-1',
                 'data': {
                     'invocation_id': invocation_id,
 
@@ -159,6 +164,8 @@ class TestEventTracking(DBTIntegrationTest):
                     'run_status': status,
                     'run_error': error,
                     'run_skipped': False,
+
+                    'timing': timing,
                 },
             }]
 
@@ -256,7 +263,7 @@ class TestEventTrackingSuccess(TestEventTracking):
     def test__event_tracking_seed(self):
         def seed_context(project_id, user_id, invocation_id, version):
             return [{
-                'schema': 'iglu:com.dbt/run_model/jsonschema/1-0-0',
+                'schema': 'iglu:com.dbt/run_model/jsonschema/1-0-1',
                 'data': {
                     'invocation_id': invocation_id,
 
@@ -272,6 +279,8 @@ class TestEventTrackingSuccess(TestEventTracking):
                     'run_status': 'INSERT 1',
                     'run_error': None,
                     'run_skipped': False,
+
+                    'timing': [ANY, ANY],
                 },
             }]
 
