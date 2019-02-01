@@ -313,7 +313,7 @@ def _build_base_subparser():
 
 def _build_docs_subparser(subparsers, base_subparser):
     docs_sub = subparsers.add_parser(
-        'docs',
+        "docs",
         help='''
         Generate or serve the documentation website for your project.
         '''
@@ -323,7 +323,7 @@ def _build_docs_subparser(subparsers, base_subparser):
 
 def _build_source_subparser(subparsers, base_subparser):
     source_sub = subparsers.add_parser(
-        'source',
+        "source",
         help='''
         Manage your project's sources
         ''',
@@ -560,7 +560,7 @@ def _build_parse_subparser(subparsers, base_subparser):
 def _build_docs_generate_subparser(subparsers, base_subparser):
     # it might look like docs_sub is the correct parents entry, but that
     # will cause weird errors about 'conflicting option strings'.
-    generate_sub = subparsers.add_parser('generate', parents=[base_subparser])
+    generate_sub = subparsers.add_parser("generate", parents=[base_subparser])
     generate_sub.set_defaults(cls=generate_task.GenerateTask,
                               which='generate', rpc_method='docs.generate')
     generate_sub.add_argument(
@@ -692,7 +692,7 @@ def _build_seed_subparser(subparsers, base_subparser):
 
 
 def _build_docs_serve_subparser(subparsers, base_subparser):
-    serve_sub = subparsers.add_parser('serve', parents=[base_subparser])
+    serve_sub = subparsers.add_parser("serve", parents=[base_subparser])
     serve_sub.add_argument(
         '--port',
         default=8080,
@@ -760,8 +760,8 @@ def _build_source_freshness_subparser(subparsers, base_subparser):
         aliases=['snapshot-freshness'],
     )
     sub.add_argument(
-        '-o',
-        '--output',
+        "-o",
+        "--output",
         required=False,
         help='''
         Specify the output path for the json report. By default, outputs to
@@ -899,15 +899,15 @@ def parse_args(args, cls=DBTArgumentParser):
     )
 
     p.add_argument(
-        '--version',
-        action='dbtversion',
+        "--version",
+        action="dbtversion",
         help='''
         Show version information
         ''')
 
     p.add_argument(
-        '-r',
-        '--record-timing-info',
+        "-r",
+        "--record-timing-info",
         default=None,
         type=str,
         help='''
@@ -917,9 +917,9 @@ def parse_args(args, cls=DBTArgumentParser):
     )
 
     p.add_argument(
-        '-d',
-        '--debug',
-        action='store_true',
+        "-d",
+        "--debug",
+        action="store_true",
         default=None,
         help='''
         Display debug logging during dbt execution. Useful for debugging and
@@ -1017,8 +1017,8 @@ def parse_args(args, cls=DBTArgumentParser):
     # a thread, as the profiler ignores child threads. Users should really
     # never use this.
     p.add_argument(
-        '--single-threaded',
-        action='store_true',
+        "--single-threaded",
+        action="store_true",
         help=argparse.SUPPRESS,
     )
 

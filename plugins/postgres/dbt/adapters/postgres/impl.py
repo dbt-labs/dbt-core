@@ -68,7 +68,7 @@ class PostgresAdapter(SQLAdapter):
 
     @classmethod
     def date_function(cls):
-        return 'now()'
+        return "now()"
 
     @available
     def verify_database(self, database):

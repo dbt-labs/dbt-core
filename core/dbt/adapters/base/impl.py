@@ -44,7 +44,7 @@ SeedModel = Union[ParsedSeedNode, CompiledSeedNode]
 
 
 GET_CATALOG_MACRO_NAME = 'get_catalog'
-FRESHNESS_MACRO_NAME = 'collect_freshness'
+FRESHNESS_MACRO_NAME = "collect_freshness"
 
 
 def _expect_row_value(key: str, row: agate.Row):
@@ -1023,7 +1023,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     ) -> Dict[str, Any]:
         """Calculate the freshness of sources in dbt, and return it"""
         kwargs: Dict[str, Any] = {
-            'source': source,
+            "source": source,
             'loaded_at_field': loaded_at_field,
             'filter': filter,
         }
@@ -1052,9 +1052,9 @@ class BaseAdapter(metaclass=AdapterMeta):
         snapshotted_at = _utc(table[0][1], source, loaded_at_field)
         age = (snapshotted_at - max_loaded_at).total_seconds()
         return {
-            'max_loaded_at': max_loaded_at,
-            'snapshotted_at': snapshotted_at,
-            'age': age,
+            "max_loaded_at": max_loaded_at,
+            "snapshotted_at": snapshotted_at,
+            "age": age,
         }
 
     def pre_model_hook(self, config: Mapping[str, Any]) -> Any:

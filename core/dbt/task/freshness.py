@@ -25,7 +25,7 @@ from dbt.graph import ResourceTypeSelector
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
 
 
-RESULT_FILE_NAME = 'sources.json'
+RESULT_FILE_NAME = "sources.json"
 
 
 class FreshnessRunner(BaseRunner):
@@ -215,9 +215,7 @@ class FreshnessTask(GraphRunnableTask):
 
     def get_result(self, results, elapsed_time, generated_at):
         return FreshnessResult.from_node_results(
-            elapsed_time=elapsed_time,
-            generated_at=generated_at,
-            results=results
+            elapsed_time=elapsed_time, generated_at=generated_at, results=results
         )
 
     def task_end_messages(self, results):

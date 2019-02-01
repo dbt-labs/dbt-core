@@ -199,7 +199,7 @@ class BaseRelation(FakeAPIObject, Hashable):
             schema=source.schema,
             identifier=source.identifier,
             quote_policy=quote_policy,
-            **kwargs
+            **kwargs,
         )
 
     @staticmethod

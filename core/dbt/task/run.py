@@ -407,8 +407,7 @@ class RunTask(CompileTask):
         execution = ""
 
         if execution_time is not None:
-            execution = " in {execution_time:0.2f}s".format(
-                execution_time=execution_time)
+            execution = " in {execution_time:0.2f}s".format(execution_time=execution_time)
 
         with TextOnly():
             fire_event(EmptyLine())
