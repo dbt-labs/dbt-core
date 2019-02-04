@@ -189,7 +189,8 @@ class BaseRunner(object):
                 error = exc_str
 
         if error is not None:
-            result = self.error_result(node, error, started, timing)
+            # we could include compile time for runtime errors here
+            result = self.error_result(node, error, started, [])
         elif result is not None:
             result = self.from_run_result(result, started, timing)
         else:
