@@ -5,24 +5,9 @@ import os
 from datetime import datetime, timedelta
 from mock import ANY, patch
 
-from test.integration.base import DBTIntegrationTest, use_profile
+from test.integration.base import DBTIntegrationTest, use_profile, AnyFloat, \
+    AnyStringWith
 from dbt.compat import basestring
-
-DATEFMT = '%Y-%m-%dT%H:%M:%S.%fZ'
-
-class AnyFloat(object):
-    """Any float. Use this in assertEqual() calls to assert that it is a float.
-    """
-    def __eq__(self, other):
-        return isinstance(other, float)
-
-
-class AnyStringWith(object):
-    def __init__(self, contains):
-        self.contains = contains
-
-    def __eq__(self, other):
-        return isinstance(other, basestring) and self.contains in other
 
 
 def _read_file(path):
@@ -103,23 +88,6 @@ class TestDocsGenerate(DBTIntegrationTest):
         os.remove(_normalize('target/run_results.json'))
         self.generate_start_time = datetime.utcnow()
         self.run_dbt(['docs', 'generate', vars_arg])
-
-    def assertBetween(self, timestr, start, end=None):
-        if end is None:
-            end = datetime.utcnow()
-
-        parsed = datetime.strptime(timestr, DATEFMT)
-
-        self.assertLessEqual(start, parsed,
-            'parsed date {} happened before {}'.format(
-                parsed,
-                start.strftime(DATEFMT))
-        )
-        self.assertGreaterEqual(end, parsed,
-            'parsed date {} happened after {}'.format(
-                parsed,
-                end.strftime(DATEFMT))
-        )
 
     def _no_stats(self):
         return {

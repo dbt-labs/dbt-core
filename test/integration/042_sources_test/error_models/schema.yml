@@ -1,0 +1,11 @@
+version: 2
+sources:
+  - name: test_source
+    loader: custom
+    freshness:
+      warn_after: {count: 10, period: hour}
+      error_after: {count: 1, period: day}
+    tables:
+      - name: test_table
+        sql_table_name: invalid.source
+        loaded_at_field: updated_at
