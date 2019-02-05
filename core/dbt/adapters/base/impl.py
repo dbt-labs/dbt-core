@@ -804,7 +804,12 @@ class BaseAdapter(object):
         # now we have a 1-row table of the maximum `loaded_at_field` value and
         # the current time according to the db.
         if len(table) != 1 or len(table[0]) != 2:
-            raise ValueError('TODO: fill this out!')
+            dbt.exceptions.raise_compiler_error(
+                'Got an invalid result from "{}" macro: {}'.format(
+                    FRESHNESS_MACRO_NAME, [tuple(r) for r in table]
+                ),
+                node=node
+            )
 
         max_loaded_at, snapshotted_at = map(_utc, table[0])
         age = (snapshotted_at - max_loaded_at).total_seconds()

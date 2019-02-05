@@ -219,7 +219,6 @@ def _warn_for_deprecated_configs(manifest):
 
 
 def _check_manifest(manifest, config):
-    # TODO: maybe this belongs in the GraphLoader, too?
     _check_resource_uniqueness(manifest)
     _warn_for_unused_resource_config_paths(manifest, config)
     _warn_for_deprecated_configs(manifest)

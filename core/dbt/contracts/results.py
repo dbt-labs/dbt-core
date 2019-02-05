@@ -125,19 +125,6 @@ class PartialResult(NodeSerializable):
     def failed(self):
         return None
 
-    # TODO: remove these
-    @property
-    def source_name(self):
-        return self.node.source_name
-
-    @property
-    def table_name(self):
-        return self.node.name
-
-    @property
-    def criteria(self):
-        return self.node.freshness
-
 
 RUN_MODEL_RESULT_CONTRACT = deep_merge(PARTIAL_RESULT_CONTRACT, {
     'description': 'The result of a single node being run',
