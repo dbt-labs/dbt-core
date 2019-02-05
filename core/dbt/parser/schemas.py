@@ -155,18 +155,34 @@ def _build_test_args(test, name):
                 type(test), test
             )
         )
+    if not isinstance(test_args, dict):
+        dbt.exceptions.raise_compiler_error(
+            'test arguments must be dict, got {} (value {})'.format(
+                type(test_args), test_args
+            )
+        )
+    if not isinstance(test_name, basestring):
+        dbt.exceptions.raise_compiler_error(
+            'test name must be a str, got {} (value {})'.format(
+                type(test_name), test_name
+            )
+        )
     if name is not None:
         test_args['column_name'] = name
     return test_name, test_args
+
+
+def warn_or_raise(msg, value):
+    if dbt.flags.STRICT_MODE:
+        dbt.exceptions.raise_compiler_error(msg, value)
+    dbt.utils.compiler_warning(value, msg)
 
 
 def warn_invalid(filepath, key, value, explain):
     msg = (
         "Invalid test config given in {} @ {}: {} {}"
     ).format(filepath, key, value, explain)
-    if dbt.flags.STRICT_MODE:
-        dbt.exceptions.raise_compiler_error(msg, value)
-    dbt.utils.compiler_warning(value, msg)
+    warn_or_raise(msg, value)
 
 
 def _filter_validate(filepath, location, values, validate):
@@ -214,10 +230,14 @@ class SchemaBaseTestParser(MacrosKnownParser):
         get_rendered(description, context)
 
         for test in column.get('tests', []):
-            yield self.build_test_node(
-                target, package_name, test, root_dir,
-                path, column_name
-            )
+            try:
+                yield self.build_test_node(
+                    target, package_name, test, root_dir,
+                    path, column_name
+                )
+            except dbt.exceptions.CompilationException as exc:
+                warn_or_raise('in {}: {}'.format(path, exc.msg), None)
+                continue
 
     def _build_raw_sql(self, test_namespace, target, test_type, test_args):
         raise NotImplementedError
@@ -299,8 +319,12 @@ class SchemaModelParser(SchemaBaseTestParser):
                 yield 'test', node
 
         for test in model_dict.get('tests', []):
-            node = self.build_test_node(model_dict, package_name, test,
-                                        root_dir, path)
+            try:
+                node = self.build_test_node(model_dict, package_name, test,
+                                            root_dir, path)
+            except dbt.exceptions.CompilationException as exc:
+                warn_or_raise('in {}: {}'.format(path, exc.msg), test)
+                continue
             yield 'test', node
 
         context = {'doc': dbt.context.parser.docs(model_dict, refs.docrefs)}
@@ -405,8 +429,12 @@ class SchemaSourceParser(SchemaBaseTestParser):
                 yield 'test', node
 
         for test in table.get('tests', []):
-            node = self.build_test_node(test_target, package_name, test,
-                                        root_dir, path)
+            try:
+                node = self.build_test_node(test_target, package_name, test,
+                                            root_dir, path)
+            except dbt.exceptions.CompilationException as exc:
+                warn_or_raise('in {}: {}'.format(path, exc.msg), test)
+                continue
             yield 'test', node
 
         node = self.generate_source_node(source, table, path, package_name,
