@@ -488,7 +488,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             database=self.config.credentials.database,
             schema=schema,
             identifier=identifier,
-            quote_policy=self.config.quoting
+            quote_policy=self.config.quoting,
         )
         return self.get_columns_in_relation(relation)
 
