@@ -244,13 +244,13 @@ UNPARSED_SOURCE_TABLE_DEFINITION_CONTRACT = deep_merge(
             'subsection of the "sources" section of schema.yml'
         ),
         'properties': {
-            'sql_table_name': {
+            'identifier': {
                 'type': 'string',
-                'description': 'The exact identifier for the source table',
+                'description': 'The identifier for the source table',
                 'minLength': 1,
             },
         },
-        'required': ['sql_table_name'],
+        'required': ['identifier'],
     }
 )
 
@@ -278,6 +278,16 @@ UNPARSED_SOURCE_DEFINITION_CONTRACT = deep_merge(
             'description': {
                 'type': 'string',
                 'description': 'The user-supplied description of the source',
+            },
+            'database': {
+                'type': 'string',
+                'description': 'The database name for the source table',
+                'minLength': 1,
+            },
+            'schema': {
+                'type': 'string',
+                'description': 'The schema name for the source table',
+                'minLength': 1,
             },
             'tables': {
                 'type': 'array',

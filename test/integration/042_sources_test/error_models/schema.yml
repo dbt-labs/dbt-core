@@ -5,7 +5,8 @@ sources:
     freshness:
       warn_after: {count: 10, period: hour}
       error_after: {count: 1, period: day}
+    schema: invalid
     tables:
       - name: test_table
-        sql_table_name: invalid.source
+        identifier: source
         loaded_at_field: updated_at

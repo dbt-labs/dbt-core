@@ -399,8 +399,13 @@ class SchemaSourceParser(SchemaBaseTestParser):
 
         loaded_at_field = table.get('loaded_at_field',
                                     source.get('loaded_at_field'))
+        default_database = self.root_project_config.credentials.database
+        default_schema = self.root_project_config.credentials.schema
         return ParsedSourceDefinition(
             package_name=package_name,
+            database=source.get('database', default_database),
+            schema=source.get('schema', default_schema),
+            identifier=table.identifier,
             root_path=root_dir,
             path=path,
             original_file_path=path,
@@ -411,7 +416,6 @@ class SchemaSourceParser(SchemaBaseTestParser):
             source_name=source.name,
             source_description=source_description,
             loader=source.get('loader', ''),
-            sql_table_name=table.sql_table_name,
             docrefs=refs.docrefs,
             loaded_at_field=loaded_at_field,
             freshness=freshness,

@@ -202,7 +202,9 @@ class SchemaParserTest(BaseParserTest):
                 },
             },
             loaded_at_field='something',
-            sql_table_name='foo.bar',
+            database='test',
+            schema='foo',
+            identifier='bar',
             resource_type='source'
         )
 
@@ -473,10 +475,11 @@ class SchemaParserTest(BaseParserTest):
                         count: 20
                         period: hour
                   loaded_at_field: something
+                  schema: foo
                   tables:
                     - name: my_table
                       description: "my table description"
-                      sql_table_name: foo.bar
+                      identifier: bar
                       freshness:
                         warn_after:
                             count: 7
@@ -613,10 +616,11 @@ class SchemaParserTest(BaseParserTest):
                         count: 20
                         period: hour
                   loaded_at_field: something
+                  schema: '{{ var("test_schema_name") }}'
                   tables:
                     - name: my_table
                       description: "my table description"
-                      sql_table_name: '{{ var("test_schema_name") }}.bar'
+                      identifier: bar
                       freshness:
                         warn_after:
                             count: 7
@@ -684,10 +688,11 @@ class SchemaParserTest(BaseParserTest):
                         count: 20
                         period: hour
                   loaded_at_field: something
+                  schema: foo
                   tables:
                     - name: my_table
                       description: "my table description"
-                      sql_table_name: foo.bar
+                      identifier: bar
                       freshness:
                         warn_after:
                             count: 7
@@ -739,10 +744,11 @@ class SchemaParserTest(BaseParserTest):
                         count: 20
                         period: hour
                   loaded_at_field: something
+                  schema: foo
                   tables:
                     - name: my_table
                       description: "my table description"
-                      sql_table_name: foo.bar
+                      identifier: bar
                       freshness:
                         warn_after:
                             count: 7

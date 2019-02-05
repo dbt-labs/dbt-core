@@ -1196,6 +1196,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'id'
                         }
                     },
+                   'database': self.default_database,
                    'description': 'My table',
                    'docrefs': [
                         {
@@ -1208,6 +1209,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         }
                     ],
                    'freshness': {},
+                   'identifier': 'seed',
                    'loaded_at_field': None,
                    'loader': 'a_loader',
                    'name': 'my_table',
@@ -1216,9 +1218,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                    'path': self.dir('ref_models/schema.yml'),
                    'resource_type': 'source',
                    'root_path': os.getcwd(),
+                   'schema': my_schema_name,
                    'source_description': "{{ doc('source_info') }}",
                    'source_name': 'my_source',
-                   'sql_table_name': '{}.seed'.format(my_schema_name),
                    'unique_id': 'source.test.my_source.my_table'
                 }
             },
@@ -2034,8 +2036,8 @@ class TestDocsGenerate(DBTIntegrationTest):
         )
 
         cte_sql = (
-            ' __dbt__CTE__ephemeral_copy as (\n\n\nselect * from {}.seed\n)'
-        ).format(my_schema_name)
+            ' __dbt__CTE__ephemeral_copy as (\n\n\nselect * from "{}"."{}".seed\n)'
+        ).format(self.default_database, my_schema_name)
 
         ephemeral_injected_sql = (
             '\n\nwith{}select first_name, count(*) as ct from '
