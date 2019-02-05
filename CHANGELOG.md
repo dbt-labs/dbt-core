@@ -8,19 +8,19 @@ This release makes dbt and its adapters into a core-and-plugin architecture.
 - '{{this}}' is no longer respected in hooks [#1176](https://github.com/fishtown-analytics/dbt/pull/1176), implementing [#878](https://github.com/fishtown-analytics/dbt/issues/878)
 - A number of widely-used adapter methods previously available in macros/materializations have changed in breaking ways:
   - get_missing_columns - takes Relations instead of schemas and identifiers
-  - get_columns_in_table - removed in favor of get_columns_in_relation (takes a Relation instead of schema, identifier)
+  - get_columns_in_table - deprecated in favor of get_columns_in_relation (takes a Relation instead of schema, identifier)
   - expand_target_column_types - takes a Relation instead of schema, identifier
   - query_for_existing - removed
   - get_relation - database parameter added
   - create_schema - database parameter added
   - drop_schema - database parameter added
-  - already_exists - changed to take a relation
+  - already_exists - deprecated in favor of get_relation (takes a relation)
 
 ## dbt 0.12.2 - Grace Kelly (January 8, 2019)
 
 ### Overview
 
-This release reduces the runtime of dbt projects by improving dbt's approach to model running. Additionally, a number of workflow improvements have been added. 
+This release reduces the runtime of dbt projects by improving dbt's approach to model running. Additionally, a number of workflow improvements have been added.
 
 ### Deprecations
 - Deprecate `sql_where` ([#744](https://github.com/fishtown-analytics/dbt/issues/744)) ([docs](https://docs.getdbt.com/v0.12/docs/configuring-incremental-models))
