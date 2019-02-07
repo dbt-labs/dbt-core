@@ -70,5 +70,5 @@
 {%- endmacro %}
 
 {% macro snowflake__current_timestamp() -%}
-  CURRENT_TIMESTAMP()
+  convert_timestamp('UTC', current_timestamp())
 {%- endmacro %}

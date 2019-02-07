@@ -195,7 +195,7 @@ class NodeSelector(object):
             if target_table in (None, real_node.name, SELECTOR_GLOB):
                 yield node
 
-    def get_nodes_from_spec(self, graph, spec, sources=False):
+    def get_nodes_from_spec(self, graph, spec):
         select_parents = spec['select_parents']
         select_children = spec['select_children']
 

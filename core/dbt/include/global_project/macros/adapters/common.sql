@@ -243,16 +243,10 @@
 
 {% macro default__collect_freshness(source, loaded_at_field) %}
   {% call statement('check_schema_exists', fetch_result=True, auto_begin=False) -%}
-    with source_snapshot as (
-      select
-        max({{ loaded_at_field }}) as max_loaded_at
-      from {{ source }}
-    )
-
     select
-      max_loaded_at,
+      max({{ loaded_at_field }}) as max_loaded_at,
       {{ current_timestamp() }} as snapshotted_at
-    from source_snapshot
+    from {{ source }}
   {% endcall %}
   {{ return(load_result('check_schema_exists').table) }}
 {% endmacro %}

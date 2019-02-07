@@ -349,12 +349,6 @@ class FreshnessRunner(BaseRunner):
                                                    self.node_index,
                                                    self.num_nodes)
 
-    @staticmethod
-    def _freshness_delta(freshness):
-        # timedelta makes this convenient!
-        kwargs = {freshness['period']+'s': freshness['count']}
-        return timedelta(**kwargs).total_seconds()
-
     def _calculate_status(self, target_freshness, freshness):
         """Calculate the status of a run.
 
@@ -363,16 +357,18 @@ class FreshnessRunner(BaseRunner):
         :param timedelta freshness: The actual freshness of the data, as
             calculated from the database's timestamps
         """
-        warn_after = self._freshness_delta(target_freshness['warn_after'])
-        error_after = self._freshness_delta(target_freshness['error_after'])
         # if freshness > warn_after > error_after, you'll get an error, not a
         # warning
-        if freshness > error_after:
-            return 'error'
-        elif freshness > warn_after:
-            return 'warn'
-        else:
-            return 'pass'
+        for key in ('error', 'warn'):
+            fullkey = '{}_after'.format(key)
+            if fullkey not in target_freshness:
+                continue
+
+            target = target_freshness[fullkey]
+            kwargs = {target['period']+'s': target['count']}
+            if freshness > timedelta(**kwargs).total_seconds():
+                return key
+        return 'pass'
 
     def _build_run_result(self, node, start_time, error, status, timing_info,
                           skip=False, failed=None):

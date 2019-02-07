@@ -706,4 +706,4 @@ class ParsedSourceDefinition(APIObject):
 
     @property
     def has_freshness(self):
-        return self.freshness is not None and self.loaded_at_field is not None
+        return bool(self.freshness) and self.loaded_at_field is not None
