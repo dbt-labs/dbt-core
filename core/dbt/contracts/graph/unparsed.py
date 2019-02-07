@@ -250,7 +250,6 @@ UNPARSED_SOURCE_TABLE_DEFINITION_CONTRACT = deep_merge(
                 'minLength': 1,
             },
         },
-        'required': ['identifier'],
     }
 )
 

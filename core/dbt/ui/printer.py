@@ -203,7 +203,7 @@ def print_freshness_result_line(result, index, total):
         info = 'WARN'
         color = yellow
     else:
-        info = 'pass'
+        info = 'PASS'
         color = green
 
     if hasattr(result, 'node'):

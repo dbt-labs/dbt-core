@@ -2036,7 +2036,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         )
 
         cte_sql = (
-            ' __dbt__CTE__ephemeral_copy as (\n\n\nselect * from "{}"."{}".seed\n)'
+            ' __dbt__CTE__ephemeral_copy as (\n\n\nselect * from "{}"."{}"."seed"\n)'
         ).format(self.default_database, my_schema_name)
 
         ephemeral_injected_sql = (

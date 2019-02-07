@@ -17,6 +17,7 @@ class BaseSourcesTest(DBTIntegrationTest):
     def project_config(self):
         return {
             'data-paths': ['test/integration/042_sources_test/data'],
+            'quoting': {'database': True, 'schema': True, 'identifier': True},
         }
 
     def setUp(self):
@@ -114,7 +115,7 @@ class TestSourceFreshness(BaseSourcesTest):
         #favorite_color,id,first_name,email,ip_address,updated_at
         insert_id = self._id
         self._id += 1
-        raw_sql = """INSERT INTO {schema}.source
+        raw_sql = """INSERT INTO {schema}.{source}
             (favorite_color,id,first_name,email,ip_address,updated_at)
         VALUES (
             'blue',{id},'Jake','abc@example.com','192.168.1.1','{time}'
@@ -124,7 +125,8 @@ class TestSourceFreshness(BaseSourcesTest):
             kwargs={
                 'schema': self.unique_schema(),
                 'time': timestr,
-                'id': insert_id
+                'id': insert_id,
+                'source': self.adapter.quote('source'),
             }
         )
         self.last_inserted_time = insert_time.strftime("%Y-%m-%dT%H:%M:%S+00:00Z")

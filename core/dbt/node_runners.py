@@ -392,10 +392,7 @@ class FreshnessRunner(BaseRunner):
         return result
 
     def execute(self, compiled_node, manifest):
-        relation = self.adapter.Relation.create_from_source(
-            config=self.config,
-            source=compiled_node
-        )
+        relation = self.adapter.Relation.create_from_source(compiled_node)
         # given a Source, calculate its fresnhess.
         freshness = self.adapter.calculate_freshness(
             relation,

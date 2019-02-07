@@ -400,12 +400,11 @@ class SchemaSourceParser(SchemaBaseTestParser):
         loaded_at_field = table.get('loaded_at_field',
                                     source.get('loaded_at_field'))
         default_database = self.root_project_config.credentials.database
-        default_schema = self.root_project_config.credentials.schema
         return ParsedSourceDefinition(
             package_name=package_name,
             database=source.get('database', default_database),
-            schema=source.get('schema', default_schema),
-            identifier=table.identifier,
+            schema=source.get('schema', source.name),
+            identifier=table.get('identifier', table.name),
             root_path=root_dir,
             path=path,
             original_file_path=path,
