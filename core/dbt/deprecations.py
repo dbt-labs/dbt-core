@@ -44,6 +44,24 @@ class SeedDropExistingDeprecation(DBTDeprecation):
   will be removed in a future version of dbt."""
 
 
+_adapter_renamed_description = """\
+The adapter function `adapter.{old_name}` is deprecated and will be removed in
+ a future release of dbt. Please use `adapter.{new_name}` instead.
+ Documentation for {new_name} can be found here:
+ https://docs.getdbt.com/reference#adapter"""
+
+
+def renamed_method(old_name, new_name):
+    class AdapterDeprecationWarning(DBTDeprecation):
+        name = 'adapter:{}'.format(old_name)
+        description = _adapter_renamed_description.format(old_name=old_name,
+                                                          new_name=new_name)
+
+    dep = AdapterDeprecationWarning()
+    deprecations_list.append(dep)
+    deprecations[dep.name] = dep
+
+
 def warn(name, *args, **kwargs):
     if name not in deprecations:
         # this should (hopefully) never happen

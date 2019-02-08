@@ -51,6 +51,7 @@ install:
 build: false  # Not a C# project, build stuff at the test step instead.
 
 before_test:
+  - "%CMD_IN_ENV% python -m pip install --upgrade pip"  # sometimes on appveyor we get pip 7.x!
   - "%CMD_IN_ENV% pip install psycopg2==2.6.2"
   - "%CMD_IN_ENV% pip install tox"
 

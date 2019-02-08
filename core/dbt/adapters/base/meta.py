@@ -1,4 +1,6 @@
 import abc
+from functools import wraps
+from dbt.deprecations import warn, renamed_method
 
 
 def available(func):
@@ -19,6 +21,30 @@ def available_raw(func):
     func._is_available_ = True
     func._model_name_ = False
     return func
+
+
+def available_deprecated(supported_name):
+    """A decorator that marks a function as available, but also prints a
+    deprecation warning. Use like
+
+    @available_deprecated('my_new_method')
+    def my_old_method(self, arg, model_name=None):
+        args = compatability_shim(arg)
+        return self.my_new_method(*args, model_name=None)
+
+    To make `adapter.my_old_method` available but also print out a warning on
+    use directing users to `my_new_method`.
+    """
+    def wrapper(func):
+        func_name = func.__name__
+        renamed_method(func_name, supported_name)
+
+        @wraps(func)
+        def inner(*args, **kwargs):
+            warn('adapter:{}'.format(func_name))
+            return func(*args, **kwargs)
+        return available(inner)
+    return wrapper
 
 
 class AdapterMeta(abc.ABCMeta):

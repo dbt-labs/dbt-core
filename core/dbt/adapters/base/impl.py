@@ -18,7 +18,8 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.schema import Column
 from dbt.utils import filter_null_values, translate_aliases
 
-from dbt.adapters.base.meta import AdapterMeta, available, available_raw
+from dbt.adapters.base.meta import AdapterMeta, available, available_raw, \
+    available_deprecated
 from dbt.adapters.base import BaseRelation
 from dbt.adapters.cache import RelationsCache
 
@@ -356,6 +357,17 @@ class BaseAdapter(object):
             '`get_columns_in_relation` is not implemented for this adapter!'
         )
 
+    @available_deprecated('get_columns_in_relation')
+    def get_columns_in_table(self, schema, identifier, model_name=None):
+        """DEPRECATED: Get a list of the columns in the given table."""
+        relation = self.Relation.create(
+            database=self.config.credentials.database,
+            schema=schema,
+            identifier=identifier,
+            quote_policy=self.config.quoting
+        )
+        return self.get_columns_in_relation(relation, model_name=model_name)
+
     @abc.abstractmethod
     def expand_column_types(self, goal, current, model_name=None):
         """Expand the current table's types to match the goal table. (passable)
@@ -513,6 +525,14 @@ class BaseAdapter(object):
 
         return None
 
+    @available_deprecated('get_relation')
+    def already_exists(self, schema, name, model_name=None):
+        """DEPRECATED: Return if a model already exists in the database"""
+        database = self.config.credentials.database
+        relation = self.get_relation(database, schema, name,
+                                     model_name=model_name)
+        return relation is not None
+
     ###
     # ODBC FUNCTIONS -- these should not need to change for every adapter,
     #                   although some adapters may override them
@@ -541,21 +561,6 @@ class BaseAdapter(object):
         raise dbt.exceptions.NotImplementedException(
             '`drop_schema` is not implemented for this adapter!'
         )
-
-    @available
-    def already_exists(self, relation, model_name=None):
-        if not isinstance(relation, self.Relation):
-            dbt.exceptions.invalid_type_error(
-                method_name='already_exists',
-                arg_name='relation',
-                got_value=relation,
-                expected_type=self.Relation)
-
-        relation = self.get_relation(database=relation.database,
-                                     schema=relation.schema,
-                                     identifier=relation.identifier,
-                                     model_name=model_name)
-        return relation is not None
 
     @available_raw
     @abstractclassmethod
