@@ -9,7 +9,41 @@ import dbt.exceptions
 SELECTOR_PARENTS = '+'
 SELECTOR_CHILDREN = '+'
 SELECTOR_GLOB = '*'
+SELECTOR_CHILDREN_AND_ANCESTORS = '@'
 SELECTOR_DELIMITER = ':'
+
+
+class SelectionCriteria(object):
+    def __init__(self, node_spec):
+        self.raw = node_spec
+        self.select_children = False
+        self.select_parents = False
+        self.select_childrens_parents = False
+        self.selector_type = SELECTOR_FILTERS.FQN
+
+        if node_spec.startswith(SELECTOR_CHILDREN_AND_ANCESTORS):
+            self.select_childrens_parents = True
+            node_spec = node_spec[1:]
+
+        if node_spec.startswith(SELECTOR_PARENTS):
+            self.select_parents = True
+            node_spec = node_spec[1:]
+
+        if node_spec.endswith(SELECTOR_CHILDREN):
+            self.select_children = True
+            node_spec = node_spec[:-1]
+
+        if self.select_children and self.select_childrens_parents:
+            raise dbt.exceptions.RuntimeException(
+                'Invalid node spec {} - "@" prefix and "+" suffix are '
+                'incompatible'.format(self.raw)
+            )
+
+        if SELECTOR_DELIMITER in node_spec:
+            selector_parts = node_spec.split(SELECTOR_DELIMITER, 1)
+            self.selector_type, self.selector_value = selector_parts
+        else:
+            self.selector_value = node_spec
 
 
 class SELECTOR_FILTERS(object):
@@ -25,46 +59,6 @@ def split_specs(node_specs):
         specs.update(parts)
 
     return specs
-
-
-def parse_spec(node_spec):
-    select_children = False
-    select_parents = False
-    index_start = 0
-    index_end = len(node_spec)
-
-    if node_spec.startswith(SELECTOR_PARENTS):
-        select_parents = True
-        index_start = 1
-
-    if node_spec.endswith(SELECTOR_CHILDREN):
-        select_children = True
-        index_end -= 1
-
-    node_selector = node_spec[index_start:index_end]
-
-    if SELECTOR_DELIMITER in node_selector:
-        selector_parts = node_selector.split(SELECTOR_DELIMITER, 1)
-        selector_type, selector_value = selector_parts
-
-        node_filter = {
-            "type": selector_type,
-            "value": selector_value
-        }
-
-    else:
-        node_filter = {
-            "type": SELECTOR_FILTERS.FQN,
-            "value": node_selector
-
-        }
-
-    return {
-        "select_parents": select_parents,
-        "select_children": select_children,
-        "filter": node_filter,
-        "raw": node_spec
-    }
 
 
 def get_package_names(graph):
@@ -195,47 +189,34 @@ class NodeSelector(object):
             if target_table is None or target_table == real_node.name:
                 yield node
 
-    def get_nodes_from_spec(self, graph, spec):
-        select_parents = spec['select_parents']
-        select_children = spec['select_children']
+    def select_childrens_parents(self, graph, selected):
+        ancestors_for = self.select_children(graph, selected) | selected
+        return self.select_parents(graph, ancestors_for) | ancestors_for
 
-        filter_map = {
-            SELECTOR_FILTERS.FQN: self.get_nodes_by_qualified_name,
-            SELECTOR_FILTERS.TAG: self.get_nodes_by_tag,
-            SELECTOR_FILTERS.SOURCE: self.get_nodes_by_source,
-        }
+    def select_children(self, graph, selected):
+        descendants = set()
+        for node in selected:
+            descendants.update(nx.descendants(graph, node))
+        return descendants
 
-        node_filter = spec['filter']
-        filter_method = filter_map.get(node_filter['type'])
+    def select_parents(self, graph, selected):
+        ancestors = set()
+        for node in selected:
+            ancestors.update(nx.ancestors(graph, node))
+        return ancestors
 
-        if filter_method is None:
-            valid_selectors = ", ".join(filter_map.keys())
-            logger.info("The '{}' selector specified in {} is invalid. Must "
-                        "be one of [{}]".format(
-                            node_filter['type'],
-                            spec['raw'],
-                            valid_selectors))
+    def collect_models(self, graph, selected, spec):
+        additional = set()
+        if spec.select_childrens_parents:
+            additional.update(self.select_childrens_parents(graph, selected))
+        if spec.select_parents:
+            additional.update(self.select_parents(graph, selected))
+        if spec.select_children:
+            additional.update(self.select_children(graph, selected))
+        return additional
 
-            selected_nodes = set()
-
-        else:
-            selected_nodes = set(filter_method(graph, node_filter['value']))
-
-        additional_nodes = set()
+    def collect_tests(self, graph, model_nodes):
         test_nodes = set()
-
-        if select_parents:
-            for node in selected_nodes:
-                parent_nodes = nx.ancestors(graph, node)
-                additional_nodes.update(parent_nodes)
-
-        if select_children:
-            for node in selected_nodes:
-                child_nodes = nx.descendants(graph, node)
-                additional_nodes.update(child_nodes)
-
-        model_nodes = selected_nodes | additional_nodes
-
         for node in model_nodes:
             # include tests that depend on this node. if we aren't running
             # tests, they'll be filtered out later.
@@ -243,31 +224,49 @@ class NodeSelector(object):
                            if self.manifest.nodes[n].resource_type ==
                            NodeType.Test]
             test_nodes.update(child_tests)
+        return test_nodes
+
+    def get_nodes_from_spec(self, graph, spec):
+        filter_map = {
+            SELECTOR_FILTERS.FQN: self.get_nodes_by_qualified_name,
+            SELECTOR_FILTERS.TAG: self.get_nodes_by_tag,
+            SELECTOR_FILTERS.SOURCE: self.get_nodes_by_source,
+        }
+
+        filter_method = filter_map.get(spec.selector_type)
+
+        if filter_method is None:
+            valid_selectors = ", ".join(filter_map.keys())
+            logger.info("The '{}' selector specified in {} is invalid. Must "
+                        "be one of [{}]".format(
+                            spec.selector_type,
+                            spec.raw,
+                            valid_selectors))
+
+            return set()
+
+        collected = set(filter_method(graph, spec.selector_value))
+        collected.update(self.collect_models(graph, collected, spec))
+        collected.update(self.collect_tests(graph, collected))
 
         # filter out all actual source nodes now that we've calculated any
         # children specifiers
         source_nodes = set(uid for uid, _ in self.source_nodes(graph))
 
-        return (model_nodes | test_nodes).difference(source_nodes)
+        return collected.difference(source_nodes)
 
     def select_nodes(self, graph, raw_include_specs, raw_exclude_specs):
         selected_nodes = set()
 
-        split_include_specs = split_specs(raw_include_specs)
-        split_exclude_specs = split_specs(raw_exclude_specs)
-
-        include_specs = [parse_spec(spec) for spec in split_include_specs]
-        exclude_specs = [parse_spec(spec) for spec in split_exclude_specs]
-
-        for spec in include_specs:
+        for raw_spec in split_specs(raw_include_specs):
+            spec = SelectionCriteria(raw_spec)
             included_nodes = self.get_nodes_from_spec(graph, spec)
-            warn_if_useless_spec(spec, included_nodes)
-            selected_nodes = selected_nodes | included_nodes
+            selected_nodes.update(included_nodes)
 
-        for spec in exclude_specs:
+        for raw_spec in split_specs(raw_exclude_specs):
+            spec = SelectionCriteria(raw_spec)
             excluded_nodes = self.get_nodes_from_spec(graph, spec)
-            warn_if_useless_spec(spec, excluded_nodes)
-            selected_nodes = selected_nodes - excluded_nodes
+            selected_nodes.difference_update(excluded_nodes)
 
         return selected_nodes
 
