@@ -1,5 +1,6 @@
 from dbt.compat import basestring, builtins
 from dbt.logger import GLOBAL_LOGGER as logger
+import dbt.flags
 import re
 
 
@@ -578,6 +579,15 @@ def raise_unrecognized_credentials_type(typename, supported_types):
 
 def raise_not_implemented(msg):
     raise NotImplementedException(msg)
+
+
+def warn_or_error(msg, node=None, log_fmt=None):
+    if dbt.flags.WARN_ERROR:
+        raise_compiler_error(msg, node)
+    else:
+        if log_fmt is not None:
+            msg = log_fmt.format(msg)
+        logger.warning(msg)
 
 
 # Update this when a new function should be added to the

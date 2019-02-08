@@ -164,9 +164,8 @@ def warn_invalid(filepath, key, value, explain):
     msg = (
         "Invalid test config given in {} @ {}: {} {}"
     ).format(filepath, key, value, explain)
-    if dbt.flags.STRICT_MODE:
-        dbt.exceptions.raise_compiler_error(msg, value)
-    dbt.utils.compiler_warning(value, msg)
+    dbt.exceptions.warn_or_error(msg, value,
+                                 log_fmt='Compilation warning: {}\n')
 
 
 def _filter_validate(filepath, location, values, validate):

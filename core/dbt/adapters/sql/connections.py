@@ -3,6 +3,7 @@ import time
 
 import dbt.clients.agate_helper
 import dbt.exceptions
+from dbt.contracts.connection import Connection
 from dbt.adapters.base import BaseConnectionManager
 from dbt.compat import abstractclassmethod
 from dbt.logger import GLOBAL_LOGGER as logger

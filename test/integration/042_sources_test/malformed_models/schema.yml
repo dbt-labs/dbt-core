@@ -1,0 +1,12 @@
+version: 2
+sources:
+  - name: test_source
+    loader: custom
+    tables:
+      - name: test_table
+        tests:
+          - relationships:
+            # this is invalid
+              - column_name: favorite_color
+              - to: ref('descendant_model')
+              - field: favorite_color
