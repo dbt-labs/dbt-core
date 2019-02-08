@@ -1,13 +1,8 @@
 from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest, use_profile
-from dbt import deprecations
 
 
 class BaseTestSimpleCopy(DBTIntegrationTest):
-    def setUp(self):
-        super(BaseTestSimpleCopy, self).setUp()
-        deprecations.reset_deprecations()
-
     @property
     def schema(self):
         return "simple_copy_001"
@@ -26,11 +21,8 @@ class TestSimpleCopy(BaseTestSimpleCopy):
     def test__postgres__simple_copy(self):
         self.use_default_project({"data-paths": [self.dir("seed-initial")]})
 
-        self.assertEqual(deprecations.active_deprecations, set())
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
-        self.assertEqual({'adapter:already_exists', 'sql_where'},
-                         deprecations.active_deprecations)
         results = self.run_dbt()
         self.assertEqual(len(results),  6)
 
