@@ -564,7 +564,7 @@ def raise_invalid_schema_yml_version(path, issue):
     raise_compiler_error(
         'The schema file at {} is invalid because {}. Please consult the '
         'documentation for more information on schema.yml syntax:\n\n'
-        'https://docs.getdbt.com/docs/schemayml-filesf'
+        'https://docs.getdbt.com/docs/schemayml-files'
         .format(path, issue)
     )
 
