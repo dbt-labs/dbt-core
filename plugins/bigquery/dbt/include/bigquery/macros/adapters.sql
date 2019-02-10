@@ -26,6 +26,20 @@
 
 {%- endmacro -%}
 
+{% macro table_options() %}
+  {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
+  {%- set raw_persist_relation_docs = raw_persist_docs.get('relation', false) -%}
+
+  {%- if raw_persist_docs is {} -%}
+    {{ return('') }}
+  {% endif %}
+
+  OPTIONS(
+    {% if raw_persist_relation_docs -%}
+      description={{ model.description }}
+    {% endif %}
+  )
+{%- endmacro -%}
 
 {% macro bigquery__create_table_as(temporary, relation, sql) -%}
   {%- set raw_partition_by = config.get('partition_by', none) -%}
@@ -34,6 +48,7 @@
   create or replace table {{ relation }}
   {{ partition_by(raw_partition_by) }}
   {{ cluster_by(raw_cluster_by) }}
+  {{ table_docs() }}
   as (
     {{ sql }}
   );
