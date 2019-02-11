@@ -51,6 +51,8 @@ class BigQueryAdapter(BaseAdapter):
     Column = dbt.schema.BigQueryColumn
     ConnectionManager = BigQueryConnectionManager
 
+    AdapterSpecificConfigs = frozenset({"cluster_by", "partition_by"})
+
     ###
     # Implementations of abstract methods
     ###

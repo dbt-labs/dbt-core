@@ -14,7 +14,7 @@ class SnowflakeAdapter(SQLAdapter):
     Relation = SnowflakeRelation
     ConnectionManager = SnowflakeConnectionManager
 
-    AdapterSpecificConfigs = {"transient"}
+    AdapterSpecificConfigs = frozenset({"transient"})
 
     @classmethod
     def date_function(cls):

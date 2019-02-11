@@ -110,7 +110,9 @@ class BaseAdapter(object):
     # This should be an implementation of BaseConnectionManager
     ConnectionManager = None
 
-    AdapterSpecificConfigs = set()
+    # A set of clobber config fields accepted by this adapter
+    # for use in materializations
+    AdapterSpecificConfigs = frozenset()
 
     def __init__(self, config):
         self.config = config
