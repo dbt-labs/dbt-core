@@ -405,32 +405,11 @@ class Manifest(APIObject):
             type(self).__name__, name)
         )
 
-    def parsed_nodes(self):
-        for node in self.nodes.values():
-            if node.resource_type == NodeType.Source:
-                continue
-            yield node
-
-    def sources(self):
-        for node in self.nodes.values():
-            if node.resource_type != NodeType.Source:
-                continue
-            yield node
-
     def get_used_schemas(self):
         return frozenset({
             (node.database, node.schema)
-            for node in self.parsed_nodes()
+            for node in self.nodes.values()
         })
 
     def get_used_databases(self):
-        return frozenset(node.database for node in self.parsed_nodes())
-
-    def get_source_schemas(self):
-        return frozenset({
-            (node.database, node.schema)
-            for node in self.sources()
-        })
-
-    def get_used_databases(self):
-        return frozenset(node.database for node in self.sources())
+        return frozenset(node.database for node in self.nodes.values())

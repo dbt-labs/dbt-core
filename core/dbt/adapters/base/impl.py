@@ -54,13 +54,8 @@ def _catalog_filter_schemas(manifest):
     """Return a function that takes a row and decides if the row should be
     included in the catalog output.
     """
-    node_schemas = frozenset((d.lower(), s.lower())
+    schemas = frozenset((d.lower(), s.lower())
                         for d, s in manifest.get_used_schemas())
-
-    source_schemas = frozenset((d.lower(), s.lower())
-                        for d, s in manifest.get_source_schemas())
-
-    schemas = frozenset(node_schemas | source_schemas)
 
     def test(row):
         table_database = _expect_row_value('table_database', row)
