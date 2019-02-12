@@ -36,7 +36,7 @@
 
   OPTIONS(
     {% if raw_persist_relation_docs -%}
-      description={{ model.description }}
+      description={{ model.description | tojson }}
     {% endif %}
   )
 {%- endmacro -%}
@@ -48,7 +48,7 @@
   create or replace table {{ relation }}
   {{ partition_by(raw_partition_by) }}
   {{ cluster_by(raw_cluster_by) }}
-  {{ table_docs() }}
+  {{ table_options() }}
   as (
     {{ sql }}
   );
