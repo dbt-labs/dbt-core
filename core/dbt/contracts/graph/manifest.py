@@ -330,7 +330,8 @@ class Manifest(APIObject):
 
     def _model_matches_schema_and_table(self, schema, table, model):
         if model.resource_type == NodeType.Source:
-            return False
+            return (model.schema.lower() == schema.lower() and
+                    model.identifier.lower() == table.lower())
         return (model.schema.lower() == schema.lower() and
                 model.alias.lower() == table.lower())
 
@@ -410,6 +411,12 @@ class Manifest(APIObject):
                 continue
             yield node
 
+    def sources(self):
+        for node in self.nodes.values():
+            if node.resource_type != NodeType.Source:
+                continue
+            yield node
+
     def get_used_schemas(self):
         return frozenset({
             (node.database, node.schema)
@@ -418,3 +425,12 @@ class Manifest(APIObject):
 
     def get_used_databases(self):
         return frozenset(node.database for node in self.parsed_nodes())
+
+    def get_source_schemas(self):
+        return frozenset({
+            (node.database, node.schema)
+            for node in self.sources()
+        })
+
+    def get_used_databases(self):
+        return frozenset(node.database for node in self.sources())
