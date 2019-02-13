@@ -104,7 +104,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
         results = self.run_dbt(['run', '--models', 'users+'])
-        self.assertEqual(len(results),  2)
+        self.assertEqual(len(results),  3)
 
         self.assertManyTablesEqual(
             ["SEED", "USERS"],
