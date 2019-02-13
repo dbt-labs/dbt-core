@@ -195,9 +195,11 @@ def print_seed_result_line(result, schema_name, index, total):
 
 
 def print_freshness_result_line(result, index, total):
-
-    if result.error or result.status == 'error':
+    if result.error:
         info = 'ERROR'
+        color = red
+    elif result.status == 'error':
+        info = 'ERROR STALE'
         color = red
     elif result.status == 'warn':
         info = 'WARN'
@@ -213,14 +215,14 @@ def print_freshness_result_line(result, index, total):
         source_name = result.source_name
         table_name = result.table_name
 
-    msg = "{info} source {source_name}.{table_name}".format(
+    msg = "{info} freshness of {source_name}.{table_name}".format(
         info=info,
         source_name=source_name,
         table_name=table_name
     )
 
     print_fancy_output_line(
-        info,
+        msg,
         color(info),
         index,
         total,
