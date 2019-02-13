@@ -25,8 +25,6 @@ setup(
     },
     install_requires=[
         'dbt-core=={}'.format(package_version),
-        'snowflake-connector-python>=1.4.9',
-        'boto3>=1.6.23,<1.8.0',
-        'botocore>=1.9.23,<1.11.0',
+        'snowflake-connector-python>=1.6.12',
     ]
 )
