@@ -23,11 +23,11 @@ class SeedTask(RunnableTask):
         return results
 
     def show_table(self, result):
-        table = result.node['agate_table']
+        table = result.node.agate_table
         rand_table = table.order_by(lambda x: random.random())
 
-        schema = result.node['schema']
-        alias = result.node['alias']
+        schema = result.node.schema
+        alias = result.node.alias
 
         header = "Random sample of table: {}.{}".format(schema, alias)
         logger.info("")
