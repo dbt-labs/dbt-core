@@ -86,3 +86,15 @@ class TestSources(DBTIntegrationTest):
             ['source', 'descendant_model'],
             ['expected_multi_source', 'multi_source_model'])
         self.assertTableDoesNotExist('nonsource_descendant')
+
+    @use_profile('postgres')
+    def test_source_childrens_parents(self):
+        results = self.run_dbt_with_vars([
+            'run', '--models', '@source:test_source'
+        ])
+        self.assertEqual(len(results), 2)
+        self.assertManyTablesEqual(
+            ['source', 'descendant_model'],
+            ['expected_multi_source', 'multi_source_model'],
+        )
+        self.assertTableDoesNotExist('nonsource_descendant')
