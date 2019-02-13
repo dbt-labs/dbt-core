@@ -167,19 +167,18 @@ def incorporate_catalog_unique_ids(catalog, manifest):
 
     for schema, tables in catalog.items():
         for table_name, table_def in tables.items():
-            unique_id = manifest.get_unique_id_for_schema_and_table(
+            unique_ids = manifest.get_unique_ids_for_schema_and_table(
                 schema, table_name)
 
-            if not unique_id:
-                continue
+            for unique_id in unique_ids:
+                if unique_id in nodes:
+                    dbt.exceptions.raise_ambiguous_catalog_match(
+                        unique_id, nodes[unique_id], table_def)
 
-            elif unique_id in nodes:
-                dbt.exceptions.raise_ambiguous_catalog_match(
-                    unique_id, nodes[unique_id], table_def)
-
-            else:
-                table_def['unique_id'] = unique_id
-                nodes[unique_id] = table_def
+                else:
+                    table_def_copy = table_def.copy()
+                    table_def_copy['unique_id'] = unique_id
+                    nodes[unique_id] = table_def_copy
 
     return nodes
 

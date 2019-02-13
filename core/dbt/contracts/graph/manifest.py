@@ -335,21 +335,17 @@ class Manifest(APIObject):
         return (model.schema.lower() == schema.lower() and
                 model.alias.lower() == table.lower())
 
-    def get_unique_id_for_schema_and_table(self, schema, table):
+    def get_unique_ids_for_schema_and_table(self, schema, table):
         """
-        Given a schema and table, find a matching model, and return
-        the unique_id for that model. If more than one matching
-        model is found, raise an exception.
+        Given a schema and table, find matching models, and return
+        their unique_ids. A schema and table may have more than one
+        match if the relation matches both a source and a seed, for instance.
         """
         def predicate(model):
             return self._model_matches_schema_and_table(schema, table, model)
 
         matching = list(self._filter_subgraph(self.nodes, predicate))
-
-        if not matching:
-            return None
-
-        return matching[0].get('unique_id')
+        return [match.get('unique_id') for match in matching]
 
     def add_nodes(self, new_nodes):
         """Add the given dict of new nodes to the manifest."""

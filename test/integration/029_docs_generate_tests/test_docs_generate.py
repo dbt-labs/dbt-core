@@ -347,6 +347,39 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'comment': None,
             },
         }
+
+        seed_columns = {
+            'id': {
+                'name': 'id',
+                'index': 1,
+                'type': 'integer',
+                'comment': None,
+            },
+            'first_name': {
+                'name': 'first_name',
+                'index': 2,
+                'type': 'text',
+                'comment': None,
+            },
+            'email': {
+                'name': 'email',
+                'index': 3,
+                'type': 'text',
+                'comment': None,
+            },
+            'ip_address': {
+                'name': 'ip_address',
+                'index': 4,
+                'type': 'text',
+                'comment': None,
+            },
+            'updated_at': {
+                'name': 'updated_at',
+                'index': 5,
+                'type': 'timestamp without time zone',
+                'comment': None,
+            },
+        }
         return {
             'seed.test.seed': {
                 'unique_id': 'seed.test.seed',
@@ -359,38 +392,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'owner': role,
                 },
                 'stats': stats,
-                'columns': {
-                    'id': {
-                        'name': 'id',
-                        'index': 1,
-                        'type': 'integer',
-                        'comment': None,
-                    },
-                    'first_name': {
-                        'name': 'first_name',
-                        'index': 2,
-                        'type': 'text',
-                        'comment': None,
-                    },
-                    'email': {
-                        'name': 'email',
-                        'index': 3,
-                        'type': 'text',
-                        'comment': None,
-                    },
-                    'ip_address': {
-                        'name': 'ip_address',
-                        'index': 4,
-                        'type': 'text',
-                        'comment': None,
-                    },
-                    'updated_at': {
-                        'name': 'updated_at',
-                        'index': 5,
-                        'type': 'timestamp without time zone',
-                        'comment': None,
-                    },
-                },
+                'columns': seed_columns
             },
             'model.test.ephemeral_summary': {
                 'unique_id': 'model.test.ephemeral_summary',
@@ -417,6 +419,19 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'stats': stats,
                 'columns': summary_columns,
+            },
+            "source.test.my_source.my_table": {
+                "unique_id": "source.test.my_source.my_table",
+                "metadata": {
+                    'schema': my_schema_name,
+                    'database': self.default_database,
+                    'name': 'seed',
+                    'type': 'BASE TABLE',
+                    'comment': None,
+                    'owner': role,
+                },
+                "stats": stats,
+                'columns': seed_columns
             },
         }
 
