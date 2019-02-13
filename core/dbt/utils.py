@@ -19,27 +19,6 @@ from dbt.node_types import NodeType
 from dbt.clients import yaml_helper
 
 
-DBTConfigKeys = [
-    'alias',
-    'schema',
-    'enabled',
-    'materialized',
-    'dist',
-    'sort',
-    'sql_where',
-    'unique_key',
-    'sort_type',
-    'pre-hook',
-    'post-hook',
-    'vars',
-    'column_types',
-    'bind',
-    'quoting',
-    'tags',
-    'database',
-]
-
-
 class ExitCodes(object):
     Success = 0
     ModelError = 1
