@@ -125,10 +125,11 @@ def warn_if_useless_spec(spec, nodes):
     if len(nodes) > 0:
         return
 
-    logger.info(
-        "* Spec='{}' does not identify any models and was ignored\n"
+    msg = (
+        "* Spec='{}' does not identify any models"
         .format(spec['raw'])
     )
+    dbt.exceptions.warn_or_error(msg, log_fmt='{} and was ignored\n')
 
 
 class NodeSelector(object):

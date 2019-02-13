@@ -43,7 +43,7 @@ class TestSimpleSeed(DBTIntegrationTest):
         self.assertTablesEqual("seed_actual","seed_expected")
 
         # this should drop the seed table, then re-create
-        results = self.run_dbt(["seed", "--drop-existing"])
+        results = self.run_dbt(["seed", "--full-refresh"])
         self.assertEqual(len(results),  1)
         self.assertTablesEqual("seed_actual","seed_expected")
 

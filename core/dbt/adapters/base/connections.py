@@ -296,7 +296,7 @@ class BaseConnectionManager(object):
         operation does not require the lock.
         """
         if dbt.flags.STRICT_MODE:
-            Connection(**connection)
+            assert isinstance(connection, Connection)
 
         if connection.transaction_open is False:
             raise dbt.exceptions.InternalException(
