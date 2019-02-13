@@ -1,12 +1,10 @@
-from dbt.runner import RunManager
-from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.node_runners import TestRunner
 from dbt.node_types import NodeType
 import dbt.ui.printer
-from dbt.task.base_task import RunnableTask
+from dbt.task.run import RunTask
 
 
-class TestTask(RunnableTask):
+class TestTask(RunTask):
     """
     Testing:
         1) Create tmp views w/ 0 rows to ensure all tables, schemas, and SQL
@@ -17,17 +15,15 @@ class TestTask(RunnableTask):
            c) referential integrity
            d) accepted value
     """
-    def run(self):
+    def raise_on_first_error(self):
+        return False
 
-        include = self.args.models
-        exclude = self.args.exclude
-
+    def build_query(self):
         query = {
             "include": self.args.models,
             "exclude": self.args.exclude,
             "resource_types": NodeType.Test
         }
-
         test_types = [self.args.data, self.args.schema]
 
         if all(test_types) or not any(test_types):
@@ -40,8 +36,7 @@ class TestTask(RunnableTask):
             raise RuntimeError("unexpected")
 
         query['tags'] = tags
-        results = RunManager(self.config, query, TestRunner).run()
+        return query
 
-        dbt.ui.printer.print_run_end_messages(results)
-
-        return results
+    def get_runner_type(self):
+        return TestRunner

@@ -19,6 +19,7 @@ import dbt.task.test as test_task
 import dbt.task.archive as archive_task
 import dbt.task.generate as generate_task
 import dbt.task.serve as serve_task
+import dbt.task.freshness as freshness_task
 from dbt.adapters.factory import reset_adapters
 
 import dbt.tracking
@@ -303,70 +304,7 @@ def invoke_dbt(parsed):
     return task, cfg
 
 
-def parse_args(args):
-    p = DBTArgumentParser(
-        prog='dbt: data build tool',
-        formatter_class=argparse.RawTextHelpFormatter,
-        description="An ELT tool for managing your SQL "
-        "transformations and data models."
-        "\nFor more documentation on these commands, visit: "
-        "docs.getdbt.com",
-        epilog="Specify one of these sub-commands and you can "
-        "find more help from there.")
-
-    p.add_argument(
-        '--version',
-        action='dbtversion',
-        help="Show version information")
-
-    p.add_argument(
-        '-r',
-        '--record-timing-info',
-        default=None,
-        type=str,
-        help="""
-        When this option is passed, dbt will output low-level timing
-        stats to the specified file. Example:
-        `--record-timing-info output.profile`
-        """
-    )
-
-    p.add_argument(
-        '-d',
-        '--debug',
-        action='store_true',
-        help='''Display debug logging during dbt execution. Useful for
-        debugging and making bug reports.''')
-
-    p.add_argument(
-        '-S',
-        '--strict',
-        action='store_true',
-        help='''Run schema validations at runtime. This will surface
-        bugs in dbt, but may incur a performance penalty. This flag implies
-        --warn-error''')
-
-    p.add_argument(
-        '--warn-error',
-        action='store_true',
-        help='''If dbt would normally warn, instead raise an exception.
-        Examples include --models that selects nothing, deprecations,
-        configurations with no associated models, invalid test configurations,
-        and missing sources/refs in tests''')
-
-    # if set, run dbt in single-threaded mode: thread count is ignored, and
-    # calls go through `map` instead of the thread pool. This is useful for
-    # getting performance information about aspects of dbt that normally run in
-    # a thread, as the profiler ignores child threads. Users should really
-    # never use this.
-    p.add_argument(
-        '--single-threaded',
-        action='store_true',
-        help=argparse.SUPPRESS,
-    )
-
-    subs = p.add_subparsers(title="Available sub-commands")
-
+def _build_base_subparser():
     base_subparser = argparse.ArgumentParser(add_help=False)
 
     base_subparser.add_argument(
@@ -417,22 +355,48 @@ def parse_args(args):
         dest='use_cache',
         help='If set, bypass the adapter-level cache of database state',
     )
+    return base_subparser
 
-    sub = subs.add_parser(
+
+def _build_docs_subparser(subparsers, base_subparser):
+    docs_sub = subparsers.add_parser(
+        'docs',
+        parents=[base_subparser],
+        help="Generate or serve the documentation "
+        "website for your project.")
+    return docs_sub
+
+
+def _build_source_subparser(subparsers, base_subparser):
+    source_sub = subparsers.add_parser(
+        'source',
+        parents=[base_subparser],
+        help="Manage your project's sources")
+    return source_sub
+
+
+def _build_init_subparser(subparsers, base_subparser):
+    sub = subparsers.add_parser(
             'init',
             parents=[base_subparser],
             help="Initialize a new DBT project.")
     sub.add_argument('project_name', type=str, help='Name of the new project')
     sub.set_defaults(cls=init_task.InitTask, which='init')
+    return sub
 
-    sub = subs.add_parser(
+
+def _build_clean_subparser(subparsers, base_subparser):
+    sub = subparsers.add_parser(
         'clean',
         parents=[base_subparser],
         help="Delete all folders in the clean-targets list"
         "\n(usually the dbt_modules and target directories.)")
     sub.set_defaults(cls=clean_task.CleanTask, which='clean')
+    return sub
 
-    sub = subs.add_parser(
+
+def _build_debug_subparser(subparsers, base_subparser):
+    sub = subparsers.add_parser(
         'debug',
         parents=[base_subparser],
         help="Show some helpful information about dbt for debugging."
@@ -446,15 +410,21 @@ def parse_args(args):
         """
     )
     sub.set_defaults(cls=debug_task.DebugTask, which='debug')
+    return sub
 
-    sub = subs.add_parser(
+
+def _build_deps_subparser(subparsers, base_subparser):
+    sub = subparsers.add_parser(
         'deps',
         parents=[base_subparser],
         help="Pull the most recent version of the dependencies "
         "listed in packages.yml")
     sub.set_defaults(cls=deps_task.DepsTask, which='deps')
+    return sub
 
-    sub = subs.add_parser(
+
+def _build_archive_subparser(subparsers, base_subparser):
+    sub = subparsers.add_parser(
         'archive',
         parents=[base_subparser],
         help="Record changes to a mutable table over time."
@@ -469,31 +439,34 @@ def parse_args(args):
         """
     )
     sub.set_defaults(cls=archive_task.ArchiveTask, which='archive')
+    return sub
 
-    run_sub = subs.add_parser(
+
+def _build_run_subparser(subparsers, base_subparser):
+    run_sub = subparsers.add_parser(
         'run',
         parents=[base_subparser],
         help="Compile SQL and execute against the current "
         "target database.")
     run_sub.set_defaults(cls=run_task.RunTask, which='run')
+    return run_sub
 
-    compile_sub = subs.add_parser(
+
+def _build_compile_subparser(subparsers, base_subparser):
+    sub = subparsers.add_parser(
         'compile',
         parents=[base_subparser],
         help="Generates executable SQL from source model, test, and"
         "analysis files. \nCompiled SQL files are written to the target/"
         "directory.")
-    compile_sub.set_defaults(cls=compile_task.CompileTask, which='compile')
+    sub.set_defaults(cls=compile_task.CompileTask, which='compile')
+    return sub
 
-    docs_sub = subs.add_parser(
-        'docs',
-        parents=[base_subparser],
-        help="Generate or serve the documentation "
-        "website for your project.")
-    docs_subs = docs_sub.add_subparsers()
+
+def _build_docs_generate_subparser(subparsers, base_subparser):
     # it might look like docs_sub is the correct parents entry, but that
     # will cause weird errors about 'conflicting option strings'.
-    generate_sub = docs_subs.add_parser('generate', parents=[base_subparser])
+    generate_sub = subparsers.add_parser('generate', parents=[base_subparser])
     generate_sub.set_defaults(cls=generate_task.GenerateTask,
                               which='generate')
     generate_sub.add_argument(
@@ -502,8 +475,11 @@ def parse_args(args):
         dest='compile',
         help='Do not run "dbt compile" as part of docs generation'
     )
+    return generate_sub
 
-    for sub in [run_sub, compile_sub, generate_sub]:
+
+def _add_common_arguments(*subparsers):
+    for sub in subparsers:
         sub.add_argument(
             '-m',
             '--models',
@@ -554,7 +530,9 @@ def parse_args(args):
             the dbt_project.yml file ('require-dbt-version')
             """)
 
-    seed_sub = subs.add_parser(
+
+def _build_seed_subparser(subparsers, base_subparser):
+    seed_sub = subparsers.add_parser(
         'seed',
         parents=[base_subparser],
         help="Load data from csv files into your data warehouse.")
@@ -574,18 +552,23 @@ def parse_args(args):
         help='Show a sample of the loaded data in the terminal'
     )
     seed_sub.set_defaults(cls=seed_task.SeedTask, which='seed')
+    return seed_sub
 
-    serve_sub = docs_subs.add_parser('serve', parents=[base_subparser])
+
+def _build_docs_serve_subparser(subparsers, base_subparser):
+    serve_sub = subparsers.add_parser('serve', parents=[base_subparser])
     serve_sub.add_argument(
         '--port',
         default=8080,
         type=int,
         help='Specify the port number for the docs server.'
     )
-    serve_sub.set_defaults(cls=serve_task.ServeTask,
-                           which='serve')
+    serve_sub.set_defaults(cls=serve_task.ServeTask, which='serve')
+    return serve_sub
 
-    sub = subs.add_parser(
+
+def _build_test_subparser(subparsers, base_subparser):
+    sub = subparsers.add_parser(
         'test',
         parents=[base_subparser],
         help="Runs tests on data in deployed models."
@@ -628,6 +611,117 @@ def parse_args(args):
     )
 
     sub.set_defaults(cls=test_task.TestTask, which='test')
+    return sub
+
+
+def _build_source_snapshot_freshness_subparser(subparsers, base_subparser):
+    sub = subparsers.add_parser(
+        'snapshot-freshness',
+        parents=[base_subparser],
+        help="Snapshots the current freshness of the project's sources",
+    )
+    sub.add_argument(
+        '-s',
+        '--select',
+        required=False,
+        nargs='+',
+        help="""
+        Specify the sources to snapshot freshness
+        """,
+        dest='selected'
+    )
+    sub.add_argument(
+        '-o',
+        '--output',
+        required=False,
+        help="""
+        Specify the output path for the json report. By default, outputs to
+        target/sources.json
+        """
+    )
+    sub.set_defaults(cls=freshness_task.FreshnessTask,
+                     which='snapshot-freshness')
+    return sub
+
+
+def parse_args(args):
+    p = DBTArgumentParser(
+        prog='dbt: data build tool',
+        formatter_class=argparse.RawTextHelpFormatter,
+        description="An ELT tool for managing your SQL "
+        "transformations and data models."
+        "\nFor more documentation on these commands, visit: "
+        "docs.getdbt.com",
+        epilog="Specify one of these sub-commands and you can "
+        "find more help from there.")
+
+    p.add_argument(
+        '--version',
+        action='dbtversion',
+        help="Show version information")
+
+    p.add_argument(
+        '-r',
+        '--record-timing-info',
+        default=None,
+        type=str,
+        help="""
+        When this option is passed, dbt will output low-level timing
+        stats to the specified file. Example:
+        `--record-timing-info output.profile`
+        """
+    )
+
+    p.add_argument(
+        '-d',
+        '--debug',
+        action='store_true',
+        help='''Display debug logging during dbt execution. Useful for
+        debugging and making bug reports.''')
+
+    p.add_argument(
+        '-S',
+        '--strict',
+        action='store_true',
+        help='''Run schema validations at runtime. This will surface
+        bugs in dbt, but may incur a performance penalty.''')
+
+    # if set, run dbt in single-threaded mode: thread count is ignored, and
+    # calls go through `map` instead of the thread pool. This is useful for
+    # getting performance information about aspects of dbt that normally run in
+    # a thread, as the profiler ignores child threads. Users should really
+    # never use this.
+    p.add_argument(
+        '--single-threaded',
+        action='store_true',
+        help=argparse.SUPPRESS,
+    )
+
+    subs = p.add_subparsers(title="Available sub-commands")
+
+    base_subparser = _build_base_subparser()
+
+    # make the subcommands that have their own subcommands
+    docs_sub = _build_docs_subparser(subs, base_subparser)
+    docs_subs = docs_sub.add_subparsers()
+    source_sub = _build_source_subparser(subs, base_subparser)
+    source_subs = source_sub.add_subparsers()
+
+    _build_init_subparser(subs, base_subparser)
+    _build_clean_subparser(subs, base_subparser)
+    _build_debug_subparser(subs, base_subparser)
+    _build_deps_subparser(subs, base_subparser)
+    _build_archive_subparser(subs, base_subparser)
+
+    run_sub = _build_run_subparser(subs, base_subparser)
+    compile_sub = _build_compile_subparser(subs, base_subparser)
+    generate_sub = _build_docs_generate_subparser(docs_subs, base_subparser)
+    _add_common_arguments(run_sub, compile_sub, generate_sub)
+
+    _build_seed_subparser(subs, base_subparser)
+    _build_docs_serve_subparser(docs_subs, base_subparser)
+    _build_test_subparser(subs, base_subparser)
+    _build_source_snapshot_freshness_subparser(source_subs, base_subparser)
 
     if len(args) == 0:
         p.print_help()

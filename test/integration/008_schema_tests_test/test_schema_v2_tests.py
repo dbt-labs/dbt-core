@@ -38,7 +38,7 @@ class TestSchemaTests(DBTIntegrationTest):
         for result in test_results:
             # assert that all deliberately failing tests actually fail
             if 'failure' in result.node.get('name'):
-                self.assertFalse(result.errored)
+                self.assertIsNone(result.error)
                 self.assertFalse(result.skipped)
                 self.assertTrue(
                     result.status > 0,
@@ -47,7 +47,7 @@ class TestSchemaTests(DBTIntegrationTest):
 
             # assert that actual tests pass
             else:
-                self.assertFalse(result.errored)
+                self.assertIsNone(result.error)
                 self.assertFalse(result.skipped)
                 # status = # of failing rows
                 self.assertEqual(
@@ -149,7 +149,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         expected_failures = ['unique', 'every_value_is_blue']
 
         for result in test_results:
-            if result.errored:
+            if result.error is not None:
                 self.assertTrue(result.node['name'] in expected_failures)
         self.assertEqual(sum(x.status for x in test_results), 52)
 
@@ -186,7 +186,7 @@ class TestBQSchemaTests(DBTIntegrationTest):
         for result in test_results:
             # assert that all deliberately failing tests actually fail
             if 'failure' in result.node.get('name'):
-                self.assertFalse(result.errored)
+                self.assertIsNone(result.error)
                 self.assertFalse(result.skipped)
                 self.assertTrue(
                     result.status > 0,
@@ -195,7 +195,7 @@ class TestBQSchemaTests(DBTIntegrationTest):
 
             # assert that actual tests pass
             else:
-                self.assertFalse(result.errored)
+                self.assertIsNone(result.error)
                 self.assertFalse(result.skipped)
                 # status = # of failing rows
                 self.assertEqual(

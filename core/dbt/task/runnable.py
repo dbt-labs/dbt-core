@@ -1,48 +1,57 @@
 import os
 import time
 
+from dbt.task.base_task import BaseTask
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.contracts.graph.parsed import ParsedNode
+from dbt.compilation import compile_manifest
 from dbt.contracts.graph.manifest import CompileResultNode
 from dbt.contracts.results import ExecutionResult
-from dbt import deprecations
 from dbt.loader import GraphLoader
-from dbt.node_types import NodeType
 
-import dbt.clients.jinja
-import dbt.compilation
 import dbt.exceptions
-import dbt.linker
-import dbt.tracking
 import dbt.ui.printer
 import dbt.utils
-from dbt.clients.system import write_json
 
 import dbt.graph.selector
 
 from multiprocessing.dummy import Pool as ThreadPool
 
-
 RESULT_FILE_NAME = 'run_results.json'
 MANIFEST_FILE_NAME = 'manifest.json'
 
 
-class RunManager(object):
-    def __init__(self, config, query, Runner):
-        """
-        Runner is a type (not instance!) derived from
-            dbt.node_runners.BaseRunner
-        """
-        self.config = config
-        self.query = query
-        self.Runner = Runner
+def load_manifest(config):
+    # performance trick: if the adapter has a manifest loaded, use that to
+    # avoid parsing internal macros twice.
+    internal_manifest = get_adapter(config).check_internal_manifest()
+    manifest = GraphLoader.load_all(config,
+                                    internal_manifest=internal_manifest)
 
-        self.manifest = self.load_manifest()
-        self.linker = self.compile()
+    manifest.write(os.path.join(config.target_path, MANIFEST_FILE_NAME))
+    return manifest
+
+
+class BaseRunnableTask(BaseTask):
+    def __init__(self, args, config):
+        super(BaseRunnableTask, self).__init__(args, config)
+        self.manifest = None
+        self.linker = None
+        self.job_queue = None
+        self._flattened_nodes = None
+
+        self.run_count = 0
+        self.num_nodes = None
+        self.node_results = []
+        self._skipped_children = {}
+        self._raise_next_tick = None
+
+    def _runtime_initialize(self):
+        self.manifest = load_manifest(self.config)
+        self.linker = compile_manifest(self.config, self.manifest)
 
         selector = dbt.graph.selector.NodeSelector(self.linker, self.manifest)
-        selected_nodes = selector.select(query)
+        selected_nodes = selector.select(self.build_query())
         self.job_queue = self.linker.as_graph_queue(self.manifest,
                                                     selected_nodes)
 
@@ -51,19 +60,27 @@ class RunManager(object):
             self.manifest.nodes[uid] for uid in selected_nodes
         ]
 
-        self.run_count = 0
         self.num_nodes = len([
             n for n in self._flattened_nodes
-            if not Runner.is_ephemeral_model(n)
+            if not n.is_ephemeral_model
         ])
-        self.node_results = []
-        self._skipped_children = {}
-        self._raise_next_tick = None
+
+    def raise_on_first_error(self):
+        return False
+
+    def build_query(self):
+        raise dbt.exceptions.NotImplementedException('Not Implemented')
+
+    def get_runner_type(self):
+        raise dbt.exceptions.NotImplementedException('Not Implemented')
+
+    def result_path(self):
+        return os.path.join(self.config.target_path, RESULT_FILE_NAME)
 
     def get_runner(self, node):
         adapter = get_adapter(self.config)
 
-        if self.Runner.is_ephemeral_model(node):
+        if node.is_ephemeral_model:
             run_count = 0
             num_nodes = 0
         else:
@@ -71,26 +88,17 @@ class RunManager(object):
             run_count = self.run_count
             num_nodes = self.num_nodes
 
-        return self.Runner(self.config, adapter, node, run_count, num_nodes)
+        cls = self.get_runner_type()
+        return cls(self.config, adapter, node, run_count, num_nodes)
 
     def call_runner(self, runner):
-        if runner.skip:
-            return runner.on_skip()
-
-        # no before/after printing for ephemeral mdoels
-        if not runner.is_ephemeral_model(runner.node):
-            runner.before_execute()
-
-        result = runner.safe_run(self.manifest)
-
-        if not runner.is_ephemeral_model(runner.node):
-            runner.after_execute(result)
-
-        if result.errored and runner.raise_on_first_error():
+        # TODO: create+enforce an actual contracts for what `result` is instead
+        # of the current free-for-all
+        result = runner.run_with_hooks(self.manifest)
+        if result.error is not None and self.raise_on_first_error():
             # if we raise inside a thread, it'll just get silently swallowed.
-            # stash the error message we want on the RunManager, and it will
-            # check the next 'tick' - should be soon since our thread is about
-            # to finish!
+            # stash the error message we want here, and it will check the
+            # next 'tick' - should be soon since our thread is about to finish!
             self._raise_next_tick = result.error
 
         return result
@@ -104,7 +112,7 @@ class RunManager(object):
 
         This does still go through the callback path for result collection.
         """
-        if self.config.args.single_threaded:
+        if self.config.args.single_threaded or True:
             callback(self.call_runner(*args))
         else:
             pool.apply_async(self.call_runner, args=args, callback=callback)
@@ -147,7 +155,7 @@ class RunManager(object):
         the manifest, and mark any descendants (potentially with a 'cause' if
         the result was an ephemeral model) as skipped.
         """
-        is_ephemeral = self.Runner.is_ephemeral_model(result.node)
+        is_ephemeral = result.node.is_ephemeral_model
         if not is_ephemeral:
             self.node_results.append(result)
 
@@ -155,7 +163,7 @@ class RunManager(object):
         node_id = node.unique_id
         self.manifest.nodes[node_id] = node
 
-        if result.errored:
+        if result.error is not None:
             if is_ephemeral:
                 cause = result
             else:
@@ -209,118 +217,106 @@ class RunManager(object):
         for dep_node_id in self.linker.get_dependent_nodes(node_id):
             self._skipped_children[dep_node_id] = cause
 
-    def write_results(self, execution_result):
-        filepath = os.path.join(self.config.target_path, RESULT_FILE_NAME)
-        write_json(filepath, execution_result.serialize())
+    def before_hooks(self, adapter):
+        pass
 
-    def write_manifest_file(self, manifest):
-        """Write the manifest file to disk.
+    def before_run(self, adapter, selected_uids):
+        pass
 
-        manifest should be a Manifest.
-        """
-        manifest_path = os.path.join(self.config.target_path,
-                                     MANIFEST_FILE_NAME)
-        write_json(manifest_path, manifest.serialize())
+    def after_run(self, adapter, results):
+        pass
 
-    @staticmethod
-    def _check_resource_uniqueness(manifest):
-        names_resources = {}
-        alias_resources = {}
+    def after_hooks(self, adapter, results, elapsed):
+        pass
 
-        for resource, node in manifest.nodes.items():
-            if node.resource_type not in NodeType.refable():
-                continue
+    def task_end_messages(self, results):
+        raise dbt.exceptions.NotImplementedException('Not Implemented')
 
-            name = node.name
-            alias = "{}.{}".format(node.schema, node.alias)
-
-            existing_node = names_resources.get(name)
-            if existing_node is not None:
-                dbt.exceptions.raise_duplicate_resource_name(
-                        existing_node, node)
-
-            existing_alias = alias_resources.get(alias)
-            if existing_alias is not None:
-                dbt.exceptions.raise_ambiguous_alias(
-                        existing_alias, node)
-
-            names_resources[name] = node
-            alias_resources[alias] = node
-
-    def _warn_for_unused_resource_config_paths(self, manifest):
-        resource_fqns = manifest.get_resource_fqns()
-        disabled_fqns = [n.fqn for n in manifest.disabled]
-        self.config.warn_for_unused_resource_config_paths(resource_fqns,
-                                                          disabled_fqns)
-
-    @staticmethod
-    def _warn_for_deprecated_configs(manifest):
-        for unique_id, node in manifest.nodes.items():
-            is_model = node.resource_type == NodeType.Model
-            if is_model and 'sql_where' in node.config:
-                deprecations.warn('sql_where')
-
-    def _check_manifest(self, manifest):
-        # TODO: maybe this belongs in the GraphLoader, too?
-        self._check_resource_uniqueness(manifest)
-        self._warn_for_unused_resource_config_paths(manifest)
-        self._warn_for_deprecated_configs(manifest)
-
-    def load_manifest(self):
-        # performance trick: if the adapter has a manifest loaded, use that to
-        # avoid parsing internal macros twice.
-        internal_manifest = get_adapter(self.config).check_internal_manifest()
-        manifest = GraphLoader.load_all(self.config,
-                                        internal_manifest=internal_manifest)
-
-        self.write_manifest_file(manifest)
-        self._check_manifest(manifest)
-        return manifest
-
-    def compile(self):
-        compiler = dbt.compilation.Compiler(self.config)
-        compiler.initialize()
-
-        return compiler.compile(self.manifest)
+    def get_result(self, results, elapsed_time, generated_at):
+        raise dbt.exceptions.NotImplementedException('Not Implemented')
 
     def run(self):
         """
         Run dbt for the query, based on the graph.
         """
+        self._runtime_initialize()
         adapter = get_adapter(self.config)
 
         if len(self._flattened_nodes) == 0:
             logger.info("WARNING: Nothing to do. Try checking your model "
                         "configs and model specification args")
             return []
-        elif self.Runner.print_header:
-            stat_line = dbt.ui.printer.get_counts(self._flattened_nodes)
-            logger.info("")
-            dbt.ui.printer.print_timestamped_line(stat_line)
-            dbt.ui.printer.print_timestamped_line("")
         else:
             logger.info("")
 
         selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
         try:
-            self.Runner.before_hooks(self.config, adapter, self.manifest)
+            self.before_hooks(adapter)
             started = time.time()
-            self.Runner.before_run(self.config, adapter, self.manifest,
-                                   selected_uids)
+            self.before_run(adapter, selected_uids)
             res = self.execute_nodes()
-            self.Runner.after_run(self.config, adapter, res, self.manifest)
+            self.after_run(adapter, res)
             elapsed = time.time() - started
-            self.Runner.after_hooks(self.config, adapter, res, self.manifest,
-                                    elapsed)
+            self.after_hooks(adapter, res, elapsed)
 
         finally:
             adapter.cleanup_connections()
 
-        result = ExecutionResult(
+        result = self.get_result(
             results=res,
             elapsed_time=elapsed,
-            generated_at=dbt.utils.timestring(),
+            generated_at=dbt.utils.timestring()
         )
-        self.write_results(result)
+        result.write(self.result_path())
 
+        self.task_end_messages(res)
         return res
+
+    def interpret_results(self, results):
+        if results is None:
+            return False
+
+        failures = [r for r in results if r.error or r.failed]
+        return len(failures) == 0
+
+
+class RunnableTask(BaseRunnableTask):
+    def get_model_schemas(self, selected_uids):
+        schemas = set()
+        for node in self.manifest.nodes.values():
+            if node.unique_id not in selected_uids:
+                continue
+            if node.is_refable and not node.is_ephemeral:
+                schemas.add((node.database, node.schema))
+
+        return schemas
+
+    def create_schemas(self, adapter, selected_uids):
+        required_schemas = self.get_model_schemas(selected_uids)
+
+        # Snowflake needs to issue a "use {schema}" query, where schema
+        # is the one defined in the profile. Create this schema if it
+        # does not exist, otherwise subsequent queries will fail. Generally,
+        # dbt expects that this schema will exist anyway.
+        required_schemas.add(
+            (self.config.credentials.database, self.config.credentials.schema)
+        )
+
+        required_databases = set(db for db, _ in required_schemas)
+
+        existing_schemas = set()
+        for db in required_databases:
+            existing_schemas.update((db, s) for s in adapter.list_schemas(db))
+
+        for database, schema in (required_schemas - existing_schemas):
+            adapter.create_schema(database, schema)
+
+    def get_result(self, results, elapsed_time, generated_at):
+        return ExecutionResult(
+            results=results,
+            elapsed_time=elapsed_time,
+            generated_at=generated_at
+        )
+
+    def task_end_messages(self, results):
+        dbt.ui.printer.print_run_end_messages(results)

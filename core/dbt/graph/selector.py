@@ -185,9 +185,9 @@ class NodeSelector(object):
             raise dbt.exceptions.RuntimeException(msg)
 
         for node, real_node in self.source_nodes(graph):
-            if real_node.source_name != target_source:
+            if target_source not in (real_node.source_name, SELECTOR_GLOB):
                 continue
-            if target_table is None or target_table == real_node.name:
+            if target_table in (None, real_node.name, SELECTOR_GLOB):
                 yield node
 
     def select_childrens_parents(self, graph, selected):
@@ -250,11 +250,7 @@ class NodeSelector(object):
         collected.update(self.collect_models(graph, collected, spec))
         collected.update(self.collect_tests(graph, collected))
 
-        # filter out all actual source nodes now that we've calculated any
-        # children specifiers
-        source_nodes = set(uid for uid, _ in self.source_nodes(graph))
-
-        return collected.difference(source_nodes)
+        return collected
 
     def select_nodes(self, graph, raw_include_specs, raw_exclude_specs):
         selected_nodes = set()
@@ -283,7 +279,20 @@ class NodeSelector(object):
             if self._is_graph_member(node_name)
         ]
 
-    def get_selected(self, include, exclude, resource_types, tags):
+    def _is_match(self, node_name, resource_types, tags, required):
+        node = self.manifest.nodes[node_name]
+        if node.resource_type not in resource_types:
+            return False
+        tags = set(tags)
+        if tags and not bool(set(node.tags) & tags):
+            # there are tags specified but none match
+            return False
+        for attr in required:
+            if not getattr(node, attr):
+                return False
+        return True
+
+    def get_selected(self, include, exclude, resource_types, tags, required):
         graph = self.linker.graph
 
         include = coalesce(include, ['*'])
@@ -296,13 +305,7 @@ class NodeSelector(object):
 
         filtered_nodes = set()
         for node_name in selected_nodes:
-            node = self.manifest.nodes[node_name]
-
-            matched_resource = node.resource_type in resource_types
-            matched_tags = (len(tags) == 0 or
-                            bool(set(node.tags) & set(tags)))
-
-            if matched_resource and matched_tags:
+            if self._is_match(node_name, resource_types, tags, required):
                 filtered_nodes.add(node_name)
 
         return filtered_nodes
@@ -313,16 +316,22 @@ class NodeSelector(object):
         return is_model and is_ephemeral
 
     def get_ancestor_ephemeral_nodes(self, selected_nodes):
-        node_names = {
-            node: self.manifest.nodes[node].name
-            for node in selected_nodes
-            if node in self.manifest.nodes
-        }
+        node_names = {}
+        for node_id in selected_nodes:
+            if node_id not in self.manifest.nodes:
+                continue
+            node = self.manifest.nodes[node_id]
+            # sources don't have ancestors and this results in a silly select()
+            if node.resource_type == NodeType.Source:
+                continue
+            node_names[node_id] = node.name
 
         include_spec = [
             '+{}'.format(node_names[node])
             for node in selected_nodes if node in node_names
         ]
+        if not include_spec:
+            return set()
 
         all_ancestors = self.select_nodes(self.linker.graph, include_spec, [])
 
@@ -340,8 +349,11 @@ class NodeSelector(object):
         exclude = query.get('exclude')
         resource_types = query.get('resource_types')
         tags = query.get('tags')
+        required = query.get('required', ())
 
-        selected = self.get_selected(include, exclude, resource_types, tags)
+        selected = self.get_selected(include, exclude, resource_types, tags,
+                                     required)
+
         addins = self.get_ancestor_ephemeral_nodes(selected)
 
         return selected | addins

@@ -5,24 +5,9 @@ import os
 from datetime import datetime, timedelta
 from mock import ANY, patch
 
-from test.integration.base import DBTIntegrationTest, use_profile
+from test.integration.base import DBTIntegrationTest, use_profile, AnyFloat, \
+    AnyStringWith
 from dbt.compat import basestring
-
-DATEFMT = '%Y-%m-%dT%H:%M:%S.%fZ'
-
-class AnyFloat(object):
-    """Any float. Use this in assertEqual() calls to assert that it is a float.
-    """
-    def __eq__(self, other):
-        return isinstance(other, float)
-
-
-class AnyStringWith(object):
-    def __init__(self, contains):
-        self.contains = contains
-
-    def __eq__(self, other):
-        return isinstance(other, basestring) and self.contains in other
 
 
 def _read_file(path):
@@ -103,23 +88,6 @@ class TestDocsGenerate(DBTIntegrationTest):
         os.remove(_normalize('target/run_results.json'))
         self.generate_start_time = datetime.utcnow()
         self.run_dbt(['docs', 'generate', vars_arg])
-
-    def assertBetween(self, timestr, start, end=None):
-        if end is None:
-            end = datetime.utcnow()
-
-        parsed = datetime.strptime(timestr, DATEFMT)
-
-        self.assertLessEqual(start, parsed,
-            'parsed date {} happened before {}'.format(
-                parsed,
-                start.strftime(DATEFMT))
-        )
-        self.assertGreaterEqual(end, parsed,
-            'parsed date {} happened after {}'.format(
-                parsed,
-                end.strftime(DATEFMT))
-        )
 
     def _no_stats(self):
         return {
@@ -379,6 +347,39 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'comment': None,
             },
         }
+
+        seed_columns = {
+            'id': {
+                'name': 'id',
+                'index': 1,
+                'type': 'integer',
+                'comment': None,
+            },
+            'first_name': {
+                'name': 'first_name',
+                'index': 2,
+                'type': 'text',
+                'comment': None,
+            },
+            'email': {
+                'name': 'email',
+                'index': 3,
+                'type': 'text',
+                'comment': None,
+            },
+            'ip_address': {
+                'name': 'ip_address',
+                'index': 4,
+                'type': 'text',
+                'comment': None,
+            },
+            'updated_at': {
+                'name': 'updated_at',
+                'index': 5,
+                'type': 'timestamp without time zone',
+                'comment': None,
+            },
+        }
         return {
             'seed.test.seed': {
                 'unique_id': 'seed.test.seed',
@@ -391,38 +392,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'owner': role,
                 },
                 'stats': stats,
-                'columns': {
-                    'id': {
-                        'name': 'id',
-                        'index': 1,
-                        'type': 'integer',
-                        'comment': None,
-                    },
-                    'first_name': {
-                        'name': 'first_name',
-                        'index': 2,
-                        'type': 'text',
-                        'comment': None,
-                    },
-                    'email': {
-                        'name': 'email',
-                        'index': 3,
-                        'type': 'text',
-                        'comment': None,
-                    },
-                    'ip_address': {
-                        'name': 'ip_address',
-                        'index': 4,
-                        'type': 'text',
-                        'comment': None,
-                    },
-                    'updated_at': {
-                        'name': 'updated_at',
-                        'index': 5,
-                        'type': 'timestamp without time zone',
-                        'comment': None,
-                    },
-                },
+                'columns': seed_columns
             },
             'model.test.ephemeral_summary': {
                 'unique_id': 'model.test.ephemeral_summary',
@@ -449,6 +419,19 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'stats': stats,
                 'columns': summary_columns,
+            },
+            "source.test.my_source.my_table": {
+                "unique_id": "source.test.my_source.my_table",
+                "metadata": {
+                    'schema': my_schema_name,
+                    'database': self.default_database,
+                    'name': 'seed',
+                    'type': 'BASE TABLE',
+                    'comment': None,
+                    'owner': role,
+                },
+                "stats": stats,
+                'columns': seed_columns
             },
         }
 
@@ -1228,6 +1211,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'id'
                         }
                     },
+                   'database': self.default_database,
                    'description': 'My table',
                    'docrefs': [
                         {
@@ -1240,6 +1224,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         }
                     ],
                    'freshness': {},
+                   'identifier': 'seed',
                    'loaded_at_field': None,
                    'loader': 'a_loader',
                    'name': 'my_table',
@@ -1248,9 +1233,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                    'path': self.dir('ref_models/schema.yml'),
                    'resource_type': 'source',
                    'root_path': os.getcwd(),
+                   'schema': my_schema_name,
                    'source_description': "{{ doc('source_info') }}",
                    'source_name': 'my_source',
-                   'sql_table_name': '{}.seed'.format(my_schema_name),
                    'unique_id': 'source.test.my_source.my_table'
                 }
             },
@@ -2066,8 +2051,8 @@ class TestDocsGenerate(DBTIntegrationTest):
         )
 
         cte_sql = (
-            ' __dbt__CTE__ephemeral_copy as (\n\n\nselect * from {}.seed\n)'
-        ).format(my_schema_name)
+            ' __dbt__CTE__ephemeral_copy as (\n\n\nselect * from "{}"."{}"."seed"\n)'
+        ).format(self.default_database, my_schema_name)
 
         ephemeral_injected_sql = (
             '\n\nwith{}select first_name, count(*) as ct from '

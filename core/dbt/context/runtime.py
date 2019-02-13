@@ -79,7 +79,7 @@ def source(db_wrapper, model, config, manifest):
                 table_name)
 
         model.sources.append([source_name, table_name])
-        return target_source.sql_table_name
+        return db_wrapper.Relation.create_from_source(target_source)
 
     return do_source
 

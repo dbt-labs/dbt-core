@@ -21,7 +21,7 @@ class PostgresAdapter(SQLAdapter):
 
     @classmethod
     def date_function(cls):
-        return 'datenow()'
+        return 'now()'
 
     @available_raw
     def verify_database(self, database):

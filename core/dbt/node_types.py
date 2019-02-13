@@ -21,7 +21,6 @@ class NodeType(object):
             cls.Operation,
             cls.Seed,
             cls.Documentation,
-            cls.Source,
         ]
 
     @classmethod

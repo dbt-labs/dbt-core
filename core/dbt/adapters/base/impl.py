@@ -4,6 +4,7 @@ import multiprocessing
 import time
 
 import agate
+import pytz
 import six
 
 import dbt.exceptions
@@ -25,6 +26,7 @@ from dbt.adapters.cache import RelationsCache
 
 
 GET_CATALOG_MACRO_NAME = 'get_catalog'
+FRESHNESS_MACRO_NAME = 'collect_freshness'
 
 
 def _expect_row_value(key, row):
@@ -65,6 +67,16 @@ def _catalog_filter_schemas(manifest):
             return False
         return (table_database.lower(), table_schema.lower()) in schemas
     return test
+
+
+def _utc(dt):
+    """If dt has a timezone, return a new datetime that's in UTC. Otherwise,
+    assume the datetime is already for UTC and add the timezone.
+    """
+    if dt.tzinfo:
+        return dt.astimezone(pytz.UTC)
+    else:
+        return dt.replace(tzinfo=pytz.UTC)
 
 
 @six.add_metaclass(AdapterMeta)
@@ -780,3 +792,38 @@ class BaseAdapter(object):
     def cancel_open_connections(self):
         """Cancel all open connections."""
         return self.connections.cancel_open()
+
+    def calculate_freshness(self, source, loaded_at_field, manifest=None,
+                            connection_name=None):
+        """Calculate the freshness of sources in dbt, and return it"""
+        # in the future `source` will be a Relation instead of a string
+        kwargs = {
+            'source': source,
+            'loaded_at_field': loaded_at_field
+        }
+
+        # run the macro
+        table = self.execute_macro(
+            FRESHNESS_MACRO_NAME,
+            kwargs=kwargs,
+            release=True,
+            manifest=manifest,
+            connection_name=connection_name
+        )
+        # now we have a 1-row table of the maximum `loaded_at_field` value and
+        # the current time according to the db.
+        if len(table) != 1 or len(table[0]) != 2:
+            dbt.exceptions.raise_compiler_error(
+                'Got an invalid result from "{}" macro: {}'.format(
+                    FRESHNESS_MACRO_NAME, [tuple(r) for r in table]
+                ),
+                node=node
+            )
+
+        max_loaded_at, snapshotted_at = map(_utc, table[0])
+        age = (snapshotted_at - max_loaded_at).total_seconds()
+        return {
+            'max_loaded_at': max_loaded_at,
+            'snapshotted_at': snapshotted_at,
+            'age': age,
+        }
