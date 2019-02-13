@@ -3,14 +3,32 @@ import mock
 
 import os
 import string
+import dbt.exceptions
 import dbt.graph.selector as graph_selector
 
 import networkx as nx
 
+class BaseGraphSelectionTest(unittest.TestCase):
+    def create_graph(self):
+        raise NotImplementedError
 
-class GraphSelectionTest(unittest.TestCase):
+    def add_tags(self, nodes):
+        pass
 
     def setUp(self):
+        self.package_graph = self.create_graph()
+        nodes = {
+            node: mock.MagicMock(fqn=node.split('.')[1:], tags=[])
+            for node in self.package_graph
+        }
+        self.add_tags(nodes)
+        self.manifest = mock.MagicMock(nodes=nodes)
+        self.linker = mock.MagicMock(graph=self.package_graph)
+        self.selector = graph_selector.NodeSelector(self.linker, self.manifest)
+
+
+class GraphSelectionTest(BaseGraphSelectionTest):
+    def create_graph(self):
         integer_graph = nx.balanced_tree(2, 2, nx.DiGraph())
 
         package_mapping = {
@@ -19,12 +37,9 @@ class GraphSelectionTest(unittest.TestCase):
         }
 
         # Edges: [(X.a, Y.b), (X.a, X.c), (Y.b, Y.d), (Y.b, X.e), (X.c, Y.f), (X.c, X.g)]
-        self.package_graph = nx.relabel_nodes(integer_graph, package_mapping)
-        nodes = {
-            node: mock.MagicMock(fqn=node.split('.')[1:], tags=[])
-            for node in self.package_graph
-        }
+        return nx.relabel_nodes(integer_graph, package_mapping)
 
+    def add_tags(self, nodes):
         nodes['m.X.a'].tags = ['abc']
         nodes['m.Y.b'].tags = ['abc']
         nodes['m.X.c'].tags = ['abc']
@@ -32,11 +47,6 @@ class GraphSelectionTest(unittest.TestCase):
         nodes['m.X.e'].tags = ['efg']
         nodes['m.Y.f'].tags = ['efg']
         nodes['m.X.g'].tags = ['efg']
-
-        self.manifest = mock.MagicMock(nodes=nodes)
-        self.linker = mock.MagicMock(graph=self.package_graph)
-        self.selector = graph_selector.NodeSelector(self.linker, self.manifest)
-
 
     def run_specs_and_assert(self, graph, include, exclude, expected):
         selected = self.selector.select_nodes(
@@ -109,41 +119,59 @@ class GraphSelectionTest(unittest.TestCase):
             ['tag:efg'],
             set(['m.X.a','m.Y.b','m.X.c', 'm.Y.d']))
 
-    def parse_spec_and_assert(self, spec, parents, children, filter_type, filter_value):
-        parsed = graph_selector.parse_spec(spec)
-        self.assertEquals(
-            parsed,
-            {
-                "select_parents": parents,
-                "select_children": children,
-                "filter": {
-                    'type': filter_type,
-                    'value': filter_value
-                },
-                "raw": spec
-            }
+    def test__select_childrens_parents(self):
+        self.run_specs_and_assert(
+            self.package_graph,
+            ['@X.c'],
+            [],
+            set(['m.X.a', 'm.X.c', 'm.Y.f', 'm.X.g'])
         )
 
+    def parse_spec_and_assert(self, spec, parents, children, filter_type, filter_value, childrens_parents):
+        parsed = graph_selector.SelectionCriteria(spec)
+        self.assertEqual(parsed.select_parents, parents)
+        self.assertEqual(parsed.select_children, children)
+        self.assertEqual(parsed.selector_type, filter_type)
+        self.assertEqual(parsed.selector_value, filter_value)
+        self.assertEqual(parsed.select_childrens_parents, childrens_parents)
+
+    def invalid_spec(self, spec):
+        with self.assertRaises(dbt.exceptions.RuntimeException):
+            graph_selector.SelectionCriteria(spec)
+
     def test__spec_parsing(self):
-        self.parse_spec_and_assert('a', False, False, 'fqn', 'a')
-        self.parse_spec_and_assert('+a', True, False, 'fqn', 'a')
-        self.parse_spec_and_assert('a+', False, True, 'fqn', 'a')
-        self.parse_spec_and_assert('+a+', True, True, 'fqn', 'a')
+        self.parse_spec_and_assert('a', False, False, 'fqn', 'a', False)
+        self.parse_spec_and_assert('+a', True, False, 'fqn', 'a', False)
+        self.parse_spec_and_assert('a+', False, True, 'fqn', 'a', False)
+        self.parse_spec_and_assert('+a+', True, True, 'fqn', 'a', False)
+        self.parse_spec_and_assert('@a', False, False, 'fqn', 'a', True)
+        self.invalid_spec('@a+')
 
-        self.parse_spec_and_assert('a.b', False, False, 'fqn', 'a.b')
-        self.parse_spec_and_assert('+a.b', True, False, 'fqn', 'a.b')
-        self.parse_spec_and_assert('a.b+', False, True, 'fqn', 'a.b')
-        self.parse_spec_and_assert('+a.b+', True, True, 'fqn', 'a.b')
+        self.parse_spec_and_assert('a.b', False, False, 'fqn', 'a.b', False)
+        self.parse_spec_and_assert('+a.b', True, False, 'fqn', 'a.b', False)
+        self.parse_spec_and_assert('a.b+', False, True, 'fqn', 'a.b', False)
+        self.parse_spec_and_assert('+a.b+', True, True, 'fqn', 'a.b', False)
+        self.parse_spec_and_assert('@a.b', False, False, 'fqn', 'a.b', True)
+        self.invalid_spec('@a.b+')
 
-        self.parse_spec_and_assert('a.b.*', False, False, 'fqn', 'a.b.*')
-        self.parse_spec_and_assert('+a.b.*', True, False, 'fqn', 'a.b.*')
-        self.parse_spec_and_assert('a.b.*+', False, True, 'fqn', 'a.b.*')
-        self.parse_spec_and_assert('+a.b.*+', True, True, 'fqn', 'a.b.*')
+        self.parse_spec_and_assert('a.b.*', False, False, 'fqn', 'a.b.*', False)
+        self.parse_spec_and_assert('+a.b.*', True, False, 'fqn', 'a.b.*', False)
+        self.parse_spec_and_assert('a.b.*+', False, True, 'fqn', 'a.b.*', False)
+        self.parse_spec_and_assert('+a.b.*+', True, True, 'fqn', 'a.b.*', False)
+        self.parse_spec_and_assert('@a.b.*', False, False, 'fqn', 'a.b.*', True)
+        self.invalid_spec('@a.b*+')
 
-        self.parse_spec_and_assert('tag:a', False, False, 'tag', 'a')
-        self.parse_spec_and_assert('+tag:a', True, False, 'tag', 'a')
-        self.parse_spec_and_assert('tag:a+', False, True, 'tag', 'a')
-        self.parse_spec_and_assert('+tag:a+', True, True, 'tag', 'a')
+        self.parse_spec_and_assert('tag:a', False, False, 'tag', 'a', False)
+        self.parse_spec_and_assert('+tag:a', True, False, 'tag', 'a', False)
+        self.parse_spec_and_assert('tag:a+', False, True, 'tag', 'a', False)
+        self.parse_spec_and_assert('+tag:a+', True, True, 'tag', 'a', False)
+        self.parse_spec_and_assert('@tag:a', False, False, 'tag', 'a', True)
+        self.invalid_spec('@tag:a+')
+
+        self.parse_spec_and_assert('source:a', False, False, 'source', 'a', False)
+        self.parse_spec_and_assert('source:a+', False, True, 'source', 'a', False)
+        self.parse_spec_and_assert('@source:a', False, False, 'source', 'a', True)
+        self.invalid_spec('@source:a+')
 
     def test__package_name_getter(self):
         found = graph_selector.get_package_names(self.package_graph)
