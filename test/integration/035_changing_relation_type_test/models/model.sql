@@ -1,5 +1,4 @@
 
-
-{{ config(materialized=var('materialized'), sql_where='TRUE') }}
+{{ config(materialized=var('materialized')) }}
 
 select '{{ var("materialized") }}' as materialization
