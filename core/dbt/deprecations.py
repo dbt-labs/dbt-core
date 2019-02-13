@@ -1,5 +1,6 @@
 from dbt.logger import GLOBAL_LOGGER as logger
 import dbt.links
+import dbt.flags
 
 
 class DBTDeprecation(object):
@@ -9,7 +10,9 @@ class DBTDeprecation(object):
     def show(self, *args, **kwargs):
         if self.name not in active_deprecations:
             desc = self.description.format(**kwargs)
-            logger.info("* Deprecation Warning: {}\n".format(desc))
+            dbt.exceptions.warn_or_error(
+                "* Deprecation Warning: {}\n".format(desc)
+            )
             active_deprecations.add(self.name)
 
 

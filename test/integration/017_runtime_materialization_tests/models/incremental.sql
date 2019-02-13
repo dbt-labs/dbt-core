@@ -1,8 +1,13 @@
 {{
   config(
-    materialized = "incremental",
-    sql_where = "id>(select max(id) from {{this}})"
+    materialized = "incremental"
   )
 }}
 
 select * from {{ this.schema }}.seed
+
+{% if is_incremental() %}
+
+    where id > (select max(id) from {{this}})
+
+{% endif %}

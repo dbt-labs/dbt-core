@@ -88,11 +88,10 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
         self.assertEqual(len(ran_tests), 5)
         self.assertEqual(sum(x.status for x in ran_tests), 0)
 
-    # TODO: re-enable this test when we make --strict actually set strict mode
-    # @attr(type='postgres')
-    # def test_malformed_schema_strict_will_break_run(self):
-    #     with self.assertRaises(CompilationException):
-    #         self.run_dbt(strict=True)
+    @attr(type='postgres')
+    def test_malformed_schema_strict_will_break_run(self):
+        with self.assertRaises(CompilationException):
+            self.run_dbt(strict=True)
 
 
 class TestCustomSchemaTests(DBTIntegrationTest):

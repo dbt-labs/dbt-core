@@ -13,6 +13,7 @@ from dbt.exceptions import DbtProjectError
 from dbt.exceptions import RecursionException
 from dbt.exceptions import SemverException
 from dbt.exceptions import ValidationException
+from dbt.exceptions import warn_or_error
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.semver import VersionSpecifier
 from dbt.semver import versions_compatible
@@ -417,7 +418,7 @@ class Project(object):
             len(unused),
             '\n'.join('- {}'.format('.'.join(u)) for u in unused)
         )
-        logger.info(printer.yellow(msg))
+        warn_or_error(msg, log_fmt=printer.yellow('{}'))
 
     def validate_version(self):
         """Ensure this package works with the installed version of dbt."""

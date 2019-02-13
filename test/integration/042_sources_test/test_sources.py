@@ -1,5 +1,6 @@
 from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest, use_profile
+from dbt.exceptions import CompilationException
 import os
 
 class TestSources(DBTIntegrationTest):
@@ -86,3 +87,27 @@ class TestSources(DBTIntegrationTest):
             ['source', 'descendant_model'],
             ['expected_multi_source', 'multi_source_model'])
         self.assertTableDoesNotExist('nonsource_descendant')
+
+
+class TestMalformedSources(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "sources_042"
+
+    @property
+    def models(self):
+        return "test/integration/042_sources_test/malformed_models"
+
+    def setUp(self):
+        super(TestMalformedSources, self).setUp()
+        self.run_sql_file('test/integration/042_sources_test/source.sql',
+                          kwargs={'schema':self.unique_schema()})
+
+    @use_profile('postgres')
+    def test_malformed_schema_strict_will_break_run(self):
+        self.run_dbt(strict=False)
+
+    @use_profile('postgres')
+    def test_malformed_schema_strict_will_break_run(self):
+        with self.assertRaises(CompilationException):
+            self.run_dbt(strict=True)
