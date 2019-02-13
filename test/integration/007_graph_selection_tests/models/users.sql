@@ -2,7 +2,7 @@
 {{
     config(
         materialized = 'table',
-        tags='bi'
+        tags=['bi', 'users']
     )
 }}
 

@@ -60,11 +60,12 @@ class TestGraphSelection(DBTIntegrationTest):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
         results = self.run_dbt(['run', '--models', 'tag:base+'])
-        self.assertEqual(len(results), 2)
+        self.assertEqual(len(results), 3)
 
         created_models = self.get_models_in_schema()
         self.assertFalse('base_users' in created_models)
         self.assertFalse('emails' in created_models)
+        self.assertIn('emails_alt', created_models)
         self.assertTrue('users_rollup' in created_models)
         self.assertTrue('users' in created_models)
         self.assert_correct_schemas()
@@ -88,13 +89,14 @@ class TestGraphSelection(DBTIntegrationTest):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
         results = self.run_dbt(['run', '--models', 'users+'])
-        self.assertEqual(len(results),  2)
+        self.assertEqual(len(results),  3)
 
         self.assertTablesEqual("seed", "users")
         self.assertTablesEqual("summary_expected", "users_rollup")
         created_models = self.get_models_in_schema()
-        self.assertFalse('base_users' in created_models)
-        self.assertFalse('emails' in created_models)
+        self.assertIn('emails_alt', created_models)
+        self.assertNotIn('base_users', created_models)
+        self.assertNotIn('emails', created_models)
         self.assert_correct_schemas()
 
     @attr(type='snowflake')
@@ -102,7 +104,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
         results = self.run_dbt(['run', '--models', 'users+'])
-        self.assertEqual(len(results),  2)
+        self.assertEqual(len(results),  3)
 
         self.assertManyTablesEqual(
             ["SEED", "USERS"],
@@ -187,3 +189,30 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertIn('subdir', created_models)
         self.assertIn('nested_users', created_models)
         self.assert_correct_schemas()
+
+    @attr(type='postgres')
+    def test__postgres__childrens_parents(self):
+        self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
+        results = self.run_dbt(['run', '--models', '@base_users'])
+        self.assertEqual(len(results), 3)
+
+        created_models = self.get_models_in_schema()
+        self.assertIn('users_rollup', created_models)
+        self.assertIn('users', created_models)
+        self.assertIn('emails_alt', created_models)
+        self.assertNotIn('subdir', created_models)
+        self.assertNotIn('nested_users', created_models)
+
+    @attr(type='postgres')
+    def test__postgres__more_childrens_parents(self):
+        self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
+        results = self.run_dbt(['run', '--models', '@users'])
+        # base_users, emails, users_rollup, but not users (ephemeral)
+        self.assertEqual(len(results), 3)
+
+        created_models = self.get_models_in_schema()
+        self.assertIn('users_rollup', created_models)
+        self.assertIn('users', created_models)
+        self.assertIn('emails_alt', created_models)
+        self.assertNotIn('subdir', created_models)
+        self.assertNotIn('nested_users', created_models)
