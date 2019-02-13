@@ -71,8 +71,8 @@ def recursively_prepend_ctes(model, manifest):
         return (model, model.extra_ctes, manifest)
 
     if dbt.flags.STRICT_MODE:
-        # ensure that all the nodes in this manifest are compiled
-        CompiledGraph(**manifest.to_flat_graph())
+        # ensure that the cte we're adding to is compiled
+        CompiledNode(**model.serialize())
 
     prepended_ctes = []
 
@@ -81,7 +81,6 @@ def recursively_prepend_ctes(model, manifest):
         cte_to_add = manifest.nodes.get(cte_id)
         cte_to_add, new_prepended_ctes, manifest = recursively_prepend_ctes(
             cte_to_add, manifest)
-
         _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
         new_cte_name = '__dbt__CTE__{}'.format(cte_to_add.get('name'))
         sql = ' {} as (\n{}\n)'.format(new_cte_name, cte_to_add.compiled_sql)

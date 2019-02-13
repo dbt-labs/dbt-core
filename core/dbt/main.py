@@ -285,6 +285,11 @@ def invoke_dbt(parsed):
 
     arg_drop_existing = getattr(parsed, 'drop_existing', False)
     arg_full_refresh = getattr(parsed, 'full_refresh', False)
+    flags.STRICT_MODE = getattr(parsed, 'strict', False)
+    flags.WARN_ERROR = (
+        flags.STRICT_MODE or
+        getattr(parsed, 'warn_error', False)
+    )
 
     if arg_drop_existing:
         dbt.deprecations.warn('drop-existing')

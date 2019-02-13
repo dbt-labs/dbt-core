@@ -13,6 +13,7 @@ from dbt.exceptions import DbtProjectError
 from dbt.exceptions import RecursionException
 from dbt.exceptions import SemverException
 from dbt.exceptions import ValidationException
+from dbt.exceptions import warn_or_error
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.semver import VersionSpecifier
 from dbt.semver import versions_compatible
@@ -20,7 +21,7 @@ from dbt.version import get_installed_version
 from dbt.ui import printer
 from dbt.utils import deep_map
 from dbt.utils import parse_cli_vars
-from dbt.utils import DBTConfigKeys
+from dbt.parser.source_config import SourceConfig
 
 from dbt.contracts.project import Project as ProjectContract
 from dbt.contracts.project import PackageConfig
@@ -83,7 +84,7 @@ def _get_config_paths(config, path=(), paths=None):
 
     for key, value in config.items():
         if isinstance(value, dict):
-            if key in DBTConfigKeys:
+            if key in SourceConfig.ConfigKeys:
                 if path not in paths:
                     paths.add(path)
             else:
@@ -417,7 +418,7 @@ class Project(object):
             len(unused),
             '\n'.join('- {}'.format('.'.join(u)) for u in unused)
         )
-        logger.info(printer.yellow(msg))
+        warn_or_error(msg, log_fmt=printer.yellow('{}'))
 
     def validate_version(self):
         """Ensure this package works with the installed version of dbt."""

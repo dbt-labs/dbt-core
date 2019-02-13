@@ -27,6 +27,7 @@ class BaseParserTest(unittest.TestCase):
 
     def setUp(self):
         dbt.flags.STRICT_MODE = True
+        dbt.flags.WARN_ERROR = True
 
         self.maxDiff = None
 
@@ -35,7 +36,7 @@ class BaseParserTest(unittest.TestCase):
             'quoting': {},
             'outputs': {
                 'test': {
-                    'type': 'postgres',
+                    'type': 'redshift',
                     'host': 'localhost',
                     'schema': 'analytics',
                     'user': 'test',
@@ -729,6 +730,7 @@ class SchemaParserTest(BaseParserTest):
             ))
 
     def test__source_schema_invalid_test_not_strict(self):
+        dbt.flags.WARN_ERROR = False
         dbt.flags.STRICT_MODE = False
         test_yml = yaml.safe_load('''
             version: 2

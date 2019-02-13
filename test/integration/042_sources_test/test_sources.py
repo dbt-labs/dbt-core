@@ -1,8 +1,12 @@
 from nose.plugins.attrib import attr
+from datetime import datetime, timedelta
+import json
+import os
+
+from dbt.exceptions import CompilationException
 from test.integration.base import DBTIntegrationTest, use_profile, AnyFloat, \
     AnyStringWith
-from datetime import datetime, timedelta
-import json, os
+
 
 class BaseSourcesTest(DBTIntegrationTest):
     @property
@@ -23,7 +27,7 @@ class BaseSourcesTest(DBTIntegrationTest):
     def setUp(self):
         super(BaseSourcesTest, self).setUp()
         os.environ['DBT_TEST_SCHEMA_NAME_VARIABLE'] = 'test_run_schema'
-        self.run_dbt_with_vars(['seed'])
+        self.run_dbt_with_vars(['seed'], strict=False)
 
     def tearDown(self):
         del os.environ['DBT_TEST_SCHEMA_NAME_VARIABLE']
@@ -217,7 +221,7 @@ class TestSourceFreshnessErrors(BaseSourcesTest):
         return "test/integration/042_sources_test/error_models"
 
     @use_profile('postgres')
-    def test_error(self):
+    def test_postgres_error(self):
         results = self.run_dbt_with_vars(
             ['source', 'snapshot-freshness'],
             expect_pass=False
@@ -226,3 +230,18 @@ class TestSourceFreshnessErrors(BaseSourcesTest):
         self.assertEqual(results[0].status, 'error')
         self.assertFalse(results[0].failed)
         self.assertIsNotNone(results[0].error)
+
+
+class TestMalformedSources(BaseSourcesTest):
+    @property
+    def models(self):
+        return "test/integration/042_sources_test/malformed_models"
+
+    @use_profile('postgres')
+    def test_postgres_malformed_schema_nonstrict_will_not_break_run(self):
+        self.run_dbt_with_vars(['run'], strict=False)
+
+    @use_profile('postgres')
+    def test_postgres_malformed_schema_strict_will_break_run(self):
+        with self.assertRaises(CompilationException):
+            self.run_dbt_with_vars(['run'], strict=True)

@@ -51,6 +51,8 @@ class BigQueryAdapter(BaseAdapter):
     Column = dbt.schema.BigQueryColumn
     ConnectionManager = BigQueryConnectionManager
 
+    AdapterSpecificConfigs = frozenset({"cluster_by", "partition_by"})
+
     ###
     # Implementations of abstract methods
     ###
@@ -333,7 +335,7 @@ class BigQueryAdapter(BaseAdapter):
 
         if flags.STRICT_MODE:
             connection = self.connections.get(model.get('name'))
-            Connection(**connection)
+            assert isinstance(connection, Connection)
 
         if materialization == 'view':
             res = self._materialize_as_view(model)
