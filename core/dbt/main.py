@@ -200,9 +200,7 @@ def track_run(task):
         fire_event(MainEncounteredError(e=str(e)))
         dbt.tracking.track_invocation_end(config=task.config, args=task.args, result_type="error")
     except Exception:
-        dbt.tracking.track_invocation_end(
-            config=task.config, args=task.args, result_type="error"
-        )
+        dbt.tracking.track_invocation_end(config=task.config, args=task.args, result_type="error")
         raise
     finally:
         dbt.tracking.flush()
