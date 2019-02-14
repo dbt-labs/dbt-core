@@ -11,7 +11,7 @@ setup(
     name=package_name,
     version=package_version,
     description=description,
-    long_description_content_type=description,
+    long_description=description,
     author="Fishtown Analytics",
     author_email="info@fishtownanalytics.com",
     url="https://github.com/fishtown-analytics/dbt",
