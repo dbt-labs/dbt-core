@@ -228,7 +228,7 @@ def run_from_args(parsed):
     # Set up logging
     log_path = None
     if task.config is not None:
-        log_path = getattr(task.config, 'log_path', None)
+        log_path = getattr(task.config, "log_path", None)
     log_manager.set_path(log_path)
     # if 'list' task: set stdout to WARN instead of INFO
     level_override = parsed.cls.pre_init_hook(parsed)

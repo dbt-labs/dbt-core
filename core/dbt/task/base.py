@@ -50,7 +50,7 @@ def read_profiles(profiles_dir=None):
     if raw_profiles is None:
         profiles = {}
     else:
-        profiles = {k: v for (k, v) in raw_profiles.items() if k != 'config'}
+        profiles = {k: v for (k, v) in raw_profiles.items() if k != "config"}
 
     return profiles
 
@@ -94,7 +94,7 @@ class BaseTask(metaclass=ABCMeta):
             fire_event(DbtProjectError())
             fire_event(DbtProjectErrorException(exc=exc))
 
-            tracking.track_invalid_invocation(
+            tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
                 args=args,
                 result_type=exc.result_type)
             raise dbt.exceptions.RuntimeException('Could not run dbt') from exc
@@ -113,7 +113,7 @@ class BaseTask(metaclass=ABCMeta):
 
             fire_event(ProfileHelpMessage())
 
-            tracking.track_invalid_invocation(
+            tracking.track_invalid_invocation(args=args, result_type=exc.result_type)
                 args=args,
                 result_type=exc.result_type)
             raise dbt.exceptions.RuntimeException('Could not run dbt') from exc
@@ -121,7 +121,7 @@ class BaseTask(metaclass=ABCMeta):
 
     @abstractmethod
     def run(self):
-        raise dbt.exceptions.NotImplementedException('Not Implemented')
+        raise dbt.exceptions.NotImplementedException("Not Implemented")
 
     def interpret_results(self, results):
         return True

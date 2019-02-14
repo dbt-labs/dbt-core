@@ -732,6 +732,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             }
         )
 
+    def get_used_databases(self):
+        return frozenset(x.database for x in chain(self.nodes.values(), self.sources.values()))
+
     def deepcopy(self):
         return Manifest(
             nodes={k: _deepcopy(v) for k, v in self.nodes.items()},
