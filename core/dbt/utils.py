@@ -453,6 +453,8 @@ class JSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, DECIMALS):
             return float(obj)
+        if isinstance(obj, datetime):
+            return obj.isoformat()
         return super(JSONEncoder, self).default(obj)
 
 

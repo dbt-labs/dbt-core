@@ -62,8 +62,22 @@ class BaseSqlParser(MacrosKnownParser):
 
         return self.parse_sql_nodes(result, tags)
 
-    def parse_sql_nodes(self, nodes, tags=None):
+    def parse_sql_node(self, node_dict, tags=None):
+        if tags is None:
+            tags = []
 
+        node = UnparsedNode(**node_dict)
+        package_name = node.package_name
+
+        unique_id = self.get_path(node.resource_type,
+                                  package_name,
+                                  node.name)
+
+        project = self.all_projects.get(package_name)
+        node_parsed = self.parse_node(node, unique_id, project, tags=tags)
+        return unique_id, node_parsed
+
+    def parse_sql_nodes(self, nodes, tags=None):
         if tags is None:
             tags = []
 
@@ -71,18 +85,10 @@ class BaseSqlParser(MacrosKnownParser):
         disabled = []
 
         for n in nodes:
-            node = UnparsedNode(**n)
-            package_name = node.package_name
-
-            node_path = self.get_path(node.resource_type,
-                                      package_name,
-                                      node.name)
-
-            project = self.all_projects.get(package_name)
-            node_parsed = self.parse_node(node, node_path, project, tags=tags)
+            node_path, node_parsed = self.parse_sql_node(n, tags)
 
             # Ignore disabled nodes
-            if not node_parsed['config']['enabled']:
+            if not node_parsed.config['enabled']:
                 disabled.append(node_parsed)
                 continue
 

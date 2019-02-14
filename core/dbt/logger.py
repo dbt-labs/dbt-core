@@ -43,6 +43,8 @@ logging.getLogger('urllib3').setLevel(logging.INFO)
 logging.getLogger('google').setLevel(logging.INFO)
 logging.getLogger('snowflake.connector').setLevel(logging.INFO)
 logging.getLogger('parsedatetime').setLevel(logging.INFO)
+# we never want to seek werkzeug logs
+logging.getLogger('werkzeug').setLevel(logging.CRITICAL)
 
 # provide this for the cache.
 CACHE_LOGGER = logging.getLogger('dbt.cache')
