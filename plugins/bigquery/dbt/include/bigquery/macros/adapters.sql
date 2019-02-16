@@ -27,18 +27,16 @@
 {%- endmacro -%}
 
 {% macro table_options() %}
-  {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
-  {%- set raw_persist_relation_docs = raw_persist_docs.get('relation', false) -%}
+  {%- set raw_persist_docs = config.get('persist_docs', none) -%}
 
-  {%- if raw_persist_docs is {} -%}
-    {{ return('') }}
-  {% endif %}
-
-  OPTIONS(
-    {% if raw_persist_relation_docs -%}
+  {%- if raw_persist_docs -%}
+    {%- set raw_relation = raw_persist_docs.get('relation', false) -%}
+    OPTIONS(
+      {%- if raw_relation -%}
       description={{ model.description | tojson }}
-    {% endif %}
-  )
+      {% endif %}
+    )
+  {% endif %}
 {%- endmacro -%}
 
 {% macro bigquery__create_table_as(temporary, relation, sql) -%}
@@ -56,7 +54,9 @@
 
 
 {% macro bigquery__create_view_as(relation, sql) -%}
-  create or replace view {{ relation }} as (
+  create or replace view {{ relation }}
+  {{ table_options() }}
+  as (
     {{ sql }}
   );
 {% endmacro %}
