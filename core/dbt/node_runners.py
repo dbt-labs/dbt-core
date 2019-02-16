@@ -397,7 +397,8 @@ class FreshnessRunner(BaseRunner):
         freshness = self.adapter.calculate_freshness(
             relation,
             compiled_node.loaded_at_field,
-            manifest=manifest
+            manifest=manifest,
+            connection_name=compiled_node.unique_id
         )
         status = self._calculate_status(
             compiled_node.freshness,
