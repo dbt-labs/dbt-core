@@ -5,6 +5,7 @@ import yaml
 import random
 import time
 import json
+from datetime import datetime
 from functools import wraps
 
 from nose.plugins.attrib import attr
@@ -14,6 +15,7 @@ import dbt.flags as flags
 from dbt.adapters.factory import get_adapter, reset_adapters
 from dbt.clients.jinja import template_cache
 from dbt.config import RuntimeConfig
+from dbt.compat import basestring
 
 from dbt.logger import GLOBAL_LOGGER as logger
 import logging
@@ -925,6 +927,23 @@ class DBTIntegrationTest(unittest.TestCase):
         # assertEquals is deprecated. This makes the warnings less chatty
         self.assertEqual(*args, **kwargs)
 
+    def assertBetween(self, timestr, start, end=None):
+        datefmt = '%Y-%m-%dT%H:%M:%S.%fZ'
+        if end is None:
+            end = datetime.utcnow()
+
+        parsed = datetime.strptime(timestr, datefmt)
+
+        self.assertLessEqual(start, parsed,
+            'parsed date {} happened before {}'.format(
+                parsed,
+                start.strftime(datefmt))
+        )
+        self.assertGreaterEqual(end, parsed,
+            'parsed date {} happened after {}'.format(
+                parsed,
+                end.strftime(datefmt))
+        )
 
 def use_profile(profile_name):
     """A decorator to declare a test method as using a particular profile.
@@ -950,3 +969,27 @@ def use_profile(profile_name):
         assert _profile_from_test_name(wrapped.__name__) == profile_name
         return func
     return outer
+
+
+class AnyFloat(object):
+    """Any float. Use this in assertEqual() calls to assert that it is a float.
+    """
+    def __eq__(self, other):
+        return isinstance(other, float)
+
+
+class AnyStringWith(object):
+    def __init__(self, contains=None):
+        self.contains = contains
+
+    def __eq__(self, other):
+        if not isinstance(other, basestring):
+            return False
+
+        if self.contains is None:
+            return True
+
+        return self.contains in other
+
+    def __repr__(self):
+        return 'AnyStringWith<{!r}>'.format(self.contains)

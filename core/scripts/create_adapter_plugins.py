@@ -31,7 +31,7 @@ setup(
     name=package_name,
     version=package_version,
     description=description,
-    long_description_content_type=description,
+    long_description=description,
     author={author_name},
     author_email={author_email},
     url={url},

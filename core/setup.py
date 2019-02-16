@@ -3,8 +3,10 @@ from setuptools import find_packages
 from distutils.core import setup
 import os
 
+
 def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
+
 
 package_name = "dbt-core"
 package_version = "0.13.0a1"
@@ -16,7 +18,7 @@ setup(
     name=package_name,
     version=package_version,
     description=description,
-    long_description_content_type=description,
+    long_description=description,
     author="Fishtown Analytics",
     author_email="info@fishtownanalytics.com",
     url="https://github.com/fishtown-analytics/dbt",

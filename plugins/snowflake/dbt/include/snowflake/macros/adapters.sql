@@ -3,7 +3,16 @@
     use schema {{ adapter.quote_as_configured(schema, 'schema') }};
   {% endif %}
 
-  {{ default__create_table_as(temporary, relation, sql) }}
+  {%- set transient = config.get('transient', default=true) -%}
+
+  create {% if temporary -%}
+    temporary
+  {%- elif transient -%}
+    transient
+  {%- endif %} table {{ relation.include(database=(not temporary), schema=(not temporary)) }}
+  as (
+    {{ sql }}
+  );
 {% endmacro %}
 
 {% macro snowflake__create_view_as(relation, sql) -%}
@@ -67,4 +76,8 @@
             and upper(catalog_name) = upper('{{ database }}')
   {%- endcall %}
   {{ return(load_result('check_schema_exists').table) }}
+{%- endmacro %}
+
+{% macro snowflake__current_timestamp() -%}
+  convert_timezone('UTC', current_timestamp())
 {%- endmacro %}

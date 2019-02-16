@@ -1,13 +1,8 @@
 from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest, use_profile
-from dbt import deprecations
 
 
 class BaseTestSimpleCopy(DBTIntegrationTest):
-    def setUp(self):
-        super(BaseTestSimpleCopy, self).setUp()
-        deprecations.reset_deprecations()
-
     @property
     def schema(self):
         return "simple_copy_001"
@@ -26,23 +21,20 @@ class TestSimpleCopy(BaseTestSimpleCopy):
     def test__postgres__simple_copy(self):
         self.use_default_project({"data-paths": [self.dir("seed-initial")]})
 
-        self.assertEqual(deprecations.active_deprecations, set())
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
-        self.assertEqual({'adapter:already_exists', 'sql_where'},
-                         deprecations.active_deprecations)
         results = self.run_dbt()
-        self.assertEqual(len(results),  7)
+        self.assertEqual(len(results),  6)
 
-        self.assertManyTablesEqual(["seed", "view_model", "incremental", "incremental_deprecated", "materialized"])
+        self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized"])
 
         self.use_default_project({"data-paths": [self.dir("seed-update")]})
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  7)
+        self.assertEqual(len(results),  6)
 
-        self.assertManyTablesEqual(["seed", "view_model", "incremental", "incremental_deprecated", "materialized"])
+        self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized"])
 
     @use_profile("postgres")
     def test__postgres__dbt_doesnt_run_empty_models(self):
@@ -51,7 +43,7 @@ class TestSimpleCopy(BaseTestSimpleCopy):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  7)
+        self.assertEqual(len(results),  6)
 
         models = self.get_models_in_schema()
 
@@ -65,7 +57,7 @@ class TestSimpleCopy(BaseTestSimpleCopy):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt(expect_pass=False)
-        self.assertEqual(len(results),  7)
+        self.assertEqual(len(results),  6)
         for result in results:
             if 'incremental' in result.node.name:
                 self.assertIn('not implemented for presto', result.error)
@@ -76,16 +68,20 @@ class TestSimpleCopy(BaseTestSimpleCopy):
     def test__snowflake__simple_copy(self):
         self.use_default_project({"data-paths": [self.dir("seed-initial")]})
 
-        self.run_dbt(["seed"])
-        self.run_dbt()
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        results = self.run_dbt()
+        self.assertEqual(len(results),  6)
 
-        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "INCREMENTAL_DEPRECATED", "MATERIALIZED"])
+        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED"])
 
         self.use_default_project({"data-paths": [self.dir("seed-update")]})
-        self.run_dbt(["seed"])
-        self.run_dbt()
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        results = self.run_dbt()
+        self.assertEqual(len(results),  6)
 
-        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "INCREMENTAL_DEPRECATED", "MATERIALIZED"])
+        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED"])
 
     @use_profile("snowflake")
     def test__snowflake__simple_copy__quoting_off(self):
@@ -97,9 +93,9 @@ class TestSimpleCopy(BaseTestSimpleCopy):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  7)
+        self.assertEqual(len(results),  6)
 
-        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "INCREMENTAL_DEPRECATED", "MATERIALIZED"])
+        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED"])
 
         self.use_default_project({
             "data-paths": [self.dir("seed-update")],
@@ -108,9 +104,9 @@ class TestSimpleCopy(BaseTestSimpleCopy):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  7)
+        self.assertEqual(len(results),  6)
 
-        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "INCREMENTAL_DEPRECATED", "MATERIALIZED"])
+        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED"])
 
     @use_profile("snowflake")
     def test__snowflake__seed__quoting_switch(self):
@@ -135,10 +131,9 @@ class TestSimpleCopy(BaseTestSimpleCopy):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  7)
+        self.assertEqual(len(results),  6)
 
         self.assertTablesEqual("seed","view_model")
-        self.assertTablesEqual("seed","incremental_deprecated")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
 
@@ -147,10 +142,9 @@ class TestSimpleCopy(BaseTestSimpleCopy):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  7)
+        self.assertEqual(len(results),  6)
 
         self.assertTablesEqual("seed","view_model")
-        self.assertTablesEqual("seed","incremental_deprecated")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
 
@@ -173,9 +167,9 @@ class TestSimpleCopyQuotingIdentifierOn(BaseTestSimpleCopy):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  7)
+        self.assertEqual(len(results),  6)
 
-        self.assertManyTablesEqual(["seed", "view_model", "incremental", "incremental_deprecated", "materialized"])
+        self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized"])
 
         self.use_default_project({
             "data-paths": [self.dir("seed-update")],
@@ -183,9 +177,9 @@ class TestSimpleCopyQuotingIdentifierOn(BaseTestSimpleCopy):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  7)
+        self.assertEqual(len(results),  6)
 
-        self.assertManyTablesEqual(["seed", "view_model", "incremental", "incremental_deprecated", "materialized"])
+        self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized"])
 
 
 class BaseLowercasedSchemaTest(BaseTestSimpleCopy):
@@ -200,16 +194,21 @@ class TestSnowflakeSimpleLowercasedSchemaCopy(BaseLowercasedSchemaTest):
     def test__snowflake__simple_copy(self):
         self.use_default_project({"data-paths": [self.dir("seed-initial")]})
 
-        self.run_dbt(["seed"])
-        self.run_dbt()
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        results = self.run_dbt()
+        self.assertEqual(len(results),  6)
 
-        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "INCREMENTAL_DEPRECATED", "MATERIALIZED"])
+        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED"])
 
         self.use_default_project({"data-paths": [self.dir("seed-update")]})
-        self.run_dbt(["seed"])
-        self.run_dbt()
 
-        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "INCREMENTAL_DEPRECATED", "MATERIALIZED"])
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)
+        results = self.run_dbt()
+        self.assertEqual(len(results),  6)
+
+        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED"])
 
 
 class TestSnowflakeSimpleLowercasedSchemaQuoted(BaseLowercasedSchemaTest):

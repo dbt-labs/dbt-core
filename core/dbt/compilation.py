@@ -71,8 +71,8 @@ def recursively_prepend_ctes(model, manifest):
         return (model, model.extra_ctes, manifest)
 
     if dbt.flags.STRICT_MODE:
-        # ensure that all the nodes in this manifest are compiled
-        CompiledGraph(**manifest.to_flat_graph())
+        # ensure that the cte we're adding to is compiled
+        CompiledNode(**model.serialize())
 
     prepended_ctes = []
 
@@ -81,7 +81,6 @@ def recursively_prepend_ctes(model, manifest):
         cte_to_add = manifest.nodes.get(cte_id)
         cte_to_add, new_prepended_ctes, manifest = recursively_prepend_ctes(
             cte_to_add, manifest)
-
         _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
         new_cte_name = '__dbt__CTE__{}'.format(cte_to_add.get('name'))
         sql = ' {} as (\n{}\n)'.format(new_cte_name, cte_to_add.compiled_sql)
@@ -200,3 +199,46 @@ class Compiler(object):
         print_compile_stats(stats)
 
         return linker
+
+
+def compile_manifest(config, manifest):
+    compiler = Compiler(config)
+    compiler.initialize()
+    return compiler.compile(manifest)
+
+
+def compile_node(adapter, config, node, manifest, extra_context):
+    compiler = Compiler(config)
+    node = compiler.compile_node(node, manifest, extra_context)
+    node = _inject_runtime_config(adapter, node, extra_context)
+
+    if(node.injected_sql is not None and
+       not (dbt.utils.is_type(node, NodeType.Archive))):
+        logger.debug('Writing injected SQL for node "{}"'.format(
+            node.unique_id))
+
+        written_path = dbt.writer.write_node(
+            node,
+            config.target_path,
+            'compiled',
+            node.injected_sql)
+
+        node.build_path = written_path
+
+    return node
+
+
+def _inject_runtime_config(adapter, node, extra_context):
+    wrapped_sql = node.wrapped_sql
+    context = _node_context(adapter, node)
+    context.update(extra_context)
+    sql = dbt.clients.jinja.get_rendered(wrapped_sql, context)
+    node.wrapped_sql = sql
+    return node
+
+
+def _node_context(adapter, node):
+    return {
+        "run_started_at": dbt.tracking.active_user.run_started_at,
+        "invocation_id": dbt.tracking.active_user.invocation_id,
+    }

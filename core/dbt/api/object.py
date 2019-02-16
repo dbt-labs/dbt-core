@@ -4,6 +4,7 @@ from jsonschema import Draft4Validator
 
 from dbt.exceptions import JSONValidationException
 from dbt.utils import deep_merge
+from dbt.clients.system import write_json
 
 
 class APIObject(Mapping):
@@ -60,6 +61,9 @@ class APIObject(Mapping):
         Return a dict representation of this object.
         """
         return copy.deepcopy(self._contents)
+
+    def write(self, path):
+        write_json(path, self.serialize())
 
     @classmethod
     def deserialize(cls, settings):

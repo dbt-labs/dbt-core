@@ -27,6 +27,7 @@ class BaseParserTest(unittest.TestCase):
 
     def setUp(self):
         dbt.flags.STRICT_MODE = True
+        dbt.flags.WARN_ERROR = True
 
         self.maxDiff = None
 
@@ -35,7 +36,7 @@ class BaseParserTest(unittest.TestCase):
             'quoting': {},
             'outputs': {
                 'test': {
-                    'type': 'postgres',
+                    'type': 'redshift',
                     'host': 'localhost',
                     'schema': 'analytics',
                     'user': 'test',
@@ -202,7 +203,9 @@ class SchemaParserTest(BaseParserTest):
                 },
             },
             loaded_at_field='something',
-            sql_table_name='foo.bar',
+            database='test',
+            schema='foo',
+            identifier='bar',
             resource_type='source'
         )
 
@@ -473,10 +476,11 @@ class SchemaParserTest(BaseParserTest):
                         count: 20
                         period: hour
                   loaded_at_field: something
+                  schema: foo
                   tables:
                     - name: my_table
                       description: "my table description"
-                      sql_table_name: foo.bar
+                      identifier: bar
                       freshness:
                         warn_after:
                             count: 7
@@ -613,10 +617,11 @@ class SchemaParserTest(BaseParserTest):
                         count: 20
                         period: hour
                   loaded_at_field: something
+                  schema: '{{ var("test_schema_name") }}'
                   tables:
                     - name: my_table
                       description: "my table description"
-                      sql_table_name: '{{ var("test_schema_name") }}.bar'
+                      identifier: bar
                       freshness:
                         warn_after:
                             count: 7
@@ -667,6 +672,135 @@ class SchemaParserTest(BaseParserTest):
             self.assertEqual(test, expected)
 
         self.assertEqual(patches[0], self._expected_patch)
+        self.assertEqual(sources[0], self._expected_source)
+
+    def test__source_schema_invalid_test_strict(self):
+        test_yml = yaml.safe_load('''
+            version: 2
+            sources:
+                - name: my_source
+                  loader: some_loader
+                  description: my source description
+                  freshness:
+                    warn_after:
+                        count: 10
+                        period: hour
+                    error_after:
+                        count: 20
+                        period: hour
+                  loaded_at_field: something
+                  schema: foo
+                  tables:
+                    - name: my_table
+                      description: "my table description"
+                      identifier: bar
+                      freshness:
+                        warn_after:
+                            count: 7
+                            period: hour
+                      columns:
+                        - name: id
+                          description: user ID
+                          tests:
+                            - unique
+                            - not_null
+                            - accepted_values: # this test is invalid
+                                - values:
+                                    - a
+                                    - b
+                            - relationships:
+                                from: id
+                                to: ref('model_two')
+                      tests:
+                        - some_test:
+                            key: value
+        ''')
+        parser = SchemaParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+        root_dir = get_os_path('/usr/src/app')
+        with self.assertRaises(dbt.exceptions.CompilationException):
+            list(parser.parse_schema(
+                path='test_one.yml',
+                test_yml=test_yml,
+                package_name='root',
+                root_dir=root_dir
+            ))
+
+    def test__source_schema_invalid_test_not_strict(self):
+        dbt.flags.WARN_ERROR = False
+        dbt.flags.STRICT_MODE = False
+        test_yml = yaml.safe_load('''
+            version: 2
+            sources:
+                - name: my_source
+                  loader: some_loader
+                  description: my source description
+                  freshness:
+                    warn_after:
+                        count: 10
+                        period: hour
+                    error_after:
+                        count: 20
+                        period: hour
+                  loaded_at_field: something
+                  schema: foo
+                  tables:
+                    - name: my_table
+                      description: "my table description"
+                      identifier: bar
+                      freshness:
+                        warn_after:
+                            count: 7
+                            period: hour
+                      columns:
+                        - name: id
+                          description: user ID
+                          tests:
+                            - unique
+                            - not_null
+                            - accepted_values: # this test is invalid
+                                - values:
+                                    - a
+                                    - b
+                            - relationships:
+                                from: id
+                                to: ref('model_two')
+                      tests:
+                        - some_test:
+                            key: value
+        ''')
+        parser = SchemaParser(
+            self.root_project_config,
+            self.all_projects,
+            self.macro_manifest
+        )
+        root_dir = get_os_path('/usr/src/app')
+        results = list(parser.parse_schema(
+            path='test_one.yml',
+            test_yml=test_yml,
+            package_name='root',
+            root_dir=root_dir
+        ))
+
+        tests = sorted((node for t, node in results if t == 'test'),
+                       key=lambda n: n.name)
+        patches = sorted((node for t, node in results if t == 'patch'),
+                         key=lambda n: n.name)
+        sources = sorted((node for t, node in results if t == 'source'),
+                         key=lambda n: n.name)
+        self.assertEqual(len(tests), 4)
+        self.assertEqual(len(patches), 0)
+        self.assertEqual(len(sources), 1)
+        self.assertEqual(len(results), 5)
+
+        expected_tests = [x for x in self._expected_source_tests
+                          if 'accepted_values' not in x.unique_id]
+        for test, expected in zip(tests, expected_tests):
+            self.assertEqual(test, expected)
+
         self.assertEqual(sources[0], self._expected_source)
 
     @mock.patch.object(SchemaParser, 'find_schema_yml')

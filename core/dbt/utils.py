@@ -11,34 +11,12 @@ import numbers
 import os
 
 import dbt.exceptions
-import dbt.flags
 
 from dbt.include.global_project import PACKAGES
 from dbt.compat import basestring, DECIMALS
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt.clients import yaml_helper
-
-
-DBTConfigKeys = [
-    'alias',
-    'schema',
-    'enabled',
-    'materialized',
-    'dist',
-    'sort',
-    'sql_where',
-    'unique_key',
-    'sort_type',
-    'pre-hook',
-    'post-hook',
-    'vars',
-    'column_types',
-    'bind',
-    'quoting',
-    'tags',
-    'database',
-]
 
 
 class ExitCodes(object):
@@ -416,7 +394,7 @@ def invalid_ref_fail_unless_test(node, target_model_name,
         if disabled:
             logger.debug(msg)
         else:
-            logger.warning(msg)
+            dbt.exceptions.warn_or_error(msg)
 
     else:
         dbt.exceptions.ref_target_not_found(
@@ -429,7 +407,7 @@ def invalid_source_fail_unless_test(node, target_name, target_table_name):
     if node.get('resource_type') == NodeType.Test:
         msg = dbt.exceptions.source_disabled_message(node, target_name,
                                                      target_table_name)
-        logger.warning('WARNING: {}'.format(msg))
+        dbt.exceptions.warn_or_error(msg, log_fmt='WARNING: {}')
     else:
         dbt.exceptions.source_target_not_found(node, target_name,
                                                target_table_name)

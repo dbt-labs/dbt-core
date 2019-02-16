@@ -9,7 +9,41 @@ import dbt.exceptions
 SELECTOR_PARENTS = '+'
 SELECTOR_CHILDREN = '+'
 SELECTOR_GLOB = '*'
+SELECTOR_CHILDREN_AND_ANCESTORS = '@'
 SELECTOR_DELIMITER = ':'
+
+
+class SelectionCriteria(object):
+    def __init__(self, node_spec):
+        self.raw = node_spec
+        self.select_children = False
+        self.select_parents = False
+        self.select_childrens_parents = False
+        self.selector_type = SELECTOR_FILTERS.FQN
+
+        if node_spec.startswith(SELECTOR_CHILDREN_AND_ANCESTORS):
+            self.select_childrens_parents = True
+            node_spec = node_spec[1:]
+
+        if node_spec.startswith(SELECTOR_PARENTS):
+            self.select_parents = True
+            node_spec = node_spec[1:]
+
+        if node_spec.endswith(SELECTOR_CHILDREN):
+            self.select_children = True
+            node_spec = node_spec[:-1]
+
+        if self.select_children and self.select_childrens_parents:
+            raise dbt.exceptions.RuntimeException(
+                'Invalid node spec {} - "@" prefix and "+" suffix are '
+                'incompatible'.format(self.raw)
+            )
+
+        if SELECTOR_DELIMITER in node_spec:
+            selector_parts = node_spec.split(SELECTOR_DELIMITER, 1)
+            self.selector_type, self.selector_value = selector_parts
+        else:
+            self.selector_value = node_spec
 
 
 class SELECTOR_FILTERS(object):
@@ -25,46 +59,6 @@ def split_specs(node_specs):
         specs.update(parts)
 
     return specs
-
-
-def parse_spec(node_spec):
-    select_children = False
-    select_parents = False
-    index_start = 0
-    index_end = len(node_spec)
-
-    if node_spec.startswith(SELECTOR_PARENTS):
-        select_parents = True
-        index_start = 1
-
-    if node_spec.endswith(SELECTOR_CHILDREN):
-        select_children = True
-        index_end -= 1
-
-    node_selector = node_spec[index_start:index_end]
-
-    if SELECTOR_DELIMITER in node_selector:
-        selector_parts = node_selector.split(SELECTOR_DELIMITER, 1)
-        selector_type, selector_value = selector_parts
-
-        node_filter = {
-            "type": selector_type,
-            "value": selector_value
-        }
-
-    else:
-        node_filter = {
-            "type": SELECTOR_FILTERS.FQN,
-            "value": node_selector
-
-        }
-
-    return {
-        "select_parents": select_parents,
-        "select_children": select_children,
-        "filter": node_filter,
-        "raw": node_spec
-    }
 
 
 def get_package_names(graph):
@@ -125,10 +119,11 @@ def warn_if_useless_spec(spec, nodes):
     if len(nodes) > 0:
         return
 
-    logger.info(
-        "* Spec='{}' does not identify any models and was ignored\n"
+    msg = (
+        "* Spec='{}' does not identify any models"
         .format(spec['raw'])
     )
+    dbt.exceptions.warn_or_error(msg, log_fmt='{} and was ignored\n')
 
 
 class NodeSelector(object):
@@ -190,52 +185,39 @@ class NodeSelector(object):
             raise dbt.exceptions.RuntimeException(msg)
 
         for node, real_node in self.source_nodes(graph):
-            if real_node.source_name != target_source:
+            if target_source not in (real_node.source_name, SELECTOR_GLOB):
                 continue
-            if target_table is None or target_table == real_node.name:
+            if target_table in (None, real_node.name, SELECTOR_GLOB):
                 yield node
 
-    def get_nodes_from_spec(self, graph, spec):
-        select_parents = spec['select_parents']
-        select_children = spec['select_children']
+    def select_childrens_parents(self, graph, selected):
+        ancestors_for = self.select_children(graph, selected) | selected
+        return self.select_parents(graph, ancestors_for) | ancestors_for
 
-        filter_map = {
-            SELECTOR_FILTERS.FQN: self.get_nodes_by_qualified_name,
-            SELECTOR_FILTERS.TAG: self.get_nodes_by_tag,
-            SELECTOR_FILTERS.SOURCE: self.get_nodes_by_source,
-        }
+    def select_children(self, graph, selected):
+        descendants = set()
+        for node in selected:
+            descendants.update(nx.descendants(graph, node))
+        return descendants
 
-        node_filter = spec['filter']
-        filter_method = filter_map.get(node_filter['type'])
+    def select_parents(self, graph, selected):
+        ancestors = set()
+        for node in selected:
+            ancestors.update(nx.ancestors(graph, node))
+        return ancestors
 
-        if filter_method is None:
-            valid_selectors = ", ".join(filter_map.keys())
-            logger.info("The '{}' selector specified in {} is invalid. Must "
-                        "be one of [{}]".format(
-                            node_filter['type'],
-                            spec['raw'],
-                            valid_selectors))
+    def collect_models(self, graph, selected, spec):
+        additional = set()
+        if spec.select_childrens_parents:
+            additional.update(self.select_childrens_parents(graph, selected))
+        if spec.select_parents:
+            additional.update(self.select_parents(graph, selected))
+        if spec.select_children:
+            additional.update(self.select_children(graph, selected))
+        return additional
 
-            selected_nodes = set()
-
-        else:
-            selected_nodes = set(filter_method(graph, node_filter['value']))
-
-        additional_nodes = set()
+    def collect_tests(self, graph, model_nodes):
         test_nodes = set()
-
-        if select_parents:
-            for node in selected_nodes:
-                parent_nodes = nx.ancestors(graph, node)
-                additional_nodes.update(parent_nodes)
-
-        if select_children:
-            for node in selected_nodes:
-                child_nodes = nx.descendants(graph, node)
-                additional_nodes.update(child_nodes)
-
-        model_nodes = selected_nodes | additional_nodes
-
         for node in model_nodes:
             # include tests that depend on this node. if we aren't running
             # tests, they'll be filtered out later.
@@ -243,31 +225,45 @@ class NodeSelector(object):
                            if self.manifest.nodes[n].resource_type ==
                            NodeType.Test]
             test_nodes.update(child_tests)
+        return test_nodes
 
-        # filter out all actual source nodes now that we've calculated any
-        # children specifiers
-        source_nodes = set(uid for uid, _ in self.source_nodes(graph))
+    def get_nodes_from_spec(self, graph, spec):
+        filter_map = {
+            SELECTOR_FILTERS.FQN: self.get_nodes_by_qualified_name,
+            SELECTOR_FILTERS.TAG: self.get_nodes_by_tag,
+            SELECTOR_FILTERS.SOURCE: self.get_nodes_by_source,
+        }
 
-        return (model_nodes | test_nodes).difference(source_nodes)
+        filter_method = filter_map.get(spec.selector_type)
+
+        if filter_method is None:
+            valid_selectors = ", ".join(filter_map.keys())
+            logger.info("The '{}' selector specified in {} is invalid. Must "
+                        "be one of [{}]".format(
+                            spec.selector_type,
+                            spec.raw,
+                            valid_selectors))
+
+            return set()
+
+        collected = set(filter_method(graph, spec.selector_value))
+        collected.update(self.collect_models(graph, collected, spec))
+        collected.update(self.collect_tests(graph, collected))
+
+        return collected
 
     def select_nodes(self, graph, raw_include_specs, raw_exclude_specs):
         selected_nodes = set()
 
-        split_include_specs = split_specs(raw_include_specs)
-        split_exclude_specs = split_specs(raw_exclude_specs)
-
-        include_specs = [parse_spec(spec) for spec in split_include_specs]
-        exclude_specs = [parse_spec(spec) for spec in split_exclude_specs]
-
-        for spec in include_specs:
+        for raw_spec in split_specs(raw_include_specs):
+            spec = SelectionCriteria(raw_spec)
             included_nodes = self.get_nodes_from_spec(graph, spec)
-            warn_if_useless_spec(spec, included_nodes)
-            selected_nodes = selected_nodes | included_nodes
+            selected_nodes.update(included_nodes)
 
-        for spec in exclude_specs:
+        for raw_spec in split_specs(raw_exclude_specs):
+            spec = SelectionCriteria(raw_spec)
             excluded_nodes = self.get_nodes_from_spec(graph, spec)
-            warn_if_useless_spec(spec, excluded_nodes)
-            selected_nodes = selected_nodes - excluded_nodes
+            selected_nodes.difference_update(excluded_nodes)
 
         return selected_nodes
 
@@ -283,7 +279,20 @@ class NodeSelector(object):
             if self._is_graph_member(node_name)
         ]
 
-    def get_selected(self, include, exclude, resource_types, tags):
+    def _is_match(self, node_name, resource_types, tags, required):
+        node = self.manifest.nodes[node_name]
+        if node.resource_type not in resource_types:
+            return False
+        tags = set(tags)
+        if tags and not bool(set(node.tags) & tags):
+            # there are tags specified but none match
+            return False
+        for attr in required:
+            if not getattr(node, attr):
+                return False
+        return True
+
+    def get_selected(self, include, exclude, resource_types, tags, required):
         graph = self.linker.graph
 
         include = coalesce(include, ['*'])
@@ -296,13 +305,7 @@ class NodeSelector(object):
 
         filtered_nodes = set()
         for node_name in selected_nodes:
-            node = self.manifest.nodes[node_name]
-
-            matched_resource = node.resource_type in resource_types
-            matched_tags = (len(tags) == 0 or
-                            bool(set(node.tags) & set(tags)))
-
-            if matched_resource and matched_tags:
+            if self._is_match(node_name, resource_types, tags, required):
                 filtered_nodes.add(node_name)
 
         return filtered_nodes
@@ -313,16 +316,22 @@ class NodeSelector(object):
         return is_model and is_ephemeral
 
     def get_ancestor_ephemeral_nodes(self, selected_nodes):
-        node_names = {
-            node: self.manifest.nodes[node].name
-            for node in selected_nodes
-            if node in self.manifest.nodes
-        }
+        node_names = {}
+        for node_id in selected_nodes:
+            if node_id not in self.manifest.nodes:
+                continue
+            node = self.manifest.nodes[node_id]
+            # sources don't have ancestors and this results in a silly select()
+            if node.resource_type == NodeType.Source:
+                continue
+            node_names[node_id] = node.name
 
         include_spec = [
             '+{}'.format(node_names[node])
             for node in selected_nodes if node in node_names
         ]
+        if not include_spec:
+            return set()
 
         all_ancestors = self.select_nodes(self.linker.graph, include_spec, [])
 
@@ -340,8 +349,11 @@ class NodeSelector(object):
         exclude = query.get('exclude')
         resource_types = query.get('resource_types')
         tags = query.get('tags')
+        required = query.get('required', ())
 
-        selected = self.get_selected(include, exclude, resource_types, tags)
+        selected = self.get_selected(include, exclude, resource_types, tags,
+                                     required)
+
         addins = self.get_ancestor_ephemeral_nodes(selected)
 
         return selected | addins

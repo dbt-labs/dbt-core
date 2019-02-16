@@ -108,7 +108,7 @@ def print_cancel_line(model):
 
 
 def get_printable_result(result, success, error):
-    if result.errored:
+    if result.error is not None:
         info = 'ERROR {}'.format(error)
         status = red(result.status)
     else:
@@ -122,7 +122,7 @@ def print_test_result_line(result, schema_name, index, total):
     model = result.node
     info = 'PASS'
 
-    if result.errored:
+    if result.error is not None:
         info = "ERROR"
         color = red
 
@@ -194,8 +194,44 @@ def print_seed_result_line(result, schema_name, index, total):
         result.execution_time)
 
 
+def print_freshness_result_line(result, index, total):
+    if result.error:
+        info = 'ERROR'
+        color = red
+    elif result.status == 'error':
+        info = 'ERROR STALE'
+        color = red
+    elif result.status == 'warn':
+        info = 'WARN'
+        color = yellow
+    else:
+        info = 'PASS'
+        color = green
+
+    if hasattr(result, 'node'):
+        source_name = result.node.source_name
+        table_name = result.node.name
+    else:
+        source_name = result.source_name
+        table_name = result.table_name
+
+    msg = "{info} freshness of {source_name}.{table_name}".format(
+        info=info,
+        source_name=source_name,
+        table_name=table_name
+    )
+
+    print_fancy_output_line(
+        msg,
+        color(info),
+        index,
+        total,
+        execution_time=result.execution_time
+    )
+
+
 def interpret_run_result(result):
-    if result.errored or result.failed:
+    if result.error is not None or result.failed:
         return 'error'
     elif result.skipped:
         return 'skip'
@@ -267,7 +303,7 @@ def print_end_of_run_summary(num_errors, early_exit=False):
 
 
 def print_run_end_messages(results, early_exit=False):
-    errors = [r for r in results if r.errored or r.failed]
+    errors = [r for r in results if r.error is not None or r.failed]
     print_end_of_run_summary(len(errors), early_exit)
 
     for error in errors:

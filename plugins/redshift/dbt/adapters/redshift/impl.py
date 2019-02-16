@@ -7,6 +7,8 @@ import dbt.exceptions
 class RedshiftAdapter(PostgresAdapter):
     ConnectionManager = RedshiftConnectionManager
 
+    AdapterSpecificConfigs = frozenset({"sort_type", "dist", "sort", "bind"})
+
     @classmethod
     def date_function(cls):
         return 'getdate()'

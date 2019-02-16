@@ -5,8 +5,11 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
 
     def setUp(self):
         DBTIntegrationTest.setUp(self)
+        self.run_dbt(['seed'])
 
-        self.run_sql_file("test/integration/017_runtime_materialization_tests/seed.sql")
+    @property
+    def project_config(self):
+        return {"data-paths": ["test/integration/017_runtime_materialization_tests/data"]}
 
     @property
     def schema(self):
@@ -81,7 +84,6 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
         self.assertTablesEqual("seed","view")
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
-
 
     @attr(type='postgres')
     def test_postgres_delete__dbt_tmp_relation(self):

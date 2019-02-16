@@ -173,6 +173,20 @@ class BaseRelation(APIObject):
             identifier=identifier)
 
     @classmethod
+    def create_from_source(cls, source, **kwargs):
+        return cls.create(
+            database=source.database,
+            schema=source.schema,
+            identifier=source.identifier,
+            quote_policy={
+                'database': True,
+                'schema': True,
+                'identifier': True,
+            },
+            **kwargs
+        )
+
+    @classmethod
     def create_from_node(cls, config, node, table_name=None, quote_policy=None,
                          **kwargs):
         if quote_policy is None:

@@ -77,3 +77,8 @@
 {% macro bigquery__list_relations_without_caching(database, schema) -%}
   {{ return(adapter.list_relations_without_caching(database, schema)) }}
 {% endmacro %}
+
+
+{% macro bigquery__current_timestamp() -%}
+  CURRENT_TIMESTAMP()
+{%- endmacro %}
