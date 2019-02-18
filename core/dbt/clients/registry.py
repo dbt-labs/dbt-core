@@ -3,6 +3,7 @@ import six
 import requests
 from dbt.exceptions import RegistryException
 from dbt.utils import memoized
+from dbt.logger import GLOBAL_LOGGER as logger
 import os
 
 if os.getenv('DBT_PACKAGE_HUB_URL'):
@@ -32,7 +33,9 @@ def _wrap_exceptions(fn):
 @_wrap_exceptions
 def _get(path, registry_base_url=None):
     url = _get_url(path, registry_base_url)
+    logger.debug('Making package registry request: GET {}'.format(url))
     resp = requests.get(url)
+    logger.debug('Response from registry: GET {} {}'.format(url, resp.status_code))
     resp.raise_for_status()
     return resp.json()
 
