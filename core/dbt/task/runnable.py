@@ -112,7 +112,7 @@ class BaseRunnableTask(BaseTask):
 
         This does still go through the callback path for result collection.
         """
-        if self.config.args.single_threaded or True:
+        if self.config.args.single_threaded:
             callback(self.call_runner(*args))
         else:
             pool.apply_async(self.call_runner, args=args, callback=callback)
