@@ -35,7 +35,8 @@ def _get(path, registry_base_url=None):
     url = _get_url(path, registry_base_url)
     logger.debug('Making package registry request: GET {}'.format(url))
     resp = requests.get(url)
-    logger.debug('Response from registry: GET {} {}'.format(url, resp.status_code))
+    logger.debug('Response from registry: GET {} {}'.format(url,
+                                                            resp.status_code))
     resp.raise_for_status()
     return resp.json()
 

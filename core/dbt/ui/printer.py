@@ -147,8 +147,6 @@ def print_test_result_line(result, schema_name, index, total):
 
 
 def print_model_result_line(result, description, index, total):
-    model = result.node
-
     info, status = get_printable_result(result, 'created', 'creating')
 
     print_fancy_output_line(
