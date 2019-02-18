@@ -298,9 +298,9 @@ class ModelRunner(CompileRunner):
                                         self.num_nodes)
 
     def print_result_line(self, result):
-        schema_name = self.node.schema
+        description = self.describe_node()
         dbt.ui.printer.print_model_result_line(result,
-                                               schema_name,
+                                               description,
                                                self.node_index,
                                                self.num_nodes)
 

@@ -146,17 +146,11 @@ def print_test_result_line(result, schema_name, index, total):
         result.execution_time)
 
 
-def print_model_result_line(result, schema_name, index, total):
-    model = result.node
-
+def print_model_result_line(result, description, index, total):
     info, status = get_printable_result(result, 'created', 'creating')
 
     print_fancy_output_line(
-        "{info} {model_type} model {schema}.{relation}".format(
-            info=info,
-            model_type=get_materialization(model),
-            schema=schema_name,
-            relation=model.get('alias')),
+        "{info} {description}".format(info=info, description=description),
         status,
         index,
         total,
