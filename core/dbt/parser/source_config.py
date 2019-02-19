@@ -97,7 +97,7 @@ class SourceConfig(object):
                 current = self.in_model_config.get(key, {})
                 try:
                     current.update(value)
-                except (ValueError, TypeError):
+                except (ValueError, TypeError, AttributeError):
                     dbt.exceptions.raise_compiler_error(
                         'Invalid config field: "{}" must be a dict'.format(key)
                     )
