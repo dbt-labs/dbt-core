@@ -119,7 +119,7 @@ class TestSourceFreshness(BaseSourcesTest):
         self.maxDiff = None
         self._id = 100
         # this is the db initial value
-        self.last_inserted_time = "2016-09-19T14:45:51+00:00Z"
+        self.last_inserted_time = "2016-09-19T14:45:51+00:00"
 
     # test_source.test_table should have a loaded_at field of `updated_at`
     # and a freshness of warn_after: 10 hours, error_after: 18 hours
@@ -144,7 +144,7 @@ class TestSourceFreshness(BaseSourcesTest):
                 'source': self.adapter.quote('source'),
             }
         )
-        self.last_inserted_time = insert_time.strftime("%Y-%m-%dT%H:%M:%S+00:00Z")
+        self.last_inserted_time = insert_time.strftime("%Y-%m-%dT%H:%M:%S+00:00")
 
     def _assert_freshness_results(self, path, state):
         self.assertTrue(os.path.exists(path))
@@ -160,7 +160,7 @@ class TestSourceFreshness(BaseSourcesTest):
 
         last_inserted_time = self.last_inserted_time
         if last_inserted_time is None:
-            last_inserted_time = "2016-09-19T14:45:51+00:00Z"
+            last_inserted_time = "2016-09-19T14:45:51+00:00"
 
         self.assertEqual(data['sources'], {
             'source.test.test_source.test_table': {
