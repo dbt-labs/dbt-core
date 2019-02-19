@@ -27,15 +27,17 @@
 {%- endmacro -%}
 
 {% macro table_options() %}
-  {%- set raw_persist_docs = config.get('persist_docs', none) -%}
+  {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
 
-  {%- if raw_persist_docs -%}
+  {%- if raw_persist_docs is mapping -%}
     {%- set raw_relation = raw_persist_docs.get('relation', false) -%}
     OPTIONS(
       {%- if raw_relation -%}
       description={{ model.description | tojson }}
       {% endif %}
     )
+  {%- else -%}
+    {{ exceptions.raise_compiler_error("Invalid value provided for 'persist_docs'. Expected dict but got value: " ~ raw_persist_docs) }}
   {% endif %}
 {%- endmacro -%}
 
