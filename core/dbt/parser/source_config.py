@@ -95,11 +95,12 @@ class SourceConfig(object):
                 self.in_model_config[key] = current
             elif key in self.ExtendDictFields:
                 current = self.in_model_config.get(key, {})
-                if not isinstance(current, dict):
+                try:
+                    current.update(value)
+                except (ValueError, TypeError):
                     dbt.exceptions.raise_compiler_error(
                         'Invalid config field: "{}" must be a dict'.format(key)
                     )
-                current.update(value)
                 self.in_model_config[key] = current
             else:  # key in self.ClobberFields or self.AdapterSpecificConfigs
                 self.in_model_config[key] = value
