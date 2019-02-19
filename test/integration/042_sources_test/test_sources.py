@@ -6,7 +6,7 @@ import os
 from dbt.exceptions import CompilationException
 from test.integration.base import DBTIntegrationTest, use_profile, AnyFloat, \
     AnyStringWith
-
+from dbt.main import handle_and_check
 
 class BaseSourcesTest(DBTIntegrationTest):
     @property
@@ -112,6 +112,7 @@ class TestSources(BaseSourcesTest):
             ['expected_multi_source', 'multi_source_model'],
         )
         self.assertTableDoesNotExist('nonsource_descendant')
+
 
 class TestSourceFreshness(BaseSourcesTest):
     def setUp(self):
@@ -256,3 +257,296 @@ class TestMalformedSources(BaseSourcesTest):
     def test_postgres_malformed_schema_strict_will_break_run(self):
         with self.assertRaises(CompilationException):
             self.run_dbt_with_vars(['run'], strict=True)
+
+
+import multiprocessing
+from base64 import standard_b64encode as b64
+import json
+import requests
+import socket
+import time
+import os
+
+
+
+class ServerProcess(multiprocessing.Process):
+    def __init__(self, cli_vars=None):
+        self.port = 22991
+        handle_and_check_args = [
+            '--strict', 'rpc', '--log-cache-events',
+            '--port', str(self.port),
+        ]
+        if cli_vars:
+            handle_and_check_args.extend(['--vars', cli_vars])
+        super(ServerProcess, self).__init__(
+            target=handle_and_check,
+            args=(handle_and_check_args,))
+
+    def is_up(self):
+        sock = socket.socket()
+        try:
+            sock.connect(('localhost', self.port))
+        except socket.error:
+            return False
+        sock.close()
+        return True
+
+    def start(self):
+        super(ServerProcess, self).start()
+        for _ in range(10):
+            if self.is_up():
+                break
+            time.sleep(0.5)
+        if not self.is_up():
+            self.terminate()
+            raise Exception('server never appeared!')
+
+
+class TestRPCServer(BaseSourcesTest):
+    def setUp(self):
+        super(TestRPCServer, self).setUp()
+        self._server = ServerProcess(
+            cli_vars='{{test_run_schema: {}}}'.format(self.unique_schema())
+        )
+        self._server.start()
+
+    def tearDown(self):
+        self._server.terminate()
+        super(TestRPCServer, self).tearDown()
+
+    def build_query(self, method, kwargs, sql=None, test_request_id=1):
+        if sql is not None:
+            kwargs['sql'] = b64(sql.encode('utf-8')).decode('utf-8')
+
+        return {
+            'jsonrpc': '2.0',
+            'method': method,
+            'params': kwargs,
+            'id': test_request_id
+        }
+
+    def perform_query(self, query):
+        url = 'http://localhost:{}/jsonrpc'.format(self._server.port)
+        headers = {'content-type': 'application/json'}
+        response = requests.post(url, headers=headers, data=json.dumps(query))
+        return response
+
+    def query(self, _method, _sql=None, _test_request_id=1, **kwargs):
+        built = self.build_query(_method, kwargs, _sql, _test_request_id)
+        return self.perform_query(built)
+
+    def assertResultHasTimings(self, result, *names):
+        self.assertIn('timing', result)
+        timings = result['timing']
+        self.assertEqual(len(timings), len(names))
+        for expected_name, timing in zip(names, timings):
+            self.assertIn('name', timing)
+            self.assertEqual(timing['name'], expected_name)
+            self.assertIn('started_at', timing)
+            self.assertIn('completed_at', timing)
+            datetime.strptime(timing['started_at'], '%Y-%m-%dT%H:%M:%S.%fZ')
+            datetime.strptime(timing['completed_at'], '%Y-%m-%dT%H:%M:%S.%fZ')
+
+    def assertIsResult(self, data):
+        self.assertEqual(data['id'], 1)
+        self.assertEqual(data['jsonrpc'], '2.0')
+        self.assertIn('result', data)
+        self.assertNotIn('error', data)
+        return data['result']
+
+    def assertIsError(self, data):
+        self.assertEqual(data['id'], 1)
+        self.assertEqual(data['jsonrpc'], '2.0')
+        self.assertIn('error', data)
+        self.assertNotIn('result', data)
+        return data['error']
+
+    def assertIsErrorWithCode(self, data, code):
+        error = self.assertIsError(data)
+        self.assertIn('code', error)
+        self.assertIn('message', error)
+        self.assertEqual(error['code'], code)
+        return error
+
+    def assertResultHasSql(self, data, raw_sql, compiled_sql=None):
+        if compiled_sql is None:
+            compiled_sql = raw_sql
+        result = self.assertIsResult(data)
+        self.assertIn('raw_sql', result)
+        self.assertIn('compiled_sql', result)
+        self.assertEqual(result['raw_sql'], raw_sql)
+        self.assertEqual(result['compiled_sql'], compiled_sql)
+        return result
+
+    def assertSuccessfulCompilationResult(self, data, raw_sql, compiled_sql=None):
+        result = self.assertResultHasSql(data, raw_sql, compiled_sql)
+        self.assertNotIn('table', result)
+        # compile results still have an 'execute' timing, it just represents
+        # the time to construct a result object.
+        self.assertResultHasTimings(result, 'compile', 'execute')
+
+    def assertSuccessfulRunResult(self, data, raw_sql, compiled_sql=None, table=None):
+        result = self.assertResultHasSql(data, raw_sql, compiled_sql)
+        self.assertIn('table', result)
+        if table is not None:
+            self.assertEqual(result['table'], table)
+        self.assertResultHasTimings(result, 'compile', 'execute')
+
+    @use_profile('postgres')
+    def test_compile(self):
+        trivial = self.query(
+            'compile',
+            'select 1 as id',
+            name='foo'
+        ).json()
+        self.assertSuccessfulCompilationResult(
+            trivial, 'select 1 as id'
+        )
+
+        ref = self.query(
+            'compile',
+            'select * from {{ ref("descendant_model") }}',
+            name='foo'
+        ).json()
+        self.assertSuccessfulCompilationResult(
+            ref,
+            'select * from {{ ref("descendant_model") }}',
+            compiled_sql='select * from "{}"."{}"."descendant_model"'.format(
+                self.default_database,
+                self.unique_schema())
+        )
+
+        source = self.query(
+            'compile',
+            'select * from {{ source("test_source", "test_table") }}',
+            name='foo'
+        ).json()
+
+        self.assertSuccessfulCompilationResult(
+            source,
+            'select * from {{ source("test_source", "test_table") }}',
+            compiled_sql='select * from "{}"."{}"."source"'.format(
+                self.default_database,
+                self.unique_schema())
+            )
+
+    @use_profile('postgres')
+    def test_run(self):
+        # seed + run dbt to make models before using them!
+        self.run_dbt_with_vars(['seed'])
+        self.run_dbt_with_vars(['run'])
+        data = self.query(
+            'run',
+            'select 1 as id',
+            name='foo'
+        ).json()
+        self.assertSuccessfulRunResult(
+            data, 'select 1 as id', table=[{'id': 1.0}]
+        )
+
+        ref = self.query(
+            'run',
+            'select * from {{ ref("descendant_model") }} order by updated_at limit 1',
+            name='foo'
+        ).json()
+        self.assertSuccessfulRunResult(
+            ref,
+            'select * from {{ ref("descendant_model") }} order by updated_at limit 1',
+            compiled_sql='select * from "{}"."{}"."descendant_model" order by updated_at limit 1'.format(
+                self.default_database,
+                self.unique_schema()),
+            table=[{
+                'email': 'gray11@statcounter.com',
+                'favorite_color': 'blue',
+                'first_name': 'Gary',
+                'id': 38.0,
+                'ip_address': "'40.193.124.56'",
+                'updated_at': '1970-01-27T10:04:51'
+            }]
+        )
+
+        source = self.query(
+            'run',
+            'select * from {{ source("test_source", "test_table") }} order by updated_at limit 1',
+            name='foo'
+        ).json()
+
+        self.assertSuccessfulRunResult(
+            source,
+            'select * from {{ source("test_source", "test_table") }} order by updated_at limit 1',
+            compiled_sql='select * from "{}"."{}"."source" order by updated_at limit 1'.format(
+                self.default_database,
+                self.unique_schema()),
+            table=[{
+                'email': 'gray11@statcounter.com',
+                'favorite_color': 'blue',
+                'first_name': 'Gary',
+                'id': 38.0,
+                'ip_address': "'40.193.124.56'",
+                'updated_at': '1970-01-27T10:04:51'
+            }]
+        )
+
+    @use_profile('postgres')
+    def test_invalid_requests(self):
+        data = self.query(
+            'xxxxxnotamethodxxxxx',
+            'hi this is not sql'
+        ).json()
+        error = self.assertIsErrorWithCode(data, -32601)
+        self.assertEqual(error['message'],  'Method not found')
+
+        data = self.query(
+            'compile',
+            'select * from {{ reff("nonsource_descendant") }}',
+            name='mymodel'
+        ).json()
+        error = self.assertIsErrorWithCode(data, -32000)
+        self.assertEqual(error['message'], 'Server error')
+        self.assertIn('data', error)
+        self.assertEqual(error['data']['type'], 'RPCException')
+        self.assertEqual(
+            error['data']['message'],
+            "Compilation Error in rpc mymodel (from remote system)\n  'reff' is undefined"
+        )
+
+        data = self.query(
+            'run',
+            'hi this is not sql',
+            name='foo'
+        ).json()
+        error = self.assertIsErrorWithCode(data, -32000)
+        self.assertEqual(error['message'], 'Server error')
+        self.assertIn('data', error)
+        self.assertEqual(error['data']['type'], 'RPCException')
+        self.assertEqual(
+            error['data']['message'],
+            'Database Error in rpc foo (from remote system)\n  syntax error at or near "hi"\n  LINE 1: hi this is not sql\n          ^'
+        )
+
+    @use_profile('postgres')
+    def test_timeout(self):
+        data = self.query(
+            'run',
+            'select from pg_sleep(5)',
+            name='foo',
+            timeout=1
+        ).json()
+        error = self.assertIsErrorWithCode(data, -32000)
+        self.assertEqual(error['message'], 'Server error')
+        self.assertIn('data', error)
+        self.assertEqual(error['data']['type'], 'RPCException')
+        self.assertEqual(error['data']['message'], 'timed out after 1s')
+
+     #    {'id': 1,
+     # 'jsonrpc': '2.0',
+     # 'result': {'compiled_sql': 'select 1 as id',
+     #            'raw_sql': 'select 1 as id',
+     #            'table': [{'id': 1.0}],
+     #            'timing': [{'completed_at': '2019-02-19T20:27:44.666006Z',
+     #                        'name': 'compile',
+     #                        'started_at': '2019-02-19T20:27:44.660492Z'},
+     #                       {'completed_at': '2019-02-19T20:27:44.675920Z',
+     #                        'name': 'execute',
+     #                        'started_at': '2019-02-19T20:27:44.666159Z'}]}}
+
