@@ -639,7 +639,7 @@ def _add_version_check(sub):
 def _add_common_arguments(*subparsers):
     for sub in subparsers:
         sub.add_argument(
-            '--threads',
+            "--threads",
             type=int,
             required=False,
             help="""
@@ -1099,7 +1099,7 @@ def parse_args(args, cls=DBTArgumentParser):
     test_sub = _build_test_subparser(subs, base_subparser)
     seed_sub = _build_seed_subparser(subs, base_subparser)
     # --threads, --no-version-check
-    _add_common_arguments(run_sub, compile_sub, generate_sub, test_sub,
+    _add_common_arguments(
         run_sub, compile_sub, generate_sub, test_sub, seed_sub, parse_sub, build_sub
     )
     # --select, --exclude
