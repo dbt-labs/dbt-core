@@ -395,7 +395,7 @@ def _build_docs_generate_subparser(subparsers, base_subparser):
     return generate_sub
 
 
-def _add_common_arguments(*subparsers):
+def _add_selection_arguments(*subparsers):
     for sub in subparsers:
         sub.add_argument(
             '-m',
@@ -414,15 +414,10 @@ def _add_common_arguments(*subparsers):
             Specify the models to exclude.
             """
         )
-        sub.add_argument(
-            '--threads',
-            type=int,
-            required=False,
-            help="""
-            Specify number of threads to use while executing models. Overrides
-            settings in profiles.yml.
-            """
-        )
+
+
+def _add_table_mutability_arguments(*subparsers):
+    for sub in subparsers:
         sub.add_argument(
             '--non-destructive',
             action='store_true',
@@ -438,6 +433,19 @@ def _add_common_arguments(*subparsers):
             If specified, DBT will drop incremental models and
             fully-recalculate the incremental table from the model definition.
             """)
+
+
+def _add_common_arguments(*subparsers):
+    for sub in subparsers:
+        sub.add_argument(
+            '--threads',
+            type=int,
+            required=False,
+            help="""
+            Specify number of threads to use while executing models. Overrides
+            settings in profiles.yml.
+            """
+        )
         sub.add_argument(
             '--no-version-check',
             dest='version_check',
@@ -500,32 +508,6 @@ def _build_test_subparser(subparsers, base_subparser):
         action='store_true',
         help='Run constraint validations from schema.yml files'
     )
-    sub.add_argument(
-        '--threads',
-        type=int,
-        required=False,
-        help="""
-        Specify number of threads to use while executing tests. Overrides
-        settings in profiles.yml
-        """
-    )
-    sub.add_argument(
-        '-m',
-        '--models',
-        required=False,
-        nargs='+',
-        help="""
-        Specify the models to test.
-        """
-    )
-    sub.add_argument(
-        '--exclude',
-        required=False,
-        nargs='+',
-        help="""
-        Specify the models to exclude from testing.
-        """
-    )
 
     sub.set_defaults(cls=test_task.TestTask, which='test')
     return sub
@@ -579,6 +561,9 @@ def _build_rpc_subparser(subparsers, base_subparser):
         help='Specify the port number for the rpc server.'
     )
     sub.set_defaults(cls=RPCServerTask, which='rpc')
+    # the rpc task does a 'compile', so we need these attributes to exist, but
+    # we don't want users to be allowed to set them.
+    sub.set_defaults(models=None, exclude=None)
     return sub
 
 
@@ -655,11 +640,17 @@ def parse_args(args):
     run_sub = _build_run_subparser(subs, base_subparser)
     compile_sub = _build_compile_subparser(subs, base_subparser)
     generate_sub = _build_docs_generate_subparser(docs_subs, base_subparser)
-    _add_common_arguments(run_sub, compile_sub, generate_sub, rpc_sub)
+    test_sub = _build_test_subparser(subs, base_subparser)
+    # --threads, --no-version-check
+    _add_common_arguments(run_sub, compile_sub, generate_sub, test_sub,
+                          rpc_sub)
+    # --models, --exclude
+    _add_selection_arguments(run_sub, compile_sub, generate_sub, test_sub)
+    # --full-refresh, --non-destructive
+    _add_table_mutability_arguments(run_sub, compile_sub)
 
     _build_seed_subparser(subs, base_subparser)
     _build_docs_serve_subparser(docs_subs, base_subparser)
-    _build_test_subparser(subs, base_subparser)
     _build_source_snapshot_freshness_subparser(source_subs, base_subparser)
 
     if len(args) == 0:

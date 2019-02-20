@@ -546,10 +546,10 @@ class RPCExecuteRunner(RPCCompileRunner):
     def execute(self, compiled_node, manifest):
         status, table = self.adapter.execute(compiled_node.injected_sql,
                                              fetch=True)
-        table = [
-            {k: v for k, v in zip(table.column_names, row)}
-            for row in table
-        ]
+        table = {
+            'column_names': list(table.column_names),
+            'rows': [list(row) for row in table]
+        }
 
         return RemoteRunResult(
             raw_sql=compiled_node.raw_sql,

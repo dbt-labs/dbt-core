@@ -504,13 +504,19 @@ class RemoteCompileResult(APIObject):
 REMOTE_RUN_RESULT_CONTRACT = deep_merge(REMOTE_COMPILE_RESULT_CONTRACT, {
     'properties': {
         'table': {
-            'type': 'array',
-            # an array of column name: value dicts, one per row
-            'items': {
-                'type': 'object',
-                'additionalProperties': True,
-            }
-        }
+            'type': 'object',
+            'properties': {
+                'column_names': {
+                    'type': 'array',
+                    'items': {'type': 'string'},
+                },
+                'rows': {
+                    'type': 'array',
+                    # any item type is ok
+                },
+            },
+            'required': ['rows', 'column_names'],
+        },
     },
     'required': ['table'],
 })

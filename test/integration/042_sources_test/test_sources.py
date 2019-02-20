@@ -441,7 +441,7 @@ class TestRPCServer(BaseSourcesTest):
             name='foo'
         ).json()
         self.assertSuccessfulRunResult(
-            data, 'select 1 as id', table=[{'id': 1.0}]
+            data, 'select 1 as id', table={'column_names': ['id'], 'rows': [[1.0]]}
         )
 
         ref = self.query(
@@ -455,14 +455,10 @@ class TestRPCServer(BaseSourcesTest):
             compiled_sql='select * from "{}"."{}"."descendant_model" order by updated_at limit 1'.format(
                 self.default_database,
                 self.unique_schema()),
-            table=[{
-                'email': 'gray11@statcounter.com',
-                'favorite_color': 'blue',
-                'first_name': 'Gary',
-                'id': 38.0,
-                'ip_address': "'40.193.124.56'",
-                'updated_at': '1970-01-27T10:04:51'
-            }]
+            table={
+                'column_names': ['favorite_color', 'id', 'first_name', 'email', 'ip_address', 'updated_at'],
+                'rows': [['blue', 38.0, 'Gary',  'gray11@statcounter.com', "'40.193.124.56'", '1970-01-27T10:04:51']],
+            }
         )
 
         source = self.query(
@@ -477,14 +473,10 @@ class TestRPCServer(BaseSourcesTest):
             compiled_sql='select * from "{}"."{}"."source" order by updated_at limit 1'.format(
                 self.default_database,
                 self.unique_schema()),
-            table=[{
-                'email': 'gray11@statcounter.com',
-                'favorite_color': 'blue',
-                'first_name': 'Gary',
-                'id': 38.0,
-                'ip_address': "'40.193.124.56'",
-                'updated_at': '1970-01-27T10:04:51'
-            }]
+            table={
+                'column_names': ['favorite_color', 'id', 'first_name', 'email', 'ip_address', 'updated_at'],
+                'rows': [['blue', 38.0, 'Gary',  'gray11@statcounter.com', "'40.193.124.56'", '1970-01-27T10:04:51']],
+            }
         )
 
     @use_profile('postgres')
@@ -537,16 +529,3 @@ class TestRPCServer(BaseSourcesTest):
         self.assertIn('data', error)
         self.assertEqual(error['data']['type'], 'RPCException')
         self.assertEqual(error['data']['message'], 'timed out after 1s')
-
-     #    {'id': 1,
-     # 'jsonrpc': '2.0',
-     # 'result': {'compiled_sql': 'select 1 as id',
-     #            'raw_sql': 'select 1 as id',
-     #            'table': [{'id': 1.0}],
-     #            'timing': [{'completed_at': '2019-02-19T20:27:44.666006Z',
-     #                        'name': 'compile',
-     #                        'started_at': '2019-02-19T20:27:44.660492Z'},
-     #                       {'completed_at': '2019-02-19T20:27:44.675920Z',
-     #                        'name': 'execute',
-     #                        'started_at': '2019-02-19T20:27:44.666159Z'}]}}
-
