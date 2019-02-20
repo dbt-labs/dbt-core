@@ -48,6 +48,9 @@ logging.getLogger('werkzeug').setLevel(logging.CRITICAL)
 
 # provide this for the cache.
 CACHE_LOGGER = logging.getLogger('dbt.cache')
+# provide this for RPC connection logging
+RPC_LOGGER = logging.getLogger('dbt.rpc')
+
 
 # Redirect warnings through our logging setup
 # They will be logged to a file below

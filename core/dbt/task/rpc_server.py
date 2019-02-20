@@ -6,7 +6,7 @@ from jsonrpc import Dispatcher, JSONRPCResponseManager
 from werkzeug.wrappers import Request, Response
 from werkzeug.serving import run_simple
 
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.logger import RPC_LOGGER as logger
 from dbt.task.base import ConfiguredTask
 from dbt.task.compile import CompileTask, RemoteCompileTask
 from dbt.task.run import RemoteRunTask
@@ -58,8 +58,8 @@ class RPCServerTask(ConfiguredTask):
 
     @Request.application
     def handle_request(self, request):
-        logger.info('Received request ({}), data={}'.format(request,
-                                                            request.data))
+        msg = 'Received request ({0}) from {0.remote_addr}, data={0.data}'
+        logger.info(msg.format(request))
         # request_data is the request as a parsedjson object
         response = JSONRPCResponseManager.handle(
             request.data, self.dispatcher
@@ -70,7 +70,7 @@ class RPCServerTask(ConfiguredTask):
         # datetimes, and if we use the json_data itself the output looks silly
         # because of escapes, so re-serialize it into valid JSON types for
         # logging.
-        logger.info('sending response ({}), data={}'.format(
-            response, json.loads(json_data))
+        logger.info('sending response ({}) to {}, data={}'.format(
+            response, request.remote_addr, json.loads(json_data))
         )
         return response

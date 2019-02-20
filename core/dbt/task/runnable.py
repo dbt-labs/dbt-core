@@ -1,5 +1,6 @@
 import base64
 import os
+import re
 import time
 from abc import abstractmethod
 from multiprocessing import Process, Pipe
@@ -362,6 +363,7 @@ class RemoteCallable(object):
                          exc_info=True)
             error = str(exc)
         conn.send([result, error])
+        conn.close()
 
     def safe_handle_request(self, **kwargs):
         # assumption here: we are within a thread/process already and can block
@@ -380,6 +382,8 @@ class RemoteCallable(object):
             error = 'timed out after {}s'.format(timeout)
             proc.terminate()
 
+        parent_conn.close()
+
         proc.join()
         if error:
             raise dbt.exceptions.RPCException(error)
@@ -395,8 +399,15 @@ class RemoteCallable(object):
         # JSON is defined as using "unicode", we'll go a step further and
         # mandate utf-8 (though for the base64 part, it doesn't really matter!)
         base64_sql_bytes = to_unicode(sql).encode('utf-8')
+        # in python3.x you can pass `validate=True` to b64decode to get this
+        # behavior.
+        if not re.match(b'^[A-Za-z0-9+/]*={0,2}$', base64_sql_bytes):
+            raise dbt.exceptions.RPCException(
+                'invalid base64-encoded sql input: {!s}'.format(sql)
+            )
+
         try:
-            sql_bytes = base64.b64decode(base64_sql_bytes, validate=True)
+            sql_bytes = base64.b64decode(base64_sql_bytes)
         except ValueError as exc:
             raise dbt.exceptions.RPCException(
                 'invalid base64-encoded sql input: {!s}'.format(exc)

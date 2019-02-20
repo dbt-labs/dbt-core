@@ -57,7 +57,7 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
         self._skipped_children = {}
         self._raise_next_tick = None
 
-    def handle_request(self, name, sql, timeout=None):
+    def handle_request(self, name, sql):
         self.parser = RPCCallParser(
             self.config,
             all_projects=load_all_projects(self.config),
@@ -89,9 +89,6 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
         self.job_queue = self.linker.as_graph_queue(self.manifest,
                                                     selected_uids)
 
-        # TODO: how can we get a timeout in here? Spin off a subprocess?
-        # thought: if requests were handled in a process (instead of a thread)
-        # we could just SIGINT and have it handled like ctrl+c.
         result = self.get_runner(node).safe_run(self.manifest)
 
         return result.serialize()
