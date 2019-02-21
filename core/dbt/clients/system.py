@@ -370,7 +370,7 @@ def _handle_windows_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
         )
         cls = dbt.exceptions.ExecutableError
     elif exc.errno == errno.ENOEXEC:
-        message = ('Command was not executable, ensure it is valid')
+        message = "Command was not executable, ensure it is valid"
         cls = dbt.exceptions.ExecutableError
     elif exc.errno == errno.ENOTDIR:
         message = (
