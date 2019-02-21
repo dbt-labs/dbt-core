@@ -15,7 +15,7 @@ import dbt.flags as flags
 from dbt.adapters.factory import get_adapter, reset_adapters
 from dbt.clients.jinja import template_cache
 from dbt.config import RuntimeConfig
-from dbt.compat import basestring
+from dbt.compat import basestring, suppress_warnings
 
 from dbt.logger import GLOBAL_LOGGER as logger
 import logging
