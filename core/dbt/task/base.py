@@ -51,7 +51,7 @@ class BaseTask(object):
     def from_args(cls, args):
         try:
             config = cls.ConfigType.from_args(args)
-        except DbtProjectError as exc:
+        except dbt.exceptions.DbtProjectError as exc:
             logger.info("Encountered an error while reading the project:")
             logger.info(to_string(exc))
 
@@ -59,7 +59,7 @@ class BaseTask(object):
                 args=args,
                 result_type=exc.result_type)
             raise dbt.exceptions.RuntimeException('Could not run dbt')
-        except DbtProfileError as exc:
+        except dbt.exceptions.DbtProfileError as exc:
             logger.info("Encountered an error while reading profiles:")
             logger.info("  ERROR {}".format(str(exc)))
 
