@@ -1,3 +1,4 @@
+import unittest
 from nose.plugins.attrib import attr
 from datetime import datetime, timedelta
 import json
@@ -302,6 +303,7 @@ class ServerProcess(multiprocessing.Process):
             raise Exception('server never appeared!')
 
 
+@unittest.skipIf(os.name=='nt', 'Windows not supported for now')
 class TestRPCServer(BaseSourcesTest):
     def setUp(self):
         super(TestRPCServer, self).setUp()
