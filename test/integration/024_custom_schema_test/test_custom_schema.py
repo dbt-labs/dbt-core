@@ -47,7 +47,7 @@ class TestCustomProjectSchemaWithPrefix(DBTIntegrationTest):
                     'my-target': {
                         'type': 'postgres',
                         'threads': 1,
-                        'host': 'database',
+                        'host': self.database_host,
                         'port': 5432,
                         'user': 'root',
                         'pass': 'password',
@@ -103,7 +103,7 @@ class TestCustomSchemaWithCustomMacro(DBTIntegrationTest):
                     'prod': {
                         'type': 'postgres',
                         'threads': 1,
-                        'host': 'database',
+                        'host': self.database_host,
                         'port': 5432,
                         'user': 'root',
                         'pass': 'password',

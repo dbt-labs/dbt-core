@@ -32,7 +32,6 @@ jobs:
       choco install postgresql --params '/Password:password' --params-global --version 10.6
       Set-Content "c:\program files\postgresql\10\data\pg_hba.conf" "host   all   all   ::1/128        trust"
       Add-Content "c:\program files\postgresql\10\data\pg_hba.conf" "host   all   all   127.0.0.1/32   trust"
-      "`r`n" + 127.0.0.1 + "`t`t" + "database" | Out-File -encoding ASCII -append "C:\Windows\System32\drivers\etc\hosts"
       # the service name is "postgresql-x64-10", conveniently it's both the display name and the actual name
       Restart-Service postgresql-x64-10
 

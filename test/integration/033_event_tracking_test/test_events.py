@@ -499,7 +499,7 @@ class TestEventTrackingUnableToConnect(TestEventTracking):
                     'default2': {
                         'type': 'postgres',
                         'threads': 4,
-                        'host': 'database',
+                        'host': self.database_host,
                         'port': 5432,
                         'user': 'root',
                         'pass': 'password',
@@ -509,7 +509,7 @@ class TestEventTrackingUnableToConnect(TestEventTracking):
                     'noaccess': {
                         'type': 'postgres',
                         'threads': 4,
-                        'host': 'database',
+                        'host': self.database_host,
                         'port': 5432,
                         'user': 'BAD',
                         'pass': 'bad_password',
