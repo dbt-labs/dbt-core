@@ -2,6 +2,7 @@ from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
 import mock
 import hashlib
+import os
 
 from mock import call, ANY
 
@@ -342,6 +343,12 @@ class TestEventTrackingSuccess(TestEventTracking):
             ),
         ]
 
+        hashed = '20ff78afb16c8b3b8f83861b1d3b99bd'
+        # this hashed contents field changes on azure postgres tests, I believe
+        # due to newlines again
+        if os.name == 'nt':
+            hashed = '52cf9d1db8f0a18ca64ef64681399746'
+
         expected_contexts = [
             self.build_context('run', 'start'),
             self.run_context(
@@ -353,7 +360,7 @@ class TestEventTrackingSuccess(TestEventTracking):
                 materialization='view'
             ),
             self.run_context(
-                hashed_contents='20ff78afb16c8b3b8f83861b1d3b99bd',
+                hashed_contents=hashed,
                 model_id='57994a805249953b31b738b1af7a1eeb',
                 index=2,
                 total=2,
