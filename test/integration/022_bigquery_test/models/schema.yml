@@ -1,6 +1,7 @@
 version: 2
 models:
 - name: view_model
+  description: 'View model description'
   columns:
   - name: dupe
     tests:
@@ -17,6 +18,7 @@ models:
       name: view_model
       type: view
 - name: table_model
+  description: 'Model description'
   columns:
   - name: id
     tests:

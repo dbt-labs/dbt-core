@@ -1,6 +1,7 @@
 {{
   config(
-    materialized = "view"
+    materialized = "view",
+    persist_docs={ "relation": true, "columns": true, "schema": true }
   )
 }}
 
