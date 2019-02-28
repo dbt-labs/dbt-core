@@ -1,5 +1,5 @@
 
-{{ config(schema='test') }}
+{{ config(schema='test', materialized='table') }}
 
 
 with v1 as (
