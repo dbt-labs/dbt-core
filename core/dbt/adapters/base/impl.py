@@ -744,9 +744,16 @@ class BaseAdapter(object):
 
         macro = manifest.find_macro_by_name(macro_name, project)
         if macro is None:
+            if project is None:
+                package_name = 'any package'
+            else:
+                package_name = 'the "{}" package'.format(project)
+
+            # The import of dbt.context.runtime below shadows 'dbt'
+            import dbt.exceptions
             raise dbt.exceptions.RuntimeException(
-                'Could not find macro with name {} in project {}'
-                .format(macro_name, project)
+                'dbt could not find a macro with the name "{}" in {}'
+                .format(macro_name, package_name)
             )
 
         # This causes a reference cycle, as dbt.context.runtime.generate()
