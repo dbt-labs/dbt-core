@@ -7,10 +7,6 @@
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
   {%- set full_refresh_mode = (flags.FULL_REFRESH == True) -%}
 
-  {% if non_destructive_mode %}
-    {{ exceptions.raise_compiler_error("--non-destructive mode is not supported on BigQuery") }}
-  {% endif %}
-
   {%- set identifier = model['alias'] -%}
 
   {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) -%}
@@ -43,7 +39,9 @@
     )
   {%- endset -%}
 
+  {{ run_hooks(pre_hooks, inside_transaction=False) }}
 
+  -- `BEGIN` happens here:
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
   -- build model
@@ -58,7 +56,9 @@
      {% endcall %}
   {%- endif %}
 
--- `COMMIT` happens here
+  {{ run_hooks(post_hooks, inside_transaction=True) }}
+
+  -- `COMMIT` happens here
   {{ adapter.commit() }}
 
   {{ run_hooks(post_hooks, inside_transaction=False) }}
