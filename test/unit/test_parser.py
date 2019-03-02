@@ -95,6 +95,7 @@ class SourceConfigTest(BaseParserTest):
             'materialized': 'something',
             'post-hook': [],
             'pre-hook': ['my pre run hook'],
+            'persist_docs': {},
             'quoting': {},
             'sort': 'my sort key',
             'tags': [],
@@ -120,6 +121,7 @@ class SourceConfigTest(BaseParserTest):
             'column_types': {},
             'enabled': True,
             'materialized': 'something else',
+            'persist_docs': {},
             'post-hook': [],
             'pre-hook': [
                 'my pre run hook',
@@ -155,6 +157,7 @@ class SchemaParserTest(BaseParserTest):
         self.model_config = {
             'enabled': True,
             'materialized': 'view',
+            'persist_docs': {},
             'post-hook': [],
             'pre-hook': [],
             'vars': {},
@@ -895,6 +898,7 @@ class ParserTest(BaseParserTest):
             'quoting': {},
             'column_types': {},
             'tags': [],
+            'persist_docs': {}
         }
 
         self.disabled_config = {
