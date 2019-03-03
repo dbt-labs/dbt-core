@@ -229,7 +229,14 @@ class BaseAdapter(object):
         if not dbt.flags.USE_CACHE:
             return
 
-        schemas = manifest.get_used_schemas()
+        # We only really need to cache relations for resources that
+        # dbt will try to build. Even the executable() list is probably
+        # more expansive than necessary. Really, we just want to avoid
+        # caching Sources here, as there could be _many_ different schemas
+        # in the list, and dbt largely doesn't need to know if those sources
+        # exist or not.
+        resource_types = NodeType.executable()
+        schemas = manifest.get_used_schemas(resource_types)
 
         relations = []
         # add all relations
