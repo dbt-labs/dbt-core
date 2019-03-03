@@ -79,6 +79,26 @@ def _utc(dt):
         return dt.replace(tzinfo=pytz.UTC)
 
 
+def _parse_max_loaded_at(row, source, field_name):
+    for dt in row:
+        if dt is None:
+            raise dbt.exceptions.raise_database_error(
+                "Expected a non-null value when querying field '{}' of table "
+                " {} but received value 'null' instead".format(
+                    field_name,
+                    source))
+
+        elif not hasattr(dt, 'tzinfo'):
+            raise dbt.exceptions.raise_database_error(
+                "Expected a timestamp value when querying field '{}' of table "
+                "{} but received value of type '{}' instead".format(
+                    field_name,
+                    source,
+                    type(dt).__name__))
+        else:
+            yield _utc(dt)
+
+
 @six.add_metaclass(AdapterMeta)
 class BaseAdapter(object):
     """The BaseAdapter provides an abstract base class for adapters.
@@ -827,7 +847,9 @@ class BaseAdapter(object):
                 node=node
             )
 
-        max_loaded_at, snapshotted_at = map(_utc, table[0])
+        max_loaded_at, snapshotted_at = _parse_max_loaded_at(table[0],
+                                                             source,
+                                                             loaded_at_field)
         age = (snapshotted_at - max_loaded_at).total_seconds()
         return {
             'max_loaded_at': max_loaded_at,
