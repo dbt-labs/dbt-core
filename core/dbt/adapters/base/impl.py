@@ -986,11 +986,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         }
 
         # run the macro
-        table = self.execute_macro(
-            FRESHNESS_MACRO_NAME,
-            kwargs=kwargs,
-            manifest=manifest
-        )
+        table = self.execute_macro(FRESHNESS_MACRO_NAME, kwargs=kwargs, manifest=manifest)
         # now we have a 1-row table of the maximum `loaded_at_field` value and
         # the current time according to the db.
         if len(table) != 1 or len(table[0]) != 2:
