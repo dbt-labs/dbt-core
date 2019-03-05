@@ -443,10 +443,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         and adapters should implement it if there is an optimized path (and
         there probably is)
         """
-        search = (
-            s.lower() for s in
-            self.list_schemas(database=database)
-        )
+        search = (s.lower() for s in self.list_schemas(database=database))
         return schema.lower() in search
 
     ###
@@ -555,15 +552,9 @@ class BaseAdapter(metaclass=AdapterMeta):
                 expected_type=self.Relation,
             )
 
-        from_columns = {
-            col.name: col for col in
-            self.get_columns_in_relation(from_relation)
-        }
+        from_columns = {col.name: col for col in self.get_columns_in_relation(from_relation)}
 
-        to_columns = {
-            col.name: col for col in
-            self.get_columns_in_relation(to_relation)
-        }
+        to_columns = {col.name: col for col in self.get_columns_in_relation(to_relation)}
 
         missing_columns = set(from_columns.keys()) - set(to_columns.keys())
 
