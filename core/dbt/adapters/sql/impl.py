@@ -145,10 +145,7 @@ class SQLAdapter(BaseAdapter):
         self.cache_renamed(from_relation, to_relation)
 
         kwargs = {"from_relation": from_relation, "to_relation": to_relation}
-        self.execute_macro(
-            RENAME_RELATION_MACRO_NAME,
-            kwargs=kwargs
-        )
+        self.execute_macro(RENAME_RELATION_MACRO_NAME, kwargs=kwargs)
 
     def get_columns_in_relation(self, relation):
         return self.execute_macro(
