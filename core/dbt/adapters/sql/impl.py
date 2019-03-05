@@ -1,15 +1,10 @@
-import abc
-import time
-
 import agate
-import six
 
 import dbt.clients.agate_helper
 import dbt.exceptions
 import dbt.flags
 from dbt.adapters.base import BaseAdapter, available
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.compat import abstractclassmethod
 
 
 LIST_RELATIONS_MACRO_NAME = 'list_relations_without_caching'
@@ -196,11 +191,12 @@ class SQLAdapter(BaseAdapter):
                            kwargs=kwargs,
                            connection_name=model_name)
 
-    def list_relations_without_caching(self, database, schema,
+    def list_relations_without_caching(self, information_schema, schema,
                                        model_name=None):
+        kwargs = {'information_schema': information_schema, 'schema': schema}
         results = self.execute_macro(
             LIST_RELATIONS_MACRO_NAME,
-            kwargs={'database': database, 'schema': schema},
+            kwargs=kwargs,
             connection_name=model_name,
             release=True
         )

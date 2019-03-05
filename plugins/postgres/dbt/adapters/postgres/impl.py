@@ -56,6 +56,11 @@ class PostgresAdapter(SQLAdapter):
             if refed_schema.lower() in schemas:
                 self.cache.add_link(dependent, referenced)
 
+    def _get_cache_schemas(self, manifest):
+        # postgres/redshift only allow one database (the main one)
+        schemas = super(PostgresAdapter, self)._get_cache_schemas(manifest)
+        return schemas.flatten()
+
     def _link_cached_relations(self, manifest):
         schemas = set()
         for db, schema in manifest.get_used_schemas():

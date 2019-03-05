@@ -26,7 +26,7 @@
           numeric_precision,
           numeric_scale
 
-      from {{ information_schema_name(relation.database) }}.columns
+      from {{ relation.information_schema('columns') }}
       where table_name = '{{ relation.identifier }}'
         {% if relation.schema %}
         and table_schema = '{{ relation.schema }}'
@@ -39,10 +39,10 @@
 {% endmacro %}
 
 
-{% macro postgres__list_relations_without_caching(database, schema) %}
+{% macro postgres__list_relations_without_caching(information_schema, schema) %}
   {% call statement('list_relations_without_caching', fetch_result=True) -%}
     select
-      '{{ database }}' as database,
+      '{{ information_schema.database.lower() }}' as database,
       tablename as name,
       schemaname as schema,
       'table' as type
@@ -50,7 +50,7 @@
     where schemaname ilike '{{ schema }}'
     union all
     select
-      '{{ database }}' as database,
+      '{{ information_schema.database.lower() }}' as database,
       viewname as name,
       schemaname as schema,
       'view' as type

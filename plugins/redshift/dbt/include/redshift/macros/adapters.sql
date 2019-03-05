@@ -88,7 +88,7 @@
           numeric_precision,
           numeric_scale
 
-        from information_schema.columns
+        from {{ relation.information_schema('columns') }}
         where table_name = '{{ relation.identifier }}'
     ),
 
@@ -153,8 +153,8 @@
 {% endmacro %}
 
 
-{% macro redshift__list_relations_without_caching(database, schema) %}
-  {{ return(postgres__list_relations_without_caching(database, schema)) }}
+{% macro redshift__list_relations_without_caching(information_schema, schema) %}
+  {{ return(postgres__list_relations_without_caching(information_schema, schema)) }}
 {% endmacro %}
 
 

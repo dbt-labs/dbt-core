@@ -4,7 +4,7 @@ from dbt.contracts.graph.parsed import PARSED_NODE_CONTRACT, \
     PARSED_MACRO_CONTRACT, PARSED_DOCUMENTATION_CONTRACT, \
     PARSED_SOURCE_DEFINITION_CONTRACT
 from dbt.contracts.graph.compiled import COMPILED_NODE_CONTRACT, CompiledNode
-from dbt.exceptions import ValidationException
+from dbt.exceptions import raise_duplicate_resource_name
 from dbt.node_types import NodeType
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt import tracking

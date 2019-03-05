@@ -1,5 +1,6 @@
 from dbt.api import APIObject
 from dbt.utils import filter_null_values
+from dbt.node_types import NodeType
 
 import dbt.exceptions
 
@@ -38,7 +39,7 @@ class BaseRelation(APIObject):
         'properties': {
             'database': {'type': ['string', 'null']},
             'schema': {'type': ['string', 'null']},
-            'identifier': {'type': 'string'},
+            'identifier': {'type': ['string', 'null']},
         },
         'required': ['database', 'schema', 'identifier'],
     }
@@ -135,6 +136,36 @@ class BaseRelation(APIObject):
 
         return self.incorporate(include_policy=policy)
 
+    def information_schema(self, identifier=None):
+        include_db = self.database is not None
+        include_policy = filter_null_values({
+            'database': include_db,
+            'schema': True,
+            'identifier': identifier is not None
+        })
+        quote_policy = filter_null_values({
+            'database': self.quote_policy['database'],
+            'schema': False,
+            'identifier': False,
+        })
+
+        path_update = {
+            'schema': 'information_schema',
+            'identifier': identifier
+        }
+
+        return self.incorporate(
+            quote_policy=quote_policy,
+            include_policy=include_policy,
+            path=path_update,
+            table_name=identifier)
+
+    def information_schema_only(self):
+        return self.information_schema()
+
+    def information_schema_table(self, identifier):
+        return self.information_schema(identifier)
+
     def render(self, use_table_name=True):
         parts = []
 
@@ -202,6 +233,13 @@ class BaseRelation(APIObject):
             table_name=table_name,
             quote_policy=quote_policy,
             **kwargs)
+
+    @classmethod
+    def create_from(cls, config, node, **kwargs):
+        if node.resource_type == NodeType.Source:
+            return cls.create_from_source(node, **kwargs)
+        else:
+            return cls.create_from_node(config, node, **kwargs)
 
     @classmethod
     def create(cls, database=None, schema=None,

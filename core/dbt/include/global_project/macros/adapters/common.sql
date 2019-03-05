@@ -83,11 +83,11 @@
 {% endmacro %}
 
 
-{% macro get_catalog() -%}
-  {{ return(adapter_macro('get_catalog')) }}
+{% macro get_catalog(information_schemas) -%}
+  {{ return(adapter_macro('get_catalog', information_schemas)) }}
 {%- endmacro %}
 
-{% macro default__get_catalog() -%}
+{% macro default__get_catalog(information_schemas) -%}
 
   {% set typename = adapter.type() %}
   {% set msg -%}
@@ -214,12 +214,12 @@
 {% endmacro %}
 
 
-{% macro list_relations_without_caching(database, schema) %}
-  {{ return(adapter_macro('list_relations_without_caching', database, schema)) }}
+{% macro list_relations_without_caching(information_schema, schema) %}
+  {{ return(adapter_macro('list_relations_without_caching', information_schema, schema)) }}
 {% endmacro %}
 
 
-{% macro default__list_relations_without_caching(database, schema) %}
+{% macro default__list_relations_without_caching(information_schema, schema) %}
   {{ dbt.exceptions.raise_not_implemented(
     'list_relations_without_caching macro not implemented for adapter '+adapter.type()) }}
 {% endmacro %}
