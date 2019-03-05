@@ -458,3 +458,79 @@ class FreshnessRunOutput(APIObject):
 
     def __init__(self, meta, sources):
         super(FreshnessRunOutput, self).__init__(meta=meta, sources=sources)
+
+
+REMOTE_COMPILE_RESULT_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'properties': {
+        'raw_sql': {
+            'type': 'string',
+        },
+        'compiled_sql': {
+            'type': 'string',
+        },
+        'timing': {
+            'type': 'array',
+            'items': TIMING_INFO_CONTRACT,
+        },
+    },
+    'required': ['raw_sql', 'compiled_sql', 'timing']
+}
+
+
+class RemoteCompileResult(APIObject):
+    SCHEMA = REMOTE_COMPILE_RESULT_CONTRACT
+
+    def __init__(self, raw_sql, compiled_sql, timing=None, **kwargs):
+        if timing is None:
+            timing = []
+        super(RemoteCompileResult, self).__init__(
+            raw_sql=raw_sql,
+            compiled_sql=compiled_sql,
+            timing=timing,
+            **kwargs
+        )
+
+    @property
+    def node(self):
+        return None
+
+    @property
+    def error(self):
+        return None
+
+
+REMOTE_RUN_RESULT_CONTRACT = deep_merge(REMOTE_COMPILE_RESULT_CONTRACT, {
+    'properties': {
+        'table': {
+            'type': 'object',
+            'properties': {
+                'column_names': {
+                    'type': 'array',
+                    'items': {'type': 'string'},
+                },
+                'rows': {
+                    'type': 'array',
+                    # any item type is ok
+                },
+            },
+            'required': ['rows', 'column_names'],
+        },
+    },
+    'required': ['table'],
+})
+
+
+class RemoteRunResult(RemoteCompileResult):
+    SCHEMA = REMOTE_RUN_RESULT_CONTRACT
+
+    def __init__(self, raw_sql, compiled_sql, timing=None, table=None):
+        if table is None:
+            table = []
+        super(RemoteRunResult, self).__init__(
+            raw_sql=raw_sql,
+            compiled_sql=compiled_sql,
+            timing=timing,
+            table=table
+        )

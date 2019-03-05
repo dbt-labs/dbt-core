@@ -2,7 +2,7 @@ from __future__ import print_function
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType, RunHookType
-from dbt.node_runners import ModelRunner
+from dbt.node_runners import ModelRunner, RPCExecuteRunner
 
 import dbt.exceptions
 import dbt.flags
@@ -11,7 +11,7 @@ from dbt.contracts.graph.parsed import Hook
 from dbt.hooks import get_hook_dict
 
 from dbt.compilation import compile_node
-from dbt.task.compile import CompileTask
+from dbt.task.compile import CompileTask, RemoteCompileTask
 from dbt.utils import get_nodes_by_tags
 
 
@@ -114,3 +114,10 @@ class RunTask(CompileTask):
     def task_end_messages(self, results):
         if results:
             dbt.ui.printer.print_run_end_messages(results)
+
+
+class RemoteRunTask(RemoteCompileTask, RunTask):
+    METHOD_NAME = 'run'
+
+    def get_runner_type(self):
+        return RPCExecuteRunner

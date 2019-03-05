@@ -5,8 +5,9 @@ from dbt.utils import get_nodes_by_tags
 from dbt.node_types import NodeType, RunHookType
 from dbt.adapters.factory import get_adapter
 from dbt.contracts.results import RunModelResult, collect_timing_info, \
-    SourceFreshnessResult, PartialResult
+    SourceFreshnessResult, PartialResult, RemoteCompileResult, RemoteRunResult
 from dbt.compilation import compile_node
+from dbt.utils import timestring
 
 import dbt.clients.jinja
 import dbt.context.runtime
@@ -493,3 +494,66 @@ class SeedRunner(ModelRunner):
                                               schema_name,
                                               self.node_index,
                                               self.num_nodes)
+
+
+class RPCCompileRunner(CompileRunner):
+    def __init__(self, config, adapter, node, node_index, num_nodes):
+        super(RPCCompileRunner, self).__init__(config, adapter, node,
+                                               node_index, num_nodes)
+
+    def before_execute(self):
+        pass
+
+    def after_execute(self, result):
+        pass
+
+    def compile(self, manifest):
+        return compile_node(self.adapter, self.config, self.node, manifest, {},
+                            write=False)
+
+    def execute(self, compiled_node, manifest):
+        return RemoteCompileResult(
+            raw_sql=compiled_node.raw_sql,
+            compiled_sql=compiled_node.injected_sql
+        )
+
+    def error_result(self, node, error, start_time, timing_info):
+        raise dbt.exceptions.RPCException(error)
+
+    def ephemeral_result(self, node, start_time, timing_info):
+        raise dbt.exceptions.NotImplementedException(
+            'cannot execute ephemeral nodes remotely!'
+        )
+
+    def from_run_result(self, result, start_time, timing_info):
+        timing = [t.serialize() for t in timing_info]
+        return RemoteCompileResult(
+            raw_sql=result.raw_sql,
+            compiled_sql=result.compiled_sql,
+            timing=timing
+        )
+
+
+class RPCExecuteRunner(RPCCompileRunner):
+    def from_run_result(self, result, start_time, timing_info):
+        timing = [t.serialize() for t in timing_info]
+        return RemoteRunResult(
+            raw_sql=result.raw_sql,
+            compiled_sql=result.compiled_sql,
+            table=result.table,
+            timing=timing
+        )
+
+    def execute(self, compiled_node, manifest):
+        status, table = self.adapter.execute(compiled_node.injected_sql,
+                                             fetch=True)
+        table = {
+            'column_names': list(table.column_names),
+            'rows': [list(row) for row in table]
+        }
+
+        return RemoteRunResult(
+            raw_sql=compiled_node.raw_sql,
+            compiled_sql=compiled_node.injected_sql,
+            table=table
+        )

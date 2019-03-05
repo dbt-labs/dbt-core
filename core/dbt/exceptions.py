@@ -21,6 +21,10 @@ class InternalException(Exception):
     pass
 
 
+class RPCException(Exception):
+    pass
+
+
 class RuntimeException(RuntimeError, Exception):
     def __init__(self, msg, node=None):
         self.stack = []

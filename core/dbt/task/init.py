@@ -6,7 +6,7 @@ import dbt.clients.system
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
-from dbt.task.base_task import BaseTask
+from dbt.task.base import BaseTask
 
 STARTER_REPO = 'https://github.com/fishtown-analytics/dbt-starter-project.git'
 DOCS_URL = 'https://docs.getdbt.com/docs/configure-your-profile'

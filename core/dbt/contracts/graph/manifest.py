@@ -409,3 +409,13 @@ class Manifest(APIObject):
 
     def get_used_databases(self):
         return frozenset(node.database for node in self.nodes.values())
+
+    def deepcopy(self, config=None):
+        return Manifest(
+            nodes={k: v.incorporate() for k, v in self.nodes.items()},
+            macros={k: v.incorporate() for k, v in self.macros.items()},
+            docs={k: v.incorporate() for k, v in self.docs.items()},
+            generated_at=self.generated_at,
+            disabled=[n.incorporate() for n in self.disabled],
+            config=config
+        )

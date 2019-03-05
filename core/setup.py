@@ -52,5 +52,7 @@ setup(
         'colorama==0.3.9',
         'agate>=1.6,<2',
         'jsonschema==2.6.0',
+        'json-rpc>=1.12,<2',
+        'werkzeug>=0.14.1,<0.15',
     ]
 )
