@@ -127,10 +127,7 @@ class SQLAdapter(BaseAdapter):
             "column_name": column_name,
             "new_column_type": new_column_type,
         }
-        self.execute_macro(
-            ALTER_COLUMN_TYPE_MACRO_NAME,
-            kwargs=kwargs
-        )
+        self.execute_macro(ALTER_COLUMN_TYPE_MACRO_NAME, kwargs=kwargs)
 
     def drop_relation(self, relation):
         if relation.type is None:
@@ -139,16 +136,10 @@ class SQLAdapter(BaseAdapter):
             )
 
         self.cache_dropped(relation)
-        self.execute_macro(
-            DROP_RELATION_MACRO_NAME,
-            kwargs={'relation': relation}
-        )
+        self.execute_macro(DROP_RELATION_MACRO_NAME, kwargs={"relation": relation})
 
     def truncate_relation(self, relation):
-        self.execute_macro(
-            TRUNCATE_RELATION_MACRO_NAME,
-            kwargs={'relation': relation}
-        )
+        self.execute_macro(TRUNCATE_RELATION_MACRO_NAME, kwargs={"relation": relation})
 
     def rename_relation(self, from_relation, to_relation):
         self.cache_renamed(from_relation, to_relation)
@@ -161,8 +152,7 @@ class SQLAdapter(BaseAdapter):
 
     def get_columns_in_relation(self, relation):
         return self.execute_macro(
-            GET_COLUMNS_IN_RELATION_MACRO_NAME,
-            kwargs={'relation': relation}
+            GET_COLUMNS_IN_RELATION_MACRO_NAME, kwargs={"relation": relation}
         )
 
     def create_schema(self, relation: BaseRelation) -> None:
@@ -191,10 +181,7 @@ class SQLAdapter(BaseAdapter):
         schema_relation: BaseRelation,
     ) -> List[BaseRelation]:
         kwargs = {"schema_relation": schema_relation}
-        results = self.execute_macro(
-            LIST_RELATIONS_MACRO_NAME,
-            kwargs=kwargs
-        )
+        results = self.execute_macro(LIST_RELATIONS_MACRO_NAME, kwargs=kwargs)
 
         relations = []
         quote_policy = {
@@ -222,10 +209,7 @@ class SQLAdapter(BaseAdapter):
         return '"{}"'.format(identifier)
 
     def list_schemas(self, database: str) -> List[str]:
-        results = self.execute_macro(
-            LIST_SCHEMAS_MACRO_NAME,
-            kwargs={'database': database}
-        )
+        results = self.execute_macro(LIST_SCHEMAS_MACRO_NAME, kwargs={"database": database})
 
         return [row[0] for row in results]
 
@@ -238,8 +222,5 @@ class SQLAdapter(BaseAdapter):
         ).information_schema()
 
         kwargs = {'information_schema': information_schema, 'schema': schema}
-        results = self.execute_macro(
-            CHECK_SCHEMA_EXISTS_MACRO_NAME,
-            kwargs=kwargs
-        )
+        results = self.execute_macro(CHECK_SCHEMA_EXISTS_MACRO_NAME, kwargs=kwargs)
         return results[0][0] > 0
