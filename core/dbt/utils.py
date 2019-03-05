@@ -475,8 +475,10 @@ def translate_aliases(kwargs, aliases):
             key_names = ', '.join("{}".format(k) for k in kwargs if
                                   aliases.get(k) == canonical_key)
 
-            raise AliasException('Got duplicate keys: ({}) all map to "{}"'
-                                 .format(key_names, canonical_key))
+            raise dbt.exceptions.AliasException(
+                'Got duplicate keys: ({}) all map to "{}"'
+                .format(key_names, canonical_key)
+            )
 
         result[canonical_key] = value
 

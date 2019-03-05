@@ -1,6 +1,7 @@
 import unittest
 import dbt.main as dbt
-import os, shutil
+import os
+import shutil
 import yaml
 import random
 import time
@@ -9,13 +10,17 @@ from datetime import datetime
 from functools import wraps
 
 from nose.plugins.attrib import attr
+from mock import patch
 
 import dbt.flags as flags
 
 from dbt.adapters.factory import get_adapter, reset_adapters
 from dbt.clients.jinja import template_cache
 from dbt.config import RuntimeConfig
-from dbt.compat import basestring, suppress_warnings
+from dbt.compat import basestring
+from dbt.context import common
+
+from contextlib import contextmanager
 
 from dbt.logger import GLOBAL_LOGGER as logger
 import logging
@@ -372,7 +377,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def _create_schema_named(self, database, schema):
         if self.adapter_type == 'bigquery':
-            self.adapter.create_schema(database, schema, '__test')
+            self.adapter.create_schema(database, schema)
         else:
             schema_fqn = self._get_schema_fqn(database, schema)
             self.run_sql(self.CREATE_SCHEMA_STATEMENT.format(schema_fqn))
@@ -381,7 +386,7 @@ class DBTIntegrationTest(unittest.TestCase):
     def _drop_schema_named(self, database, schema):
         if self.adapter_type == 'bigquery' or self.adapter_type == 'presto':
             self.adapter.drop_schema(
-                database, schema, '__test'
+                database, schema
             )
         else:
             schema_fqn = self._get_schema_fqn(database, schema)
@@ -389,9 +394,10 @@ class DBTIntegrationTest(unittest.TestCase):
 
     def _create_schemas(self):
         schema = self.unique_schema()
-        self._create_schema_named(self.default_database, schema)
-        if self.setup_alternate_db and self.adapter_type == 'snowflake':
-            self._create_schema_named(self.alternative_database, schema)
+        with self.adapter.connection_named('__test'):
+            self._create_schema_named(self.default_database, schema)
+            if self.setup_alternate_db and self.adapter_type == 'snowflake':
+                self._create_schema_named(self.alternative_database, schema)
 
     def _drop_schemas_adapter(self):
         schema = self.unique_schema()
@@ -421,10 +427,11 @@ class DBTIntegrationTest(unittest.TestCase):
         self._created_schemas.clear()
 
     def _drop_schemas(self):
-        if self.adapter_type == 'bigquery' or self.adapter_type == 'presto':
-            self._drop_schemas_adapter()
-        else:
-            self._drop_schemas_sql()
+        with self.adapter.connection_named('__test'):
+            if self.adapter_type == 'bigquery' or self.adapter_type == 'presto':
+                self._drop_schemas_adapter()
+            else:
+                self._drop_schemas_sql()
 
     @property
     def project_config(self):
@@ -497,8 +504,7 @@ class DBTIntegrationTest(unittest.TestCase):
         else:
             return list(res)
 
-    def run_sql_presto(self, sql, fetch, connection_name=None):
-        conn = self.adapter.acquire_connection(connection_name)
+    def run_sql_presto(self, sql, fetch, conn):
         cursor = conn.handle.cursor()
         try:
             cursor.execute(sql)
@@ -519,6 +525,24 @@ class DBTIntegrationTest(unittest.TestCase):
             conn.handle.commit()
             conn.transaction_open = False
 
+    def run_sql_common(self, sql, fetch, conn):
+            with conn.handle.cursor() as cursor:
+                try:
+                    cursor.execute(sql)
+                    conn.handle.commit()
+                    if fetch == 'one':
+                        return cursor.fetchone()
+                    elif fetch == 'all':
+                        return cursor.fetchall()
+                    else:
+                        return
+                except BaseException as e:
+                    conn.handle.rollback()
+                    print(sql)
+                    print(e)
+                    raise e
+                finally:
+                    conn.transaction_open = False
 
     def run_sql(self, query, fetch='None', kwargs=None, connection_name=None):
         if connection_name is None:
@@ -528,30 +552,15 @@ class DBTIntegrationTest(unittest.TestCase):
             return
 
         sql = self.transform_sql(query, kwargs=kwargs)
-        if self.adapter_type == 'bigquery':
-            return self.run_sql_bigquery(sql, fetch)
-        elif self.adapter_type == 'presto':
-            return self.run_sql_presto(sql, fetch, connection_name)
 
-        conn = self.adapter.acquire_connection(connection_name)
-        with conn.handle.cursor() as cursor:
-            logger.debug('test connection "{}" executing: {}'.format(connection_name, sql))
-            try:
-                cursor.execute(sql)
-                conn.handle.commit()
-                if fetch == 'one':
-                    return cursor.fetchone()
-                elif fetch == 'all':
-                    return cursor.fetchall()
-                else:
-                    return
-            except BaseException as e:
-                conn.handle.rollback()
-                print(query)
-                print(e)
-                raise e
-            finally:
-                conn.transaction_open = False
+        with self.test_connection(connection_name) as conn:
+            logger.debug('test connection "{}" executing: {}'.format(conn.name, sql))
+            if self.adapter_type == 'bigquery':
+                return self.run_sql_bigquery(sql, fetch)
+            elif self.adapter_type == 'presto':
+                return self.run_sql_presto(sql, fetch, conn)
+            else:
+                return self.run_sql_common(sql, fetch, conn)
 
     def _ilike(self, target, value):
         # presto has this regex substitution monstrosity instead of 'ilike'
@@ -612,11 +621,23 @@ class DBTIntegrationTest(unittest.TestCase):
                 char_size = 16777216
         return (table_name, column_name, data_type, char_size)
 
+    @contextmanager
+    def test_connection(self, name=None):
+        """Create a test connection context where all executed macros, etc will
+        get self.adapter as the adapter.
+
+        This allows tests to run normal adapter macros as if reset_adapters()
+        were not called by handle_and_check (for asserts, etc)
+        """
+        if name is None:
+            name = '__test'
+        with patch.object(common, 'get_adapter', return_value=self.adapter):
+            with self.adapter.connection_named(name) as conn:
+                yield conn
+
     def get_relation_columns(self, relation):
-        columns = self.adapter.get_columns_in_relation(
-            relation,
-            model_name='__test'
-        )
+        with self.test_connection():
+            columns = self.adapter.get_columns_in_relation(relation)
 
         return sorted(((c.name, c.dtype, c.char_size) for c in columns),
                       key=lambda x: x[0])
@@ -781,7 +802,8 @@ class DBTIntegrationTest(unittest.TestCase):
 
             specs.append(relation)
 
-        column_specs = self.get_many_relation_columns(specs)
+        with self.test_connection():
+            column_specs = self.get_many_relation_columns(specs)
 
         # make sure everyone has equal column definitions
         first_columns = None

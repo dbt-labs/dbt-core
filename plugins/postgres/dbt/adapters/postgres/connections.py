@@ -61,7 +61,7 @@ class PostgresConnectionManager(SQLConnectionManager):
     TYPE = 'postgres'
 
     @contextmanager
-    def exception_handler(self, sql, connection_name='master'):
+    def exception_handler(self, sql):
         try:
             yield
 
@@ -70,7 +70,7 @@ class PostgresConnectionManager(SQLConnectionManager):
 
             try:
                 # attempt to release the connection
-                self.release(connection_name)
+                self.release()
             except psycopg2.Error:
                 logger.debug("Failed to release connection!")
                 pass
@@ -81,7 +81,7 @@ class PostgresConnectionManager(SQLConnectionManager):
         except Exception as e:
             logger.debug("Error running SQL: %s", sql)
             logger.debug("Rolling back transaction.")
-            self.release(connection_name)
+            self.release()
             raise dbt.exceptions.RuntimeException(e)
 
     @classmethod
@@ -90,7 +90,6 @@ class PostgresConnectionManager(SQLConnectionManager):
             logger.debug('Connection is already open, skipping open.')
             return connection
 
-        base_credentials = connection.credentials
         credentials = cls.get_credentials(connection.credentials.incorporate())
         kwargs = {}
         keepalives_idle = credentials.get('keepalives_idle',

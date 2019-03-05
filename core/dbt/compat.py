@@ -1,3 +1,5 @@
+# flake8: noqa
+
 import abc
 import codecs
 import json
@@ -34,10 +36,12 @@ if WHICH_PYTHON == 2:
     from SimpleHTTPServer import SimpleHTTPRequestHandler
     from SocketServer import TCPServer
     from Queue import PriorityQueue
+    from thread import get_ident
 else:
     from http.server import SimpleHTTPRequestHandler
     from socketserver import TCPServer
     from queue import PriorityQueue
+    from threading import get_ident
 
 
 def to_unicode(s):

@@ -29,34 +29,29 @@ class RunTask(CompileTask):
 
         ordered_hooks = sorted(hooks, key=lambda h: h.get('index', len(hooks)))
 
-        for i, hook in enumerate(ordered_hooks):
-            model_name = hook.get('name')
-
-            # This will clear out an open transaction if there is one.
+        with adapter.connection_named(hook_type):
             # on-run-* hooks should run outside of a transaction. This happens
             # b/c psycopg2 automatically begins a transaction when a connection
-            # is created. TODO : Move transaction logic out of here, and
-            # implement a for-loop over these sql statements in jinja-land.
-            # Also, consider configuring psycopg2 (and other adapters?) to
-            # ensure that a transaction is only created if dbt initiates it.
-            adapter.clear_transaction(model_name)
-            compiled = compile_node(adapter, self.config, hook, self.manifest,
-                                    extra_context)
-            statement = compiled.wrapped_sql
+            # is created.
+            adapter.clear_transaction()
 
-            hook_index = hook.get('index', len(hooks))
-            hook_dict = get_hook_dict(statement, index=hook_index)
+            for i, hook in enumerate(ordered_hooks):
+                compiled = compile_node(adapter, self.config, hook,
+                                        self.manifest, extra_context)
+                statement = compiled.wrapped_sql
 
-            if dbt.flags.STRICT_MODE:
-                Hook(**hook_dict)
+                hook_index = hook.get('index', len(hooks))
+                hook_dict = get_hook_dict(statement, index=hook_index)
 
-            sql = hook_dict.get('sql', '')
+                if dbt.flags.STRICT_MODE:
+                    Hook(**hook_dict)
 
-            if len(sql.strip()) > 0:
-                adapter.execute(sql, model_name=model_name, auto_begin=False,
-                                fetch=False)
+                sql = hook_dict.get('sql', '')
 
-            adapter.release_connection(model_name)
+                if len(sql.strip()) > 0:
+                    adapter.execute(sql, auto_begin=False, fetch=False)
+
+            adapter.release_connection()
 
     def safe_run_hooks(self, adapter, hook_type, extra_context):
         try:
@@ -82,8 +77,11 @@ class RunTask(CompileTask):
             .format(stat_line=stat_line, execution=execution))
 
     def before_run(self, adapter, selected_uids):
-        self.populate_adapter_cache(adapter)
+        with adapter.connection_named('master'):
+            self.populate_adapter_cache(adapter)
         self.safe_run_hooks(adapter, RunHookType.Start, {})
+        with adapter.connection_named('master'):
+            self.populate_adapter_cache(adapter)
         self.create_schemas(adapter, selected_uids)
 
     def after_run(self, adapter, results):

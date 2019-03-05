@@ -13,7 +13,6 @@ from dbt.utils import coalesce
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.contracts.graph.parsed import ParsedNode
 from dbt.parser.source_config import SourceConfig
-from dbt.node_types import NodeType
 
 
 class BaseParser(object):
@@ -88,7 +87,7 @@ class MacrosKnownParser(BaseParser):
         else:
             root_context = dbt.context.parser.generate_macro(
                 get_schema_macro, self.root_project_config,
-                self.macro_manifest, 'generate_schema_name'
+                self.macro_manifest
             )
             get_schema = get_schema_macro.generator(root_context)
 
@@ -158,10 +157,6 @@ class MacrosKnownParser(BaseParser):
         dbt.clients.jinja.get_rendered(
             parsed_node.raw_sql, context, parsed_node.to_shallow_dict(),
             capture_macros=True)
-
-        # Clean up any open conns opened by adapter functions that hit the db
-        db_wrapper = context['adapter']
-        db_wrapper.adapter.release_connection(parsed_node.name)
 
     def _update_parsed_node_info(self, parsed_node, config):
         """Given the SourceConfig used for parsing and the parsed node,
