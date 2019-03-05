@@ -35,6 +35,7 @@ def find_matching(root_path,
           'searched_path': 'models' } ]
     """
     matching = []
+    root_path = os.path.normpath(root_path)
 
     for relative_path_to_search in relative_paths_to_search:
         absolute_path_to_search = os.path.join(
@@ -240,12 +241,17 @@ def _handle_windows_error(exc, cwd, cmd):
         message = ("Could not find command, ensure it is in the user's PATH "
                    "and that the user has permissions to run it")
         cls = dbt.exceptions.ExecutableError
+    elif exc.errno == errno.ENOEXEC:
+        message = ('Command was not executable, ensure it is valid')
+        cls = dbt.exceptions.ExecutableError
     elif exc.errno == errno.ENOTDIR:
         message = ('Unable to cd: path does not exist, user does not have'
                    ' permissions, or not a directory')
         cls = dbt.exceptions.WorkingDirectoryError
     else:
-        message = 'Unknown error: {}'.format(str(exc))
+        message = 'Unknown error: {} (errno={}: "{}")'.format(
+            str(exc), exc.errno,  errno.errorcode.get(exc.errno, '<Unknown!>')
+        )
     raise cls(cwd, cmd, message)
 
 
