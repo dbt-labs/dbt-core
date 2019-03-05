@@ -405,7 +405,7 @@ class Manifest(APIObject):
         return frozenset({
             (node.database, node.schema)
             for node in self.nodes.values()
-            if resource_types and node.resource_type in resource_types
+            if not resource_types or node.resource_type in resource_types
         })
 
     def get_used_databases(self):
