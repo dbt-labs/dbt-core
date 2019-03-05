@@ -15,7 +15,7 @@ import dbt.flags as flags
 from dbt.adapters.factory import get_adapter, reset_adapters
 from dbt.clients.jinja import template_cache
 from dbt.config import RuntimeConfig
-from dbt.compat import basestring
+from dbt.compat import basestring, suppress_warnings
 
 from dbt.logger import GLOBAL_LOGGER as logger
 import logging
@@ -71,6 +71,12 @@ class DBTIntegrationTest(unittest.TestCase):
     prefix = "test{}{:04}".format(int(time.time()), random.randint(0, 9999))
     setup_alternate_db = False
 
+    @property
+    def database_host(self):
+        if os.name == 'nt':
+            return 'localhost'
+        return 'database'
+
     def postgres_profile(self):
         return {
             'config': {
@@ -81,7 +87,7 @@ class DBTIntegrationTest(unittest.TestCase):
                     'default2': {
                         'type': 'postgres',
                         'threads': 4,
-                        'host': 'database',
+                        'host': self.database_host,
                         'port': 5432,
                         'user': 'root',
                         'pass': 'password',
@@ -91,7 +97,7 @@ class DBTIntegrationTest(unittest.TestCase):
                     'noaccess': {
                         'type': 'postgres',
                         'threads': 4,
-                        'host': 'database',
+                        'host': self.database_host,
                         'port': 5432,
                         'user': 'noaccess',
                         'pass': 'password',
