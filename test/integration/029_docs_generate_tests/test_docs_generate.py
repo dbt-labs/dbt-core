@@ -23,7 +23,7 @@ class LineIndifferent(object):
         return self.expected == other.replace('\r', '')
 
     def __repr__(self):
-        return 'LineIndifferent("self.expected")'
+        return 'LineIndifferent("{}")'.format(self.expected)
 
     def __str__(self):
         return self.__repr__()
