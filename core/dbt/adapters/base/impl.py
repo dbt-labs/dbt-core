@@ -97,17 +97,16 @@ def _utc(dt: Optional[datetime], source: BaseRelation, field_name: str) -> datet
     if dt is None:
         raise raise_database_error(
             "Expected a non-null value when querying field '{}' of table "
-            " {} but received value 'null' instead".format(
-                field_name,
-                source))
+            " {} but received value 'null' instead".format(field_name, source)
+        )
 
-    elif not hasattr(dt, 'tzinfo'):
+    elif not hasattr(dt, "tzinfo"):
         raise raise_database_error(
             "Expected a timestamp value when querying field '{}' of table "
             "{} but received value of type '{}' instead".format(
-                field_name,
-                source,
-                type(dt).__name__))
+                field_name, source, type(dt).__name__
+            )
+        )
 
     elif dt.tzinfo:
         return dt.astimezone(pytz.UTC)
