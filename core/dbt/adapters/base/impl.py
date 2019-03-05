@@ -69,11 +69,26 @@ def _catalog_filter_schemas(manifest):
     return test
 
 
-def _utc(dt):
+def _utc(dt, source, field_name):
     """If dt has a timezone, return a new datetime that's in UTC. Otherwise,
     assume the datetime is already for UTC and add the timezone.
     """
-    if dt.tzinfo:
+    if dt is None:
+        raise dbt.exceptions.raise_database_error(
+            "Expected a non-null value when querying field '{}' of table "
+            " {} but received value 'null' instead".format(
+                field_name,
+                source))
+
+    elif not hasattr(dt, 'tzinfo'):
+        raise dbt.exceptions.raise_database_error(
+            "Expected a timestamp value when querying field '{}' of table "
+            "{} but received value of type '{}' instead".format(
+                field_name,
+                source,
+                type(dt).__name__))
+
+    elif dt.tzinfo:
         return dt.astimezone(pytz.UTC)
     else:
         return dt.replace(tzinfo=pytz.UTC)
@@ -823,11 +838,12 @@ class BaseAdapter(object):
             dbt.exceptions.raise_compiler_error(
                 'Got an invalid result from "{}" macro: {}'.format(
                     FRESHNESS_MACRO_NAME, [tuple(r) for r in table]
-                ),
-                node=node
+                )
             )
 
-        max_loaded_at, snapshotted_at = map(_utc, table[0])
+        max_loaded_at = _utc(table[0][0], source, loaded_at_field)
+        snapshotted_at = _utc(table[0][1], source, loaded_at_field)
+
         age = (snapshotted_at - max_loaded_at).total_seconds()
         return {
             'max_loaded_at': max_loaded_at,
