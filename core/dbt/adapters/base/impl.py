@@ -18,6 +18,7 @@ from dbt.loader import GraphLoader
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.schema import Column
 from dbt.utils import filter_null_values, translate_aliases
+from dbt.node_types import NodeType
 
 from dbt.adapters.base.meta import AdapterMeta, available, available_raw, \
     available_deprecated
