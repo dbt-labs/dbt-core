@@ -36,6 +36,7 @@ class CompilerTest(unittest.TestCase):
         self.model_config = {
             'enabled': True,
             'materialized': 'view',
+            'persist_docs': {},
             'post-hook': [],
             'pre-hook': [],
             'vars': {},

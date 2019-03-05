@@ -892,6 +892,7 @@ class ParserTest(BaseParserTest):
         self.model_config = {
             'enabled': True,
             'materialized': 'view',
+            'persist_docs': {},
             'post-hook': [],
             'pre-hook': [],
             'vars': {},
@@ -904,6 +905,7 @@ class ParserTest(BaseParserTest):
         self.disabled_config = {
             'enabled': False,
             'materialized': 'view',
+            'persist_docs': {},
             'post-hook': [],
             'pre-hook': [],
             'vars': {},

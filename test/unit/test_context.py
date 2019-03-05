@@ -28,6 +28,7 @@ class TestVar(unittest.TestCase):
             config={
                 'enabled': True,
                 'materialized': 'view',
+                'persist_docs': {},
                 'post-hook': [],
                 'pre-hook': [],
                 'vars': {},
