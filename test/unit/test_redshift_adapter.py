@@ -9,7 +9,7 @@ from dbt.adapters.redshift import RedshiftAdapter
 from dbt.exceptions import ValidationException, FailedToConnectException
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
-from .utils import config_from_parts_or_dicts
+from .utils import config_from_parts_or_dicts, mock_connection
 
 
 @classmethod
@@ -106,17 +106,19 @@ class TestRedshiftAdapter(unittest.TestCase):
         self.assertEqual(len(list(self.adapter.cancel_open_connections())), 0)
 
     def test_cancel_open_connections_master(self):
-        self.adapter.connections.in_use['master'] = mock.MagicMock()
+        key = self.adapter.connections.get_thread_identifier()
+        self.adapter.connections.thread_connections[key] = mock_connection('master')
         self.assertEqual(len(list(self.adapter.cancel_open_connections())), 0)
 
     def test_cancel_open_connections_single(self):
-        master = mock.MagicMock()
-        model = mock.MagicMock()
+        master = mock_connection('master')
+        model = mock_connection('model')
         model.handle.get_backend_pid.return_value = 42
 
-        self.adapter.connections.in_use.update({
-            'master': master,
-            'model': model,
+        key = self.adapter.connections.get_thread_identifier()
+        self.adapter.connections.thread_connections.update({
+            key: master,
+            1: model,
         })
         with mock.patch.object(self.adapter.connections, 'add_query') as add_query:
             query_result = mock.MagicMock()

@@ -72,7 +72,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
     TYPE = 'snowflake'
 
     @contextmanager
-    def exception_handler(self, sql, connection_name='master'):
+    def exception_handler(self, sql):
         try:
             yield
         except snowflake.connector.errors.ProgrammingError as e:
@@ -83,7 +83,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
             if 'Empty SQL statement' in msg:
                 logger.debug("got empty sql statement, moving on")
             elif 'This session does not have a current database' in msg:
-                self.release(connection_name)
+                self.release()
                 raise dbt.exceptions.FailedToConnectException(
                     ('{}\n\nThis error sometimes occurs when invalid '
                      'credentials are provided, or when your default role '
@@ -91,12 +91,12 @@ class SnowflakeConnectionManager(SQLConnectionManager):
                      'Please double check your profile and try again.')
                     .format(msg))
             else:
-                self.release(connection_name)
+                self.release()
                 raise dbt.exceptions.DatabaseException(msg)
         except Exception as e:
             logger.debug("Error running SQL: %s", sql)
             logger.debug("Rolling back transaction.")
-            self.release(connection_name)
+            self.release()
             raise dbt.exceptions.RuntimeException(e.msg)
 
     @classmethod
@@ -140,8 +140,6 @@ class SnowflakeConnectionManager(SQLConnectionManager):
             connection.state = 'fail'
 
             raise dbt.exceptions.FailedToConnectException(str(e))
-
-        return connection
 
     def cancel(self, connection):
         handle = connection.handle
@@ -193,7 +191,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption())
 
-    def add_query(self, sql, model_name=None, auto_begin=True,
+    def add_query(self, sql, auto_begin=True,
                   bindings=None, abridge_sql_log=False):
 
         connection = None
@@ -219,7 +217,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
 
             parent = super(SnowflakeConnectionManager, self)
             connection, cursor = parent.add_query(
-                individual_query, model_name, auto_begin,
+                individual_query, auto_begin,
                 bindings=bindings,
                 abridge_sql_log=abridge_sql_log
             )
@@ -229,11 +227,14 @@ class SnowflakeConnectionManager(SQLConnectionManager):
                     "Tried to run an empty query on model '{}'. If you are "
                     "conditionally running\nsql, eg. in a model hook, make "
                     "sure your `else` clause contains valid sql!\n\n"
-                    "Provided SQL:\n{}".format(model_name, sql))
+                    "Provided SQL:\n{}"
+                    .format(self.nice_connection_name(), sql)
+                )
 
         return connection, cursor
 
-    def _rollback_handle(self, connection):
+    @classmethod
+    def _rollback_handle(cls, connection):
         """On snowflake, rolling back the handle of an aborted session raises
         an exception.
         """

@@ -101,8 +101,7 @@ def generate(model, runtime_config, manifest, source_config):
         model, runtime_config, manifest, source_config, dbt.context.parser)
 
 
-def generate_macro(model, runtime_config, manifest, connection_name):
+def generate_macro(model, runtime_config, manifest):
     return dbt.context.common.generate_execute_macro(
-        model, runtime_config, manifest, dbt.context.parser,
-        connection_name
+        model, runtime_config, manifest, dbt.context.parser
     )

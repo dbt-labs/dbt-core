@@ -9,7 +9,7 @@ def available(func):
     arguments.
     """
     func._is_available_ = True
-    func._model_name_ = True
+    func._model_name_ = False
     return func
 
 

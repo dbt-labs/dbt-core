@@ -201,13 +201,12 @@ class BaseRunner(object):
         """Try to release a connection. If an exception is hit, log and return
         the error string.
         """
-        node_name = self.node.name
         try:
-            self.adapter.release_connection(node_name)
+            self.adapter.release_connection()
         except Exception as exc:
             logger.debug(
                 'Error releasing connection for node {}: {!s}\n{}'
-                .format(node_name, exc, traceback.format_exc())
+                .format(self.node.name, exc, traceback.format_exc())
             )
             return dbt.compat.to_string(exc)
 
@@ -394,12 +393,12 @@ class FreshnessRunner(BaseRunner):
     def execute(self, compiled_node, manifest):
         relation = self.adapter.Relation.create_from_source(compiled_node)
         # given a Source, calculate its fresnhess.
-        freshness = self.adapter.calculate_freshness(
-            relation,
-            compiled_node.loaded_at_field,
-            manifest=manifest,
-            connection_name=compiled_node.unique_id
-        )
+        with self.adapter.connection_named(compiled_node.unique_id):
+            freshness = self.adapter.calculate_freshness(
+                relation,
+                compiled_node.loaded_at_field,
+                manifest=manifest
+            )
         status = self._calculate_status(
             compiled_node.freshness,
             freshness['age']
@@ -440,7 +439,6 @@ class TestRunner(CompileRunner):
     def execute_test(self, test):
         res, table = self.adapter.execute(
             test.wrapped_sql,
-            model_name=test.name,
             auto_begin=True,
             fetch=True)
 
