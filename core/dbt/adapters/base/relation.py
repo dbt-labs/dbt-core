@@ -30,7 +30,7 @@ class BaseRelation(APIObject):
             'database': True,
             'schema': True,
             'identifier': True
-        }
+        },
     }
 
     PATH_SCHEMA = {
@@ -174,15 +174,16 @@ class BaseRelation(APIObject):
 
     @classmethod
     def create_from_source(cls, source, **kwargs):
+        quote_policy = dbt.utils.deep_merge(
+            cls.DEFAULTS['quote_policy'],
+            source.quoting,
+            kwargs.get('quote_policy', {})
+        )
         return cls.create(
             database=source.database,
             schema=source.schema,
             identifier=source.identifier,
-            quote_policy={
-                'database': True,
-                'schema': True,
-                'identifier': True,
-            },
+            quote_policy=quote_policy,
             **kwargs
         )
 

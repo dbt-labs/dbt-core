@@ -218,6 +218,29 @@ _FRESHNESS_CONTRACT = {
 }
 
 
+_QUOTING_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'properties': {
+        'database': {'type': 'boolean'},
+        'schema': {'type': 'boolean'},
+        'identifier': {'type': 'boolean'},
+    },
+}
+
+
+QUOTING_CONTRACT = {
+    'properties': {
+        'quoting': {
+            'anyOf': [
+                {'type': 'null'},
+                _QUOTING_CONTRACT,
+            ],
+        },
+    },
+}
+
+
 FRESHNESS_CONTRACT = {
     'properties': {
         'loaded_at_field': {
@@ -238,6 +261,7 @@ UNPARSED_SOURCE_TABLE_DEFINITION_CONTRACT = deep_merge(
     UNPARSED_NODE_DESCRIPTION_CONTRACT,
     UNPARSED_COLUMN_DESCRIPTION_CONTRACT,
     FRESHNESS_CONTRACT,
+    QUOTING_CONTRACT,
     {
         'description': (
             'A source table definition, as provided in the "tables" '
@@ -256,6 +280,7 @@ UNPARSED_SOURCE_TABLE_DEFINITION_CONTRACT = deep_merge(
 
 UNPARSED_SOURCE_DEFINITION_CONTRACT = deep_merge(
     FRESHNESS_CONTRACT,
+    QUOTING_CONTRACT,
     {
         'type': 'object',
         'additionalProperties': False,
