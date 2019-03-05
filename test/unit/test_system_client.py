@@ -92,7 +92,12 @@ class TestRunCmd(unittest.TestCase):
             dbt.clients.system.run_cmd(self.run_dir, [self.empty_file])
 
         msg = str(exc.exception).lower()
-        self.assertIn('permissions', msg)
+        if os.name == 'nt':
+            # on windows, this means it's not an executable at all!
+            self.assertIn('not executable', msg)
+        else:
+            # on linux, this means you don't have executable permissions on it
+            self.assertIn('permissions', msg)
         self.assertIn(self.empty_file.lower(), msg)
 
     def test__cwd_does_not_exist(self):
