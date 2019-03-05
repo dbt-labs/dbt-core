@@ -261,8 +261,8 @@ class SourceFreshnessResult(NodeSerializable):
     def __init__(self, node, max_loaded_at, snapshotted_at,
                  age, status, thread_id, error=None,
                  timing=None, execution_time=0):
-        max_loaded_at = max_loaded_at.isoformat() + 'Z'
-        snapshotted_at = snapshotted_at.isoformat() + 'Z'
+        max_loaded_at = max_loaded_at.isoformat()
+        snapshotted_at = snapshotted_at.isoformat()
         if timing is None:
             timing = []
         super(SourceFreshnessResult, self).__init__(

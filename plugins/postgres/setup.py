@@ -3,7 +3,7 @@ from setuptools import find_packages
 from distutils.core import setup
 
 package_name = "dbt-postgres"
-package_version = "0.13.0a1"
+package_version = "0.13.0a2"
 description = """The postgres adpter plugin for dbt (data build tool)"""
 
 setup(

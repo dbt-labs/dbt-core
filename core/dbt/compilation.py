@@ -36,6 +36,7 @@ def print_compile_stats(stats):
         NodeType.Macro: 'macros',
         NodeType.Operation: 'operations',
         NodeType.Seed: 'seed files',
+        NodeType.Source: 'sources',
     }
 
     results = {k: 0 for k in names.keys()}
