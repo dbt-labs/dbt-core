@@ -449,7 +449,7 @@ class RunTask(CompileTask):
         self.write_manifest()
 
     def before_run(self, adapter, selected_uids: AbstractSet[str]):
-        with adapter.connection_named('master'):
+        with adapter.connection_named("master"):
             self.create_schemas(adapter, selected_uids)
             self.populate_adapter_cache(adapter)
             self.defer_to_manifest(adapter, selected_uids)

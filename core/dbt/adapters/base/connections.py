@@ -1,5 +1,6 @@
 import abc
 import os
+
 # multiprocessing.RLock is a function returning this type
 from multiprocessing.synchronize import RLock
 from threading import get_ident
@@ -139,7 +140,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
                 state=ConnectionState.INIT,
                 transaction_open=False,
                 handle=None,
-                credentials=self.profile.credentials
+                credentials=self.profile.credentials,
             )
             self.set_thread_connection(conn)
 
@@ -148,7 +149,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
 
         fire_event(NewConnection(conn_name=conn_name, conn_type=self.TYPE))
 
-        if conn.state == 'open':
+        if conn.state == "open":
             fire_event(ConnectionReused(conn_name=conn_name))
         else:
             conn.handle = LazyHandle(self.open)
@@ -195,7 +196,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     def cleanup_all(self) -> None:
         with self.lock:
             for connection in self.thread_connections.values():
-                if connection.state not in {'closed', 'init'}:
+                if connection.state not in {"closed", "init"}:
                     fire_event(ConnectionLeftOpen(conn_name=connection.name))
                 else:
                     fire_event(ConnectionClosed(conn_name=connection.name))
@@ -230,7 +231,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     def _close_handle(cls, connection: Connection) -> None:
         """Perform the actual close operation."""
         # On windows, sometimes connection handles don't have a close() attr.
-        if hasattr(connection.handle, 'close'):
+        if hasattr(connection.handle, "close"):
             fire_event(ConnectionClosed2(conn_name=connection.name))
             connection.handle.close()
         else:

@@ -378,7 +378,7 @@ def _handle_windows_error(exc: OSError, cwd: str, cmd: List[str]) -> NoReturn:
         cls = dbt.exceptions.WorkingDirectoryError
     else:
         message = 'Unknown error: {} (errno={}: "{}")'.format(
-            str(exc), exc.errno, errno.errorcode.get(exc.errno, '<Unknown!>')
+            str(exc), exc.errno, errno.errorcode.get(exc.errno, "<Unknown!>")
         )
     raise cls(cwd, cmd, message)
 
@@ -529,7 +529,7 @@ def move(src, dst):
     except OSError:
         # probably different drives
         if os.path.isdir(src):
-            if _absnorm(dst + '\\').startswith(_absnorm(src + '\\')):
+            if _absnorm(dst + "\\").startswith(_absnorm(src + "\\")):
                 # dst is inside src
                 raise EnvironmentError(
                     "Cannot move a directory '{}' into itself '{}'"

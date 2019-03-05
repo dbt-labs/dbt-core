@@ -234,7 +234,7 @@ class GenerateTask(CompileTask):
             raise InternalException("self.manifest was None in run!")
 
         adapter = get_adapter(self.config)
-        with adapter.connection_named('generate_catalog'):
+        with adapter.connection_named("generate_catalog"):
             fire_event(BuildingCatalog())
             catalog_table, exceptions = adapter.get_catalog(self.manifest)
 

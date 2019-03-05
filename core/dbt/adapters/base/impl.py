@@ -184,7 +184,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     def nice_connection_name(self) -> str:
         conn = self.connections.get_if_exists()
         if conn is None or conn.name is None:
-            return '<None>'
+            return "<None>"
         return conn.name
 
     @contextmanager

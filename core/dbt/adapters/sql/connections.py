@@ -131,10 +131,10 @@ class SQLConnectionManager(BaseConnectionManager):
         return response, table
 
     def add_begin_query(self):
-        return self.add_query('BEGIN', auto_begin=False)
+        return self.add_query("BEGIN", auto_begin=False)
 
     def add_commit_query(self):
-        return self.add_query('COMMIT', auto_begin=False)
+        return self.add_query("COMMIT", auto_begin=False)
 
     def begin(self):
         connection = self.get_thread_connection()

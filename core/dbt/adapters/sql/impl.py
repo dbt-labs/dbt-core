@@ -63,8 +63,7 @@ class SQLAdapter(BaseAdapter):
         :param abridge_sql_log: If set, limit the raw sql logged to 512
             characters
         """
-        return self.connections.add_query(sql, auto_begin, bindings,
-                                          abridge_sql_log)
+        return self.connections.add_query(sql, auto_begin, bindings, abridge_sql_log)
 
     @classmethod
     def convert_text_type(cls, agate_table: agate.Table, col_idx: int) -> str:
