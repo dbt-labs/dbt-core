@@ -125,7 +125,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         )
         self.mock_execute.assert_has_calls([
             mock.call(
-                'alter table "test_database"."test_schema".table_a rename to table_b',
+                'alter table "test_database"."test_schema".table_a rename to "test_database"."test_schema".table_b',
                 None
             )
         ])
