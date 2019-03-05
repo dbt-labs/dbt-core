@@ -95,15 +95,9 @@ class SQLAdapter(BaseAdapter):
         return True
 
     def expand_column_types(self, goal, current):
-        reference_columns = {
-            c.name: c for c in
-            self.get_columns_in_relation(goal)
-        }
+        reference_columns = {c.name: c for c in self.get_columns_in_relation(goal)}
 
-        target_columns = {
-            c.name: c for c
-            in self.get_columns_in_relation(current)
-        }
+        target_columns = {c.name: c for c in self.get_columns_in_relation(current)}
 
         for column_name, reference_column in reference_columns.items():
             target_column = target_columns.get(column_name)
