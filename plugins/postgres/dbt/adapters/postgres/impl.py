@@ -112,7 +112,7 @@ class PostgresAdapter(SQLAdapter):
             return schemas.flatten()
         except dbt.exceptions.RuntimeException as exc:
             dbt.exceptions.raise_compiler_error(
-                'Cross-db references not allowed in adapter {}: Got {}'.format(
+                "Cross-db references not allowed in adapter {}: Got {}".format(
                     self.type(), exc.msg
                 )
             )
