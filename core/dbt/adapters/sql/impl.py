@@ -214,6 +214,6 @@ class SQLAdapter(BaseAdapter):
             quote_policy=self.config.quoting,
         ).information_schema()
 
-        kwargs = {'information_schema': information_schema, 'schema': schema}
+        kwargs = {"information_schema": information_schema, "schema": schema}
         results = self.execute_macro(CHECK_SCHEMA_EXISTS_MACRO_NAME, kwargs=kwargs)
         return results[0][0] > 0
