@@ -281,7 +281,7 @@ class BaseAdapter(object):
         """
         return table.where(_relations_filter_schemas(schemas))
 
-    def _get_cache_schemas(self, manifest):
+    def _get_cache_schemas(self, manifest, exec_only=False):
         """Get a mapping of each node's "information_schema" relations to a
         set of all schemas expected in that information_schema.
 
@@ -292,9 +292,10 @@ class BaseAdapter(object):
         """
         info_schema_name_map = SchemaSearchMap()
         for node in manifest.nodes.values():
-            if node.resource_type in NodeType.executable():
-                relation = self.Relation.create_from_node(self.config, node)
-                info_schema_name_map.add(relation)
+            if exec_only and node.resource_type not in NodeType.executable():
+                continue
+            relation = self.Relation.create_from(self.config, node)
+            info_schema_name_map.add(relation)
         # result is a map whose keys are information_schema Relations without
         # identifiers that have appropriate database prefixes, and whose values
         # are sets of lowercase schema names that are valid members of those
@@ -308,7 +309,8 @@ class BaseAdapter(object):
         if not dbt.flags.USE_CACHE:
             return
 
-        info_schema_name_map = self._get_cache_schemas(manifest)
+        info_schema_name_map = self._get_cache_schemas(manifest,
+                                                       exec_only=True)
         for db, schema in info_schema_name_map.search():
             for relation in self.list_relations_without_caching(db, schema):
                 self.cache.add(relation)
