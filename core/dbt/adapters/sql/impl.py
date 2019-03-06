@@ -232,9 +232,14 @@ class SQLAdapter(BaseAdapter):
         return [row[0] for row in results]
 
     def check_schema_exists(self, database, schema, model_name=None):
+        information_schema = self.Relation.create(
+            database=database, schema=schema
+        ).information_schema()
+
+        kwargs = {'information_schema': information_schema, 'schema': schema}
         results = self.execute_macro(
             CHECK_SCHEMA_EXISTS_MACRO_NAME,
-            kwargs={'database': database, 'schema': schema},
+            kwargs=kwargs,
             connection_name=model_name
         )
         return results[0][0] > 0

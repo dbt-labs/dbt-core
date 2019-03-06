@@ -168,8 +168,8 @@
 {%- endmacro %}
 
 
-{% macro redshift__check_schema_exists(database, schema) -%}
-  {{ return(postgres__check_schema_exists(database, schema)) }}
+{% macro redshift__check_schema_exists(information_schema, schema) -%}
+  {{ return(postgres__check_schema_exists(information_schema, schema)) }}
 {%- endmacro %}
 list_schemas
 

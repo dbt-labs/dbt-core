@@ -199,15 +199,15 @@
 {% endmacro %}
 
 
-{% macro check_schema_exists(database, schema) -%}
-  {{ return(adapter_macro('check_schema_exists', database, schema)) }}
+{% macro check_schema_exists(information_schema, schema) -%}
+  {{ return(adapter_macro('check_schema_exists', information_schema, schema)) }}
 {% endmacro %}
 
-{% macro default__check_schema_exists(database, schema) -%}
+{% macro default__check_schema_exists(information_schema, schema) -%}
   {% call statement('check_schema_exists', fetch_result=True, auto_begin=False) -%}
         select count(*)
-        from {{ information_schema_name(database) }}.schemata
-        where catalog_name='{{ database }}'
+        from {{ information_schema }}.schemata
+        where catalog_name='{{ information_schema.database }}'
           and schema_name='{{ schema }}'
   {%- endcall %}
   {{ return(load_result('check_schema_exists').table) }}

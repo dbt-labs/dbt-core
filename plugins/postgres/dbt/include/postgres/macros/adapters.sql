@@ -77,9 +77,9 @@
   {{ return(load_result('list_schemas').table) }}
 {% endmacro %}
 
-{% macro postgres__check_schema_exists(database, schema) -%}
+{% macro postgres__check_schema_exists(information_schema, schema) -%}
   {% if database -%}
-    {{ adapter.verify_database(database) }}
+    {{ adapter.verify_database(information_schema.database) }}
   {%- endif -%}
   {% call statement('check_schema_exists', fetch_result=True, auto_begin=False) %}
     select count(*) from pg_namespace where nspname = '{{ schema }}'
