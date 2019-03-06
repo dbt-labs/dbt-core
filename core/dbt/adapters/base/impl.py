@@ -1,7 +1,4 @@
 import abc
-import copy
-import multiprocessing
-import time
 
 import agate
 import pytz
@@ -13,11 +10,11 @@ import dbt.schema
 import dbt.clients.agate_helper
 
 from dbt.compat import abstractclassmethod, classmethod
-from dbt.contracts.connection import Connection
+from dbt.node_types import NodeType
 from dbt.loader import GraphLoader
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.schema import Column
-from dbt.utils import filter_null_values, translate_aliases
+from dbt.utils import filter_null_values
 
 from dbt.adapters.base.meta import AdapterMeta, available, available_raw, \
     available_deprecated
@@ -92,6 +89,51 @@ def _utc(dt, source, field_name):
         return dt.astimezone(pytz.UTC)
     else:
         return dt.replace(tzinfo=pytz.UTC)
+
+
+class SchemaSearchMap(dict):
+    """A utility class to keep track of what information_schema tables to
+    search for what schemas
+    """
+    def add(self, relation):
+        key = relation.information_schema_only()
+        if key not in self:
+            self[key] = set()
+        self[key].add(relation.schema.lower())
+
+    def search(self):
+        for information_schema_name, schemas in self.items():
+            for schema in schemas:
+                yield information_schema_name, schema
+
+    def schemas_searched(self):
+        result = set()
+        for information_schema_name, schemas in self.items():
+            result.update(
+                (information_schema_name.database, schema)
+                for schema in schemas
+            )
+        return result
+
+    def flatten(self):
+        new = self.__class__()
+
+        database = None
+        # iterate once to look for a database name
+        seen = {r.database.lower() for r in self if r.database}
+        if len(seen) > 1:
+            dbt.exceptions.raise_compiler_error(str(seen))
+        elif len(seen) == 1:
+            database = list(seen)[0]
+
+        for information_schema_name, schema in self.search():
+            new.add(information_schema_name.incorporate(
+                path={'database': database, 'schema': schema},
+                quote_policy={'database': False},
+                include_policy={'database': False},
+            ))
+
+        return new
 
 
 @six.add_metaclass(AdapterMeta)
@@ -237,6 +279,27 @@ class BaseAdapter(object):
         """
         return table.where(_relations_filter_schemas(schemas))
 
+    def _get_cache_schemas(self, manifest, exec_only=False):
+        """Get a mapping of each node's "information_schema" relations to a
+        set of all schemas expected in that information_schema.
+
+        There may be keys that are technically duplicates on the database side,
+        for example all of '"foo", 'foo', '"FOO"' and 'FOO' could coexist as
+        databases, and values could overlap as appropriate. All values are
+        lowercase strings.
+        """
+        info_schema_name_map = SchemaSearchMap()
+        for node in manifest.nodes.values():
+            if exec_only and node.resource_type not in NodeType.executable():
+                continue
+            relation = self.Relation.create_from(self.config, node)
+            info_schema_name_map.add(relation)
+        # result is a map whose keys are information_schema Relations without
+        # identifiers that have appropriate database prefixes, and whose values
+        # are sets of lowercase schema names that are valid members of those
+        # schemas
+        return info_schema_name_map
+
     def _relations_cache_for_schemas(self, manifest):
         """Populate the relations cache for the given schemas. Returns an
         iteratble of the schemas populated, as strings.
@@ -244,17 +307,16 @@ class BaseAdapter(object):
         if not dbt.flags.USE_CACHE:
             return
 
-        schemas = manifest.get_used_schemas()
-
-        relations = []
-        # add all relations
-        for db, schema in schemas:
+        info_schema_name_map = self._get_cache_schemas(manifest,
+                                                       exec_only=True)
+        for db, schema in info_schema_name_map.search():
             for relation in self.list_relations_without_caching(db, schema):
                 self.cache.add(relation)
+
         # it's possible that there were no relations in some schemas. We want
         # to insert the schemas we query into the cache's `.schemas` attribute
         # so we can check it later
-        self.cache.update_schemas(schemas)
+        self.cache.update_schemas(info_schema_name_map.schemas_searched())
 
     def set_relations_cache(self, manifest, clear=False):
         """Run a query that gets a populated cache of the relations in the
@@ -415,13 +477,14 @@ class BaseAdapter(object):
         )
 
     @abc.abstractmethod
-    def list_relations_without_caching(self, database, schema,
+    def list_relations_without_caching(self, information_schema, schema,
                                        model_name=None):
         """List relations in the given schema, bypassing the cache.
 
         This is used as the underlying behavior to fill the cache.
 
-        :param str database: The name of the database to list relations from.
+        :param Relation information_schema: The information schema to list
+            relations from.
         :param str schema: The name of the schema to list relations from.
         :param Optional[str] model_name: The name of the model to use for the
             connection.
@@ -495,10 +558,15 @@ class BaseAdapter(object):
         if self._schema_is_cached(database, schema, model_name):
             return self.cache.get_relations(database, schema)
 
+        information_schema = self.Relation.create(
+            database=database,
+            schema=schema,
+            model_name='').information_schema()
+
         # we can't build the relations cache because we don't have a
         # manifest so we can't run any operations.
         relations = self.list_relations_without_caching(
-            database, schema, model_name=model_name
+            information_schema, schema, model_name=model_name
         )
 
         logger.debug('with schema={}, model_name={}, relations={}'
@@ -802,10 +870,11 @@ class BaseAdapter(object):
         """Get the catalog for this manifest by running the get catalog macro.
         Returns an agate.Table of catalog information.
         """
+        information_schemas = list(self._get_cache_schemas(manifest).keys())
         # make it a list so macros can index into it.
-        context = {'databases': list(manifest.get_used_databases())}
+        kwargs = {'information_schemas': information_schemas}
         table = self.execute_macro(GET_CATALOG_MACRO_NAME,
-                                   context_override=context,
+                                   kwargs=kwargs,
                                    release=True)
 
         results = self._catalog_filter_table(table, manifest)
