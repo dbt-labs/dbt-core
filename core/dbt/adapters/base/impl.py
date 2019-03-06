@@ -122,9 +122,7 @@ class SchemaSearchMap(dict):
         # iterate once to look for a database name
         seen = {r.database.lower() for r in self if r.database}
         if len(seen) > 1:
-            dbt.exceptions.raise_compiler_error(
-                'flatten() requires <=1 database (got {})'.format(seen)
-            )
+            dbt.exceptions.raise_compiler_error(str(seen))
         elif len(seen) == 1:
             database = list(seen)[0]
 
