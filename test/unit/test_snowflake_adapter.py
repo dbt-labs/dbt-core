@@ -69,7 +69,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         )
 
         self.mock_execute.assert_has_calls([
-            mock.call('drop schema if exists "test_database"."test_schema" cascade', None)
+            mock.call('drop schema if exists test_database."test_schema" cascade', None)
         ])
 
     def test_quoting_on_drop(self):
@@ -84,7 +84,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
 
         self.mock_execute.assert_has_calls([
             mock.call(
-                'drop table if exists "test_database"."test_schema".test_table cascade',
+                'drop table if exists test_database."test_schema".test_table cascade',
                 None
             )
         ])
@@ -100,7 +100,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         self.adapter.truncate_relation(relation)
 
         self.mock_execute.assert_has_calls([
-            mock.call('truncate table "test_database"."test_schema".test_table', None)
+            mock.call('truncate table test_database."test_schema".test_table', None)
         ])
 
     def test_quoting_on_rename(self):
@@ -125,7 +125,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
         )
         self.mock_execute.assert_has_calls([
             mock.call(
-                'alter table "test_database"."test_schema".table_a rename to "test_database"."test_schema".table_b',
+                'alter table test_database."test_schema".table_a rename to test_database."test_schema".table_b',
                 None
             )
         ])

@@ -401,10 +401,11 @@ class Manifest(APIObject):
             type(self).__name__, name)
         )
 
-    def get_used_schemas(self):
+    def get_used_schemas(self, resource_types=None):
         return frozenset({
             (node.database, node.schema)
             for node in self.nodes.values()
+            if not resource_types or node.resource_type in resource_types
         })
 
     def get_used_databases(self):

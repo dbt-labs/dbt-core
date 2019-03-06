@@ -1808,7 +1808,9 @@ class TestDocsGenerate(DBTIntegrationTest):
         schema = self.unique_schema()
 
         # we are selecting from the seed, which is always in the default db
-        compiled_database = self._quote(self.default_database)
+        compiled_database = self.default_database
+        if self.adapter_type != 'snowflake':
+            compiled_database = self._quote(compiled_database)
         compiled_schema = self._quote(schema) if quote_schema else schema
         compiled_seed = self._quote('seed') if quote_model else 'seed'
 

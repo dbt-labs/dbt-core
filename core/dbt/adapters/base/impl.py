@@ -292,8 +292,9 @@ class BaseAdapter(object):
         """
         info_schema_name_map = SchemaSearchMap()
         for node in manifest.nodes.values():
-            relation = self.Relation.create_from(self.config, node)
-            info_schema_name_map.add(relation)
+            if node.resource_type in NodeType.executable():
+                relation = self.Relation.create_from_node(self.config, node)
+                info_schema_name_map.add(relation)
         # result is a map whose keys are information_schema Relations without
         # identifiers that have appropriate database prefixes, and whose values
         # are sets of lowercase schema names that are valid members of those
