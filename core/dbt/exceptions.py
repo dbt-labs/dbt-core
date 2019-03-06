@@ -28,8 +28,8 @@ class Exception(builtins.Exception):
     def data(self):
         # if overriding, make sure the result is json-serializable.
         return {
-            'type': self.__class__.__name__,
-            'message': str(self),
+            "type": self.__class__.__name__,
+            "message": str(self),
         }
 
 
@@ -142,7 +142,7 @@ class RPCFailureResult(RuntimeException):
 
 class RPCTimeoutException(RuntimeException):
     CODE = 10008
-    MESSAGE = 'RPC timeout error'
+    MESSAGE = "RPC timeout error"
 
     def __init__(self, timeout):
         super().__init__(self.MESSAGE)
@@ -151,8 +151,8 @@ class RPCTimeoutException(RuntimeException):
     def data(self):
         result = super().data()
         result.update({
-            'timeout': self.timeout,
-            'message': 'RPC timed out after {}s'.format(self.timeout),
+            {
+                "timeout": self.timeout,
         })
         return result
 
