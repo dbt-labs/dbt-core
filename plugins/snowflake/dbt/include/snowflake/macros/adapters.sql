@@ -31,7 +31,7 @@
           numeric_scale
 
       from
-      {{ information_schema_name(relation.database) }}.columns
+      {{ relation.information_schema('columns') }}
 
       where table_name ilike '{{ relation.identifier }}'
         {% if relation.schema %}
@@ -50,7 +50,7 @@
 {% endmacro %}
 
 
-{% macro snowflake__list_relations_without_caching(database, schema) %}
+{% macro snowflake__list_relations_without_caching(information_schema, schema) %}
   {% call statement('list_relations_without_caching', fetch_result=True) -%}
     select
       table_catalog as database,
@@ -60,20 +60,20 @@
            when table_type = 'VIEW' then 'view'
            else table_type
       end as table_type
-    from {{ information_schema_name(database) }}.tables
+    from {{ information_schema }}.tables
     where table_schema ilike '{{ schema }}'
-      and table_catalog ilike '{{ database }}'
+      and table_catalog ilike '{{ information_schema.database.lower() }}'
   {% endcall %}
   {{ return(load_result('list_relations_without_caching').table) }}
 {% endmacro %}
 
 
-{% macro snowflake__check_schema_exists(database, schema) -%}
+{% macro snowflake__check_schema_exists(information_schema, schema) -%}
   {% call statement('check_schema_exists', fetch_result=True) -%}
         select count(*)
-        from {{ information_schema_name(database) }}.schemata
+        from {{ information_schema }}.schemata
         where upper(schema_name) = upper('{{ schema }}')
-            and upper(catalog_name) = upper('{{ database }}')
+            and upper(catalog_name) = upper('{{ information_schema.database }}')
   {%- endcall %}
   {{ return(load_result('check_schema_exists').table) }}
 {%- endmacro %}

@@ -36,6 +36,11 @@ class RelationProxy(object):
     def __getattr__(self, key):
         return getattr(self.relation_type, key)
 
+    def create_from_source(self, *args, **kwargs):
+        # bypass our create when creating from source so as not to mess up
+        # the source quoting
+        return self.relation_type.create_from_source(*args, **kwargs)
+
     def create(self, *args, **kwargs):
         kwargs['quote_policy'] = dbt.utils.merge(
             self.quoting_config,

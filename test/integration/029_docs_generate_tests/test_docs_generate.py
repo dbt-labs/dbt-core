@@ -1114,8 +1114,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         }
                     ],
                     'empty': False,
-                    'fqn': ['test',
-                    'ephemeral_summary'],
+                    'fqn': ['test', 'ephemeral_summary'],
                     'name': 'ephemeral_summary',
                     'original_file_path': self.dir('ref_models/ephemeral_summary.sql'),
                     'package_name': 'test',
@@ -1236,32 +1235,36 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'name': 'id'
                         }
                     },
-                   'database': self.default_database,
-                   'description': 'My table',
-                   'docrefs': [
-                        {
-                            'documentation_name': 'table_info',
-                            'documentation_package': ''
-                        },
-                        {
-                            'documentation_name': 'source_info',
-                            'documentation_package': ''
-                        }
-                    ],
-                   'freshness': {},
-                   'identifier': 'seed',
-                   'loaded_at_field': None,
-                   'loader': 'a_loader',
-                   'name': 'my_table',
-                   'original_file_path': self.dir('ref_models/schema.yml'),
-                   'package_name': 'test',
-                   'path': self.dir('ref_models/schema.yml'),
-                   'resource_type': 'source',
-                   'root_path': os.getcwd(),
-                   'schema': my_schema_name,
-                   'source_description': "{{ doc('source_info') }}",
-                   'source_name': 'my_source',
-                   'unique_id': 'source.test.my_source.my_table'
+                    'quoting': {
+                        'database': False,
+                        'identifier': True,
+                    },
+                    'database': self.default_database,
+                    'description': 'My table',
+                    'docrefs': [
+                         {
+                             'documentation_name': 'table_info',
+                             'documentation_package': ''
+                         },
+                         {
+                             'documentation_name': 'source_info',
+                             'documentation_package': ''
+                         }
+                     ],
+                    'freshness': {},
+                    'identifier': 'seed',
+                    'loaded_at_field': None,
+                    'loader': 'a_loader',
+                    'name': 'my_table',
+                    'original_file_path': self.dir('ref_models/schema.yml'),
+                    'package_name': 'test',
+                    'path': self.dir('ref_models/schema.yml'),
+                    'resource_type': 'source',
+                    'root_path': os.getcwd(),
+                    'schema': my_schema_name,
+                    'source_description': "{{ doc('source_info') }}",
+                    'source_name': 'my_source',
+                    'unique_id': 'source.test.my_source.my_table'
                 }
             },
             'docs': {
@@ -1805,7 +1808,9 @@ class TestDocsGenerate(DBTIntegrationTest):
         schema = self.unique_schema()
 
         # we are selecting from the seed, which is always in the default db
-        compiled_database = self._quote(self.default_database)
+        compiled_database = self.default_database
+        if self.adapter_type != 'snowflake':
+            compiled_database = self._quote(compiled_database)
         compiled_schema = self._quote(schema) if quote_schema else schema
         compiled_seed = self._quote('seed') if quote_model else 'seed'
 
@@ -2075,7 +2080,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         )
 
         cte_sql = (
-            ' __dbt__CTE__ephemeral_copy as (\n\n\nselect * from "{}"."{}"."seed"\n)'
+            ' __dbt__CTE__ephemeral_copy as (\n\n\nselect * from {}."{}"."seed"\n)'
         ).format(self.default_database, my_schema_name)
 
         ephemeral_injected_sql = (

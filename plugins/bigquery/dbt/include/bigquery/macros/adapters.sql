@@ -59,8 +59,8 @@
 {% endmacro %}
 
 
-{% macro bigquery__list_relations_without_caching(database, schema) -%}
-  {{ return(adapter.list_relations_without_caching(database, schema)) }}
+{% macro bigquery__list_relations_without_caching(information_schema, schema) -%}
+  {{ return(adapter.list_relations_without_caching(information_schema, schema)) }}
 {% endmacro %}
 
 

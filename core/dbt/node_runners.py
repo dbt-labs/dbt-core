@@ -287,11 +287,17 @@ class CompileRunner(BaseRunner):
 
 
 class ModelRunner(CompileRunner):
+    def get_node_representation(self):
+        if self.config.credentials.database == self.node.database:
+            template = "{0.schema}.{0.alias}"
+        else:
+            template = "{0.database}.{0.schema}.{0.alias}"
+
+        return template.format(self.node)
+
     def describe_node(self):
-        materialization = dbt.utils.get_materialization(self.node)
-        return "{0} model {1.database}.{1.schema}.{1.alias}".format(
-            materialization, self.node
-        )
+        return "{} model {}".format(self.node.get_materialization(),
+                                    self.get_node_representation())
 
     def print_start_line(self):
         description = self.describe_node()
@@ -478,7 +484,7 @@ class ArchiveRunner(ModelRunner):
 
 class SeedRunner(ModelRunner):
     def describe_node(self):
-        return "seed file {0.database}.{0.schema}.{0.alias}".format(self.node)
+        return "seed file {}".format(self.get_node_representation())
 
     def before_execute(self):
         description = self.describe_node()

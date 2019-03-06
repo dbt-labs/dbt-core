@@ -56,6 +56,19 @@ class PostgresAdapter(SQLAdapter):
             if refed_schema.lower() in schemas:
                 self.cache.add_link(dependent, referenced)
 
+    def _get_cache_schemas(self, manifest, exec_only=False):
+        # postgres/redshift only allow one database (the main one)
+        superself = super(PostgresAdapter, self)
+        schemas = superself._get_cache_schemas(manifest, exec_only=exec_only)
+        try:
+            return schemas.flatten()
+        except dbt.exceptions.RuntimeException as exc:
+            dbt.exceptions.raise_compiler_error(
+                'Cross-db references not allowed in adapter {}: Got {}'.format(
+                    self.type(), exc.msg
+                )
+            )
+
     def _link_cached_relations(self, manifest):
         schemas = set()
         for db, schema in manifest.get_used_schemas():
