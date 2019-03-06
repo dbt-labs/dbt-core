@@ -2,7 +2,6 @@
 
 import abc
 import codecs
-import json
 import warnings
 import decimal
 
@@ -35,12 +34,12 @@ else:
 if WHICH_PYTHON == 2:
     from SimpleHTTPServer import SimpleHTTPRequestHandler
     from SocketServer import TCPServer
-    from Queue import PriorityQueue
+    from Queue import PriorityQueue, Empty as QueueEmpty
     from thread import get_ident
 else:
     from http.server import SimpleHTTPRequestHandler
     from socketserver import TCPServer
-    from queue import PriorityQueue
+    from queue import PriorityQueue, Empty as QueueEmpty
     from threading import get_ident
 
 

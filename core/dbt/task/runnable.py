@@ -3,15 +3,14 @@ import os
 import re
 import time
 from abc import abstractmethod
-from multiprocessing import Process, Pipe
 from multiprocessing.dummy import Pool as ThreadPool
+from jsonrpc.exceptions import JSONRPCInvalidParams
 
-import six
-
+from dbt import rpc
 from dbt.task.base import ConfiguredTask
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.compat import abstractclassmethod, to_unicode
+from dbt.compat import to_unicode
 from dbt.compilation import compile_manifest
 from dbt.contracts.graph.manifest import CompileResultNode
 from dbt.contracts.results import ExecutionResult
@@ -346,50 +345,6 @@ class RemoteCallable(object):
             'from_kwargs not implemented'
         )
 
-    def _subprocess_handle_request(self, conn, **kwargs):
-        error = None
-        result = None
-        try:
-            result = self.handle_request(**kwargs)
-        except dbt.exceptions.RuntimeException as exc:
-            logger.debug('dbt runtime exception',
-                         exc_info=True)
-            # we have to convert this to a string for RPC responses
-            error = str(exc)
-        except dbt.exceptions.RPCException as exc:
-            error = str(exc)
-        except Exception as exc:
-            logger.debug('uncaught python exception',
-                         exc_info=True)
-            error = str(exc)
-        conn.send([result, error])
-        conn.close()
-
-    def safe_handle_request(self, **kwargs):
-        # assumption here: we are within a thread/process already and can block
-        # however we like to enforce the timeout
-        timeout = kwargs.pop('timeout', None)
-        parent_conn, child_conn = Pipe()
-        proc = Process(
-            target=self._subprocess_handle_request,
-            args=(child_conn,),
-            kwargs=kwargs
-        )
-        proc.start()
-        if parent_conn.poll(timeout):
-            result, error = parent_conn.recv()
-        else:
-            error = 'timed out after {}s'.format(timeout)
-            proc.terminate()
-
-        parent_conn.close()
-
-        proc.join()
-        if error:
-            raise dbt.exceptions.RPCException(error)
-        else:
-            return result
-
     def decode_sql(self, sql):
         """Base64 decode a string. This should only be used for sql in calls.
 
@@ -402,15 +357,22 @@ class RemoteCallable(object):
         # in python3.x you can pass `validate=True` to b64decode to get this
         # behavior.
         if not re.match(b'^[A-Za-z0-9+/]*={0,2}$', base64_sql_bytes):
-            raise dbt.exceptions.RPCException(
-                'invalid base64-encoded sql input: {!s}'.format(sql)
-            )
+            self.raise_invalid_base64(sql)
 
         try:
             sql_bytes = base64.b64decode(base64_sql_bytes)
         except ValueError as exc:
-            raise dbt.exceptions.RPCException(
-                'invalid base64-encoded sql input: {!s}'.format(exc)
-            )
+            self.raise_invalid_base64(sql)
 
         return sql_bytes.decode('utf-8')
+
+    @staticmethod
+    def raise_invalid_base64(sql):
+        raise rpc.invalid_params(
+            code=JSONRPCInvalidParams.CODE,
+            message=JSONRPCInvalidParams.MESSAGE,
+            data={
+                'message': 'invalid base64-encoded sql input',
+                'sql': str(sql),
+            }
+        )

@@ -374,6 +374,8 @@ class TestRPCServer(BaseSourcesTest):
         if compiled_sql is None:
             compiled_sql = raw_sql
         result = self.assertIsResult(data)
+        self.assertIn('logs', result)
+        self.assertTrue(len(result['logs']) > 0)
         self.assertIn('raw_sql', result)
         self.assertIn('compiled_sql', result)
         self.assertEqual(result['raw_sql'], raw_sql)
@@ -495,28 +497,34 @@ class TestRPCServer(BaseSourcesTest):
             'select * from {{ reff("nonsource_descendant") }}',
             name='mymodel'
         ).json()
-        error = self.assertIsErrorWithCode(data, -32000)
-        self.assertEqual(error['message'], 'Server error')
+        error = self.assertIsErrorWithCode(data, 10004)
+        self.assertEqual(error['message'], 'Compilation Error')
         self.assertIn('data', error)
-        self.assertEqual(error['data']['type'], 'RPCException')
+        error_data = error['data']
+        self.assertEqual(error_data['type'], 'CompilationException')
         self.assertEqual(
-            error['data']['message'],
+            error_data['message'],
             "Compilation Error in rpc mymodel (from remote system)\n  'reff' is undefined"
         )
+        self.assertIn('logs', error_data)
+        self.assertTrue(len(error_data['logs']) > 0)
 
         data = self.query(
             'run',
             'hi this is not sql',
             name='foo'
         ).json()
-        error = self.assertIsErrorWithCode(data, -32000)
-        self.assertEqual(error['message'], 'Server error')
+        error = self.assertIsErrorWithCode(data, 10003)
+        self.assertEqual(error['message'], 'Database Error')
         self.assertIn('data', error)
-        self.assertEqual(error['data']['type'], 'RPCException')
+        error_data = error['data']
+        self.assertEqual(error_data['type'], 'DatabaseException')
         self.assertEqual(
-            error['data']['message'],
-            'Database Error in rpc foo (from remote system)\n  syntax error at or near "hi"\n  LINE 1: hi this is not sql\n          ^'
+            error_data['message'],
+            'Database Error\n  syntax error at or near "hi"\n  LINE 1: hi this is not sql\n          ^'
         )
+        self.assertIn('logs', error_data)
+        self.assertTrue(len(error_data['logs']) > 0)
 
     @use_profile('postgres')
     def test_timeout(self):
@@ -526,8 +534,13 @@ class TestRPCServer(BaseSourcesTest):
             name='foo',
             timeout=1
         ).json()
-        error = self.assertIsErrorWithCode(data, -32000)
-        self.assertEqual(error['message'], 'Server error')
+        error = self.assertIsErrorWithCode(data, 10008)
+        self.assertEqual(error['message'], 'RPC timeout error')
         self.assertIn('data', error)
-        self.assertEqual(error['data']['type'], 'RPCException')
-        self.assertEqual(error['data']['message'], 'timed out after 1s')
+        error_data = error['data']
+        self.assertIn('timeout', error_data)
+        self.assertEqual(error_data['timeout'], 1)
+        self.assertIn('message', error_data)
+        self.assertEqual(error_data['message'], 'RPC timed out after 1s')
+        self.assertIn('logs', error_data)
+        self.assertTrue(len(error_data['logs']) > 0)

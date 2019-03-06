@@ -36,7 +36,7 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
     METHOD_NAME = 'compile'
 
     def __init__(self, args, config):
-        super(CompileTask, self).__init__(args, config)
+        super(RemoteCompileTask, self).__init__(args, config)
         self.parser = None
         self._base_manifest = GraphLoader.load_all(
             config,

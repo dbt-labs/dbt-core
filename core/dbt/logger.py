@@ -75,6 +75,10 @@ class ColorFilter(logging.Filter):
         return True
 
 
+def default_formatter():
+    return logging.Formatter('%(asctime)-18s (%(threadName)s): %(message)s')
+
+
 def initialize_logger(debug_mode=False, path=None):
     global initialized, logger, stdout_handler
 
@@ -82,8 +86,7 @@ def initialize_logger(debug_mode=False, path=None):
         return
 
     if debug_mode:
-        stdout_handler.setFormatter(
-            logging.Formatter('%(asctime)-18s (%(threadName)s): %(message)s'))
+        stdout_handler.setFormatter(default_formatter())
         stdout_handler.setLevel(logging.DEBUG)
 
     if path is not None:
@@ -101,8 +104,7 @@ def initialize_logger(debug_mode=False, path=None):
         color_filter = ColorFilter()
         logdir_handler.addFilter(color_filter)
 
-        logdir_handler.setFormatter(
-            logging.Formatter('%(asctime)-18s (%(threadName)s): %(message)s'))
+        logdir_handler.setFormatter(default_formatter())
         logdir_handler.setLevel(logging.DEBUG)
 
         logger.addHandler(logdir_handler)
@@ -126,3 +128,21 @@ def log_cache_events(flag):
 
 
 GLOBAL_LOGGER = logger
+
+
+class QueueLogHandler(logging.Handler):
+    def __init__(self, queue):
+        super(QueueLogHandler, self).__init__()
+        self.queue = queue
+
+    def emit(self, record):
+        msg = self.format(record)
+        self.queue.put_nowait(['log', msg])
+
+
+def add_queue_handler(queue):
+    """Add a queue log handler to the global logger."""
+    handler = QueueLogHandler(queue)
+    handler.setFormatter(default_formatter())
+    handler.setLevel(logging.DEBUG)
+    GLOBAL_LOGGER.addHandler(handler)

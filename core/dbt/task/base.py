@@ -7,7 +7,7 @@ from dbt.config import RuntimeConfig, Project
 from dbt.config.profile import read_profile, PROFILES_DIR
 from dbt import tracking
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.utils import to_string
+from dbt.compat import to_string
 import dbt.exceptions
 
 
