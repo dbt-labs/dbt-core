@@ -116,6 +116,8 @@ class BaseConnectionManager(object):
         """Clear any existing transactions."""
         conn = self.get_thread_connection()
         if conn is not None:
+            if conn.transaction_open:
+                self._rollback(conn)
             self.begin()
             self.commit()
 
