@@ -461,7 +461,7 @@ class RunTask(CompileTask):
             "results": results,
             "database_schemas": list(database_schema_set),
         }
-        with adapter.connection_named('master'):
+        with adapter.connection_named("master"):
             self.safe_run_hooks(adapter, RunHookType.End, extras)
 
     def after_hooks(self, adapter, results, elapsed):
