@@ -314,7 +314,7 @@ def add_ephemeral_model_prefix(s: str) -> str:
 def timestring() -> str:
     """Get the current datetime as an RFC 3339-compliant string"""
     # isoformat doesn't include the mandatory trailing 'Z' for UTC.
-    return datetime.datetime.utcnow().isoformat() + 'Z'
+    return datetime.datetime.utcnow().isoformat() + "Z"
 
 
 class JSONEncoder(json.JSONEncoder):
