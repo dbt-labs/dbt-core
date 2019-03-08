@@ -3,7 +3,7 @@ from setuptools import find_packages
 from distutils.core import setup
 
 package_name = "dbt-snowflake"
-package_version = "0.13.0a2"
+package_version = "0.13.0rc1"
 description = """The snowflake adapter plugin for dbt (data build tool)"""
 
 
