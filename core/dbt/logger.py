@@ -150,6 +150,22 @@ GLOBAL_LOGGER = logger
 
 
 class QueueFormatter(logging.Formatter):
+    def formatMessage(self, record):
+        superself = super(QueueFormatter, self)
+        if hasattr(superself, 'formatMessage'):
+            # python 3.x
+            return superself.formatMessage(record)
+
+        # python 2.x, handling weird unicode things
+        try:
+            return self._fmt % record.__dict__
+        except UnicodeDecodeError as e:
+            try:
+                record.name = record.name.decode('utf-8')
+                return self._fmt % record.__dict__
+            except UnicodeDecodeError as e:
+                raise e
+
     def format(self, record):
         record.message = record.getMessage()
         record.asctime = self.formatTime(record, self.datefmt)
