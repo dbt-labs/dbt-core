@@ -95,16 +95,16 @@ class RedshiftConnectionManager(PostgresConnectionManager):
         """
         with drop_lock:
 
-            connection = self.get(name)
+            connection = self.get_thread_connection()
 
             if connection.transaction_open:
-                self.commit(connection)
+                self.commit()
 
-            self.begin(connection.name)
+            self.begin()
             yield
 
-            self.commit(connection)
-            self.begin(connection.name)
+            self.commit()
+            self.begin()
 
     @classmethod
     def fetch_cluster_credentials(cls, db_user, db_name, cluster_id,

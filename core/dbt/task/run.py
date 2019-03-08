@@ -29,19 +29,14 @@ class RunTask(CompileTask):
 
         ordered_hooks = sorted(hooks, key=lambda h: h.get('index', len(hooks)))
 
-        for i, hook in enumerate(ordered_hooks):
-            model_name = hook.get('name')
+        # on-run-* hooks should run outside of a transaction. This happens
+        # b/c psycopg2 automatically begins a transaction when a connection
+        # is created.
+        adapter.clear_transaction()
 
-            # This will clear out an open transaction if there is one.
-            # on-run-* hooks should run outside of a transaction. This happens
-            # b/c psycopg2 automatically begins a transaction when a connection
-            # is created. TODO : Move transaction logic out of here, and
-            # implement a for-loop over these sql statements in jinja-land.
-            # Also, consider configuring psycopg2 (and other adapters?) to
-            # ensure that a transaction is only created if dbt initiates it.
-            adapter.clear_transaction(model_name)
-            compiled = compile_node(adapter, self.config, hook, self.manifest,
-                                    extra_context)
+        for i, hook in enumerate(ordered_hooks):
+            compiled = compile_node(adapter, self.config, hook,
+                                    self.manifest, extra_context)
             statement = compiled.wrapped_sql
 
             hook_index = hook.get('index', len(hooks))
@@ -53,10 +48,7 @@ class RunTask(CompileTask):
             sql = hook_dict.get('sql', '')
 
             if len(sql.strip()) > 0:
-                adapter.execute(sql, model_name=model_name, auto_begin=False,
-                                fetch=False)
-
-            adapter.release_connection(model_name)
+                adapter.execute(sql, auto_begin=False, fetch=False)
 
     def safe_run_hooks(self, adapter, hook_type, extra_context):
         try:
@@ -82,9 +74,10 @@ class RunTask(CompileTask):
             .format(stat_line=stat_line, execution=execution))
 
     def before_run(self, adapter, selected_uids):
-        self.populate_adapter_cache(adapter)
-        self.safe_run_hooks(adapter, RunHookType.Start, {})
-        self.create_schemas(adapter, selected_uids)
+        with adapter.connection_named('master'):
+            self.create_schemas(adapter, selected_uids)
+            self.populate_adapter_cache(adapter)
+            self.safe_run_hooks(adapter, RunHookType.Start, {})
 
     def after_run(self, adapter, results):
         # in on-run-end hooks, provide the value 'schemas', which is a list of
@@ -94,8 +87,9 @@ class RunTask(CompileTask):
             r.node.schema for r in results
             if not any((r.error is not None, r.failed, r.skipped))
         ))
-        self.safe_run_hooks(adapter, RunHookType.End,
-                            {'schemas': schemas, 'results': results})
+        with adapter.connection_named('master'):
+            self.safe_run_hooks(adapter, RunHookType.End,
+                                {'schemas': schemas, 'results': results})
 
     def after_hooks(self, adapter, results, elapsed):
         self.print_results_line(results, elapsed)

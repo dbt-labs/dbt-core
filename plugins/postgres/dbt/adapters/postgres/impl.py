@@ -1,15 +1,8 @@
-import psycopg2
-
-import time
-
-from dbt.adapters.base.meta import available_raw
+from dbt.adapters.base.meta import available
 from dbt.adapters.sql import SQLAdapter
 from dbt.adapters.postgres import PostgresConnectionManager
 import dbt.compat
 import dbt.exceptions
-import agate
-
-from dbt.logger import GLOBAL_LOGGER as logger
 
 
 # note that this isn't an adapter macro, so just a single underscore
@@ -23,7 +16,7 @@ class PostgresAdapter(SQLAdapter):
     def date_function(cls):
         return 'now()'
 
-    @available_raw
+    @available
     def verify_database(self, database):
         database = database.strip('"')
         expected = self.config.credentials.database
@@ -75,10 +68,7 @@ class PostgresAdapter(SQLAdapter):
             self.verify_database(db)
             schemas.add(schema)
 
-        try:
-            self._link_cached_database_relations(schemas)
-        finally:
-            self.release_connection(GET_RELATIONS_MACRO_NAME)
+        self._link_cached_database_relations(schemas)
 
     def _relations_cache_for_schemas(self, manifest):
         super(PostgresAdapter, self)._relations_cache_for_schemas(manifest)

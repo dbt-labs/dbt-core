@@ -1,13 +1,10 @@
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.exceptions import NotImplementedException, CompilationException, \
     RuntimeException, InternalException, missing_materialization
-from dbt.utils import get_nodes_by_tags
-from dbt.node_types import NodeType, RunHookType
-from dbt.adapters.factory import get_adapter
+from dbt.node_types import NodeType
 from dbt.contracts.results import RunModelResult, collect_timing_info, \
     SourceFreshnessResult, PartialResult, RemoteCompileResult, RemoteRunResult
 from dbt.compilation import compile_node
-from dbt.utils import timestring
 
 import dbt.clients.jinja
 import dbt.context.runtime
@@ -19,8 +16,6 @@ import dbt.flags
 import dbt.schema
 import dbt.writer
 
-import six
-import sys
 import threading
 import time
 import traceback
@@ -131,6 +126,7 @@ class BaseRunner(object):
         result = None
 
         try:
+            self.adapter.acquire_connection(self.node.get('name'))
             with collect_timing_info('compile') as timing_info:
                 # if we fail here, we still have a compiled node to return
                 # this has the benefit of showing a build path for the errant
@@ -160,9 +156,10 @@ class BaseRunner(object):
             prefix = 'Internal error executing {}'.format(build_path)
 
             error = "{prefix}\n{error}\n\n{note}".format(
-                         prefix=dbt.ui.printer.red(prefix),
-                         error=str(e).strip(),
-                         note=INTERNAL_ERROR_STRING)
+                prefix=dbt.ui.printer.red(prefix),
+                error=str(e).strip(),
+                note=INTERNAL_ERROR_STRING
+            )
             logger.debug(error)
             error = dbt.compat.to_string(e)
 
@@ -171,11 +168,13 @@ class BaseRunner(object):
             if node_description is None:
                 node_description = self.node.unique_id
             prefix = "Unhandled error while executing {description}".format(
-                        description=node_description)
+                description=node_description
+            )
 
             error = "{prefix}\n{error}".format(
-                         prefix=dbt.ui.printer.red(prefix),
-                         error=str(e).strip())
+                prefix=dbt.ui.printer.red(prefix),
+                error=str(e).strip()
+            )
 
             logger.error(error)
             logger.debug('', exc_info=True)
@@ -202,13 +201,12 @@ class BaseRunner(object):
         """Try to release a connection. If an exception is hit, log and return
         the error string.
         """
-        node_name = self.node.name
         try:
-            self.adapter.release_connection(node_name)
+            self.adapter.release_connection()
         except Exception as exc:
             logger.debug(
                 'Error releasing connection for node {}: {!s}\n{}'
-                .format(node_name, exc, traceback.format_exc())
+                .format(self.node.name, exc, traceback.format_exc())
             )
             return dbt.compat.to_string(exc)
 
@@ -372,7 +370,8 @@ class FreshnessRunner(BaseRunner):
                 continue
 
             target = target_freshness[fullkey]
-            kwargs = {target['period']+'s': target['count']}
+            kwname = target['period'] + 's'
+            kwargs = {kwname: target['count']}
             if freshness > timedelta(**kwargs).total_seconds():
                 return key
         return 'pass'
@@ -401,12 +400,12 @@ class FreshnessRunner(BaseRunner):
     def execute(self, compiled_node, manifest):
         relation = self.adapter.Relation.create_from_source(compiled_node)
         # given a Source, calculate its fresnhess.
-        freshness = self.adapter.calculate_freshness(
-            relation,
-            compiled_node.loaded_at_field,
-            manifest=manifest,
-            connection_name=compiled_node.unique_id
-        )
+        with self.adapter.connection_named(compiled_node.unique_id):
+            freshness = self.adapter.calculate_freshness(
+                relation,
+                compiled_node.loaded_at_field,
+                manifest=manifest
+            )
         status = self._calculate_status(
             compiled_node.freshness,
             freshness['age']
@@ -447,7 +446,6 @@ class TestRunner(CompileRunner):
     def execute_test(self, test):
         res, table = self.adapter.execute(
             test.wrapped_sql,
-            model_name=test.name,
             auto_begin=True,
             fetch=True)
 

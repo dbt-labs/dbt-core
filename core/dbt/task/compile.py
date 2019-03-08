@@ -2,7 +2,6 @@ import os
 
 from dbt.adapters.factory import get_adapter
 from dbt.compilation import compile_manifest
-from dbt.exceptions import RuntimeException
 from dbt.loader import load_all_projects, GraphLoader
 from dbt.node_runners import CompileRunner, RPCCompileRunner
 from dbt.node_types import NodeType
@@ -10,7 +9,7 @@ from dbt.parser.analysis import RPCCallParser
 from dbt.parser.util import ParserUtils
 import dbt.ui.printer
 
-from dbt.task.runnable import ManifestTask, GraphRunnableTask, RemoteCallable
+from dbt.task.runnable import GraphRunnableTask, RemoteCallable
 
 
 class CompileTask(GraphRunnableTask):
@@ -70,7 +69,7 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
             'name': name,
             'root_path': request_path,
             'resource_type': NodeType.RPCCall,
-            'path': name+'.sql',
+            'path': name + '.sql',
             'original_file_path': 'from remote system',
             'package_name': self.config.project_name,
             'raw_sql': sql,

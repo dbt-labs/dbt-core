@@ -32,6 +32,7 @@ class GraphTest(unittest.TestCase):
         self.load_projects_patcher.stop()
         self.find_matching_patcher.stop()
         self.load_file_contents_patcher.stop()
+        self.get_adapter_patcher.stop()
 
     def setUp(self):
         dbt.flags.STRICT_MODE = True
@@ -41,6 +42,8 @@ class GraphTest(unittest.TestCase):
         self.load_projects_patcher = patch('dbt.loader._load_projects')
         self.find_matching_patcher = patch('dbt.clients.system.find_matching')
         self.load_file_contents_patcher = patch('dbt.clients.system.load_file_contents')
+        self.get_adapter_patcher = patch('dbt.context.parser.get_adapter')
+        self.factory = self.get_adapter_patcher.start()
 
         def mock_write_gpickle(graph, outfile):
             self.graph_result = graph
@@ -52,7 +55,7 @@ class GraphTest(unittest.TestCase):
                 'test': {
                     'type': 'postgres',
                     'threads': 4,
-                    'host': 'database',
+                    'host': 'thishostshouldnotexist',
                     'port': 5432,
                     'user': 'root',
                     'pass': 'password',
