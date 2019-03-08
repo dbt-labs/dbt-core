@@ -53,3 +53,16 @@ def dbt_error(exc, logs=None):
     exc = RPCException(code=exc.CODE, message=exc.MESSAGE, data=exc.data(),
                        logs=logs)
     return exc
+
+
+class QueueMessageType(object):
+    Error = 'error'
+    Result = 'result'
+    Log = 'log'
+
+    @classmethod
+    def terminating(cls):
+        return [
+            cls.Error,
+            cls.Result
+        ]

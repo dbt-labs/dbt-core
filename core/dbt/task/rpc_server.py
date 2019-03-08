@@ -46,10 +46,14 @@ class RequestTaskHandler(object):
             except QueueEmpty:
                 raise dbt.exceptions.RPCTimeoutException(self.timeout)
 
-            if msgtype == 'log':
+            if msgtype == rpc.QueueMessageType.Log:
                 self.logs.append(value)
-            else:
+            elif msgtype in rpc.QueueMessageType.terminating():
                 return msgtype, value
+            else:
+                raise dbt.exceptions.InternalException(
+                    'Got invalid queue message type {}'.format(msgtype)
+                )
 
     def _join_process(self):
         try:
@@ -64,10 +68,7 @@ class RequestTaskHandler(object):
         finally:
             self.process.join()
 
-        self.process = None
-        self.queue = None
-
-        if msgtype == 'error':
+        if msgtype == rpc.QueueMessageType.Error:
             raise rpc.RPCException.from_error(result)
 
         return result
@@ -101,9 +102,9 @@ class RequestTaskHandler(object):
 
         # put whatever result we got onto the queue as well.
         if error is not None:
-            self.queue.put(['error', error.error])
+            self.queue.put([rpc.QueueMessageType.Error, error.error])
         else:
-            self.queue.put(['result', result])
+            self.queue.put([rpc.QueueMessageType.Result, result])
 
     def handle(self, kwargs):
         self.started = time.time()
