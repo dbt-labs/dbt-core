@@ -1,7 +1,7 @@
 {% materialization table, adapter='snowflake' %}
   {%- set identifier = model['alias'] -%}
-  {%- set tmp_identifier = identifier + '__dbt_tmp' -%}
-  {%- set backup_identifier = identifier + '__dbt_backup' -%}
+  {%- set tmp_identifier = model['name'] + '__dbt_tmp' -%}
+  {%- set backup_identifier = model['name'] + '__dbt_backup' -%}
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
 
   {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) -%}

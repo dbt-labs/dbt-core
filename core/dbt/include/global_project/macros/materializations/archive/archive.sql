@@ -188,7 +188,7 @@
 
 
   {%- set identifier = model['alias'] -%}
-  {%- set tmp_identifier = identifier + '__dbt_archival_tmp' -%}
+  {%- set tmp_identifier = model['name'] + '__dbt_archival_tmp' -%}
 
   {% set tmp_table_sql -%}
 
