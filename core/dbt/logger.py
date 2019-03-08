@@ -48,7 +48,7 @@ colorama.init(wrap=colorama_wrap)
 # create a global console logger for dbt
 stdout_handler = logging.StreamHandler(colorama_stdout)
 stdout_handler.setFormatter(logging.Formatter('%(message)s'))
-stdout_handler.setLevel(INFO)
+stdout_handler.setLevel(NOTICE)
 
 logger = logging.getLogger('dbt')
 logger.addHandler(stdout_handler)

@@ -166,7 +166,7 @@ def track_run(task):
         )
     except (dbt.exceptions.NotImplementedException,
             dbt.exceptions.FailedToConnectException) as e:
-        logger.info('ERROR: {}'.format(e))
+        logger.error('ERROR: {}'.format(e))
         dbt.tracking.track_invocation_end(
             config=task.config, args=task.args, result_type="error"
         )
