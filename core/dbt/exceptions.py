@@ -1066,11 +1066,10 @@ def wrapper(model):
                 raise exc
 
         return inner
+
     return wrap
 
 
 def wrapped_exports(model):
     wrap = wrapper(model)
-    return {
-        name: wrap(export) for name, export in CONTEXT_EXPORTS.items()
-    }
+    return {name: wrap(export) for name, export in CONTEXT_EXPORTS.items()}
