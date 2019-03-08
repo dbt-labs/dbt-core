@@ -209,8 +209,7 @@ class DebugTask(BaseTask):
         self.profile_name = self._choose_profile_name()
         self.target_name = self._choose_target_name()
         try:
-            self.profile = Profile.from_args(self.args, self.profile_name,
-                                             self.cli_vars)
+            self.profile = Profile.from_args(self.args, self.profile_name)
         except dbt.exceptions.DbtConfigError as exc:
             self.profile_fail_details = str(exc)
             return red('ERROR invalid')
