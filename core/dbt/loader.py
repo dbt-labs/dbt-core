@@ -12,7 +12,7 @@ from dbt.utils import timestring
 
 from dbt.parser import MacroParser, ModelParser, SeedParser, AnalysisParser, \
     DocumentationParser, DataTestParser, HookParser, ArchiveParser, \
-    SchemaParser, ParserUtils
+    SchemaParser, ParserUtils, ArchiveBlockParser
 
 from dbt.contracts.project import ProjectList
 
@@ -35,15 +35,15 @@ class GraphLoader(object):
                              self.macro_manifest)
 
         for project_name, project in self.all_projects.items():
-            nodes, disabled = parser.load_and_parse(
+            parse_results = parser.load_and_parse(
                 package_name=project_name,
                 root_dir=project.project_root,
                 relative_dirs=getattr(project, relative_dirs_attr),
                 resource_type=resource_type,
                 **kwargs
             )
-            self.nodes.update(nodes)
-            self.disabled.extend(disabled)
+            self.nodes.update(parse_results.parsed)
+            self.disabled.extend(parse_results.disabled)
 
     def _load_macros(self, internal_manifest=None):
         # skip any projects in the internal manifest
@@ -76,6 +76,8 @@ class GraphLoader(object):
 
     def _load_nodes(self):
         self._load_sql_nodes(ModelParser, NodeType.Model, 'source_paths')
+        self._load_sql_nodes(ArchiveBlockParser, NodeType.Archive,
+                             'archive_paths')
         self._load_sql_nodes(AnalysisParser, NodeType.Analysis,
                              'analysis_paths')
         self._load_sql_nodes(DataTestParser, NodeType.Test, 'test_paths',

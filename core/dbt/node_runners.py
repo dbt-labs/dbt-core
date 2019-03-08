@@ -491,8 +491,9 @@ class TestRunner(CompileRunner):
 class ArchiveRunner(ModelRunner):
     def describe_node(self):
         cfg = self.node.get('config', {})
-        return "archive {source_database}.{source_schema}.{source_table} --> "\
-               "{target_database}.{target_schema}.{target_table}".format(**cfg)
+        return "archive {name} --> "\
+               "{target_database}.{target_schema}.{target_table}".format(
+                name=self.node.name, **cfg)
 
     def print_result_line(self, result):
         dbt.ui.printer.print_archive_result_line(result, self.node_index,
