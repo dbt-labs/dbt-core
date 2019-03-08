@@ -1,3 +1,7 @@
+import sys
+import six
+import functools
+
 from dbt.compat import builtins
 from dbt.logger import GLOBAL_LOGGER as logger
 import dbt.flags
@@ -648,3 +652,26 @@ CONTEXT_EXPORTS = {
         relation_wrong_type,
     ]
 }
+
+
+def wrapper(model):
+    def wrap(func):
+        @functools.wraps(func)
+        def inner(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except Exception:
+                exc_type, exc, exc_tb = sys.exc_info()
+                if hasattr(exc, 'node') and exc.node is None:
+                    exc.node = model
+                six.reraise(exc_type, exc, exc_tb)
+
+        return inner
+    return wrap
+
+
+def wrapped_exports(model):
+    wrap = wrapper(model)
+    return {
+        name: wrap(export) for name, export in CONTEXT_EXPORTS.items()
+    }
