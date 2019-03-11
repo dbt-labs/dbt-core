@@ -965,8 +965,8 @@ def parse_args(args, cls=DBTArgumentParser):
     )
 
     p.add_argument(
-        '--warn-error',
-        action='store_true',
+        "--warn-error",
+        action="store_true",
         default=None,
         help="""
         If dbt would normally warn, instead raise an exception. Examples
