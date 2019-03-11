@@ -50,7 +50,9 @@ This release provides [a stable API for building new adapters](https://docs.getd
 - Rewrote Postgres introspective queries to be faster on large databases ([#1192](https://github.com/fishtown-analytics/dbt/issues/1192)
 
 
-Contributors:
+### Contributors:
+Thanks for your contributions to dbt!
+
 - [@patrickgoss](https://github.com/patrickgoss) [#1193](https://github.com/fishtown-analytics/dbt/issues/1193)
 - [@brianhartsock](https://github.com/brianhartsock) [#1191](https://github.com/fishtown-analytics/dbt/pull/1191)
 - [@alexyer](https://github.com/alexyer) [#1232](https://github.com/fishtown-analytics/dbt/pull/1232)
