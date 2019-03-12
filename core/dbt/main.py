@@ -687,6 +687,14 @@ def parse_args(args):
         help='''Run schema validations at runtime. This will surface
         bugs in dbt, but may incur a performance penalty.''')
 
+    p.add_argument(
+        '--warn-error',
+        action='store_true',
+        help='''If dbt would normally warn, instead raise an exception.
+        Examples include --models that selects nothing, deprecations,
+        configurations with no associated models, invalid test configurations,
+        and missing sources/refs in tests''')
+
     # if set, run dbt in single-threaded mode: thread count is ignored, and
     # calls go through `map` instead of the thread pool. This is useful for
     # getting performance information about aspects of dbt that normally run in
