@@ -369,8 +369,6 @@ class RemoteCallable(object):
     @staticmethod
     def raise_invalid_base64(sql):
         raise rpc.invalid_params(
-            code=JSONRPCInvalidParams.CODE,
-            message=JSONRPCInvalidParams.MESSAGE,
             data={
                 'message': 'invalid base64-encoded sql input',
                 'sql': str(sql),

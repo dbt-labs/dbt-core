@@ -31,11 +31,11 @@ class RPCException(JSONRPCDispatchException):
         return cls(err.code, err.message, err.data, err.data.get('logs'))
 
 
-def invalid_params(err, logs):
+def invalid_params(data):
     return RPCException(
-        code=JSONRPCInvalidParams.code,
+        code=JSONRPCInvalidParams.CODE,
         message=JSONRPCInvalidParams.MESSAGE,
-        data={'logs': logs}
+        data=data
     )
 
 

@@ -1,13 +1,20 @@
 import unittest
-from nose.plugins.attrib import attr
 from datetime import datetime, timedelta
 import json
 import os
+
+import multiprocessing
+from base64 import standard_b64encode as b64
+import requests
+import socket
+import time
+
 
 from dbt.exceptions import CompilationException
 from test.integration.base import DBTIntegrationTest, use_profile, AnyFloat, \
     AnyStringWith
 from dbt.main import handle_and_check
+
 
 class BaseSourcesTest(DBTIntegrationTest):
     @property
@@ -260,16 +267,6 @@ class TestMalformedSources(BaseSourcesTest):
             self.run_dbt_with_vars(['run'], strict=True)
 
 
-import multiprocessing
-from base64 import standard_b64encode as b64
-import json
-import requests
-import socket
-import time
-import os
-
-
-
 class ServerProcess(multiprocessing.Process):
     def __init__(self, cli_vars=None):
         self.port = 22991
@@ -303,7 +300,7 @@ class ServerProcess(multiprocessing.Process):
             raise Exception('server never appeared!')
 
 
-@unittest.skipIf(os.name=='nt', 'Windows not supported for now')
+@unittest.skipIf(os.name == 'nt', 'Windows not supported for now')
 class TestRPCServer(BaseSourcesTest):
     def setUp(self):
         super(TestRPCServer, self).setUp()
@@ -316,10 +313,20 @@ class TestRPCServer(BaseSourcesTest):
         self._server.terminate()
         super(TestRPCServer, self).tearDown()
 
-    def build_query(self, method, kwargs, sql=None, test_request_id=1):
+    @property
+    def project_config(self):
+        return {
+            'data-paths': ['test/integration/042_sources_test/data'],
+            'quoting': {'database': True, 'schema': True, 'identifier': True},
+            'macro-paths': ['test/integration/042_sources_test/macros'],
+        }
+
+    def build_query(self, method, kwargs, sql=None, test_request_id=1, macros=None):
         if sql is not None:
             kwargs['sql'] = b64(sql.encode('utf-8')).decode('utf-8')
 
+        if macros is not None:
+            kwargs['macros'] = b64(macros.encode('utf-8')).decode('utf-8')
         return {
             'jsonrpc': '2.0',
             'method': method,
@@ -333,8 +340,8 @@ class TestRPCServer(BaseSourcesTest):
         response = requests.post(url, headers=headers, data=json.dumps(query))
         return response
 
-    def query(self, _method, _sql=None, _test_request_id=1, **kwargs):
-        built = self.build_query(_method, kwargs, _sql, _test_request_id)
+    def query(self, _method, _sql=None, _test_request_id=1, macros=None, **kwargs):
+        built = self.build_query(_method, kwargs, _sql, _test_request_id, macros)
         return self.perform_query(built)
 
     def assertResultHasTimings(self, result, *names):
@@ -425,7 +432,6 @@ class TestRPCServer(BaseSourcesTest):
             'select * from {{ source("test_source", "test_table") }}',
             name='foo'
         ).json()
-
         self.assertSuccessfulCompilationResult(
             source,
             'select * from {{ source("test_source", "test_table") }}',
@@ -433,6 +439,30 @@ class TestRPCServer(BaseSourcesTest):
                 self.default_database,
                 self.unique_schema())
             )
+
+        macro = self.query(
+            'compile',
+            'select {{ my_macro() }}',
+            name='foo',
+            macros='{% macro my_macro() %}1 as id{% endmacro %}'
+        ).json()
+        self.assertSuccessfulCompilationResult(
+            macro,
+            'select {{ my_macro() }}',
+            compiled_sql='select 1 as id'
+        )
+
+        macro_override = self.query(
+            'compile',
+            'select {{ happy_little_macro() }}',
+            name='foo',
+            macros='{% macro override_me() %}2 as id{% endmacro %}'
+        ).json()
+        self.assertSuccessfulCompilationResult(
+            macro_override,
+            'select {{ happy_little_macro() }}',
+            compiled_sql='select 2 as id'
+        )
 
     @use_profile('postgres')
     def test_run(self):
@@ -470,7 +500,6 @@ class TestRPCServer(BaseSourcesTest):
             'select * from {{ source("test_source", "test_table") }} order by updated_at limit 1',
             name='foo'
         ).json()
-
         self.assertSuccessfulRunResult(
             source,
             'select * from {{ source("test_source", "test_table") }} order by updated_at limit 1',
@@ -481,6 +510,32 @@ class TestRPCServer(BaseSourcesTest):
                 'column_names': ['favorite_color', 'id', 'first_name', 'email', 'ip_address', 'updated_at'],
                 'rows': [['blue', 38.0, 'Gary',  'gray11@statcounter.com', "'40.193.124.56'", '1970-01-27T10:04:51']],
             }
+        )
+
+        macro = self.query(
+            'run',
+            'select {{ my_macro() }}',
+            name='foo',
+            macros='{% macro my_macro() %}1 as id{% endmacro %}'
+        ).json()
+        self.assertSuccessfulRunResult(
+            macro,
+            raw_sql='select {{ my_macro() }}',
+            compiled_sql='select 1 as id',
+            table={'column_names': ['id'], 'rows': [[1.0]]}
+        )
+
+        macro_override = self.query(
+            'run',
+            'select {{ happy_little_macro() }}',
+            name='foo',
+            macros='{% macro override_me() %}2 as id{% endmacro %}'
+        ).json()
+        self.assertSuccessfulRunResult(
+            macro_override,
+            raw_sql='select {{ happy_little_macro() }}',
+            compiled_sql='select 2 as id',
+            table={'column_names': ['id'], 'rows': [[2.0]]}
         )
 
     @use_profile('postgres')
@@ -525,6 +580,17 @@ class TestRPCServer(BaseSourcesTest):
         )
         self.assertIn('logs', error_data)
         self.assertTrue(len(error_data['logs']) > 0)
+
+        macro_no_override = self.query(
+            'run',
+            'select {{ happy_little_macro() }}',
+            name='foo',
+        ).json()
+        self.assertIsErrorWithCode(macro_no_override, 10003)
+        self.assertEqual(error['message'], 'Database Error')
+        self.assertIn('data', error)
+        error_data = error['data']
+        self.assertEqual(error_data['type'], 'DatabaseException')
 
     @use_profile('postgres')
     def test_timeout(self):
