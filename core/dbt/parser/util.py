@@ -231,12 +231,15 @@ class ParserUtils(object):
         return manifest
 
     @classmethod
-    def add_new_refs(cls, manifest, current_project, node):
+    def add_new_refs(cls, manifest, current_project, node, macros):
         """Given a new node that is not in the manifest, copy the manifest and
         insert the new node into it as if it were part of regular ref
         processing
         """
         manifest = manifest.deepcopy(config=current_project)
+        # it's ok for macros to silently override a local project macro name
+        manifest.macros.update(macros)
+
         if node.unique_id in manifest.nodes:
             # this should be _impossible_ due to the fact that rpc calls get
             # a unique ID that starts with 'rpc'!
