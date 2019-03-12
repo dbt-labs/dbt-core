@@ -7,7 +7,7 @@ from dbt.config import RuntimeConfig, Project
 from dbt.config.profile import read_profile, PROFILES_DIR
 from dbt import tracking
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.utils import to_string
+from dbt.compat import to_string
 import dbt.exceptions
 
 
@@ -52,16 +52,16 @@ class BaseTask(object):
         try:
             config = cls.ConfigType.from_args(args)
         except dbt.exceptions.DbtProjectError as exc:
-            logger.info("Encountered an error while reading the project:")
-            logger.info(to_string(exc))
+            logger.error("Encountered an error while reading the project:")
+            logger.error("  ERROR: {}".format(str(exc)))
 
             tracking.track_invalid_invocation(
                 args=args,
                 result_type=exc.result_type)
             raise dbt.exceptions.RuntimeException('Could not run dbt')
         except dbt.exceptions.DbtProfileError as exc:
-            logger.info("Encountered an error while reading profiles:")
-            logger.info("  ERROR {}".format(str(exc)))
+            logger.error("Encountered an error while reading profiles:")
+            logger.error("  ERROR {}".format(str(exc)))
 
             all_profiles = read_profiles(args.profiles_dir).keys()
 

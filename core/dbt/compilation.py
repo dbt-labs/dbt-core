@@ -45,7 +45,7 @@ def print_compile_stats(stats):
     stat_line = ", ".join(
         ["{} {}".format(ct, names.get(t)) for t, ct in results.items()])
 
-    logger.info("Found {}".format(stat_line))
+    logger.notice("Found {}".format(stat_line))
 
 
 def _add_prepended_cte(prepended_ctes, new_cte):

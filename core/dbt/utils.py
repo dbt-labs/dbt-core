@@ -1,18 +1,14 @@
-from datetime import datetime
-from decimal import Decimal
-
 import collections
 import copy
+import datetime
 import functools
 import hashlib
 import itertools
 import json
-import numbers
 import os
 
 import dbt.exceptions
 
-from dbt.include.global_project import PACKAGES
 from dbt.compat import basestring, DECIMALS
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
@@ -442,7 +438,7 @@ def add_ephemeral_model_prefix(s):
 def timestring():
     """Get the current datetime as an RFC 3339-compliant string"""
     # isoformat doesn't include the mandatory trailing 'Z' for UTC.
-    return datetime.utcnow().isoformat() + 'Z'
+    return datetime.datetime.utcnow().isoformat() + 'Z'
 
 
 class JSONEncoder(json.JSONEncoder):
@@ -453,8 +449,9 @@ class JSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, DECIMALS):
             return float(obj)
-        if isinstance(obj, datetime):
+        if isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
             return obj.isoformat()
+
         return super(JSONEncoder, self).default(obj)
 
 

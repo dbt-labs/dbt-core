@@ -15,6 +15,7 @@ import dbt.ui.printer
 import dbt.flags
 import dbt.schema
 import dbt.writer
+from dbt import rpc
 
 import threading
 import time
@@ -42,6 +43,15 @@ def track_model_run(index, num_nodes, run_model_result):
         "hashed_contents": dbt.utils.get_hashed_contents(run_model_result.node),  # noqa
         "timing": run_model_result.timing,
     })
+
+
+class ExecutionContext(object):
+    """During execution and error handling, dbt makes use of mutable state:
+    timing information and the newest (compiled vs executed) form of the node.
+    """
+    def __init__(self, node):
+        self.timing = []
+        self.node = node
 
 
 class BaseRunner(object):
@@ -115,71 +125,78 @@ class BaseRunner(object):
             timing_info=timing_info
         )
 
-    def safe_run(self, manifest):
-        catchable_errors = (CompilationException, RuntimeException)
+    def compile_and_execute(self, manifest, ctx):
+        result = None
+        self.adapter.acquire_connection(self.node.get('name'))
+        with collect_timing_info('compile') as timing_info:
+            # if we fail here, we still have a compiled node to return
+            # this has the benefit of showing a build path for the errant
+            # model
+            ctx.node = self.compile(manifest)
+        ctx.timing.append(timing_info)
 
-        # result = self.DefaultResult(self.node)
+        # for ephemeral nodes, we only want to compile, not run
+        if not ctx.node.is_ephemeral_model:
+            with collect_timing_info('execute') as timing_info:
+                result = self.run(ctx.node, manifest)
+                ctx.node = result.node
+
+            ctx.timing.append(timing_info)
+
+        return result
+
+    def _handle_catchable_exception(self, e, ctx):
+        if e.node is None:
+            e.node = ctx.node
+
+        return dbt.compat.to_string(e)
+
+    def _handle_internal_exception(self, e, ctx):
+        build_path = self.node.build_path
+        prefix = 'Internal error executing {}'.format(build_path)
+
+        error = "{prefix}\n{error}\n\n{note}".format(
+                     prefix=dbt.ui.printer.red(prefix),
+                     error=str(e).strip(),
+                     note=INTERNAL_ERROR_STRING)
+        logger.debug(error)
+        return dbt.compat.to_string(e)
+
+    def _handle_generic_exception(self, e, ctx):
+        node_description = self.node.get('build_path')
+        if node_description is None:
+            node_description = self.node.unique_id
+        prefix = "Unhandled error while executing {description}".format(
+                    description=node_description)
+
+        error = "{prefix}\n{error}".format(
+                     prefix=dbt.ui.printer.red(prefix),
+                     error=str(e).strip())
+
+        logger.error(error)
+        logger.debug('', exc_info=True)
+        return dbt.compat.to_string(e)
+
+    def handle_exception(self, e, ctx):
+        catchable_errors = (CompilationException, RuntimeException)
+        if isinstance(e, catchable_errors):
+            error = self._handle_catchable_exception(e, ctx)
+        elif isinstance(e, InternalException):
+            error = self._handle_internal_exception(e, ctx)
+        else:
+            error = self._handle_generic_exception(e, ctx)
+        return error
+
+    def safe_run(self, manifest):
         started = time.time()
-        timing = []
+        ctx = ExecutionContext(self.node)
         error = None
-        node = self.node
         result = None
 
         try:
-            self.adapter.acquire_connection(self.node.get('name'))
-            with collect_timing_info('compile') as timing_info:
-                # if we fail here, we still have a compiled node to return
-                # this has the benefit of showing a build path for the errant
-                # model
-                node = self.compile(manifest)
-
-            timing.append(timing_info)
-
-            # for ephemeral nodes, we only want to compile, not run
-            if not node.is_ephemeral_model:
-                with collect_timing_info('execute') as timing_info:
-                    result = self.run(node, manifest)
-                    node = result.node
-
-                timing.append(timing_info)
-
-            # result.extend(item.serialize() for item in timing)
-
-        except catchable_errors as e:
-            if e.node is None:
-                e.node = node
-
-            error = dbt.compat.to_string(e)
-
-        except InternalException as e:
-            build_path = self.node.build_path
-            prefix = 'Internal error executing {}'.format(build_path)
-
-            error = "{prefix}\n{error}\n\n{note}".format(
-                prefix=dbt.ui.printer.red(prefix),
-                error=str(e).strip(),
-                note=INTERNAL_ERROR_STRING
-            )
-            logger.debug(error)
-            error = dbt.compat.to_string(e)
-
+            result = self.compile_and_execute(manifest, ctx)
         except Exception as e:
-            node_description = self.node.get('build_path')
-            if node_description is None:
-                node_description = self.node.unique_id
-            prefix = "Unhandled error while executing {description}".format(
-                description=node_description
-            )
-
-            error = "{prefix}\n{error}".format(
-                prefix=dbt.ui.printer.red(prefix),
-                error=str(e).strip()
-            )
-
-            logger.error(error)
-            logger.debug('', exc_info=True)
-            error = dbt.compat.to_string(e)
-
+            error = self.handle_exception(e, ctx)
         finally:
             exc_str = self._safe_release_connection()
 
@@ -190,11 +207,11 @@ class BaseRunner(object):
 
         if error is not None:
             # we could include compile time for runtime errors here
-            result = self.error_result(node, error, started, [])
+            result = self.error_result(ctx.node, error, started, [])
         elif result is not None:
-            result = self.from_run_result(result, started, timing)
+            result = self.from_run_result(result, started, ctx.timing)
         else:
-            result = self.ephemeral_result(node, started, timing)
+            result = self.ephemeral_result(ctx.node, started, ctx.timing)
         return result
 
     def _safe_release_connection(self):
@@ -505,6 +522,14 @@ class RPCCompileRunner(CompileRunner):
         super(RPCCompileRunner, self).__init__(config, adapter, node,
                                                node_index, num_nodes)
 
+    def handle_exception(self, e, ctx):
+        if isinstance(e, dbt.exceptions.Exception):
+            return rpc.dbt_error(e)
+        elif isinstance(e, rpc.RPCException):
+            return e
+        else:
+            return rpc.server_error(e)
+
     def before_execute(self):
         pass
 
@@ -522,10 +547,10 @@ class RPCCompileRunner(CompileRunner):
         )
 
     def error_result(self, node, error, start_time, timing_info):
-        raise dbt.exceptions.RPCException(error)
+        raise error
 
     def ephemeral_result(self, node, start_time, timing_info):
-        raise dbt.exceptions.NotImplementedException(
+        raise NotImplementedException(
             'cannot execute ephemeral nodes remotely!'
         )
 

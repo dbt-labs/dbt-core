@@ -6,6 +6,7 @@ from dbt.loader import load_all_projects, GraphLoader
 from dbt.node_runners import CompileRunner, RPCCompileRunner
 from dbt.node_types import NodeType
 from dbt.parser.analysis import RPCCallParser
+from dbt.parser.macros import MacroParser
 from dbt.parser.util import ParserUtils
 import dbt.ui.printer
 
@@ -36,8 +37,7 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
     METHOD_NAME = 'compile'
 
     def __init__(self, args, config):
-        super(CompileTask, self).__init__(args, config)
-        self.parser = None
+        super(RemoteCompileTask, self).__init__(args, config)
         self._base_manifest = GraphLoader.load_all(
             config,
             internal_manifest=get_adapter(config).check_internal_manifest()
@@ -56,15 +56,28 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
         self._skipped_children = {}
         self._raise_next_tick = None
 
-    def handle_request(self, name, sql):
-        self.parser = RPCCallParser(
+    def handle_request(self, name, sql, macros=None):
+        request_path = os.path.join(self.config.target_path, 'rpc', name)
+        all_projects = load_all_projects(self.config)
+        macro_overrides = {}
+        if macros is not None:
+            macros = self.decode_sql(macros)
+            macro_parser = MacroParser(self.config, all_projects)
+            macro_overrides.update(macro_parser.parse_macro_file(
+                macro_file_path='from remote system',
+                macro_file_contents=macros,
+                root_path=request_path,
+                package_name=self.config.project_name,
+                resource_type=NodeType.Macro
+            ))
+
+        rpc_parser = RPCCallParser(
             self.config,
-            all_projects=load_all_projects(self.config),
+            all_projects=all_projects,
             macro_manifest=self._base_manifest
         )
 
         sql = self.decode_sql(sql)
-        request_path = os.path.join(self.config.target_path, 'rpc', name)
         node_dict = {
             'name': name,
             'root_path': request_path,
@@ -74,13 +87,16 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
             'package_name': self.config.project_name,
             'raw_sql': sql,
         }
-        unique_id, node = self.parser.parse_sql_node(node_dict)
+
+        unique_id, node = rpc_parser.parse_sql_node(node_dict)
 
         self.manifest = ParserUtils.add_new_refs(
             manifest=self._base_manifest,
             current_project=self.config,
-            node=node
+            node=node,
+            macros=macro_overrides
         )
+
         # don't write our new, weird manifest!
         self.linker = compile_manifest(self.config, self.manifest, write=False)
         selected_uids = [node.unique_id]
