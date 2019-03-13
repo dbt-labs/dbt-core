@@ -25,62 +25,68 @@ class BlockTag:
         self.full_block = full_block
 
     def __str__(self):
-        return 'BlockTag({!r}, {!r})'.format(self.block_type_name,
-                                             self.block_name)
+        return "BlockTag({!r}, {!r})".format(self.block_type_name, self.block_name)
 
     def __repr__(self):
         return str(self)
 
     @property
     def end_block_type_name(self):
-        return 'end{}'.format(self.block_type_name)
+        return "end{}".format(self.block_type_name)
 
     def end_pat(self):
         # we don't want to use string formatting here because jinja uses most
         # of the string formatting operators in its syntax...
-        pattern = ''.join((
-            r'(?P<endblock>((?:\s*\{\%\-|\{\%)\s*',
-            self.end_block_type_name,
-            r'\s*(?:\-\%\}\s*|\%\})))',
-        ))
+        pattern = "".join(
+            (
+                r"(?P<endblock>((?:\s*\{\%\-|\{\%)\s*",
+                self.end_block_type_name,
+                r"\s*(?:\-\%\}\s*|\%\})))",
+            )
+        )
         return regex(pattern)
 
 
 Tag = namedtuple('Tag', 'block_type_name block_name start end')
 
 
-_NAME_PATTERN = r'[A-Za-z_][A-Za-z_0-9]*'
+_NAME_PATTERN = r"[A-Za-z_][A-Za-z_0-9]*"
 
-COMMENT_START_PATTERN = regex(r'(?:(?P<comment_start>(\s*\{\#)))')
-COMMENT_END_PATTERN = regex(r'(.*?)(\s*\#\})')
-RAW_START_PATTERN = regex(
-    r'(?:\s*\{\%\-|\{\%)\s*(?P<raw_start>(raw))\s*(?:\-\%\}\s*|\%\})'
+COMMENT_START_PATTERN = regex(r"(?:(?P<comment_start>(\s*\{\#)))")
+COMMENT_END_PATTERN = regex(r"(.*?)(\s*\#\})")
+RAW_START_PATTERN = regex(r"(?:\s*\{\%\-|\{\%)\s*(?P<raw_start>(raw))\s*(?:\-\%\}\s*|\%\})")
+EXPR_START_PATTERN = regex(r"(?P<expr_start>(\{\{\s*))")
 )
 EXPR_START_PATTERN = regex(r'(?P<expr_start>(\{\{\s*))')
 EXPR_END_PATTERN = regex(r'(?P<expr_end>(\s*\}\}))')
 
-BLOCK_START_PATTERN = regex(''.join((
-    r'(?:\s*\{\%\-|\{\%)\s*',
-    r'(?P<block_type_name>({}))'.format(_NAME_PATTERN),
-    # some blocks have a 'block name'.
-    r'(?:\s+(?P<block_name>({})))?'.format(_NAME_PATTERN),
-)))
+BLOCK_START_PATTERN = regex(
+    "".join(
+        (
+            r"(?:\s*\{\%\-|\{\%)\s*",
+            r"(?P<block_type_name>({}))".format(_NAME_PATTERN),
+            # some blocks have a 'block name'.
+            r"(?:\s+(?P<block_name>({})))?".format(_NAME_PATTERN),
+        )
+    )
+)
 
 
 RAW_BLOCK_PATTERN = regex(''.join((
     r'(?:\s*\{\%\-|\{\%)\s*raw\s*(?:\-\%\}\s*|\%\})',
     r'(?:.*?)',
     r'(?:\s*\{\%\-|\{\%)\s*endraw\s*(?:\-\%\}\s*|\%\})',
-)))
+            r"(?:.*?)",
+            r"(?:\s*\{\%\-|\{\%)\s*endraw\s*(?:\-\%\}\s*|\%\})",
+        )
+    )
+)
 
 TAG_CLOSE_PATTERN = regex(r'(?:(?P<tag_close>(\-\%\}\s*|\%\})))')
 
 # stolen from jinja's lexer. Note that we've consumed all prefix whitespace by
 # the time we want to use this.
-STRING_PATTERN = regex(
-    r"(?P<string>('([^'\\]*(?:\\.[^'\\]*)*)'|"
-    r'"([^"\\]*(?:\\.[^"\\]*)*)"))'
-)
+STRING_PATTERN = regex(r"(?P<string>('([^'\\]*(?:\\.[^'\\]*)*)'|" r'"([^"\\]*(?:\\.[^"\\]*)*)"))')
 
 QUOTE_START_PATTERN = regex(r'''(?P<quote>(['"]))''')
 
@@ -120,7 +126,7 @@ class TagIterator:
         matches = []
         for pattern in patterns:
             # default to 'search', but sometimes we want to 'match'.
-            if kwargs.get('method', 'search') == 'search':
+            if kwargs.get("method", "search") == "search":
                 match = self._search(pattern)
             else:
                 match = self._match(pattern)
