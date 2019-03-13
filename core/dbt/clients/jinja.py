@@ -12,8 +12,7 @@ import jinja2.sandbox
 import dbt.compat
 import dbt.exceptions
 
-from dbt.node_types import NodeType
-from dbt.utils import AttrDict
+from dbt.clients._jinja_blocks import BlockIterator
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -281,3 +280,7 @@ def get_rendered(string, ctx, node=None,
 
 def undefined_error(msg):
     raise jinja2.exceptions.UndefinedError(msg)
+
+
+def extract_toplevel_blocks(data):
+    return BlockIterator(data).lex_for_blocks()
