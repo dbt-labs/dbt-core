@@ -48,7 +48,7 @@ def docs(unparsed, docrefs, column_name=None):
 def source(db_wrapper, model, config, manifest):
     def do_source(source_name, table_name):
         model.sources.append([source_name, table_name])
-        return ''
+        return db_wrapper.adapter.Relation.create_from_node(config, model)
 
     return do_source
 

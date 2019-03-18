@@ -146,7 +146,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             "diststyle": {
               "id": "diststyle",
               "label": "Dist Style",
-              "value": "EVEN",
+              "value": AnyStringWith(None),
               "description": "Distribution style or distribution key column, if key distribution is defined.",
               "include": True
             },
