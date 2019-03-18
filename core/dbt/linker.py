@@ -174,33 +174,18 @@ class GraphQueue(object):
         self.inner.join()
 
 
-def _remove_node_from_graph(graph, node):
-    # find all our direct parents in the graph, and all our direct
-    # children. note: do not use the _iter forms here, we need actual lists
-    # as we'll be mutating the graph again
-    parents = graph.predecessors(node)
-    children = graph.successors(node)
-    # remove the actual node
-    graph.remove_node(node)
-    # now redraw the edges, so that if A -> B -> C and B is to be
-    # removed, we will now have A -> C
-    for parent in parents:
-        for child in children:
-            graph.add_edge(parent, child)
-
-
 def _subset_graph(graph, include_nodes):
     """Create and return a new graph that is a shallow copy of graph but with
     only the nodes in include_nodes. Transitive edges across removed nodes are
     preserved as explicit new edges.
     """
-    new_graph = nx.DiGraph(graph)
+    new_graph = nx.algorithms.transitive_closure(graph)
 
     include_nodes = set(include_nodes)
 
     for node in graph.nodes():
         if node not in include_nodes:
-            _remove_node_from_graph(new_graph, node)
+            new_graph.remove_node(node)
 
     for node in include_nodes:
         if node not in new_graph:
