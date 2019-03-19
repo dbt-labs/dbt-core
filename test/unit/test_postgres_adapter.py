@@ -48,21 +48,25 @@ class TestPostgresAdapter(unittest.TestCase):
             inject_adapter('postgres', self._adapter)
         return self._adapter
 
-    def test_acquire_connection_validations(self):
+    @mock.patch('dbt.adapters.postgres.connections.psycopg2')
+    def test_acquire_connection_validations(self, psycopg2):
         try:
             connection = self.adapter.acquire_connection('dummy')
-            self.assertEquals(connection.type, 'postgres')
         except ValidationException as e:
             self.fail('got ValidationException: {}'.format(str(e)))
         except BaseException as e:
-            self.fail('validation failed with unknown exception: {}'
+            self.fail('acquiring connection failed with unknown exception: {}'
                       .format(str(e)))
+        self.assertEquals(connection.type, 'postgres')
+        psycopg2.connect.assert_called_once()
 
-    def test_acquire_connection(self):
+    @mock.patch('dbt.adapters.postgres.connections.psycopg2')
+    def test_acquire_connection(self, psycopg2):
         connection = self.adapter.acquire_connection('dummy')
 
         self.assertEquals(connection.state, 'open')
         self.assertNotEquals(connection.handle, None)
+        psycopg2.connect.assert_called_once()
 
     def test_cancel_open_connections_empty(self):
         self.assertEqual(len(list(self.adapter.cancel_open_connections())), 0)

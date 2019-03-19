@@ -209,7 +209,11 @@ class SchemaParserTest(BaseParserTest):
             database='test',
             schema='foo',
             identifier='bar',
-            resource_type='source'
+            resource_type='source',
+            quoting={
+                'schema': True,
+                'identifier': False,
+            }
         )
 
         self._expected_source_tests = [
@@ -471,6 +475,9 @@ class SchemaParserTest(BaseParserTest):
                 - name: my_source
                   loader: some_loader
                   description: my source description
+                  quoting:
+                    schema: True
+                    identifier: True
                   freshness:
                     warn_after:
                         count: 10
@@ -479,7 +486,7 @@ class SchemaParserTest(BaseParserTest):
                         count: 20
                         period: hour
                   loaded_at_field: something
-                  schema: foo
+                  schema: '{{ var("test_schema_name") }}'
                   tables:
                     - name: my_table
                       description: "my table description"
@@ -488,6 +495,8 @@ class SchemaParserTest(BaseParserTest):
                         warn_after:
                             count: 7
                             period: hour
+                      quoting:
+                        identifier: False
                       columns:
                         - name: id
                           description: user ID
@@ -589,6 +598,8 @@ class SchemaParserTest(BaseParserTest):
     def test__mixed_schema(self):
         test_yml = yaml.safe_load('''
             version: 2
+            quoting:
+              database: True
             models:
                 - name: model_one
                   description: blah blah
@@ -612,6 +623,9 @@ class SchemaParserTest(BaseParserTest):
                 - name: my_source
                   loader: some_loader
                   description: my source description
+                  quoting:
+                    schema: True
+                    identifier: True
                   freshness:
                     warn_after:
                         count: 10
@@ -629,6 +643,8 @@ class SchemaParserTest(BaseParserTest):
                         warn_after:
                             count: 7
                             period: hour
+                      quoting:
+                        identifier: False
                       columns:
                         - name: id
                           description: user ID
@@ -684,6 +700,9 @@ class SchemaParserTest(BaseParserTest):
                 - name: my_source
                   loader: some_loader
                   description: my source description
+                  quoting:
+                    schema: True
+                    identifier: True
                   freshness:
                     warn_after:
                         count: 10
@@ -701,6 +720,8 @@ class SchemaParserTest(BaseParserTest):
                         warn_after:
                             count: 7
                             period: hour
+                      quoting:
+                        identifier: False
                       columns:
                         - name: id
                           description: user ID
@@ -741,6 +762,9 @@ class SchemaParserTest(BaseParserTest):
                 - name: my_source
                   loader: some_loader
                   description: my source description
+                  quoting:
+                    schema: True
+                    identifier: True
                   freshness:
                     warn_after:
                         count: 10
@@ -758,6 +782,8 @@ class SchemaParserTest(BaseParserTest):
                         warn_after:
                             count: 7
                             period: hour
+                      quoting:
+                        identifier: False
                       columns:
                         - name: id
                           description: user ID

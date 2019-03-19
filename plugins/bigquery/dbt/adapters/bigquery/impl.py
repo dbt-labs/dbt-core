@@ -116,13 +116,14 @@ class BigQueryAdapter(BaseAdapter):
         # This is a no-op on BigQuery
         pass
 
-    def list_relations_without_caching(self, database, schema,
+    def list_relations_without_caching(self, information_schema, schema,
                                        model_name=None):
         connection = self.connections.get(model_name)
         client = connection.handle
 
-        bigquery_dataset = self.connections.dataset(database, schema,
-                                                    connection)
+        bigquery_dataset = self.connections.dataset(
+            information_schema.database, schema, connection
+        )
 
         all_tables = client.list_tables(
             bigquery_dataset,
