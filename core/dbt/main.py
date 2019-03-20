@@ -640,6 +640,14 @@ def _build_source_snapshot_freshness_subparser(subparsers, base_subparser):
         target/sources.json
         """
     )
+    sub.add_argument(
+        '--threads',
+        type=int,
+        required=False,
+        help="""
+        Specify number of threads to use. Overrides settings in profiles.yml
+        """
+    )
     sub.set_defaults(cls=freshness_task.FreshnessTask,
                      which='snapshot-freshness')
     return sub
