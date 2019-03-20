@@ -753,7 +753,7 @@ def _build_source_freshness_subparser(subparsers, base_subparser):
         """,
     )
     sub.add_argument(
-        '--threads',
+        "--threads",
         type=int,
         required=False,
         help="""
