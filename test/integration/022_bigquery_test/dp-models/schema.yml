@@ -1,18 +1,30 @@
-
-# check that this exists
-partitioned_simple:
-    constraints:
-        unique:
-            - id
-        not_null:
-            - id
-
-confirmation:
-    constraints:
-        accepted_values:
-            - {field: cast(day_1 as string), values:[1] }
-            - {field: cast(day_2 as string), values:[1] }
-            - {field: cast(day_3 as string), values:[1] }
-            - {field: cast(count_days as string), values:[3] }
-
-
+version: 2
+models:
+- name: partitioned_simple
+  columns:
+  - name: id
+    tests:
+    - not_null
+    - unique
+- name: confirmation
+  columns:
+  - name: cast(count_days as string)
+    tests:
+    - accepted_values:
+        values:
+        - 3
+  - name: cast(day_1 as string)
+    tests:
+    - accepted_values:
+        values:
+        - 1
+  - name: cast(day_2 as string)
+    tests:
+    - accepted_values:
+        values:
+        - 1
+  - name: cast(day_3 as string)
+    tests:
+    - accepted_values:
+        values:
+        - 1

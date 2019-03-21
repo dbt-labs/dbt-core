@@ -1,6 +1,9 @@
-
-test_vars:
-    constraints:
-        accepted_values:
-            - {field: 'field', values: ['override']}
-
+version: 2
+models:
+- name: test_vars
+  columns:
+  - name: field
+    tests:
+    - accepted_values:
+        values:
+        - override

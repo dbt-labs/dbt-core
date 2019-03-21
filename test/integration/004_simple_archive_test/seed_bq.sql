@@ -1,4 +1,4 @@
-create table {schema}.seed (
+create table {database}.{schema}.seed (
 	`id` INT64,
 	`first_name` STRING,
 	`last_name` STRING,
@@ -8,7 +8,7 @@ create table {schema}.seed (
 	`updated_at` TIMESTAMP
 );
 
-create table {schema}.archive_expected (
+create table {database}.{schema}.archive_expected (
 	`id` INT64,
 	`first_name` STRING,
 	`last_name` STRING,
@@ -26,7 +26,7 @@ create table {schema}.archive_expected (
 
 
 -- seed inserts
-insert {schema}.seed (`id`, `first_name`, `last_name`, `email`, `gender`, `ip_address`, `updated_at`) values
+insert {database}.{schema}.seed (`id`, `first_name`, `last_name`, `email`, `gender`, `ip_address`, `updated_at`) values
 (1, 'Judith', 'Kennedy', 'jkennedy0@phpbb.com', 'Female', '54.60.24.128', '2015-12-24 12:19:28'),
 (2, 'Arthur', 'Kelly', 'akelly1@eepurl.com', 'Male', '62.56.24.215', '2015-10-28 16:22:15'),
 (3, 'Rachel', 'Moreno', 'rmoreno2@msu.edu', 'Female', '31.222.249.23', '2016-04-05 02:05:30'),
@@ -50,7 +50,7 @@ insert {schema}.seed (`id`, `first_name`, `last_name`, `email`, `gender`, `ip_ad
 
 
 -- populate archive table
-insert {schema}.archive_expected (
+insert {database}.{schema}.archive_expected (
     `id`,
     `first_name`,
     `last_name`,
@@ -77,5 +77,5 @@ select
     cast(null as timestamp) as valid_to,
     `updated_at` as dbt_updated_at,
     to_hex(md5(concat(cast(`id` as string), '-', `first_name`, '|', cast(`updated_at` as string)))) as scd_id
-from {schema}.seed;
+from {database}.{schema}.seed;
 

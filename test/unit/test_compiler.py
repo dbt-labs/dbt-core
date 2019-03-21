@@ -53,6 +53,7 @@ class CompilerTest(unittest.TestCase):
             nodes={
                 'model.root.view': CompiledNode(
                     name='view',
+                    database='dbt',
                     schema='analytics',
                     alias='view',
                     resource_type='model',
@@ -62,6 +63,7 @@ class CompilerTest(unittest.TestCase):
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [
                             'model.root.ephemeral'
@@ -85,6 +87,7 @@ class CompilerTest(unittest.TestCase):
                 ),
                 'model.root.ephemeral': CompiledNode(
                     name='ephemeral',
+                    database='dbt',
                     schema='analytics',
                     alias='view',
                     resource_type='model',
@@ -94,6 +97,7 @@ class CompilerTest(unittest.TestCase):
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -140,6 +144,7 @@ class CompilerTest(unittest.TestCase):
             nodes={
                 'model.root.view': CompiledNode(
                     name='view',
+                    database='dbt',
                     schema='analytics',
                     alias='view',
                     resource_type='model',
@@ -149,6 +154,7 @@ class CompilerTest(unittest.TestCase):
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -168,6 +174,7 @@ class CompilerTest(unittest.TestCase):
                 ),
                 'model.root.view_no_cte': CompiledNode(
                     name='view_no_cte',
+                    database='dbt',
                     schema='analytics',
                     alias='view_no_cte',
                     resource_type='model',
@@ -177,6 +184,7 @@ class CompilerTest(unittest.TestCase):
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -235,6 +243,7 @@ class CompilerTest(unittest.TestCase):
             nodes={
                 'model.root.view': CompiledNode(
                     name='view',
+                    database='dbt',
                     schema='analytics',
                     alias='view',
                     resource_type='model',
@@ -244,6 +253,7 @@ class CompilerTest(unittest.TestCase):
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [
                             'model.root.ephemeral'
@@ -265,6 +275,7 @@ class CompilerTest(unittest.TestCase):
                 ),
                 'model.root.ephemeral': CompiledNode(
                     name='ephemeral',
+                    database='dbt',
                     schema='analytics',
                     alias='ephemeral',
                     resource_type='model',
@@ -274,6 +285,7 @@ class CompilerTest(unittest.TestCase):
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -326,6 +338,7 @@ class CompilerTest(unittest.TestCase):
             nodes={
                 'model.root.view': CompiledNode(
                     name='view',
+                    database='dbt',
                     schema='analytics',
                     alias='view',
                     resource_type='model',
@@ -335,6 +348,7 @@ class CompilerTest(unittest.TestCase):
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [
                             'model.root.ephemeral'
@@ -356,6 +370,7 @@ class CompilerTest(unittest.TestCase):
                 ),
                 'model.root.ephemeral': CompiledNode(
                     name='ephemeral',
+                    database='dbt',
                     schema='analytics',
                     alias='ephemeral',
                     resource_type='model',
@@ -365,6 +380,7 @@ class CompilerTest(unittest.TestCase):
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []
@@ -384,6 +400,7 @@ class CompilerTest(unittest.TestCase):
                 ),
                 'model.root.ephemeral_level_two': CompiledNode(
                     name='ephemeral_level_two',
+                    database='dbt',
                     schema='analytics',
                     alias='ephemeral_level_two',
                     resource_type='model',
@@ -393,6 +410,7 @@ class CompilerTest(unittest.TestCase):
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
+                    sources=[],
                     depends_on={
                         'nodes': [],
                         'macros': []

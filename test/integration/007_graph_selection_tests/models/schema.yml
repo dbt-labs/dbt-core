@@ -1,15 +1,17 @@
-
-emails:
-    constraints:
-        unique:
-            - email
-
-users:
-    constraints:
-        unique:
-            - id
-
-users_rollup:
-    constraints:
-        unique:
-            - gender
+version: 2
+models:
+- name: emails
+  columns:
+  - name: email
+    tests:
+    - unique
+- name: users
+  columns:
+  - name: id
+    tests:
+    - unique
+- name: users_rollup
+  columns:
+  - name: gender
+    tests:
+    - unique

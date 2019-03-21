@@ -1,14 +1,5 @@
-Jinja2>=2.10
-PyYAML>=3.11
-psycopg2>=2.7.5,<2.8
-sqlparse==0.2.3
-networkx==1.11
-minimal-snowplow-tracker==0.0.1
-snowflake-connector-python>=1.4.9
-colorama==0.3.9
-google-cloud-bigquery>=1.0.0,<2
-requests>=2.18.0,<3
-agate>=1.6,<2
-jsonschema==2.6.0
-boto3>=1.6.23,<1.8.0
-botocore>=1.9.23,<1.11.0
+-e ./core
+-e ./plugins/postgres
+-e ./plugins/redshift
+-e ./plugins/snowflake
+-e ./plugins/bigquery

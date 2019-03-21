@@ -1,6 +1,18 @@
 import unittest
 
+import decimal
 import dbt.schema
+
+class TestStringType(unittest.TestCase):
+
+    def test__character_type(self):
+        col = dbt.schema.Column(
+            'fieldname',
+            'character',
+            char_size=10
+        )
+
+        self.assertEqual(col.data_type, 'character varying(10)')
 
 
 class TestNumericType(unittest.TestCase):
@@ -9,7 +21,8 @@ class TestNumericType(unittest.TestCase):
         col = dbt.schema.Column(
             'fieldname',
             'numeric',
-            numeric_size='12,2')
+            numeric_precision=decimal.Decimal('12'),
+            numeric_scale=decimal.Decimal('2'))
 
         self.assertEqual(col.data_type, 'numeric(12,2)')
 
@@ -18,6 +31,6 @@ class TestNumericType(unittest.TestCase):
         col = dbt.schema.Column(
             'fieldname',
             'numeric',
-            numeric_size=None)
+            numeric_precision=None)
 
         self.assertEqual(col.data_type, 'numeric')

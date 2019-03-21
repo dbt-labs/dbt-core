@@ -21,7 +21,7 @@ class TestTimezones(DBTIntegrationTest):
                     'dev': {
                         'type': 'postgres',
                         'threads': 1,
-                        'host': 'database',
+                        'host': self.database_host,
                         'port': 5432,
                         'user': "root",
                         'pass': "password",
