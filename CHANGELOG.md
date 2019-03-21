@@ -18,7 +18,7 @@ This release provides [a stable API for building new adapters](https://docs.getd
 - The following adapter methods are now deprecated, and will be removed in a future release:
   - get_columns_in_table - deprecated in favor of [get_columns_in_relation](https://docs.getdbt.com/v0.13/reference#adapter-get-columns-in-relation)
   - already_exists - deprecated in favor of [get_relation](https://docs.getdbt.com/v0.13/reference#adapter-get-relation)
-  
+
 ### Features
 - Add `source`s to dbt, use them to calculate source data freshness ([docs](https://docs.getdbt.com/v0.13/docs/using-sources) ) ([#814](https://github.com/fishtown-analytics/dbt/issues/814), [#1240](https://github.com/fishtown-analytics/dbt/issues/1240))
 - Add support for Presto ([docs](https://docs.getdbt.com/v0.13/docs/profile-presto), [repo](https://github.com/fishtown-analytics/dbt-presto)) ([#1106](https://github.com/fishtown-analytics/dbt/issues/1106))
@@ -32,7 +32,7 @@ This release provides [a stable API for building new adapters](https://docs.getd
 - Add CLI flag to toggle warnings as errors ([docs](https://docs.getdbt.com/v0.13/reference#section-treat-warnings-as-errors)) ([#1243](https://github.com/fishtown-analytics/dbt/issues/1243))
 - Add tab completion script for Bash ([docs](https://github.com/fishtown-analytics/dbt-completion.bash)) ([#1197](https://github.com/fishtown-analytics/dbt/issues/1197))
 - Added docs on how to build a new adapter ([docs](https://docs.getdbt.com/v0.13/docs/building-a-new-adapter)) ([#560](https://github.com/fishtown-analytics/dbt/issues/560))
-
+- Use new logo ([#1349](https://github.com/fishtown-analytics/dbt/pull/1349))
 
 ### Fixes
 - Fix for Postgres character columns treated as string types ([#1194](https://github.com/fishtown-analytics/dbt/issues/1194))
@@ -42,7 +42,13 @@ This release provides [a stable API for building new adapters](https://docs.getd
 - Fix for `dbt seed --show` ([#1288](https://github.com/fishtown-analytics/dbt/issues/1288))
 - Fix for `is_incremental()` which should only return `True` if the target relation is a `table` ([#1292](https://github.com/fishtown-analytics/dbt/issues/1292))
 - Fix for error in Snowflake table materializations with custom schemas ([#1316](https://github.com/fishtown-analytics/dbt/issues/1316))
-
+- Fix errored out concurrent transactions on Redshift and Postgres ([#1356](https://github.com/fishtown-analytics/dbt/pull/1356))
+- Fix out of order execution on model select ([#1354](https://github.com/fishtown-analytics/dbt/issues/1354), [#1355](https://github.com/fishtown-analytics/dbt/pull/1355))
+- Fix adapter macro namespace issue ([#1352](https://github.com/fishtown-analytics/dbt/issues/1352), [#1353](https://github.com/fishtown-analytics/dbt/pull/1353))
+- Re-add CLI flag to toggle warnings as errors ([#1347](https://github.com/fishtown-analytics/dbt/pull/1347))
+- Fix release candidate regression that runs run hooks on test invocations ([#1346](https://github.com/fishtown-analytics/dbt/pull/1346))
+- Fix Snowflake source quoting ([#1338](https://github.com/fishtown-analytics/dbt/pull/1338), [#1317](https://github.com/fishtown-analytics/dbt/issues/1317), [#1332](https://github.com/fishtown-analytics/dbt/issues/1332))
+- Handle unexpected max_loaded_at types ([#1330](https://github.com/fishtown-analytics/dbt/pull/1330))
 
 ### Under the hood
 - Replace all SQL in Python code with Jinja in macros ([#1204](https://github.com/fishtown-analytics/dbt/issues/1204))
