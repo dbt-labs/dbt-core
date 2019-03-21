@@ -11,12 +11,11 @@
     custom_alias_name: The custom alias name specified for a model, or none
 
 #}
-{% macro generate_alias_name(custom_alias_name=none) -%}
+{% macro generate_alias_name(node, custom_alias_name=none) -%}
 
-    {%- set default_alias = this.name -%}
     {%- if custom_alias_name is none -%}
 
-        {{ default_alias }}
+        {{ node }}
 
     {%- else -%}
 

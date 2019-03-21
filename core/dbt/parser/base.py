@@ -58,6 +58,7 @@ class MacrosKnownParser(BaseParser):
         )
         self.macro_manifest = macro_manifest
         self._get_schema_func = None
+        self._get_alias_func = None
 
     def get_schema_func(self):
         """The get_schema function is set by a few different things:
@@ -206,8 +207,8 @@ class MacrosKnownParser(BaseParser):
 
         alias_override = config.config.get('alias')
         get_alias = self.get_alias_func()
-        parsed_node.alias = get_alias(alias_override).strip()
-        # parsed_node.alias = config.config.get('alias', parsed_node.get('name'))
+        temp_node = config.config.get('alias', parsed_node.get('name'))
+        parsed_node.alias = get_alias(temp_node, alias_override).strip()
 
         parsed_node.database = config.config.get(
             'database', self.default_database
