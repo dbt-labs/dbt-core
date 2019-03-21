@@ -1,10 +1,11 @@
-## dbt dev/stephen-girard (0.13.0 - To be released)
+## dbt dev/stephen-girard (0.13.0 - March 21, 2019)
 
 ## Overview
 
-This release provides [a stable API for building new adapters](https://docs.getdbt.com/v0.13/docs/building-a-new-adapter) and reimplements dbt's adapters as "plugins". Additionally, a new adapter for [Presto](https://github.com/fishtown-analytics/dbt-presto) was added using this architecture. Beyond adapters, this release of dbt also includes [Sources](https://docs.getdbt.com/v0.13/docs/using-sources) which can be used to document and test source data tables.
+This release provides [a stable API for building new adapters](https://docs.getdbt.com/v0.13/docs/building-a-new-adapter) and reimplements dbt's adapters as "plugins". Additionally, a new adapter for [Presto](https://github.com/fishtown-analytics/dbt-presto) was added using this architecture. Beyond adapters, this release of dbt also includes [Sources](https://docs.getdbt.com/v0.13/docs/using-sources) which can be used to document and test source data tables. See the full list of features added in 0.13.0 below.
 
 ### Breaking Changes
+- version 1 schema.yml specs are no longer implemented. Please use the version 2 spec instead ([migration guide](https://docs.getdbt.com/docs/upgrading-from-0-10-to-0-11#section-schema-yml-v2-syntax))
 - `{{this}}` is no longer implemented for `on-run-start` and `on-run-end` hooks. Use `{{ target }}` or an [`on-run-end` context variable](https://docs.getdbt.com/reference#schemas) instead ([#1176](https://github.com/fishtown-analytics/dbt/pull/1176), implementing [#878](https://github.com/fishtown-analytics/dbt/issues/878))
 - A number of materialization-specific adapter methods have changed in breaking ways. If you use these adapter methods in your macros or materializations, you may need to update your code accordingly.
   - query_for_existing - **removed**, use [get_relation](https://docs.getdbt.com/v0.13/reference#adapter-get-relation) instead.
@@ -63,6 +64,8 @@ Thanks for your contributions to dbt!
 - [@brianhartsock](https://github.com/brianhartsock) [#1191](https://github.com/fishtown-analytics/dbt/pull/1191)
 - [@alexyer](https://github.com/alexyer) [#1232](https://github.com/fishtown-analytics/dbt/pull/1232)
 - [@adriank-convoy](https://github.com/adriank-convoy) [#1224](https://github.com/fishtown-analytics/dbt/pull/1224)
+- [@mikekaminsky](https://github.com/mikekaminsky) [#1216](https://github.com/fishtown-analytics/dbt/pull/1216)
+- [@vijaykiran](https://github.com/vijaykiran) [#1198](https://github.com/fishtown-analytics/dbt/pull/1198), [#1199](https://github.com/fishtown-analytics/dbt/pull/1199)
 
 ## dbt 0.12.2 - Grace Kelly (January 8, 2019)
 
