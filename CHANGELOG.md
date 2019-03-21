@@ -1,6 +1,6 @@
-## dbt dev/stephen-girard (0.13.0 - March 21, 2019)
+## dbt 0.13.0 - Stephen Girard (March 21, 2019)
 
-## Overview
+### Overview
 
 This release provides [a stable API for building new adapters](https://docs.getdbt.com/v0.13/docs/building-a-new-adapter) and reimplements dbt's adapters as "plugins". Additionally, a new adapter for [Presto](https://github.com/fishtown-analytics/dbt-presto) was added using this architecture. Beyond adapters, this release of dbt also includes [Sources](https://docs.getdbt.com/v0.13/docs/using-sources) which can be used to document and test source data tables. See the full list of features added in 0.13.0 below.
 
