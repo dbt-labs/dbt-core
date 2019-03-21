@@ -186,8 +186,9 @@ class JSONValidationException(ValidationException):
         self.typename = typename
         self.errors = errors
         self.errors_message = ', '.join(errors)
-        msg = ('Invalid arguments passed to "{}" instance: {}'.format(
-                self.typename, self.errors_message))
+        msg = 'Invalid arguments passed to "{}" instance: {}'.format(
+            self.typename, self.errors_message
+        )
         super(JSONValidationException, self).__init__(msg)
 
     def __reduce__(self):
@@ -592,8 +593,8 @@ def raise_ambiguous_catalog_match(unique_id, match_1, match_2):
 
     def get_match_string(match):
         return "{}.{}".format(
-                match.get('metadata', {}).get('schema'),
-                match.get('metadata', {}).get('name'))
+            match.get('metadata', {}).get('schema'),
+            match.get('metadata', {}).get('name'))
 
     raise_compiler_error(
         'dbt found two relations in your warehouse with similar database '

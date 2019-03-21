@@ -14,7 +14,7 @@ import dbt.contracts.project
 
 from dbt.clients.jinja import get_rendered
 from dbt.node_types import NodeType
-from dbt.compat import basestring, to_string, to_native_string
+from dbt.compat import basestring, to_string
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import get_pseudo_test_path
 from dbt.contracts.graph.unparsed import UnparsedNode, UnparsedNodeUpdate, \
@@ -194,7 +194,7 @@ def _filter_validate(filepath, location, values, validate):
         except dbt.exceptions.JSONValidationException as exc:
             # we don't want to fail the full run, but we do want to fail
             # parsing this file
-            warn_invalid(filepath, location, value, '- '+exc.msg)
+            warn_invalid(filepath, location, value, '- ' + exc.msg)
             continue
 
 
@@ -393,7 +393,7 @@ class SchemaSourceParser(SchemaBaseTestParser):
 
     def _generate_test_name(self, target, test_type, test_args):
         return get_nice_schema_test_name(
-            'source_'+test_type,
+            'source_' + test_type,
             '{}_{}'.format(target['source']['name'], target['table']['name']),
             test_args
         )

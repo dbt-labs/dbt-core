@@ -174,8 +174,8 @@ class BlockIterator(object):
         match = self._first_match(*patterns, **kwargs)
         if match is None:
             msg = 'unexpected EOF, expected {}, got "{}"'.format(
-                    expected_name, self.data[self.pos:]
-                )
+                expected_name, self.data[self.pos:]
+            )
             dbt.exceptions.raise_compiler_error(msg)
         return match
 

@@ -1,7 +1,6 @@
 # coding=utf-8
 import os
 import platform
-import pprint
 import sys
 
 from dbt.logger import GLOBAL_LOGGER as logger

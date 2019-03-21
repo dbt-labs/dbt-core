@@ -11,6 +11,7 @@ import jinja2.sandbox
 
 import dbt.compat
 import dbt.exceptions
+import dbt.utils
 
 from dbt.clients._jinja_blocks import BlockIterator
 
@@ -55,7 +56,7 @@ class MacroFuzzEnvironment(jinja2.sandbox.SandboxedEnvironment):
             linecache.cache[filename] = (
                 len(source),
                 None,
-                [line+'\n' for line in source.splitlines()],
+                [line + '\n' for line in source.splitlines()],
                 filename
             )
 

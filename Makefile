@@ -11,7 +11,7 @@ test:
 
 test-unit:
 	@echo "Unit test run starting..."
-	@time docker-compose run test tox -e unit-py27,unit-py36,pep8
+	@time docker-compose run test tox -e unit-py27,unit-py36,flake8
 
 test-integration:
 	@echo "Integration test run starting..."

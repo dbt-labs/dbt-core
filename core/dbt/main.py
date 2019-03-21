@@ -32,8 +32,8 @@ import dbt.deprecations
 import dbt.profiler
 
 from dbt.utils import ExitCodes
-from dbt.config import Project, UserConfig, RuntimeConfig, PROFILES_DIR
-from dbt.exceptions import DbtProjectError, DbtProfileError, RuntimeException
+from dbt.config import UserConfig, PROFILES_DIR
+from dbt.exceptions import RuntimeException
 
 
 PROFILES_HELP_MESSAGE = """
@@ -83,7 +83,7 @@ def main(args=None):
         else:
             exit_code = ExitCodes.ModelError
 
-    except KeyboardInterrupt as e:
+    except KeyboardInterrupt:
         logger.info("ctrl-c")
         exit_code = ExitCodes.UnhandledError
 
@@ -170,7 +170,7 @@ def track_run(task):
         dbt.tracking.track_invocation_end(
             config=task.config, args=task.args, result_type="error"
         )
-    except Exception as e:
+    except Exception:
         dbt.tracking.track_invocation_end(
             config=task.config, args=task.args, result_type="error"
         )
@@ -297,9 +297,9 @@ def _build_source_subparser(subparsers, base_subparser):
 
 def _build_init_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
-            'init',
-            parents=[base_subparser],
-            help="Initialize a new DBT project.")
+        'init',
+        parents=[base_subparser],
+        help="Initialize a new DBT project.")
     sub.add_argument('project_name', type=str, help='Name of the new project')
     sub.set_defaults(cls=init_task.InitTask, which='init')
     return sub
