@@ -539,6 +539,14 @@ def _build_source_snapshot_freshness_subparser(subparsers, base_subparser):
         target/sources.json
         """
     )
+    sub.add_argument(
+        '--threads',
+        type=int,
+        required=False,
+        help="""
+        Specify number of threads to use. Overrides settings in profiles.yml
+        """
+    )
     sub.set_defaults(cls=freshness_task.FreshnessTask,
                      which='snapshot-freshness')
     return sub
@@ -609,6 +617,14 @@ def parse_args(args):
         action='store_true',
         help='''Run schema validations at runtime. This will surface
         bugs in dbt, but may incur a performance penalty.''')
+
+    p.add_argument(
+        '--warn-error',
+        action='store_true',
+        help='''If dbt would normally warn, instead raise an exception.
+        Examples include --models that selects nothing, deprecations,
+        configurations with no associated models, invalid test configurations,
+        and missing sources/refs in tests''')
 
     # if set, run dbt in single-threaded mode: thread count is ignored, and
     # calls go through `map` instead of the thread pool. This is useful for

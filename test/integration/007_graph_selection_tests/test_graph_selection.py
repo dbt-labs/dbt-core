@@ -59,7 +59,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
         results = self.run_dbt(['run', '--models', 'tag:base+'])
-        self.assertEqual(len(results), 3)
+        self.assertEqual(len(results), 4)
 
         created_models = self.get_models_in_schema()
         self.assertFalse('base_users' in created_models)
@@ -88,7 +88,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
         results = self.run_dbt(['run', '--models', 'users+'])
-        self.assertEqual(len(results),  3)
+        self.assertEqual(len(results),  4)
 
         self.assertTablesEqual("seed", "users")
         self.assertTablesEqual("summary_expected", "users_rollup")
@@ -103,7 +103,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
         results = self.run_dbt(['run', '--models', 'users+'])
-        self.assertEqual(len(results),  3)
+        self.assertEqual(len(results),  4)
 
         self.assertManyTablesEqual(
             ["SEED", "USERS"],
@@ -193,7 +193,7 @@ class TestGraphSelection(DBTIntegrationTest):
     def test__postgres__childrens_parents(self):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
         results = self.run_dbt(['run', '--models', '@base_users'])
-        self.assertEqual(len(results), 3)
+        self.assertEqual(len(results), 4)
 
         created_models = self.get_models_in_schema()
         self.assertIn('users_rollup', created_models)
@@ -206,8 +206,8 @@ class TestGraphSelection(DBTIntegrationTest):
     def test__postgres__more_childrens_parents(self):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
         results = self.run_dbt(['run', '--models', '@users'])
-        # base_users, emails, users_rollup, but not users (ephemeral)
-        self.assertEqual(len(results), 3)
+        # base_users, emails, users_rollup, users_rollup_dependency, but not users (ephemeral)
+        self.assertEqual(len(results), 4)
 
         created_models = self.get_models_in_schema()
         self.assertIn('users_rollup', created_models)
@@ -215,3 +215,24 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertIn('emails_alt', created_models)
         self.assertNotIn('subdir', created_models)
         self.assertNotIn('nested_users', created_models)
+
+    @attr(type='snowflake')
+    def test__snowflake__skip_intermediate(self):
+        self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
+        results = self.run_dbt(['run', '--models', '@users'])
+        # base_users, emails, users_rollup, users_rollup_dependency
+        self.assertEqual(len(results), 4)
+
+        # now re-run, skipping users_rollup
+        results = self.run_dbt(['run', '--models', '@users', '--exclude', 'users_rollup'])
+        self.assertEqual(len(results), 3)
+
+        # make sure that users_rollup_dependency and users don't interleave
+        users = [r for r in results if r.node.name == 'users'][0]
+        dep = [r for r in results if r.node.name == 'users_rollup_dependency'][0]
+        user_last_end = users.timing[1]['completed_at']
+        dep_first_start = dep.timing[0]['started_at']
+        self.assertTrue(
+            user_last_end < dep_first_start,
+            'dependency started before its transitive parent ({} > {})'.format(user_last_end, dep_first_start)
+        )

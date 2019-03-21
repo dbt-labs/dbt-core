@@ -418,11 +418,13 @@ class FreshnessRunner(BaseRunner):
         relation = self.adapter.Relation.create_from_source(compiled_node)
         # given a Source, calculate its fresnhess.
         with self.adapter.connection_named(compiled_node.unique_id):
+            self.adapter.clear_transaction(compiled_node.unique_id)
             freshness = self.adapter.calculate_freshness(
                 relation,
                 compiled_node.loaded_at_field,
                 manifest=manifest
             )
+
         status = self._calculate_status(
             compiled_node.freshness,
             freshness['age']

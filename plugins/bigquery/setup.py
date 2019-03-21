@@ -3,7 +3,7 @@ from setuptools import find_packages
 from distutils.core import setup
 
 package_name = "dbt-bigquery"
-package_version = "0.13.0rc1"
+package_version = "0.13.0"
 description = """The bigquery adapter plugin for dbt (data build tool)"""
 
 

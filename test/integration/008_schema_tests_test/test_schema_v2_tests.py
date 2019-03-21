@@ -94,6 +94,38 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
             self.run_dbt(strict=True)
 
 
+class TestHooksInTests(DBTIntegrationTest):
+
+    @property
+    def schema(self):
+        return "schema_tests_008"
+
+    @property
+    def models(self):
+        # test ephemeral models so we don't need to do a run (which would fail)
+        return "test/integration/008_schema_tests_test/ephemeral"
+
+    @property
+    def project_config(self):
+        return {
+            "on-run-start": ["{{ exceptions.raise_compiler_error('hooks called in tests -- error') if execute }}"],
+            "on-run-end": ["{{ exceptions.raise_compiler_error('hooks called in tests -- error') if execute }}"],
+        }
+
+    @attr(type='postgres')
+    def test_hooks_dont_run_for_tests(self):
+        # This would fail if the hooks ran
+        results = self.run_dbt(['test', '--model', 'ephemeral'])
+        self.assertEqual(len(results), 1)
+        for result in results:
+            self.assertIsNone(result.error)
+            self.assertFalse(result.skipped)
+            # status = # of failing rows
+            self.assertEqual(
+                result.status, 0,
+                'test {} failed'.format(result.node.get('name'))
+            )
+
 class TestCustomSchemaTests(DBTIntegrationTest):
 
     def setUp(self):
