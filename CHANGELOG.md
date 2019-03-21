@@ -1,20 +1,62 @@
-## dbt dev/stephen-girard (0.13.0? - To be released)
+## dbt dev/stephen-girard (0.13.0 - To be released)
 
 ## Overview
 
-This release makes dbt and its adapters into a core-and-plugin architecture.
+This release provides [a stable API for building new adapters](https://docs.getdbt.com/v0.13/docs/building-a-new-adapter) and reimplements dbt's adapters as "plugins". Additionally, a new adapter for [Presto](https://github.com/fishtown-analytics/dbt-presto) was added using this architecture. Beyond adapters, this release of dbt also includes [Sources](https://docs.getdbt.com/v0.13/docs/using-sources) which can be used to document and test source data tables.
 
 ### Breaking Changes
-- '{{this}}' is no longer respected in hooks [#1176](https://github.com/fishtown-analytics/dbt/pull/1176), implementing [#878](https://github.com/fishtown-analytics/dbt/issues/878)
-- A number of widely-used adapter methods previously available in macros/materializations have changed in breaking ways:
-  - get_missing_columns - takes Relations instead of schemas and identifiers
-  - get_columns_in_table - deprecated in favor of get_columns_in_relation (takes a Relation instead of schema, identifier)
-  - expand_target_column_types - takes a Relation instead of schema, identifier
-  - query_for_existing - removed
-  - get_relation - database parameter added
-  - create_schema - database parameter added
-  - drop_schema - database parameter added
-  - already_exists - deprecated in favor of get_relation (takes a relation)
+- `{{this}}` is no longer implemented for `on-run-start` and `on-run-end` hooks. Use `{{ target }}` or an [`on-run-end` context variable](https://docs.getdbt.com/reference#schemas) instead ([#1176](https://github.com/fishtown-analytics/dbt/pull/1176), implementing [#878](https://github.com/fishtown-analytics/dbt/issues/878))
+- A number of materialization-specific adapter methods have changed in breaking ways. If you use these adapter methods in your macros or materializations, you may need to update your code accordingly.
+  - query_for_existing - **removed**, use [get_relation](https://docs.getdbt.com/v0.13/reference#adapter-get-relation) instead.
+  - [get_missing_columns](https://docs.getdbt.com/v0.13/reference#adapter-get-missing-columns) - changed to take `Relation`s instead of schemas and identifiers
+  - [expand_target_column_types](https://docs.getdbt.com/v0.13/reference#adapter-expand-target-column-types) - changed to take a `Relation` instead of schema, identifier
+  - [get_relation](https://docs.getdbt.com/v0.13/reference#adapter-get-relation) - added a `database` argument
+  - [create_schema](https://docs.getdbt.com/v0.13/reference#adapter-create-schema) - added a `database` argument
+  - [drop_schema](https://docs.getdbt.com/v0.13/reference#adapter-drop-schema) - added a `database` argument
+
+### Deprecations
+- The following adapter methods are now deprecated, and will be removed in a future release:
+  - get_columns_in_table - deprecated in favor of [get_columns_in_relation](https://docs.getdbt.com/v0.13/reference#adapter-get-columns-in-relation)
+  - already_exists - deprecated in favor of [get_relation](https://docs.getdbt.com/v0.13/reference#adapter-get-relation)
+  
+### Features
+- Add `source`s to dbt, use them to calculate source data freshness ([docs](https://docs.getdbt.com/v0.13/docs/using-sources) ) ([#814](https://github.com/fishtown-analytics/dbt/issues/814), [#1240](https://github.com/fishtown-analytics/dbt/issues/1240))
+- Add support for Presto ([docs](https://docs.getdbt.com/v0.13/docs/profile-presto), [repo](https://github.com/fishtown-analytics/dbt-presto)) ([#1106](https://github.com/fishtown-analytics/dbt/issues/1106))
+- Add `require-dbt-version` option to `dbt_project.yml` to state the supported versions of dbt for packages ([docs](https://docs.getdbt.com/v0.13/docs/requiring-dbt-versions)) ([#581](https://github.com/fishtown-analytics/dbt/issues/581))
+- Add an output line indicating the installed version of dbt to every run ([#1134](https://github.com/fishtown-analytics/dbt/issues/1134))
+- Add a new model selector (`@`) which build models, their children, and their children's parents ([docs](https://docs.getdbt.com/v0.13/reference#section-the-at-operator)) ([#1156](https://github.com/fishtown-analytics/dbt/issues/1156))
+- Add support for Snowflake Key Pair Authentication ([docs](https://docs.getdbt.com/v0.13/docs/profile-snowflake#section-key-pair-authentication)) ([#1232](https://github.com/fishtown-analytics/dbt/pull/1232))
+- Support SSO Authentication for Snowflake ([docs](https://docs.getdbt.com/v0.13/docs/profile-snowflake#section-sso-authentication)) ([#1172](https://github.com/fishtown-analytics/dbt/issues/1172))
+- Add support for Snowflake's transient tables ([docs](https://docs.getdbt.com/v0.13/docs/snowflake-configs#section-transient-tables)) ([#946](https://github.com/fishtown-analytics/dbt/issues/946))
+- Capture build timing data in `run_results.json` to visualize project performance ([#1179](https://github.com/fishtown-analytics/dbt/issues/1179))
+- Add CLI flag to toggle warnings as errors ([docs](https://docs.getdbt.com/v0.13/reference#section-treat-warnings-as-errors)) ([#1243](https://github.com/fishtown-analytics/dbt/issues/1243))
+- Add tab completion script for Bash ([docs](https://github.com/fishtown-analytics/dbt-completion.bash)) ([#1197](https://github.com/fishtown-analytics/dbt/issues/1197))
+- Added docs on how to build a new adapter ([docs](https://docs.getdbt.com/v0.13/docs/building-a-new-adapter)) ([#560](https://github.com/fishtown-analytics/dbt/issues/560))
+
+
+### Fixes
+- Fix for Postgres character columns treated as string types ([#1194](https://github.com/fishtown-analytics/dbt/issues/1194))
+- Fix for hard to reach edge case in which dbt could hang ([#1223](https://github.com/fishtown-analytics/dbt/issues/1223))
+- Fix for `dbt deps` in non-English shells ([#1222](https://github.com/fishtown-analytics/dbt/issues/1222))
+- Fix for over eager schema creation when models are run with `--models` ([#1239](https://github.com/fishtown-analytics/dbt/issues/1239))
+- Fix for `dbt seed --show` ([#1288](https://github.com/fishtown-analytics/dbt/issues/1288))
+- Fix for `is_incremental()` which should only return `True` if the target relation is a `table` ([#1292](https://github.com/fishtown-analytics/dbt/issues/1292))
+- Fix for error in Snowflake table materializations with custom schemas ([#1316](https://github.com/fishtown-analytics/dbt/issues/1316))
+
+
+### Under the hood
+- Replace all SQL in Python code with Jinja in macros ([#1204](https://github.com/fishtown-analytics/dbt/issues/1204))
+- Loosen restrictions of boto3 dependency ([#1234](https://github.com/fishtown-analytics/dbt/issues/1234))
+- Rewrote Postgres introspective queries to be faster on large databases ([#1192](https://github.com/fishtown-analytics/dbt/issues/1192)
+
+
+### Contributors:
+Thanks for your contributions to dbt!
+
+- [@patrickgoss](https://github.com/patrickgoss) [#1193](https://github.com/fishtown-analytics/dbt/issues/1193)
+- [@brianhartsock](https://github.com/brianhartsock) [#1191](https://github.com/fishtown-analytics/dbt/pull/1191)
+- [@alexyer](https://github.com/alexyer) [#1232](https://github.com/fishtown-analytics/dbt/pull/1232)
+- [@adriank-convoy](https://github.com/adriank-convoy) [#1224](https://github.com/fishtown-analytics/dbt/pull/1224)
 
 ## dbt 0.12.2 - Grace Kelly (January 8, 2019)
 
