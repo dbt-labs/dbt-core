@@ -892,8 +892,8 @@ def raise_ambiguous_catalog_match(unique_id, match_1, match_2):
 
     def get_match_string(match):
         return "{}.{}".format(
-            match.get('metadata', {}).get('schema'),
-            match.get('metadata', {}).get('name'))
+            match.get("metadata", {}).get("schema"), match.get("metadata", {}).get("name")
+        )
 
     raise_compiler_error(
         'dbt found two relations in your warehouse with similar database '

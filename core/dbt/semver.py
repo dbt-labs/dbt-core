@@ -62,7 +62,8 @@ $
 """.format(
     matchers=_MATCHERS,
     base_version_regex=_BASE_VERSION_REGEX,
-    version_extra_regex=_VERSION_EXTRA_REGEX)
+    version_extra_regex=_VERSION_EXTRA_REGEX,
+)
 
 _VERSION_REGEX = re.compile(_VERSION_REGEX_PAT_STR, re.VERBOSE)
 

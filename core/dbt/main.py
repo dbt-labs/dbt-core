@@ -333,7 +333,7 @@ def _build_source_subparser(subparsers, base_subparser):
 
 def _build_init_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
-        'init',
+        "init",
         parents=[base_subparser],
         help='''
         Initialize a new DBT project.
