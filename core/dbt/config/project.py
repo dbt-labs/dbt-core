@@ -1,4 +1,3 @@
-
 from copy import deepcopy
 import hashlib
 import os
@@ -14,7 +13,6 @@ from dbt.exceptions import RecursionException
 from dbt.exceptions import SemverException
 from dbt.exceptions import ValidationException
 from dbt.exceptions import warn_or_error
-from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.semver import VersionSpecifier
 from dbt.semver import versions_compatible
 from dbt.version import get_installed_version

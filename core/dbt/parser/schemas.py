@@ -14,7 +14,7 @@ import dbt.contracts.project
 
 from dbt.clients.jinja import get_rendered
 from dbt.node_types import NodeType
-from dbt.compat import basestring, to_string, to_native_string
+from dbt.compat import basestring, to_string
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import get_pseudo_test_path
 from dbt.contracts.graph.unparsed import UnparsedNode, UnparsedNodeUpdate, \

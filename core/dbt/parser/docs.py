@@ -62,8 +62,6 @@ class DocumentationParser(BaseParser):
             # because docs are in their own graph namespace, node type doesn't
             # need to be part of the unique ID.
             unique_id = '{}.{}'.format(docfile.package_name, name)
-            fqn = self.get_fqn(docfile.path,
-                               self.all_projects[docfile.package_name])
 
             merged = dbt.utils.deep_merge(
                 docfile.serialize(),

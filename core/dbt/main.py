@@ -32,8 +32,8 @@ import dbt.deprecations
 import dbt.profiler
 
 from dbt.utils import ExitCodes
-from dbt.config import Project, UserConfig, RuntimeConfig, PROFILES_DIR
-from dbt.exceptions import DbtProjectError, DbtProfileError, RuntimeException
+from dbt.config import UserConfig, PROFILES_DIR
+from dbt.exceptions import RuntimeException
 
 
 PROFILES_HELP_MESSAGE = """

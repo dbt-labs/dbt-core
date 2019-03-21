@@ -1,7 +1,3 @@
-from dbt.logger import GLOBAL_LOGGER as logger  # noqa
-import dbt.exceptions
-
-
 class Column(object):
     TYPE_LABELS = {
         'STRING': 'TEXT',

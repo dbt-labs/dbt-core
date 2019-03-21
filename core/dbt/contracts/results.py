@@ -3,10 +3,7 @@ from dbt.utils import deep_merge, timestring
 from dbt.contracts.common import named_property
 from dbt.contracts.graph.manifest import COMPILE_RESULT_NODE_CONTRACT
 from dbt.contracts.graph.unparsed import TIME_CONTRACT
-from dbt.contracts.graph.parsed import PARSED_NODE_CONTRACT, \
-    PARSED_SOURCE_DEFINITION_CONTRACT
-from dbt.contracts.graph.compiled import COMPILED_NODE_CONTRACT
-from dbt.contracts.graph.manifest import PARSED_MANIFEST_CONTRACT
+from dbt.contracts.graph.parsed import PARSED_SOURCE_DEFINITION_CONTRACT
 
 
 TIMING_INFO_CONTRACT = {

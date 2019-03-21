@@ -799,16 +799,18 @@ class TestProject(BaseConfigTest):
         ))}, [])
         self.assertEqual(len(unused), 0)
 
-    @mock.patch.object(dbt.config.project, 'logger')
-    def test__warn_for_unused_resource_config_paths_empty(self, mock_logger):
+    def test__warn_for_unused_resource_config_paths_empty(self):
         project = dbt.config.Project.from_project_config(
             self.default_project_data
         )
-        unused = project.warn_for_unused_resource_config_paths({'models': frozenset((
-            ('my_test_project', 'foo', 'bar'),
-            ('my_test_project', 'foo', 'baz'),
-        ))}, [])
-        mock_logger.info.assert_not_called()
+        dbt.flags.WARN_ERROR = True
+        try:
+            unused = project.warn_for_unused_resource_config_paths({'models': frozenset((
+                ('my_test_project', 'foo', 'bar'),
+                ('my_test_project', 'foo', 'baz'),
+            ))}, [])
+        finally:
+            dbt.flags.WARN_ERROR = False
 
     def test_none_values(self):
         self.default_project_data.update({
@@ -891,8 +893,7 @@ class TestProjectWithConfigs(BaseConfigTest):
         unused = project.warn_for_unused_resource_config_paths(self.used, [])
         warn_or_error.assert_called_once()
 
-    @mock.patch.object(dbt.config.project, 'logger')
-    def test__warn_for_unused_resource_config_paths_disabled(self, mock_logger):
+    def test__warn_for_unused_resource_config_paths_disabled(self):
         project = dbt.config.Project.from_project_config(
             self.default_project_data
         )
