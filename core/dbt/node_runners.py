@@ -418,7 +418,7 @@ class FreshnessRunner(BaseRunner):
         relation = self.adapter.Relation.create_from_source(compiled_node)
         # given a Source, calculate its fresnhess.
         with self.adapter.connection_named(compiled_node.unique_id):
-            self.adapter.clear_transaction(compiled_node.unique_id)
+            self.adapter.clear_transaction()
             freshness = self.adapter.calculate_freshness(
                 relation,
                 compiled_node.loaded_at_field,
