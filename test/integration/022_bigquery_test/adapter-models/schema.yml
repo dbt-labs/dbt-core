@@ -1,21 +1,39 @@
-
-
-test_get_columns_in_table:
-    constraints:
-        not_null:
-            - field_1
-            - field_2
-            - field_3
-            - nested_field
-            - repeated_column
-
-
-test_flattened_get_columns_in_table:
-    constraints:
-        not_null:
-            - field_1
-            - field_2
-            - field_3
-            - field_4
-            - field_5
-            - repeated_column
+version: 2
+models:
+- name: test_get_columns_in_table
+  columns:
+  - name: field_1
+    tests:
+    - not_null
+  - name: field_2
+    tests:
+    - not_null
+  - name: field_3
+    tests:
+    - not_null
+  - name: nested_field
+    tests:
+    - not_null
+  - name: repeated_column
+    tests:
+    - not_null
+- name: test_flattened_get_columns_in_table
+  columns:
+  - name: field_1
+    tests:
+    - not_null
+  - name: field_2
+    tests:
+    - not_null
+  - name: field_3
+    tests:
+    - not_null
+  - name: field_4
+    tests:
+    - not_null
+  - name: field_5
+    tests:
+    - not_null
+  - name: repeated_column
+    tests:
+    - not_null

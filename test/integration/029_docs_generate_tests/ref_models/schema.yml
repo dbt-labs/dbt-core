@@ -11,3 +11,21 @@ models:
   - name: view_summary
     description: "{{ doc('view_summary') }}"
     columns: *summary_columns
+
+sources:
+  - name: my_source
+    description: "{{ doc('source_info') }}"
+    loader: a_loader
+    schema: "{{ var('test_schema') }}"
+    quoting:
+      database: False
+      identifier: False
+    tables:
+      - name: my_table
+        description: "{{ doc('table_info') }}"
+        identifier: seed
+        quoting:
+          identifier: True
+        columns:
+          - name: id
+            description: "An ID field"

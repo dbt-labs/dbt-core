@@ -1,0 +1,15 @@
+STRICT_MODE = False
+NON_DESTRUCTIVE = False
+FULL_REFRESH = False
+USE_CACHE = True
+WARN_ERROR = False
+
+
+def reset():
+    global STRICT_MODE, NON_DESTRUCTIVE, FULL_REFRESH, USE_CACHE, WARN_ERROR
+
+    STRICT_MODE = False
+    NON_DESTRUCTIVE = False
+    FULL_REFRESH = False
+    USE_CACHE = True
+    WARN_ERROR = False

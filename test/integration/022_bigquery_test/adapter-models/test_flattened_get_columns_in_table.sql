@@ -1,5 +1,5 @@
 {% set source = ref('source') %}
-{% set cols = adapter.get_columns_in_table(source.schema, source.name) %}
+{% set cols = adapter.get_columns_in_relation(source) %}
 
 {{ log('source') }}
 {{ log(source) }}

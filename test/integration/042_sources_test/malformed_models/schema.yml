@@ -1,0 +1,14 @@
+version: 2
+sources:
+  - name: test_source
+    loader: custom
+    schema: "{{ var('test_run_schema') }}"
+    tables:
+      - name: test_table
+        identifier: source
+        tests:
+          - relationships:
+            # this is invalid
+              - column_name: favorite_color
+              - to: ref('descendant_model')
+              - field: favorite_color

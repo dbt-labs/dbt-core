@@ -1,7 +1,19 @@
-
-complex_model:
-    constraints:
-        accepted_values:
-            - {field: var_1, values: ["abc"]}
-            - {field: var_2, values: ["def"]}
-            - {field: var_3, values: ["jkl"]}
+version: 2
+models:
+- name: complex_model
+  columns:
+  - name: var_1
+    tests:
+    - accepted_values:
+        values:
+        - abc
+  - name: var_2
+    tests:
+    - accepted_values:
+        values:
+        - def
+  - name: var_3
+    tests:
+    - accepted_values:
+        values:
+        - jkl

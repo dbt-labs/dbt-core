@@ -32,6 +32,7 @@ class ManifestTest(unittest.TestCase):
         self.nested_nodes = {
             'model.snowplow.events': ParsedNode(
                 name='events',
+                database='dbt',
                 schema='analytics',
                 alias='events',
                 resource_type='model',
@@ -40,6 +41,7 @@ class ManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='snowplow',
                 refs=[],
+                sources=[],
                 depends_on={
                     'nodes': [],
                     'macros': []
@@ -53,6 +55,7 @@ class ManifestTest(unittest.TestCase):
             ),
             'model.root.events': ParsedNode(
                 name='events',
+                database='dbt',
                 schema='analytics',
                 alias='events',
                 resource_type='model',
@@ -61,6 +64,7 @@ class ManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='root',
                 refs=[],
+                sources=[],
                 depends_on={
                     'nodes': [],
                     'macros': []
@@ -74,6 +78,7 @@ class ManifestTest(unittest.TestCase):
             ),
             'model.root.dep': ParsedNode(
                 name='dep',
+                database='dbt',
                 schema='analytics',
                 alias='dep',
                 resource_type='model',
@@ -82,6 +87,7 @@ class ManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='root',
                 refs=[['events']],
+                sources=[],
                 depends_on={
                     'nodes': ['model.root.events'],
                     'macros': []
@@ -95,6 +101,7 @@ class ManifestTest(unittest.TestCase):
             ),
             'model.root.nested': ParsedNode(
                 name='nested',
+                database='dbt',
                 schema='analytics',
                 alias='nested',
                 resource_type='model',
@@ -103,6 +110,7 @@ class ManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='root',
                 refs=[['events']],
+                sources=[],
                 depends_on={
                     'nodes': ['model.root.dep'],
                     'macros': []
@@ -116,6 +124,7 @@ class ManifestTest(unittest.TestCase):
             ),
             'model.root.sibling': ParsedNode(
                 name='sibling',
+                database='dbt',
                 schema='analytics',
                 alias='sibling',
                 resource_type='model',
@@ -124,6 +133,7 @@ class ManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='root',
                 refs=[['events']],
+                sources=[],
                 depends_on={
                     'nodes': ['model.root.events'],
                     'macros': []
@@ -137,6 +147,7 @@ class ManifestTest(unittest.TestCase):
             ),
             'model.root.multi': ParsedNode(
                 name='multi',
+                database='dbt',
                 schema='analytics',
                 alias='multi',
                 resource_type='model',
@@ -145,6 +156,7 @@ class ManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='root',
                 refs=[['events']],
+                sources=[],
                 depends_on={
                     'nodes': ['model.root.nested', 'model.root.sibling'],
                     'macros': []
@@ -317,24 +329,26 @@ class ManifestTest(unittest.TestCase):
         nodes = copy.copy(self.nested_nodes)
         nodes['seed.root.seed'] = ParsedNode(
             name='seed',
+            database='dbt',
             schema='analytics',
-                alias='seed',
-                resource_type='seed',
-                unique_id='seed.root.seed',
-                fqn=['root', 'seed'],
-                empty=False,
-                package_name='root',
-                refs=[['events']],
-                depends_on={
-                    'nodes': [],
-                    'macros': []
-                },
-                config=self.model_config,
-                tags=[],
-                path='seed.csv',
-                original_file_path='seed.csv',
-                root_path='',
-                raw_sql='-- csv --'
+            alias='seed',
+            resource_type='seed',
+            unique_id='seed.root.seed',
+            fqn=['root', 'seed'],
+            empty=False,
+            package_name='root',
+            refs=[['events']],
+            sources=[],
+            depends_on={
+                'nodes': [],
+                'macros': []
+            },
+            config=self.model_config,
+            tags=[],
+            path='seed.csv',
+            original_file_path='seed.csv',
+            root_path='',
+            raw_sql='-- csv --'
         )
         manifest = Manifest(nodes=nodes, macros={}, docs={},
                             generated_at=timestring(), disabled=[])
@@ -373,6 +387,7 @@ class MixedManifestTest(unittest.TestCase):
         self.nested_nodes = {
             'model.snowplow.events': CompiledNode(
                 name='events',
+                database='dbt',
                 schema='analytics',
                 alias='events',
                 resource_type='model',
@@ -381,6 +396,7 @@ class MixedManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='snowplow',
                 refs=[],
+                sources=[],
                 depends_on={
                     'nodes': [],
                     'macros': []
@@ -399,6 +415,7 @@ class MixedManifestTest(unittest.TestCase):
             ),
             'model.root.events': CompiledNode(
                 name='events',
+                database='dbt',
                 schema='analytics',
                 alias='events',
                 resource_type='model',
@@ -407,6 +424,7 @@ class MixedManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='root',
                 refs=[],
+                sources=[],
                 depends_on={
                     'nodes': [],
                     'macros': []
@@ -425,6 +443,7 @@ class MixedManifestTest(unittest.TestCase):
             ),
             'model.root.dep': ParsedNode(
                 name='dep',
+                database='dbt',
                 schema='analytics',
                 alias='dep',
                 resource_type='model',
@@ -433,6 +452,7 @@ class MixedManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='root',
                 refs=[['events']],
+                sources=[],
                 depends_on={
                     'nodes': ['model.root.events'],
                     'macros': []
@@ -446,6 +466,7 @@ class MixedManifestTest(unittest.TestCase):
             ),
             'model.root.nested': ParsedNode(
                 name='nested',
+                database='dbt',
                 schema='analytics',
                 alias='nested',
                 resource_type='model',
@@ -454,6 +475,7 @@ class MixedManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='root',
                 refs=[['events']],
+                sources=[],
                 depends_on={
                     'nodes': ['model.root.dep'],
                     'macros': []
@@ -467,6 +489,7 @@ class MixedManifestTest(unittest.TestCase):
             ),
             'model.root.sibling': ParsedNode(
                 name='sibling',
+                database='dbt',
                 schema='analytics',
                 alias='sibling',
                 resource_type='model',
@@ -475,6 +498,7 @@ class MixedManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='root',
                 refs=[['events']],
+                sources=[],
                 depends_on={
                     'nodes': ['model.root.events'],
                     'macros': []
@@ -488,6 +512,7 @@ class MixedManifestTest(unittest.TestCase):
             ),
             'model.root.multi': ParsedNode(
                 name='multi',
+                database='dbt',
                 schema='analytics',
                 alias='multi',
                 resource_type='model',
@@ -496,6 +521,7 @@ class MixedManifestTest(unittest.TestCase):
                 empty=False,
                 package_name='root',
                 refs=[['events']],
+                sources=[],
                 depends_on={
                     'nodes': ['model.root.nested', 'model.root.sibling'],
                     'macros': []

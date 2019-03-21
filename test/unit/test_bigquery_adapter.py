@@ -3,15 +3,20 @@ from mock import patch, MagicMock
 
 import dbt.flags as flags
 
-from dbt.contracts.connection import BigQueryCredentials
+from dbt.adapters.bigquery import BigQueryCredentials
 from dbt.adapters.bigquery import BigQueryAdapter
-from dbt.adapters.bigquery.relation import BigQueryRelation
+from dbt.adapters.bigquery import BigQueryRelation
 import dbt.exceptions
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
-fake_conn = {"handle": None, "state": "open", "type": "bigquery"}
+from .utils import config_from_parts_or_dicts, inject_adapter
 
-from .utils import config_from_parts_or_dicts
+
+def _bq_conn():
+    conn = MagicMock()
+    conn.get.side_effect = lambda x: 'bigquery' if x == 'type' else None
+    return conn
+
 
 class TestBigQueryAdapter(unittest.TestCase):
 
@@ -63,10 +68,12 @@ class TestBigQueryAdapter(unittest.TestCase):
             project=project,
             profile=profile,
         )
-        return BigQueryAdapter(config)
+        adapter = BigQueryAdapter(config)
+        inject_adapter('bigquery', adapter)
+        return adapter
 
 
-    @patch('dbt.adapters.bigquery.BigQueryAdapter.open_connection', return_value=fake_conn)
+    @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
     def test_acquire_connection_oauth_validations(self, mock_open_connection):
         adapter = self.get_adapter('oauth')
         try:
@@ -81,7 +88,7 @@ class TestBigQueryAdapter(unittest.TestCase):
 
         mock_open_connection.assert_called_once()
 
-    @patch('dbt.adapters.bigquery.BigQueryAdapter.open_connection', return_value=fake_conn)
+    @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
     def test_acquire_connection_service_account_validations(self, mock_open_connection):
         adapter = self.get_adapter('service_account')
         try:
@@ -95,6 +102,24 @@ class TestBigQueryAdapter(unittest.TestCase):
             raise
 
         mock_open_connection.assert_called_once()
+
+    def test_cancel_open_connections_empty(self):
+        adapter = self.get_adapter('oauth')
+        self.assertEqual(adapter.cancel_open_connections(), None)
+
+    def test_cancel_open_connections_master(self):
+        adapter = self.get_adapter('oauth')
+        adapter.connections.in_use['master'] = object()
+        self.assertEqual(adapter.cancel_open_connections(), None)
+
+    def test_cancel_open_connections_single(self):
+        adapter = self.get_adapter('oauth')
+        adapter.connections.in_use.update({
+            'master': object(),
+            'model': object(),
+        })
+        # actually does nothing
+        self.assertEqual(adapter.cancel_open_connections(), None)
 
     @patch('dbt.adapters.bigquery.impl.google.auth.default')
     @patch('dbt.adapters.bigquery.impl.google.cloud.bigquery')
@@ -117,7 +142,7 @@ class TestBigQueryRelation(unittest.TestCase):
         kwargs = {
             'type': None,
             'path': {
-                'project': 'test-project',
+                'database': 'test-project',
                 'schema': 'test_schema',
                 'identifier': 'my_view'
             },
@@ -132,7 +157,7 @@ class TestBigQueryRelation(unittest.TestCase):
         kwargs = {
             'type': 'view',
             'path': {
-                'project': 'test-project',
+                'database': 'test-project',
                 'schema': 'test_schema',
                 'identifier': 'my_view'
             },
@@ -148,7 +173,7 @@ class TestBigQueryRelation(unittest.TestCase):
         kwargs = {
             'type': 'table',
             'path': {
-                'project': 'test-project',
+                'database': 'test-project',
                 'schema': 'test_schema',
                 'identifier': 'generic_table'
             },
@@ -164,7 +189,7 @@ class TestBigQueryRelation(unittest.TestCase):
         kwargs = {
             'type': 'external',
             'path': {
-                'project': 'test-project',
+                'database': 'test-project',
                 'schema': 'test_schema',
                 'identifier': 'sheet'
             },
@@ -180,7 +205,7 @@ class TestBigQueryRelation(unittest.TestCase):
         kwargs = {
             'type': 'invalid-type',
             'path': {
-                'project': 'test-project',
+                'database': 'test-project',
                 'schema': 'test_schema',
                 'identifier': 'my_invalid_id'
             },

@@ -10,6 +10,7 @@ class TestVar(unittest.TestCase):
         self.model = ParsedNode(
             alias='model_one',
             name='model_one',
+            database='dbt',
             schema='analytics',
             resource_type='model',
             unique_id='model.root.model_one',
@@ -19,6 +20,7 @@ class TestVar(unittest.TestCase):
             original_file_path='model_one.sql',
             root_path='/usr/src/app',
             refs=[],
+            sources=[],
             depends_on={
                 'nodes': [],
                 'macros': []

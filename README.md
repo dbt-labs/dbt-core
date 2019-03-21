@@ -36,7 +36,7 @@ These select statements, or "models", form a dbt project. Models frequently buil
 
 -   [Install dbt](https://docs.getdbt.com/docs/installation)
 -   Read the [documentation](https://docs.getdbt.com/).
--   Productionize your dbt project with [Sinter](https://www.sinterdata.com)
+-   Productionize your dbt project with [dbt Cloud](https://www.getdbt.com)
 
 ## Find out more
 

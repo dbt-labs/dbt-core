@@ -103,7 +103,7 @@ class BaseTestPrePost(DBTIntegrationTest):
         for ctx in ctxs:
             self.assertEqual(ctx['state'], state)
             self.assertEqual(ctx['target.dbname'], 'dbt')
-            self.assertEqual(ctx['target.host'], 'database')
+            self.assertEqual(ctx['target.host'], self.database_host)
             self.assertEqual(ctx['target.name'], 'default2')
             self.assertEqual(ctx['target.port'], 5432)
             self.assertEqual(ctx['target.schema'], self.unique_schema())

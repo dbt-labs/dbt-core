@@ -1,0 +1,121 @@
+# Python package
+# Create and test a Python package on multiple Python versions.
+# Add steps that analyze code, save the dist with the build record, publish to a PyPI-compatible index, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/python
+
+trigger:
+- master
+
+jobs:
+- job: UnitTest
+  pool:
+    vmImage: 'vs2017-win2016'
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.5'
+      architecture: 'x64'
+
+  - script: python -m pip install --upgrade pip && pip install tox
+    displayName: 'Install dependencies'
+
+  - script: python -m tox -e pywin-unit
+    displayName: Run unit tests
+
+- job: PostgresIntegrationTest
+  pool:
+    vmImage: 'vs2017-win2016'
+  dependsOn: UnitTest
+
+  steps:
+  - pwsh: |
+      choco install postgresql --params '/Password:password' --params-global --version 10.6
+      Set-Content "c:\program files\postgresql\10\data\pg_hba.conf" "host   all   all   ::1/128        trust"
+      Add-Content "c:\program files\postgresql\10\data\pg_hba.conf" "host   all   all   127.0.0.1/32   trust"
+      # the service name is "postgresql-x64-10", conveniently it's both the display name and the actual name
+      Restart-Service postgresql-x64-10
+
+      & "C:\program files\postgresql\10\bin\createdb.exe" -U postgres dbt
+      & "C:\program files\postgresql\10\bin\psql.exe"  -U postgres -c "CREATE ROLE root WITH PASSWORD 'password';"
+      & "C:\program files\postgresql\10\bin\psql.exe"  -U postgres -c "ALTER ROLE root WITH LOGIN;"
+      & "C:\program files\postgresql\10\bin\psql.exe"  -U postgres -c "GRANT CREATE, CONNECT ON DATABASE dbt TO root WITH GRANT OPTION;"
+      & "C:\program files\postgresql\10\bin\psql.exe"  -U postgres -c "CREATE ROLE noaccess WITH PASSWORD 'password' NOSUPERUSER;"
+      & "C:\program files\postgresql\10\bin\psql.exe"  -U postgres -c "ALTER ROLE noaccess WITH LOGIN;"
+      & "C:\program files\postgresql\10\bin\psql.exe"  -U postgres -c "GRANT CONNECT ON DATABASE dbt TO noaccess;"
+    displayName: Install postgresql and set up database
+
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.5'
+      architecture: 'x64'
+
+  - script: python -m pip install --upgrade pip && pip install tox
+    displayName: 'Install dependencies'
+
+  - script: python -m tox -e pywin-postgres
+    displayName: Run integration tests
+
+# These three are all similar except secure environment variables, which MUST be passed along to their tasks,
+# but there's probably a better way to do this!
+- job: SnowflakeIntegrationTest
+  pool:
+    vmImage: 'vs2017-win2016'
+  dependsOn: PostgresIntegrationTest
+
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.5'
+      architecture: 'x64'
+
+  - script: python -m pip install --upgrade pip && pip install tox
+    displayName: 'Install dependencies'
+
+  - script: python -m tox -e pywin-snowflake
+    env:
+      SNOWFLAKE_TEST_ACCOUNT: $(SNOWFLAKE_TEST_ACCOUNT)
+      SNOWFLAKE_TEST_PASSWORD: $(SNOWFLAKE_TEST_PASSWORD)
+      SNOWFLAKE_TEST_USER: $(SNOWFLAKE_TEST_USER)
+      SNOWFLAKE_TEST_WAREHOUSE: $(SNOWFLAKE_TEST_WAREHOUSE)
+    displayName: Run integration tests
+
+- job: BigQueryIntegrationTest
+  pool:
+    vmImage: 'vs2017-win2016'
+  dependsOn: PostgresIntegrationTest
+
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.5'
+      architecture: 'x64'
+
+  - script: python -m pip install --upgrade pip && pip install tox
+    displayName: 'Install dependencies'
+  - script: python -m tox -e pywin-bigquery
+    env:
+      BIGQUERY_SERVICE_ACCOUNT_JSON: $(BIGQUERY_SERVICE_ACCOUNT_JSON)
+    displayName: Run integration tests
+
+- job: RedshiftIntegrationTest
+  pool:
+    vmImage: 'vs2017-win2016'
+  dependsOn: PostgresIntegrationTest
+
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.5'
+      architecture: 'x64'
+
+  - script: python -m pip install --upgrade pip && pip install tox
+    displayName: 'Install dependencies'
+
+  - script: python -m tox -e pywin-redshift
+    env:
+      REDSHIFT_TEST_DBNAME: $(REDSHIFT_TEST_DBNAME)
+      REDSHIFT_TEST_PASS: $(REDSHIFT_TEST_PASS)
+      REDSHIFT_TEST_USER: $(REDSHIFT_TEST_USER)
+      REDSHIFT_TEST_PORT: $(REDSHIFT_TEST_PORT)
+      REDSHIFT_TEST_HOST: $(REDSHIFT_TEST_HOST)
+    displayName: Run integration tests

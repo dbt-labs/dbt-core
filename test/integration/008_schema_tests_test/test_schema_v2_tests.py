@@ -38,7 +38,7 @@ class TestSchemaTests(DBTIntegrationTest):
         for result in test_results:
             # assert that all deliberately failing tests actually fail
             if 'failure' in result.node.get('name'):
-                self.assertFalse(result.errored)
+                self.assertIsNone(result.error)
                 self.assertFalse(result.skipped)
                 self.assertTrue(
                     result.status > 0,
@@ -47,7 +47,7 @@ class TestSchemaTests(DBTIntegrationTest):
 
             # assert that actual tests pass
             else:
-                self.assertFalse(result.errored)
+                self.assertIsNone(result.error)
                 self.assertFalse(result.skipped)
                 # status = # of failing rows
                 self.assertEqual(
@@ -88,12 +88,43 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
         self.assertEqual(len(ran_tests), 5)
         self.assertEqual(sum(x.status for x in ran_tests), 0)
 
-    # TODO: re-enable this test when we make --strict actually set strict mode
-    # @attr(type='postgres')
-    # def test_malformed_schema_strict_will_break_run(self):
-    #     with self.assertRaises(CompilationException):
-    #         self.run_dbt(strict=True)
+    @attr(type='postgres')
+    def test_malformed_schema_strict_will_break_run(self):
+        with self.assertRaises(CompilationException):
+            self.run_dbt(strict=True)
 
+
+class TestHooksInTests(DBTIntegrationTest):
+
+    @property
+    def schema(self):
+        return "schema_tests_008"
+
+    @property
+    def models(self):
+        # test ephemeral models so we don't need to do a run (which would fail)
+        return "test/integration/008_schema_tests_test/ephemeral"
+
+    @property
+    def project_config(self):
+        return {
+            "on-run-start": ["{{ exceptions.raise_compiler_error('hooks called in tests -- error') if execute }}"],
+            "on-run-end": ["{{ exceptions.raise_compiler_error('hooks called in tests -- error') if execute }}"],
+        }
+
+    @attr(type='postgres')
+    def test_hooks_dont_run_for_tests(self):
+        # This would fail if the hooks ran
+        results = self.run_dbt(['test', '--model', 'ephemeral'])
+        self.assertEqual(len(results), 1)
+        for result in results:
+            self.assertIsNone(result.error)
+            self.assertFalse(result.skipped)
+            # status = # of failing rows
+            self.assertEqual(
+                result.status, 0,
+                'test {} failed'.format(result.node.get('name'))
+            )
 
 class TestCustomSchemaTests(DBTIntegrationTest):
 
@@ -111,7 +142,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
             'packages': [
                 {
                     'git': 'https://github.com/fishtown-analytics/dbt-utils',
-                    'revision': 'macros-v2',
+                    'revision': '0.13-support',
                 },
                 {
                     'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
@@ -150,7 +181,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         expected_failures = ['unique', 'every_value_is_blue']
 
         for result in test_results:
-            if result.errored:
+            if result.error is not None:
                 self.assertTrue(result.node['name'] in expected_failures)
         self.assertEqual(sum(x.status for x in test_results), 52)
 
@@ -187,7 +218,7 @@ class TestBQSchemaTests(DBTIntegrationTest):
         for result in test_results:
             # assert that all deliberately failing tests actually fail
             if 'failure' in result.node.get('name'):
-                self.assertFalse(result.errored)
+                self.assertIsNone(result.error)
                 self.assertFalse(result.skipped)
                 self.assertTrue(
                     result.status > 0,
@@ -196,7 +227,7 @@ class TestBQSchemaTests(DBTIntegrationTest):
 
             # assert that actual tests pass
             else:
-                self.assertFalse(result.errored)
+                self.assertIsNone(result.error)
                 self.assertFalse(result.skipped)
                 # status = # of failing rows
                 self.assertEqual(

@@ -1,21 +1,27 @@
-
-view_model:
-    constraints:
-        not_null:
-            - id
-            - updated_at
-
-        unique:
-            - id
-            - dupe    # fails
-
-        was_materialized:
-            - {name: view_model, type: view}
-
-table_model:
-    constraints:
-        not_null:
-            - id
-
-        was_materialized:
-            - {name: table_model, type: table}
+version: 2
+models:
+- name: view_model
+  columns:
+  - name: dupe
+    tests:
+    - unique
+  - name: id
+    tests:
+    - not_null
+    - unique
+  - name: updated_at
+    tests:
+    - not_null
+  tests:
+  - was_materialized:
+      name: view_model
+      type: view
+- name: table_model
+  columns:
+  - name: id
+    tests:
+    - not_null
+  tests:
+  - was_materialized:
+      name: table_model
+      type: table
