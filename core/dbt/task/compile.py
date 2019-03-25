@@ -1,9 +1,8 @@
 import os
 
-from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import extract_toplevel_blocks
 from dbt.compilation import compile_manifest
-from dbt.loader import load_all_projects, GraphLoader
+from dbt.loader import load_all_projects
 from dbt.node_runners import CompileRunner, RPCCompileRunner
 from dbt.node_types import NodeType
 from dbt.parser.analysis import RPCCallParser
@@ -37,12 +36,9 @@ class CompileTask(GraphRunnableTask):
 class RemoteCompileTask(CompileTask, RemoteCallable):
     METHOD_NAME = 'compile'
 
-    def __init__(self, args, config):
+    def __init__(self, args, config, manifest):
         super(RemoteCompileTask, self).__init__(args, config)
-        self._base_manifest = GraphLoader.load_all(
-            config,
-            internal_manifest=get_adapter(config).check_internal_manifest()
-        )
+        self._base_manifest = manifest
 
     def get_runner_type(self):
         return RPCCompileRunner
@@ -70,7 +66,7 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
         sql = ''.join(data_chunks)
         return sql, macros
 
-    def handle_request(self, name, sql):
+    def _get_exec_node(self, name, sql, macros):
         request_path = os.path.join(self.config.target_path, 'rpc', name)
         all_projects = load_all_projects(self.config)
         macro_overrides = {}
@@ -103,7 +99,6 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
         }
 
         unique_id, node = rpc_parser.parse_sql_node(node_dict)
-
         self.manifest = ParserUtils.add_new_refs(
             manifest=self._base_manifest,
             current_project=self.config,
@@ -113,11 +108,15 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
 
         # don't write our new, weird manifest!
         self.linker = compile_manifest(self.config, self.manifest, write=False)
+        return node
+
+    def handle_request(self, name, sql, macros=None):
+        node = self._get_exec_node(name, sql, macros)
+
         selected_uids = [node.unique_id]
         self.runtime_cleanup(selected_uids)
         self.job_queue = self.linker.as_graph_queue(self.manifest,
                                                     selected_uids)
 
         result = self.get_runner(node).safe_run(self.manifest)
-
         return result.serialize()
