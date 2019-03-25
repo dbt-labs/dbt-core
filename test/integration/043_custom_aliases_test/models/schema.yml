@@ -1,0 +1,9 @@
+version: 2
+
+models:
+  - name: model1
+    columns:
+      - name: model_name
+        tests:
+          - accepted_values:
+             values: ['custom_alias']
