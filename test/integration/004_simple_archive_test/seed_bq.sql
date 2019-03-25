@@ -18,9 +18,9 @@ create table {database}.{schema}.archive_expected (
 
 	-- archival fields
 	`updated_at` TIMESTAMP,
-	`valid_from` TIMESTAMP,
-	`valid_to`   TIMESTAMP,
-	`scd_id`     STRING,
+	`dbt_valid_from` TIMESTAMP,
+	`dbt_valid_to`   TIMESTAMP,
+	`dbt_scd_id`     STRING,
 	`dbt_updated_at` TIMESTAMP
 );
 
@@ -58,10 +58,10 @@ insert {database}.{schema}.archive_expected (
     `gender`,
     `ip_address`,
     `updated_at`,
-    `valid_from`,
-    `valid_to`,
+    `dbt_valid_from`,
+    `dbt_valid_to`,
     `dbt_updated_at`,
-    `scd_id`
+    `dbt_scd_id`
 )
 
 select
@@ -73,9 +73,9 @@ select
     `ip_address`,
     `updated_at`,
     -- fields added by archival
-    `updated_at` as valid_from,
-    cast(null as timestamp) as valid_to,
+    `updated_at` as dbt_valid_from,
+    cast(null as timestamp) as dbt_valid_to,
     `updated_at` as dbt_updated_at,
-    to_hex(md5(concat(cast(`id` as string), '-', `first_name`, '|', cast(`updated_at` as string)))) as scd_id
+    to_hex(md5(concat(cast(`id` as string), '-', `first_name`, '|', cast(`updated_at` as string)))) as dbt_scd_id
 from {database}.{schema}.seed;
 

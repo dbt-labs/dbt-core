@@ -66,6 +66,8 @@ class SourceConfig(object):
 
         if self.node_type == NodeType.Seed:
             defaults['materialized'] = 'seed'
+        elif self.node_type == NodeType.Archive:
+            defaults['materialized'] = 'archive'
 
         active_config = self.load_config_from_active_project()
 
@@ -150,6 +152,8 @@ class SourceConfig(object):
 
         if self.node_type == NodeType.Seed:
             model_configs = runtime_config.seeds
+        elif self.node_type == NodeType.Archive:
+            model_configs = {}
         else:
             model_configs = runtime_config.models
 

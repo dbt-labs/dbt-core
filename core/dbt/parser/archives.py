@@ -2,7 +2,7 @@ from dbt.contracts.graph.unparsed import UnparsedNode
 from dbt.node_types import NodeType
 from dbt.parser.base import MacrosKnownParser
 from dbt.parser.base_sql import BaseSqlParser, SQLParseResult
-
+from dbt.adapters.factory import get_adapter
 import dbt.clients.jinja
 import dbt.exceptions
 import dbt.utils
@@ -24,7 +24,7 @@ class ArchiveParser(MacrosKnownParser):
 
             for table in tables:
                 cfg = table.copy()
-                cfg['source_database'] = archive_config.get(
+                source_database = archive_config.get(
                     'source_database',
                     config.credentials.database
                 )
@@ -33,11 +33,22 @@ class ArchiveParser(MacrosKnownParser):
                     config.credentials.database
                 )
 
-                cfg['source_schema'] = archive_config.get('source_schema')
+                source_schema = archive_config['source_schema']
                 cfg['target_schema'] = archive_config.get('target_schema')
 
                 fake_path = [cfg['target_database'], cfg['target_schema'],
                              cfg['target_table']]
+
+                relation = get_adapter(config).Relation.create(
+                    database=source_database,
+                    schema=source_schema,
+                    identifier=table['source_table'],
+                    type='table'
+                )
+
+                raw_sql = '{{ config(materialized="archive") }}' + \
+                          'select * from {!s}'.format(relation)
+
                 archives.append({
                     'name': table.get('target_table'),
                     'root_path': config.project_root,
@@ -46,7 +57,7 @@ class ArchiveParser(MacrosKnownParser):
                     'original_file_path': 'dbt_project.yml',
                     'package_name': config.project_name,
                     'config': cfg,
-                    'raw_sql': '{{config(materialized="archive")}} -- noop'
+                    'raw_sql': raw_sql
                 })
 
         return archives

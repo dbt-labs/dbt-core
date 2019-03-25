@@ -163,7 +163,7 @@ def print_archive_result_line(result, index, total):
     info, status = get_printable_result(result, 'archived', 'archiving')
     cfg = model.get('config', {})
 
-    msg = "{info} {name} --> {target_schema}.{target_table}".format(
+    msg = "{info} {name} --> {target_database}.{target_schema}.{name}".format(
         info=info, name=model.name, **cfg)
     print_fancy_output_line(
         msg,

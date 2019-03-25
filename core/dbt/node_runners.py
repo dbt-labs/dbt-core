@@ -492,7 +492,7 @@ class ArchiveRunner(ModelRunner):
     def describe_node(self):
         cfg = self.node.get('config', {})
         return "archive {name} --> "\
-               "{target_database}.{target_schema}.{target_table}".format(
+               "{target_database}.{target_schema}.{name}".format(
                 name=self.node.name, **cfg)
 
     def print_result_line(self, result):
@@ -527,7 +527,7 @@ class RPCCompileRunner(CompileRunner):
 
     def handle_exception(self, e, ctx):
         if isinstance(e, dbt.exceptions.Exception):
-            if hasattr(e, 'node'):
+            if isinstance(e, dbt.exceptions.RuntimeException):
                 e.node = ctx.node
             return rpc.dbt_error(e)
         elif isinstance(e, rpc.RPCException):

@@ -230,11 +230,14 @@ class TestCrossDBArchive(DBTIntegrationTest):
             ]
         }
 
+    def run_archive(self):
+        return self.run_dbt(['archive', '--vars', '{{"target_database": {}}}'.format(self.alternative_database)])
+
     @attr(type='snowflake')
     def test__snowflake__cross_archive(self):
         self.run_sql_file("test/integration/004_simple_archive_test/seed.sql")
 
-        results = self.run_dbt(["archive"])
+        results = self.run_archive()
         self.assertEqual(len(results),  1)
 
         self.assertTablesEqual("ARCHIVE_EXPECTED", "ARCHIVE_ACTUAL", table_b_db=self.alternative_database)
@@ -242,7 +245,7 @@ class TestCrossDBArchive(DBTIntegrationTest):
         self.run_sql_file("test/integration/004_simple_archive_test/invalidate_snowflake.sql")
         self.run_sql_file("test/integration/004_simple_archive_test/update.sql")
 
-        results = self.run_dbt(["archive"])
+        results = self.run_archive()
         self.assertEqual(len(results),  1)
 
         self.assertTablesEqual("ARCHIVE_EXPECTED", "ARCHIVE_ACTUAL", table_b_db=self.alternative_database)
@@ -251,14 +254,45 @@ class TestCrossDBArchive(DBTIntegrationTest):
     def test__bigquery__cross_archive(self):
         self.run_sql_file("test/integration/004_simple_archive_test/seed_bq.sql")
 
-        self.run_dbt(["archive"])
+        self.run_archive()
 
         self.assertTablesEqual("archive_expected", "archive_actual", table_b_db=self.alternative_database)
 
         self.run_sql_file("test/integration/004_simple_archive_test/invalidate_bigquery.sql")
         self.run_sql_file("test/integration/004_simple_archive_test/update_bq.sql")
 
-        self.run_dbt(["archive"])
+        self.run_archive()
 
         self.assertTablesEqual("archive_expected", "archive_actual", table_b_db=self.alternative_database)
 
+
+class TestSimpleArchiveFiles(TestSimpleArchive):
+    @property
+    def project_config(self):
+        return {
+            "data-paths": ['test/integration/004_simple_archive_test/data'],
+            "archive-paths": ['test/integration/004_simple_archive_test/test-archives-pg'],
+        }
+
+
+class TestSimpleArchiveFilesBigquery(TestSimpleArchiveBigquery):
+    @property
+    def project_config(self):
+        return {
+            "archive-paths": ['test/integration/004_simple_archive_test/test-archives-bq'],
+        }
+
+
+class TestCrossDBArchiveFiles(TestCrossDBArchive):
+    @property
+    def project_config(self):
+        if self.adapter_type == 'snowflake':
+            paths = ['test/integration/004_simple_archive_test/test-archives-pg']
+        else:
+            paths = ['test/integration/004_simple_archive_test/test-archives-bq']
+        return {
+            'archive-paths': paths,
+        }
+
+    def run_archive(self):
+        return self.run_dbt(['archive', '--vars', '{{"target_database": {}}}'.format(self.alternative_database)])
