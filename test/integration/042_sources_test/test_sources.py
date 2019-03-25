@@ -568,6 +568,30 @@ class TestRPCServer(BaseSourcesTest):
             table={'column_names': ['id'], 'rows': [[2.0]]}
         )
 
+        macro_with_raw_statement = self.query(
+            'run',
+            '{% raw %}select 1 as{% endraw %}{{ test_macros() }}{% macro test_macros() %} id{% endmacro %}',
+            name='foo'
+        ).json()
+        self.assertSuccessfulRunResult(
+            macro_with_raw_statement,
+            '{% raw %}select 1 as{% endraw %}{{ test_macros() }}',
+            compiled_sql='select 1 as id',
+            table={'column_names': ['id'], 'rows': [[1.0]]}
+        )
+
+        macro_with_comment = self.query(
+            'run',
+            '{% raw %}select 1 {% endraw %}{{ test_macros() }} {# my comment #}{% macro test_macros() -%} as{% endmacro %} id{# another comment #}',
+            name='foo'
+        ).json()
+        self.assertSuccessfulRunResult(
+            macro_with_comment,
+            '{% raw %}select 1 {% endraw %}{{ test_macros() }} {# my comment #} id{# another comment #}',
+            compiled_sql='select 1 as  id',
+            table={'column_names': ['id'], 'rows': [[1.0]]}
+        )
+
     @use_profile('postgres')
     def test_invalid_requests(self):
         data = self.query(

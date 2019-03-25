@@ -250,11 +250,15 @@ class BlockIterator(object):
 
         # comments are easy
         if matchgroups.get('comment_start') is not None:
+            start = match.start()
             self.expect_comment_end()
+            self.blocks.append(BlockData(self.data[start:self.pos]))
             return True
 
         if matchgroups.get('block_type_name') == 'raw':
+            start = match.start()
             self.expect_raw_end()
+            self.blocks.append(BlockData(self.data[start:self.pos]))
             return True
 
         if matchgroups.get('block_type_name') == 'materialization':
