@@ -8,10 +8,10 @@ insert into {database}.{schema}.archive_expected (
     "gender",
     "ip_address",
     "updated_at",
-    "valid_from",
-    "valid_to",
+    "dbt_valid_from",
+    "dbt_valid_to",
     "dbt_updated_at",
-    "scd_id"
+    "dbt_scd_id"
 )
 
 select
@@ -23,13 +23,105 @@ select
     "ip_address",
     "updated_at",
     -- fields added by archival
-    "updated_at" as "valid_from",
-    null::timestamp as "valid_to",
+    "updated_at" as "dbt_valid_from",
+    null::timestamp as "dbt_valid_to",
     "updated_at" as "dbt_updated_at",
-    md5("id" || '-' || "first_name" || '|' || "updated_at"::text) as "scd_id"
+    md5("id" || '-' || "first_name" || '|' || "updated_at"::text) as "dbt_scd_id"
 from {database}.{schema}.seed
 where "id" >= 10 and "id" <= 20;
 
+
+insert into {database}.{schema}.archive_castillo_expected (
+    "id",
+    "first_name",
+    "last_name",
+    "email",
+    "gender",
+    "ip_address",
+    "updated_at",
+    "dbt_valid_from",
+    "dbt_valid_to",
+    "dbt_updated_at",
+    "dbt_scd_id"
+)
+
+select
+    "id",
+    "first_name",
+    "last_name",
+    "email",
+    "gender",
+    "ip_address",
+    "updated_at",
+    -- fields added by archival
+    "updated_at" as "dbt_valid_from",
+    null::timestamp as "dbt_valid_to",
+    "updated_at" as "dbt_updated_at",
+    md5("id" || '-' || "first_name" || '|' || "updated_at"::text) as "dbt_scd_id"
+from {database}.{schema}.seed
+where "id" >= 10 and "id" <= 20 and "last_name" = 'Castillo';
+
+
+insert into {database}.{schema}.archive_alvarez_expected (
+    "id",
+    "first_name",
+    "last_name",
+    "email",
+    "gender",
+    "ip_address",
+    "updated_at",
+    "dbt_valid_from",
+    "dbt_valid_to",
+    "dbt_updated_at",
+    "dbt_scd_id"
+)
+
+select
+    "id",
+    "first_name",
+    "last_name",
+    "email",
+    "gender",
+    "ip_address",
+    "updated_at",
+    -- fields added by archival
+    "updated_at" as "dbt_valid_from",
+    null::timestamp as "dbt_valid_to",
+    "updated_at" as "dbt_updated_at",
+    md5("id" || '-' || "first_name" || '|' || "updated_at"::text) as "dbt_scd_id"
+from {database}.{schema}.seed
+where "id" >= 10 and "id" <= 20 and "last_name" = 'Alvarez';
+
+
+insert into {database}.{schema}.archive_kelly_expected (
+    "id",
+    "first_name",
+    "last_name",
+    "email",
+    "gender",
+    "ip_address",
+    "updated_at",
+    "dbt_valid_from",
+    "dbt_valid_to",
+    "dbt_updated_at",
+    "dbt_scd_id"
+)
+
+select
+    "id",
+    "first_name",
+    "last_name",
+    "email",
+    "gender",
+    "ip_address",
+    "updated_at",
+    -- fields added by archival
+    "updated_at" as "dbt_valid_from",
+    null::timestamp as "dbt_valid_to",
+    "updated_at" as "dbt_updated_at",
+    md5("id" || '-' || "first_name" || '|' || "updated_at"::text) as "dbt_scd_id"
+from {database}.{schema}.seed
+where "id" >= 10 and "id" <= 20 and "last_name" = 'Kelly';
 
 -- insert 10 new records
 insert into {database}.{schema}.seed ("id", "first_name", "last_name", "email", "gender", "ip_address", "updated_at") values
@@ -54,10 +146,10 @@ insert into {database}.{schema}.archive_expected (
     "gender",
     "ip_address",
     "updated_at",
-    "valid_from",
-    "valid_to",
+    "dbt_valid_from",
+    "dbt_valid_to",
     "dbt_updated_at",
-    "scd_id"
+    "dbt_scd_id"
 )
 
 select
@@ -69,9 +161,101 @@ select
     "ip_address",
     "updated_at",
     -- fields added by archival
-    "updated_at" as "valid_from",
-    null::timestamp as "valid_to",
+    "updated_at" as "dbt_valid_from",
+    null::timestamp as "dbt_valid_to",
     "updated_at" as "dbt_updated_at",
-    md5("id" || '-' || "first_name" || '|' || "updated_at"::text) as "scd_id"
+    md5("id" || '-' || "first_name" || '|' || "updated_at"::text) as "dbt_scd_id"
 from {database}.{schema}.seed
 where "id" > 20;
+
+
+-- add these new records to the archive table
+insert into {database}.{schema}.archive_castillo_expected (
+    "id",
+    "first_name",
+    "last_name",
+    "email",
+    "gender",
+    "ip_address",
+    "updated_at",
+    "dbt_valid_from",
+    "dbt_valid_to",
+    "dbt_updated_at",
+    "dbt_scd_id"
+)
+
+select
+    "id",
+    "first_name",
+    "last_name",
+    "email",
+    "gender",
+    "ip_address",
+    "updated_at",
+    -- fields added by archival
+    "updated_at" as "dbt_valid_from",
+    null::timestamp as "dbt_valid_to",
+    "updated_at" as "dbt_updated_at",
+    md5("id" || '-' || "first_name" || '|' || "updated_at"::text) as "dbt_scd_id"
+from {database}.{schema}.seed
+where "id" > 20 and "last_name" = 'Castillo';
+
+insert into {database}.{schema}.archive_alvarez_expected (
+    "id",
+    "first_name",
+    "last_name",
+    "email",
+    "gender",
+    "ip_address",
+    "updated_at",
+    "dbt_valid_from",
+    "dbt_valid_to",
+    "dbt_updated_at",
+    "dbt_scd_id"
+)
+
+select
+    "id",
+    "first_name",
+    "last_name",
+    "email",
+    "gender",
+    "ip_address",
+    "updated_at",
+    -- fields added by archival
+    "updated_at" as "dbt_valid_from",
+    null::timestamp as "dbt_valid_to",
+    "updated_at" as "dbt_updated_at",
+    md5("id" || '-' || "first_name" || '|' || "updated_at"::text) as "dbt_scd_id"
+from {database}.{schema}.seed
+where "id" > 20 and "last_name" = 'Alvarez';
+
+insert into {database}.{schema}.archive_kelly_expected (
+    "id",
+    "first_name",
+    "last_name",
+    "email",
+    "gender",
+    "ip_address",
+    "updated_at",
+    "dbt_valid_from",
+    "dbt_valid_to",
+    "dbt_updated_at",
+    "dbt_scd_id"
+)
+
+select
+    "id",
+    "first_name",
+    "last_name",
+    "email",
+    "gender",
+    "ip_address",
+    "updated_at",
+    -- fields added by archival
+    "updated_at" as "dbt_valid_from",
+    null::timestamp as "dbt_valid_to",
+    "updated_at" as "dbt_updated_at",
+    md5("id" || '-' || "first_name" || '|' || "updated_at"::text) as "dbt_scd_id"
+from {database}.{schema}.seed
+where "id" > 20 and "last_name" = 'Kelly';

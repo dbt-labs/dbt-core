@@ -8,10 +8,10 @@ insert {database}.{schema}.archive_expected (
     `gender`,
     `ip_address`,
     `updated_at`,
-    `valid_from`,
-    `valid_to`,
+    `dbt_valid_from`,
+    `dbt_valid_to`,
     `dbt_updated_at`,
-    `scd_id`
+    `dbt_scd_id`
 )
 
 select
@@ -23,10 +23,10 @@ select
     `ip_address`,
     `updated_at`,
     -- fields added by archival
-    `updated_at` as `valid_from`,
-    cast(null as timestamp) as `valid_to`,
+    `updated_at` as `dbt_valid_from`,
+    cast(null as timestamp) as `dbt_valid_to`,
     `updated_at` as `dbt_updated_at`,
-    to_hex(md5(concat(cast(`id` as string), '-', `first_name`, '|', cast(`updated_at` as string)))) as `scd_id`
+    to_hex(md5(concat(cast(`id` as string), '-', `first_name`, '|', cast(`updated_at` as string)))) as `dbt_scd_id`
 from {database}.{schema}.seed
 where `id` >= 10 and `id` <= 20;
 
@@ -54,10 +54,10 @@ insert {database}.{schema}.archive_expected (
     `gender`,
     `ip_address`,
     `updated_at`,
-    `valid_from`,
-    `valid_to`,
+    `dbt_valid_from`,
+    `dbt_valid_to`,
     `dbt_updated_at`,
-    `scd_id`
+    `dbt_scd_id`
 )
 
 select
@@ -69,10 +69,10 @@ select
     `ip_address`,
     `updated_at`,
     -- fields added by archival
-    `updated_at` as `valid_from`,
-    cast(null as timestamp) as `valid_to`,
+    `updated_at` as `dbt_valid_from`,
+    cast(null as timestamp) as `dbt_valid_to`,
     `updated_at` as `dbt_updated_at`,
-    to_hex(md5(concat(cast(`id` as string), '-', `first_name`, '|', cast(`updated_at` as string)))) as `scd_id`
+    to_hex(md5(concat(cast(`id` as string), '-', `first_name`, '|', cast(`updated_at` as string)))) as `dbt_scd_id`
 from {database}.{schema}.seed
 where `id` > 20;
 

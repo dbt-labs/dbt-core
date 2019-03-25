@@ -16,8 +16,8 @@
 
 {% macro bigquery__archive_update(target_relation, tmp_relation) %}
     update {{ target_relation }} as dest
-    set dest.{{ adapter.quote('valid_to') }} = tmp.{{ adapter.quote('valid_to') }}
+    set dest.{{ adapter.quote('dbt_valid_to') }} = tmp.{{ adapter.quote('dbt_valid_to') }}
     from {{ tmp_relation }} as tmp
-    where tmp.{{ adapter.quote('scd_id') }} = dest.{{ adapter.quote('scd_id') }}
+    where tmp.{{ adapter.quote('dbt_scd_id') }} = dest.{{ adapter.quote('dbt_scd_id') }}
       and {{ adapter.quote('change_type') }} = 'update';
 {% endmacro %}

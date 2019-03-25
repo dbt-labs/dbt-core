@@ -1,4 +1,4 @@
-create table {database}.{schema}.seed (
+    create table {database}.{schema}.seed (
 	"id" INTEGER,
 	"first_name" VARCHAR(50),
 	"last_name" VARCHAR(50),
@@ -18,9 +18,9 @@ create table {database}.{schema}.archive_expected (
 
 	-- archival fields
 	"updated_at" TIMESTAMP WITHOUT TIME ZONE,
-	"valid_from" TIMESTAMP WITHOUT TIME ZONE,
-	"valid_to"   TIMESTAMP WITHOUT TIME ZONE,
-	"scd_id"     VARCHAR(255),
+	"dbt_valid_from" TIMESTAMP WITHOUT TIME ZONE,
+	"dbt_valid_to"   TIMESTAMP WITHOUT TIME ZONE,
+	"dbt_scd_id"     VARCHAR(255),
 	"dbt_updated_at" TIMESTAMP WITHOUT TIME ZONE
 );
 
@@ -58,10 +58,10 @@ insert into {database}.{schema}.archive_expected (
     "gender",
     "ip_address",
     "updated_at",
-    "valid_from",
-    "valid_to",
+    "dbt_valid_from",
+    "dbt_valid_to",
     "dbt_updated_at",
-    "scd_id"
+    "dbt_scd_id"
 )
 
 select
@@ -73,8 +73,149 @@ select
     "ip_address",
     "updated_at",
     -- fields added by archival
-    "updated_at" as valid_from,
-    null::timestamp as valid_to,
+    "updated_at" as dbt_valid_from,
+    null::timestamp as dbt_valid_to,
     "updated_at" as dbt_updated_at,
-    md5("id" || '-' || "first_name" || '|' || "updated_at"::text) as scd_id
+    md5("id" || '-' || "first_name" || '|' || "updated_at"::text) as dbt_scd_id
 from {database}.{schema}.seed;
+
+
+
+create table {database}.{schema}.archive_castillo_expected (
+    "id" INTEGER,
+    "first_name" VARCHAR(50),
+    "last_name" VARCHAR(50),
+    "email" VARCHAR(50),
+    "gender" VARCHAR(50),
+    "ip_address" VARCHAR(20),
+
+    -- archival fields
+    "updated_at" TIMESTAMP WITHOUT TIME ZONE,
+    "dbt_valid_from" TIMESTAMP WITHOUT TIME ZONE,
+    "dbt_valid_to"   TIMESTAMP WITHOUT TIME ZONE,
+    "dbt_scd_id"     VARCHAR(255),
+    "dbt_updated_at" TIMESTAMP WITHOUT TIME ZONE
+);
+
+-- one entry
+insert into {database}.{schema}.archive_castillo_expected (
+    "id",
+    "first_name",
+    "last_name",
+    "email",
+    "gender",
+    "ip_address",
+    "updated_at",
+    "dbt_valid_from",
+    "dbt_valid_to",
+    "dbt_updated_at",
+    "dbt_scd_id"
+)
+
+select
+    "id",
+    "first_name",
+    "last_name",
+    "email",
+    "gender",
+    "ip_address",
+    "updated_at",
+    -- fields added by archival
+    "updated_at" as dbt_valid_from,
+    null::timestamp as dbt_valid_to,
+    "updated_at" as dbt_updated_at,
+    md5("id" || '-' || "first_name" || '|' || "updated_at"::text) as dbt_scd_id
+from {database}.{schema}.seed where "last_name" = 'Castillo';
+
+create table {database}.{schema}.archive_alvarez_expected (
+    "id" INTEGER,
+    "first_name" VARCHAR(50),
+    "last_name" VARCHAR(50),
+    "email" VARCHAR(50),
+    "gender" VARCHAR(50),
+    "ip_address" VARCHAR(20),
+
+    -- archival fields
+    "updated_at" TIMESTAMP WITHOUT TIME ZONE,
+    "dbt_valid_from" TIMESTAMP WITHOUT TIME ZONE,
+    "dbt_valid_to"   TIMESTAMP WITHOUT TIME ZONE,
+    "dbt_scd_id"     VARCHAR(255),
+    "dbt_updated_at" TIMESTAMP WITHOUT TIME ZONE
+);
+
+-- 0 entries
+insert into {database}.{schema}.archive_alvarez_expected (
+    "id",
+    "first_name",
+    "last_name",
+    "email",
+    "gender",
+    "ip_address",
+    "updated_at",
+    "dbt_valid_from",
+    "dbt_valid_to",
+    "dbt_updated_at",
+    "dbt_scd_id"
+)
+
+select
+    "id",
+    "first_name",
+    "last_name",
+    "email",
+    "gender",
+    "ip_address",
+    "updated_at",
+    -- fields added by archival
+    "updated_at" as dbt_valid_from,
+    null::timestamp as dbt_valid_to,
+    "updated_at" as dbt_updated_at,
+    md5("id" || '-' || "first_name" || '|' || "updated_at"::text) as dbt_scd_id
+from {database}.{schema}.seed where "last_name" = 'Alvarez';
+
+create table {database}.{schema}.archive_kelly_expected (
+    "id" INTEGER,
+    "first_name" VARCHAR(50),
+    "last_name" VARCHAR(50),
+    "email" VARCHAR(50),
+    "gender" VARCHAR(50),
+    "ip_address" VARCHAR(20),
+
+    -- archival fields
+    "updated_at" TIMESTAMP WITHOUT TIME ZONE,
+    "dbt_valid_from" TIMESTAMP WITHOUT TIME ZONE,
+    "dbt_valid_to"   TIMESTAMP WITHOUT TIME ZONE,
+    "dbt_scd_id"     VARCHAR(255),
+    "dbt_updated_at" TIMESTAMP WITHOUT TIME ZONE
+);
+
+
+-- 2 entries
+insert into {database}.{schema}.archive_kelly_expected (
+    "id",
+    "first_name",
+    "last_name",
+    "email",
+    "gender",
+    "ip_address",
+    "updated_at",
+    "dbt_valid_from",
+    "dbt_valid_to",
+    "dbt_updated_at",
+    "dbt_scd_id"
+)
+
+select
+    "id",
+    "first_name",
+    "last_name",
+    "email",
+    "gender",
+    "ip_address",
+    "updated_at",
+    -- fields added by archival
+    "updated_at" as dbt_valid_from,
+    null::timestamp as dbt_valid_to,
+    "updated_at" as dbt_updated_at,
+    md5("id" || '-' || "first_name" || '|' || "updated_at"::text) as dbt_scd_id
+from {database}.{schema}.seed where "last_name" = 'Kelly';

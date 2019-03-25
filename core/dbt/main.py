@@ -662,8 +662,8 @@ def parse_args(args):
     _build_clean_subparser(subs, base_subparser)
     _build_debug_subparser(subs, base_subparser)
     _build_deps_subparser(subs, base_subparser)
-    _build_archive_subparser(subs, base_subparser)
 
+    archive_sub = _build_archive_subparser(subs, base_subparser)
     rpc_sub = _build_rpc_subparser(subs, base_subparser)
     run_sub = _build_run_subparser(subs, base_subparser)
     compile_sub = _build_compile_subparser(subs, base_subparser)
@@ -673,7 +673,8 @@ def parse_args(args):
     _add_common_arguments(run_sub, compile_sub, generate_sub, test_sub,
                           rpc_sub)
     # --models, --exclude
-    _add_selection_arguments(run_sub, compile_sub, generate_sub, test_sub)
+    _add_selection_arguments(run_sub, compile_sub, generate_sub, test_sub,
+                             archive_sub)
     # --full-refresh, --non-destructive
     _add_table_mutability_arguments(run_sub, compile_sub)
 

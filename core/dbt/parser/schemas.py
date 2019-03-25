@@ -291,7 +291,8 @@ class SchemaBaseTestParser(MacrosKnownParser):
 
         # supply our own fqn which overrides the hashed version from the path
         # TODO: is this necessary even a little bit for tests?
-        fqn_override = self.get_fqn(full_path, source_package)
+        fqn_override = self.get_fqn(unparsed.incorporate(path=full_path),
+                                    source_package)
 
         node_path = self.get_path(NodeType.Test, unparsed.package_name,
                                   unparsed.name)
