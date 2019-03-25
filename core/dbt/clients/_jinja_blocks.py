@@ -10,8 +10,9 @@ def regex(pat):
 
 class BlockData:
     """raw plaintext data from the top level of the file."""
+
     def __init__(self, contents):
-        self.block_type_name = '__dbt__data'
+        self.block_type_name = "__dbt__data"
         self.contents = contents
         self.full_block = contents
 
