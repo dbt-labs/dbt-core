@@ -566,17 +566,18 @@ class BaseAdapter(metaclass=AdapterMeta):
         if not isinstance(relation, self.Relation):
             invalid_type_error(
                 method_name="valid_snapshot_target",
-                arg_name='relation',
+                arg_name="relation",
                 got_value=relation,
-                expected_type=self.Relation)
+                expected_type=self.Relation,
+            )
 
         columns = self.get_columns_in_relation(relation)
         names = set(c.name.lower() for c in columns)
-        expanded_keys = ('scd_id', 'valid_from', 'valid_to')
+        expanded_keys = ("scd_id", "valid_from", "valid_to")
         extra = []
         missing = []
         for legacy in expanded_keys:
-            desired = 'dbt_' + legacy
+            desired = "dbt_" + legacy
             if desired not in names:
                 missing.append(desired)
                 if legacy in names:
@@ -586,11 +587,12 @@ class BaseAdapter(metaclass=AdapterMeta):
             if extra:
                 msg = (
                     'Snapshot target has ("{}") but not ("{}") - is it an '
-                    'unmigrated previous version archive?'
-                    .format('", "'.join(extra), '", "'.join(missing))
+                    "unmigrated previous version archive?".format(
+                        '", "'.join(extra), '", "'.join(missing)
+                    )
                 )
             else:
-                msg = (
+                msg = 'Snapshot target is not a snapshot table (missing "{}")'.format(
                     'Snapshot target is not a snapshot table (missing "{}")'
                     .format('", "'.join(missing))
                 )
