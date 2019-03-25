@@ -322,11 +322,16 @@ class TestRPCServer(BaseSourcesTest):
         }
 
     def build_query(self, method, kwargs, sql=None, test_request_id=1, macros=None):
+        body_data = ''
         if sql is not None:
-            kwargs['sql'] = b64(sql.encode('utf-8')).decode('utf-8')
+            body_data += sql
 
         if macros is not None:
-            kwargs['macros'] = b64(macros.encode('utf-8')).decode('utf-8')
+            body_data += macros
+
+        if sql is not None or macros is not None:
+            kwargs['sql'] = b64(body_data.encode('utf-8')).decode('utf-8')
+
         return {
             'jsonrpc': '2.0',
             'method': method,
