@@ -62,10 +62,10 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
         macro_blocks = []
         data_chunks = []
         for block in extract_toplevel_blocks(data):
-            if block.render():
-                data_chunks.append(block.contents)
             if block.block_type_name == 'macro':
                 macro_blocks.append(block.full_block)
+            else:
+                data_chunks.append(block.full_block)
         macros = '\n'.join(macro_blocks)
         sql = ''.join(data_chunks)
         return sql, macros

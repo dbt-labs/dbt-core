@@ -469,6 +469,18 @@ class TestRPCServer(BaseSourcesTest):
             compiled_sql='select 2 as id'
         )
 
+        macro_override_with_if_statement = self.query(
+            'compile',
+            '{% if True %}select {{ happy_little_macro() }}{% endif %}',
+            name='foo',
+            macros='{% macro override_me() %}2 as id{% endmacro %}'
+        ).json()
+        self.assertSuccessfulCompilationResult(
+            macro_override_with_if_statement,
+            '{% if True %}select {{ happy_little_macro() }}{% endif %}',
+            compiled_sql='select 2 as id'
+        )
+
     @use_profile('postgres')
     def test_run(self):
         # seed + run dbt to make models before using them!
@@ -539,6 +551,19 @@ class TestRPCServer(BaseSourcesTest):
         self.assertSuccessfulRunResult(
             macro_override,
             raw_sql='select {{ happy_little_macro() }}',
+            compiled_sql='select 2 as id',
+            table={'column_names': ['id'], 'rows': [[2.0]]}
+        )
+
+        macro_override_with_if_statement = self.query(
+            'run',
+            '{% if True %}select {{ happy_little_macro() }}{% endif %}',
+            name='foo',
+            macros='{% macro override_me() %}2 as id{% endmacro %}'
+        ).json()
+        self.assertSuccessfulRunResult(
+            macro_override_with_if_statement,
+            '{% if True %}select {{ happy_little_macro() }}{% endif %}',
             compiled_sql='select 2 as id',
             table={'column_names': ['id'], 'rows': [[2.0]]}
         )
