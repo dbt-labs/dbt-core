@@ -7,6 +7,14 @@ def regex(pat):
     return re.compile(pat, re.DOTALL | re.MULTILINE)
 
 
+class BlockData(object):
+    """raw plaintext data from the top level of the file."""
+    def __init__(self, contents):
+        self.block_type_name = '__dbt__data'
+        self.contents = contents
+        self.full_block = contents
+
+
 class BlockTag(object):
     def __init__(self, block_type_name, block_name, contents=None, **kw):
         self.block_type_name = block_type_name
@@ -234,6 +242,10 @@ class BlockIterator(object):
         if match is None:
             return False
 
+        raw_toplevel = self.data[self.pos:match.start()]
+        if len(raw_toplevel) > 0:
+            self.blocks.append(BlockData(raw_toplevel))
+
         matchgroups = match.groupdict()
 
         # comments are easy
@@ -357,10 +369,8 @@ class BlockIterator(object):
             if not found:
                 break
 
-        if self.data[self.pos:].strip():
-            # if there is non-whitespace left, the file is not valid
-            dbt.exceptions.raise_compiler_error(
-                'parse error: extra data "{}"'.format(self.data[self.pos:])
-            )
+        raw_toplevel = self.data[self.pos:]
+        if len(raw_toplevel) > 0:
+            self.blocks.append(BlockData(raw_toplevel))
 
         return self.blocks

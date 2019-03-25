@@ -36,14 +36,16 @@ class TestBlockLexer(unittest.TestCase):
             '  {% mytype foo %}' + body_one + '{% endmytype %}' +
             '\r\n{% othertype bar %}' + body_two + '{% endothertype %}'
         )
-        blocks = extract_toplevel_blocks(block_data)
+        all_blocks = extract_toplevel_blocks(block_data)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
         self.assertEqual(len(blocks), 2)
 
     def test_comments(self):
         body = '{{ config(foo="bar") }}\r\nselect * from this.that\r\n'
         comment = '{# my comment #}'
         block_data = '  \n\r\t{%- mytype foo %}'+body+'{%endmytype -%}'
-        blocks = extract_toplevel_blocks(comment+block_data)
+        all_blocks = extract_toplevel_blocks(comment+block_data)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
         self.assertEqual(len(blocks), 1)
         self.assertEqual(blocks[0].block_type_name, 'mytype')
         self.assertEqual(blocks[0].block_name, 'foo')
@@ -54,7 +56,8 @@ class TestBlockLexer(unittest.TestCase):
         body = '{{ config(foo="bar") }}\r\nselect * from this.that\r\n'
         comment = '{# external comment {% othertype bar %} select * from thing.other_thing{% endothertype %} #}'
         block_data = '  \n\r\t{%- mytype foo %}'+body+'{%endmytype -%}'
-        blocks = extract_toplevel_blocks(comment+block_data)
+        all_blocks = extract_toplevel_blocks(comment+block_data)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
         self.assertEqual(len(blocks), 1)
         self.assertEqual(blocks[0].block_type_name, 'mytype')
         self.assertEqual(blocks[0].block_name, 'foo')
@@ -65,7 +68,8 @@ class TestBlockLexer(unittest.TestCase):
         body = '{# my comment #} {{ config(foo="bar") }}\r\nselect * from {# my other comment embedding {% endmytype %} #} this.that\r\n'
         block_data = '  \n\r\t{%- mytype foo %}'+body+'{% endmytype -%}'
         comment = '{# external comment {% othertype bar %} select * from thing.other_thing{% endothertype %} #}'
-        blocks = extract_toplevel_blocks(comment+block_data)
+        all_blocks = extract_toplevel_blocks(comment+block_data)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
         self.assertEqual(len(blocks), 1)
         self.assertEqual(blocks[0].block_type_name, 'mytype')
         self.assertEqual(blocks[0].block_name, 'foo')
@@ -73,7 +77,8 @@ class TestBlockLexer(unittest.TestCase):
         self.assertEqual(blocks[0].full_block, block_data)
 
     def test_complex_file(self):
-        blocks = extract_toplevel_blocks(complex_archive_file)
+        all_blocks = extract_toplevel_blocks(complex_archive_file)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
         self.assertEqual(len(blocks), 3)
         self.assertEqual(blocks[0].block_type_name, 'mytype')
         self.assertEqual(blocks[0].block_name, 'foo')
@@ -90,7 +95,8 @@ class TestBlockLexer(unittest.TestCase):
 
     def test_peaceful_macro_coexistence(self):
         body = '{# my macro #} {% macro foo(a, b) %} do a thing {%- endmacro %} {# my model #} {% a b %} {% enda %}'
-        blocks = extract_toplevel_blocks(body)
+        all_blocks = extract_toplevel_blocks(body)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
         self.assertEqual(len(blocks), 2)
         self.assertEqual(blocks[0].block_type_name, 'macro')
         self.assertEqual(blocks[0].block_name, 'foo')
@@ -101,7 +107,8 @@ class TestBlockLexer(unittest.TestCase):
 
     def test_macro_with_crazy_args(self):
         body = '''{% macro foo(a, b=asdf("cool this is 'embedded'" * 3) + external_var, c)%}cool{# block comment with {% endmacro %} in it #} stuff here {% endmacro %}'''
-        blocks = extract_toplevel_blocks(body)
+        all_blocks = extract_toplevel_blocks(body)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
         self.assertEqual(len(blocks), 1)
         self.assertEqual(blocks[0].block_type_name, 'macro')
         self.assertEqual(blocks[0].block_name, 'foo')
@@ -109,14 +116,16 @@ class TestBlockLexer(unittest.TestCase):
 
     def test_materialization_parse(self):
         body = '{% materialization xxx, default %} ... {% endmaterialization %}'
-        blocks = extract_toplevel_blocks(body)
+        all_blocks = extract_toplevel_blocks(body)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
         self.assertEqual(len(blocks), 1)
         self.assertEqual(blocks[0].block_type_name, 'materialization')
         self.assertEqual(blocks[0].block_name, 'xxx')
         self.assertEqual(blocks[0].full_block, body)
 
         body = '{% materialization xxx, adapter="other" %} ... {% endmaterialization %}'
-        blocks = extract_toplevel_blocks(body)
+        all_blocks = extract_toplevel_blocks(body)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
         self.assertEqual(len(blocks), 1)
         self.assertEqual(blocks[0].block_type_name, 'materialization')
         self.assertEqual(blocks[0].block_name, 'xxx')
@@ -148,7 +157,8 @@ class TestBlockLexer(unittest.TestCase):
 
     def test_comment_only(self):
         body = '{# myblock #}'
-        blocks = extract_toplevel_blocks(body)
+        all_blocks = extract_toplevel_blocks(body)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
         self.assertEqual(len(blocks), 0)
 
 bar_block = '''{% mytype bar %}
