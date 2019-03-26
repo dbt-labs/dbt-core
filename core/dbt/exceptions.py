@@ -156,17 +156,17 @@ class RPCTimeoutException(RuntimeException):
 
 class RPCKilledException(RuntimeException):
     CODE = 10009
-    MESSAGE = 'RPC process killed'
+    MESSAGE = "RPC process killed"
 
     def __init__(self, signum):
         self.signum = signum
-        self.message = 'RPC process killed by signal {}'.format(self.signum)
+        self.message = "RPC process killed by signal {}".format(self.signum)
         super().__init__(self.message)
 
     def data(self):
         return {
-            'signum': self.signum,
-            'message': self.message,
+            "signum": self.signum,
+            "message": self.message,
         }
 
 
