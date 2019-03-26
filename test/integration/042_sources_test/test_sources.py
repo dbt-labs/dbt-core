@@ -322,11 +322,16 @@ class TestRPCServer(BaseSourcesTest):
         }
 
     def build_query(self, method, kwargs, sql=None, test_request_id=1, macros=None):
+        body_data = ''
         if sql is not None:
-            kwargs['sql'] = b64(sql.encode('utf-8')).decode('utf-8')
+            body_data += sql
 
         if macros is not None:
-            kwargs['macros'] = b64(macros.encode('utf-8')).decode('utf-8')
+            body_data += macros
+
+        if sql is not None or macros is not None:
+            kwargs['sql'] = b64(body_data.encode('utf-8')).decode('utf-8')
+
         return {
             'jsonrpc': '2.0',
             'method': method,
@@ -464,6 +469,18 @@ class TestRPCServer(BaseSourcesTest):
             compiled_sql='select 2 as id'
         )
 
+        macro_override_with_if_statement = self.query(
+            'compile',
+            '{% if True %}select {{ happy_little_macro() }}{% endif %}',
+            name='foo',
+            macros='{% macro override_me() %}2 as id{% endmacro %}'
+        ).json()
+        self.assertSuccessfulCompilationResult(
+            macro_override_with_if_statement,
+            '{% if True %}select {{ happy_little_macro() }}{% endif %}',
+            compiled_sql='select 2 as id'
+        )
+
     @use_profile('postgres')
     def test_run(self):
         # seed + run dbt to make models before using them!
@@ -536,6 +553,43 @@ class TestRPCServer(BaseSourcesTest):
             raw_sql='select {{ happy_little_macro() }}',
             compiled_sql='select 2 as id',
             table={'column_names': ['id'], 'rows': [[2.0]]}
+        )
+
+        macro_override_with_if_statement = self.query(
+            'run',
+            '{% if True %}select {{ happy_little_macro() }}{% endif %}',
+            name='foo',
+            macros='{% macro override_me() %}2 as id{% endmacro %}'
+        ).json()
+        self.assertSuccessfulRunResult(
+            macro_override_with_if_statement,
+            '{% if True %}select {{ happy_little_macro() }}{% endif %}',
+            compiled_sql='select 2 as id',
+            table={'column_names': ['id'], 'rows': [[2.0]]}
+        )
+
+        macro_with_raw_statement = self.query(
+            'run',
+            '{% raw %}select 1 as{% endraw %}{{ test_macros() }}{% macro test_macros() %} id{% endmacro %}',
+            name='foo'
+        ).json()
+        self.assertSuccessfulRunResult(
+            macro_with_raw_statement,
+            '{% raw %}select 1 as{% endraw %}{{ test_macros() }}',
+            compiled_sql='select 1 as id',
+            table={'column_names': ['id'], 'rows': [[1.0]]}
+        )
+
+        macro_with_comment = self.query(
+            'run',
+            '{% raw %}select 1 {% endraw %}{{ test_macros() }} {# my comment #}{% macro test_macros() -%} as{% endmacro %} id{# another comment #}',
+            name='foo'
+        ).json()
+        self.assertSuccessfulRunResult(
+            macro_with_comment,
+            '{% raw %}select 1 {% endraw %}{{ test_macros() }} {# my comment #} id{# another comment #}',
+            compiled_sql='select 1 as  id',
+            table={'column_names': ['id'], 'rows': [[1.0]]}
         )
 
     @use_profile('postgres')

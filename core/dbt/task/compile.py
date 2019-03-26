@@ -1,6 +1,7 @@
 import os
 
 from dbt.adapters.factory import get_adapter
+from dbt.clients.jinja import extract_toplevel_blocks
 from dbt.compilation import compile_manifest
 from dbt.loader import load_all_projects, GraphLoader
 from dbt.node_runners import CompileRunner, RPCCompileRunner
@@ -56,12 +57,26 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
         self._skipped_children = {}
         self._raise_next_tick = None
 
-    def handle_request(self, name, sql, macros=None):
+    def _extract_request_data(self, data):
+        data = self.decode_sql(data)
+        macro_blocks = []
+        data_chunks = []
+        for block in extract_toplevel_blocks(data):
+            if block.block_type_name == 'macro':
+                macro_blocks.append(block.full_block)
+            else:
+                data_chunks.append(block.full_block)
+        macros = '\n'.join(macro_blocks)
+        sql = ''.join(data_chunks)
+        return sql, macros
+
+    def handle_request(self, name, sql):
         request_path = os.path.join(self.config.target_path, 'rpc', name)
         all_projects = load_all_projects(self.config)
         macro_overrides = {}
-        if macros is not None:
-            macros = self.decode_sql(macros)
+        sql, macros = self._extract_request_data(sql)
+
+        if macros:
             macro_parser = MacroParser(self.config, all_projects)
             macro_overrides.update(macro_parser.parse_macro_file(
                 macro_file_path='from remote system',
@@ -77,7 +92,6 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
             macro_manifest=self._base_manifest
         )
 
-        sql = self.decode_sql(sql)
         node_dict = {
             'name': name,
             'root_path': request_path,
