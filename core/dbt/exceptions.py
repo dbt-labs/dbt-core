@@ -129,6 +129,22 @@ class RPCTimeoutException(RuntimeException):
         return result
 
 
+class RPCKilledException(RuntimeException):
+    CODE = 10009
+    MESSAGE = 'RPC process killed'
+
+    def __init__(self, signum):
+        self.signum = signum
+        self.message = 'RPC process killed by signal {}'.format(self.signum)
+        super(RPCKilledException, self).__init__(self.message)
+
+    def data(self):
+        return {
+            'signum': self.signum,
+            'message': self.message,
+        }
+
+
 class DatabaseException(RuntimeException):
     CODE = 10003
     MESSAGE = "Database Error"

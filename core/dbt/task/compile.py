@@ -1,5 +1,8 @@
 import os
+import signal
+import threading
 
+from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import extract_toplevel_blocks
 from dbt.compilation import compile_manifest
 from dbt.loader import load_all_projects
@@ -9,6 +12,7 @@ from dbt.parser.analysis import RPCCallParser
 from dbt.parser.macros import MacroParser
 from dbt.parser.util import ParserUtils
 import dbt.ui.printer
+from dbt.logger import RPC_LOGGER as rpc_logger
 
 from dbt.task.runnable import GraphRunnableTask, RemoteCallable
 
@@ -111,13 +115,47 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
         self.linker = compile_manifest(self.config, self.manifest, write=False)
         return node
 
+    def _raise_set_error(self):
+        if self._raise_next_tick is not None:
+            raise self._raise_next_tick
+
+    def _in_thread(self, node, thread_done):
+        runner = self.get_runner(node)
+        try:
+            self.node_results.append(runner.safe_run(self.manifest))
+        except Exception as exc:
+            self._raise_next_tick = exc
+        finally:
+            thread_done.set()
+
     def handle_request(self, name, sql, macros=None):
         node = self._get_exec_node(name, sql, macros)
 
         selected_uids = [node.unique_id]
         self.runtime_cleanup(selected_uids)
-        self.job_queue = self.linker.as_graph_queue(self.manifest,
-                                                    selected_uids)
 
-        result = self.get_runner(node).safe_run(self.manifest)
-        return result.serialize()
+        thread_done = threading.Event()
+        thread = threading.Thread(target=self._in_thread,
+                                  args=(node, thread_done))
+        thread.start()
+        try:
+            thread_done.wait()
+        except KeyboardInterrupt:
+            adapter = get_adapter(self.config)
+            if adapter.is_cancelable():
+
+                for conn_name in adapter.cancel_open_connections():
+                    rpc_logger.debug('canceled query {}'.format(conn_name))
+
+                thread.join()
+            else:
+                msg = ("The {} adapter does not support query "
+                       "cancellation. Some queries may still be "
+                       "running!".format(adapter.type()))
+
+                rpc_logger.debug(msg)
+
+            raise dbt.exceptions.RPCKilledException(signal.SIGINT)
+
+        self._raise_set_error()
+        return self.node_results[0].serialize()
