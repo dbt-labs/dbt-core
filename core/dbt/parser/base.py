@@ -126,7 +126,7 @@ class MacrosKnownParser(BaseParser):
         else:
             root_context = dbt.context.parser.generate_macro(
                 get_alias_macro, self.root_project_config,
-                self.macro_manifest, 'generate_alias_name'
+                self.macro_manifest
             )
             get_alias = get_alias_macro.generator(root_context)
 
