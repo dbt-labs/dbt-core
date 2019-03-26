@@ -119,7 +119,7 @@ class MacrosKnownParser(BaseParser):
             )
         if get_alias_macro is None:
             def get_alias(node, _):
-                return node
+                return node.name
         else:
             root_context = dbt.context.parser.generate_macro(
                 get_alias_macro, self.root_project_config,
