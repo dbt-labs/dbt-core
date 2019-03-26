@@ -118,8 +118,11 @@ class MacrosKnownParser(BaseParser):
                 GLOBAL_PROJECT_NAME
             )
         if get_alias_macro is None:
-            def get_alias(node, _):
-                return node.name
+            def get_alias(node, custom_alias_name=None):
+                if custom_alias_name is None:
+                    return node.name
+                else:
+                    return custom_alias_name
         else:
             root_context = dbt.context.parser.generate_macro(
                 get_alias_macro, self.root_project_config,
