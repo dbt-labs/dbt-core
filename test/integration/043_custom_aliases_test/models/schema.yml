@@ -7,3 +7,9 @@ models:
         tests:
           - accepted_values:
              values: ['custom_alias']
+  - name: model2
+    columns:
+      - name: model_name
+        tests:
+          - accepted_values:
+             values: ['model2']

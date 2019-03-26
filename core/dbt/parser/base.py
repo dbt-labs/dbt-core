@@ -207,8 +207,7 @@ class MacrosKnownParser(BaseParser):
 
         alias_override = config.config.get('alias')
         get_alias = self.get_alias_func()
-        temp_node = config.config.get('alias', parsed_node.get('name'))
-        parsed_node.alias = get_alias(temp_node, alias_override).strip()
+        parsed_node.alias = get_alias(parsed_node, alias_override).strip()
 
         parsed_node.database = config.config.get(
             'database', self.default_database

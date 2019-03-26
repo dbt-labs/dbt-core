@@ -15,7 +15,7 @@
 
     {%- if custom_alias_name is none -%}
 
-        {{ node }}
+        {{ node.name }}
 
     {%- else -%}
 
