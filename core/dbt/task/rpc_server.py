@@ -4,8 +4,10 @@ import time
 
 from jsonrpc import Dispatcher, JSONRPCResponseManager
 
+from werkzeug.wsgi import DispatcherMiddleware
 from werkzeug.wrappers import Request, Response
 from werkzeug.serving import run_simple
+from werkzeug.exceptions import NotFound
 
 from dbt.logger import RPC_LOGGER as logger, add_queue_handler
 from dbt.task.base import ConfiguredTask
@@ -161,14 +163,18 @@ class RPCServerTask(ConfiguredTask):
         )
 
         logger.info(
-            'Send requests to http://{}:{}'.format(display_host, port)
+            'Send requests to http://{}:{}/jsonrpc'.format(display_host, port)
         )
 
-        run_simple(host, port, self.handle_request,
-                   processes=self.config.threads)
+        app = self.handle_request
+        app = DispatcherMiddleware(app, {
+            '/jsonrpc': self.handle_jsonrpc_request,
+        })
+
+        run_simple(host, port, app, processes=self.config.threads)
 
     @Request.application
-    def handle_request(self, request):
+    def handle_jsonrpc_request(self, request):
         msg = 'Received request ({0}) from {0.remote_addr}, data={0.data}'
         logger.info(msg.format(request))
         response = JSONRPCResponseManager.handle(request.data, self.dispatcher)
@@ -182,3 +188,7 @@ class RPCServerTask(ConfiguredTask):
             response, request.remote_addr, json.loads(json_data))
         )
         return response
+
+    @Request.application
+    def handle_request(self, request):
+        raise NotFound()
