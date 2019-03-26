@@ -1,7 +1,7 @@
 
 {% macro generate_alias_name(node, custom_alias_name=none) -%}
     {%- if custom_alias_name is none -%}
-        {{ node }}
+        {{ node.name }}
     {%- else -%}
         custom_{{ custom_alias_name | trim }}
     {%- endif -%}
