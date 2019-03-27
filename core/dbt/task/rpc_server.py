@@ -133,7 +133,7 @@ class RPCServerTask(ConfiguredTask):
         self.dispatcher = Dispatcher()
         tasks = tasks or [RemoteCompileTask, RemoteRunTask]
         for cls in tasks:
-            self.register(cls(args, config))
+            self.register(cls(args, config, self.manifest))
 
     def register(self, task):
         self.dispatcher.add_method(RequestTaskHandler.factory(task),

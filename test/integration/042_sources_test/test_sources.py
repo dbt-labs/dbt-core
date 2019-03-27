@@ -300,6 +300,13 @@ class ServerProcess(multiprocessing.Process):
             raise Exception('server never appeared!')
 
 
+_select_from_ephemeral = '''with __dbt__CTE__ephemeral_model as (
+
+
+select 1 as id
+)select * from __dbt__CTE__ephemeral_model'''
+
+
 @unittest.skipIf(os.name == 'nt', 'Windows not supported for now')
 class TestRPCServer(BaseSourcesTest):
     def setUp(self):
@@ -481,6 +488,17 @@ class TestRPCServer(BaseSourcesTest):
             compiled_sql='select 2 as id'
         )
 
+        ephemeral = self.query(
+            'compile',
+            'select * from {{ ref("ephemeral_model") }}',
+            name='foo'
+        ).json()
+        self.assertSuccessfulCompilationResult(
+            ephemeral,
+            'select * from {{ ref("ephemeral_model") }}',
+            compiled_sql=_select_from_ephemeral
+        )
+
     @use_profile('postgres')
     def test_run(self):
         # seed + run dbt to make models before using them!
@@ -589,6 +607,18 @@ class TestRPCServer(BaseSourcesTest):
             macro_with_comment,
             '{% raw %}select 1 {% endraw %}{{ test_macros() }} {# my comment #} id{# another comment #}',
             compiled_sql='select 1 as  id',
+            table={'column_names': ['id'], 'rows': [[1.0]]}
+        )
+
+        ephemeral = self.query(
+            'run',
+            'select * from {{ ref("ephemeral_model") }}',
+            name='foo'
+        ).json()
+        self.assertSuccessfulRunResult(
+            ephemeral,
+            raw_sql='select * from {{ ref("ephemeral_model") }}',
+            compiled_sql=_select_from_ephemeral,
             table={'column_names': ['id'], 'rows': [[1.0]]}
         )
 
