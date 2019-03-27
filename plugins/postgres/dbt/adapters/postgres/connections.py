@@ -137,7 +137,7 @@ class PostgresConnectionManager(SQLConnectionManager):
 
         logger.debug("Cancelling query '{}' ({})".format(connection_name, pid))
 
-        _, cursor = self.add_query(sql, 'master')
+        _, cursor = self.add_query(sql)
         res = cursor.fetchone()
 
         logger.debug("Cancel query '{}': {}".format(connection_name, res))

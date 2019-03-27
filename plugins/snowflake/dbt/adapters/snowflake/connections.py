@@ -156,7 +156,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
 
         logger.debug("Cancelling query '{}' ({})".format(connection_name, sid))
 
-        _, cursor = self.add_query(sql, 'master')
+        _, cursor = self.add_query(sql)
         res = cursor.fetchone()
 
         logger.debug("Cancel query '{}': {}".format(connection_name, res))
