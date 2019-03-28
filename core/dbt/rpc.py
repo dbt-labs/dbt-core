@@ -356,7 +356,8 @@ class TaskManager(object):
             self.completed[task_id] = self.tasks.pop(task_id)
 
     def methods(self):
-        return list(self._rpc_task_map)
+        rpc_builtin_methods = ['ps', 'kill']
+        return list(self._rpc_task_map) + rpc_builtin_methods
 
 
 class ResponseManager(JSONRPCResponseManager):
