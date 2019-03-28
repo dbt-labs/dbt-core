@@ -129,16 +129,18 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
             thread_done.set()
 
     def handle_request(self, name, sql, macros=None):
-        node = self._get_exec_node(name, sql, macros)
-
-        selected_uids = [node.unique_id]
-        self.runtime_cleanup(selected_uids)
-
-        thread_done = threading.Event()
-        thread = threading.Thread(target=self._in_thread,
-                                  args=(node, thread_done))
-        thread.start()
+        # we could get a ctrl+c at any time, including during parsing.
+        thread = None
         try:
+            node = self._get_exec_node(name, sql, macros)
+
+            selected_uids = [node.unique_id]
+            self.runtime_cleanup(selected_uids)
+
+            thread_done = threading.Event()
+            thread = threading.Thread(target=self._in_thread,
+                                      args=(node, thread_done))
+            thread.start()
             thread_done.wait()
         except KeyboardInterrupt:
             adapter = get_adapter(self.config)
@@ -146,8 +148,8 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
 
                 for conn_name in adapter.cancel_open_connections():
                     rpc_logger.debug('canceled query {}'.format(conn_name))
-
-                thread.join()
+                if thread:
+                    thread.join()
             else:
                 msg = ("The {} adapter does not support query "
                        "cancellation. Some queries may still be "
