@@ -526,6 +526,8 @@ class RPCCompileRunner(CompileRunner):
 
     def handle_exception(self, e, ctx):
         if isinstance(e, dbt.exceptions.Exception):
+            if hasattr(e, 'node'):
+                e.node = ctx.node
             return rpc.dbt_error(e)
         elif isinstance(e, rpc.RPCException):
             return e

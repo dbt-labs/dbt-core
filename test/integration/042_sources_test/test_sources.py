@@ -416,7 +416,7 @@ class TestRPCServer(BaseSourcesTest):
         self.assertResultHasTimings(result, 'compile', 'execute')
 
     @use_profile('postgres')
-    def test_compile(self):
+    def test_compile_postgres(self):
         trivial = self.query(
             'compile',
             'select 1 as id',
@@ -500,7 +500,7 @@ class TestRPCServer(BaseSourcesTest):
         )
 
     @use_profile('postgres')
-    def test_run(self):
+    def test_run_postgres(self):
         # seed + run dbt to make models before using them!
         self.run_dbt_with_vars(['seed'])
         self.run_dbt_with_vars(['run'])
@@ -623,7 +623,7 @@ class TestRPCServer(BaseSourcesTest):
         )
 
     @use_profile('postgres')
-    def test_invalid_requests(self):
+    def test_invalid_requests_postgres(self):
         data = self.query(
             'xxxxxnotamethodxxxxx',
             'hi this is not sql'
@@ -660,7 +660,7 @@ class TestRPCServer(BaseSourcesTest):
         self.assertEqual(error_data['type'], 'DatabaseException')
         self.assertEqual(
             error_data['message'],
-            'Database Error\n  syntax error at or near "hi"\n  LINE 1: hi this is not sql\n          ^'
+            'Database Error in rpc foo (from remote system)\n  syntax error at or near "hi"\n  LINE 1: hi this is not sql\n          ^'
         )
         self.assertIn('logs', error_data)
         self.assertTrue(len(error_data['logs']) > 0)
@@ -677,7 +677,7 @@ class TestRPCServer(BaseSourcesTest):
         self.assertEqual(error_data['type'], 'DatabaseException')
 
     @use_profile('postgres')
-    def test_timeout(self):
+    def test_timeout_postgres(self):
         data = self.query(
             'run',
             'select from pg_sleep(5)',
