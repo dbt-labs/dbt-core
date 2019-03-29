@@ -389,6 +389,16 @@ class TestRPCServer(BaseSourcesTest):
         self.assertEqual(error['code'], code)
         return error
 
+    def assertIsErrorWith(self, data, code, message, error_data):
+        error = self.assertIsErrorWithCode(data, code)
+        if message is not None:
+            self.assertEqual(error['message'], message)
+
+        if error_data is not None:
+            return self.assertHasErrorData(error, error_data)
+        else:
+            return error.get('data')
+
     def assertResultHasSql(self, data, raw_sql, compiled_sql=None):
         if compiled_sql is None:
             compiled_sql = raw_sql
@@ -628,23 +638,19 @@ class TestRPCServer(BaseSourcesTest):
             'xxxxxnotamethodxxxxx',
             'hi this is not sql'
         ).json()
-        error = self.assertIsErrorWithCode(data, -32601)
-        self.assertEqual(error['message'],  'Method not found')
+        self.assertIsErrorWith(data, -32601, 'Method not found', None)
 
         data = self.query(
             'compile',
             'select * from {{ reff("nonsource_descendant") }}',
             name='mymodel'
         ).json()
-        error = self.assertIsErrorWithCode(data, 10004)
-        self.assertEqual(error['message'], 'Compilation Error')
-        self.assertIn('data', error)
-        error_data = error['data']
-        self.assertEqual(error_data['type'], 'CompilationException')
-        self.assertEqual(
-            error_data['message'],
-            "Compilation Error in rpc mymodel (from remote system)\n  'reff' is undefined"
-        )
+        error_data = self.assertIsErrorWith(data, 10004, 'Compilation Error', {
+            'type': 'CompilationException',
+            'message': "Compilation Error in rpc mymodel (from remote system)\n  'reff' is undefined",
+            'compiled_sql': None,
+            'raw_sql': 'select * from {{ reff("nonsource_descendant") }}',
+        })
         self.assertIn('logs', error_data)
         self.assertTrue(len(error_data['logs']) > 0)
 
@@ -653,15 +659,12 @@ class TestRPCServer(BaseSourcesTest):
             'hi this is not sql',
             name='foo'
         ).json()
-        error = self.assertIsErrorWithCode(data, 10003)
-        self.assertEqual(error['message'], 'Database Error')
-        self.assertIn('data', error)
-        error_data = error['data']
-        self.assertEqual(error_data['type'], 'DatabaseException')
-        self.assertEqual(
-            error_data['message'],
-            'Database Error in rpc foo (from remote system)\n  syntax error at or near "hi"\n  LINE 1: hi this is not sql\n          ^'
-        )
+        error_data = self.assertIsErrorWith(data, 10003, 'Database Error', {
+            'type': 'DatabaseException',
+            'message': 'Database Error in rpc foo (from remote system)\n  syntax error at or near "hi"\n  LINE 1: hi this is not sql\n          ^',
+            'compiled_sql': 'hi this is not sql',
+            'raw_sql': 'hi this is not sql',
+        })
         self.assertIn('logs', error_data)
         self.assertTrue(len(error_data['logs']) > 0)
 
@@ -670,11 +673,21 @@ class TestRPCServer(BaseSourcesTest):
             'select {{ happy_little_macro() }}',
             name='foo',
         ).json()
-        self.assertIsErrorWithCode(macro_no_override, 10003)
-        self.assertEqual(error['message'], 'Database Error')
+        error_data = self.assertIsErrorWith(macro_no_override, 10004, 'Compilation Error', {
+            'type': 'CompilationException',
+            'raw_sql': 'select {{ happy_little_macro() }}',
+            'compiled_sql': None
+        })
+        self.assertIn('logs', error_data)
+        self.assertTrue(len(error_data['logs']) > 0)
+
+    def assertHasErrorData(self, error, expected_error_data):
         self.assertIn('data', error)
         error_data = error['data']
-        self.assertEqual(error_data['type'], 'DatabaseException')
+        for key, value in expected_error_data.items():
+            self.assertIn(key, error_data)
+            self.assertEqual(error_data[key], value)
+        return error_data
 
     @use_profile('postgres')
     def test_timeout_postgres(self):

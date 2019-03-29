@@ -38,7 +38,7 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
 
     def __init__(self, args, config, manifest):
         super(RemoteCompileTask, self).__init__(args, config)
-        self._base_manifest = manifest
+        self._base_manifest = manifest.deepcopy(config=config)
 
     def get_runner_type(self):
         return RPCCompileRunner
@@ -82,6 +82,7 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
                 resource_type=NodeType.Macro
             ))
 
+        self._base_manifest.macros.update(macro_overrides)
         rpc_parser = RPCCallParser(
             self.config,
             all_projects=all_projects,
