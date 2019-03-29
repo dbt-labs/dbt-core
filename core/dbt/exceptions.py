@@ -120,11 +120,13 @@ class RuntimeException(RuntimeError, Exception):
         if self.node is None:
             return result
 
-        result.update({
+        result.update(
             {
                 "raw_sql": self.node.raw_sql,
                 # the node isn't always compiled, but if it is, include that!
-        })
+                "compiled_sql": getattr(self.node, "compiled_sql", None),
+            }
+        )
         return result
 
 
@@ -143,10 +145,12 @@ class RPCTimeoutException(RuntimeException):
 
     def data(self):
         result = super().data()
-        result.update({
+        result.update(
             {
                 "timeout": self.timeout,
-        })
+                "message": "RPC timed out after {}s".format(self.timeout),
+            }
+        )
         return result
 
 
