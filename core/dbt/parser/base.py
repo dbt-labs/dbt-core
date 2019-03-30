@@ -58,6 +58,7 @@ class MacrosKnownParser(BaseParser):
         )
         self.macro_manifest = macro_manifest
         self._get_schema_func = None
+        self._get_alias_func = None
 
     def get_schema_func(self):
         """The get_schema function is set by a few different things:
@@ -93,6 +94,44 @@ class MacrosKnownParser(BaseParser):
 
         self._get_schema_func = get_schema
         return self._get_schema_func
+
+    def get_alias_func(self):
+        """The get_alias function is set by a few different things:
+            - if there is a 'generate_alias_name' macro in the root project,
+                it will be used.
+            - if that does not exist but there is a 'generate_alias_name'
+                macro in the 'dbt' internal project, that will be used
+            - if neither of those exist (unit tests?), a function that returns
+                the 'default alias' as set in the model's filename or alias
+                configuration.
+        """
+        if self._get_alias_func is not None:
+            return self._get_alias_func
+
+        get_alias_macro = self.macro_manifest.find_macro_by_name(
+            'generate_alias_name',
+            self.root_project_config.project_name
+        )
+        if get_alias_macro is None:
+            get_alias_macro = self.macro_manifest.find_macro_by_name(
+                'generate_alias_name',
+                GLOBAL_PROJECT_NAME
+            )
+        if get_alias_macro is None:
+            def get_alias(node, custom_alias_name=None):
+                if custom_alias_name is None:
+                    return node.name
+                else:
+                    return custom_alias_name
+        else:
+            root_context = dbt.context.parser.generate_macro(
+                get_alias_macro, self.root_project_config,
+                self.macro_manifest
+            )
+            get_alias = get_alias_macro.generator(root_context)
+
+        self._get_alias_func = get_alias
+        return self._get_alias_func
 
     def _build_intermediate_node_dict(self, config, node_dict, node_path,
                                       package_project_config, tags, fqn,
@@ -168,7 +207,11 @@ class MacrosKnownParser(BaseParser):
         schema_override = config.config.get('schema')
         get_schema = self.get_schema_func()
         parsed_node.schema = get_schema(schema_override).strip()
-        parsed_node.alias = config.config.get('alias', parsed_node.get('name'))
+
+        alias_override = config.config.get('alias')
+        get_alias = self.get_alias_func()
+        parsed_node.alias = get_alias(parsed_node, alias_override).strip()
+
         parsed_node.database = config.config.get(
             'database', self.default_database
         ).strip()

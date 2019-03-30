@@ -1,8 +1,8 @@
 import os
 
-from dbt.adapters.factory import get_adapter
+from dbt.clients.jinja import extract_toplevel_blocks
 from dbt.compilation import compile_manifest
-from dbt.loader import load_all_projects, GraphLoader
+from dbt.loader import load_all_projects
 from dbt.node_runners import CompileRunner, RPCCompileRunner
 from dbt.node_types import NodeType
 from dbt.parser.analysis import RPCCallParser
@@ -36,12 +36,9 @@ class CompileTask(GraphRunnableTask):
 class RemoteCompileTask(CompileTask, RemoteCallable):
     METHOD_NAME = 'compile'
 
-    def __init__(self, args, config):
+    def __init__(self, args, config, manifest):
         super(RemoteCompileTask, self).__init__(args, config)
-        self._base_manifest = GraphLoader.load_all(
-            config,
-            internal_manifest=get_adapter(config).check_internal_manifest()
-        )
+        self._base_manifest = manifest
 
     def get_runner_type(self):
         return RPCCompileRunner
@@ -56,12 +53,26 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
         self._skipped_children = {}
         self._raise_next_tick = None
 
-    def handle_request(self, name, sql, macros=None):
+    def _extract_request_data(self, data):
+        data = self.decode_sql(data)
+        macro_blocks = []
+        data_chunks = []
+        for block in extract_toplevel_blocks(data):
+            if block.block_type_name == 'macro':
+                macro_blocks.append(block.full_block)
+            else:
+                data_chunks.append(block.full_block)
+        macros = '\n'.join(macro_blocks)
+        sql = ''.join(data_chunks)
+        return sql, macros
+
+    def _get_exec_node(self, name, sql, macros):
         request_path = os.path.join(self.config.target_path, 'rpc', name)
         all_projects = load_all_projects(self.config)
         macro_overrides = {}
-        if macros is not None:
-            macros = self.decode_sql(macros)
+        sql, macros = self._extract_request_data(sql)
+
+        if macros:
             macro_parser = MacroParser(self.config, all_projects)
             macro_overrides.update(macro_parser.parse_macro_file(
                 macro_file_path='from remote system',
@@ -77,7 +88,6 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
             macro_manifest=self._base_manifest
         )
 
-        sql = self.decode_sql(sql)
         node_dict = {
             'name': name,
             'root_path': request_path,
@@ -89,7 +99,6 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
         }
 
         unique_id, node = rpc_parser.parse_sql_node(node_dict)
-
         self.manifest = ParserUtils.add_new_refs(
             manifest=self._base_manifest,
             current_project=self.config,
@@ -99,11 +108,15 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
 
         # don't write our new, weird manifest!
         self.linker = compile_manifest(self.config, self.manifest, write=False)
+        return node
+
+    def handle_request(self, name, sql, macros=None):
+        node = self._get_exec_node(name, sql, macros)
+
         selected_uids = [node.unique_id]
         self.runtime_cleanup(selected_uids)
         self.job_queue = self.linker.as_graph_queue(self.manifest,
                                                     selected_uids)
 
         result = self.get_runner(node).safe_run(self.manifest)
-
         return result.serialize()

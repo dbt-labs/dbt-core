@@ -482,19 +482,17 @@ REMOTE_COMPILE_RESULT_CONTRACT = {
 class RemoteCompileResult(APIObject):
     SCHEMA = REMOTE_COMPILE_RESULT_CONTRACT
 
-    def __init__(self, raw_sql, compiled_sql, timing=None, **kwargs):
+    def __init__(self, raw_sql, compiled_sql, node, timing=None, **kwargs):
         if timing is None:
             timing = []
+        # this should not show up in the serialized output.
+        self.node = node
         super(RemoteCompileResult, self).__init__(
             raw_sql=raw_sql,
             compiled_sql=compiled_sql,
             timing=timing,
             **kwargs
         )
-
-    @property
-    def node(self):
-        return None
 
     @property
     def error(self):
@@ -525,12 +523,13 @@ REMOTE_RUN_RESULT_CONTRACT = deep_merge(REMOTE_COMPILE_RESULT_CONTRACT, {
 class RemoteRunResult(RemoteCompileResult):
     SCHEMA = REMOTE_RUN_RESULT_CONTRACT
 
-    def __init__(self, raw_sql, compiled_sql, timing=None, table=None):
+    def __init__(self, raw_sql, compiled_sql, node, timing=None, table=None):
         if table is None:
             table = []
         super(RemoteRunResult, self).__init__(
             raw_sql=raw_sql,
             compiled_sql=compiled_sql,
             timing=timing,
-            table=table
+            table=table,
+            node=node
         )

@@ -545,7 +545,8 @@ class RPCCompileRunner(CompileRunner):
     def execute(self, compiled_node, manifest):
         return RemoteCompileResult(
             raw_sql=compiled_node.raw_sql,
-            compiled_sql=compiled_node.injected_sql
+            compiled_sql=compiled_node.injected_sql,
+            node=compiled_node
         )
 
     def error_result(self, node, error, start_time, timing_info):
@@ -561,6 +562,7 @@ class RPCCompileRunner(CompileRunner):
         return RemoteCompileResult(
             raw_sql=result.raw_sql,
             compiled_sql=result.compiled_sql,
+            node=result.node,
             timing=timing
         )
 
@@ -571,6 +573,7 @@ class RPCExecuteRunner(RPCCompileRunner):
         return RemoteRunResult(
             raw_sql=result.raw_sql,
             compiled_sql=result.compiled_sql,
+            node=result.node,
             table=result.table,
             timing=timing
         )
@@ -586,5 +589,6 @@ class RPCExecuteRunner(RPCCompileRunner):
         return RemoteRunResult(
             raw_sql=compiled_node.raw_sql,
             compiled_sql=compiled_node.injected_sql,
+            node=compiled_node,
             table=table
         )
