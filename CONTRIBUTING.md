@@ -12,9 +12,28 @@ Before you can develop dbt effectively, you should set up the following:
 
 We strongly recommend setting up [pyenv](https://github.com/pyenv/pyenv) and its [pyenv-virtualenv](https://github.com/pyenv/pyenv-virtualenv) plugin. This setup will make it much easier for you to manage multiple Python projects in the medium to long term.
 
+There is more documentation in each of those links on how to get set up, but the commands you'll need to run will be:
+```
+brew install pyenv
+echo -e 'if command -v pyenv 1>/dev/null 2>&1; then\n  eval "$(pyenv init -)"\nfi' >> ~/.bash_profile
+exec "$SHELL"
+brew install pyenv-virtualenv
+eval "$(pyenv init -)"
+eval "$(pyenv virtualenv-init -)"
+```
+
 ### python
 
 By default, `pyenv` has only one python version installed and it's the `system` python - the one that comes with your OS. You don't want that. Instead, use `pyenv install 3.6.5` to install a more recent version. dbt supports up to Python 3.6 at the time of writing (and will soon support Python 3.7)
+
+If you get the following error:
+```
+import pip
+zipimport.ZipImportError: can't decompress data; zlib not available
+make: *** [install] Error 1
+```
+
+You can solve it by running `brew install zlib`, then try `pyenv install 3.6.5` again.
 
 To get a full (very long!) list of versions available, you can do `pyenv install -l` and look for the versions defined by numbers alone - the others are variants of Python and outside the scope of this document.
 
@@ -42,6 +61,15 @@ git clone git@github.com:fishtown-analytics/dbt.git
 
 But it really does not matter where you put it as long as you remember it.
 
+
+### Installing postgres locally
+
+For testing, and later in the examples in this document, you may want to have `psql` available so you can poke around in the database and see what happened. We recommend that you use [homebrew](https://brew.sh/) for that on macOS, and your package manager on Linux. You can install any version of the postgres client that you'd like. So on macOS, with homebrew setup:
+
+```
+brew install postgresql
+```
+
 ### Setting up your virtualenv
 
 Set up a fresh virtualenv with pyenv-virtualenv for dbt:
@@ -54,15 +82,6 @@ pyenv activate
 ```
 
 This makes a new virtualenv based on python 3.6.5 named `dbt36`, and tells pyenv that when you're in the `dbt` directory it should automatically use that virtualenv.
-
-
-### Installing postgres locally
-
-For testing, and later in the examples in this document, you may want to have `psql` available so you can poke around in the database and see what happened. We recommend that you use [homebrew](https://brew.sh/) for that on macOS, and your package manager on Linux. You can install any version of the postgres client that you'd like. So on macOS, with homebrew setup:
-
-```
-brew install postgresql
-```
 
 ## Testing
 
@@ -130,7 +149,7 @@ If you open a PR as a non-contributor, these tests won't run automatically. Some
 
 Sometimes, you're going to have to pretend to be an end user to reproduce bugs and stuff. So that means manually setting up some stuff that the test harness takes care of for you.
 
-### installation
+### Installation
 
 First make sure that you setup your `virtualenv` as described in section _Setting up your environment_.
 
@@ -161,7 +180,7 @@ talk:
     target: default
 ```
 
-There's a sample you can look at in the `dbt` folder (`sample.profiles.yml`) but it's got a lot of extra and as a developer, you really probably only want to test against your local postgres container. The basic idea is that there are multiple 'profiles' (`talk`, in this case) and within those each profile has one or more 'targets' (`default`, in this case), and each profile has a default target. You can specify what profile you want to use with the `--profile` flag, and which target with the `--target` flag. If you want to be really snazzy, dbt project files actually specify their target, and if you match up your dbt project `profile` key with your `profiles.yml` profile names you don't have to use `--profile` (and if you like your profile's default target, no need for `--target` either).
+There's a sample you can look at in the `dbt` [docs](https://docs.getdbt.com/reference#profile) but it's got a lot of extra and as a developer, you really probably only want to test against your local postgres container. The basic idea is that there are multiple 'profiles' (`talk`, in this case) and within those each profile has one or more 'targets' (`default`, in this case), and each profile has a default target. You can specify what profile you want to use with the `--profile` flag, and which target with the `--target` flag. If you want to be really snazzy, dbt project files actually specify their target, and if you match up your dbt project `profile` key with your `profiles.yml` profile names you don't have to use `--profile` (and if you like your profile's default target, no need for `--target` either).
 
 ## Example
 
