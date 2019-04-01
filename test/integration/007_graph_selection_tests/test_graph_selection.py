@@ -12,20 +12,19 @@ class TestGraphSelection(DBTIntegrationTest):
         return "test/integration/007_graph_selection_tests/models"
 
     def assert_correct_schemas(self):
-        exists = self.adapter.check_schema_exists(
-            self.default_database,
-            self.unique_schema(),
-            '__test'
-        )
-        self.assertTrue(exists)
+        with self.test_connection():
+            exists = self.adapter.check_schema_exists(
+                self.default_database,
+                self.unique_schema()
+            )
+            self.assertTrue(exists)
 
-        schema = self.unique_schema()+'_and_then'
-        exists = self.adapter.check_schema_exists(
-            self.default_database,
-            schema,
-            '__test'
-        )
-        self.assertFalse(exists)
+            schema = self.unique_schema()+'_and_then'
+            exists = self.adapter.check_schema_exists(
+                self.default_database,
+                schema
+            )
+            self.assertFalse(exists)
 
     @attr(type='postgres')
     def test__postgres__specific_model(self):

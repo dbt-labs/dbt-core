@@ -1,11 +1,22 @@
-from dbt.compat import basestring, builtins
+import sys
+import six
+import functools
+
+from dbt.compat import builtins
 from dbt.logger import GLOBAL_LOGGER as logger
 import dbt.flags
-import re
 
 
 class Exception(builtins.Exception):
-    pass
+    CODE = -32000
+    MESSAGE = "Server Error"
+
+    def data(self):
+        # if overriding, make sure the result is json-serializable.
+        return {
+            'type': self.__class__.__name__,
+            'message': str(self),
+        }
 
 
 class MacroReturn(builtins.BaseException):
@@ -22,6 +33,9 @@ class InternalException(Exception):
 
 
 class RuntimeException(RuntimeError, Exception):
+    CODE = 10001
+    MESSAGE = "Runtime error"
+
     def __init__(self, msg, node=None):
         self.stack = []
         self.node = node
@@ -82,7 +96,28 @@ class RuntimeException(RuntimeError, Exception):
             ["  " + line for line in lines[1:]])
 
 
+class RPCFailureResult(RuntimeException):
+    CODE = 10002
+    MESSAGE = "RPC execution error"
+
+
+class RPCTimeoutException(RuntimeException):
+    CODE = 10008
+    MESSAGE = 'RPC timeout error'
+
+    def __init__(self, timeout):
+        self.timeout = timeout
+
+    def data(self):
+        return {
+            'timeout': self.timeout,
+            'message': 'RPC timed out after {}s'.format(self.timeout),
+        }
+
+
 class DatabaseException(RuntimeException):
+    CODE = 10003
+    MESSAGE = "Database Error"
 
     def process_stack(self):
         lines = []
@@ -99,6 +134,9 @@ class DatabaseException(RuntimeException):
 
 
 class CompilationException(RuntimeException):
+    CODE = 10004
+    MESSAGE = "Compilation Error"
+
     @property
     def type(self):
         return 'Compilation'
@@ -109,7 +147,8 @@ class RecursionException(RuntimeException):
 
 
 class ValidationException(RuntimeException):
-    pass
+    CODE = 10005
+    MESSAGE = "Validation Error"
 
 
 class JSONValidationException(ValidationException):
@@ -130,15 +169,16 @@ class AliasException(ValidationException):
     pass
 
 
-class ParsingException(Exception):
-    pass
-
-
 class DependencyException(Exception):
-    pass
+    # this can happen due to raise_dependency_error and its callers
+    CODE = 10006
+    MESSAGE = "Dependency Error"
 
 
 class DbtConfigError(RuntimeException):
+    CODE = 10007
+    MESSAGE = "DBT Configuration Error"
+
     def __init__(self, message, project=None, result_type='invalid_project'):
         self.project = project
         super(DbtConfigError, self).__init__(message)
@@ -612,3 +652,26 @@ CONTEXT_EXPORTS = {
         relation_wrong_type,
     ]
 }
+
+
+def wrapper(model):
+    def wrap(func):
+        @functools.wraps(func)
+        def inner(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except Exception:
+                exc_type, exc, exc_tb = sys.exc_info()
+                if hasattr(exc, 'node') and exc.node is None:
+                    exc.node = model
+                six.reraise(exc_type, exc, exc_tb)
+
+        return inner
+    return wrap
+
+
+def wrapped_exports(model):
+    wrap = wrapper(model)
+    return {
+        name: wrap(export) for name, export in CONTEXT_EXPORTS.items()
+    }

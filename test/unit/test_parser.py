@@ -54,7 +54,6 @@ class BaseParserTest(unittest.TestCase):
             'project-root': os.path.abspath('.'),
         }
 
-
         self.root_project_config = config_from_parts_or_dicts(
             project=root_project,
             profile=profile_data,
@@ -76,7 +75,11 @@ class BaseParserTest(unittest.TestCase):
             'root': self.root_project_config,
             'snowplow': self.snowplow_project_config
         }
+        self.patcher = mock.patch('dbt.context.parser.get_adapter')
+        self.factory = self.patcher.start()
 
+    def tearDown(self):
+        self.patcher.stop()
 
 
 class SourceConfigTest(BaseParserTest):

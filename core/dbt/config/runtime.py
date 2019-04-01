@@ -171,16 +171,13 @@ class RuntimeConfig(Project, Profile):
         :raises DbtProfileError: If the profile is invalid or missing.
         :raises ValidationException: If the cli variables are invalid.
         """
-        cli_vars = parse_cli_vars(getattr(args, 'vars', '{}'))
-
         # build the project and read in packages.yml
-        project = Project.from_current_directory(cli_vars)
+        project = Project.from_args(args)
 
         # build the profile
         profile = Profile.from_args(
             args=args,
-            project_profile_name=project.profile_name,
-            cli_vars=cli_vars
+            project_profile_name=project.profile_name
         )
 
         return cls.from_parts(

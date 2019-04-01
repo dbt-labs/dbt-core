@@ -45,7 +45,7 @@ def print_compile_stats(stats):
     stat_line = ", ".join(
         ["{} {}".format(ct, names.get(t)) for t, ct in results.items()])
 
-    logger.info("Found {}".format(stat_line))
+    logger.notice("Found {}".format(stat_line))
 
 
 def _add_prepended_cte(prepended_ctes, new_cte):
@@ -184,7 +184,7 @@ class Compiler(object):
         if cycle:
             raise RuntimeError("Found a cycle: {}".format(cycle))
 
-    def compile(self, manifest):
+    def compile(self, manifest, write=True):
         linker = Linker()
 
         self.link_graph(linker, manifest)
@@ -196,25 +196,35 @@ class Compiler(object):
                 manifest.macros.items()):
             stats[node.resource_type] += 1
 
-        self.write_graph_file(linker, manifest)
+        if write:
+            self.write_graph_file(linker, manifest)
         print_compile_stats(stats)
 
         return linker
 
 
-def compile_manifest(config, manifest):
+def compile_manifest(config, manifest, write=True):
     compiler = Compiler(config)
     compiler.initialize()
-    return compiler.compile(manifest)
+    return compiler.compile(manifest, write=write)
 
 
-def compile_node(adapter, config, node, manifest, extra_context):
+def _is_writable(node):
+    if not node.injected_sql:
+        return False
+
+    if dbt.utils.is_type(node, NodeType.Archive):
+        return False
+
+    return True
+
+
+def compile_node(adapter, config, node, manifest, extra_context, write=True):
     compiler = Compiler(config)
     node = compiler.compile_node(node, manifest, extra_context)
     node = _inject_runtime_config(adapter, node, extra_context)
 
-    if(node.injected_sql is not None and
-       not (dbt.utils.is_type(node, NodeType.Archive))):
+    if write and _is_writable(node):
         logger.debug('Writing injected SQL for node "{}"'.format(
             node.unique_id))
 

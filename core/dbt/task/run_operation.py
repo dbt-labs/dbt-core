@@ -1,6 +1,6 @@
 from dbt.logger import GLOBAL_LOGGER as logger
 
-from dbt.task.base_task import BaseTask
+from dbt.task.base import BaseTask
 from dbt.adapters.factory import get_adapter
 from dbt.loader import GraphLoader
 

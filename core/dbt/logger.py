@@ -4,10 +4,8 @@ import logging
 import logging.handlers
 import os
 import sys
-import warnings
 
 import colorama
-
 
 # Colorama needs some help on windows because we're using logger.info
 # intead of print(). If the Windows env doesn't have a TERM var set,
@@ -16,6 +14,27 @@ import colorama
 # to send escape characters and no log handler injection is needed.
 colorama_stdout = sys.stdout
 colorama_wrap = True
+
+colorama.init(wrap=colorama_wrap)
+
+DEBUG = logging.DEBUG
+NOTICE = 15
+INFO = logging.INFO
+WARNING = logging.WARNING
+ERROR = logging.ERROR
+CRITICAL = logging.CRITICAL
+
+logging.addLevelName(NOTICE, 'NOTICE')
+
+
+class Logger(logging.Logger):
+    def notice(self, msg, *args, **kwargs):
+        if self.isEnabledFor(NOTICE):
+            self._log(NOTICE, msg, args, **kwargs)
+
+
+logging.setLoggerClass(Logger)
+
 
 if sys.platform == 'win32' and not os.environ.get('TERM'):
     colorama_wrap = False
@@ -29,23 +48,28 @@ colorama.init(wrap=colorama_wrap)
 # create a global console logger for dbt
 stdout_handler = logging.StreamHandler(colorama_stdout)
 stdout_handler.setFormatter(logging.Formatter('%(message)s'))
-stdout_handler.setLevel(logging.INFO)
+stdout_handler.setLevel(NOTICE)
 
 logger = logging.getLogger('dbt')
 logger.addHandler(stdout_handler)
-logger.setLevel(logging.DEBUG)
-logging.getLogger().setLevel(logging.CRITICAL)
+logger.setLevel(DEBUG)
+logging.getLogger().setLevel(CRITICAL)
 
 # Quiet these down in the logs
-logging.getLogger('botocore').setLevel(logging.INFO)
-logging.getLogger('requests').setLevel(logging.INFO)
-logging.getLogger('urllib3').setLevel(logging.INFO)
-logging.getLogger('google').setLevel(logging.INFO)
-logging.getLogger('snowflake.connector').setLevel(logging.INFO)
-logging.getLogger('parsedatetime').setLevel(logging.INFO)
+logging.getLogger('botocore').setLevel(INFO)
+logging.getLogger('requests').setLevel(INFO)
+logging.getLogger('urllib3').setLevel(INFO)
+logging.getLogger('google').setLevel(INFO)
+logging.getLogger('snowflake.connector').setLevel(INFO)
+logging.getLogger('parsedatetime').setLevel(INFO)
+# we never want to seek werkzeug logs
+logging.getLogger('werkzeug').setLevel(CRITICAL)
 
 # provide this for the cache.
 CACHE_LOGGER = logging.getLogger('dbt.cache')
+# provide this for RPC connection logging
+RPC_LOGGER = logging.getLogger('dbt.rpc')
+
 
 # Redirect warnings through our logging setup
 # They will be logged to a file below
@@ -70,6 +94,10 @@ class ColorFilter(logging.Filter):
         return True
 
 
+def default_formatter():
+    return logging.Formatter('%(asctime)-18s (%(threadName)s): %(message)s')
+
+
 def initialize_logger(debug_mode=False, path=None):
     global initialized, logger, stdout_handler
 
@@ -77,9 +105,8 @@ def initialize_logger(debug_mode=False, path=None):
         return
 
     if debug_mode:
-        stdout_handler.setFormatter(
-            logging.Formatter('%(asctime)-18s (%(threadName)s): %(message)s'))
-        stdout_handler.setLevel(logging.DEBUG)
+        stdout_handler.setFormatter(default_formatter())
+        stdout_handler.setLevel(DEBUG)
 
     if path is not None:
         make_log_dir_if_missing(path)
@@ -96,16 +123,15 @@ def initialize_logger(debug_mode=False, path=None):
         color_filter = ColorFilter()
         logdir_handler.addFilter(color_filter)
 
-        logdir_handler.setFormatter(
-            logging.Formatter('%(asctime)-18s (%(threadName)s): %(message)s'))
-        logdir_handler.setLevel(logging.DEBUG)
+        logdir_handler.setFormatter(default_formatter())
+        logdir_handler.setLevel(DEBUG)
 
         logger.addHandler(logdir_handler)
 
         # Log Python warnings to file
         warning_logger = logging.getLogger('py.warnings')
         warning_logger.addHandler(logdir_handler)
-        warning_logger.setLevel(logging.DEBUG)
+        warning_logger.setLevel(DEBUG)
 
     initialized = True
 
@@ -121,3 +147,56 @@ def log_cache_events(flag):
 
 
 GLOBAL_LOGGER = logger
+
+
+class QueueFormatter(logging.Formatter):
+    def formatMessage(self, record):
+        superself = super(QueueFormatter, self)
+        if hasattr(superself, 'formatMessage'):
+            # python 3.x
+            return superself.formatMessage(record)
+
+        # python 2.x, handling weird unicode things
+        try:
+            return self._fmt % record.__dict__
+        except UnicodeDecodeError as e:
+            try:
+                record.name = record.name.decode('utf-8')
+                return self._fmt % record.__dict__
+            except UnicodeDecodeError as e:
+                raise e
+
+    def format(self, record):
+        record.message = record.getMessage()
+        record.asctime = self.formatTime(record, self.datefmt)
+        formatted = self.formatMessage(record)
+
+        output = {
+            'message': formatted,
+            'timestamp': record.asctime,
+            'levelname': record.levelname,
+            'level': record.levelno,
+        }
+        if record.exc_info:
+            if not record.exc_text:
+                record.exc_text = self.formatException(record.exc_info)
+            output['exc_info'] = record.exc_text
+        return output
+
+
+class QueueLogHandler(logging.Handler):
+    def __init__(self, queue):
+        super(QueueLogHandler, self).__init__()
+        self.queue = queue
+
+    def emit(self, record):
+        msg = self.format(record)
+        self.queue.put_nowait(['log', msg])
+
+
+def add_queue_handler(queue):
+    """Add a queue log handler to the global logger."""
+    handler = QueueLogHandler(queue)
+    handler.setFormatter(QueueFormatter())
+    handler.setLevel(DEBUG)
+    GLOBAL_LOGGER.addHandler(handler)

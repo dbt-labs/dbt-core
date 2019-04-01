@@ -21,7 +21,7 @@ from dbt.contracts.project import LOCAL_PACKAGE_CONTRACT, \
     GIT_PACKAGE_CONTRACT, REGISTRY_PACKAGE_CONTRACT, \
     REGISTRY_PACKAGE_METADATA_CONTRACT, PackageConfig
 
-from dbt.task.base_task import BaseTask
+from dbt.task.base import ProjectOnlyTask
 
 DOWNLOADS_PATH = None
 REMOVE_DOWNLOADS = False
@@ -440,7 +440,7 @@ def _read_packages(project_yaml):
     return packages
 
 
-class DepsTask(BaseTask):
+class DepsTask(ProjectOnlyTask):
     def __init__(self, args, config=None):
         super(DepsTask, self).__init__(args=args, config=config)
         self._downloads_path = None

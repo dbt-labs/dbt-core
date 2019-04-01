@@ -357,7 +357,6 @@ class TestProfileFile(BaseFileTest):
         kw = {
             'args': self.args,
             'project_profile_name': project_profile_name,
-            'cli_vars': {},
         }
         kw.update(kwargs)
         return dbt.config.Profile.from_args(**kw)
@@ -484,7 +483,7 @@ class TestProfileFile(BaseFileTest):
         self.args.target = 'cli-and-env-vars'
         self.args.vars = '{"cli_value_host": "cli-postgres-host"}'
         with mock.patch.dict(os.environ, self.env_override):
-            profile = self.from_args(cli_vars=None)
+            profile = self.from_args()
             from_raw = self.from_raw_profile_info(
                 target_override='cli-and-env-vars',
                 cli_vars={'cli_value_host': 'cli-postgres-host'},
