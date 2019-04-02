@@ -221,6 +221,10 @@ class RequestTaskHandler(object):
             result = self.task.handle_request(**kwargs)
         except RPCException as exc:
             error = exc
+        except dbt.exceptions.RPCKilledException as exc:
+            # do NOT log anything here, you risk triggering a deadlock on the
+            # queue handler we inserted above
+            error = dbt_error(exc)
         except dbt.exceptions.Exception as exc:
             logger.debug('dbt runtime exception', exc_info=True)
             error = dbt_error(exc)

@@ -7,6 +7,7 @@ import multiprocessing
 from base64 import standard_b64encode as b64
 import requests
 import socket
+import threading
 import time
 
 
@@ -278,7 +279,8 @@ class ServerProcess(multiprocessing.Process):
             handle_and_check_args.extend(['--vars', cli_vars])
         super(ServerProcess, self).__init__(
             target=handle_and_check,
-            args=(handle_and_check_args,))
+            args=(handle_and_check_args,),
+            name='ServerProcess')
 
     def is_up(self):
         sock = socket.socket()
@@ -299,6 +301,36 @@ class ServerProcess(multiprocessing.Process):
             self.terminate()
             raise Exception('server never appeared!')
 
+
+def query_url(url, query):
+    headers = {'content-type': 'application/json'}
+    return requests.post(url, headers=headers, data=json.dumps(query))
+
+
+class BackgroundQueryProcess(multiprocessing.Process):
+    def __init__(self, query, url, group=None, name=None):
+        parent, child = multiprocessing.Pipe()
+        self.parent_pipe = parent
+        self.child_pipe = child
+        self.query = query
+        self.url = url
+        super(BackgroundQueryProcess, self).__init__(group=group, name=name)
+
+    def run(self):
+        try:
+            result = query_url(self.url, self.query).json()
+        except Exception as exc:
+            self.child_pipe.send(('error', str(exc)))
+        else:
+            self.child_pipe.send(('result', result))
+
+    def wait_result(self):
+        result_type, result = self.parent_pipe.recv()
+        self.join()
+        if result_type == 'error':
+            raise Exception(result)
+        else:
+            return result
 
 _select_from_ephemeral = '''with __dbt__CTE__ephemeral_model as (
 
@@ -328,7 +360,8 @@ class TestRPCServer(BaseSourcesTest):
             'macro-paths': ['test/integration/042_sources_test/macros'],
         }
 
-    def build_query(self, method, kwargs, sql=None, test_request_id=1, macros=None):
+    def build_query(self, method, kwargs, sql=None, test_request_id=1,
+                    macros=None):
         body_data = ''
         if sql is not None:
             body_data += sql
@@ -346,15 +379,34 @@ class TestRPCServer(BaseSourcesTest):
             'id': test_request_id
         }
 
-    def perform_query(self, query):
-        url = 'http://localhost:{}/jsonrpc'.format(self._server.port)
-        headers = {'content-type': 'application/json'}
-        response = requests.post(url, headers=headers, data=json.dumps(query))
-        return response
+    @property
+    def url(self):
+        return 'http://localhost:{}/jsonrpc'.format(self._server.port)
 
     def query(self, _method, _sql=None, _test_request_id=1, macros=None, **kwargs):
         built = self.build_query(_method, kwargs, _sql, _test_request_id, macros)
-        return self.perform_query(built)
+        return query_url(self.url, built)
+
+    def handle_result(self, bg_query, pipe):
+        result_type, result = pipe.recv()
+        bg_query.join()
+        if result_type == 'error':
+            raise result
+        else:
+            return result
+
+    def background_query(self, _method, _sql=None, _test_request_id=1,
+                         _block=False, macros=None, **kwargs):
+        built = self.build_query(_method, kwargs, _sql, _test_request_id,
+                                 macros)
+
+        url = 'http://localhost:{}/jsonrpc'.format(self._server.port)
+        name = _method
+        if 'name' in kwargs:
+            name += ' ' + kwargs['name']
+        bg_query = BackgroundQueryProcess(built, url, name=name)
+        bg_query.start()
+        return bg_query
 
     def assertResultHasTimings(self, result, *names):
         self.assertIn('timing', result)
@@ -375,15 +427,15 @@ class TestRPCServer(BaseSourcesTest):
         self.assertNotIn('error', data)
         return data['result']
 
-    def assertIsError(self, data):
-        self.assertEqual(data['id'], 1)
+    def assertIsError(self, data, id_=1):
+        self.assertEqual(data['id'], id_)
         self.assertEqual(data['jsonrpc'], '2.0')
         self.assertIn('error', data)
         self.assertNotIn('result', data)
         return data['error']
 
-    def assertIsErrorWithCode(self, data, code):
-        error = self.assertIsError(data)
+    def assertIsErrorWithCode(self, data, code, id_=1):
+        error = self.assertIsError(data, id_)
         self.assertIn('code', error)
         self.assertIn('message', error)
         self.assertEqual(error['code'], code)
@@ -631,6 +683,107 @@ class TestRPCServer(BaseSourcesTest):
             compiled_sql=_select_from_ephemeral,
             table={'column_names': ['id'], 'rows': [[1.0]]}
         )
+
+    @use_profile('postgres')
+    def test_ps_kill_postgres(self):
+        done_query = self.query('compile', 'select 1 as id', name='done').json()
+        self.assertIsResult(done_query)
+        pg_sleeper, sleep_task_id, request_id = self._get_sleep_query()
+
+        empty_ps_result = self.query('ps', completed=False, active=False).json()
+        result = self.assertIsResult(empty_ps_result)
+        self.assertEqual(len(result['rows']), 0)
+
+        sleeper_ps_result = self.query('ps', completed=False, active=True).json()
+        result = self.assertIsResult(sleeper_ps_result)
+        self.assertEqual(len(result['rows']), 1)
+        self.assertEqual(len(result['rows'][0]), len(result['columns']))
+        rowdict = [{k: v for k, v in zip(result['columns'], row)} for row in result['rows']]
+        self.assertEqual(rowdict[0]['request_id'], request_id)
+        self.assertEqual(rowdict[0]['method'], 'run')
+        self.assertEqual(rowdict[0]['state'], 'running')
+        self.assertEqual(rowdict[0]['timeout'], None)
+
+        complete_ps_result = self.query('ps', completed=True, active=False).json()
+        result = self.assertIsResult(complete_ps_result)
+        self.assertEqual(len(result['rows']), 1)
+        self.assertEqual(len(result['rows'][0]), len(result['columns']))
+        rowdict = [{k: v for k, v in zip(result['columns'], row)} for row in result['rows']]
+        self.assertEqual(rowdict[0]['request_id'], 1)
+        self.assertEqual(rowdict[0]['method'], 'compile')
+        self.assertEqual(rowdict[0]['state'], 'finished')
+        self.assertEqual(rowdict[0]['timeout'], None)
+
+        all_ps_result = self.query('ps', completed=True, active=True).json()
+        result = self.assertIsResult(all_ps_result)
+        self.assertEqual(len(result['rows']), 2)
+        self.assertEqual(len(result['rows'][0]), len(result['columns']))
+        self.assertEqual(len(result['rows'][1]), len(result['columns']))
+        rowdict = [{k: v for k, v in zip(result['columns'], row)} for row in result['rows']]
+        rowdict.sort(key=lambda r: r['start'])
+        self.assertEqual(rowdict[0]['request_id'], 1)
+        self.assertEqual(rowdict[0]['method'], 'compile')
+        self.assertEqual(rowdict[0]['state'], 'finished')
+        self.assertEqual(rowdict[0]['timeout'], None)
+        self.assertEqual(rowdict[1]['request_id'], request_id)
+        self.assertEqual(rowdict[1]['method'], 'run')
+        self.assertEqual(rowdict[1]['state'], 'running')
+        self.assertEqual(rowdict[1]['timeout'], None)
+
+        self.kill_and_assert(pg_sleeper, sleep_task_id, request_id)
+
+    def kill_and_assert(self, pg_sleeper, task_id, request_id):
+        kill_result = self.query('kill', task_id=task_id).json()
+        kill_time = time.time()
+        result = self.assertIsResult(kill_result)
+        self.assertTrue(result['killed'])
+
+        sleeper_result = pg_sleeper.wait_result()
+        result_time = time.time()
+        error = self.assertIsErrorWithCode(sleeper_result, 10009, request_id)
+        self.assertEqual(error['message'], 'RPC process killed')
+        self.assertIn('data', error)
+        error_data = error['data']
+        self.assertEqual(error_data['signum'], 2)
+        self.assertEqual(error_data['message'], 'RPC process killed by signal 2')
+        self.assertIn('logs', error_data)
+        # it should take less than 5s to kill the process if things are working
+        # properly
+        self.assertLess(result_time, kill_time + 5)
+        return error_data
+
+    def _get_sleep_query(self):
+        request_id = 90890
+        pg_sleeper = self.background_query(
+            'run',
+            'select pg_sleep(15)',
+            _test_request_id=request_id,
+            name='sleeper',
+        )
+
+        for _ in range(20):
+            time.sleep(0.2)
+            sleeper_ps_result = self.query('ps', completed=False, active=True).json()
+            result = self.assertIsResult(sleeper_ps_result)
+            rows = [{k: v for k, v in zip(result['columns'], row)} for row in result['rows']]
+            for row in rows:
+                if row['request_id'] == request_id and row['state'] == 'running':
+                    return pg_sleeper, row['task_id'], request_id
+
+        self.assertTrue(False, 'request ID never found running!')
+
+    @use_profile('postgres')
+    def test_ps_kill_longwait_postgres(self):
+        pg_sleeper, sleep_task_id, request_id = self._get_sleep_query()
+
+        # the test above frequently kills the process during parsing of the
+        # requested node. That's also a useful test, but we should test that
+        # we cancel the in-progress sleep query.
+        time.sleep(3)
+
+        error_data = self.kill_and_assert(pg_sleeper, sleep_task_id, request_id)
+        # we should have logs if we did anything
+        self.assertTrue(len(error_data['logs']) > 0)
 
     @use_profile('postgres')
     def test_invalid_requests_postgres(self):
