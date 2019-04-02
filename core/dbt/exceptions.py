@@ -95,6 +95,17 @@ class RuntimeException(RuntimeError, Exception):
         return lines[0] + "\n" + "\n".join(
             ["  " + line for line in lines[1:]])
 
+    def data(self):
+        result = Exception.data(self)
+        if self.node is None:
+            return result
+
+        result.update({
+            'raw_sql': self.node.get('raw_sql'),
+            'compiled_sql': self.node.get('injected_sql'),
+        })
+        return result
+
 
 class RPCFailureResult(RuntimeException):
     CODE = 10002
@@ -106,13 +117,16 @@ class RPCTimeoutException(RuntimeException):
     MESSAGE = 'RPC timeout error'
 
     def __init__(self, timeout):
+        super(RPCTimeoutException, self).__init__(self.MESSAGE)
         self.timeout = timeout
 
     def data(self):
-        return {
+        result = super(RPCTimeoutException, self).data()
+        result.update({
             'timeout': self.timeout,
             'message': 'RPC timed out after {}s'.format(self.timeout),
-        }
+        })
+        return result
 
 
 class DatabaseException(RuntimeException):
