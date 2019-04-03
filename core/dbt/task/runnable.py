@@ -4,7 +4,6 @@ import re
 import time
 from abc import abstractmethod
 from multiprocessing.dummy import Pool as ThreadPool
-from jsonrpc.exceptions import JSONRPCInvalidParams
 
 from dbt import rpc
 from dbt.task.base import ConfiguredTask

@@ -97,6 +97,11 @@ class SnowflakeConnectionManager(SQLConnectionManager):
             logger.debug("Error running SQL: %s", sql)
             logger.debug("Rolling back transaction.")
             self.release()
+            if isinstance(e, dbt.exceptions.RuntimeException):
+                # during a sql query, an internal to dbt exception was raised.
+                # this sounds a lot like a signal handler and probably has
+                # useful information, so raise it without modification.
+                raise
             raise dbt.exceptions.RuntimeException(e.msg)
 
     @classmethod
@@ -151,7 +156,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
 
         logger.debug("Cancelling query '{}' ({})".format(connection_name, sid))
 
-        _, cursor = self.add_query(sql, 'master')
+        _, cursor = self.add_query(sql)
         res = cursor.fetchone()
 
         logger.debug("Cancel query '{}': {}".format(connection_name, res))

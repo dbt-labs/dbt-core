@@ -92,7 +92,7 @@ class TestPostgresAdapter(unittest.TestCase):
 
             self.assertEqual(len(list(self.adapter.cancel_open_connections())), 1)
 
-            add_query.assert_called_once_with('select pg_terminate_backend(42)', 'master')
+            add_query.assert_called_once_with('select pg_terminate_backend(42)')
 
         master.handle.get_backend_pid.assert_not_called()
 
