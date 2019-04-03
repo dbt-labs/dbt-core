@@ -306,8 +306,7 @@ class TaskManager(object):
             ))
         table.sort(key=lambda r: (r.state, r.start))
         result = {
-            'columns': list(TaskRow._fields),
-            'rows': [list(r) for r in table],
+            'rows': [dict(r._asdict()) for r in table],
         }
         return result
 

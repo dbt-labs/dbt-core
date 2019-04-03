@@ -696,8 +696,7 @@ class TestRPCServer(BaseSourcesTest):
         sleeper_ps_result = self.query('ps', completed=False, active=True).json()
         result = self.assertIsResult(sleeper_ps_result)
         self.assertEqual(len(result['rows']), 1)
-        self.assertEqual(len(result['rows'][0]), len(result['columns']))
-        rowdict = [{k: v for k, v in zip(result['columns'], row)} for row in result['rows']]
+        rowdict = result['rows']
         self.assertEqual(rowdict[0]['request_id'], request_id)
         self.assertEqual(rowdict[0]['method'], 'run')
         self.assertEqual(rowdict[0]['state'], 'running')
@@ -706,8 +705,7 @@ class TestRPCServer(BaseSourcesTest):
         complete_ps_result = self.query('ps', completed=True, active=False).json()
         result = self.assertIsResult(complete_ps_result)
         self.assertEqual(len(result['rows']), 1)
-        self.assertEqual(len(result['rows'][0]), len(result['columns']))
-        rowdict = [{k: v for k, v in zip(result['columns'], row)} for row in result['rows']]
+        rowdict = result['rows']
         self.assertEqual(rowdict[0]['request_id'], 1)
         self.assertEqual(rowdict[0]['method'], 'compile')
         self.assertEqual(rowdict[0]['state'], 'finished')
@@ -716,9 +714,7 @@ class TestRPCServer(BaseSourcesTest):
         all_ps_result = self.query('ps', completed=True, active=True).json()
         result = self.assertIsResult(all_ps_result)
         self.assertEqual(len(result['rows']), 2)
-        self.assertEqual(len(result['rows'][0]), len(result['columns']))
-        self.assertEqual(len(result['rows'][1]), len(result['columns']))
-        rowdict = [{k: v for k, v in zip(result['columns'], row)} for row in result['rows']]
+        rowdict = result['rows']
         rowdict.sort(key=lambda r: r['start'])
         self.assertEqual(rowdict[0]['request_id'], 1)
         self.assertEqual(rowdict[0]['method'], 'compile')
@@ -765,7 +761,7 @@ class TestRPCServer(BaseSourcesTest):
             time.sleep(0.2)
             sleeper_ps_result = self.query('ps', completed=False, active=True).json()
             result = self.assertIsResult(sleeper_ps_result)
-            rows = [{k: v for k, v in zip(result['columns'], row)} for row in result['rows']]
+            rows = result['rows']
             for row in rows:
                 if row['request_id'] == request_id and row['state'] == 'running':
                     return pg_sleeper, row['task_id'], request_id
