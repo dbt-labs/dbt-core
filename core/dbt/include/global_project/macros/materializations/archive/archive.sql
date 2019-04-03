@@ -157,30 +157,13 @@
   {%- set target_database = config.get('target_database') -%}
   {%- set target_schema = config.get('target_schema') -%}
   {%- set target_table = model.get('alias', model.get('name')) -%}
-{#
-  -- {%- set source_database = config.get('source_database') -%}
-  -- {%- set source_schema = config.get('source_schema') -%}
-  -- {%- set source_table = config.get('source_table') -%}
-#}
+
   {{ create_schema(target_database, target_schema) }}
 
-{# our source relation is now made in a select query - we'll get that passed in
-  {%- set source_relation = adapter.get_relation(
-      database=source_database,
-      schema=source_schema,
-      identifier=source_table) -%}
-#}
   {%- set target_relation = adapter.get_relation(
       database=target_database,
       schema=target_schema,
       identifier=target_table) -%}
-
-{# sorry I removed this error handling :(
-  {%- if source_relation is none -%}
-    {{ exceptions.missing_relation('.'.join([source_database, source_schema, source_table])) }}
-  {%- endif -%}
-
-#}
 
   {%- if target_relation is none -%}
     {%- set target_relation = api.Relation.create(

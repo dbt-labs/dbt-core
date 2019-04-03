@@ -107,10 +107,8 @@ class ArchiveBlockParser(BaseSqlParser):
             raise
         for block in blocks:
             if block.block_type_name != NodeType.Archive:
-                dbt.exceptions.raise_compiler_error(
-                    'Invalid block type, expected {}, got {} (block:\n{})'
-                    .format(block.block_type_name, NodeType.Archive,
-                            block.full_block))
+                # non-archive blocks are just ignored
+                continue
             name = block.block_name
             raw_sql = block.contents
             updates = {
