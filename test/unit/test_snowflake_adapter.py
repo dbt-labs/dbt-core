@@ -155,8 +155,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
             self.assertEqual(
                 len(list(self.adapter.cancel_open_connections())), 1)
 
-            add_query.assert_called_once_with(
-                'select system$abort_session(42)', 'master')
+            add_query.assert_called_once_with('select system$abort_session(42)')
 
     def test_client_session_keep_alive_false_by_default(self):
         self.adapter.connections.set_connection_name(name='new_connection_with_new_config')
