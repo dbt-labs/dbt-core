@@ -321,6 +321,26 @@ class TestSimpleArchiveFileSelects(DBTIntegrationTest):
         self.assertTablesEqual('archive_kelly', 'archive_kelly_expected')
         self.assertTablesEqual('archive_actual', 'archive_expected')
 
+    @attr(type='postgres')
+    def test__postgres_exclude_archives(self):
+        self.run_sql_file('test/integration/004_simple_archive_test/seed.sql')
+        results = self.run_dbt(['archive', '--exclude', 'archive_castillo'])
+        self.assertEqual(len(results),  3)
+        self.assertTableDoesNotExist('archive_castillo')
+        self.assertTablesEqual('archive_alvarez', 'archive_alvarez_expected')
+        self.assertTablesEqual('archive_kelly', 'archive_kelly_expected')
+        self.assertTablesEqual('archive_actual', 'archive_expected')
+
+    @attr(type='postgres')
+    def test__postgres_select_archives(self):
+        self.run_sql_file('test/integration/004_simple_archive_test/seed.sql')
+        results = self.run_dbt(['archive', '--models', 'archive_castillo'])
+        self.assertEqual(len(results),  1)
+        self.assertTablesEqual('archive_castillo', 'archive_castillo_expected')
+        self.assertTableDoesNotExist('archive_alvarez')
+        self.assertTableDoesNotExist('archive_kelly')
+        self.assertTableDoesNotExist('archive_actual')
+
 
 class TestSimpleArchiveFilesBigquery(TestSimpleArchiveBigquery):
     @property

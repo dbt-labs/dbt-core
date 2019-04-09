@@ -121,6 +121,16 @@ class ArchiveBlockParser(BaseSqlParser):
     def get_compiled_path(cls, name, relative_path):
         return os.path.join('archives', relative_path)
 
+    @classmethod
+    def get_fqn(cls, node, package_project_config, extra=[]):
+        parts = dbt.utils.split_path(node.path)
+        fqn = [package_project_config.project_name]
+        fqn.extend(parts[:-1])
+        fqn.extend(extra)
+        fqn.append(node.name)
+
+        return fqn
+
     def parse_sql_nodes(self, nodes, tags=None):
         if tags is None:
             tags = []
