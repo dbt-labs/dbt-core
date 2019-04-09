@@ -252,5 +252,5 @@ class TestDuplicateHooksInConfigs(DBTIntegrationTest):
         with self.assertRaises(CompilationException) as exc:
             self.run_dbt(['run'])
 
-            self.assertIn('pre_hook', str(exc.exception))
-            self.assertIn('pre-hook', str(exc.exception))
+        self.assertIn('pre_hook', str(exc.exception))
+        self.assertIn('pre-hook', str(exc.exception))

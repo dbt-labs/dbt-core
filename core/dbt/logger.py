@@ -159,7 +159,7 @@ class QueueFormatter(logging.Formatter):
         # python 2.x, handling weird unicode things
         try:
             return self._fmt % record.__dict__
-        except UnicodeDecodeError as e:
+        except UnicodeDecodeError:
             try:
                 record.name = record.name.decode('utf-8')
                 return self._fmt % record.__dict__

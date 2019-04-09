@@ -76,10 +76,10 @@ class DocumentationParser(BaseParser):
     def load_and_parse(self, package_name, root_dir, relative_dirs):
         to_return = {}
         for docfile in self.load_file(package_name, root_dir, relative_dirs):
-                for parsed in self.parse(docfile):
-                    if parsed.unique_id in to_return:
-                        dbt.exceptions.raise_duplicate_resource_name(
-                            to_return[parsed.unique_id], parsed
-                        )
-                    to_return[parsed.unique_id] = parsed
+            for parsed in self.parse(docfile):
+                if parsed.unique_id in to_return:
+                    dbt.exceptions.raise_duplicate_resource_name(
+                        to_return[parsed.unique_id], parsed
+                    )
+                to_return[parsed.unique_id] = parsed
         return to_return

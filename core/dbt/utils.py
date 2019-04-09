@@ -420,7 +420,7 @@ def parse_cli_vars(var_string):
             dbt.exceptions.raise_compiler_error(
                 "The --vars argument must be a YAML dictionary, but was "
                 "of type '{}'".format(type_name))
-    except dbt.exceptions.ValidationException as e:
+    except dbt.exceptions.ValidationException:
         logger.error(
                 "The YAML provided in the --vars argument is not valid.\n")
         raise

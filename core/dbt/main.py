@@ -83,7 +83,7 @@ def main(args=None):
         else:
             exit_code = ExitCodes.ModelError
 
-    except KeyboardInterrupt as e:
+    except KeyboardInterrupt:
         logger.info("ctrl-c")
         exit_code = ExitCodes.UnhandledError
 
@@ -170,7 +170,7 @@ def track_run(task):
         dbt.tracking.track_invocation_end(
             config=task.config, args=task.args, result_type="error"
         )
-    except Exception as e:
+    except Exception:
         dbt.tracking.track_invocation_end(
             config=task.config, args=task.args, result_type="error"
         )

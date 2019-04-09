@@ -851,8 +851,8 @@ class SchemaParserTest(BaseParserTest):
             parser.load_and_parse(
                 'test', root_dir, relative_dirs
             )
-            self.assertIn('https://docs.getdbt.com/v0.11/docs/schemayml-files',
-                          str(cm.exception))
+        self.assertIn('https://docs.getdbt.com/docs/schemayml-files',
+                      str(cm.exception))
 
     @mock.patch.object(SchemaParser, 'find_schema_yml')
     @mock.patch.object(dbt.parser.schemas, 'logger')
@@ -874,8 +874,8 @@ class SchemaParserTest(BaseParserTest):
             parser.load_and_parse(
                 'test', root_dir, relative_dirs
             )
-            self.assertIn('https://docs.getdbt.com/v0.11/docs/schemayml-files',
-                          str(cm.exception))
+        self.assertIn('https://docs.getdbt.com/docs/schemayml-files',
+                      str(cm.exception))
 
     @mock.patch.object(SchemaParser, 'find_schema_yml')
     @mock.patch.object(dbt.parser.schemas, 'logger')
@@ -897,8 +897,8 @@ class SchemaParserTest(BaseParserTest):
             parser.load_and_parse(
                 'test', root_dir, relative_dirs
             )
-            self.assertIn('https://docs.getdbt.com/v0.11/docs/schemayml-files',
-                          str(cm.exception))
+        self.assertIn('https://docs.getdbt.com/docs/schemayml-files',
+                      str(cm.exception))
 
 
 class ParserTest(BaseParserTest):

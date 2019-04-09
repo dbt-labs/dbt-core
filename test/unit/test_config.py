@@ -755,7 +755,7 @@ class TestProject(BaseConfigTest):
 
     def test_invalid_version(self):
         self.default_project_data['require-dbt-version'] = 'hello!'
-        with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
+        with self.assertRaises(dbt.exceptions.DbtProjectError):
             dbt.config.Project.from_project_config(self.default_project_data)
 
     def test_unsupported_version(self):
@@ -923,7 +923,7 @@ class TestProjectFile(BaseFileTest):
 
     def test_with_invalid_package(self):
         self.write_packages({'invalid': ['not a package of any kind']})
-        with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
+        with self.assertRaises(dbt.exceptions.DbtProjectError):
             dbt.config.Project.from_project_root(self.project_dir, {})
 
 
@@ -971,8 +971,7 @@ class TestRuntimeConfig(BaseConfigTest):
         if exc is None:
             return dbt.config.RuntimeConfig.from_parts(project, profile, self.args)
 
-        with self.assertRaises(exc) as raised:
-            err = raised
+        with self.assertRaises(exc) as err:
             dbt.config.RuntimeConfig.from_parts(project, profile, self.args)
         return err
 

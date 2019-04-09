@@ -138,7 +138,7 @@ class BigQueryAdapter(BaseAdapter):
         # the implementation of list_relations for other adapters
         try:
             return [self._bq_table_to_relation(table) for table in all_tables]
-        except google.api_core.exceptions.NotFound as e:
+        except google.api_core.exceptions.NotFound:
             return []
 
     def get_relation(self, database, schema, identifier):

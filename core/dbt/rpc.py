@@ -185,7 +185,7 @@ class RequestTaskHandler(object):
     def _join_process(self):
         try:
             msgtype, result = self._wait_for_results()
-        except dbt.exceptions.RPCTimeoutException as exc:
+        except dbt.exceptions.RPCTimeoutException:
             self.process.terminate()
             raise timeout_error(self.timeout)
         except dbt.exceptions.Exception as exc:
