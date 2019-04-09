@@ -1,5 +1,6 @@
 from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest
+import dbt.exceptions
 
 
 class TestSimpleArchive(DBTIntegrationTest):
@@ -363,3 +364,26 @@ class TestCrossDBArchiveFiles(TestCrossDBArchive):
 
     def run_archive(self):
         return self.run_dbt(['archive', '--vars', '{{"target_database": {}}}'.format(self.alternative_database)])
+
+
+class TestBadArchive(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "simple_archive_004"
+
+    @property
+    def models(self):
+        return "test/integration/004_simple_archive_test/models"
+
+    @property
+    def project_config(self):
+        return {
+            "archive-paths": ['test/integration/004_simple_archive_test/test-archives-invalid'],
+        }
+
+    @attr(type='postgres')
+    def test__postgres__invalid(self):
+        with self.assertRaises(dbt.exceptions.CompilationException) as exc:
+            self.run_dbt(['compile'], expect_pass=False)
+
+        self.assertIn('target_database', str(exc.exception))

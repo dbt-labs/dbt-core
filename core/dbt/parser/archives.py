@@ -1,4 +1,5 @@
 from dbt.contracts.graph.unparsed import UnparsedNode
+from dbt.contracts.graph.parsed import ParsedArchiveNode
 from dbt.node_types import NodeType
 from dbt.parser.base import MacrosKnownParser
 from dbt.parser.base_sql import BaseSqlParser, SQLParseResult
@@ -119,7 +120,7 @@ class ArchiveBlockParser(BaseSqlParser):
 
     @classmethod
     def get_compiled_path(cls, name, relative_path):
-        return os.path.join('archives', relative_path)
+        return relative_path
 
     @classmethod
     def get_fqn(cls, node, package_project_config, extra=[]):
@@ -130,6 +131,16 @@ class ArchiveBlockParser(BaseSqlParser):
         fqn.append(node.name)
 
         return fqn
+
+    @staticmethod
+    def validate_archives(node):
+        if node.resource_type == NodeType.Archive:
+            try:
+                return ParsedArchiveNode(**node.to_shallow_dict())
+            except dbt.exceptions.JSONValidationException as exc:
+                raise dbt.exceptions.CompilationException(str(exc), node)
+        else:
+            return node
 
     def parse_sql_nodes(self, nodes, tags=None):
         if tags is None:
@@ -145,5 +156,10 @@ class ArchiveBlockParser(BaseSqlParser):
             found = super(ArchiveBlockParser, self).parse_sql_nodes(
                 nodes=archive_nodes, tags=tags
             )
+            # make sure our blocks are going to work when we try to archive
+            # them!
+            found.parsed = {k: self.validate_archives(v) for
+                            k, v in found.parsed.items()}
+
             results.update(found)
         return results
