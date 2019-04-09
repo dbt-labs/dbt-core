@@ -196,6 +196,7 @@
 
   {{ create_columns(target_relation, missing_columns) }}
 
+  {{ adapter.valid_archive_target(target_relation) }}
 
   {%- set identifier = model['alias'] -%}
   {%- set tmp_identifier = model['name'] + '__dbt_archival_tmp' -%}

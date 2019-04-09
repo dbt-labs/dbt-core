@@ -535,6 +535,48 @@ class BaseAdapter(object):
         ]
 
     @available
+    def valid_archive_target(self, relation):
+        """Ensure that the target relation is valid, by making sure it has the
+        expected columns.
+
+        :param Relation relation: The relation to check
+        :raises dbt.exceptions.CompilationException: If the columns are
+            incorrect.
+        """
+        if not isinstance(relation, self.Relation):
+            dbt.exceptions.invalid_type_error(
+                method_name='is_existing_old_style_archive',
+                arg_name='relation',
+                got_value=relation,
+                expected_type=self.Relation)
+
+        columns = self.get_columns_in_relation(relation)
+        names = set(c.name for c in columns)
+        expanded_keys = ('scd_id', 'valid_from', 'valid_to')
+        extra = []
+        missing = []
+        for legacy in expanded_keys:
+            desired = 'dbt_' + legacy
+            if desired not in names:
+                missing.append(desired)
+                if legacy in names:
+                    extra.append(legacy)
+
+        if missing:
+            if extra:
+                msg = (
+                    'Archive target has ("{}") but not ("{}") - is it an '
+                    'unmigrated previous version archive?'
+                    .format('", "'.join(extra), '", "'.join(missing))
+                )
+            else:
+                msg = (
+                    'Archive target is not an archive table (missing "{}")'
+                    .format('", "'.join(missing))
+                )
+            dbt.exceptions.raise_compiler_error(msg)
+
+    @available
     def expand_target_column_types(self, temp_table, to_relation):
         if not isinstance(to_relation, self.Relation):
             dbt.exceptions.invalid_type_error(
