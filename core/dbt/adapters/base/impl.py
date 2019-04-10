@@ -7,18 +7,17 @@ import six
 
 import dbt.exceptions
 import dbt.flags
-import dbt.schema
 import dbt.clients.agate_helper
 
 from dbt.compat import abstractclassmethod, classmethod
 from dbt.node_types import NodeType
 from dbt.loader import GraphLoader
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.schema import Column
 from dbt.utils import filter_null_values
 
 from dbt.adapters.base.meta import AdapterMeta, available, available_deprecated
 from dbt.adapters.base import BaseRelation
+from dbt.adapters.base import Column
 from dbt.adapters.cache import RelationsCache
 
 

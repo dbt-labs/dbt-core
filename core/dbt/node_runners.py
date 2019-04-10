@@ -6,15 +6,11 @@ from dbt.contracts.results import RunModelResult, collect_timing_info, \
     SourceFreshnessResult, PartialResult, RemoteCompileResult, RemoteRunResult
 from dbt.compilation import compile_node
 
-import dbt.clients.jinja
 import dbt.context.runtime
 import dbt.exceptions
 import dbt.utils
 import dbt.tracking
 import dbt.ui.printer
-import dbt.flags
-import dbt.schema
-import dbt.writer
 from dbt import rpc
 
 import threading

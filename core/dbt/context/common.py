@@ -11,11 +11,9 @@ from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 import dbt.clients.jinja
 import dbt.clients.agate_helper
 import dbt.flags
-import dbt.schema
 import dbt.tracking
+import dbt.writer
 import dbt.utils
-
-import dbt.hooks
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 

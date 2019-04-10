@@ -303,3 +303,91 @@ class BaseRelation(APIObject):
     @property
     def is_view(self):
         return self.type == self.View
+
+
+class Column(object):
+    TYPE_LABELS = {
+        'STRING': 'TEXT',
+        'TIMESTAMP': 'TIMESTAMP',
+        'FLOAT': 'FLOAT',
+        'INTEGER': 'INT'
+    }
+
+    def __init__(self, column, dtype, char_size=None, numeric_precision=None,
+                 numeric_scale=None):
+        self.column = column
+        self.dtype = dtype
+        self.char_size = char_size
+        self.numeric_precision = numeric_precision
+        self.numeric_scale = numeric_scale
+
+    @classmethod
+    def translate_type(cls, dtype):
+        return cls.TYPE_LABELS.get(dtype.upper(), dtype)
+
+    @classmethod
+    def create(cls, name, label_or_dtype):
+        column_type = cls.translate_type(label_or_dtype)
+        return cls(name, column_type)
+
+    @property
+    def name(self):
+        return self.column
+
+    @property
+    def quoted(self):
+        return '"{}"'.format(self.column)
+
+    @property
+    def data_type(self):
+        if self.is_string():
+            return Column.string_type(self.string_size())
+        elif self.is_numeric():
+            return Column.numeric_type(self.dtype, self.numeric_precision,
+                                       self.numeric_scale)
+        else:
+            return self.dtype
+
+    def is_string(self):
+        return self.dtype.lower() in ['text', 'character varying', 'character',
+                                      'varchar']
+
+    def is_numeric(self):
+        return self.dtype.lower() in ['numeric', 'number']
+
+    def string_size(self):
+        if not self.is_string():
+            raise RuntimeError("Called string_size() on non-string field!")
+
+        if self.dtype == 'text' or self.char_size is None:
+            # char_size should never be None. Handle it reasonably just in case
+            return 255
+        else:
+            return int(self.char_size)
+
+    def can_expand_to(self, other_column):
+        """returns True if this column can be expanded to the size of the
+        other column"""
+        if not self.is_string() or not other_column.is_string():
+            return False
+
+        return other_column.string_size() > self.string_size()
+
+    def literal(self, value):
+        return "{}::{}".format(value, self.data_type)
+
+    @classmethod
+    def string_type(cls, size):
+        return "character varying({})".format(size)
+
+    @classmethod
+    def numeric_type(cls, dtype, precision, scale):
+        # This could be decimal(...), numeric(...), number(...)
+        # Just use whatever was fed in here -- don't try to get too clever
+        if precision is None or scale is None:
+            return dtype
+        else:
+            return "{}({},{})".format(dtype, precision, scale)
+
+    def __repr__(self):
+        return "<Column {} ({})>".format(self.name, self.data_type)
