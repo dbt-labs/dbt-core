@@ -550,7 +550,7 @@ class BaseAdapter(object):
                 expected_type=self.Relation)
 
         columns = self.get_columns_in_relation(relation)
-        names = set(c.name for c in columns)
+        names = set(c.name.lower() for c in columns)
         expanded_keys = ('scd_id', 'valid_from', 'valid_to')
         extra = []
         missing = []

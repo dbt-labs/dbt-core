@@ -452,9 +452,44 @@ ARCHIVE_CONFIG_CONTRACT = {
         'unique_key': {
             'type': 'string',
         },
-        'strategy': {
-            'enum': ['timestamp'],
-        },
+        'anyOf': [
+            {
+                'properties': {
+                    'strategy': {
+                        'enum': ['timestamp'],
+                    },
+                    'updated_at': {
+                        'type': 'string',
+                        'description': (
+                            'The column name with the timestamp to compare'
+                        ),
+                    },
+                },
+                'required': ['updated_at'],
+            },
+            {
+                'properties': {
+                    'strategy': {
+                        'enum': ['check'],
+                    },
+                    'check_cols': {
+                        'oneOf': [
+                            {
+                                'type': 'array',
+                                'items': {'type': 'string'},
+                                'description': 'The columns to check',
+                                'minLength': 1,
+                            },
+                            {
+                                'enum': ['all'],
+                                'description': 'Check all columns',
+                            },
+                        ],
+                    },
+                },
+                'required': ['check_cols'],
+            }
+        ]
     },
     'required': [
         'target_database', 'target_schema', 'unique_key', 'strategy',

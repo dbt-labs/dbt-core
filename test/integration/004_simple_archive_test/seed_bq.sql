@@ -1,32 +1,32 @@
 create table {database}.{schema}.seed (
-	`id` INT64,
-	`first_name` STRING,
-	`last_name` STRING,
-	`email` STRING,
-	`gender` STRING,
-	`ip_address` STRING,
-	`updated_at` TIMESTAMP
+	id INT64,
+	first_name STRING,
+	last_name STRING,
+	email STRING,
+	gender STRING,
+	ip_address STRING,
+	updated_at TIMESTAMP
 );
 
 create table {database}.{schema}.archive_expected (
-	`id` INT64,
-	`first_name` STRING,
-	`last_name` STRING,
-	`email` STRING,
-	`gender` STRING,
-	`ip_address` STRING,
+	id INT64,
+	first_name STRING,
+	last_name STRING,
+	email STRING,
+	gender STRING,
+	ip_address STRING,
 
 	-- archival fields
-	`updated_at` TIMESTAMP,
-	`dbt_valid_from` TIMESTAMP,
-	`dbt_valid_to`   TIMESTAMP,
-	`dbt_scd_id`     STRING,
-	`dbt_updated_at` TIMESTAMP
+	updated_at TIMESTAMP,
+	dbt_valid_from TIMESTAMP,
+	dbt_valid_to   TIMESTAMP,
+	dbt_scd_id     STRING,
+	dbt_updated_at TIMESTAMP
 );
 
 
 -- seed inserts
-insert {database}.{schema}.seed (`id`, `first_name`, `last_name`, `email`, `gender`, `ip_address`, `updated_at`) values
+insert {database}.{schema}.seed (id, first_name, last_name, email, gender, ip_address, updated_at) values
 (1, 'Judith', 'Kennedy', 'jkennedy0@phpbb.com', 'Female', '54.60.24.128', '2015-12-24 12:19:28'),
 (2, 'Arthur', 'Kelly', 'akelly1@eepurl.com', 'Male', '62.56.24.215', '2015-10-28 16:22:15'),
 (3, 'Rachel', 'Moreno', 'rmoreno2@msu.edu', 'Female', '31.222.249.23', '2016-04-05 02:05:30'),
@@ -51,31 +51,31 @@ insert {database}.{schema}.seed (`id`, `first_name`, `last_name`, `email`, `gend
 
 -- populate archive table
 insert {database}.{schema}.archive_expected (
-    `id`,
-    `first_name`,
-    `last_name`,
-    `email`,
-    `gender`,
-    `ip_address`,
-    `updated_at`,
-    `dbt_valid_from`,
-    `dbt_valid_to`,
-    `dbt_updated_at`,
-    `dbt_scd_id`
+    id,
+    first_name,
+    last_name,
+    email,
+    gender,
+    ip_address,
+    updated_at,
+    dbt_valid_from,
+    dbt_valid_to,
+    dbt_updated_at,
+    dbt_scd_id
 )
 
 select
-    `id`,
-    `first_name`,
-    `last_name`,
-    `email`,
-    `gender`,
-    `ip_address`,
-    `updated_at`,
+    id,
+    first_name,
+    last_name,
+    email,
+    gender,
+    ip_address,
+    updated_at,
     -- fields added by archival
-    `updated_at` as dbt_valid_from,
+    updated_at as dbt_valid_from,
     cast(null as timestamp) as dbt_valid_to,
-    `updated_at` as dbt_updated_at,
-    to_hex(md5(concat(cast(`id` as string), '-', `first_name`, '|', cast(`updated_at` as string)))) as dbt_scd_id
+    updated_at as dbt_updated_at,
+    to_hex(md5(concat(cast(id as string), '-', first_name, '|', cast(updated_at as string)))) as dbt_scd_id
 from {database}.{schema}.seed;
 
