@@ -295,9 +295,9 @@ def _build_source_subparser(subparsers, base_subparser):
 
 def _build_init_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
-            'init',
-            parents=[base_subparser],
-            help="Initialize a new DBT project.")
+        'init',
+        parents=[base_subparser],
+        help="Initialize a new DBT project.")
     sub.add_argument('project_name', type=str, help='Name of the new project')
     sub.set_defaults(cls=init_task.InitTask, which='init')
     return sub

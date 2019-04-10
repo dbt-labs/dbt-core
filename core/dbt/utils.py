@@ -166,7 +166,7 @@ def merge(*args):
         return args[0]
 
     lst = list(args)
-    last = lst.pop(len(lst)-1)
+    last = lst.pop(len(lst) - 1)
 
     return _merge(merge(*lst), last)
 
@@ -190,7 +190,7 @@ def deep_merge(*args):
         return copy.deepcopy(args[0])
 
     lst = list(args)
-    last = copy.deepcopy(lst.pop(len(lst)-1))
+    last = copy.deepcopy(lst.pop(len(lst) - 1))
 
     return _deep_merge(deep_merge(*lst), last)
 
@@ -422,7 +422,8 @@ def parse_cli_vars(var_string):
                 "of type '{}'".format(type_name))
     except dbt.exceptions.ValidationException:
         logger.error(
-                "The YAML provided in the --vars argument is not valid.\n")
+            "The YAML provided in the --vars argument is not valid.\n"
+        )
         raise
 
 

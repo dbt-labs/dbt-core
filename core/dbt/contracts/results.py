@@ -194,8 +194,8 @@ EXECUTION_RESULT_CONTRACT = {
             'type': 'array',
             'items': {
                 'anyOf': [
-                     RUN_MODEL_RESULT_CONTRACT,
-                     PARTIAL_RESULT_CONTRACT,
+                    RUN_MODEL_RESULT_CONTRACT,
+                    PARTIAL_RESULT_CONTRACT,
                 ]
             },
             'description': 'An array of results, one per model',

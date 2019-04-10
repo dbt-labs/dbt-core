@@ -30,7 +30,8 @@ _VERSION_EXTRA_REGEX = r"""
     alpha_no_leading_zeros=_ALPHA_NO_LEADING_ZEROS,
     alpha=_ALPHA)
 
-_VERSION_REGEX = re.compile(r"""
+
+_VERSION_REGEX_PAT_STR = r"""
 ^
 {matchers}
 {base_version_regex}
@@ -39,8 +40,9 @@ $
 """.format(
     matchers=_MATCHERS,
     base_version_regex=_BASE_VERSION_REGEX,
-    version_extra_regex=_VERSION_EXTRA_REGEX),
-                            re.VERBOSE)
+    version_extra_regex=_VERSION_EXTRA_REGEX)
+
+_VERSION_REGEX = re.compile(_VERSION_REGEX_PAT_STR, re.VERBOSE)
 
 
 class Matchers:

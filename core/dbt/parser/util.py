@@ -177,8 +177,8 @@ class ParserUtils(object):
                 # this node to the graph b/c there is no destination node
                 node.config['enabled'] = False
                 dbt.utils.invalid_ref_fail_unless_test(
-                        node, target_model_name, target_model_package,
-                        disabled=(target_model is cls.DISABLED)
+                    node, target_model_name, target_model_package,
+                    disabled=(target_model is cls.DISABLED)
                 )
 
                 continue

@@ -194,7 +194,7 @@ def _filter_validate(filepath, location, values, validate):
         except dbt.exceptions.JSONValidationException as exc:
             # we don't want to fail the full run, but we do want to fail
             # parsing this file
-            warn_invalid(filepath, location, value, '- '+exc.msg)
+            warn_invalid(filepath, location, value, '- ' + exc.msg)
             continue
 
 
@@ -383,7 +383,7 @@ class SchemaSourceParser(SchemaBaseTestParser):
 
     def _generate_test_name(self, target, test_type, test_args):
         return get_nice_schema_test_name(
-            'source_'+test_type,
+            'source_' + test_type,
             '{}_{}'.format(target['source']['name'], target['table']['name']),
             test_args
         )

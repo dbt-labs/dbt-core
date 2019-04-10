@@ -1,8 +1,9 @@
-from jsonrpc.exceptions import JSONRPCDispatchException, \
-                               JSONRPCInvalidParams, \
-                               JSONRPCParseError, \
-                               JSONRPCInvalidRequestException, \
-                               JSONRPCInvalidRequest
+from jsonrpc.exceptions import \
+    JSONRPCDispatchException, \
+    JSONRPCInvalidParams, \
+    JSONRPCParseError, \
+    JSONRPCInvalidRequestException, \
+    JSONRPCInvalidRequest
 from jsonrpc import JSONRPCResponseManager
 from jsonrpc.jsonrpc import JSONRPCRequest
 from jsonrpc.jsonrpc2 import JSONRPC20Response

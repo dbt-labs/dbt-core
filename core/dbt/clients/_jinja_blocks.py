@@ -168,8 +168,8 @@ class BlockIterator(object):
         match = self._first_match(*patterns, **kwargs)
         if match is None:
             msg = 'unexpected EOF, expected {}, got "{}"'.format(
-                    expected_name, self.data[self.pos:]
-                )
+                expected_name, self.data[self.pos:]
+            )
             dbt.exceptions.raise_compiler_error(msg)
         return match
 
@@ -316,8 +316,8 @@ class BlockIterator(object):
                 if match.end() - match.start() == 1:
                     msg = (
                         'Unclosed quotation mark at position {}. Context:\n{}'
-                        .format(self.pos, self.data[self.pos-20:self.pos+20])
-                    )
+                        .format(self.pos,
+                                self.data[self.pos - 20:self.pos + 20]))
                     dbt.exceptions.raise_compiler_error(msg)
             elif matchgroups.get('comma') is not None:
                 # small hack: if we hit a comma and there is one parenthesis
