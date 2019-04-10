@@ -36,6 +36,8 @@ class ArchiveParser(MacrosKnownParser):
 
                 source_schema = archive_config['source_schema']
                 cfg['target_schema'] = archive_config.get('target_schema')
+                # project-defined archives always use the 'timestamp' strategy.
+                cfg['strategy'] = 'timestamp'
 
                 fake_path = [cfg['target_database'], cfg['target_schema'],
                              cfg['target_table']]

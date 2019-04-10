@@ -4,6 +4,8 @@ import dbt.exceptions
 
 
 class TestSimpleArchive(DBTIntegrationTest):
+    NUM_ARCHIVE_MODELS = 1
+
     @property
     def schema(self):
         return "simple_archive_004"
@@ -44,58 +46,67 @@ class TestSimpleArchive(DBTIntegrationTest):
         self.run_sql_file('test/integration/004_simple_archive_test/seed.sql')
 
         results = self.run_archive()
-        self.assertEqual(len(results),  1)
+        self.assertEqual(len(results),  self.NUM_ARCHIVE_MODELS)
 
+    def assert_case_tables_equal(self, actual, expected):
+        if self.adapter_type == 'snowflake':
+            actual = actual.upper()
+            expected = expected.upper()
+
+        self.assertTablesEqual(actual, expected)
+
+    def assert_expected(self):
+        self.assert_case_tables_equal('archive_actual', 'archive_expected')
 
     @attr(type='postgres')
     def test__postgres__simple_archive(self):
         self.dbt_run_seed_archive()
 
-        self.assertTablesEqual("archive_expected","archive_actual")
+        self.assert_expected()
 
         self.run_sql_file("test/integration/004_simple_archive_test/invalidate_postgres.sql")
         self.run_sql_file("test/integration/004_simple_archive_test/update.sql")
 
         results = self.run_archive()
-        self.assertEqual(len(results),  1)
+        self.assertEqual(len(results),  self.NUM_ARCHIVE_MODELS)
 
-        self.assertTablesEqual("archive_expected","archive_actual")
+        self.assert_expected()
 
     @attr(type='snowflake')
     def test__snowflake__simple_archive(self):
         self.dbt_run_seed_archive()
 
-        self.assertTablesEqual("ARCHIVE_EXPECTED", "ARCHIVE_ACTUAL")
+        self.assert_expected()
 
         self.run_sql_file("test/integration/004_simple_archive_test/invalidate_snowflake.sql")
         self.run_sql_file("test/integration/004_simple_archive_test/update.sql")
 
         results = self.run_archive()
-        self.assertEqual(len(results),  1)
+        self.assertEqual(len(results),  self.NUM_ARCHIVE_MODELS)
 
-        self.assertTablesEqual("ARCHIVE_EXPECTED", "ARCHIVE_ACTUAL")
+        self.assert_expected()
 
     @attr(type='redshift')
     def test__redshift__simple_archive(self):
         self.dbt_run_seed_archive()
 
-        self.assertTablesEqual("archive_expected","archive_actual")
+        self.assert_expected()
 
         self.run_sql_file("test/integration/004_simple_archive_test/invalidate_postgres.sql")
         self.run_sql_file("test/integration/004_simple_archive_test/update.sql")
 
         results = self.run_archive()
-        self.assertEqual(len(results),  1)
+        self.assertEqual(len(results),  self.NUM_ARCHIVE_MODELS)
 
-        self.assertTablesEqual("archive_expected","archive_actual")
+        self.assert_expected()
 
     @attr(type='presto')
     def test__presto__simple_archive_disabled(self):
         results = self.run_dbt(["seed"])
-        self.assertEqual(len(results),  1)
+        self.assertEqual(len(results),  self.NUM_ARCHIVE_MODELS)
         # presto does not run archives
         results = self.run_dbt(["archive"], expect_pass=False)
-        self.assertEqual(len(results),  1)
+        self.assertEqual(len(results),  self.NUM_ARCHIVE_MODELS)
         self.assertIn('not implemented for presto', results[0].error)
 
 
@@ -128,6 +139,9 @@ class TestSimpleArchiveBigquery(DBTIntegrationTest):
             ]
         }
 
+    def assert_expected(self):
+        self.assertTablesEqual('archive_actual', 'archive_expected')
+
     @attr(type='bigquery')
     def test__bigquery__simple_archive(self):
         self.use_default_project()
@@ -137,14 +151,14 @@ class TestSimpleArchiveBigquery(DBTIntegrationTest):
 
         self.run_dbt(["archive"])
 
-        self.assertTablesEqual("archive_expected", "archive_actual")
+        self.assert_expected()
 
         self.run_sql_file("test/integration/004_simple_archive_test/invalidate_bigquery.sql")
         self.run_sql_file("test/integration/004_simple_archive_test/update_bq.sql")
 
         self.run_dbt(["archive"])
 
-        self.assertTablesEqual("archive_expected", "archive_actual")
+        self.assert_expected()
 
 
     @attr(type='bigquery')
@@ -387,3 +401,101 @@ class TestBadArchive(DBTIntegrationTest):
             self.run_dbt(['compile'], expect_pass=False)
 
         self.assertIn('target_database', str(exc.exception))
+
+
+class TestCheckCols(TestSimpleArchiveFiles):
+    NUM_ARCHIVE_MODELS = 2
+    def _assertTablesEqualSql(self, relation_a, relation_b, columns=None):
+        # When building the equality tests, only test columns that don't start
+        # with 'dbt_', because those are time-sensitive
+        if columns is None:
+            columns = [c for c in self.get_relation_columns(relation_a) if not c[0].lower().startswith('dbt_')]
+        return super(TestCheckCols, self)._assertTablesEqualSql(
+            relation_a,
+            relation_b,
+            columns=columns
+        )
+
+    def assert_expected(self):
+        super(TestCheckCols, self).assert_expected()
+        self.assert_case_tables_equal('archive_checkall', 'archive_expected')
+
+    @property
+    def project_config(self):
+        return {
+            "data-paths": ['test/integration/004_simple_archive_test/data'],
+            "archive-paths": ['test/integration/004_simple_archive_test/test-check-col-archives'],
+        }
+
+
+class TestCheckColsBigquery(TestSimpleArchiveFilesBigquery):
+    def _assertTablesEqualSql(self, relation_a, relation_b, columns=None):
+        # When building the equality tests, only test columns that don't start
+        # with 'dbt_', because those are time-sensitive
+        if columns is None:
+            columns = [c for c in self.get_relation_columns(relation_a) if not c[0].lower().startswith('dbt_')]
+        return super(TestCheckColsBigquery, self)._assertTablesEqualSql(
+            relation_a,
+            relation_b,
+            columns=columns
+        )
+
+    def assert_expected(self):
+        super(TestCheckColsBigquery, self).assert_expected()
+        self.assertTablesEqual('archive_checkall', 'archive_expected')
+
+    @property
+    def project_config(self):
+        return {
+            "data-paths": ['test/integration/004_simple_archive_test/data'],
+            "archive-paths": ['test/integration/004_simple_archive_test/test-check-col-archives-bq'],
+        }
+
+    @attr(type='bigquery')
+    def test__bigquery__archive_with_new_field(self):
+        self.use_default_project()
+        self.use_profile('bigquery')
+
+        self.run_sql_file("test/integration/004_simple_archive_test/seed_bq.sql")
+
+        self.run_dbt(["archive"])
+
+        self.assertTablesEqual("archive_expected", "archive_actual")
+        self.assertTablesEqual("archive_expected", "archive_checkall")
+
+        self.run_sql_file("test/integration/004_simple_archive_test/invalidate_bigquery.sql")
+        self.run_sql_file("test/integration/004_simple_archive_test/update_bq.sql")
+
+        # This adds new fields to the source table, and updates the expected archive output accordingly
+        self.run_sql_file("test/integration/004_simple_archive_test/add_column_to_source_bq.sql")
+
+        # this should fail because `check="all"` will try to compare the nested field
+        self.run_dbt(['archive'], expect_pass=False)
+
+        self.run_dbt(["archive", '-m', 'archive_actual'])
+
+        # A more thorough test would assert that archived == expected, but BigQuery does not support the
+        # "EXCEPT DISTINCT" operator on nested fields! Instead, just check that schemas are congruent.
+
+        expected_cols = self.get_table_columns(
+            database=self.default_database,
+            schema=self.unique_schema(),
+            table='archive_expected'
+        )
+        archived_cols = self.get_table_columns(
+            database=self.default_database,
+            schema=self.unique_schema(),
+            table='archive_actual'
+        )
+
+        self.assertTrue(len(expected_cols) > 0, "source table does not exist -- bad test")
+        self.assertEqual(len(expected_cols), len(archived_cols), "actual and expected column lengths are different")
+
+        for (expected_col, actual_col) in zip(expected_cols, archived_cols):
+            expected_name, expected_type, _ = expected_col
+            actual_name, actual_type, _ = actual_col
+            self.assertTrue(expected_name is not None)
+            self.assertTrue(expected_type is not None)
+
+            self.assertEqual(expected_name, actual_name, "names are different")
+            self.assertEqual(expected_type, actual_type, "data types are different")

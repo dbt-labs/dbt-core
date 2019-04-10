@@ -1,6 +1,4 @@
-{% archive archive_sad %}
-
-    {# missing target_database #}
+{% archive no_target_database %}
     {{
         config(
             target_schema=schema,
