@@ -5,13 +5,13 @@ import copy
 import dbt.compat
 import dbt.deprecations
 import dbt.exceptions
-import dbt.schema
 import dbt.flags as flags
 import dbt.clients.gcloud
 import dbt.clients.agate_helper
 
 from dbt.adapters.base import BaseAdapter, available
 from dbt.adapters.bigquery import BigQueryRelation
+from dbt.adapters.bigquery import BigQueryColumn
 from dbt.adapters.bigquery import BigQueryConnectionManager
 from dbt.contracts.connection import Connection
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -26,19 +26,6 @@ import time
 import agate
 
 
-def column_to_bq_schema(col):
-    """Convert a column to a bigquery schema object. This is here instead of
-    in dbt.schema to avoid importing google libraries there.
-    """
-    kwargs = {}
-    if len(col.fields) > 0:
-        fields = [column_to_bq_schema(field) for field in col.fields]
-        kwargs = {"fields": fields}
-
-    return google.cloud.bigquery.SchemaField(col.name, col.dtype, col.mode,
-                                             **kwargs)
-
-
 class BigQueryAdapter(BaseAdapter):
 
     RELATION_TYPES = {
@@ -48,7 +35,7 @@ class BigQueryAdapter(BaseAdapter):
     }
 
     Relation = BigQueryRelation
-    Column = dbt.schema.BigQueryColumn
+    Column = BigQueryColumn
     ConnectionManager = BigQueryConnectionManager
 
     AdapterSpecificConfigs = frozenset({"cluster_by", "partition_by"})
@@ -371,7 +358,7 @@ class BigQueryAdapter(BaseAdapter):
                                                relation.identifier, conn)
         table = client.get_table(table_ref)
 
-        new_columns = [column_to_bq_schema(col) for col in columns]
+        new_columns = [col.column_to_bq_schema() for col in columns]
         new_schema = table.schema + new_columns
 
         new_table = google.cloud.bigquery.Table(table_ref, schema=new_schema)
