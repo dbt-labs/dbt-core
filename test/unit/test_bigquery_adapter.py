@@ -18,7 +18,7 @@ def _bq_conn():
     return conn
 
 
-class TestBigQueryAdapter(unittest.TestCase):
+class BaseTestBigQueryAdapter(unittest.TestCase):
 
     def setUp(self):
         flags.STRICT_MODE = True
@@ -73,6 +73,7 @@ class TestBigQueryAdapter(unittest.TestCase):
         return adapter
 
 
+class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
     @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
     def test_acquire_connection_oauth_validations(self, mock_open_connection):
         adapter = self.get_adapter('oauth')
@@ -132,6 +133,52 @@ class TestBigQueryAdapter(unittest.TestCase):
         mock_client = mock_bq.Client
         mock_client.assert_called_once_with('dbt-unit-000000', creds,
                                             location='Luna Station')
+
+
+class TestConnectionNamePassthrough(BaseTestBigQueryAdapter):
+
+    def setUp(self):
+        super(TestConnectionNamePassthrough, self).setUp()
+        self._conn_patch = patch.object(BigQueryAdapter, 'ConnectionManager')
+        self.conn_manager_cls = self._conn_patch.start()
+
+        self._relation_patch = patch.object(BigQueryAdapter, 'Relation')
+        self.relation_cls = self._relation_patch.start()
+
+        self.mock_connection_manager = self.conn_manager_cls.return_value
+        self.conn_manager_cls.TYPE = 'bigquery'
+        self.relation_cls.DEFAULTS = BigQueryRelation.DEFAULTS
+
+        self.adapter = self.get_adapter('oauth')
+
+    def tearDown(self):
+        super(TestConnectionNamePassthrough, self).tearDown()
+        self._conn_patch.stop()
+        self._relation_patch.stop()
+
+    def test_get_relation(self):
+        self.adapter.get_relation('db', 'schema', 'my_model', 'my_conn')
+        self.mock_connection_manager.get_bq_table.assert_called_once_with('db', 'schema', 'my_model', conn_name='my_conn')
+
+    def test_create_schema(self):
+        self.adapter.create_schema('db', 'schema', 'my_conn')
+        self.mock_connection_manager.create_dataset.assert_called_once_with('db', 'schema', 'my_conn')
+
+    @patch.object(BigQueryAdapter, 'check_schema_exists')
+    def test_drop_schema(self, mock_check_schema):
+        mock_check_schema.return_value = True
+        self.adapter.drop_schema('db', 'schema', 'my_conn')
+        self.mock_connection_manager.drop_dataset.assert_called_once_with('db', 'schema', 'my_conn')
+
+    def test_get_columns_in_relation(self):
+        self.mock_connection_manager.get_bq_table.side_effect = ValueError
+        self.adapter.get_columns_in_relation(
+            MagicMock(database='db', schema='schema', table_name='ident'),
+            'my_conn'
+        )
+        self.mock_connection_manager.get_bq_table.assert_called_once_with(
+            database='db', schema='schema', identifier='ident', conn_name='my_conn'
+        )
 
 
 class TestBigQueryRelation(unittest.TestCase):
