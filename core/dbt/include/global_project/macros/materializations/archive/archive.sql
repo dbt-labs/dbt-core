@@ -7,7 +7,7 @@
 {% endmacro %}
 
 {% macro default__archive_hash_arguments(args) %}
-    md5({% for arg in args %}{{ adapter.quote(arg) }}{% if not loop.last %} || '|' || {% endif %}{% endfor %})
+    md5({% for arg in args %}{{ arg }}{% if not loop.last %} || '|' || {% endif %}{% endfor %})
 {% endmacro %}
 
 {% macro create_temporary_table(sql, relation) %}
@@ -48,10 +48,10 @@
 
 {% macro default__archive_update(target_relation, tmp_relation) %}
     update {{ target_relation }}
-    set {{ adapter.quote('dbt_valid_to') }} = tmp.{{ adapter.quote('dbt_valid_to') }}
+    set dbt_valid_to = tmp.dbt_valid_to
     from {{ tmp_relation }} as tmp
-    where tmp.{{ adapter.quote('dbt_scd_id') }} = {{ target_relation }}.{{ adapter.quote('dbt_scd_id') }}
-      and {{ adapter.quote('change_type') }} = 'update';
+    where tmp.dbt_scd_id = {{ target_relation }}.dbt_scd_id
+      and change_type = 'update';
 {% endmacro %}
 
 
@@ -67,20 +67,6 @@
   to_timestamp_ntz({{ current_timestamp() }})
 {%- endmacro %}
 
-{#
-{% macro archive_current_timestamp() -%}
-  {{ adapter_macro('archive_current_timestamp') }}
-{%- endmacro %}
-
-{% macro default__archive_current_timestamp() -%}
-  {{ current_timestamp() }}
-{%- endmacro %}
-
-{% macro snowflake__archive_current_timestamp() -%}
-  TO_TIMESTAMP_NTZ(archive_current_timestamp())
-{%- endmacro %}
-#}
-
 
 {% macro archive_select_generic(source_sql, target_relation, transforms, scd_hash) -%}
     with source as (
@@ -89,14 +75,14 @@
     {{ transforms }}
     merged as (
 
-      select *, 'update' as {{ adapter.quote('change_type') }} from updates
+      select *, 'update' as change_type from updates
       union all
-      select *, 'insert' as {{ adapter.quote('change_type') }} from insertions
+      select *, 'insert' as change_type from insertions
 
     )
 
     select *,
-        {{ scd_hash }} as {{ adapter.quote('dbt_scd_id') }}
+        {{ scd_hash }} as dbt_scd_id
     from merged
 
 {%- endmacro %}
@@ -111,12 +97,12 @@
 
         select
             {% for col in source_columns %}
-                {{ adapter.quote(col.name) }} {% if not loop.last %},{% endif %}
+                {{ col.name }} {% if not loop.last %},{% endif %}
             {% endfor %},
-            {{ updated_at }} as {{ adapter.quote('dbt_updated_at') }},
-            {{ unique_key }} as {{ adapter.quote('dbt_pk') }},
-            {{ updated_at }} as {{ adapter.quote('dbt_valid_from') }},
-            {{ timestamp_column.literal('null') }} as {{ adapter.quote('tmp_valid_to') }}
+            {{ updated_at }} as dbt_updated_at,
+            {{ unique_key }} as dbt_pk,
+            {{ updated_at }} as dbt_valid_from,
+            {{ timestamp_column.literal('null') }} as tmp_valid_to
         from source
     ),
 
@@ -124,12 +110,12 @@
 
         select
             {% for col in source_columns %}
-                {{ adapter.quote(col.name) }},
+                {{ col.name }},
             {% endfor %}
-            {{ updated_at }} as {{ adapter.quote('dbt_updated_at') }},
-            {{ unique_key }} as {{ adapter.quote('dbt_pk') }},
-            {{ adapter.quote('dbt_valid_from') }},
-            {{ adapter.quote('dbt_valid_to') }} as {{ adapter.quote('tmp_valid_to') }}
+            {{ updated_at }} as dbt_updated_at,
+            {{ unique_key }} as dbt_pk,
+            dbt_valid_from,
+            dbt_valid_to as tmp_valid_to
         from {{ target_relation }}
 
     ),
@@ -138,16 +124,16 @@
 
         select
             current_data.*,
-            {{ timestamp_column.literal('null') }} as {{ adapter.quote('dbt_valid_to') }}
+            {{ timestamp_column.literal('null') }} as dbt_valid_to
         from current_data
         left outer join archived_data
-          on archived_data.{{ adapter.quote('dbt_pk') }} = current_data.{{ adapter.quote('dbt_pk') }}
+          on archived_data.dbt_pk = current_data.dbt_pk
         where
-          archived_data.{{ adapter.quote('dbt_pk') }} is null
+          archived_data.dbt_pk is null
           or (
-                archived_data.{{ adapter.quote('dbt_pk') }} is not null
-            and archived_data.{{ adapter.quote('dbt_updated_at') }} < current_data.{{ adapter.quote('dbt_updated_at') }}
-            and archived_data.{{ adapter.quote('tmp_valid_to') }} is null
+                archived_data.dbt_pk is not null
+            and archived_data.dbt_updated_at < current_data.dbt_updated_at
+            and archived_data.tmp_valid_to is null
         )
     ),
 
@@ -155,13 +141,13 @@
 
         select
             archived_data.*,
-            current_data.{{ adapter.quote('dbt_updated_at') }} as {{ adapter.quote('dbt_valid_to') }}
+            current_data.dbt_updated_at as dbt_valid_to
         from current_data
         left outer join archived_data
-          on archived_data.{{ adapter.quote('dbt_pk') }} = current_data.{{ adapter.quote('dbt_pk') }}
-        where archived_data.{{ adapter.quote('dbt_pk') }} is not null
-          and archived_data.{{ adapter.quote('dbt_updated_at') }} < current_data.{{ adapter.quote('dbt_updated_at') }}
-          and archived_data.{{ adapter.quote('tmp_valid_to') }} is null
+          on archived_data.dbt_pk = current_data.dbt_pk
+        where archived_data.dbt_pk is not null
+          and archived_data.dbt_updated_at < current_data.dbt_updated_at
+          and archived_data.tmp_valid_to is null
     ),
     {%- endset %}
     {%- set scd_hash = archive_hash_arguments(['dbt_pk', 'dbt_updated_at']) -%}
@@ -174,14 +160,14 @@
 
     {# if we recognize the primary key, it's the newest record, and anything we care about has changed, it's an update candidate #}
     {%- set update_candidate -%}
-      archived_data.{{ adapter.quote('dbt_pk') }} is not null
+      archived_data.dbt_pk is not null
       and (
         {%- for col in check_cols %}
-        current_data.{{ adapter.quote(col) }} <> archived_data.{{ adapter.quote(col) }}
+        current_data.{{ col }} <> archived_data.{{ col }}
         {%- if not loop.last %} or {% endif %}
       {% endfor -%}
       )
-      and archived_data.{{ adapter.quote('tmp_valid_to') }} is null
+      and archived_data.tmp_valid_to is null
     {%- endset %}
 
     {% set transforms -%}
@@ -189,12 +175,12 @@
 
         select
             {% for col in source_columns %}
-                {{ adapter.quote(col.name) }} {% if not loop.last %},{% endif %}
+                {{ col.name }} {% if not loop.last %},{% endif %}
             {% endfor %},
-            {{ archive_get_time() }} as {{ adapter.quote('dbt_updated_at') }},
-            {{ unique_key }} as {{ adapter.quote('dbt_pk') }},
-            {{ archive_get_time() }} as {{ adapter.quote('dbt_valid_from') }},
-            {{ timestamp_column.literal('null') }} as {{ adapter.quote('tmp_valid_to') }}
+            {{ archive_get_time() }} as dbt_updated_at,
+            {{ unique_key }} as dbt_pk,
+            {{ archive_get_time() }} as dbt_valid_from,
+            {{ timestamp_column.literal('null') }} as tmp_valid_to
         from source
     ),
 
@@ -202,12 +188,12 @@
 
         select
             {% for col in source_columns %}
-                {{ adapter.quote(col.name) }},
+                {{ col.name }},
             {% endfor %}
-            {{ adapter.quote('dbt_updated_at') }},
-            {{ unique_key }} as {{ adapter.quote('dbt_pk') }},
-            {{ adapter.quote('dbt_valid_from') }},
-            {{ adapter.quote('dbt_valid_to') }} as {{ adapter.quote('tmp_valid_to') }}
+            dbt_updated_at,
+            {{ unique_key }} as dbt_pk,
+            dbt_valid_from,
+            dbt_valid_to as tmp_valid_to
         from {{ target_relation }}
 
     ),
@@ -216,12 +202,12 @@
 
         select
             current_data.*,
-            {{ timestamp_column.literal('null') }} as {{ adapter.quote('dbt_valid_to') }}
+            {{ timestamp_column.literal('null') }} as dbt_valid_to
         from current_data
         left outer join archived_data
-          on archived_data.{{ adapter.quote('dbt_pk') }} = current_data.{{ adapter.quote('dbt_pk') }}
+          on archived_data.dbt_pk = current_data.dbt_pk
         where
-          archived_data.{{ adapter.quote('dbt_pk') }} is null
+          archived_data.dbt_pk is null
           or ( {{ update_candidate }} )
     ),
 
@@ -229,10 +215,10 @@
 
         select
             archived_data.*,
-            {{ archive_get_time() }} as {{ adapter.quote('dbt_valid_to') }}
+            {{ archive_get_time() }} as dbt_valid_to
         from current_data
         left outer join archived_data
-          on archived_data.{{ adapter.quote('dbt_pk') }} = current_data.{{ adapter.quote('dbt_pk') }}
+          on archived_data.dbt_pk = current_data.dbt_pk
         where {{ update_candidate }}
     ),
     {%- endset %}
@@ -345,7 +331,7 @@
       {{ column_list(dest_columns) }}
     )
     select {{ column_list(dest_columns) }} from {{ tmp_relation }}
-    where {{ adapter.quote('change_type') }} = 'insert';
+    where change_type = 'insert';
   {% endcall %}
 
   {{ adapter.commit() }}
