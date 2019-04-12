@@ -74,6 +74,6 @@
 {% endmacro %}
 
 
-{% macro bigquery__check_schema_exists(database, schema) %}
-  {{ return(adapter.check_schema_exists(database, schema)) }}
+{% macro bigquery__check_schema_exists(information_schema, schema) %}
+  {{ return(adapter.check_schema_exists(information_schema.database, schema)) }}
 {% endmacro %}

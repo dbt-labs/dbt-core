@@ -253,7 +253,14 @@
   {%- set target_table = model.get('alias', model.get('name')) -%}
   {%- set strategy = config.get('strategy') -%}
 
-  {{ create_schema(target_database, target_schema) }}
+  {% set information_schema = api.Relation.create(
+    database=target_database,
+    schema=target_schema,
+    identifier=target_table).information_schema() %}
+
+  {% if not check_schema_exists(information_schema, target_schema) %}
+    {{ create_schema(target_database, target_schema) }}
+  {% endif %}
 
   {%- set target_relation = adapter.get_relation(
       database=target_database,
