@@ -75,6 +75,7 @@ class BigQueryAdapter(BaseAdapter):
             '`rename_relation` is not implemented for this adapter!'
         )
 
+    @available
     def list_schemas(self, database):
         conn = self.connections.get_thread_connection()
         client = conn.handle
@@ -83,6 +84,11 @@ class BigQueryAdapter(BaseAdapter):
             all_datasets = client.list_datasets(project=database,
                                                 include_all=True)
             return [ds.dataset_id for ds in all_datasets]
+
+    @available
+    def check_schema_exists(self, database, schema):
+        superself = super(BigQueryAdapter, self)
+        return superself.check_schema_exists(database, schema)
 
     def get_columns_in_relation(self, relation):
         try:
