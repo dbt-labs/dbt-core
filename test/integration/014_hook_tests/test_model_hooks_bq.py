@@ -1,5 +1,4 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 MODEL_PRE_HOOK = """
    insert into {{this.schema}}.on_model_hook (
@@ -106,7 +105,7 @@ class TestBigqueryPrePostModelHooks(DBTIntegrationTest):
         self.assertTrue(ctx['run_started_at'] is not None and len(ctx['run_started_at']) > 0, 'run_started_at was not set')
         self.assertTrue(ctx['invocation_id'] is not None and len(ctx['invocation_id']) > 0, 'invocation_id was not set')
 
-    @attr(type='bigquery')
+    @use_profile('bigquery')
     def test_pre_and_post_model_hooks_bigquery(self):
         self.run_dbt(['run'])
 
@@ -135,7 +134,7 @@ class TestBigqueryPrePostModelHooksOnSeeds(DBTIntegrationTest):
             }
         }
 
-    @attr(type='bigquery')
+    @use_profile('bigquery')
     def test_hooks_on_seeds_bigquery(self):
         res = self.run_dbt(['seed'])
         self.assertEqual(len(res), 1, 'Expected exactly one item')

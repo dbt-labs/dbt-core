@@ -1,4 +1,3 @@
-from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest, use_profile
 
 
@@ -12,7 +11,7 @@ class TestCustomSchema(DBTIntegrationTest):
     def models(self):
         return "test/integration/024_custom_schema_test/models"
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__custom_schema_no_prefix(self):
         self.use_default_project()
         self.run_sql_file("test/integration/024_custom_schema_test/seed.sql")
@@ -67,7 +66,7 @@ class TestCustomProjectSchemaWithPrefix(DBTIntegrationTest):
             }
         }
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__custom_schema_with_prefix(self):
         self.use_default_project()
         self.run_sql_file("test/integration/024_custom_schema_test/seed.sql")
@@ -160,7 +159,7 @@ class TestCustomSchemaWithCustomMacro(DBTIntegrationTest):
             }
         }
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__custom_schema_from_macro(self):
         self.use_default_project()
         self.run_sql_file("test/integration/024_custom_schema_test/seed.sql")
