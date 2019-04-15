@@ -18,8 +18,7 @@ class BlockData:
 
 
 class BlockTag:
-    def __init__(self, block_type_name, block_name, contents=None,
-                 full_block=None, **kw):
+    def __init__(self, block_type_name, block_name, contents=None, full_block=None, **kw):
         self.block_type_name = block_type_name
         self.block_name = block_name
         self.contents = contents
