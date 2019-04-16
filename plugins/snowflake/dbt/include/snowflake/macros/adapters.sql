@@ -15,6 +15,23 @@
   );
 {% endmacro %}
 
+{% macro snowflake__create_or_replace_table_as(relation, sql) -%}
+  {% if temporary %}
+    use schema {{ adapter.quote_as_configured(schema, 'schema') }};
+  {% endif %}
+
+  {%- set transient = config.get('transient', default=true) -%}
+
+  create or replace {% if temporary -%}
+    temporary
+  {%- elif transient -%}
+    transient
+  {%- endif %} table {{ relation.include(database=(not temporary), schema=(not temporary)) }}
+  as (
+    {{ sql }}
+  );
+{% endmacro %}
+
 {% macro snowflake__create_view_as(relation, sql) -%}
   create or replace view {{ relation }} as (
     {{ sql }}
