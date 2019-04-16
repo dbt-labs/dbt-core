@@ -25,7 +25,10 @@ class PostgresAdapter(SQLAdapter):
 
     @available_raw
     def verify_database(self, database):
-        database = database.strip('"')
+        if database.startswith('"'):
+            database = database.strip('"')
+        else:
+            database = database.lower()
         expected = self.config.credentials.database
         if database != expected:
             raise dbt.exceptions.NotImplementedException(
