@@ -37,8 +37,10 @@
   -- setup: if the target relation already exists, truncate or drop it (if it's a view)
   {% if non_destructive_mode -%}
     {% if exists_as_table -%}
-      {{ adapter.truncate_relation(old_relation) }}
+      --noop we can do away with this step all together since the table can be replaced in Snowflake.
+      {# {{ adapter.truncate_relation(old_relation) }} #}
     {% elif exists_as_view -%}
+      --noop. I think we should also be able to do away with this and call a replace.
       {{ adapter.drop_relation(old_relation) }}
       {%- set old_relation = none -%}
     {%- endif %}
@@ -49,44 +51,22 @@
   -- `BEGIN` happens here:
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
-  -- build model
+  --build model
   {% call statement('main') -%}
-    {%- if non_destructive_mode -%}
-      {%- if old_relation is not none -%}
-        {{ create_table_as(create_as_temporary, intermediate_relation, sql) }}
-
-        {% set dest_columns = adapter.get_columns_in_relation(old_relation) %}
-        {% set dest_cols_csv = dest_columns | map(attribute='quoted') | join(', ') %}
-
-        insert into {{ target_relation }} ({{ dest_cols_csv }}) (
-          select {{ dest_cols_csv }}
-          from {{ intermediate_relation.include(database=(not create_as_temporary), schema=(not create_as_temporary)) }}
-        );
-      {%- else -%}
-        {{ create_table_as(create_as_temporary, target_relation, sql) }}
-      {%- endif -%}
-    {%- else -%}
-      {{ create_table_as(create_as_temporary, intermediate_relation, sql) }}
-    {%- endif -%}
-  {%- endcall %}
-
-  -- cleanup
-  {% if non_destructive_mode -%}
-    -- noop
-  {%- else -%}
+  -- we can leverage Snowflake create or replace table here to achieve an atomic replace.
     {% if old_relation is not none %}
+      {# -- I'm preserving one of the old checks here for a view, and to make sure Snowflake doesn't
+      -- complain that we're running a replace table on a view. #}
       {% if old_relation.type == 'view' %}
-        {#-- This is the primary difference between Snowflake and Redshift. Renaming this view
-          -- would cause an error if the view has become invalid due to upstream schema changes #}
         {{ log("Dropping relation " ~ old_relation ~ " because it is a view and this model is a table.") }}
         {{ drop_relation_if_exists(old_relation) }}
-      {% else %}
-        {{ adapter.rename_relation(target_relation, backup_relation) }}
       {% endif %}
     {% endif %}
+    -- 
+    {{create_or_replace_table_as(target_relation, sql)}}
+  {%- endcall %}
 
-    {{ adapter.rename_relation(intermediate_relation, target_relation) }}
-  {%- endif %}
+  -- skiping all previous renames here since they are not needed in Snowflake
 
   {{ run_hooks(post_hooks, inside_transaction=True) }}
 
@@ -94,6 +74,8 @@
   {{ adapter.commit() }}
 
   -- finally, drop the existing/backup relation after the commit
+  {# -- TODO: Check with Drew wether this backup_relation gets used at all should this materialisation
+  -- fail #}
   {{ drop_relation_if_exists(backup_relation) }}
 
   {{ run_hooks(post_hooks, inside_transaction=False) }}
