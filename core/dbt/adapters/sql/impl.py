@@ -181,11 +181,7 @@ class SQLAdapter(BaseAdapter):
         results = self.execute_macro(LIST_RELATIONS_MACRO_NAME, kwargs=kwargs)
 
         relations = []
-        quote_policy = {
-            'database': True,
-            'schema': True,
-            'identifier': True
-        }
+        quote_policy = {"database": True, "schema": True, "identifier": True}
         for _database, name, _schema, _type in results:
             try:
                 _type = self.Relation.get_relation_type(_type)
