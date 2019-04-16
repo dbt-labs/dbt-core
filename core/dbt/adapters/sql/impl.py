@@ -203,6 +203,7 @@ class SQLAdapter(BaseAdapter):
 
         relations = []
         quote_policy = {
+            'database': True,
             'schema': True,
             'identifier': True
         }

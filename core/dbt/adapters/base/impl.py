@@ -581,7 +581,7 @@ class BaseAdapter(object):
         if schema is not None and quoting['schema'] is False:
             schema = schema.lower()
 
-        if database is not None and quoting['schema'] is False:
+        if database is not None and quoting['database'] is False:
             database = database.lower()
 
         return filter_null_values({
