@@ -278,6 +278,8 @@ class SchemaBaseTestParser(MacrosKnownParser):
         full_path = get_pseudo_test_path(full_name, test_path, 'schema_test')
         raw_sql = self._build_raw_sql(test_namespace, test_target, test_type,
                                       test_args)
+
+        self.check_block_parsing(full_name, test_path, raw_sql)
         unparsed = UnparsedNode(
             name=full_name,
             resource_type=NodeType.Test,

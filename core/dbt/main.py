@@ -221,6 +221,8 @@ def update_flags(parsed):
     elif arg_full_refresh:
         flags.FULL_REFRESH = True
 
+    flags.WRAP_MODELS_IN_TAGS = getattr(parsed, 'wrap_models_in_tags', False)
+
 
 def _build_base_subparser():
     base_subparser = argparse.ArgumentParser(add_help=False)
@@ -635,6 +637,15 @@ def parse_args(args):
         '--single-threaded',
         action='store_true',
         help=argparse.SUPPRESS,
+    )
+
+    # if set, wrap all models and tests in '{% model name %}...{% endmodel %}'
+    # tags, extract them with the jinja block extractor, and verify that we
+    # got the original input. This is just a sanity check.
+    p.add_argument(
+        '--wrap-models-in-tags',
+        action='store_true',
+        help=argparse.SUPPRESS
     )
 
     subs = p.add_subparsers(title="Available sub-commands")

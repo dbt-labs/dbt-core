@@ -9,6 +9,7 @@ import dbt.flags
 
 from dbt.contracts.graph.unparsed import UnparsedNode
 from dbt.parser.base import MacrosKnownParser
+from dbt.node_types import NodeType
 
 
 class BaseSqlParser(MacrosKnownParser):
@@ -49,6 +50,9 @@ class BaseSqlParser(MacrosKnownParser):
             original_file_path = os.path.join(
                 file_match.get('searched_path'),
                 path)
+
+            if resource_type == NodeType.Model:
+                self.check_block_parsing(name, path, file_contents)
 
             result.append({
                 'name': name,

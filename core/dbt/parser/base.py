@@ -265,3 +265,43 @@ class MacrosKnownParser(BaseParser):
         parsed_node.validate()
 
         return parsed_node
+
+    def check_block_parsing(self, name, path, contents):
+        if not dbt.flags.WRAP_MODELS_IN_TAGS:
+            return
+
+        wrapped = ''.join(
+            ['{% model ', name, ' %}', contents, '{% endmodel %}']
+        )
+        blocks = dbt.clients.jinja.extract_toplevel_blocks(wrapped)
+        if len(blocks) == 0:
+            raise dbt.exceptions.InternalException(
+                'Failed to extract node {} ({}) from its wrapped block!'
+                .format(name, path)
+            )
+        elif len(blocks) > 1:
+            raise dbt.exceptions.InternalException(
+                'Found multiple blocks when parsing node {} ({}) from its '
+                'wrapped block, expected 1!'.format(name, path)
+            )
+        block = blocks[0]
+        if block.block_type_name != 'model':
+            raise dbt.exceptions.InternalException(
+                'Found invalid block type ("{}") when parsing node {} ({}) '
+                'from its wrapped block, expected "model"'
+                .format(block.block_type_name, name, path)
+            )
+
+        if block.block_name != name:
+            raise dbt.exceptions.InternalException(
+                'Found invalid block name ("{}") when parsing node {} ({}) '
+                'from its wrapped block, expected "{}"'
+                .format(block.block_name, name, path, name)
+            )
+
+        if blocks[0].contents != contents:
+            raise dbt.exceptions.InternalException(
+                'Found invalid block contents when parsing node {} ({}) '
+                'from its wrapped block, expected it to match original file'
+                .format(name, path)
+            )
