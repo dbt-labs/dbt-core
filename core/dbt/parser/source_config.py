@@ -13,7 +13,6 @@ class SourceConfig(object):
         'schema',
         'enabled',
         'materialized',
-        'sql_where',
         'unique_key',
         'database',
     }

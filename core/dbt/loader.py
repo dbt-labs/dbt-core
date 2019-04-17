@@ -214,8 +214,6 @@ def _warn_for_unused_resource_config_paths(manifest, config):
 def _warn_for_deprecated_configs(manifest):
     for unique_id, node in manifest.nodes.items():
         is_model = node.resource_type == NodeType.Model
-        if is_model and 'sql_where' in node.config:
-            deprecations.warn('sql_where')
 
 
 def _check_manifest(manifest, config):
