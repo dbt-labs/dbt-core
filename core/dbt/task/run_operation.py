@@ -1,6 +1,5 @@
 from dbt.logger import GLOBAL_LOGGER as logger
-
-from dbt.task.base import BaseTask
+from dbt.task.base import ConfiguredTask
 from dbt.adapters.factory import get_adapter
 from dbt.loader import GraphLoader
 
@@ -9,7 +8,7 @@ import dbt.utils
 import dbt.exceptions
 
 
-class RunOperationTask(BaseTask):
+class RunOperationTask(ConfiguredTask):
     def _get_macro_parts(self):
         macro_name = self.args.macro
         if '.' in macro_name:
@@ -22,7 +21,7 @@ class RunOperationTask(BaseTask):
     def _get_kwargs(self):
         return dbt.utils.parse_cli_vars(self.args.args)
 
-    def run(self):
+    def run_unsafe(self):
         manifest = GraphLoader.load_all(self.config)
         adapter = get_adapter(self.config)
 
@@ -33,8 +32,31 @@ class RunOperationTask(BaseTask):
             macro_name,
             project=package_name,
             kwargs=macro_kwargs,
-            manifest=manifest,
-            connection_name="macro_{}".format(macro_name)
+            manifest=manifest
         )
 
         return res
+
+    def run(self):
+        try:
+            result = self.run_unsafe()
+        except dbt.exceptions.Exception as exc:
+            logger.error(
+                'Encountered a dbt exception while running a macro: {}'
+                .format(exc)
+            )
+            logger.debug('', exc_info=True)
+            return False, None
+        except Exception as exc:
+            logger.error(
+                'Encountered an uncaught exception while running a macro: {}'
+                .format(exc)
+            )
+            logger.debug('', exc_info=True)
+            return False, None
+        else:
+            return True, result
+
+    def interpret_results(self, results):
+        success, _ = results
+        return success
