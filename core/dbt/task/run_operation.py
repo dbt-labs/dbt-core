@@ -41,7 +41,7 @@ class RunOperationTask(ManifestTask):
         package_name, macro_name = self._get_macro_parts()
         macro_kwargs = self._get_kwargs()
 
-        with adapter.connection_named('macro_{}'.format(macro_name)):
+        with adapter.connection_named("macro_{}".format(macro_name)):
             adapter.clear_transaction()
             res = adapter.execute_macro(
                 macro_name,
