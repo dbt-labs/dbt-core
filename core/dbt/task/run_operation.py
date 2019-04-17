@@ -28,12 +28,14 @@ class RunOperationTask(ConfiguredTask):
         package_name, macro_name = self._get_macro_parts()
         macro_kwargs = self._get_kwargs()
 
-        res = adapter.execute_macro(
-            macro_name,
-            project=package_name,
-            kwargs=macro_kwargs,
-            manifest=manifest
-        )
+        with adapter.connection_named('macro_{}'.format(macro_name)):
+            res = adapter.execute_macro(
+                macro_name,
+                project=package_name,
+                kwargs=macro_kwargs,
+                manifest=manifest
+            )
+            adapter.commit_if_has_connection()
 
         return res
 
