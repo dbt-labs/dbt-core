@@ -51,9 +51,6 @@ class BaseSqlParser(MacrosKnownParser):
                 file_match.get('searched_path'),
                 path)
 
-            if resource_type == NodeType.Model:
-                self.check_block_parsing(name, path, file_contents)
-
             result.append({
                 'name': name,
                 'root_path': root_dir,
@@ -78,7 +75,21 @@ class BaseSqlParser(MacrosKnownParser):
                                   node.name)
 
         project = self.all_projects.get(package_name)
+
+        parse_ok = True
+        if node.resource_type == NodeType.Model:
+            parse_ok = self.check_block_parsing(
+                node.name, node.original_file_path, node.raw_sql
+            )
+
         node_parsed = self.parse_node(node, unique_id, project, tags=tags)
+        if not parse_ok:
+            # if we had a parse error in parse_node, we would not get here. So
+            # this means we rejected a good file :(
+            raise dbt.exceptions.InternalException(
+                'the block parser rejected a good node: {} was marked invalid '
+                'but is actually valid!'.format(node.original_file_path)
+            )
         return unique_id, node_parsed
 
     def parse_sql_nodes(self, nodes, tags=None):

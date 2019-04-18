@@ -221,7 +221,7 @@ def update_flags(parsed):
     elif arg_full_refresh:
         flags.FULL_REFRESH = True
 
-    flags.WRAP_MODELS_IN_TAGS = getattr(parsed, 'wrap_models_in_tags', False)
+    flags.TEST_NEW_PARSER = getattr(parsed, 'test_new_parser', False)
 
 
 def _build_base_subparser():
@@ -639,11 +639,11 @@ def parse_args(args):
         help=argparse.SUPPRESS,
     )
 
-    # if set, wrap all models and tests in '{% model name %}...{% endmodel %}'
-    # tags, extract them with the jinja block extractor, and verify that we
-    # got the original input. This is just a sanity check.
+    # if set, extract all models and blocks with the jinja block extractor, and
+    # verify that we don't fail anywhere the actual jinja parser passes. The
+    # reverse (passing files that ends up failing jinja) is fine.
     p.add_argument(
-        '--wrap-models-in-tags',
+        '--test-new-parser',
         action='store_true',
         help=argparse.SUPPRESS
     )

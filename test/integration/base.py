@@ -441,7 +441,7 @@ class DBTIntegrationTest(unittest.TestCase):
     def profile_config(self):
         return {}
 
-    def run_dbt(self, args=None, expect_pass=True, strict=True, wrap=True):
+    def run_dbt(self, args=None, expect_pass=True, strict=True, parser=True):
         if args is None:
             args = ["run"]
 
@@ -449,8 +449,8 @@ class DBTIntegrationTest(unittest.TestCase):
 
         if strict:
             final_args.append('--strict')
-        if wrap:
-            final_args.append('--wrap-models-in-tags')
+        if parser:
+            final_args.append('--test-new-parser')
 
         final_args.extend(args)
         final_args.append('--log-cache-events')
