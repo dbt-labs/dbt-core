@@ -441,16 +441,23 @@ class DBTIntegrationTest(unittest.TestCase):
     def profile_config(self):
         return {}
 
-    def run_dbt(self, args=None, expect_pass=True, strict=True):
+    def run_dbt(self, args=None, expect_pass=True, strict=True, parser=True):
         if args is None:
             args = ["run"]
 
-        if strict:
-            args = ["--strict"] + args
-        args.append('--log-cache-events')
-        logger.info("Invoking dbt with {}".format(args))
+        final_args = []
 
-        res, success = dbt.handle_and_check(args)
+        if strict:
+            final_args.append('--strict')
+        if parser:
+            final_args.append('--test-new-parser')
+
+        final_args.extend(args)
+        final_args.append('--log-cache-events')
+
+        logger.info("Invoking dbt with {}".format(final_args))
+
+        res, success = dbt.handle_and_check(final_args)
         self.assertEqual(
             success, expect_pass,
             "dbt exit state did not match expected")

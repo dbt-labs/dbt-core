@@ -278,6 +278,7 @@ class SchemaBaseTestParser(MacrosKnownParser):
         full_path = get_pseudo_test_path(full_name, test_path, 'schema_test')
         raw_sql = self._build_raw_sql(test_namespace, test_target, test_type,
                                       test_args)
+
         unparsed = UnparsedNode(
             name=full_name,
             resource_type=NodeType.Test,
@@ -295,13 +296,23 @@ class SchemaBaseTestParser(MacrosKnownParser):
         node_path = self.get_path(NodeType.Test, unparsed.package_name,
                                   unparsed.name)
 
-        return self.parse_node(unparsed,
-                               node_path,
-                               source_package,
-                               tags=['schema'],
-                               fqn_extra=None,
-                               fqn=fqn_override,
-                               column_name=column_name)
+        result = self.parse_node(unparsed,
+                                 node_path,
+                                 source_package,
+                                 tags=['schema'],
+                                 fqn_extra=None,
+                                 fqn=fqn_override,
+                                 column_name=column_name)
+
+        parse_ok = self.check_block_parsing(full_name, test_path, raw_sql)
+        if not parse_ok:
+            # if we had a parse error in parse_node, we would not get here. So
+            # this means we rejected a good file :(
+            raise dbt.exceptions.InternalException(
+                'the block parser rejected a good node: {} was marked invalid '
+                'but is actually valid!'.format(test_path)
+            )
+        return result
 
 
 class SchemaModelParser(SchemaBaseTestParser):

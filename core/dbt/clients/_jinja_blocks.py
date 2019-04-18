@@ -16,11 +16,12 @@ class BlockData(object):
 
 
 class BlockTag(object):
-    def __init__(self, block_type_name, block_name, contents=None, **kw):
+    def __init__(self, block_type_name, block_name, contents=None,
+                 full_block=None, **kw):
         self.block_type_name = block_type_name
         self.block_name = block_name
         self.contents = contents
-        self.full_block = None
+        self.full_block = full_block
 
     def __str__(self):
         return 'BlockTag({!r}, {!r})'.format(self.block_type_name,
@@ -59,7 +60,7 @@ BLOCK_START_PATTERN = regex(''.join((
     r'(?:\s+(?P<block_name>({})))?'.format(_NAME_PATTERN),
 )))
 
-TAG_CLOSE_PATTERN = regex(r'(?:\-\%\}\s*|\%\})')
+TAG_CLOSE_PATTERN = regex(r'(?:(?P<tag_close>(\-\%\}\s*|\%\})))')
 # if you do {% materialization foo, adapter="myadapter' %} and end up with
 # mismatched quotes this will still match, but jinja will fail somewhere
 # since the adapter= argument has to be an adapter name, and none have quotes
@@ -103,6 +104,13 @@ NON_STRING_MACRO_ARGS_PATTERN = regex(
 )
 
 
+NON_STRING_DO_BLOCK_MEMBER_PATTERN = regex(
+    # anything, followed by a quote, paren, or a tag end
+    r'''(.*?)'''
+    r'''((?P<quote>(['"]))|(?P<open>(\())|(?P<close>(\))))'''
+)
+
+
 class BlockIterator(object):
     def __init__(self, data):
         self.data = data
@@ -134,9 +142,7 @@ class BlockIterator(object):
     def expect_comment_end(self):
         """Expect a comment end and return the match object.
         """
-        match = self._match(COMMENT_END_PATTERN)
-        if match is None:
-            dbt.exceptions.raise_compiler_error('unexpected EOF, expected #}')
+        match = self._expect_match('#}', COMMENT_END_PATTERN)
         self.advance(match.end())
 
     def expect_raw_end(self):
@@ -195,7 +201,8 @@ class BlockIterator(object):
         while True:
             match = self._expect_match(
                 '"{}"'.format(found.end_block_type_name),
-                found.end_pat(), COMMENT_START_PATTERN, RAW_START_PATTERN
+                found.end_pat(), COMMENT_START_PATTERN, RAW_START_PATTERN,
+                regex('''(?P<quote>(['"]))''')
             )
             groups = match.groupdict()
             if groups.get('endblock') is not None:
@@ -207,6 +214,10 @@ class BlockIterator(object):
                 self.expect_comment_end()
             elif groups.get('raw_start') is not None:
                 self.expect_raw_end()
+            elif groups.get('quote') is not None:
+                self.rewind()
+                match = self._expect_match('any string', STRING_PATTERN)
+                self.advance(match.end())
             else:
                 raise dbt.exceptions.InternalException(
                     'unhandled regex in handle_block, no match: {}'
@@ -226,9 +237,48 @@ class BlockIterator(object):
     def handle_materialization(self, match):
         self._expect_match('materialization args',
                            MATERIALIZATION_ARGS_PATTERN)
-        self._expect_match('%}', TAG_CLOSE_PATTERN)
+        endtag = self._expect_match('%}', TAG_CLOSE_PATTERN)
+        self.advance(endtag.end())
         # handle the block we started with!
         self.blocks.append(self.handle_block(match))
+
+    def handle_do(self, match, expect_block):
+        if expect_block:
+            # we might be wrong to expect a block ({% do (...) %}, for example)
+            # so see if there's more data before the tag closes. if there
+            # isn't, we expect a block.
+            close_match = self._expect_match('%}', TAG_CLOSE_PATTERN)
+            unprocessed = self.data[match.end():close_match.start()].strip()
+            expect_block = not unprocessed
+
+        if expect_block:
+            # if we're here, expect_block is True and we must have set
+            # close_match
+            self.advance(close_match.end())
+            block = self.handle_block(match)
+        else:
+            # we have a do-statement like {% do thing() %}, so no {% enddo %}
+            # also, we don't want to advance to the end of the match, as it
+            # might be inside a string or something! So go back and figure out
+            self._process_rval_components()
+            block = BlockTag('do', None,
+                             full_block=self.data[match.start():self.pos])
+        self.blocks.append(block)
+
+    def handle_set(self, match):
+        equal_or_close = self._expect_match('%} or =',
+                                            TAG_CLOSE_PATTERN, regex(r'='))
+        self.advance(equal_or_close.end())
+        if equal_or_close.groupdict().get('tag_close') is None:
+            # it's an equals sign, must be like {% set x = 1 %}
+            self._process_rval_components()
+            # watch out, order matters here on python 2
+            block = BlockTag(full_block=self.data[match.start():self.pos],
+                             **match.groupdict())
+        else:
+            # it's a tag close, must be like {% set x %}...{% endset %}
+            block = self.handle_block(match)
+        self.blocks.append(block)
 
     def find_block(self):
         open_block = (
@@ -251,19 +301,37 @@ class BlockIterator(object):
         # comments are easy
         if matchgroups.get('comment_start') is not None:
             start = match.start()
+            self.advance(match.end())
             self.expect_comment_end()
             self.blocks.append(BlockData(self.data[start:self.pos]))
             return True
 
-        if matchgroups.get('block_type_name') == 'raw':
+        block_type_name = matchgroups.get('block_type_name')
+
+        if block_type_name == 'raw':
             start = match.start()
             self.expect_raw_end()
             self.blocks.append(BlockData(self.data[start:self.pos]))
             return True
 
-        if matchgroups.get('block_type_name') == 'materialization':
+        if block_type_name == 'materialization':
             self.advance(match.end())
             self.handle_materialization(match)
+            return True
+
+        if block_type_name == 'do':
+            # if there is a "block_name" in the match groups, we don't expect a
+            # block as the "block name" is actually part of the do-statement.
+            # we need to do this to handle the (weird and probably wrong!) case
+            # of a do-statement that is only a single identifier - techincally
+            # allowed in jinja. (for example, {% do thing %})
+            expect_block = matchgroups.get('block_name') is None
+            self.handle_do(match, expect_block=expect_block)
+            return True
+
+        if block_type_name == 'set':
+            self.advance(match.end())
+            self.handle_set(match)
             return True
 
         # we're somewhere like this {% block_type_name block_type
@@ -284,6 +352,42 @@ class BlockIterator(object):
         self.blocks.append(self.handle_block(match))
         return True
 
+    def _process_rval_components(self):
+        """This is suspiciously similar to _process_macro_default_arg, probably
+        want to figure out how to merge the two.
+
+        Process the rval of an assignment statement or a do-block
+        """
+        while True:
+            match = self._expect_match(
+                'do block component',
+                # you could have a string, though that would be weird
+                STRING_PATTERN,
+                # a quote or an open/close parenthesis
+                NON_STRING_DO_BLOCK_MEMBER_PATTERN,
+                # a tag close
+                TAG_CLOSE_PATTERN
+            )
+            matchgroups = match.groupdict()
+            self.advance(match.end())
+            if matchgroups.get('string') is not None:
+                continue
+            elif matchgroups.get('quote') is not None:
+                self.rewind()
+                # now look for a string
+                match = self._expect_match('any string', STRING_PATTERN)
+                self.advance(match.end())
+            elif matchgroups.get('open'):
+                self._parenthesis_stack.append(True)
+            elif matchgroups.get('close'):
+                self._parenthesis_stack.pop()
+            elif matchgroups.get('tag_close'):
+                if self._parenthesis_stack:
+                    msg = ('Found "%}", expected ")"')
+                    dbt.exceptions.raise_compiler_error(msg)
+                return
+            # else whitespace
+
     def _process_macro_default_arg(self):
         """Handle the bit after an '=' in a macro default argument. This is
         probably the trickiest thing. The goal here is to accept all strings
@@ -297,7 +401,7 @@ class BlockIterator(object):
                 'macro argument',
                 # you could have a string
                 STRING_PATTERN,
-                # a quote, a comma, or a close parenthesis
+                # a quote, a comma, or a open/close parenthesis
                 NON_STRING_MACRO_ARGS_PATTERN,
                 # we want to "match", not "search"
                 method='match'
@@ -311,20 +415,17 @@ class BlockIterator(object):
                 # we got a bunch of data and then a string opening value.
                 # put the quote back on the menu
                 self.rewind()
-                # if we only got a single quote mark and didn't hit a string
-                # at all, this file has an unclosed quote. Fail accordingly.
-                if match.end() - match.start() == 1:
-                    msg = (
-                        'Unclosed quotation mark at position {}. Context:\n{}'
-                        .format(self.pos, self.data[self.pos-20:self.pos+20])
-                    )
-                    dbt.exceptions.raise_compiler_error(msg)
+                # now look for a string
+                match = self._expect_match('any string', STRING_PATTERN)
+                self.advance(match.end())
             elif matchgroups.get('comma') is not None:
                 # small hack: if we hit a comma and there is one parenthesis
                 # left, return to look for a new name. otherwise we're still
                 # looking for the parameter close.
                 if len(self._parenthesis_stack) == 1:
                     return
+            elif matchgroups.get('open'):
+                self._parenthesis_stack.append(True)
             elif matchgroups.get('close'):
                 self._parenthesis_stack.pop()
             else:

@@ -265,3 +265,16 @@ class MacrosKnownParser(BaseParser):
         parsed_node.validate()
 
         return parsed_node
+
+    def check_block_parsing(self, name, path, contents):
+        """Check if we were able to extract toplevel blocks from the given
+        contents. Return True if extraction was successful (no exceptions),
+        False if it fails.
+        """
+        if not dbt.flags.TEST_NEW_PARSER:
+            return True
+        try:
+            dbt.clients.jinja.extract_toplevel_blocks(contents)
+        except Exception:
+            return False
+        return True

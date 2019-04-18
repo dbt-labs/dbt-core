@@ -221,6 +221,8 @@ def update_flags(parsed):
     elif arg_full_refresh:
         flags.FULL_REFRESH = True
 
+    flags.TEST_NEW_PARSER = getattr(parsed, 'test_new_parser', False)
+
 
 def _build_base_subparser():
     base_subparser = argparse.ArgumentParser(add_help=False)
@@ -635,6 +637,15 @@ def parse_args(args):
         '--single-threaded',
         action='store_true',
         help=argparse.SUPPRESS,
+    )
+
+    # if set, extract all models and blocks with the jinja block extractor, and
+    # verify that we don't fail anywhere the actual jinja parser passes. The
+    # reverse (passing files that ends up failing jinja) is fine.
+    p.add_argument(
+        '--test-new-parser',
+        action='store_true',
+        help=argparse.SUPPRESS
     )
 
     subs = p.add_subparsers(title="Available sub-commands")
