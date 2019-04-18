@@ -21,7 +21,7 @@ class RunOperationTask(ConfiguredTask):
     def _get_kwargs(self):
         return dbt.utils.parse_cli_vars(self.args.args)
 
-    def run_unsafe(self):
+    def _run_unsafe(self):
         manifest = GraphLoader.load_all(self.config)
         adapter = get_adapter(self.config)
 
@@ -41,7 +41,7 @@ class RunOperationTask(ConfiguredTask):
 
     def run(self):
         try:
-            result = self.run_unsafe()
+            result = self._run_unsafe()
         except dbt.exceptions.Exception as exc:
             logger.error(
                 'Encountered a dbt exception while running a macro: {}'
