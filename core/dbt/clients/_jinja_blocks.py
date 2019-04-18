@@ -322,6 +322,9 @@ class BlockIterator(object):
         if block_type_name == 'do':
             # if there is a "block_name" in the match groups, we don't expect a
             # block as the "block name" is actually part of the do-statement.
+            # we need to do this to handle the (weird and probably wrong!) case
+            # of a do-statement that is only a single identifier - techincally
+            # allowed in jinja. (for example, {% do thing %})
             expect_block = matchgroups.get('block_name') is None
             self.handle_do(match, expect_block=expect_block)
             return True

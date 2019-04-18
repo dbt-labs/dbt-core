@@ -215,6 +215,14 @@ class TestBlockLexer(unittest.TestCase):
         self.assertEqual(blocks[0].full_block, '{% do thing.update() %}')
         self.assertEqual(blocks[1].full_block, '{% myblock foo %}hi{% endmyblock %}')
 
+    def test_deceptive_do_statement(self):
+        body = '{% do thing %}{% myblock foo %}hi{% endmyblock %}'
+        all_blocks = extract_toplevel_blocks(body)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual(blocks[0].full_block, '{% do thing %}')
+        self.assertEqual(blocks[1].full_block, '{% myblock foo %}hi{% endmyblock %}')
+
     def test_do_block(self):
         body = '{% do %}thing.update(){% enddo %}{% myblock foo %}hi{% endmyblock %}'
         all_blocks = extract_toplevel_blocks(body)
