@@ -63,6 +63,7 @@
       {% endif %}
     {% endif %}
     -- 
+    {{ log("Using snowflake create or replace method, from TABLE view.") }}
     {{create_or_replace_table_as(target_relation, sql)}}
   {%- endcall %}
 
