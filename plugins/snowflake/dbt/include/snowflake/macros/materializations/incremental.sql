@@ -16,8 +16,10 @@
   {%- set exists_as_table = (old_relation is not none and old_relation.is_table) -%}
   {%- set exists_not_as_table = (old_relation is not none and not old_relation.is_table) -%}
 
-  {%- set should_drop = (full_refresh_mode or exists_not_as_table) -%}
-  {%- set force_create = (full_refresh_mode) -%}
+  -- FIXME: Double check the operators syntax as non-destrive always has to be false here
+  {%- set should_drop = (full_refresh_mode or exists_not_as_table and not non_destructive_mode) -%}
+  {%- set force_create_or_replace = full_refresh_mode -%}
+
 
   -- setup
   {% if old_relation is none -%}
@@ -45,21 +47,47 @@
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
   -- build model
-  {% if force_create or old_relation is none -%}
+  {% if force_create_or_replace or old_relation is none -%}
     {%- call statement('main') -%}
-      {{ create_table_as(False, target_relation, sql) }}
+
+      {# -- create or replace logic because we're in a full refresh or table is non existant. #}
+      {% if old_relation is not none and old_relation.type == 'view' %}
+        {# -- I'm preserving one of the old checks here for a view, and to make sure Snowflake doesn't
+        -- complain that we're running a replace table on a view. #}
+          {{ log("Dropping relation " ~ old_relation ~ " because it is a view and this model is a table.") }}
+          {{ adapter.drop_relation(old_relation) }}
+      {% endif %}
+  
+      {# -- now create or replace the table because we're in full-refresh #}
+      {{create_or_replace_table_as(target_relation, source_sql)}}
     {%- endcall -%}
+
   {%- else -%}
-     {% set dest_columns = adapter.get_columns_in_relation(target_relation) %}
-     {%- call statement('main') -%}
-       {{ get_merge_sql(target_relation, source_sql, unique_key, dest_columns) }}
-     {% endcall %}
+    {# -- here is the incremental part #}
+    {% set dest_columns = adapter.get_columns_in_relation(target_relation) %}
+    {%- call statement('main') -%}
+      {%- if unique_key is none -%}
+      {# -- if no unique_key is provided run regular insert as Snowflake may complain #}
+        insert into {{ target_relation }} ({{ dest_columns }})
+        (
+          select {{ dest_columns }}
+          from {{ source_sql }}
+        );
+      {%- else -%}
+      {# -- use merge if a unique key is provided #}
+        {{ get_merge_sql(target_relation, source_sql, unique_key, dest_columns) }}
+      {%- endif -%}
+    {% endcall %}
+
   {%- endif %}
 
   {{ run_hooks(post_hooks, inside_transaction=True) }}
 
   -- `COMMIT` happens here
   {{ adapter.commit() }}
+
+{# -- FIXME: There doesn't seem to be any backup relation created here. Need to check whether we 
+-- should have one #}
 
   {{ run_hooks(post_hooks, inside_transaction=False) }}
 
