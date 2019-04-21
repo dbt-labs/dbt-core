@@ -35,7 +35,6 @@ class RunOperationTask(ConfiguredTask):
                 kwargs=macro_kwargs,
                 manifest=manifest
             )
-            adapter.commit_if_has_connection()
 
         return res
 
@@ -44,14 +43,14 @@ class RunOperationTask(ConfiguredTask):
             result = self._run_unsafe()
         except dbt.exceptions.Exception as exc:
             logger.error(
-                'Encountered a dbt exception while running a macro: {}'
+                'Encountered an error while running operation: {}'
                 .format(exc)
             )
             logger.debug('', exc_info=True)
             return False, None
         except Exception as exc:
             logger.error(
-                'Encountered an uncaught exception while running a macro: {}'
+                'Encountered an uncaught exception while running operation: {}'
                 .format(exc)
             )
             logger.debug('', exc_info=True)
