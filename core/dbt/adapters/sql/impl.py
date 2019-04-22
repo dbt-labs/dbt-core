@@ -211,7 +211,7 @@ class SQLAdapter(BaseAdapter):
             database=database,
             schema=schema,
             identifier="INFORMATION_SCHEMA",
-            quote_policy=self.config.quoting
+            quote_policy=self.config.quoting,
         ).information_schema()
 
         kwargs = {'information_schema': information_schema, 'schema': schema}
