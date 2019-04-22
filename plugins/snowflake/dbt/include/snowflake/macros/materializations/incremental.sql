@@ -52,7 +52,7 @@
       {% endif %}
       {# -- now create or replace the table because we're in full-refresh #}
       {{ log("Creating or Replacing table") }}
-      {{snowflake__create_or_replace_table_as(target_relation, source_sql)}}
+      {{create_or_replace_table_as(target_relation, source_sql)}}
     {%- endcall -%}
 
   {%- else -%}
