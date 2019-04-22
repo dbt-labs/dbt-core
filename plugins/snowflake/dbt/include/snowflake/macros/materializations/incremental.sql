@@ -51,7 +51,6 @@
           {{ adapter.drop_relation(old_relation) }}
       {% endif %}
       {# -- now create or replace the table because we're in full-refresh #}
-      {{ log("Creating or Replacing table") }}
       {{create_or_replace_table_as(target_relation, source_sql)}}
     {%- endcall -%}
 
@@ -62,7 +61,6 @@
     {%- call statement('main') -%}
     
       {%- if unique_key is none -%}
-        {{ log("Incremental Run happening via INSERT") }}
         {# -- if no unique_key is provided run regular insert as Snowflake may complain #}
         insert into {{ target_relation }} ({{ dest_cols_csv }})
         (
@@ -71,7 +69,6 @@
         );
       {%- else -%}
         {# -- use merge if a unique key is provided #}
-        {{ log("Incremental Run happening via MERGE") }}
         {{ get_merge_sql(target_relation, source_sql, unique_key, dest_columns) }}
       {%- endif -%}
     {% endcall %}

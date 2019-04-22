@@ -62,8 +62,6 @@
         {{ drop_relation_if_exists(old_relation) }}
       {% endif %}
     {% endif %}
-    -- 
-    {{ log("Using snowflake create or replace method.") }}
     {{create_or_replace_table_as(target_relation, sql)}}
   {%- endcall %}
 
