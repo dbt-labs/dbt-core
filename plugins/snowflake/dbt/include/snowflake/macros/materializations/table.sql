@@ -35,6 +35,8 @@
   {{ adapter.drop_relation(intermediate_relation) }}
 
   -- setup: if the target relation already exists, truncate or drop it (if it's a view)
+  {# TODO: Would like to check this. New materialsiation makes these tests a bit moot. We should
+  be able to deprecate non-destructive flag all together here. #}
   {% if non_destructive_mode -%}
     {% if exists_as_table -%}
       --noop we can do away with this step all together since the table can be replaced in Snowflake.
