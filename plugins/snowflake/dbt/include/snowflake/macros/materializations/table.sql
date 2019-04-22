@@ -64,7 +64,7 @@
     {% endif %}
     -- 
     {{ log("Using snowflake create or replace method.") }}
-    {{snowflake__create_or_replace_table_as(target_relation, sql)}}
+    {{create_or_replace_table_as(target_relation, sql)}}
   {%- endcall %}
 
   -- skiping all previous renames here since they are not needed in Snowflake
