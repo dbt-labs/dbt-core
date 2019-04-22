@@ -561,7 +561,9 @@ class BaseAdapter(object):
         information_schema = self.Relation.create(
             database=database,
             schema=schema,
-            model_name='').information_schema()
+            model_name='',
+            quote_policy=self.config.quoting
+        ).information_schema()
 
         # we can't build the relations cache because we don't have a
         # manifest so we can't run any operations.
