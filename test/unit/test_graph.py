@@ -208,7 +208,6 @@ class GraphTest(unittest.TestCase):
                 "test_models_compile": {
                     "model_one": {
                         "materialized": "incremental",
-                        "sql_where": "created_at",
                         "unique_key": "id"
                     },
                 }
