@@ -16,3 +16,9 @@
     {% endcall %}
   {% endif %}
 {% endmacro %}
+
+{% macro vacuum(table_name) %}
+  {% call statement(auto_begin=false) %}
+    vacuum "{{ schema }}"."{{ table_name }}"
+  {% endcall %}
+{% endmacro %}

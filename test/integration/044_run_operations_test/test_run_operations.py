@@ -50,3 +50,9 @@ class TestOperations(DBTIntegrationTest):
         self.run_operation('no_args',
                            extra_args=['--target', 'noaccess'],
                            expect_pass=False)
+
+    @use_profile('postgres')
+    def test__postgres_vacuum(self):
+        self.run_dbt(['run'])
+        # this should succeed
+        self.run_operation('vacuum', table_name='model')
