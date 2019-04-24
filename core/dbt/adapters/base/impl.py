@@ -507,7 +507,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             '`get_columns_in_relation` is not implemented for this adapter!'
         )
 
-    @available.deprecated('get_columns_in_relation', lambda *a, **k: [])
+    @available.deprecated("get_columns_in_relation", lambda *a, **k: [])
     def get_columns_in_table(self, schema: str, identifier: str) -> List[BaseColumn]:
         """DEPRECATED: Get a list of the columns in the given table."""
         relation = self.Relation.create(
@@ -735,7 +735,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         return None
 
-    @available.deprecated('get_relation', lambda *a, **k: False)
+    @available.deprecated("get_relation", lambda *a, **k: False)
     def already_exists(self, schema: str, name: str) -> bool:
         """DEPRECATED: Return if a model already exists in the database"""
         database = self.config.credentials.database
