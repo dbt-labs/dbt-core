@@ -23,8 +23,7 @@ class TestDeprecations(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_deprecations_fail(self):
-        with self.assertRaises(dbt.exceptions.CompilationException):
-            self.run_dbt(strict=True)
+        self.run_dbt(strict=True, expect_pass=False)
 
     @use_profile('postgres')
     def test_postgres_deprecations(self):

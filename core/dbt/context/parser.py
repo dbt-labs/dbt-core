@@ -1,6 +1,7 @@
 import dbt.exceptions
 
 import dbt.context.common
+from dbt.clients.agate_helper import empty_table
 from dbt.adapters.factory import get_adapter
 
 
@@ -95,6 +96,26 @@ class Config(object):
 
     def get(self, name, validator=None, default=None):
         return ''
+
+
+class DatabaseWrapper(dbt.context.common.BaseDatabaseWrapper):
+    """The parser subclass of the database wrapper applies any explicit
+    parse-time overrides.
+    """
+    def __getattr__(self, name):
+        override = (name in self.adapter._available_ and
+                    name in self.adapter._parse_replacements_)
+
+        if override:
+            return self.adapter._parse_replacements_[name]
+        elif name in self.adapter._available_:
+            return getattr(self.adapter, name)
+        else:
+            raise AttributeError(
+                "'{}' object has no attribute '{}'".format(
+                    self.__class__.__name__, name
+                )
+            )
 
 
 def generate(model, runtime_config, manifest, source_config):

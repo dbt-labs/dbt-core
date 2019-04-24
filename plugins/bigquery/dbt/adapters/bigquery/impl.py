@@ -39,6 +39,16 @@ def column_to_bq_schema(col):
                                              **kwargs)
 
 
+def _stub_relation(*args, **kwargs):
+    return BigQueryRelation.create(
+        database='',
+        schema='',
+        identifier='',
+        quote_policy={},
+        type=BigQueryRelation.Table
+    )
+
+
 class BigQueryAdapter(BaseAdapter):
 
     RELATION_TYPES = {
@@ -310,7 +320,7 @@ class BigQueryAdapter(BaseAdapter):
     ###
     # Special bigquery adapter methods
     ###
-    @available
+    @available.parse_none
     def make_date_partitioned_table(self, relation):
         return self.connections.create_date_partitioned_table(
             database=relation.database,
@@ -318,7 +328,7 @@ class BigQueryAdapter(BaseAdapter):
             table_name=relation.identifier
         )
 
-    @available
+    @available.parse(lambda *a, **k: '')
     def execute_model(self, model, materialization, sql_override=None,
                       decorator=None):
 
@@ -340,9 +350,8 @@ class BigQueryAdapter(BaseAdapter):
 
         return res
 
-    @available
+    @available.parse(_stub_relation)
     def create_temporary_table(self, sql, **kwargs):
-
         # BQ queries always return a temp table with their results
         query_job, _ = self.connections.raw_execute(sql)
         bq_table = query_job.destination
@@ -357,7 +366,7 @@ class BigQueryAdapter(BaseAdapter):
             },
             type=BigQueryRelation.Table)
 
-    @available
+    @available.parse_none
     def alter_table_add_columns(self, relation, columns):
 
         logger.debug('Adding columns ({}) to table {}".'.format(
@@ -377,7 +386,7 @@ class BigQueryAdapter(BaseAdapter):
         new_table = google.cloud.bigquery.Table(table_ref, schema=new_schema)
         client.update_table(new_table, ['schema'])
 
-    @available
+    @available.parse_none
     def load_dataframe(self, database, schema, table_name, agate_table,
                        column_override):
         bq_schema = self._agate_to_schema(agate_table, column_override)
