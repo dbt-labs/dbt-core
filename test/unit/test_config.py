@@ -42,7 +42,6 @@ model_config = {
                 'sort': 'timestamp',
                 'materialized': 'incremental',
                 'dist': 'user_id',
-                'sql_where': 'created_at > (select max(created_at) from {{ this }})',
                 'unique_key': 'id'
             },
             'base': {
