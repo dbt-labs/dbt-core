@@ -1,7 +1,6 @@
 import os
 import itertools
 
-from dbt import deprecations
 from dbt.include.global_project import PACKAGES
 import dbt.exceptions
 import dbt.flags
@@ -215,15 +214,9 @@ def _warn_for_unused_resource_config_paths(manifest, config):
     config.warn_for_unused_resource_config_paths(resource_fqns, disabled_fqns)
 
 
-def _warn_for_deprecated_configs(manifest):
-    for unique_id, node in manifest.nodes.items():
-        is_model = node.resource_type == NodeType.Model
-
-
 def _check_manifest(manifest, config):
     _check_resource_uniqueness(manifest)
     _warn_for_unused_resource_config_paths(manifest, config)
-    _warn_for_deprecated_configs(manifest)
 
 
 def internal_project_names():
