@@ -3,10 +3,8 @@
 
   {%- set unique_key = config.get('unique_key') -%}
   {%- set sql_where = config.get('sql_where') -%}
-
   {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
   {%- set full_refresh_mode = (flags.FULL_REFRESH == True) -%}
-
   {%- set identifier = model['alias'] -%}
 
   {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) -%}
@@ -14,8 +12,8 @@
   {%- set target_relation = api.Relation.create(database=database, identifier=identifier, schema=schema, type='table') -%}
 
   {%- set exists_as_table = (old_relation is not none and old_relation.is_table) -%}
-  {%- set exists_not_as_table = (old_relation is not none and not old_relation.is_table) -%}
 
+  {%- set exists_not_as_table = (old_relation is not none and not old_relation.is_table) -%}
 
   {%- set force_create = full_refresh_mode -%}
 
