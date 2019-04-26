@@ -51,7 +51,7 @@ setup(
         'requests>=2.18.0,<3',
         'colorama==0.3.9',
         'agate>=1.6,<2',
-        'jsonschema==2.6.0',
+        'jsonschema>=3.0.1,<4',
         'json-rpc>=1.12,<2',
         'werkzeug>=0.14.1,<0.15',
     ]

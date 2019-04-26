@@ -9,9 +9,10 @@ class ArchiveTask(RunTask):
 
     def build_query(self):
         return {
-            'include': ['*'],
-            'exclude': [],
-            'resource_types': [NodeType.Archive]
+            "include": self.args.models,
+            "exclude": self.args.exclude,
+            "resource_types": [NodeType.Archive],
+            "tags": [],
         }
 
     def get_runner_type(self):

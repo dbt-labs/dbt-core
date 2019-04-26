@@ -603,10 +603,11 @@ class TestEventTrackingArchive(TestEventTracking):
             ),
         ]
 
+        # the model here has a raw_sql that contains the schema, which changes
         expected_contexts = [
             self.build_context('archive', 'start'),
             self.run_context(
-                hashed_contents='f785c4490e73e5b52fed5627f5709bfa',
+                hashed_contents=ANY,
                 model_id='3cdcd0fef985948fd33af308468da3b9',
                 index=1,
                 total=1,

@@ -1,7 +1,6 @@
 import dbt.exceptions
 
 import dbt.context.common
-from dbt.clients.agate_helper import empty_table
 from dbt.adapters.factory import get_adapter
 
 

@@ -1,4 +1,4 @@
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 
 class TestAliases(DBTIntegrationTest):
@@ -16,7 +16,8 @@ class TestAliases(DBTIntegrationTest):
             "macro-paths": ['test/integration/043_custom_aliases_test/macros'],
         }
 
-    def test__customer_alias_name(self):
+    @use_profile('postgres')
+    def test_postgres_customer_alias_name(self):
         results = self.run_dbt(['run'])
-        self.assertEqual(len(results), 1)
+        self.assertEqual(len(results), 2)
         self.run_dbt(['test'])

@@ -6,15 +6,11 @@ from dbt.contracts.results import RunModelResult, collect_timing_info, \
     SourceFreshnessResult, PartialResult, RemoteCompileResult, RemoteRunResult
 from dbt.compilation import compile_node
 
-import dbt.clients.jinja
 import dbt.context.runtime
 import dbt.exceptions
 import dbt.utils
 import dbt.tracking
 import dbt.ui.printer
-import dbt.flags
-import dbt.schema
-import dbt.writer
 from dbt import rpc
 
 import threading
@@ -156,9 +152,10 @@ class BaseRunner(object):
         prefix = 'Internal error executing {}'.format(build_path)
 
         error = "{prefix}\n{error}\n\n{note}".format(
-                     prefix=dbt.ui.printer.red(prefix),
-                     error=str(e).strip(),
-                     note=INTERNAL_ERROR_STRING)
+            prefix=dbt.ui.printer.red(prefix),
+            error=str(e).strip(),
+            note=INTERNAL_ERROR_STRING
+        )
         logger.debug(error)
         return dbt.compat.to_string(e)
 
@@ -166,12 +163,11 @@ class BaseRunner(object):
         node_description = self.node.get('build_path')
         if node_description is None:
             node_description = self.node.unique_id
-        prefix = "Unhandled error while executing {description}".format(
-                    description=node_description)
-
+        prefix = "Unhandled error while executing {}".format(node_description)
         error = "{prefix}\n{error}".format(
-                     prefix=dbt.ui.printer.red(prefix),
-                     error=str(e).strip())
+            prefix=dbt.ui.printer.red(prefix),
+            error=str(e).strip()
+        )
 
         logger.error(error)
         logger.debug('', exc_info=True)
@@ -491,8 +487,10 @@ class TestRunner(CompileRunner):
 class ArchiveRunner(ModelRunner):
     def describe_node(self):
         cfg = self.node.get('config', {})
-        return "archive {source_database}.{source_schema}.{source_table} --> "\
-               "{target_database}.{target_schema}.{target_table}".format(**cfg)
+        return (
+            "archive {name} --> {target_database}.{target_schema}.{name}"
+            .format(name=self.node.name, **cfg)
+        )
 
     def print_result_line(self, result):
         dbt.ui.printer.print_archive_result_line(result, self.node_index,
@@ -526,7 +524,7 @@ class RPCCompileRunner(CompileRunner):
 
     def handle_exception(self, e, ctx):
         if isinstance(e, dbt.exceptions.Exception):
-            if hasattr(e, 'node'):
+            if isinstance(e, dbt.exceptions.RuntimeException):
                 e.node = ctx.node
             return rpc.dbt_error(e)
         elif isinstance(e, rpc.RPCException):
