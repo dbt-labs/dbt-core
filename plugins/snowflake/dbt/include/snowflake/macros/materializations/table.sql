@@ -40,15 +40,15 @@
 
   --build model
   {% call statement('main') -%}
-  -- we can leverage Snowflake create or replace table here to achieve an atomic replace.
+     {# Drop the relation if it was a view to essencially "convert" it in a table. This does lead to 
+        downtime but I think it makes sense and should happen. Impact will be minimal I suspect. #}
     {% if old_relation is not none and old_relation.type == 'view' %}
       {{ log("Dropping relation " ~ old_relation ~ " because it is a view and this model is a table.") }}
       {{ drop_relation_if_exists(old_relation) }}
     {% endif %}
-    {{create_or_replace_table_as(target_relation, sql)}}
-  {%- endcall %}
 
-  -- skiping all previous renames here since they are not needed in Snowflake
+    {{ create_or_replace_table_as(target_relation, sql) }}
+  {%- endcall %}
 
   {{ run_hooks(post_hooks, inside_transaction=True) }}
 
