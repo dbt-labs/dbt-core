@@ -96,23 +96,44 @@ class BaseSqlParser(MacrosKnownParser):
         if tags is None:
             tags = []
 
-        to_return = {}
-        disabled = []
+        results = SQLParseResult()
 
         for n in nodes:
             node_path, node_parsed = self.parse_sql_node(n, tags)
 
             # Ignore disabled nodes
             if not node_parsed.config['enabled']:
-                disabled.append(node_parsed)
+                results.disable(node_parsed)
                 continue
 
-            # Check for duplicate model names
-            existing_node = to_return.get(node_path)
-            if existing_node is not None:
-                dbt.exceptions.raise_duplicate_resource_name(
-                        existing_node, node_parsed)
+            results.keep(node_path, node_parsed)
 
-            to_return[node_path] = node_parsed
+        return results
 
-        return to_return, disabled
+
+class SQLParseResult(object):
+    def __init__(self):
+        self.parsed = {}
+        self.disabled = []
+
+    def result(self, unique_id, node):
+        if node.config['enabled']:
+            self.keep(unique_id, node)
+        else:
+            self.disable(node)
+
+    def disable(self, node):
+        self.disabled.append(node)
+
+    def keep(self, unique_id, node):
+        if unique_id in self.parsed:
+            dbt.exceptions.raise_duplicate_resource_name(
+                self.parsed[unique_id], node
+            )
+
+        self.parsed[unique_id] = node
+
+    def update(self, other):
+        self.disabled.extend(other.disabled)
+        for unique_id, node in other.parsed.items():
+            self.keep(unique_id, node)

@@ -1,6 +1,6 @@
 import copy
 from collections import Mapping
-from jsonschema import Draft4Validator
+from jsonschema import Draft7Validator
 
 from dbt.exceptions import JSONValidationException
 from dbt.utils import deep_merge
@@ -79,7 +79,7 @@ class APIObject(Mapping):
         of this instance. If any attributes are missing or
         invalid, raise a ValidationException.
         """
-        validator = Draft4Validator(self.SCHEMA)
+        validator = Draft7Validator(self.SCHEMA)
 
         errors = set()  # make errors a set to avoid duplicates
 

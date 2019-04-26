@@ -11,11 +11,9 @@ from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 import dbt.clients.jinja
 import dbt.clients.agate_helper
 import dbt.flags
-import dbt.schema
 import dbt.tracking
+import dbt.writer
 import dbt.utils
-
-import dbt.hooks
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -299,14 +297,14 @@ def render(context, node):
 def fromjson(string, default=None):
     try:
         return json.loads(string)
-    except ValueError as e:
+    except ValueError:
         return default
 
 
 def tojson(value, default=None):
     try:
         return json.dumps(value)
-    except ValueError as e:
+    except ValueError:
         return default
 
 
@@ -314,7 +312,7 @@ def try_or_compiler_error(model):
     def impl(message_if_exception, func, *args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except Exception as e:
+        except Exception:
             dbt.exceptions.raise_compiler_error(message_if_exception, model)
     return impl
 

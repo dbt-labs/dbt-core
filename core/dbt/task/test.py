@@ -1,6 +1,5 @@
 from dbt.node_runners import TestRunner
 from dbt.node_types import NodeType
-import dbt.ui.printer
 from dbt.task.run import RunTask
 
 

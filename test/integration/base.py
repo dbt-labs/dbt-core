@@ -451,6 +451,8 @@ class DBTIntegrationTest(unittest.TestCase):
             final_args.append('--strict')
         if parser:
             final_args.append('--test-new-parser')
+        if os.getenv('DBT_TEST_SINGLE_THREADED') in ('y', 'Y', '1'):
+            final_args.append('--single-threaded')
 
         final_args.extend(args)
         final_args.append('--log-cache-events')

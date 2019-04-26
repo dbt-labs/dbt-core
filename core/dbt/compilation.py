@@ -1,14 +1,11 @@
 import itertools
 import os
-import json
-from collections import OrderedDict, defaultdict
-import sqlparse
+from collections import defaultdict
 
 import dbt.utils
 import dbt.include
 import dbt.tracking
 
-from dbt import deprecations
 from dbt.utils import get_materialization, NodeType, is_type
 from dbt.linker import Linker
 
@@ -19,9 +16,8 @@ import dbt.exceptions
 import dbt.flags
 import dbt.loader
 import dbt.config
-from dbt.contracts.graph.compiled import CompiledNode, CompiledGraph
+from dbt.contracts.graph.compiled import CompiledNode
 
-from dbt.clients.system import write_json
 from dbt.logger import GLOBAL_LOGGER as logger
 
 graph_file_name = 'graph.gpickle'

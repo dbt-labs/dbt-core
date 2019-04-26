@@ -1,4 +1,3 @@
-from dbt.logger import GLOBAL_LOGGER as logger
 import dbt.links
 import dbt.flags
 
