@@ -60,7 +60,7 @@
   );
 {% endmacro %}
 
-{% macro create_or_replace_table_as(relation, sql) -%}
+{# {% macro create_or_replace_table_as(relation, sql) -%}
   {{ adapter_macro('create_or_replace_table_as', relation, sql) }}
 {%- endmacro %}
 
@@ -70,7 +70,7 @@
   as (
     {{ sql }}
   );
-{% endmacro %}
+{% endmacro %} #}
 
 {% macro create_view_as(relation, sql) -%}
   {{ adapter_macro('create_view_as', relation, sql) }}

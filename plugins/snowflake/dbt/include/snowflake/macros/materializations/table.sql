@@ -56,13 +56,9 @@
   --build model
   {% call statement('main') -%}
   -- we can leverage Snowflake create or replace table here to achieve an atomic replace.
-    {% if old_relation is not none %}
-      {# -- I'm preserving one of the old checks here for a view, and to make sure Snowflake doesn't
-      -- complain that we're running a replace table on a view. #}
-      {% if old_relation.type == 'view' %}
-        {{ log("Dropping relation " ~ old_relation ~ " because it is a view and this model is a table.") }}
-        {{ drop_relation_if_exists(old_relation) }}
-      {% endif %}
+    {% if old_relation is not none and old_relation.type == 'view' %}
+      {{ log("Dropping relation " ~ old_relation ~ " because it is a view and this model is a table.") }}
+      {{ drop_relation_if_exists(old_relation) }}
     {% endif %}
     {{create_or_replace_table_as(target_relation, sql)}}
   {%- endcall %}
@@ -73,11 +69,6 @@
 
   -- `COMMIT` happens here
   {{ adapter.commit() }}
-
-  -- finally, drop the existing/backup relation after the commit
-  {# -- TODO: Check with Drew wether this backup_relation gets used at all should this materialisation
-  -- fail #}
-  {{ drop_relation_if_exists(backup_relation) }}
 
   {{ run_hooks(post_hooks, inside_transaction=False) }}
 {% endmaterialization %}

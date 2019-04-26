@@ -5,7 +5,7 @@
 
   {%- set transient = config.get('transient', default=true) -%}
 
-  create {% if temporary -%}
+  create or replace {% if temporary -%}
     temporary
   {%- elif transient -%}
     transient
@@ -15,7 +15,7 @@
   );
 {% endmacro %}
 
-{% macro snowflake__create_or_replace_table_as(relation, sql) -%}
+{# {% macro snowflake__create_or_replace_table_as(relation, sql) -%}
   {% if temporary %}
     use schema {{ adapter.quote_as_configured(schema, 'schema') }};
   {% endif %}
@@ -30,7 +30,7 @@
   as (
     {{ sql }}
   );
-{% endmacro %}
+{% endmacro %} #}
 
 {% macro snowflake__create_view_as(relation, sql) -%}
   create or replace view {{ relation }} as (

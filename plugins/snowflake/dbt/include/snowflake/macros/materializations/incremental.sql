@@ -17,13 +17,13 @@
   {%- set exists_not_as_table = (old_relation is not none and not old_relation.is_table) -%}
 
 
-  {%- set force_create_or_replace = full_refresh_mode -%}
+  {%- set force_create = full_refresh_mode -%}
 
 
   -- setup
 
-  {% set source_sql -%}
-     {#-- wrap sql in parens to make it a subquery --#}
+  {% set source_sql = sql -%}
+     {# -- wrap sql in parens to make it a subquery --
      (
         select * from (
             {{ sql }}
@@ -32,7 +32,7 @@
             where ({{ sql_where }}) or ({{ sql_where }}) is null
         {% endif %}
     )
-  {%- endset -%}
+  {%- endset -%} #}
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
 
@@ -40,7 +40,7 @@
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
   -- build model
-  {% if force_create_or_replace or old_relation is none -%}
+  {% if force_create or old_relation is none -%}
     {%- call statement('main') -%}
 
       {# -- create or replace logic because we're in a full refresh or table is non existant. #}
@@ -51,7 +51,7 @@
           {{ adapter.drop_relation(old_relation) }}
       {% endif %}
       {# -- now create or replace the table because we're in full-refresh #}
-      {{create_or_replace_table_as(target_relation, source_sql)}}
+      {{create_table_as(target_relation, source_sql)}}
     {%- endcall -%}
 
   {%- else -%}
