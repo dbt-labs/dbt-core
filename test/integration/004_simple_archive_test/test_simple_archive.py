@@ -42,7 +42,10 @@ class TestSimpleArchive(DBTIntegrationTest):
         }
 
     def dbt_run_seed_archive(self):
-        self.run_sql_file('test/integration/004_simple_archive_test/seed.sql')
+        if self.adapter_type == 'postgres':
+            self.run_sql_file('test/integration/004_simple_archive_test/seed_pg.sql')
+        else:
+            self.run_sql_file('test/integration/004_simple_archive_test/seed.sql')
 
         results = self.run_archive()
         self.assertEqual(len(results),  self.NUM_ARCHIVE_MODELS)
@@ -316,7 +319,7 @@ class TestSimpleArchiveFileSelects(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test__postgres__select_archives(self):
-        self.run_sql_file('test/integration/004_simple_archive_test/seed.sql')
+        self.run_sql_file('test/integration/004_simple_archive_test/seed_pg.sql')
 
         results = self.run_dbt(['archive'])
         self.assertEqual(len(results),  4)
@@ -337,7 +340,7 @@ class TestSimpleArchiveFileSelects(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test__postgres_exclude_archives(self):
-        self.run_sql_file('test/integration/004_simple_archive_test/seed.sql')
+        self.run_sql_file('test/integration/004_simple_archive_test/seed_pg.sql')
         results = self.run_dbt(['archive', '--exclude', 'archive_castillo'])
         self.assertEqual(len(results),  3)
         self.assertTableDoesNotExist('archive_castillo')
@@ -347,7 +350,7 @@ class TestSimpleArchiveFileSelects(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test__postgres_select_archives(self):
-        self.run_sql_file('test/integration/004_simple_archive_test/seed.sql')
+        self.run_sql_file('test/integration/004_simple_archive_test/seed_pg.sql')
         results = self.run_dbt(['archive', '--models', 'archive_castillo'])
         self.assertEqual(len(results),  1)
         self.assertTablesEqual('archive_castillo', 'archive_castillo_expected')
@@ -498,3 +501,38 @@ class TestCheckColsBigquery(TestSimpleArchiveFilesBigquery):
 
             self.assertEqual(expected_name, actual_name, "names are different")
             self.assertEqual(expected_type, actual_type, "data types are different")
+
+
+class TestLongText(DBTIntegrationTest):
+
+    @property
+    def schema(self):
+        return "simple_archive_004"
+
+    @property
+    def models(self):
+        return "test/integration/004_simple_archive_test/models"
+
+    def run_archive(self):
+        return self.run_dbt(['archive'])
+
+    @property
+    def project_config(self):
+        return {
+            "archive-paths": ['test/integration/004_simple_archive_test/test-archives-longtext'],
+        }
+
+    @use_profile('postgres')
+    def test__postgres__long_text(self):
+        self.run_sql_file('test/integration/004_simple_archive_test/seed_longtext.sql')
+        results = self.run_dbt(['archive'])
+        self.assertEqual(len(results), 1)
+
+        with self.adapter.connection_named('test'):
+            status, results = self.adapter.execute(
+                'select * from {}.{}.archive_actual'.format(self.default_database, self.unique_schema()),
+                fetch=True
+            )
+        self.assertEqual(len(results), 2)
+        got_names = set(r.get('longstring') for r in results)
+        self.assertEqual(got_names, {'a' * 500, 'short'})

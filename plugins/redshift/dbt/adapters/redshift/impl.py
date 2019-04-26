@@ -1,10 +1,13 @@
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.adapters.redshift import RedshiftConnectionManager
+from dbt.adapters.base import Column
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
 class RedshiftAdapter(PostgresAdapter):
     ConnectionManager = RedshiftConnectionManager
+    # postgres overrides this, so override the override.
+    Column = Column
 
     AdapterSpecificConfigs = frozenset({"sort_type", "dist", "sort", "bind"})
 

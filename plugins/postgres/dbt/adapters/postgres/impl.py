@@ -1,6 +1,7 @@
 from dbt.adapters.base.meta import available
 from dbt.adapters.sql import SQLAdapter
 from dbt.adapters.postgres import PostgresConnectionManager
+from dbt.adapters.postgres import PostgresColumn
 import dbt.compat
 import dbt.exceptions
 
@@ -11,6 +12,7 @@ GET_RELATIONS_MACRO_NAME = 'postgres_get_relations'
 
 class PostgresAdapter(SQLAdapter):
     ConnectionManager = PostgresConnectionManager
+    Column = PostgresColumn
 
     @classmethod
     def date_function(cls):

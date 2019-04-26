@@ -20,7 +20,7 @@ create table {database}.{schema}.archive_expected (
 	updated_at TIMESTAMP WITHOUT TIME ZONE,
 	dbt_valid_from TIMESTAMP WITHOUT TIME ZONE,
 	dbt_valid_to   TIMESTAMP WITHOUT TIME ZONE,
-	dbt_scd_id     VARCHAR(256),
+	dbt_scd_id     TEXT,
 	dbt_updated_at TIMESTAMP WITHOUT TIME ZONE
 );
 
@@ -93,7 +93,7 @@ create table {database}.{schema}.archive_castillo_expected (
     updated_at TIMESTAMP WITHOUT TIME ZONE,
     dbt_valid_from TIMESTAMP WITHOUT TIME ZONE,
     dbt_valid_to   TIMESTAMP WITHOUT TIME ZONE,
-    dbt_scd_id     VARCHAR(256),
+    dbt_scd_id     TEXT,
     dbt_updated_at TIMESTAMP WITHOUT TIME ZONE
 );
 
@@ -139,7 +139,7 @@ create table {database}.{schema}.archive_alvarez_expected (
     updated_at TIMESTAMP WITHOUT TIME ZONE,
     dbt_valid_from TIMESTAMP WITHOUT TIME ZONE,
     dbt_valid_to   TIMESTAMP WITHOUT TIME ZONE,
-    dbt_scd_id     VARCHAR(256),
+    dbt_scd_id     TEXT,
     dbt_updated_at TIMESTAMP WITHOUT TIME ZONE
 );
 
@@ -185,7 +185,7 @@ create table {database}.{schema}.archive_kelly_expected (
     updated_at TIMESTAMP WITHOUT TIME ZONE,
     dbt_valid_from TIMESTAMP WITHOUT TIME ZONE,
     dbt_valid_to   TIMESTAMP WITHOUT TIME ZONE,
-    dbt_scd_id     VARCHAR(256),
+    dbt_scd_id     TEXT,
     dbt_updated_at TIMESTAMP WITHOUT TIME ZONE
 );
 

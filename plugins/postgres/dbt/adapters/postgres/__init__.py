@@ -1,6 +1,7 @@
 # these are mostly just exports, #noqa them so flake8 will be happy
 from dbt.adapters.postgres.connections import PostgresConnectionManager  # noqa
 from dbt.adapters.postgres.connections import PostgresCredentials
+from dbt.adapters.postgres.relation import PostgresColumn  # noqa
 from dbt.adapters.postgres.impl import PostgresAdapter
 
 from dbt.adapters.base import AdapterPlugin
