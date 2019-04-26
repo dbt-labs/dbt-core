@@ -3,12 +3,7 @@
 
   {%- set unique_key = config.get('unique_key') -%}
 
-  {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
   {%- set full_refresh_mode = (flags.FULL_REFRESH == True) -%}
-
-  {% if non_destructive_mode %}
-    {{ exceptions.raise_compiler_error("--non-destructive mode is not supported on BigQuery") }}
-  {% endif %}
 
   {%- set identifier = model['alias'] -%}
 
