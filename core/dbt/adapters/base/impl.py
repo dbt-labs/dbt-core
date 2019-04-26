@@ -603,10 +603,11 @@ class BaseAdapter(metaclass=AdapterMeta):
     ) -> None:
         if not isinstance(from_relation, self.Relation):
             invalid_type_error(
-                method_name='expand_target_column_types',
-                arg_name='from_relation',
+                method_name="expand_target_column_types",
+                arg_name="from_relation",
                 got_value=from_relation,
-                expected_type=self.Relation)
+                expected_type=self.Relation,
+            )
 
         if not isinstance(to_relation, self.Relation):
             invalid_type_error(
