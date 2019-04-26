@@ -1,6 +1,7 @@
 from test.integration.base import DBTIntegrationTest, use_profile
-import threading
+import threading, traceback
 from dbt.adapters.factory import get_adapter
+from dbt.logger import GLOBAL_LOGGER as logger
 
 class BaseTestConcurrentTransaction(DBTIntegrationTest):
 
@@ -31,7 +32,7 @@ class BaseTestConcurrentTransaction(DBTIntegrationTest):
         connection_name = '__test_{}'.format(id(threading.current_thread()))
         try:
             with get_adapter(self.config).connection_named(connection_name) as conn:
-                res = self.run_sql_common(self.transform_sql(sql), 'one', conn)
+                res = self.run_sql_common(self.transform_sql(sql), 'one', conn, verbose=True)
 
             # The result is the output of f_sleep(), which is True
             if res[0] == True:
@@ -40,6 +41,8 @@ class BaseTestConcurrentTransaction(DBTIntegrationTest):
                 self.query_state[rel] = 'bad'
 
         except Exception as e:
+            logger.info("Caught exception: {}".format(e))
+            traceback.print_exc()
             if 'concurrent transaction' in str(e):
                 self.query_state[rel] = 'error: {}'.format(e)
             else:

@@ -11,10 +11,7 @@
                                                 identifier=identifier,
                                                 type='table') -%}
 
-  {%- set tmp_relation = api.Relation.create(database=database,
-                                             schema=schema,
-                                             identifier=identifier ~ "__dbt_tmp",
-                                             type='table') -%}
+  {%- set tmp_relation = make_temp_relation(target_relation) %}
 
   -- setup
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
@@ -42,7 +39,7 @@
        {{ create_table_as(true, tmp_relation, sql) }}
     {%- endcall -%}
 
-    {{ adapter.expand_target_column_types(temp_table=tmp_relation.identifier,
+    {{ adapter.expand_target_column_types(from_relation=tmp_relation,
                                           to_relation=target_relation) }}
     {% set incremental_sql %}
     (

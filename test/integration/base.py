@@ -129,7 +129,8 @@ class DBTIntegrationTest(unittest.TestCase):
                         'user': os.getenv('REDSHIFT_TEST_USER'),
                         'pass': os.getenv('REDSHIFT_TEST_PASS'),
                         'dbname': os.getenv('REDSHIFT_TEST_DBNAME'),
-                        'schema': self.unique_schema()
+                        'schema': self.unique_schema(),
+                        'keepalives_idle': 5
                     }
                 },
                 'target': 'default2'
@@ -534,10 +535,14 @@ class DBTIntegrationTest(unittest.TestCase):
             conn.handle.commit()
             conn.transaction_open = False
 
-    def run_sql_common(self, sql, fetch, conn):
+    def run_sql_common(self, sql, fetch, conn, verbose=False):
         with conn.handle.cursor() as cursor:
             try:
+                if verbose:
+                    logger.debug('running sql: {}'.format(sql))
                 cursor.execute(sql)
+                if verbose:
+                    logger.debug('result from sql: {}'.format(cursor.statusmessage))
                 conn.handle.commit()
                 if fetch == 'one':
                     return cursor.fetchone()
@@ -546,9 +551,9 @@ class DBTIntegrationTest(unittest.TestCase):
                 else:
                     return
             except BaseException as e:
-                conn.handle.rollback()
                 print(sql)
                 print(e)
+                conn.handle.rollback()
                 raise e
             finally:
                 conn.transaction_open = False
@@ -1015,7 +1020,9 @@ class DBTIntegrationTest(unittest.TestCase):
 
         text_types = {'text', 'character varying', 'character', 'varchar'}
 
-        self.assertEqual(len(table_a_result), len(table_b_result))
+        self.assertEqual(len(table_a_result), len(table_b_result),
+                         "{} vs. {}".format(table_a_result, table_b_result))
+
         for a_column, b_column in zip(table_a_result, table_b_result):
             a_name, a_type, a_size = a_column
             b_name, b_type, b_size = b_column

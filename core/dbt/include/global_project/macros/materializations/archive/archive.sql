@@ -1,27 +1,4 @@
 {#
-    Create SCD Hash SQL fields cross-db
-#}
-
-{% macro archive_hash_arguments(args) %}
-  {{ adapter_macro('archive_hash_arguments', args) }}
-{% endmacro %}
-
-{% macro default__archive_hash_arguments(args) %}
-    md5({% for arg in args %}coalesce(cast({{ arg }} as varchar ), '') {% if not loop.last %} || '|' || {% endif %}{% endfor %})
-{% endmacro %}
-
-{% macro create_temporary_table(sql, relation) %}
-  {{ return(adapter_macro('create_temporary_table', sql, relation)) }}
-{% endmacro %}
-
-{% macro default__create_temporary_table(sql, relation) %}
-    {% call statement() %}
-        {{ create_table_as(True, relation, sql) }}
-    {% endcall %}
-    {{ return(relation) }}
-{% endmacro %}
-
-{#
     Add new columns to the table if applicable
 #}
 {% macro create_columns(relation, columns) %}
@@ -36,212 +13,167 @@
   {% endfor %}
 {% endmacro %}
 
-{#
-    Run the update part of an archive query. Different databases have
-    tricky differences in their `update` semantics. Table projection is
-    not allowed on Redshift/pg, but is effectively required on bq.
-#}
 
-{% macro archive_update(target_relation, tmp_relation) %}
-    {{ adapter_macro('archive_update', target_relation, tmp_relation) }}
+{% macro post_archive(staging_relation) %}
+  {{ adapter_macro('post_archive', staging_relation) }}
 {% endmacro %}
 
-{% macro default__archive_update(target_relation, tmp_relation) %}
-    update {{ target_relation }}
-    set dbt_valid_to = tmp.dbt_valid_to
-    from {{ tmp_relation }} as tmp
-    where tmp.dbt_scd_id = {{ target_relation }}.dbt_scd_id
-      and change_type = 'update';
+{% macro default__post_archive(staging_relation) %}
+    {# no-op #}
 {% endmacro %}
 
 
-{% macro archive_get_time() -%}
-  {{ adapter_macro('archive_get_time') }}
-{%- endmacro %}
+{% macro archive_staging_table_inserts(strategy, source_sql, target_relation) -%}
 
-{% macro default__archive_get_time() -%}
-  {{ current_timestamp() }}
-{%- endmacro %}
+    with archive_query as (
 
-{% macro snowflake__archive_get_time() -%}
-  to_timestamp_ntz({{ current_timestamp() }})
-{%- endmacro %}
+        {{ source_sql }}
 
-
-{% macro archive_select_generic(source_sql, target_relation, transforms, scd_hash) -%}
-    with source as (
-      {{ source_sql }}
     ),
-    {{ transforms }}
-    merged as (
 
-      select *, 'update' as change_type from updates
-      union all
-      select *, 'insert' as change_type from insertions
+    source_data as (
+
+        select *,
+            {{ strategy.scd_id }} as dbt_scd_id,
+            {{ strategy.unique_key }} as dbt_unique_key,
+            {{ strategy.updated_at }} as dbt_updated_at,
+            {{ strategy.updated_at }} as dbt_valid_from,
+            nullif({{ strategy.updated_at }}, {{ strategy.updated_at }}) as dbt_valid_to
+
+        from archive_query
+    ),
+
+    archived_data as (
+
+        select *,
+            {{ strategy.unique_key }} as dbt_unique_key
+
+        from {{ target_relation }}
+
+    ),
+
+    insertions as (
+
+        select
+            'insert' as dbt_change_type,
+            source_data.*
+
+        from source_data
+        left outer join archived_data on archived_data.dbt_unique_key = source_data.dbt_unique_key
+        where archived_data.dbt_unique_key is null
+           or (
+                archived_data.dbt_unique_key is not null
+            and archived_data.dbt_valid_to is null
+            and (
+                {{ strategy.row_changed }}
+            )
+        )
 
     )
+
+    select * from insertions
+
+{%- endmacro %}
+
+
+{% macro archive_staging_table_updates(strategy, source_sql, target_relation) -%}
+
+    with archive_query as (
+
+        {{ source_sql }}
+
+    ),
+
+    source_data as (
+
+        select
+            *,
+            {{ strategy.scd_id }} as dbt_scd_id,
+            {{ strategy.unique_key }} as dbt_unique_key,
+            {{ strategy.updated_at }} as dbt_updated_at,
+            {{ strategy.updated_at }} as dbt_valid_from
+
+        from archive_query
+    ),
+
+    archived_data as (
+
+        select *,
+            {{ strategy.unique_key }} as dbt_unique_key
+
+        from {{ target_relation }}
+
+    ),
+
+    updates as (
+
+        select
+            'update' as dbt_change_type,
+            archived_data.dbt_scd_id,
+            source_data.dbt_valid_from as dbt_valid_to
+
+        from source_data
+        join archived_data on archived_data.dbt_unique_key = source_data.dbt_unique_key
+        where archived_data.dbt_valid_to is null
+        and (
+            {{ strategy.row_changed }}
+        )
+
+    )
+
+    select * from updates
+
+{%- endmacro %}
+
+
+{% macro build_archive_table(strategy, sql) %}
 
     select *,
-        {{ scd_hash }} as dbt_scd_id
-    from merged
+        {{ strategy.scd_id }} as dbt_scd_id,
+        {{ strategy.updated_at }} as dbt_updated_at,
+        {{ strategy.updated_at }} as dbt_valid_from,
+        nullif({{ strategy.updated_at }}, {{ strategy.updated_at }}) as dbt_valid_to
+    from (
+        {{ sql }}
+    ) sbq
 
-{%- endmacro %}
-
-{#
-    Cross-db compatible archival implementation
-#}
-{% macro archive_select_timestamp(source_sql, target_relation, source_columns, unique_key, updated_at) -%}
-    {% set timestamp_column = api.Column.create('_', 'timestamp') %}
-    {% set transforms -%}
-    current_data as (
-
-        select
-            {% for col in source_columns %}
-                {{ col.name }} {% if not loop.last %},{% endif %}
-            {% endfor %},
-            {{ updated_at }} as dbt_updated_at,
-            {{ unique_key }} as dbt_pk,
-            {{ updated_at }} as dbt_valid_from,
-            {{ timestamp_column.literal('null') }} as tmp_valid_to
-        from source
-    ),
-
-    archived_data as (
-
-        select
-            {% for col in source_columns %}
-                {{ col.name }},
-            {% endfor %}
-            {{ updated_at }} as dbt_updated_at,
-            {{ unique_key }} as dbt_pk,
-            dbt_valid_from,
-            dbt_valid_to as tmp_valid_to
-        from {{ target_relation }}
-
-    ),
-
-    insertions as (
-
-        select
-            current_data.*,
-            {{ timestamp_column.literal('null') }} as dbt_valid_to
-        from current_data
-        left outer join archived_data
-          on archived_data.dbt_pk = current_data.dbt_pk
-        where
-          archived_data.dbt_pk is null
-          or (
-                archived_data.dbt_pk is not null
-            and archived_data.dbt_updated_at < current_data.dbt_updated_at
-            and archived_data.tmp_valid_to is null
-        )
-    ),
-
-    updates as (
-
-        select
-            archived_data.*,
-            current_data.dbt_updated_at as dbt_valid_to
-        from current_data
-        left outer join archived_data
-          on archived_data.dbt_pk = current_data.dbt_pk
-        where archived_data.dbt_pk is not null
-          and archived_data.dbt_updated_at < current_data.dbt_updated_at
-          and archived_data.tmp_valid_to is null
-    ),
-    {%- endset %}
-    {%- set scd_hash = archive_hash_arguments(['dbt_pk', 'dbt_updated_at']) -%}
-    {{ archive_select_generic(source_sql, target_relation, transforms, scd_hash) }}
-{%- endmacro %}
+{% endmacro %}
 
 
-{% macro archive_select_check_cols(source_sql, target_relation, source_columns, unique_key, check_cols) -%}
-    {%- set timestamp_column = api.Column.create('_', 'timestamp') -%}
+{% macro get_or_create_relation(database, schema, identifier, type) %}
+  {%- set target_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) %}
 
-    {# if we recognize the primary key, it's the newest record, and anything we care about has changed, it's an update candidate #}
-    {%- set update_candidate -%}
-      archived_data.dbt_pk is not null
-      and (
-        {%- for col in check_cols %}
-        current_data.{{ col }} <> archived_data.{{ col }}
-        {%- if not loop.last %} or {% endif %}
-      {% endfor -%}
-      )
-      and archived_data.tmp_valid_to is null
-    {%- endset %}
+  {% if target_relation %}
+    {% do return([true, target_relation]) %}
+  {% endif %}
 
-    {% set transforms -%}
-    current_data as (
+  {%- set new_relation = api.Relation.create(
+      database=database,
+      schema=schema,
+      identifier=identifier,
+      type=type
+  ) -%}
+  {% do return([false, new_relation]) %}
+{% endmacro %}
 
-        select
-            {% for col in source_columns %}
-                {{ col.name }} {% if not loop.last %},{% endif %}
-            {% endfor %},
-            {{ archive_get_time() }} as dbt_updated_at,
-            {{ unique_key }} as dbt_pk,
-            {{ archive_get_time() }} as dbt_valid_from,
-            {{ timestamp_column.literal('null') }} as tmp_valid_to
-        from source
-    ),
+{% macro build_archive_staging_table(strategy, sql, target_relation) %}
+    {% set tmp_relation = make_temp_relation(target_relation) %}
 
-    archived_data as (
+    {% set inserts_select = archive_staging_table_inserts(strategy, sql, target_relation) %}
+    {% set updates_select = archive_staging_table_updates(strategy, sql, target_relation) %}
 
-        select
-            {% for col in source_columns %}
-                {{ col.name }},
-            {% endfor %}
-            dbt_updated_at,
-            {{ unique_key }} as dbt_pk,
-            dbt_valid_from,
-            dbt_valid_to as tmp_valid_to
-        from {{ target_relation }}
+    {% call statement('build_archive_staging_relation_inserts') %}
+        {{ create_table_as(True, tmp_relation, inserts_select) }}
+    {% endcall %}
 
-    ),
+    {% call statement('build_archive_staging_relation_updates') %}
+        insert into {{ tmp_relation }} (dbt_change_type, dbt_scd_id, dbt_valid_to)
+        select dbt_change_type, dbt_scd_id, dbt_valid_to from (
+            {{ updates_select }}
+        ) dbt_sbq;
+    {% endcall %}
 
-    insertions as (
-
-        select
-            current_data.*,
-            {{ timestamp_column.literal('null') }} as dbt_valid_to
-        from current_data
-        left outer join archived_data
-          on archived_data.dbt_pk = current_data.dbt_pk
-        where
-          archived_data.dbt_pk is null
-          or ( {{ update_candidate }} )
-    ),
-
-    updates as (
-
-        select
-            archived_data.*,
-            {{ archive_get_time() }} as dbt_valid_to
-        from current_data
-        left outer join archived_data
-          on archived_data.dbt_pk = current_data.dbt_pk
-        where {{ update_candidate }}
-    ),
-    {%- endset %}
-
-    {%- set hash_components = ['dbt_pk'] %}
-    {%- do hash_components.extend(check_cols) -%}
-    {%- set scd_hash = archive_hash_arguments(hash_components) -%}
-    {{ archive_select_generic(source_sql, target_relation, transforms, scd_hash) }}
-{%- endmacro %}
-
-{# this is gross #}
-{% macro create_empty_table_as(sql) %}
-  {% set tmp_relation = api.Relation.create(identifier=model['name']+'_dbt_archival_view_tmp', type='view') %}
-  {% set limited_sql -%}
-    with cte as (
-      {{ sql }}
-    )
-    select * from cte limit 0
-  {%- endset %}
-  {%- set tmp_relation = create_temporary_table(limited_sql, tmp_relation) -%}
-
-  {{ return(tmp_relation) }}
-
+    {% do return(tmp_relation) %}
 {% endmacro %}
 
 
@@ -251,95 +183,74 @@
   {%- set target_database = config.get('target_database') -%}
   {%- set target_schema = config.get('target_schema') -%}
   {%- set target_table = model.get('alias', model.get('name')) -%}
-  {%- set strategy = config.get('strategy') -%}
 
-  {% set information_schema = api.Relation.create(
-    database=target_database,
-    schema=target_schema,
-    identifier=target_table).information_schema() %}
+  {%- set strategy_name = config.get('strategy') -%}
+  {%- set unique_key = config.get('unique_key') %}
 
-  {% if not check_schema_exists(information_schema, target_schema) %}
-    {{ create_schema(target_database, target_schema) }}
+  {% if not adapter.check_schema_exists(target_database, target_schema) %}
+    {% do create_schema(target_database, target_schema) %}
   {% endif %}
 
-  {%- set target_relation = adapter.get_relation(
-      database=target_database,
-      schema=target_schema,
-      identifier=target_table) -%}
+  {% set target_relation_exists, target_relation = get_or_create_relation(
+          database=target_database,
+          schema=target_schema,
+          identifier=target_table,
+          type='table') -%}
 
-  {%- if target_relation is none -%}
-    {%- set target_relation = api.Relation.create(
-        database=target_database,
-        schema=target_schema,
-        identifier=target_table) -%}
-  {%- elif not target_relation.is_table -%}
-    {{ exceptions.relation_wrong_type(target_relation, 'table') }}
+  {%- if not target_relation.is_table -%}
+    {% do exceptions.relation_wrong_type(target_relation, 'table') %}
   {%- endif -%}
 
-  {% set source_info_model = create_empty_table_as(model['injected_sql']) %}
+  {% set strategy_macro = strategy_dispatch(strategy_name) %}
+  {% set strategy = strategy_macro(model, "archived_data", "source_data", config) %}
 
-  {%- set source_columns = adapter.get_columns_in_relation(source_info_model) -%}
+  {% if not target_relation_exists %}
 
-  {%- set unique_key = config.get('unique_key') -%}
-  {%- set dest_columns = source_columns + [
-      api.Column.create('dbt_valid_from', 'timestamp'),
-      api.Column.create('dbt_valid_to', 'timestamp'),
-      api.Column.create('dbt_scd_id', 'string'),
-      api.Column.create('dbt_updated_at', 'timestamp'),
-  ] -%}
+      {% set build_sql = build_archive_table(strategy, model['injected_sql']) %}
+      {% call statement('main') -%}
+          {{ create_table_as(False, target_relation, build_sql) }}
+      {% endcall %}
 
-  {% call statement() %}
-    {{ create_archive_table(target_relation, dest_columns) }}
-  {% endcall %}
+  {% else %}
 
-  {% set missing_columns = adapter.get_missing_columns(source_info_model, target_relation) %}
+      {{ adapter.valid_archive_target(target_relation) }}
 
-  {{ create_columns(target_relation, missing_columns) }}
+      {% set staging_table = build_archive_staging_table(strategy, sql, target_relation) %}
 
-  {{ adapter.valid_archive_target(target_relation) }}
+      {% do adapter.expand_target_column_types(from_relation=staging_table,
+                                               to_relation=target_relation) %}
 
-  {%- set identifier = model['alias'] -%}
-  {%- set tmp_identifier = model['name'] + '__dbt_archival_tmp' -%}
+      {% set missing_columns = adapter.get_missing_columns(staging_table, target_relation)
+                                   | rejectattr('name', 'equalto', 'dbt_change_type')
+                                   | rejectattr('name', 'equalto', 'DBT_CHANGE_TYPE')
+                                   | rejectattr('name', 'equalto', 'dbt_unique_key')
+                                   | rejectattr('name', 'equalto', 'DBT_UNIQUE_KEY')
+                                   | list %}
 
-  {% set tmp_table_sql -%}
+      {% do create_columns(target_relation, missing_columns) %}
 
-      with dbt_archive_sbq as (
+      {% set source_columns = adapter.get_columns_in_relation(staging_table)
+                                   | rejectattr('name', 'equalto', 'dbt_change_type')
+                                   | rejectattr('name', 'equalto', 'DBT_CHANGE_TYPE')
+                                   | rejectattr('name', 'equalto', 'dbt_unique_key')
+                                   | rejectattr('name', 'equalto', 'DBT_UNIQUE_KEY')
+                                   | list %}
 
-      {% if strategy == 'timestamp' %}
-        {%- set updated_at = config.get('updated_at') -%}
-        {{ archive_select_timestamp(model['injected_sql'], target_relation, source_columns, unique_key, updated_at) }}
-      {% elif strategy == 'check' %}
-        {%- set check_cols = config.get('check_cols') -%}
-        {% if check_cols == 'all' %}
-          {% set check_cols = source_columns | map(attribute='name') | list %}
-        {% endif %}
-        {{ archive_select_check_cols(model['injected_sql'], target_relation, source_columns, unique_key, check_cols)}}
-      {% else %}
-        {{ exceptions.raise_compiler_error('Got invalid strategy "{}"'.format(strategy)) }}
-      {% endif %}
-      )
-      select * from dbt_archive_sbq
+      {% call statement('main') %}
+          {{ archive_merge_sql(
+                target = target_relation,
+                source = staging_table,
+                insert_cols = source_columns
+             )
+          }}
+      {% endcall %}
 
-  {%- endset %}
-
-  {%- set tmp_relation = api.Relation.create(identifier=tmp_identifier, type='table') -%}
-  {%- set tmp_relation = create_temporary_table(tmp_table_sql, tmp_relation) -%}
-
-  {{ adapter.expand_target_column_types(temp_table=tmp_identifier,
-                                        to_relation=target_relation) }}
-
-  {% call statement('_') -%}
-    {{ archive_update(target_relation, tmp_relation) }}
-  {% endcall %}
-
-  {% call statement('main') -%}
-
-    insert into {{ target_relation }} (
-      {{ column_list(dest_columns) }}
-    )
-    select {{ column_list(dest_columns) }} from {{ tmp_relation }}
-    where change_type = 'insert';
-  {% endcall %}
+  {% endif %}
 
   {{ adapter.commit() }}
+
+  {% if staging_table is defined %}
+      {% do post_archive(staging_table) %}
+  {% endif %}
+
 {% endmaterialization %}

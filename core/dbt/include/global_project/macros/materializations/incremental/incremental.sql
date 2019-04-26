@@ -15,13 +15,9 @@
   {%- set unique_key = config.get('unique_key') -%}
 
   {%- set identifier = model['alias'] -%}
-  {%- set tmp_identifier = model['name'] + '__dbt_incremental_tmp' -%}
-
   {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) -%}
   {%- set target_relation = api.Relation.create(identifier=identifier, schema=schema, database=database,  type='table') -%}
-  {%- set tmp_relation = api.Relation.create(identifier=tmp_identifier,
-                                             schema=schema,
-                                             database=database, type='table') -%}
+  {%- set tmp_relation = make_temp_relation(target_relation) %}
 
   {%- set full_refresh_mode = (flags.FULL_REFRESH == True) -%}
 
@@ -55,7 +51,7 @@
 
      {%- endcall -%}
 
-     {{ adapter.expand_target_column_types(temp_table=tmp_identifier,
+     {{ adapter.expand_target_column_types(from_relation=tmp_relation,
                                            to_relation=target_relation) }}
 
      {%- call statement('main') -%}
@@ -71,7 +67,7 @@
        insert into {{ target_relation }} ({{ dest_cols_csv }})
        (
          select {{ dest_cols_csv }}
-         from {{ tmp_relation.include(schema=False, database=False) }}
+         from {{ tmp_relation }}
        );
      {% endcall %}
   {%- endif %}

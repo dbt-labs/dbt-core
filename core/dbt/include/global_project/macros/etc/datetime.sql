@@ -54,3 +54,7 @@
     {{ return(dates_in_range(start_date, end_date, in_fmt=date_fmt)) }}
 {% endmacro %}
 
+{% macro py_current_timestring() %}
+    {% set dt = modules.datetime.datetime.now() %}
+    {% do return(dt.strftime("%Y%m%d%H%M%S%f")) %}
+{% endmacro %}

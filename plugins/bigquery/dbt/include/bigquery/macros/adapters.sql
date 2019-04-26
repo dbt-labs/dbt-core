@@ -34,6 +34,11 @@
   create or replace table {{ relation }}
   {{ partition_by(raw_partition_by) }}
   {{ cluster_by(raw_cluster_by) }}
+  {% if temporary %}
+  OPTIONS(
+      expiration_timestamp=TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)
+  )
+  {% endif %}
   as (
     {{ sql }}
   );
@@ -52,6 +57,12 @@
 
 {% macro bigquery__drop_schema(database_name, schema_name) -%}
   {{ adapter.drop_schema(database_name, schema_name) }}
+{% endmacro %}
+
+{% macro bigquery__drop_relation(relation) -%}
+  {% call statement('drop_relation') -%}
+    drop {{ relation.type }} if exists {{ relation }}
+  {%- endcall %}
 {% endmacro %}
 
 {% macro bigquery__get_columns_in_relation(relation) -%}
