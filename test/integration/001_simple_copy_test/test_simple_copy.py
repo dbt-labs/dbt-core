@@ -1,4 +1,3 @@
-from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest, use_profile
 
 

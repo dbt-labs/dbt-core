@@ -1,5 +1,4 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 class TestGraphSelection(DBTIntegrationTest):
 
@@ -26,7 +25,7 @@ class TestGraphSelection(DBTIntegrationTest):
             )
             self.assertFalse(exists)
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__specific_model(self):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
@@ -40,7 +39,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertFalse('emails' in created_models)
         self.assert_correct_schemas()
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__tags(self):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
@@ -54,7 +53,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertTrue('users_rollup' in created_models)
         self.assert_correct_schemas()
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__tags_and_children(self):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
@@ -69,7 +68,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertTrue('users' in created_models)
         self.assert_correct_schemas()
 
-    @attr(type='snowflake')
+    @use_profile('snowflake')
     def test__snowflake__specific_model(self):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
@@ -83,7 +82,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertFalse('EMAILS' in created_models)
         self.assert_correct_schemas()
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__specific_model_and_children(self):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
@@ -98,7 +97,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertNotIn('emails', created_models)
         self.assert_correct_schemas()
 
-    @attr(type='snowflake')
+    @use_profile('snowflake')
     def test__snowflake__specific_model_and_children(self):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
@@ -114,7 +113,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertFalse('EMAILS' in created_models)
 
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__specific_model_and_parents(self):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
@@ -128,7 +127,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertFalse('emails' in created_models)
         self.assert_correct_schemas()
 
-    @attr(type='snowflake')
+    @use_profile('snowflake')
     def test__snowflake__specific_model_and_parents(self):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
@@ -145,7 +144,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertFalse('EMAILS' in created_models)
 
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__specific_model_with_exclusion(self):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
@@ -161,7 +160,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertFalse('emails' in created_models)
         self.assert_correct_schemas()
 
-    @attr(type='snowflake')
+    @use_profile('snowflake')
     def test__snowflake__specific_model_with_exclusion(self):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
 
@@ -176,7 +175,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertFalse('USERS_ROLLUP' in created_models)
         self.assertFalse('EMAILS' in created_models)
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__locally_qualified_name(self):
         results = self.run_dbt(['run', '--models', 'test.subdir'])
         self.assertEqual(len(results), 2)
@@ -189,7 +188,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertIn('nested_users', created_models)
         self.assert_correct_schemas()
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__childrens_parents(self):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
         results = self.run_dbt(['run', '--models', '@base_users'])
@@ -202,7 +201,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertNotIn('subdir', created_models)
         self.assertNotIn('nested_users', created_models)
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__more_childrens_parents(self):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
         results = self.run_dbt(['run', '--models', '@users'])
@@ -216,7 +215,7 @@ class TestGraphSelection(DBTIntegrationTest):
         self.assertNotIn('subdir', created_models)
         self.assertNotIn('nested_users', created_models)
 
-    @attr(type='snowflake')
+    @use_profile('snowflake')
     def test__snowflake__skip_intermediate(self):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
         results = self.run_dbt(['run', '--models', '@users'])

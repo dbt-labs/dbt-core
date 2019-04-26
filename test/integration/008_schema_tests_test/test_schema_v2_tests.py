@@ -1,4 +1,3 @@
-from nose.plugins.attrib import attr
 from test.integration.base import DBTIntegrationTest, FakeArgs, use_profile
 import os
 
@@ -27,7 +26,7 @@ class TestSchemaTests(DBTIntegrationTest):
         test_task = TestTask(args, self.config)
         return test_task.run()
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_schema_tests(self):
         results = self.run_dbt()
         self.assertEqual(len(results), 5)
@@ -77,7 +76,7 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
         test_task = TestTask(args, self.config)
         return test_task.run()
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_malformed_schema_test_wont_brick_run(self):
         # dbt run should work (Despite broken schema test)
         results = self.run_dbt(strict=False)
@@ -88,7 +87,7 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
         self.assertEqual(len(ran_tests), 5)
         self.assertEqual(sum(x.status for x in ran_tests), 0)
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_malformed_schema_strict_will_break_run(self):
         with self.assertRaises(CompilationException):
             self.run_dbt(strict=True)
@@ -112,7 +111,7 @@ class TestHooksInTests(DBTIntegrationTest):
             "on-run-end": ["{{ exceptions.raise_compiler_error('hooks called in tests -- error') if execute }}"],
         }
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_hooks_dont_run_for_tests(self):
         # This would fail if the hooks ran
         results = self.run_dbt(['test', '--model', 'ephemeral'])
@@ -169,7 +168,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         test_task = TestTask(args, self.config)
         return test_task.run()
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_schema_tests(self):
         self.run_dbt(["deps"])
         results = self.run_dbt()

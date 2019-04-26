@@ -1,7 +1,5 @@
-from nose.plugins.attrib import attr
-
 from dbt.exceptions import CompilationException
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 
 class TestDuplicateModelEnabled(DBTIntegrationTest):
@@ -34,7 +32,7 @@ class TestDuplicateModelEnabled(DBTIntegrationTest):
             }
         }
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test_duplicate_model_enabled(self):
         message = "dbt found two resources with the name"
         try:
@@ -74,7 +72,7 @@ class TestDuplicateModelDisabled(DBTIntegrationTest):
             }
         }
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test_duplicate_model_disabled(self):
         try:
             results = self.run_dbt(["run"])
@@ -109,7 +107,7 @@ class TestDuplicateModelEnabledAcrossPackages(DBTIntegrationTest):
             ],
         }
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test_duplicate_model_enabled_across_packages(self):
         self.run_dbt(["deps"])
         message = "dbt found two resources with the name"
@@ -145,7 +143,7 @@ class TestDuplicateModelDisabledAcrossPackages(DBTIntegrationTest):
             ],
         }
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test_duplicate_model_disabled_across_packages(self):
         self.run_dbt(["deps"])
         try:
