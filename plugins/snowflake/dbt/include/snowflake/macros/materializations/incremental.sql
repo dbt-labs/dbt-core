@@ -8,29 +8,21 @@
   {%- set identifier = model['alias'] -%}
 
   {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) -%}
-
   {%- set target_relation = api.Relation.create(database=database, identifier=identifier, schema=schema, type='table') -%}
-
   {%- set exists_as_table = (old_relation is not none and old_relation.is_table) -%}
-
   {%- set exists_not_as_table = (old_relation is not none and not old_relation.is_table) -%}
-
   {%- set force_create = full_refresh_mode -%}
-
 
   -- setup
 
-  {% set source_sql = sql -%}
-     {# -- wrap sql in parens to make it a subquery --
+  {% set source_sql -%}
+     -- wrap sql in parens to make it a subquery --
      (
         select * from (
             {{ sql }}
         )
-        {% if sql_where %}
-            where ({{ sql_where }}) or ({{ sql_where }}) is null
-        {% endif %}
     )
-  {%- endset -%} #}
+  {%- endset -%}
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
 
@@ -49,7 +41,7 @@
           {{ adapter.drop_relation(old_relation) }}
       {% endif %}
       {# -- now create or replace the table because we're in full-refresh #}
-      {{create_table_as(target_relation, source_sql)}}
+      {{create_table_as(false, target_relation, source_sql)}}
     {%- endcall -%}
 
   {%- else -%}

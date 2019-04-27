@@ -17,7 +17,7 @@
 
 
   -- drop the temp relations if they exists for some reason
-  {{ adapter.drop_relation(intermediate_relation) }}
+  {# {{ adapter.drop_relation(intermediate_relation) }} #}
 
   --- FIXME: Do we want to put this block all together? I think it serves no purpose, but need to check
   -- setup: if the target relation already exists, truncate or drop it (if it's a view)
@@ -48,7 +48,7 @@
       {{ drop_relation_if_exists(old_relation) }}
     {% endif %}
 
-    {{ create_or_replace_table_as(target_relation, sql) }}
+    {{ create_table_as(create_as_temporary, target_relation, sql) }}
   {%- endcall %}
 
   {{ run_hooks(post_hooks, inside_transaction=True) }}
