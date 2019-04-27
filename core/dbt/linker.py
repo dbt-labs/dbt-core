@@ -1,8 +1,6 @@
 import networkx as nx
-from collections import defaultdict
 import threading
 
-import dbt.utils
 from dbt.compat import PriorityQueue
 from dbt.node_types import NodeType
 
@@ -174,6 +172,28 @@ class GraphQueue(object):
         self.inner.join()
 
 
+def _subset_graph(graph, include_nodes):
+    """Create and return a new graph that is a shallow copy of graph but with
+    only the nodes in include_nodes. Transitive edges across removed nodes are
+    preserved as explicit new edges.
+    """
+    new_graph = nx.algorithms.transitive_closure(graph)
+
+    include_nodes = set(include_nodes)
+
+    for node in graph.nodes():
+        if node not in include_nodes:
+            new_graph.remove_node(node)
+
+    for node in include_nodes:
+        if node not in new_graph:
+            raise RuntimeError(
+                "Couldn't find model '{}' -- does it exist or is "
+                "it disabled?".format(node)
+            )
+    return new_graph
+
+
 class Linker(object):
     def __init__(self, data=None):
         if data is None:
@@ -209,23 +229,7 @@ class Linker(object):
         else:
             graph_nodes = limit_to
 
-        new_graph = nx.DiGraph(self.graph)
-
-        to_remove = []
-        graph_nodes_lookup = set(graph_nodes)
-        for node in new_graph.nodes():
-            if node not in graph_nodes_lookup:
-                to_remove.append(node)
-
-        for node in to_remove:
-            new_graph.remove_node(node)
-
-        for node in graph_nodes:
-            if node not in new_graph:
-                raise RuntimeError(
-                    "Couldn't find model '{}' -- does it exist or is "
-                    "it disabled?".format(node)
-                )
+        new_graph = _subset_graph(self.graph, graph_nodes)
         return GraphQueue(new_graph, manifest)
 
     def get_dependent_nodes(self, node):

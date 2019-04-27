@@ -1,5 +1,4 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 
 class TestCustomSchema(DBTIntegrationTest):
@@ -12,7 +11,7 @@ class TestCustomSchema(DBTIntegrationTest):
     def models(self):
         return "test/integration/024_custom_schema_test/models"
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__custom_schema_no_prefix(self):
         self.use_default_project()
         self.run_sql_file("test/integration/024_custom_schema_test/seed.sql")
@@ -47,7 +46,7 @@ class TestCustomProjectSchemaWithPrefix(DBTIntegrationTest):
                     'my-target': {
                         'type': 'postgres',
                         'threads': 1,
-                        'host': 'database',
+                        'host': self.database_host,
                         'port': 5432,
                         'user': 'root',
                         'pass': 'password',
@@ -67,7 +66,7 @@ class TestCustomProjectSchemaWithPrefix(DBTIntegrationTest):
             }
         }
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__custom_schema_with_prefix(self):
         self.use_default_project()
         self.run_sql_file("test/integration/024_custom_schema_test/seed.sql")
@@ -83,6 +82,42 @@ class TestCustomProjectSchemaWithPrefix(DBTIntegrationTest):
         self.assertTablesEqual("seed","view_1", schema, v1_schema)
         self.assertTablesEqual("seed","view_2", schema, v2_schema)
         self.assertTablesEqual("agg","view_3", schema, xf_schema)
+
+
+class TestCustomProjectSchemaWithPrefixSnowflake(DBTIntegrationTest):
+
+    @property
+    def schema(self):
+        return "custom_schema_024"
+
+    @property
+    def models(self):
+        return "test/integration/024_custom_schema_test/models"
+
+    @property
+    def project_config(self):
+        return {
+            "models": {
+                "schema": "dbt_test"
+            }
+        }
+
+    @use_profile('snowflake')
+    def test__snowflake__custom_schema_with_prefix(self):
+        self.use_default_project()
+        self.run_sql_file("test/integration/024_custom_schema_test/seed.sql")
+
+        results = self.run_dbt()
+        self.assertEqual(len(results), 3)
+
+        schema = self.unique_schema().upper()
+        v1_schema = "{}_DBT_TEST".format(schema)
+        v2_schema = "{}_CUSTOM".format(schema)
+        xf_schema = "{}_TEST".format(schema)
+
+        self.assertTablesEqual("SEED","VIEW_1", schema, v1_schema)
+        self.assertTablesEqual("SEED","VIEW_2", schema, v2_schema)
+        self.assertTablesEqual("AGG","VIEW_3", schema, xf_schema)
 
 
 class TestCustomSchemaWithCustomMacro(DBTIntegrationTest):
@@ -103,7 +138,7 @@ class TestCustomSchemaWithCustomMacro(DBTIntegrationTest):
                     'prod': {
                         'type': 'postgres',
                         'threads': 1,
-                        'host': 'database',
+                        'host': self.database_host,
                         'port': 5432,
                         'user': 'root',
                         'pass': 'password',
@@ -124,7 +159,7 @@ class TestCustomSchemaWithCustomMacro(DBTIntegrationTest):
             }
         }
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__custom_schema_from_macro(self):
         self.use_default_project()
         self.run_sql_file("test/integration/024_custom_schema_test/seed.sql")

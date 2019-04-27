@@ -62,7 +62,7 @@
     {{ column_list_for_create_table(columns) }}
   )
   {{ dist('dbt_updated_at') }}
-  {{ sort('compound', ['scd_id']) }};
+  {{ sort('compound', ['dbt_scd_id']) }};
 {%- endmacro %}
 
 
@@ -88,7 +88,7 @@
           numeric_precision,
           numeric_scale
 
-        from information_schema.columns
+        from {{ relation.information_schema('columns') }}
         where table_name = '{{ relation.identifier }}'
     ),
 
@@ -153,8 +153,8 @@
 {% endmacro %}
 
 
-{% macro redshift__list_relations_without_caching(database, schema) %}
-  {{ return(postgres__list_relations_without_caching(database, schema)) }}
+{% macro redshift__list_relations_without_caching(information_schema, schema) %}
+  {{ return(postgres__list_relations_without_caching(information_schema, schema)) }}
 {% endmacro %}
 
 
@@ -168,8 +168,8 @@
 {%- endmacro %}
 
 
-{% macro redshift__check_schema_exists(database, schema) -%}
-  {{ return(postgres__check_schema_exists(database, schema)) }}
+{% macro redshift__check_schema_exists(information_schema, schema) -%}
+  {{ return(postgres__check_schema_exists(information_schema, schema)) }}
 {%- endmacro %}
 list_schemas
 

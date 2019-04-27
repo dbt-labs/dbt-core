@@ -8,9 +8,10 @@ from dbt.adapters.postgres import PostgresAdapter
 from dbt.exceptions import ValidationException
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from psycopg2 import extensions as psycopg2_extensions
+from psycopg2 import DatabaseError, Error
 import agate
 
-from .utils import config_from_parts_or_dicts, inject_adapter
+from .utils import config_from_parts_or_dicts, inject_adapter, mock_connection
 
 
 class TestPostgresAdapter(unittest.TestCase):
@@ -29,7 +30,7 @@ class TestPostgresAdapter(unittest.TestCase):
                     'type': 'postgres',
                     'dbname': 'postgres',
                     'user': 'root',
-                    'host': 'database',
+                    'host': 'thishostshouldnotexist',
                     'pass': 'password',
                     'port': 5432,
                     'schema': 'public'
@@ -45,40 +46,45 @@ class TestPostgresAdapter(unittest.TestCase):
     def adapter(self):
         if self._adapter is None:
             self._adapter = PostgresAdapter(self.config)
-            inject_adapter('postgres', self._adapter)
+            inject_adapter(self._adapter)
         return self._adapter
 
-    def test_acquire_connection_validations(self):
+    @mock.patch('dbt.adapters.postgres.connections.psycopg2')
+    def test_acquire_connection_validations(self, psycopg2):
         try:
             connection = self.adapter.acquire_connection('dummy')
-            self.assertEquals(connection.type, 'postgres')
         except ValidationException as e:
             self.fail('got ValidationException: {}'.format(str(e)))
         except BaseException as e:
-            self.fail('validation failed with unknown exception: {}'
+            self.fail('acquiring connection failed with unknown exception: {}'
                       .format(str(e)))
+        self.assertEquals(connection.type, 'postgres')
+        psycopg2.connect.assert_called_once()
 
-    def test_acquire_connection(self):
+    @mock.patch('dbt.adapters.postgres.connections.psycopg2')
+    def test_acquire_connection(self, psycopg2):
         connection = self.adapter.acquire_connection('dummy')
 
         self.assertEquals(connection.state, 'open')
         self.assertNotEquals(connection.handle, None)
+        psycopg2.connect.assert_called_once()
 
     def test_cancel_open_connections_empty(self):
         self.assertEqual(len(list(self.adapter.cancel_open_connections())), 0)
 
     def test_cancel_open_connections_master(self):
-        self.adapter.connections.in_use['master'] = mock.MagicMock()
+        key = self.adapter.connections.get_thread_identifier()
+        self.adapter.connections.thread_connections[key] = mock_connection('master')
         self.assertEqual(len(list(self.adapter.cancel_open_connections())), 0)
 
     def test_cancel_open_connections_single(self):
-        master = mock.MagicMock()
-        model = mock.MagicMock()
+        master = mock_connection('master')
+        model = mock_connection('model')
+        key = self.adapter.connections.get_thread_identifier()
         model.handle.get_backend_pid.return_value = 42
-
-        self.adapter.connections.in_use.update({
-            'master': master,
-            'model': model,
+        self.adapter.connections.thread_connections.update({
+            key: master,
+            1: model,
         })
         with mock.patch.object(self.adapter.connections, 'add_query') as add_query:
             query_result = mock.MagicMock()
@@ -86,7 +92,7 @@ class TestPostgresAdapter(unittest.TestCase):
 
             self.assertEqual(len(list(self.adapter.cancel_open_connections())), 1)
 
-            add_query.assert_called_once_with('select pg_terminate_backend(42)', 'master')
+            add_query.assert_called_once_with('select pg_terminate_backend(42)')
 
         master.handle.get_backend_pid.assert_not_called()
 
@@ -98,7 +104,7 @@ class TestPostgresAdapter(unittest.TestCase):
         psycopg2.connect.assert_called_once_with(
             dbname='postgres',
             user='root',
-            host='database',
+            host='thishostshouldnotexist',
             password='password',
             port=5432,
             connect_timeout=10)
@@ -113,7 +119,7 @@ class TestPostgresAdapter(unittest.TestCase):
         psycopg2.connect.assert_called_once_with(
             dbname='postgres',
             user='root',
-            host='database',
+            host='thishostshouldnotexist',
             password='password',
             port=5432,
             connect_timeout=10,
@@ -129,7 +135,7 @@ class TestPostgresAdapter(unittest.TestCase):
         psycopg2.connect.assert_called_once_with(
             dbname='postgres',
             user='root',
-            host='database',
+            host='thishostshouldnotexist',
             password='password',
             port=5432,
             connect_timeout=10)
@@ -168,7 +174,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
                     'type': 'postgres',
                     'dbname': 'postgres',
                     'user': 'root',
-                    'host': 'database',
+                    'host': 'thishostshouldnotexist',
                     'pass': 'password',
                     'port': 5432,
                     'schema': 'public'
@@ -194,10 +200,14 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         self.mock_execute = self.cursor.execute
         self.patcher = mock.patch('dbt.adapters.postgres.connections.psycopg2')
         self.psycopg2 = self.patcher.start()
+        # there must be a better way to do this...
+        self.psycopg2.DatabaseError = DatabaseError
+        self.psycopg2.Error = Error
 
         self.psycopg2.connect.return_value = self.handle
         self.adapter = PostgresAdapter(self.config)
-        inject_adapter('postgres', self.adapter)
+        self.adapter.acquire_connection()
+        inject_adapter(self.adapter)
 
     def tearDown(self):
         # we want a unique self.handle every time.

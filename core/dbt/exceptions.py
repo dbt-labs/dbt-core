@@ -1,11 +1,22 @@
-from dbt.compat import basestring, builtins
+import sys
+import six
+import functools
+
+from dbt.compat import builtins
 from dbt.logger import GLOBAL_LOGGER as logger
 import dbt.flags
-import re
 
 
 class Exception(builtins.Exception):
-    pass
+    CODE = -32000
+    MESSAGE = "Server Error"
+
+    def data(self):
+        # if overriding, make sure the result is json-serializable.
+        return {
+            'type': self.__class__.__name__,
+            'message': str(self),
+        }
 
 
 class MacroReturn(builtins.BaseException):
@@ -22,6 +33,9 @@ class InternalException(Exception):
 
 
 class RuntimeException(RuntimeError, Exception):
+    CODE = 10001
+    MESSAGE = "Runtime error"
+
     def __init__(self, msg, node=None):
         self.stack = []
         self.node = node
@@ -81,8 +95,59 @@ class RuntimeException(RuntimeError, Exception):
         return lines[0] + "\n" + "\n".join(
             ["  " + line for line in lines[1:]])
 
+    def data(self):
+        result = Exception.data(self)
+        if self.node is None:
+            return result
+
+        result.update({
+            'raw_sql': self.node.get('raw_sql'),
+            'compiled_sql': self.node.get('injected_sql'),
+        })
+        return result
+
+
+class RPCFailureResult(RuntimeException):
+    CODE = 10002
+    MESSAGE = "RPC execution error"
+
+
+class RPCTimeoutException(RuntimeException):
+    CODE = 10008
+    MESSAGE = 'RPC timeout error'
+
+    def __init__(self, timeout):
+        super(RPCTimeoutException, self).__init__(self.MESSAGE)
+        self.timeout = timeout
+
+    def data(self):
+        result = super(RPCTimeoutException, self).data()
+        result.update({
+            'timeout': self.timeout,
+            'message': 'RPC timed out after {}s'.format(self.timeout),
+        })
+        return result
+
+
+class RPCKilledException(RuntimeException):
+    CODE = 10009
+    MESSAGE = 'RPC process killed'
+
+    def __init__(self, signum):
+        self.signum = signum
+        self.message = 'RPC process killed by signal {}'.format(self.signum)
+        super(RPCKilledException, self).__init__(self.message)
+
+    def data(self):
+        return {
+            'signum': self.signum,
+            'message': self.message,
+        }
+
 
 class DatabaseException(RuntimeException):
+    CODE = 10003
+    MESSAGE = "Database Error"
 
     def process_stack(self):
         lines = []
@@ -99,6 +164,9 @@ class DatabaseException(RuntimeException):
 
 
 class CompilationException(RuntimeException):
+    CODE = 10004
+    MESSAGE = "Compilation Error"
+
     @property
     def type(self):
         return 'Compilation'
@@ -109,7 +177,8 @@ class RecursionException(RuntimeException):
 
 
 class ValidationException(RuntimeException):
-    pass
+    CODE = 10005
+    MESSAGE = "Validation Error"
 
 
 class JSONValidationException(ValidationException):
@@ -117,8 +186,9 @@ class JSONValidationException(ValidationException):
         self.typename = typename
         self.errors = errors
         self.errors_message = ', '.join(errors)
-        msg = ('Invalid arguments passed to "{}" instance: {}'.format(
-                self.typename, self.errors_message))
+        msg = 'Invalid arguments passed to "{}" instance: {}'.format(
+            self.typename, self.errors_message
+        )
         super(JSONValidationException, self).__init__(msg)
 
     def __reduce__(self):
@@ -130,15 +200,16 @@ class AliasException(ValidationException):
     pass
 
 
-class ParsingException(Exception):
-    pass
-
-
 class DependencyException(Exception):
-    pass
+    # this can happen due to raise_dependency_error and its callers
+    CODE = 10006
+    MESSAGE = "Dependency Error"
 
 
 class DbtConfigError(RuntimeException):
+    CODE = 10007
+    MESSAGE = "DBT Configuration Error"
+
     def __init__(self, message, project=None, result_type='invalid_project'):
         self.project = project
         super(DbtConfigError, self).__init__(message)
@@ -522,8 +593,8 @@ def raise_ambiguous_catalog_match(unique_id, match_1, match_2):
 
     def get_match_string(match):
         return "{}.{}".format(
-                match.get('metadata', {}).get('schema'),
-                match.get('metadata', {}).get('name'))
+            match.get('metadata', {}).get('schema'),
+            match.get('metadata', {}).get('name'))
 
     raise_compiler_error(
         'dbt found two relations in your warehouse with similar database '
@@ -612,3 +683,26 @@ CONTEXT_EXPORTS = {
         relation_wrong_type,
     ]
 }
+
+
+def wrapper(model):
+    def wrap(func):
+        @functools.wraps(func)
+        def inner(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except Exception:
+                exc_type, exc, exc_tb = sys.exc_info()
+                if hasattr(exc, 'node') and exc.node is None:
+                    exc.node = model
+                six.reraise(exc_type, exc, exc_tb)
+
+        return inner
+    return wrap
+
+
+def wrapped_exports(model):
+    wrap = wrapper(model)
+    return {
+        name: wrap(export) for name, export in CONTEXT_EXPORTS.items()
+    }

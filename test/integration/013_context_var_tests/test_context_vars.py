@@ -1,5 +1,4 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 import os
 
@@ -50,7 +49,7 @@ class TestContextVars(DBTIntegrationTest):
                     'dev': {
                         'type': 'postgres',
                         'threads': 1,
-                        'host': 'database',
+                        'host': self.database_host,
                         'port': 5432,
                         'user': "root",
                         'pass': "password",
@@ -60,7 +59,7 @@ class TestContextVars(DBTIntegrationTest):
                     'prod': {
                         'type': 'postgres',
                         'threads': 1,
-                        'host': 'database',
+                        'host': self.database_host,
                         'port': 5432,
                         # root/password
                         'user': "{{ env_var('DBT_TEST_013_USER') }}",
@@ -84,7 +83,7 @@ class TestContextVars(DBTIntegrationTest):
 
         return ctx
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_env_vars_dev(self):
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 1)
@@ -99,7 +98,7 @@ class TestContextVars(DBTIntegrationTest):
         self.assertEqual(ctx['this.table'], 'context')
 
         self.assertEqual(ctx['target.dbname'], 'dbt')
-        self.assertEqual(ctx['target.host'], 'database')
+        self.assertEqual(ctx['target.host'], self.database_host)
         self.assertEqual(ctx['target.name'], 'dev')
         self.assertEqual(ctx['target.port'], 5432)
         self.assertEqual(ctx['target.schema'], self.unique_schema())
@@ -110,7 +109,7 @@ class TestContextVars(DBTIntegrationTest):
 
         self.assertEqual(ctx['env_var'], '1')
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_env_vars_prod(self):
         results = self.run_dbt(['run', '--target', 'prod'])
         self.assertEqual(len(results), 1)
@@ -125,7 +124,7 @@ class TestContextVars(DBTIntegrationTest):
         self.assertEqual(ctx['this.table'], 'context')
 
         self.assertEqual(ctx['target.dbname'], 'dbt')
-        self.assertEqual(ctx['target.host'], 'database')
+        self.assertEqual(ctx['target.host'], self.database_host)
         self.assertEqual(ctx['target.name'], 'prod')
         self.assertEqual(ctx['target.port'], 5432)
         self.assertEqual(ctx['target.schema'], self.unique_schema())

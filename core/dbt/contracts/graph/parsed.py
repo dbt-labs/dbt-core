@@ -1,8 +1,6 @@
 from dbt.api import APIObject
 from dbt.utils import deep_merge
 from dbt.node_types import NodeType
-from dbt.exceptions import raise_duplicate_resource_name, \
-    raise_patch_targets_not_found
 
 import dbt.clients.jinja
 
@@ -443,6 +441,79 @@ class ParsedNode(APIObject):
         self._contents['config'] = value
 
 
+ARCHIVE_CONFIG_CONTRACT = {
+    'properties': {
+        'target_database': {
+            'type': 'string',
+        },
+        'target_schema': {
+            'type': 'string',
+        },
+        'unique_key': {
+            'type': 'string',
+        },
+        'anyOf': [
+            {
+                'properties': {
+                    'strategy': {
+                        'enum': ['timestamp'],
+                    },
+                    'updated_at': {
+                        'type': 'string',
+                        'description': (
+                            'The column name with the timestamp to compare'
+                        ),
+                    },
+                },
+                'required': ['updated_at'],
+            },
+            {
+                'properties': {
+                    'strategy': {
+                        'enum': ['check'],
+                    },
+                    'check_cols': {
+                        'oneOf': [
+                            {
+                                'type': 'array',
+                                'items': {'type': 'string'},
+                                'description': 'The columns to check',
+                                'minLength': 1,
+                            },
+                            {
+                                'enum': ['all'],
+                                'description': 'Check all columns',
+                            },
+                        ],
+                    },
+                },
+                'required': ['check_cols'],
+            }
+        ]
+    },
+    'required': [
+        'target_database', 'target_schema', 'unique_key', 'strategy',
+    ],
+}
+
+
+PARSED_ARCHIVE_NODE_CONTRACT = deep_merge(
+    PARSED_NODE_CONTRACT,
+    {
+        'properties': {
+            'config': ARCHIVE_CONFIG_CONTRACT,
+            'resource_type': {
+                'enum': [NodeType.Archive],
+            },
+        },
+    }
+)
+
+
+class ParsedArchiveNode(ParsedNode):
+    SCHEMA = PARSED_ARCHIVE_NODE_CONTRACT
+
+
 # The parsed node update is only the 'patch', not the test. The test became a
 # regular parsed node. Note that description and columns must be present, but
 # may be empty.
@@ -558,6 +629,7 @@ class ParsedMacro(APIObject):
         # available in this class. should we just generate this here?
         return dbt.clients.jinja.macro_generator(self._contents)
 
+
 # This is just the file + its ID
 PARSED_DOCUMENTATION_CONTRACT = deep_merge(
     UNPARSED_DOCUMENTATION_FILE_CONTRACT,
@@ -634,9 +706,26 @@ FRESHNESS_CONTRACT = {
 }
 
 
+QUOTING_CONTRACT = {
+    'properties': {
+        'quoting': {
+            'type': 'object',
+            'additionalProperties': False,
+            'properties': {
+                'database': {'type': 'boolean'},
+                'schema': {'type': 'boolean'},
+                'identifier': {'type': 'boolean'},
+            },
+        },
+    },
+    'required': ['quoting'],
+}
+
+
 PARSED_SOURCE_DEFINITION_CONTRACT = deep_merge(
     UNPARSED_BASE_CONTRACT,
     FRESHNESS_CONTRACT,
+    QUOTING_CONTRACT,
     HAS_DESCRIPTION_CONTRACT,
     HAS_UNIQUE_ID_CONTRACT,
     HAS_DOCREFS_CONTRACT,
@@ -676,7 +765,7 @@ PARSED_SOURCE_DEFINITION_CONTRACT = deep_merge(
             # the manifest search stuff really requires this, sadly
             'resource_type': {
                 'enum': [NodeType.Source],
-            }
+            },
         },
         # note that while required, loaded_at_field and freshness may be null
         'required': [

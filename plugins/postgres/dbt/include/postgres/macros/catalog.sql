@@ -1,11 +1,11 @@
 
-{% macro postgres__get_catalog() -%}
+{% macro postgres__get_catalog(information_schemas) -%}
 
   {%- call statement('catalog', fetch_result=True) -%}
-    {% if (databases | length) != 1 %}
-        exceptions.raise_compiler_error('postgres get_catalog requires exactly one database')
+    {% if (information_schemas | length) != 1 %}
+        {{ exceptions.raise_compiler_error('postgres get_catalog requires exactly one database') }}
     {% endif %}
-    {% set database = databases[0] %}
+    {% set database = information_schemas[0].database %}
     {{ adapter.verify_database(database) }}
 
     with table_owners as (

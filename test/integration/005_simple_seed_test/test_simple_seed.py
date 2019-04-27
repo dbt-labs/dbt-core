@@ -1,5 +1,4 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 from dbt.exceptions import CompilationException
 
@@ -24,7 +23,7 @@ class TestSimpleSeed(DBTIntegrationTest):
             "data-paths": ['test/integration/005_simple_seed_test/data']
         }
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_simple_seed(self):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
@@ -37,7 +36,7 @@ class TestSimpleSeed(DBTIntegrationTest):
         self.assertTablesEqual("seed_actual","seed_expected")
 
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_simple_seed_with_drop(self):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
@@ -72,7 +71,7 @@ class TestSimpleSeedCustomSchema(DBTIntegrationTest):
             }
         }
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_simple_seed_with_schema(self):
         schema_name = "{}_{}".format(self.unique_schema(), 'custom_schema')
 
@@ -86,7 +85,7 @@ class TestSimpleSeedCustomSchema(DBTIntegrationTest):
         self.assertTablesEqual("seed_actual","seed_expected", table_a_schema=schema_name)
 
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_simple_seed_with_drop_and_schema(self):
         schema_name = "{}_{}".format(self.unique_schema(), 'custom_schema')
 
@@ -126,7 +125,7 @@ class TestSimpleSeedDisabled(DBTIntegrationTest):
             }
         }
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_simple_seed_with_disabled(self):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
@@ -153,7 +152,7 @@ class TestSeedParsing(DBTIntegrationTest):
             "data-paths": ['test/integration/005_simple_seed_test/data-bad']
         }
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_postgres_dbt_run_skips_seeds(self):
         # run does not try to parse the seed files
         self.assertEqual(len(self.run_dbt(['run'])), 1)

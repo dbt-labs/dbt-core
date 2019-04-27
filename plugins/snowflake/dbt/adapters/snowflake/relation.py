@@ -1,5 +1,4 @@
 from dbt.adapters.base.relation import BaseRelation
-import dbt.utils
 
 
 class SnowflakeRelation(BaseRelation):
@@ -9,7 +8,7 @@ class SnowflakeRelation(BaseRelation):
         },
         'quote_character': '"',
         'quote_policy': {
-            'database': True,
+            'database': False,
             'schema': False,
             'identifier': False,
         },

@@ -1,6 +1,6 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 import threading
+from dbt.adapters.factory import get_adapter
 
 class BaseTestConcurrentTransaction(DBTIntegrationTest):
 
@@ -9,6 +9,10 @@ class BaseTestConcurrentTransaction(DBTIntegrationTest):
             'view_model': 'wait',
             'model_1': 'wait',
         }
+
+    def setUp(self):
+        super(BaseTestConcurrentTransaction, self).setUp()
+        self.reset()
 
     @property
     def schema(self):
@@ -26,7 +30,8 @@ class BaseTestConcurrentTransaction(DBTIntegrationTest):
     def run_select_and_check(self, rel, sql):
         connection_name = '__test_{}'.format(id(threading.current_thread()))
         try:
-            res = self.run_sql(sql, fetch='one', connection_name=connection_name)
+            with get_adapter(self.config).connection_named(connection_name) as conn:
+                res = self.run_sql_common(self.transform_sql(sql), 'one', conn)
 
             # The result is the output of f_sleep(), which is True
             if res[0] == True:
@@ -54,7 +59,7 @@ class BaseTestConcurrentTransaction(DBTIntegrationTest):
                 sleep=sleep,
                 rel=rel)
 
-        thread = threading.Thread(target=lambda: self.run_select_and_check(rel, query))
+        thread = threading.Thread(target=self.run_select_and_check, args=(rel, query))
         thread.start()
         return thread
 
@@ -88,7 +93,7 @@ class TableTestConcurrentTransaction(BaseTestConcurrentTransaction):
     def models(self):
         return "test/integration/032_concurrent_transaction_test/models-table"
 
-    @attr(type="redshift")
+    @use_profile("redshift")
     def test__redshift__concurrent_transaction_table(self):
         self.reset()
         self.run_test()
@@ -98,7 +103,7 @@ class ViewTestConcurrentTransaction(BaseTestConcurrentTransaction):
     def models(self):
         return "test/integration/032_concurrent_transaction_test/models-view"
 
-    @attr(type="redshift")
+    @use_profile("redshift")
     def test__redshift__concurrent_transaction_view(self):
         self.reset()
         self.run_test()
@@ -108,7 +113,7 @@ class IncrementalTestConcurrentTransaction(BaseTestConcurrentTransaction):
     def models(self):
         return "test/integration/032_concurrent_transaction_test/models-incremental"
 
-    @attr(type="redshift")
+    @use_profile("redshift")
     def test__redshift__concurrent_transaction_incremental(self):
         self.reset()
         self.run_test()

@@ -1,7 +1,7 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 import mock
 import hashlib
+import os
 
 from mock import call, ANY
 
@@ -188,7 +188,7 @@ class TestEventTrackingSuccess(TestEventTracking):
             "test-paths": [self.dir("test")],
         }
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test__event_tracking_compile(self):
         expected_calls = [
             call(
@@ -216,7 +216,7 @@ class TestEventTrackingSuccess(TestEventTracking):
             expected_contexts
         )
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test__event_tracking_deps(self):
         package_context = [
             {
@@ -259,7 +259,7 @@ class TestEventTrackingSuccess(TestEventTracking):
 
         self.run_event_test(["deps"], expected_calls, expected_contexts)
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test__event_tracking_seed(self):
         def seed_context(project_id, user_id, invocation_id, version):
             return [{
@@ -313,7 +313,7 @@ class TestEventTrackingSuccess(TestEventTracking):
 
         self.run_event_test(["seed"], expected_calls, expected_contexts)
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test__event_tracking_models(self):
         expected_calls = [
             call(
@@ -342,6 +342,12 @@ class TestEventTrackingSuccess(TestEventTracking):
             ),
         ]
 
+        hashed = '20ff78afb16c8b3b8f83861b1d3b99bd'
+        # this hashed contents field changes on azure postgres tests, I believe
+        # due to newlines again
+        if os.name == 'nt':
+            hashed = '52cf9d1db8f0a18ca64ef64681399746'
+
         expected_contexts = [
             self.build_context('run', 'start'),
             self.run_context(
@@ -353,7 +359,7 @@ class TestEventTrackingSuccess(TestEventTracking):
                 materialization='view'
             ),
             self.run_context(
-                hashed_contents='20ff78afb16c8b3b8f83861b1d3b99bd',
+                hashed_contents=hashed,
                 model_id='57994a805249953b31b738b1af7a1eeb',
                 index=2,
                 total=2,
@@ -369,7 +375,7 @@ class TestEventTrackingSuccess(TestEventTracking):
             expected_contexts
         )
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test__event_tracking_model_error(self):
         # cmd = ["run", "--model", "model_error"]
         # self.run_event_test(cmd, event_run_model_error, expect_pass=False)
@@ -415,7 +421,7 @@ class TestEventTrackingSuccess(TestEventTracking):
             expect_pass=False
         )
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test__event_tracking_tests(self):
         # TODO: dbt does not track events for tests, but it should!
         self.run_dbt(["run", "--model", "example", "example_2"])
@@ -455,7 +461,7 @@ class TestEventTrackingCompilationError(TestEventTracking):
             "source-paths": [self.dir("model-compilation-error")],
         }
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test__event_tracking_with_compilation_error(self):
         expected_calls = [
             call(
@@ -499,7 +505,7 @@ class TestEventTrackingUnableToConnect(TestEventTracking):
                     'default2': {
                         'type': 'postgres',
                         'threads': 4,
-                        'host': 'database',
+                        'host': self.database_host,
                         'port': 5432,
                         'user': 'root',
                         'pass': 'password',
@@ -509,7 +515,7 @@ class TestEventTrackingUnableToConnect(TestEventTracking):
                     'noaccess': {
                         'type': 'postgres',
                         'threads': 4,
-                        'host': 'database',
+                        'host': self.database_host,
                         'port': 5432,
                         'user': 'BAD',
                         'pass': 'bad_password',
@@ -521,7 +527,7 @@ class TestEventTrackingUnableToConnect(TestEventTracking):
             }
         }
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test__event_tracking_unable_to_connect(self):
         expected_calls = [
             call(
@@ -571,7 +577,7 @@ class TestEventTrackingArchive(TestEventTracking):
             ]
         }
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test__event_tracking_archive(self):
         self.run_dbt(["run", "--models", "archivable"])
 
@@ -596,10 +602,11 @@ class TestEventTrackingArchive(TestEventTracking):
             ),
         ]
 
+        # the model here has a raw_sql that contains the schema, which changes
         expected_contexts = [
             self.build_context('archive', 'start'),
             self.run_context(
-                hashed_contents='f785c4490e73e5b52fed5627f5709bfa',
+                hashed_contents=ANY,
                 model_id='3cdcd0fef985948fd33af308468da3b9',
                 index=1,
                 total=1,
@@ -617,7 +624,7 @@ class TestEventTrackingArchive(TestEventTracking):
 
 
 class TestEventTrackingCatalogGenerate(TestEventTracking):
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test__event_tracking_catalog_generate(self):
         # create a model for the catalog
         self.run_dbt(["run", "--models", "example"])

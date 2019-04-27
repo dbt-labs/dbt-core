@@ -3,10 +3,7 @@ from dbt.utils import deep_merge, timestring
 from dbt.contracts.common import named_property
 from dbt.contracts.graph.manifest import COMPILE_RESULT_NODE_CONTRACT
 from dbt.contracts.graph.unparsed import TIME_CONTRACT
-from dbt.contracts.graph.parsed import PARSED_NODE_CONTRACT, \
-    PARSED_SOURCE_DEFINITION_CONTRACT
-from dbt.contracts.graph.compiled import COMPILED_NODE_CONTRACT
-from dbt.contracts.graph.manifest import PARSED_MANIFEST_CONTRACT
+from dbt.contracts.graph.parsed import PARSED_SOURCE_DEFINITION_CONTRACT
 
 
 TIMING_INFO_CONTRACT = {
@@ -197,8 +194,8 @@ EXECUTION_RESULT_CONTRACT = {
             'type': 'array',
             'items': {
                 'anyOf': [
-                     RUN_MODEL_RESULT_CONTRACT,
-                     PARTIAL_RESULT_CONTRACT,
+                    RUN_MODEL_RESULT_CONTRACT,
+                    PARTIAL_RESULT_CONTRACT,
                 ]
             },
             'description': 'An array of results, one per model',
@@ -261,8 +258,8 @@ class SourceFreshnessResult(NodeSerializable):
     def __init__(self, node, max_loaded_at, snapshotted_at,
                  age, status, thread_id, error=None,
                  timing=None, execution_time=0):
-        max_loaded_at = max_loaded_at.isoformat() + 'Z'
-        snapshotted_at = snapshotted_at.isoformat() + 'Z'
+        max_loaded_at = max_loaded_at.isoformat()
+        snapshotted_at = snapshotted_at.isoformat()
         if timing is None:
             timing = []
         super(SourceFreshnessResult, self).__init__(
@@ -458,3 +455,78 @@ class FreshnessRunOutput(APIObject):
 
     def __init__(self, meta, sources):
         super(FreshnessRunOutput, self).__init__(meta=meta, sources=sources)
+
+
+REMOTE_COMPILE_RESULT_CONTRACT = {
+    'type': 'object',
+    'additionalProperties': False,
+    'properties': {
+        'raw_sql': {
+            'type': 'string',
+        },
+        'compiled_sql': {
+            'type': 'string',
+        },
+        'timing': {
+            'type': 'array',
+            'items': TIMING_INFO_CONTRACT,
+        },
+    },
+    'required': ['raw_sql', 'compiled_sql', 'timing']
+}
+
+
+class RemoteCompileResult(APIObject):
+    SCHEMA = REMOTE_COMPILE_RESULT_CONTRACT
+
+    def __init__(self, raw_sql, compiled_sql, node, timing=None, **kwargs):
+        if timing is None:
+            timing = []
+        # this should not show up in the serialized output.
+        self.node = node
+        super(RemoteCompileResult, self).__init__(
+            raw_sql=raw_sql,
+            compiled_sql=compiled_sql,
+            timing=timing,
+            **kwargs
+        )
+
+    @property
+    def error(self):
+        return None
+
+
+REMOTE_RUN_RESULT_CONTRACT = deep_merge(REMOTE_COMPILE_RESULT_CONTRACT, {
+    'properties': {
+        'table': {
+            'type': 'object',
+            'properties': {
+                'column_names': {
+                    'type': 'array',
+                    'items': {'type': 'string'},
+                },
+                'rows': {
+                    'type': 'array',
+                    # any item type is ok
+                },
+            },
+            'required': ['rows', 'column_names'],
+        },
+    },
+    'required': ['table'],
+})
+
+
+class RemoteRunResult(RemoteCompileResult):
+    SCHEMA = REMOTE_RUN_RESULT_CONTRACT
+
+    def __init__(self, raw_sql, compiled_sql, node, timing=None, table=None):
+        if table is None:
+            table = []
+        super(RemoteRunResult, self).__init__(
+            raw_sql=raw_sql,
+            compiled_sql=compiled_sql,
+            timing=timing,
+            table=table,
+            node=node
+        )

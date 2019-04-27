@@ -6,10 +6,10 @@ from dbt.include.global_project import DOCS_INDEX_FILE_PATH
 from dbt.compat import SimpleHTTPRequestHandler, TCPServer
 from dbt.logger import GLOBAL_LOGGER as logger
 
-from dbt.task.base_task import BaseTask
+from dbt.task.base import ProjectOnlyTask
 
 
-class ServeTask(BaseTask):
+class ServeTask(ProjectOnlyTask):
     def run(self):
         os.chdir(self.config.target_path)
 
@@ -31,7 +31,7 @@ class ServeTask(BaseTask):
 
         try:
             webbrowser.open_new_tab('http://127.0.0.1:{}'.format(port))
-        except webbrowser.Error as e:
+        except webbrowser.Error:
             pass
 
         try:

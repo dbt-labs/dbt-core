@@ -1,5 +1,4 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 
 class TestSimpleSeedColumnOverride(DBTIntegrationTest):
@@ -40,7 +39,7 @@ class TestSimpleSeedColumnOverridePostgres(TestSimpleSeedColumnOverride):
             "birthday": "date",
         }
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_simple_seed_with_column_override_postgres(self):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
@@ -63,7 +62,7 @@ class TestSimpleSeedColumnOverrideSnowflake(TestSimpleSeedColumnOverride):
     def profile_config(self):
         return self.snowflake_profile()
 
-    @attr(type='snowflake')
+    @use_profile('snowflake')
     def test_simple_seed_with_column_override_snowflake(self):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
@@ -86,7 +85,7 @@ class TestSimpleSeedColumnOverrideBQ(TestSimpleSeedColumnOverride):
     def profile_config(self):
         return self.bigquery_profile()
 
-    @attr(type='bigquery')
+    @use_profile('bigquery')
     def test_simple_seed_with_column_override_bigquery(self):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)

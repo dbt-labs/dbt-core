@@ -1,5 +1,3 @@
-import os
-
 from dbt.config.project import Project
 
 

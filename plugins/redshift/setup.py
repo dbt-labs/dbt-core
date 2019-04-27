@@ -3,7 +3,7 @@ from setuptools import find_packages
 from distutils.core import setup
 
 package_name = "dbt-redshift"
-package_version = "0.13.0a1"
+package_version = "0.13.0"
 description = """The redshift adapter plugin for dbt (data build tool)"""
 
 

@@ -1,5 +1,3 @@
-from dbt.logger import GLOBAL_LOGGER as logger
-
 import dbt.exceptions
 from importlib import import_module
 from dbt.include.global_project import PACKAGES
@@ -30,7 +28,7 @@ def get_relation_class_by_name(adapter_name):
 
 def load_plugin(adapter_name):
     try:
-        mod = import_module('.'+adapter_name, 'dbt.adapters')
+        mod = import_module('.' + adapter_name, 'dbt.adapters')
     except ImportError:
         raise dbt.exceptions.RuntimeException(
             "Could not find adapter type {}!".format(adapter_name)

@@ -1,5 +1,6 @@
 from dbt.api import APIObject
 from dbt.utils import filter_null_values
+from dbt.node_types import NodeType
 
 import dbt.exceptions
 
@@ -30,7 +31,7 @@ class BaseRelation(APIObject):
             'database': True,
             'schema': True,
             'identifier': True
-        }
+        },
     }
 
     PATH_SCHEMA = {
@@ -38,7 +39,7 @@ class BaseRelation(APIObject):
         'properties': {
             'database': {'type': ['string', 'null']},
             'schema': {'type': ['string', 'null']},
-            'identifier': {'type': 'string'},
+            'identifier': {'type': ['string', 'null']},
         },
         'required': ['database', 'schema', 'identifier'],
     }
@@ -135,6 +136,36 @@ class BaseRelation(APIObject):
 
         return self.incorporate(include_policy=policy)
 
+    def information_schema(self, identifier=None):
+        include_db = self.database is not None
+        include_policy = filter_null_values({
+            'database': include_db,
+            'schema': True,
+            'identifier': identifier is not None
+        })
+        quote_policy = filter_null_values({
+            'database': self.quote_policy['database'],
+            'schema': False,
+            'identifier': False,
+        })
+
+        path_update = {
+            'schema': 'information_schema',
+            'identifier': identifier
+        }
+
+        return self.incorporate(
+            quote_policy=quote_policy,
+            include_policy=include_policy,
+            path=path_update,
+            table_name=identifier)
+
+    def information_schema_only(self):
+        return self.information_schema()
+
+    def information_schema_table(self, identifier):
+        return self.information_schema(identifier)
+
     def render(self, use_table_name=True):
         parts = []
 
@@ -174,15 +205,16 @@ class BaseRelation(APIObject):
 
     @classmethod
     def create_from_source(cls, source, **kwargs):
+        quote_policy = dbt.utils.deep_merge(
+            cls.DEFAULTS['quote_policy'],
+            source.quoting,
+            kwargs.get('quote_policy', {})
+        )
         return cls.create(
             database=source.database,
             schema=source.schema,
             identifier=source.identifier,
-            quote_policy={
-                'database': True,
-                'schema': True,
-                'identifier': True,
-            },
+            quote_policy=quote_policy,
             **kwargs
         )
 
@@ -201,6 +233,13 @@ class BaseRelation(APIObject):
             table_name=table_name,
             quote_policy=quote_policy,
             **kwargs)
+
+    @classmethod
+    def create_from(cls, config, node, **kwargs):
+        if node.resource_type == NodeType.Source:
+            return cls.create_from_source(node, **kwargs)
+        else:
+            return cls.create_from_node(config, node, **kwargs)
 
     @classmethod
     def create(cls, database=None, schema=None,
@@ -264,3 +303,91 @@ class BaseRelation(APIObject):
     @property
     def is_view(self):
         return self.type == self.View
+
+
+class Column(object):
+    TYPE_LABELS = {
+        'STRING': 'TEXT',
+        'TIMESTAMP': 'TIMESTAMP',
+        'FLOAT': 'FLOAT',
+        'INTEGER': 'INT'
+    }
+
+    def __init__(self, column, dtype, char_size=None, numeric_precision=None,
+                 numeric_scale=None):
+        self.column = column
+        self.dtype = dtype
+        self.char_size = char_size
+        self.numeric_precision = numeric_precision
+        self.numeric_scale = numeric_scale
+
+    @classmethod
+    def translate_type(cls, dtype):
+        return cls.TYPE_LABELS.get(dtype.upper(), dtype)
+
+    @classmethod
+    def create(cls, name, label_or_dtype):
+        column_type = cls.translate_type(label_or_dtype)
+        return cls(name, column_type)
+
+    @property
+    def name(self):
+        return self.column
+
+    @property
+    def quoted(self):
+        return '"{}"'.format(self.column)
+
+    @property
+    def data_type(self):
+        if self.is_string():
+            return Column.string_type(self.string_size())
+        elif self.is_numeric():
+            return Column.numeric_type(self.dtype, self.numeric_precision,
+                                       self.numeric_scale)
+        else:
+            return self.dtype
+
+    def is_string(self):
+        return self.dtype.lower() in ['text', 'character varying', 'character',
+                                      'varchar']
+
+    def is_numeric(self):
+        return self.dtype.lower() in ['numeric', 'number']
+
+    def string_size(self):
+        if not self.is_string():
+            raise RuntimeError("Called string_size() on non-string field!")
+
+        if self.dtype == 'text' or self.char_size is None:
+            # char_size should never be None. Handle it reasonably just in case
+            return 255
+        else:
+            return int(self.char_size)
+
+    def can_expand_to(self, other_column):
+        """returns True if this column can be expanded to the size of the
+        other column"""
+        if not self.is_string() or not other_column.is_string():
+            return False
+
+        return other_column.string_size() > self.string_size()
+
+    def literal(self, value):
+        return "{}::{}".format(value, self.data_type)
+
+    @classmethod
+    def string_type(cls, size):
+        return "character varying({})".format(size)
+
+    @classmethod
+    def numeric_type(cls, dtype, precision, scale):
+        # This could be decimal(...), numeric(...), number(...)
+        # Just use whatever was fed in here -- don't try to get too clever
+        if precision is None or scale is None:
+            return dtype
+        else:
+            return "{}({},{})".format(dtype, precision, scale)
+
+    def __repr__(self):
+        return "<Column {} ({})>".format(self.name, self.data_type)
