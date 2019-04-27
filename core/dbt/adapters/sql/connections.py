@@ -30,30 +30,31 @@ class SQLConnectionManager(BaseConnectionManager):
 
     def cancel_open(self):
         names = []
-        this_connection = self.get_if_exists()
         with self.lock:
-            for connection in self.thread_connections.values():
-                if connection is this_connection:
+            for name, connection in self.in_use.items():
+                if name == 'master':
                     continue
 
                 self.cancel(connection)
-                names.append(connection.name)
+                names.append(name)
         return names
 
-    def add_query(self, sql, auto_begin=True, bindings=None,
+    def add_query(self, sql, name=None, auto_begin=True, bindings=None,
                   abridge_sql_log=False):
-        connection = self.get_thread_connection()
+        connection = self.get(name)
+        connection_name = connection.name
+
         if auto_begin and connection.transaction_open is False:
-            self.begin()
+            self.begin(connection_name)
 
         logger.debug('Using {} connection "{}".'
-                     .format(self.TYPE, connection.name))
+                     .format(self.TYPE, connection_name))
 
-        with self.exception_handler(sql):
+        with self.exception_handler(sql, connection_name):
             if abridge_sql_log:
-                logger.debug('On %s: %s....', connection.name, sql[0:512])
+                logger.debug('On %s: %s....', connection_name, sql[0:512])
             else:
-                logger.debug('On %s: %s', connection.name, sql)
+                logger.debug('On %s: %s', connection_name, sql)
             pre = time.time()
 
             cursor = connection.handle.cursor()
@@ -89,8 +90,9 @@ class SQLConnectionManager(BaseConnectionManager):
 
         return dbt.clients.agate_helper.table_from_data(data, column_names)
 
-    def execute(self, sql, auto_begin=False, fetch=False):
-        _, cursor = self.add_query(sql, auto_begin)
+    def execute(self, sql, name=None, auto_begin=False, fetch=False):
+        self.get(name)
+        _, cursor = self.add_query(sql, name, auto_begin)
         status = self.get_status(cursor)
         if fetch:
             table = self.get_result_from_cursor(cursor)
@@ -98,14 +100,14 @@ class SQLConnectionManager(BaseConnectionManager):
             table = dbt.clients.agate_helper.empty_table()
         return status, table
 
-    def add_begin_query(self):
-        return self.add_query('BEGIN', auto_begin=False)
+    def add_begin_query(self, name):
+        return self.add_query('BEGIN', name, auto_begin=False)
 
-    def add_commit_query(self):
-        return self.add_query('COMMIT', auto_begin=False)
+    def add_commit_query(self, name):
+        return self.add_query('COMMIT', name, auto_begin=False)
 
-    def begin(self):
-        connection = self.get_thread_connection()
+    def begin(self, name):
+        connection = self.get(name)
 
         if dbt.flags.STRICT_MODE:
             assert isinstance(connection, Connection)
@@ -115,15 +117,19 @@ class SQLConnectionManager(BaseConnectionManager):
                 'Tried to begin a new transaction on connection "{}", but '
                 'it already had one open!'.format(connection.get('name')))
 
-        self.add_begin_query()
+        self.add_begin_query(name)
 
         connection.transaction_open = True
+        self.in_use[name] = connection
+
         return connection
 
-    def commit(self):
-        connection = self.get_thread_connection()
+    def commit(self, connection):
+
         if dbt.flags.STRICT_MODE:
             assert isinstance(connection, Connection)
+
+        connection = self.get(connection.name)
 
         if connection.transaction_open is False:
             raise dbt.exceptions.InternalException(
@@ -131,8 +137,9 @@ class SQLConnectionManager(BaseConnectionManager):
                 'it does not have one open!'.format(connection.name))
 
         logger.debug('On {}: COMMIT'.format(connection.name))
-        self.add_commit_query()
+        self.add_commit_query(connection.name)
 
         connection.transaction_open = False
+        self.in_use[connection.name] = connection
 
         return connection

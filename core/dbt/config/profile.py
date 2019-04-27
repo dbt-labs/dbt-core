@@ -335,12 +335,14 @@ class Profile(object):
         )
 
     @classmethod
-    def from_args(cls, args, project_profile_name=None):
+    def from_args(cls, args, project_profile_name=None, cli_vars=None):
         """Given the raw profiles as read from disk and the name of the desired
         profile if specified, return the profile component of the runtime
         config.
 
         :param args argparse.Namespace: The arguments as parsed from the cli.
+        :param cli_vars dict: The command-line variables passed as arguments,
+            as a dict.
         :param project_profile_name Optional[str]: The profile name, if
             specified in a project.
         :raises DbtProjectError: If there is no profile name specified in the
@@ -350,7 +352,9 @@ class Profile(object):
             target could not be found.
         :returns Profile: The new Profile object.
         """
-        cli_vars = parse_cli_vars(getattr(args, 'vars', '{}'))
+        if cli_vars is None:
+            cli_vars = parse_cli_vars(getattr(args, 'vars', '{}'))
+
         threads_override = getattr(args, 'threads', None)
         target_override = getattr(args, 'target', None)
         raw_profiles = read_profile(args.profiles_dir)

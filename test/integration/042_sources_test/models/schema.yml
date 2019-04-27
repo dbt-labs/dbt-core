@@ -14,8 +14,6 @@ sources:
       warn_after: {count: 10, period: hour}
       error_after: {count: 1, period: day}
     schema: "{{ var(env_var('DBT_TEST_SCHEMA_NAME_VARIABLE')) }}"
-    quoting:
-      identifier: True
     tables:
       - name: test_table
         identifier: source
@@ -48,8 +46,6 @@ sources:
         identifier: other_table
   - name: other_source
     schema: "{{ var('test_run_schema') }}"
-    quoting:
-      identifier: True
     tables:
       - name: test_table
         identifier: other_source_table

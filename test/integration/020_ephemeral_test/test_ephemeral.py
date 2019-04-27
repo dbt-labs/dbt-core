@@ -1,4 +1,5 @@
-from test.integration.base import DBTIntegrationTest, use_profile
+from nose.plugins.attrib import attr
+from test.integration.base import DBTIntegrationTest
 
 
 class TestEphemeral(DBTIntegrationTest):
@@ -10,7 +11,7 @@ class TestEphemeral(DBTIntegrationTest):
     def models(self):
         return "test/integration/020_ephemeral_test/models"
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test__postgres(self):
         self.run_sql_file("test/integration/020_ephemeral_test/seed.sql")
 
@@ -21,7 +22,7 @@ class TestEphemeral(DBTIntegrationTest):
         self.assertTablesEqual("seed", "double_dependent")
         self.assertTablesEqual("seed", "super_dependent")
 
-    @use_profile('snowflake')
+    @attr(type='snowflake')
     def test__snowflake(self):
         self.run_sql_file("test/integration/020_ephemeral_test/seed.sql")
 
@@ -41,7 +42,7 @@ class TestEphemeralErrorHandling(DBTIntegrationTest):
     def models(self):
         return "test/integration/020_ephemeral_test/ephemeral-errors"
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test__postgres_upstream_error(self):
         self.run_sql_file("test/integration/020_ephemeral_test/seed.sql")
 

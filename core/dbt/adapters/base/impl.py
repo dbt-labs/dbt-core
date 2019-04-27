@@ -1,5 +1,7 @@
 import abc
-from contextlib import contextmanager
+import copy
+import multiprocessing
+import time
 
 import agate
 import pytz
@@ -7,17 +9,19 @@ import six
 
 import dbt.exceptions
 import dbt.flags
+import dbt.schema
 import dbt.clients.agate_helper
 
 from dbt.compat import abstractclassmethod, classmethod
-from dbt.node_types import NodeType
+from dbt.contracts.connection import Connection
 from dbt.loader import GraphLoader
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.utils import filter_null_values
+from dbt.schema import Column
+from dbt.utils import filter_null_values, translate_aliases
 
-from dbt.adapters.base.meta import AdapterMeta, available, available_deprecated
+from dbt.adapters.base.meta import AdapterMeta, available, available_raw, \
+    available_deprecated
 from dbt.adapters.base import BaseRelation
-from dbt.adapters.base import Column
 from dbt.adapters.cache import RelationsCache
 
 
@@ -65,74 +69,14 @@ def _catalog_filter_schemas(manifest):
     return test
 
 
-def _utc(dt, source, field_name):
+def _utc(dt):
     """If dt has a timezone, return a new datetime that's in UTC. Otherwise,
     assume the datetime is already for UTC and add the timezone.
     """
-    if dt is None:
-        raise dbt.exceptions.raise_database_error(
-            "Expected a non-null value when querying field '{}' of table "
-            " {} but received value 'null' instead".format(
-                field_name,
-                source))
-
-    elif not hasattr(dt, 'tzinfo'):
-        raise dbt.exceptions.raise_database_error(
-            "Expected a timestamp value when querying field '{}' of table "
-            "{} but received value of type '{}' instead".format(
-                field_name,
-                source,
-                type(dt).__name__))
-
-    elif dt.tzinfo:
+    if dt.tzinfo:
         return dt.astimezone(pytz.UTC)
     else:
         return dt.replace(tzinfo=pytz.UTC)
-
-
-class SchemaSearchMap(dict):
-    """A utility class to keep track of what information_schema tables to
-    search for what schemas
-    """
-    def add(self, relation):
-        key = relation.information_schema_only()
-        if key not in self:
-            self[key] = set()
-        self[key].add(relation.schema.lower())
-
-    def search(self):
-        for information_schema_name, schemas in self.items():
-            for schema in schemas:
-                yield information_schema_name, schema
-
-    def schemas_searched(self):
-        result = set()
-        for information_schema_name, schemas in self.items():
-            result.update(
-                (information_schema_name.database, schema)
-                for schema in schemas
-            )
-        return result
-
-    def flatten(self):
-        new = self.__class__()
-
-        database = None
-        # iterate once to look for a database name
-        seen = {r.database.lower() for r in self if r.database}
-        if len(seen) > 1:
-            dbt.exceptions.raise_compiler_error(str(seen))
-        elif len(seen) == 1:
-            database = list(seen)[0]
-
-        for information_schema_name, schema in self.search():
-            new.add(information_schema_name.incorporate(
-                path={'database': database, 'schema': schema},
-                quote_policy={'database': False},
-                include_policy={'database': False},
-            ))
-
-        return new
 
 
 @six.add_metaclass(AdapterMeta)
@@ -192,40 +136,29 @@ class BaseAdapter(object):
     ###
     # Methods that pass through to the connection manager
     ###
-    def acquire_connection(self, name=None):
-        return self.connections.set_connection_name(name)
+    def acquire_connection(self, name):
+        return self.connections.get(name)
 
-    def release_connection(self):
-        return self.connections.release()
+    def release_connection(self, name):
+        return self.connections.release(name)
 
     def cleanup_connections(self):
         return self.connections.cleanup_all()
 
-    def clear_transaction(self):
-        self.connections.clear_transaction()
+    def clear_transaction(self, conn_name='master'):
+        return self.connections.clear_transaction(conn_name)
 
-    def commit_if_has_connection(self):
-        return self.connections.commit_if_has_connection()
-
-    def nice_connection_name(self):
-        conn = self.connections.get_thread_connection()
-        if conn is None or conn.name is None:
-            return '<None>'
-        return conn.name
-
-    @contextmanager
-    def connection_named(self, name):
-        try:
-            yield self.acquire_connection(name)
-        finally:
-            self.release_connection()
+    def commit_if_has_connection(self, name):
+        return self.connections.commit_if_has_connection(name)
 
     @available
-    def execute(self, sql, auto_begin=False, fetch=False):
+    def execute(self, sql, model_name=None, auto_begin=False, fetch=False):
         """Execute the given SQL. This is a thin wrapper around
         ConnectionManager.execute.
 
         :param str sql: The sql to execute.
+        :param Optional[str] model_name: The model name to use for the
+            connection.
         :param bool auto_begin: If set, and dbt is not currently inside a
             transaction, automatically begin one.
         :param bool fetch: If set, fetch results.
@@ -234,6 +167,7 @@ class BaseAdapter(object):
         """
         return self.connections.execute(
             sql=sql,
+            name=model_name,
             auto_begin=auto_begin,
             fetch=fetch
         )
@@ -267,15 +201,14 @@ class BaseAdapter(object):
     ###
     # Caching methods
     ###
-    def _schema_is_cached(self, database, schema):
+    def _schema_is_cached(self, database, schema, model_name=None):
         """Check if the schema is cached, and by default logs if it is not."""
-
         if dbt.flags.USE_CACHE is False:
             return False
         elif (database, schema) not in self.cache:
             logger.debug(
                 'On "{}": cache miss for schema "{}.{}", this is inefficient'
-                .format(self.nice_connection_name(), database, schema)
+                .format(model_name or '<None>', database, schema)
             )
             return False
         else:
@@ -289,27 +222,6 @@ class BaseAdapter(object):
         """
         return table.where(_relations_filter_schemas(schemas))
 
-    def _get_cache_schemas(self, manifest, exec_only=False):
-        """Get a mapping of each node's "information_schema" relations to a
-        set of all schemas expected in that information_schema.
-
-        There may be keys that are technically duplicates on the database side,
-        for example all of '"foo", 'foo', '"FOO"' and 'FOO' could coexist as
-        databases, and values could overlap as appropriate. All values are
-        lowercase strings.
-        """
-        info_schema_name_map = SchemaSearchMap()
-        for node in manifest.nodes.values():
-            if exec_only and node.resource_type not in NodeType.executable():
-                continue
-            relation = self.Relation.create_from(self.config, node)
-            info_schema_name_map.add(relation)
-        # result is a map whose keys are information_schema Relations without
-        # identifiers that have appropriate database prefixes, and whose values
-        # are sets of lowercase schema names that are valid members of those
-        # schemas
-        return info_schema_name_map
-
     def _relations_cache_for_schemas(self, manifest):
         """Populate the relations cache for the given schemas. Returns an
         iteratble of the schemas populated, as strings.
@@ -317,16 +229,17 @@ class BaseAdapter(object):
         if not dbt.flags.USE_CACHE:
             return
 
-        info_schema_name_map = self._get_cache_schemas(manifest,
-                                                       exec_only=True)
-        for db, schema in info_schema_name_map.search():
+        schemas = manifest.get_used_schemas()
+
+        relations = []
+        # add all relations
+        for db, schema in schemas:
             for relation in self.list_relations_without_caching(db, schema):
                 self.cache.add(relation)
-
         # it's possible that there were no relations in some schemas. We want
         # to insert the schemas we query into the cache's `.schemas` attribute
         # so we can check it later
-        self.cache.update_schemas(info_schema_name_map.schemas_searched())
+        self.cache.update_schemas(schemas)
 
     def set_relations_cache(self, manifest, clear=False):
         """Run a query that gets a populated cache of the relations in the
@@ -340,12 +253,11 @@ class BaseAdapter(object):
                 self.cache.clear()
             self._relations_cache_for_schemas(manifest)
 
-    def cache_new_relation(self, relation):
+    def cache_new_relation(self, relation, model_name=None):
         """Cache a new relation in dbt. It will show up in `list relations`."""
         if relation is None:
-            name = self.nice_connection_name()
             dbt.exceptions.raise_compiler_error(
-                'Attempted to cache a null relation for {}'.format(name)
+                'Attempted to cache a null relation for {}'.format(model_name)
             )
         if dbt.flags.USE_CACHE:
             self.cache.add(relation)
@@ -375,10 +287,11 @@ class BaseAdapter(object):
     # Abstract methods about schemas
     ###
     @abc.abstractmethod
-    def list_schemas(self, database):
+    def list_schemas(self, database, model_name=None):
         """Get a list of existing schemas.
 
         :param str database: The name of the database to list under.
+        :param Optional[str] model_name: The name of the connection to query as
         :return: All schemas that currently exist in the database
         :rtype: List[str]
         """
@@ -386,7 +299,7 @@ class BaseAdapter(object):
             '`list_schemas` is not implemented for this adapter!'
         )
 
-    def check_schema_exists(self, database, schema):
+    def check_schema_exists(self, database, schema, model_name=None):
         """Check if a schema exists.
 
         The default implementation of this is potentially unnecessarily slow,
@@ -395,7 +308,7 @@ class BaseAdapter(object):
         """
         search = (
             s.lower() for s in
-            self.list_schemas(database=database)
+            self.list_schemas(database=database, model_name=model_name)
         )
         return schema.lower() in search
 
@@ -404,12 +317,14 @@ class BaseAdapter(object):
     ###
     @abc.abstractmethod
     @available
-    def drop_relation(self, relation):
+    def drop_relation(self, relation, model_name=None):
         """Drop the given relation.
 
         *Implementors must call self.cache.drop() to preserve cache state!*
 
         :param self.Relation relation: The relation to drop
+        :param Optional[str] model_name: The name of the model to use for the
+            connection.
         """
         raise dbt.exceptions.NotImplementedException(
             '`drop_relation` is not implemented for this adapter!'
@@ -417,24 +332,27 @@ class BaseAdapter(object):
 
     @abc.abstractmethod
     @available
-    def truncate_relation(self, relation):
+    def truncate_relation(self, relation, model_name=None):
         """Truncate the given relation.
 
         :param self.Relation relation: The relation to truncate
-        """
+        :param Optional[str] model_name: The name of the model to use for the
+            connection."""
         raise dbt.exceptions.NotImplementedException(
             '`truncate_relation` is not implemented for this adapter!'
         )
 
     @abc.abstractmethod
     @available
-    def rename_relation(self, from_relation, to_relation):
+    def rename_relation(self, from_relation, to_relation, model_name=None):
         """Rename the relation from from_relation to to_relation.
 
         Implementors must call self.cache.rename() to preserve cache state.
 
         :param self.Relation from_relation: The original relation name
         :param self.Relation to_relation: The new relation name
+        :param Optional[str] model_name: The name of the model to use for the
+            connection.
         """
         raise dbt.exceptions.NotImplementedException(
             '`rename_relation` is not implemented for this adapter!'
@@ -442,10 +360,12 @@ class BaseAdapter(object):
 
     @abc.abstractmethod
     @available
-    def get_columns_in_relation(self, relation):
+    def get_columns_in_relation(self, relation, model_name=None):
         """Get a list of the columns in the given Relation.
 
         :param self.Relation relation: The relation to query for.
+        :param Optional[str] model_name: The name of the model to use for the
+            connection.
         :return: Information about all columns in the given relation.
         :rtype: List[self.Column]
         """
@@ -454,7 +374,7 @@ class BaseAdapter(object):
         )
 
     @available_deprecated('get_columns_in_relation')
-    def get_columns_in_table(self, schema, identifier):
+    def get_columns_in_table(self, schema, identifier, model_name=None):
         """DEPRECATED: Get a list of the columns in the given table."""
         relation = self.Relation.create(
             database=self.config.credentials.database,
@@ -462,30 +382,34 @@ class BaseAdapter(object):
             identifier=identifier,
             quote_policy=self.config.quoting
         )
-        return self.get_columns_in_relation(relation)
+        return self.get_columns_in_relation(relation, model_name=model_name)
 
     @abc.abstractmethod
-    def expand_column_types(self, goal, current):
+    def expand_column_types(self, goal, current, model_name=None):
         """Expand the current table's types to match the goal table. (passable)
 
         :param self.Relation goal: A relation that currently exists in the
             database with columns of the desired types.
         :param self.Relation current: A relation that currently exists in the
             database with columns of unspecified types.
+        :param Optional[str] model_name: The name of the model to use for the
+            connection.
         """
         raise dbt.exceptions.NotImplementedException(
             '`expand_target_column_types` is not implemented for this adapter!'
         )
 
     @abc.abstractmethod
-    def list_relations_without_caching(self, information_schema, schema):
+    def list_relations_without_caching(self, database, schema,
+                                       model_name=None):
         """List relations in the given schema, bypassing the cache.
 
         This is used as the underlying behavior to fill the cache.
 
-        :param Relation information_schema: The information schema to list
-            relations from.
+        :param str database: The name of the database to list relations from.
         :param str schema: The name of the schema to list relations from.
+        :param Optional[str] model_name: The name of the model to use for the
+            connection.
         :return: The relations in schema
         :retype: List[self.Relation]
         """
@@ -498,7 +422,7 @@ class BaseAdapter(object):
     # Provided methods about relations
     ###
     @available
-    def get_missing_columns(self, from_relation, to_relation):
+    def get_missing_columns(self, from_relation, to_relation, model_name=None):
         """Returns dict of {column:type} for columns in from_table that are
         missing from to_relation
         """
@@ -518,12 +442,12 @@ class BaseAdapter(object):
 
         from_columns = {
             col.name: col for col in
-            self.get_columns_in_relation(from_relation)
+            self.get_columns_in_relation(from_relation, model_name=model_name)
         }
 
         to_columns = {
             col.name: col for col in
-            self.get_columns_in_relation(to_relation)
+            self.get_columns_in_relation(to_relation, model_name=model_name)
         }
 
         missing_columns = set(from_columns.keys()) - set(to_columns.keys())
@@ -534,49 +458,8 @@ class BaseAdapter(object):
         ]
 
     @available
-    def valid_archive_target(self, relation):
-        """Ensure that the target relation is valid, by making sure it has the
-        expected columns.
-
-        :param Relation relation: The relation to check
-        :raises dbt.exceptions.CompilationException: If the columns are
-            incorrect.
-        """
-        if not isinstance(relation, self.Relation):
-            dbt.exceptions.invalid_type_error(
-                method_name='is_existing_old_style_archive',
-                arg_name='relation',
-                got_value=relation,
-                expected_type=self.Relation)
-
-        columns = self.get_columns_in_relation(relation)
-        names = set(c.name.lower() for c in columns)
-        expanded_keys = ('scd_id', 'valid_from', 'valid_to')
-        extra = []
-        missing = []
-        for legacy in expanded_keys:
-            desired = 'dbt_' + legacy
-            if desired not in names:
-                missing.append(desired)
-                if legacy in names:
-                    extra.append(legacy)
-
-        if missing:
-            if extra:
-                msg = (
-                    'Archive target has ("{}") but not ("{}") - is it an '
-                    'unmigrated previous version archive?'
-                    .format('", "'.join(extra), '", "'.join(missing))
-                )
-            else:
-                msg = (
-                    'Archive target is not an archive table (missing "{}")'
-                    .format('", "'.join(missing))
-                )
-            dbt.exceptions.raise_compiler_error(msg)
-
-    @available
-    def expand_target_column_types(self, temp_table, to_relation):
+    def expand_target_column_types(self, temp_table, to_relation,
+                                   model_name=None):
         if not isinstance(to_relation, self.Relation):
             dbt.exceptions.invalid_type_error(
                 method_name='expand_target_column_types',
@@ -591,25 +474,20 @@ class BaseAdapter(object):
             type='table',
             quote_policy=self.config.quoting
         )
-        self.expand_column_types(goal, to_relation)
+        self.expand_column_types(goal, to_relation, model_name)
 
-    def list_relations(self, database, schema):
-        if self._schema_is_cached(database, schema):
+    def list_relations(self, database, schema, model_name=None):
+        if self._schema_is_cached(database, schema, model_name):
             return self.cache.get_relations(database, schema)
-
-        information_schema = self.Relation.create(
-            database=database,
-            schema=schema,
-            model_name='').information_schema()
 
         # we can't build the relations cache because we don't have a
         # manifest so we can't run any operations.
         relations = self.list_relations_without_caching(
-            information_schema, schema
+            database, schema, model_name=model_name
         )
 
-        logger.debug('with database={}, schema={}, relations={}'
-                     .format(database, schema, relations))
+        logger.debug('with schema={}, model_name={}, relations={}'
+                     .format(schema, model_name, relations))
         return relations
 
     def _make_match_kwargs(self, database, schema, identifier):
@@ -642,8 +520,8 @@ class BaseAdapter(object):
         return matches
 
     @available
-    def get_relation(self, database, schema, identifier):
-        relations_list = self.list_relations(database, schema)
+    def get_relation(self, database, schema, identifier, model_name=None):
+        relations_list = self.list_relations(database, schema, model_name)
 
         matches = self._make_match(relations_list, database, schema,
                                    identifier)
@@ -664,10 +542,11 @@ class BaseAdapter(object):
         return None
 
     @available_deprecated('get_relation')
-    def already_exists(self, schema, name):
+    def already_exists(self, schema, name, model_name=None):
         """DEPRECATED: Return if a model already exists in the database"""
         database = self.config.credentials.database
-        relation = self.get_relation(database, schema, name)
+        relation = self.get_relation(database, schema, name,
+                                     model_name=model_name)
         return relation is not None
 
     ###
@@ -676,26 +555,30 @@ class BaseAdapter(object):
     ###
     @abc.abstractmethod
     @available
-    def create_schema(self, database, schema):
+    def create_schema(self, database, schema, model_name=None):
         """Create the given schema if it does not exist.
 
         :param str schema: The schema name to create.
+        :param Optional[str] model_name: The name of the model to use for the
+            connection.
         """
         raise dbt.exceptions.NotImplementedException(
             '`create_schema` is not implemented for this adapter!'
         )
 
     @abc.abstractmethod
-    def drop_schema(self, database, schema):
+    def drop_schema(self, database, schema, model_name=None):
         """Drop the given schema (and everything in it) if it exists.
 
         :param str schema: The schema name to drop.
+        :param Optional[str] model_name: The name of the model to use for the
+            connection.
         """
         raise dbt.exceptions.NotImplementedException(
             '`drop_schema` is not implemented for this adapter!'
         )
 
-    @available
+    @available_raw
     @abstractclassmethod
     def quote(cls, identifier):
         """Quote the given identifier, as appropriate for the database.
@@ -709,7 +592,7 @@ class BaseAdapter(object):
         )
 
     @available
-    def quote_as_configured(self, identifier, quote_key):
+    def quote_as_configured(self, identifier, quote_key, model_name=None):
         """Quote or do not quote the given identifer as configured in the
         project config for the quote key.
 
@@ -804,7 +687,7 @@ class BaseAdapter(object):
         raise dbt.exceptions.NotImplementedException(
             '`convert_time_type` is not implemented for this adapter!')
 
-    @available
+    @available_raw
     @classmethod
     def convert_type(cls, agate_table, col_idx):
         return cls.convert_agate_type(agate_table, col_idx)
@@ -828,7 +711,8 @@ class BaseAdapter(object):
     # Operations involving the manifest
     ###
     def execute_macro(self, macro_name, manifest=None, project=None,
-                      context_override=None, kwargs=None, release=False):
+                      context_override=None, kwargs=None, release=False,
+                      connection_name=None):
         """Look macro_name up in the manifest and execute its results.
 
         :param str macro_name: The name of the macro to execute.
@@ -842,6 +726,8 @@ class BaseAdapter(object):
         :param Optional[dict] kwargs: An optional dict of keyword args used to
             pass to the macro.
         :param bool release: If True, release the connection after executing.
+        :param Optional[str] connection_name: The connection name to use, or
+            use the macro name.
 
         Return an an AttrDict with three attributes: 'table', 'data', and
             'status'. 'table' is an agate.Table.
@@ -850,30 +736,27 @@ class BaseAdapter(object):
             kwargs = {}
         if context_override is None:
             context_override = {}
+        if connection_name is None:
+            connection_name = macro_name
 
         if manifest is None:
             manifest = self._internal_manifest
 
         macro = manifest.find_macro_by_name(macro_name, project)
         if macro is None:
-            if project is None:
-                package_name = 'any package'
-            else:
-                package_name = 'the "{}" package'.format(project)
-
-            # The import of dbt.context.runtime below shadows 'dbt'
-            import dbt.exceptions
             raise dbt.exceptions.RuntimeException(
-                'dbt could not find a macro with the name "{}" in {}'
-                .format(macro_name, package_name)
+                'Could not find macro with name {} in project {}'
+                .format(macro_name, project)
             )
+
         # This causes a reference cycle, as dbt.context.runtime.generate()
         # ends up calling get_adapter, so the import has to be here.
         import dbt.context.runtime
         macro_context = dbt.context.runtime.generate_macro(
             macro,
             self.config,
-            manifest
+            manifest,
+            connection_name
         )
         macro_context.update(context_override)
 
@@ -883,7 +766,7 @@ class BaseAdapter(object):
             result = macro_function(**kwargs)
         finally:
             if release:
-                self.release_connection()
+                self.release_connection(connection_name)
         return result
 
     @classmethod
@@ -897,11 +780,10 @@ class BaseAdapter(object):
         """Get the catalog for this manifest by running the get catalog macro.
         Returns an agate.Table of catalog information.
         """
-        information_schemas = list(self._get_cache_schemas(manifest).keys())
         # make it a list so macros can index into it.
-        kwargs = {'information_schemas': information_schemas}
+        context = {'databases': list(manifest.get_used_databases())}
         table = self.execute_macro(GET_CATALOG_MACRO_NAME,
-                                   kwargs=kwargs,
+                                   context_override=context,
                                    release=True)
 
         results = self._catalog_filter_table(table, manifest)
@@ -911,7 +793,8 @@ class BaseAdapter(object):
         """Cancel all open connections."""
         return self.connections.cancel_open()
 
-    def calculate_freshness(self, source, loaded_at_field, manifest=None):
+    def calculate_freshness(self, source, loaded_at_field, manifest=None,
+                            connection_name=None):
         """Calculate the freshness of sources in dbt, and return it"""
         # in the future `source` will be a Relation instead of a string
         kwargs = {
@@ -924,7 +807,8 @@ class BaseAdapter(object):
             FRESHNESS_MACRO_NAME,
             kwargs=kwargs,
             release=True,
-            manifest=manifest
+            manifest=manifest,
+            connection_name=connection_name
         )
         # now we have a 1-row table of the maximum `loaded_at_field` value and
         # the current time according to the db.
@@ -932,12 +816,11 @@ class BaseAdapter(object):
             dbt.exceptions.raise_compiler_error(
                 'Got an invalid result from "{}" macro: {}'.format(
                     FRESHNESS_MACRO_NAME, [tuple(r) for r in table]
-                )
+                ),
+                node=node
             )
 
-        max_loaded_at = _utc(table[0][0], source, loaded_at_field)
-        snapshotted_at = _utc(table[0][1], source, loaded_at_field)
-
+        max_loaded_at, snapshotted_at = map(_utc, table[0])
         age = (snapshotted_at - max_loaded_at).total_seconds()
         return {
             'max_loaded_at': max_loaded_at,

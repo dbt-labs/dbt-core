@@ -1,3 +1,5 @@
+import copy
+import functools
 import json
 import os
 
@@ -11,9 +13,11 @@ from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 import dbt.clients.jinja
 import dbt.clients.agate_helper
 import dbt.flags
+import dbt.schema
 import dbt.tracking
-import dbt.writer
 import dbt.utils
+
+import dbt.hooks
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -32,11 +36,6 @@ class RelationProxy(object):
     def __getattr__(self, key):
         return getattr(self.relation_type, key)
 
-    def create_from_source(self, *args, **kwargs):
-        # bypass our create when creating from source so as not to mess up
-        # the source quoting
-        return self.relation_type.create_from_source(*args, **kwargs)
-
     def create(self, *args, **kwargs):
         kwargs['quote_policy'] = dbt.utils.merge(
             self.quoting_config,
@@ -47,15 +46,27 @@ class RelationProxy(object):
 
 class DatabaseWrapper(object):
     """
-    Wrapper for runtime database interaction. Applies the runtime quote policy
-    via a relation proxy.
+    Wrapper for runtime database interaction. Mostly a compatibility layer now.
     """
-    def __init__(self, adapter):
+    def __init__(self, connection_name, adapter):
+        self.connection_name = connection_name
         self.adapter = adapter
         self.Relation = RelationProxy(adapter)
 
+    def wrap(self, name):
+        func = getattr(self.adapter, name)
+
+        @functools.wraps(func)
+        def wrapped(*args, **kwargs):
+            kwargs['model_name'] = self.connection_name
+            return func(*args, **kwargs)
+
+        return wrapped
+
     def __getattr__(self, name):
-        if name in self.adapter._available_:
+        if name in self.adapter._available_model_:
+            return self.wrap(name)
+        elif name in self.adapter._available_raw_:
             return getattr(self.adapter, name)
         else:
             raise AttributeError(
@@ -72,7 +83,7 @@ class DatabaseWrapper(object):
         return self.adapter.type()
 
     def commit(self):
-        return self.adapter.commit_if_has_connection()
+        return self.adapter.commit_if_has_connection(self.connection_name)
 
 
 def _add_macro_map(context, package_name, macro_map):
@@ -297,14 +308,14 @@ def render(context, node):
 def fromjson(string, default=None):
     try:
         return json.loads(string)
-    except ValueError:
+    except ValueError as e:
         return default
 
 
 def tojson(value, default=None):
     try:
         return json.dumps(value)
-    except ValueError:
+    except ValueError as e:
         return default
 
 
@@ -312,7 +323,7 @@ def try_or_compiler_error(model):
     def impl(message_if_exception, func, *args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except Exception:
+        except Exception as e:
             dbt.exceptions.raise_compiler_error(message_if_exception, model)
     return impl
 
@@ -348,7 +359,7 @@ def get_datetime_module_context():
 
 
 def generate_base(model, model_dict, config, manifest, source_config,
-                  provider, adapter=None):
+                  provider, connection_name):
     """Generate the common aspects of the config dict."""
     if provider is None:
         raise dbt.exceptions.InternalException(
@@ -361,7 +372,6 @@ def generate_base(model, model_dict, config, manifest, source_config,
     target['type'] = config.credentials.type
     target.pop('pass', None)
     target['name'] = target_name
-
     adapter = get_adapter(config)
 
     context = {'env': target}
@@ -369,7 +379,7 @@ def generate_base(model, model_dict, config, manifest, source_config,
     pre_hooks = None
     post_hooks = None
 
-    db_wrapper = DatabaseWrapper(adapter)
+    db_wrapper = DatabaseWrapper(connection_name, adapter)
 
     context = dbt.utils.merge(context, {
         "adapter": db_wrapper,
@@ -381,7 +391,7 @@ def generate_base(model, model_dict, config, manifest, source_config,
         "config": provider.Config(model_dict, source_config),
         "database": config.credentials.database,
         "env_var": env_var,
-        "exceptions": dbt.exceptions.wrapped_exports(model),
+        "exceptions": dbt.exceptions.CONTEXT_EXPORTS,
         "execute": provider.execute,
         "flags": dbt.flags,
         # TODO: Do we have to leave this in?
@@ -428,7 +438,7 @@ def modify_generated_context(context, model, model_dict, config, manifest):
     return context
 
 
-def generate_execute_macro(model, config, manifest, provider):
+def generate_execute_macro(model, config, manifest, provider, connection_name):
     """Internally, macros can be executed like nodes, with some restrictions:
 
      - they don't have have all values available that nodes do:
@@ -437,8 +447,8 @@ def generate_execute_macro(model, config, manifest, provider):
      - they can't be configured with config() directives
     """
     model_dict = model.serialize()
-    context = generate_base(model, model_dict, config, manifest, None,
-                            provider)
+    context = generate_base(model, model_dict, config, manifest,
+                            None, provider, connection_name)
 
     return modify_generated_context(context, model, model_dict, config,
                                     manifest)
@@ -447,7 +457,7 @@ def generate_execute_macro(model, config, manifest, provider):
 def generate_model(model, config, manifest, source_config, provider):
     model_dict = model.to_dict()
     context = generate_base(model, model_dict, config, manifest,
-                            source_config, provider)
+                            source_config, provider, model.get('name'))
     # operations (hooks) don't get a 'this'
     if model.resource_type != NodeType.Operation:
         this = get_this_relation(context['adapter'], config, model_dict)
@@ -472,4 +482,5 @@ def generate(model, config, manifest, source_config=None, provider=None):
     or
         dbt.context.runtime.generate
     """
-    return generate_model(model, config, manifest, source_config, provider)
+    return generate_model(model, config, manifest, source_config,
+                          provider)

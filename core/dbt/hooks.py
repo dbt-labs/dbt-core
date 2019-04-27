@@ -12,7 +12,7 @@ class ModelHookType:
 def _parse_hook_to_dict(hook_string):
     try:
         hook_dict = json.loads(hook_string)
-    except ValueError:
+    except ValueError as e:
         hook_dict = {"sql": hook_string}
 
     if 'transaction' not in hook_dict:

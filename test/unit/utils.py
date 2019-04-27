@@ -3,17 +3,9 @@
 Note that all imports should be inside the functions to avoid import/mocking
 issues.
 """
-import mock
-
 
 class Obj(object):
     which = 'blah'
-
-
-def mock_connection(name):
-    conn = mock.MagicMock()
-    conn.name = name
-    return conn
 
 
 def config_from_parts_or_dicts(project, profile, packages=None, cli_vars='{}'):
@@ -37,12 +29,10 @@ def config_from_parts_or_dicts(project, profile, packages=None, cli_vars='{}'):
     )
 
 
-def inject_adapter(value):
+def inject_adapter(key, value):
     """Inject the given adapter into the adapter factory, so your hand-crafted
     artisanal adapter will be available from get_adapter() as if dbt loaded it.
     """
     from dbt.adapters import factory
-    from dbt.adapters.base.connections import BaseConnectionManager
-    key = value.type()
     factory._ADAPTERS[key] = value
     factory.ADAPTER_TYPES[key] = type(value)

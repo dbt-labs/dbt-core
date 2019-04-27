@@ -76,8 +76,8 @@ A short list of tools used in dbt testing that will be helpful to your understan
 - [tox](https://tox.readthedocs.io/en/latest/) to manage virtualenvs across python versions
 - [nosetests](http://nose.readthedocs.io/en/latest) to discover/run tests
 - [make](https://users.cs.duke.edu/~ola/courses/programming/Makefiles/Makefiles.html) - but don't worry too much, nobody _really_ understands how make works and our Makefile is super simple
-- [flake8](https://gitlab.com/pycqa/flake8) for code linting
-- [CircleCI](https://circleci.com/product/) and [Azure Pipelines](https://azure.microsoft.com/en-us/services/devops/pipelines/)
+- [pep8](https://pep8.readthedocs.io/en/release-1.7.x/) for code linting
+- [CircleCI](https://circleci.com/product/) and [Appveyor](https://www.appveyor.com/docs/)
 
 If you're unfamiliar with any or all of these, that's fine! You really do not have to have a deep understanding of any of these to get by.
 

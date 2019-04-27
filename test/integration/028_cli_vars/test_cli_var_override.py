@@ -1,4 +1,5 @@
-from test.integration.base import DBTIntegrationTest, use_profile
+from nose.plugins.attrib import attr
+from test.integration.base import DBTIntegrationTest
 import yaml
 
 
@@ -21,7 +22,7 @@ class TestCLIVarOverride(DBTIntegrationTest):
             }
         }
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test__overriden_vars_global(self):
         self.use_default_project()
         self.use_profile('postgres')
@@ -52,7 +53,7 @@ class TestCLIVarOverridePorject(DBTIntegrationTest):
             }
         }
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test__overriden_vars_project_level(self):
 
         # This should be "override"

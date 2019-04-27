@@ -26,7 +26,7 @@
           numeric_precision,
           numeric_scale
 
-      from {{ relation.information_schema('columns') }}
+      from {{ information_schema_name(relation.database) }}.columns
       where table_name = '{{ relation.identifier }}'
         {% if relation.schema %}
         and table_schema = '{{ relation.schema }}'
@@ -39,10 +39,10 @@
 {% endmacro %}
 
 
-{% macro postgres__list_relations_without_caching(information_schema, schema) %}
+{% macro postgres__list_relations_without_caching(database, schema) %}
   {% call statement('list_relations_without_caching', fetch_result=True) -%}
     select
-      '{{ information_schema.database.lower() }}' as database,
+      '{{ database }}' as database,
       tablename as name,
       schemaname as schema,
       'table' as type
@@ -50,7 +50,7 @@
     where schemaname ilike '{{ schema }}'
     union all
     select
-      '{{ information_schema.database.lower() }}' as database,
+      '{{ database }}' as database,
       viewname as name,
       schemaname as schema,
       'view' as type
@@ -77,9 +77,9 @@
   {{ return(load_result('list_schemas').table) }}
 {% endmacro %}
 
-{% macro postgres__check_schema_exists(information_schema, schema) -%}
+{% macro postgres__check_schema_exists(database, schema) -%}
   {% if database -%}
-    {{ adapter.verify_database(information_schema.database) }}
+    {{ adapter.verify_database(database) }}
   {%- endif -%}
   {% call statement('check_schema_exists', fetch_result=True, auto_begin=False) %}
     select count(*) from pg_namespace where nspname = '{{ schema }}'

@@ -72,7 +72,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
     TYPE = 'snowflake'
 
     @contextmanager
-    def exception_handler(self, sql):
+    def exception_handler(self, sql, connection_name='master'):
         try:
             yield
         except snowflake.connector.errors.ProgrammingError as e:
@@ -83,7 +83,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
             if 'Empty SQL statement' in msg:
                 logger.debug("got empty sql statement, moving on")
             elif 'This session does not have a current database' in msg:
-                self.release()
+                self.release(connection_name)
                 raise dbt.exceptions.FailedToConnectException(
                     ('{}\n\nThis error sometimes occurs when invalid '
                      'credentials are provided, or when your default role '
@@ -91,17 +91,12 @@ class SnowflakeConnectionManager(SQLConnectionManager):
                      'Please double check your profile and try again.')
                     .format(msg))
             else:
-                self.release()
+                self.release(connection_name)
                 raise dbt.exceptions.DatabaseException(msg)
         except Exception as e:
             logger.debug("Error running SQL: %s", sql)
             logger.debug("Rolling back transaction.")
-            self.release()
-            if isinstance(e, dbt.exceptions.RuntimeException):
-                # during a sql query, an internal to dbt exception was raised.
-                # this sounds a lot like a signal handler and probably has
-                # useful information, so raise it without modification.
-                raise
+            self.release(connection_name)
             raise dbt.exceptions.RuntimeException(e.msg)
 
     @classmethod
@@ -146,6 +141,8 @@ class SnowflakeConnectionManager(SQLConnectionManager):
 
             raise dbt.exceptions.FailedToConnectException(str(e))
 
+        return connection
+
     def cancel(self, connection):
         handle = connection.handle
         sid = handle.session_id
@@ -156,7 +153,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
 
         logger.debug("Cancelling query '{}' ({})".format(connection_name, sid))
 
-        _, cursor = self.add_query(sql)
+        _, cursor = self.add_query(sql, 'master')
         res = cursor.fetchone()
 
         logger.debug("Cancel query '{}': {}".format(connection_name, res))
@@ -196,7 +193,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption())
 
-    def add_query(self, sql, auto_begin=True,
+    def add_query(self, sql, model_name=None, auto_begin=True,
                   bindings=None, abridge_sql_log=False):
 
         connection = None
@@ -222,24 +219,21 @@ class SnowflakeConnectionManager(SQLConnectionManager):
 
             parent = super(SnowflakeConnectionManager, self)
             connection, cursor = parent.add_query(
-                individual_query, auto_begin,
+                individual_query, model_name, auto_begin,
                 bindings=bindings,
                 abridge_sql_log=abridge_sql_log
             )
 
         if cursor is None:
             raise dbt.exceptions.RuntimeException(
-                "Tried to run an empty query on model '{}'. If you are "
-                "conditionally running\nsql, eg. in a model hook, make "
-                "sure your `else` clause contains valid sql!\n\n"
-                "Provided SQL:\n{}"
-                .format(self.nice_connection_name(), sql)
-            )
+                    "Tried to run an empty query on model '{}'. If you are "
+                    "conditionally running\nsql, eg. in a model hook, make "
+                    "sure your `else` clause contains valid sql!\n\n"
+                    "Provided SQL:\n{}".format(model_name, sql))
 
         return connection, cursor
 
-    @classmethod
-    def _rollback_handle(cls, connection):
+    def _rollback_handle(self, connection):
         """On snowflake, rolling back the handle of an aborted session raises
         an exception.
         """

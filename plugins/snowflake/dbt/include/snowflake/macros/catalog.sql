@@ -1,8 +1,8 @@
 
-{% macro snowflake__get_catalog(information_schemas) -%}
+{% macro snowflake__get_catalog() -%}
 
     {%- call statement('catalog', fetch_result=True) -%}
-    {% for information_schema in information_schemas %}
+    {% for database in databases %}
 
         (
             with tables as (
@@ -31,7 +31,7 @@
                     'Approximate size of the table as reported by Snowflake' as "stats:bytes:description",
                     (bytes is not null) as "stats:bytes:include"
 
-                from {{ information_schema }}.tables
+                from {{ information_schema_name(database) }}.tables
 
             ),
 
@@ -48,7 +48,7 @@
                     data_type as "column_type",
                     null as "column_comment"
 
-                from {{ information_schema }}.columns
+                from {{ adapter.quote_as_configured(database, "database") }}.information_schema.columns
 
             )
 
@@ -56,6 +56,7 @@
             from tables
             join columns using ("table_database", "table_schema", "table_name")
             where "table_schema" != 'INFORMATION_SCHEMA'
+              and "table_database" = {{ adapter.quote_as_configured(database, "database").replace('"', "'") }}
             order by "column_index"
         )
         {% if not loop.last %} union all {% endif %}

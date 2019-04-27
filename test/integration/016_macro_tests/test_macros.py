@@ -1,4 +1,5 @@
-from test.integration.base import DBTIntegrationTest, use_profile
+from nose.plugins.attrib import attr
+from test.integration.base import DBTIntegrationTest
 
 
 class TestMacros(DBTIntegrationTest):
@@ -34,7 +35,7 @@ class TestMacros(DBTIntegrationTest):
             "macro-paths": ["test/integration/016_macro_tests/macros"],
         }
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test_working_macros(self):
         self.run_dbt(["deps"])
         results = self.run_dbt(["run"])
@@ -63,7 +64,7 @@ class TestInvalidMacros(DBTIntegrationTest):
             "macro-paths": ["test/integration/016_macro_tests/bad-macros"]
         }
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test_invalid_macro(self):
 
         try:
@@ -106,7 +107,7 @@ class TestMisusedMacros(DBTIntegrationTest):
     # fails, it does not raise a runtime exception. change this test to verify
     # that the model finished with ERROR state.
     #
-    # @use_profile('postgres')
+    # @attr(type='postgres')
     # def test_working_macros(self):
     #     self.run_dbt(["deps"])
 

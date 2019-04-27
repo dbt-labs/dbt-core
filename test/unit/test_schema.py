@@ -1,13 +1,12 @@
 import unittest
 
 import decimal
-
-from dbt.adapters.base import Column
+import dbt.schema
 
 class TestStringType(unittest.TestCase):
 
     def test__character_type(self):
-        col = Column(
+        col = dbt.schema.Column(
             'fieldname',
             'character',
             char_size=10
@@ -19,7 +18,7 @@ class TestStringType(unittest.TestCase):
 class TestNumericType(unittest.TestCase):
 
     def test__numeric_type(self):
-        col = Column(
+        col = dbt.schema.Column(
             'fieldname',
             'numeric',
             numeric_precision=decimal.Decimal('12'),
@@ -29,7 +28,7 @@ class TestNumericType(unittest.TestCase):
 
     def test__numeric_type_with_no_precision(self):
         # PostgreSQL, at least, will allow empty numeric precision
-        col = Column(
+        col = dbt.schema.Column(
             'fieldname',
             'numeric',
             numeric_precision=None)

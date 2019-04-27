@@ -1,4 +1,5 @@
-from test.integration.base import DBTIntegrationTest, use_profile
+from nose.plugins.attrib import attr
+from test.integration.base import DBTIntegrationTest
 
 class TestBigqueryPrePostRunHooks(DBTIntegrationTest):
 
@@ -77,7 +78,7 @@ class TestBigqueryPrePostRunHooks(DBTIntegrationTest):
         self.assertTrue(ctx['run_started_at'] is not None and len(ctx['run_started_at']) > 0, 'run_started_at was not set')
         self.assertTrue(ctx['invocation_id'] is not None and len(ctx['invocation_id']) > 0, 'invocation_id was not set')
 
-    @use_profile('bigquery')
+    @attr(type='bigquery')
     def test_bigquery_pre_and_post_run_hooks(self):
         self.run_dbt(['run'])
 
@@ -87,7 +88,7 @@ class TestBigqueryPrePostRunHooks(DBTIntegrationTest):
         self.assertTableDoesNotExist("start_hook_order_test")
         self.assertTableDoesNotExist("end_hook_order_test")
 
-    @use_profile('bigquery')
+    @attr(type='bigquery')
     def test_bigquery_pre_and_post_seed_hooks(self):
         self.run_dbt(['seed'])
 

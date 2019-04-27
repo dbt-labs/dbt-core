@@ -1,5 +1,6 @@
 from freezegun import freeze_time
-from test.integration.base import DBTIntegrationTest, use_profile
+from nose.plugins.attrib import attr
+from test.integration.base import DBTIntegrationTest
 
 
 class TestTimezones(DBTIntegrationTest):
@@ -20,7 +21,7 @@ class TestTimezones(DBTIntegrationTest):
                     'dev': {
                         'type': 'postgres',
                         'threads': 1,
-                        'host': self.database_host,
+                        'host': 'database',
                         'port': 5432,
                         'user': "root",
                         'pass': "password",
@@ -42,7 +43,7 @@ class TestTimezones(DBTIntegrationTest):
         """.format(schema=self.unique_schema())
 
     @freeze_time("2017-01-01 03:00:00", tz_offset=0)
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test_run_started_at(self):
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 1)

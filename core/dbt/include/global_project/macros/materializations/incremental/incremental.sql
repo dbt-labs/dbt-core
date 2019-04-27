@@ -12,10 +12,11 @@
 {%- endmacro %}
 
 {% materialization incremental, default -%}
+  {%- set sql_where = config.get('sql_where') -%}
   {%- set unique_key = config.get('unique_key') -%}
 
   {%- set identifier = model['alias'] -%}
-  {%- set tmp_identifier = model['name'] + '__dbt_incremental_tmp' -%}
+  {%- set tmp_identifier = identifier + '__dbt_incremental_tmp' -%}
 
   {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) -%}
   {%- set target_relation = api.Relation.create(identifier=identifier, schema=schema, database=database,  type='table') -%}
@@ -56,7 +57,19 @@
   {%- else -%}
      {%- call statement() -%}
 
-       {{ dbt.create_table_as(True, tmp_relation, sql) }}
+       {% set tmp_table_sql -%}
+         {# We are using a subselect instead of a CTE here to allow PostgreSQL to use indexes. -#}
+         select * from (
+           {{ sql }}
+         ) as dbt_incr_sbq
+
+         {% if sql_where %}
+         where ({{ sql_where }})
+           or ({{ sql_where }}) is null
+         {% endif %}
+       {%- endset %}
+
+       {{ dbt.create_table_as(True, tmp_relation, tmp_table_sql) }}
 
      {%- endcall -%}
 

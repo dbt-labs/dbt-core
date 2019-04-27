@@ -10,7 +10,6 @@ class NodeType(object):
     Seed = 'seed'
     Documentation = 'documentation'
     Source = 'source'
-    RPCCall = 'rpc'
 
     @classmethod
     def executable(cls):
@@ -22,7 +21,6 @@ class NodeType(object):
             cls.Operation,
             cls.Seed,
             cls.Documentation,
-            cls.RPCCall,
         ]
 
     @classmethod
@@ -30,7 +28,6 @@ class NodeType(object):
         return [
             cls.Model,
             cls.Seed,
-            cls.Archive,
         ]
 
 

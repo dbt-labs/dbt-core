@@ -1,14 +1,18 @@
+from datetime import datetime
+from decimal import Decimal
+
 import collections
 import copy
-import datetime
 import functools
 import hashlib
 import itertools
 import json
+import numbers
 import os
 
 import dbt.exceptions
 
+from dbt.include.global_project import PACKAGES
 from dbt.compat import basestring, DECIMALS
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
@@ -166,7 +170,7 @@ def merge(*args):
         return args[0]
 
     lst = list(args)
-    last = lst.pop(len(lst) - 1)
+    last = lst.pop(len(lst)-1)
 
     return _merge(merge(*lst), last)
 
@@ -190,7 +194,7 @@ def deep_merge(*args):
         return copy.deepcopy(args[0])
 
     lst = list(args)
-    last = copy.deepcopy(lst.pop(len(lst) - 1))
+    last = copy.deepcopy(lst.pop(len(lst)-1))
 
     return _deep_merge(deep_merge(*lst), last)
 
@@ -420,10 +424,9 @@ def parse_cli_vars(var_string):
             dbt.exceptions.raise_compiler_error(
                 "The --vars argument must be a YAML dictionary, but was "
                 "of type '{}'".format(type_name))
-    except dbt.exceptions.ValidationException:
+    except dbt.exceptions.ValidationException as e:
         logger.error(
-            "The YAML provided in the --vars argument is not valid.\n"
-        )
+                "The YAML provided in the --vars argument is not valid.\n")
         raise
 
 
@@ -439,7 +442,7 @@ def add_ephemeral_model_prefix(s):
 def timestring():
     """Get the current datetime as an RFC 3339-compliant string"""
     # isoformat doesn't include the mandatory trailing 'Z' for UTC.
-    return datetime.datetime.utcnow().isoformat() + 'Z'
+    return datetime.utcnow().isoformat() + 'Z'
 
 
 class JSONEncoder(json.JSONEncoder):
@@ -450,9 +453,6 @@ class JSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, DECIMALS):
             return float(obj)
-        if isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
-            return obj.isoformat()
-
         return super(JSONEncoder, self).default(obj)
 
 
@@ -473,10 +473,8 @@ def translate_aliases(kwargs, aliases):
             key_names = ', '.join("{}".format(k) for k in kwargs if
                                   aliases.get(k) == canonical_key)
 
-            raise dbt.exceptions.AliasException(
-                'Got duplicate keys: ({}) all map to "{}"'
-                .format(key_names, canonical_key)
-            )
+            raise AliasException('Got duplicate keys: ({}) all map to "{}"'
+                                 .format(key_names, canonical_key))
 
         result[canonical_key] = value
 

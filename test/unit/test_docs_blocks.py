@@ -1,4 +1,3 @@
-import os
 import mock
 import unittest
 
@@ -55,15 +54,6 @@ TEST_DOCUMENTATION_FILE = r'''
 
 class DocumentationParserTest(unittest.TestCase):
     def setUp(self):
-        if os.name == 'nt':
-            self.root_path = 'C:\\test_root'
-            self.subdir_path = 'C:\\test_root\\test_subdir'
-            self.testfile_path = 'C:\\test_root\\test_subdir\\test_file.md'
-        else:
-            self.root_path = '/test_root'
-            self.subdir_path = '/test_root/test_subdir'
-            self.testfile_path = '/test_root/test_subdir/test_file.md'
-
         profile_data = {
             'outputs': {
                 'test': {
@@ -82,14 +72,14 @@ class DocumentationParserTest(unittest.TestCase):
             'name': 'root',
             'version': '0.1',
             'profile': 'test',
-            'project-root': self.root_path,
+            'project-root': '/test_root',
         }
 
         subdir_project = {
             'name': 'some_package',
             'version': '0.1',
             'profile': 'test',
-            'project-root': self.subdir_path,
+            'project-root': '/test_root/test_subdir',
             'quoting': {},
         }
         self.root_project_config = config_from_parts_or_dicts(
@@ -98,33 +88,35 @@ class DocumentationParserTest(unittest.TestCase):
         self.subdir_project_config = config_from_parts_or_dicts(
             project=subdir_project, profile=profile_data
         )
+
+
     @mock.patch('dbt.clients.system')
     def test_load_file(self, system):
         system.load_file_contents.return_value = TEST_DOCUMENTATION_FILE
         system.find_matching.return_value = [{
             'relative_path': 'test_file.md',
-            'absolute_path': self.testfile_path,
-            'searched_path': self.subdir_path,
+            'absolute_path': '/test_root/test_subdir/test_file.md',
+            'searched_path': '/test_root/test_subdir',
         }]
         results = list(docs.DocumentationParser.load_file(
-            'some_package', self.root_path, ['test_subdir'])
+            'some_package', '/test_root', ['test_subdir'])
         )
         self.assertEqual(len(results), 1)
         result = results[0]
         self.assertEqual(result.package_name, 'some_package')
         self.assertEqual(result.file_contents, TEST_DOCUMENTATION_FILE)
         self.assertEqual(result.original_file_path,
-                         self.testfile_path)
-        self.assertEqual(result.root_path, self.root_path)
+                         '/test_root/test_subdir/test_file.md')
+        self.assertEqual(result.root_path, '/test_root')
         self.assertEqual(result.resource_type, NodeType.Documentation)
         self.assertEqual(result.path, 'test_file.md')
 
     def test_parse(self):
         docfile = UnparsedDocumentationFile(
-            root_path=self.root_path,
+            root_path='/test_root',
             resource_type=NodeType.Documentation,
             path='test_file.md',
-            original_file_path=self.testfile_path,
+            original_file_path='/test_root/test_subdir/test_file.md',
             package_name='some_package',
             file_contents=TEST_DOCUMENTATION_FILE
         )

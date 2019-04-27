@@ -1,4 +1,5 @@
-from test.integration.base import DBTIntegrationTest, DBT_PROFILES, use_profile
+from nose.plugins.attrib import attr
+from test.integration.base import DBTIntegrationTest, DBT_PROFILES
 import os, shutil, yaml
 
 class TestCLIInvocation(DBTIntegrationTest):
@@ -16,13 +17,13 @@ class TestCLIInvocation(DBTIntegrationTest):
     def models(self):
         return "test/integration/015_cli_invocation_tests/models"
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test_toplevel_dbt_run(self):
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 1)
         self.assertTablesEqual("seed", "model")
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test_subdir_dbt_run(self):
         os.chdir(os.path.join(self.models, "subdir1"))
 
@@ -61,7 +62,7 @@ class TestCLIInvocationWithProfilesDir(DBTIntegrationTest):
                     'default': {
                         'type': 'postgres',
                         'threads': 1,
-                        'host': self.database_host,
+                        'host': 'database',
                         'port': 5432,
                         'user': 'root',
                         'pass': 'password',
@@ -85,7 +86,7 @@ class TestCLIInvocationWithProfilesDir(DBTIntegrationTest):
     def models(self):
         return "test/integration/015_cli_invocation_tests/models"
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test_toplevel_dbt_run_with_profile_dir_arg(self):
         results = self.run_dbt(['run', '--profiles-dir', 'dbt-profile'])
         self.assertEqual(len(results), 1)

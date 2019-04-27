@@ -11,9 +11,9 @@ import jinja2.sandbox
 
 import dbt.compat
 import dbt.exceptions
-import dbt.utils
 
-from dbt.clients._jinja_blocks import BlockIterator
+from dbt.node_types import NodeType
+from dbt.utils import AttrDict
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -56,7 +56,7 @@ class MacroFuzzEnvironment(jinja2.sandbox.SandboxedEnvironment):
             linecache.cache[filename] = (
                 len(source),
                 None,
-                [line + '\n' for line in source.splitlines()],
+                [line+'\n' for line in source.splitlines()],
                 filename
             )
 
@@ -281,7 +281,3 @@ def get_rendered(string, ctx, node=None,
 
 def undefined_error(msg):
     raise jinja2.exceptions.UndefinedError(msg)
-
-
-def extract_toplevel_blocks(data):
-    return BlockIterator(data).lex_for_blocks()

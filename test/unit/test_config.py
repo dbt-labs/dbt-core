@@ -42,6 +42,7 @@ model_config = {
                 'sort': 'timestamp',
                 'materialized': 'incremental',
                 'dist': 'user_id',
+                'sql_where': 'created_at > (select max(created_at) from {{ this }})',
                 'unique_key': 'id'
             },
             'base': {
@@ -356,6 +357,7 @@ class TestProfileFile(BaseFileTest):
         kw = {
             'args': self.args,
             'project_profile_name': project_profile_name,
+            'cli_vars': {},
         }
         kw.update(kwargs)
         return dbt.config.Profile.from_args(**kw)
@@ -482,7 +484,7 @@ class TestProfileFile(BaseFileTest):
         self.args.target = 'cli-and-env-vars'
         self.args.vars = '{"cli_value_host": "cli-postgres-host"}'
         with mock.patch.dict(os.environ, self.env_override):
-            profile = self.from_args()
+            profile = self.from_args(cli_vars=None)
             from_raw = self.from_raw_profile_info(
                 target_override='cli-and-env-vars',
                 cli_vars={'cli_value_host': 'cli-postgres-host'},
@@ -754,7 +756,7 @@ class TestProject(BaseConfigTest):
 
     def test_invalid_version(self):
         self.default_project_data['require-dbt-version'] = 'hello!'
-        with self.assertRaises(dbt.exceptions.DbtProjectError):
+        with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
             dbt.config.Project.from_project_config(self.default_project_data)
 
     def test_unsupported_version(self):
@@ -798,18 +800,16 @@ class TestProject(BaseConfigTest):
         ))}, [])
         self.assertEqual(len(unused), 0)
 
-    def test__warn_for_unused_resource_config_paths_empty(self):
+    @mock.patch.object(dbt.config.project, 'logger')
+    def test__warn_for_unused_resource_config_paths_empty(self, mock_logger):
         project = dbt.config.Project.from_project_config(
             self.default_project_data
         )
-        dbt.flags.WARN_ERROR = True
-        try:
-            unused = project.warn_for_unused_resource_config_paths({'models': frozenset((
-                ('my_test_project', 'foo', 'bar'),
-                ('my_test_project', 'foo', 'baz'),
-            ))}, [])
-        finally:
-            dbt.flags.WARN_ERROR = False
+        unused = project.warn_for_unused_resource_config_paths({'models': frozenset((
+            ('my_test_project', 'foo', 'bar'),
+            ('my_test_project', 'foo', 'baz'),
+        ))}, [])
+        mock_logger.info.assert_not_called()
 
     def test_none_values(self):
         self.default_project_data.update({
@@ -892,7 +892,8 @@ class TestProjectWithConfigs(BaseConfigTest):
         unused = project.warn_for_unused_resource_config_paths(self.used, [])
         warn_or_error.assert_called_once()
 
-    def test__warn_for_unused_resource_config_paths_disabled(self):
+    @mock.patch.object(dbt.config.project, 'logger')
+    def test__warn_for_unused_resource_config_paths_disabled(self, mock_logger):
         project = dbt.config.Project.from_project_config(
             self.default_project_data
         )
@@ -922,7 +923,7 @@ class TestProjectFile(BaseFileTest):
 
     def test_with_invalid_package(self):
         self.write_packages({'invalid': ['not a package of any kind']})
-        with self.assertRaises(dbt.exceptions.DbtProjectError):
+        with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
             dbt.config.Project.from_project_root(self.project_dir, {})
 
 
@@ -970,7 +971,8 @@ class TestRuntimeConfig(BaseConfigTest):
         if exc is None:
             return dbt.config.RuntimeConfig.from_parts(project, profile, self.args)
 
-        with self.assertRaises(exc) as err:
+        with self.assertRaises(exc) as raised:
+            err = raised
             dbt.config.RuntimeConfig.from_parts(project, profile, self.args)
         return err
 

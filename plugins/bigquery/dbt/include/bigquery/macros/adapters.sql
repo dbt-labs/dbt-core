@@ -59,21 +59,11 @@
 {% endmacro %}
 
 
-{% macro bigquery__list_relations_without_caching(information_schema, schema) -%}
-  {{ return(adapter.list_relations_without_caching(information_schema, schema)) }}
+{% macro bigquery__list_relations_without_caching(database, schema) -%}
+  {{ return(adapter.list_relations_without_caching(database, schema)) }}
 {% endmacro %}
 
 
 {% macro bigquery__current_timestamp() -%}
   CURRENT_TIMESTAMP()
 {%- endmacro %}
-
-
-{% macro bigquery__list_schemas(database) %}
-  {{ return(adapter.list_schemas()) }}
-{% endmacro %}
-
-
-{% macro bigquery__check_schema_exists(information_schema, schema) %}
-  {{ return(adapter.check_schema_exists(information_schema.database, schema)) }}
-{% endmacro %}

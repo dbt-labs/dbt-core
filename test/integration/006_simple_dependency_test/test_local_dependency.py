@@ -1,4 +1,5 @@
-from test.integration.base import DBTIntegrationTest, use_profile
+from nose.plugins.attrib import attr
+from test.integration.base import DBTIntegrationTest
 import mock
 
 import dbt.semver
@@ -31,7 +32,7 @@ class TestSimpleDependency(DBTIntegrationTest):
     def configured_schema(self):
         return self.unique_schema() + '_configured'
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test_postgres_local_dependency(self):
         self.run_dbt(["deps"])
         results = self.run_dbt(["run"])
@@ -61,16 +62,16 @@ class TestSimpleDependencyWithSchema(TestSimpleDependency):
     def configured_schema(self):
         return 'configured_{}_macro'.format(self.unique_schema())
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     @mock.patch('dbt.config.project.get_installed_version')
     def test_postgres_local_dependency_out_of_date(self, mock_get):
         mock_get.return_value = dbt.semver.VersionSpecifier.from_version_string('0.0.1')
         self.run_dbt(['deps'])
-        with self.assertRaises(dbt.exceptions.DbtProjectError) as exc:
+        with self.assertRaises(dbt.exceptions.DbtProjectError) as e:
             self.run_dbt(['run'])
-        self.assertIn('--no-version-check', str(exc.exception))
+            self.assertIn('--no-version-check', str(e.exception))
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     @mock.patch('dbt.config.project.get_installed_version')
     def test_postgres_local_dependency_out_of_date_no_check(self, mock_get):
         mock_get.return_value = dbt.semver.VersionSpecifier.from_version_string('0.0.1')

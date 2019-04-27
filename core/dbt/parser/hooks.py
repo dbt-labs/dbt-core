@@ -56,8 +56,8 @@ class HookParser(BaseSqlParser):
                 })
 
         tags = [hook_type]
-        results = self.parse_sql_nodes(result, tags=tags)
-        return results.parsed
+        hooks, _ = self.parse_sql_nodes(result, tags=tags)
+        return hooks
 
     def load_and_parse(self):
         if dbt.flags.STRICT_MODE:

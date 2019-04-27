@@ -1,15 +1,9 @@
-import base64
 import os
-import re
 import time
-from abc import abstractmethod
-from multiprocessing.dummy import Pool as ThreadPool
 
-from dbt import rpc
-from dbt.task.base import ConfiguredTask
+from dbt.task.base_task import BaseTask
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.compat import to_unicode
 from dbt.compilation import compile_manifest
 from dbt.contracts.graph.manifest import CompileResultNode
 from dbt.contracts.results import ExecutionResult
@@ -20,6 +14,8 @@ import dbt.ui.printer
 import dbt.utils
 
 import dbt.graph.selector
+
+from multiprocessing.dummy import Pool as ThreadPool
 
 RESULT_FILE_NAME = 'run_results.json'
 MANIFEST_FILE_NAME = 'manifest.json'
@@ -36,20 +32,11 @@ def load_manifest(config):
     return manifest
 
 
-class ManifestTask(ConfiguredTask):
+class BaseRunnableTask(BaseTask):
     def __init__(self, args, config):
-        super(ManifestTask, self).__init__(args, config)
+        super(BaseRunnableTask, self).__init__(args, config)
         self.manifest = None
         self.linker = None
-
-    def _runtime_initialize(self):
-        self.manifest = load_manifest(self.config)
-        self.linker = compile_manifest(self.config, self.manifest)
-
-
-class GraphRunnableTask(ManifestTask):
-    def __init__(self, args, config):
-        super(GraphRunnableTask, self).__init__(args, config)
         self.job_queue = None
         self._flattened_nodes = None
 
@@ -59,14 +46,12 @@ class GraphRunnableTask(ManifestTask):
         self._skipped_children = {}
         self._raise_next_tick = None
 
-    def select_nodes(self):
+    def _runtime_initialize(self):
+        self.manifest = load_manifest(self.config)
+        self.linker = compile_manifest(self.config, self.manifest)
+
         selector = dbt.graph.selector.NodeSelector(self.linker, self.manifest)
         selected_nodes = selector.select(self.build_query())
-        return selected_nodes
-
-    def _runtime_initialize(self):
-        super(GraphRunnableTask, self)._runtime_initialize()
-        selected_nodes = self.select_nodes()
         self.job_queue = self.linker.as_graph_queue(self.manifest,
                                                     selected_nodes)
 
@@ -127,7 +112,7 @@ class GraphRunnableTask(ManifestTask):
 
         This does still go through the callback path for result collection.
         """
-        if self.config.args.single_threaded:
+        if self.config.args.single_threaded or True:
             callback(self.call_runner(*args))
         else:
             pool.apply_async(self.call_runner, args=args, callback=callback)
@@ -244,8 +229,27 @@ class GraphRunnableTask(ManifestTask):
     def after_hooks(self, adapter, results, elapsed):
         pass
 
-    def execute_with_hooks(self, selected_uids):
+    def task_end_messages(self, results):
+        raise dbt.exceptions.NotImplementedException('Not Implemented')
+
+    def get_result(self, results, elapsed_time, generated_at):
+        raise dbt.exceptions.NotImplementedException('Not Implemented')
+
+    def run(self):
+        """
+        Run dbt for the query, based on the graph.
+        """
+        self._runtime_initialize()
         adapter = get_adapter(self.config)
+
+        if len(self._flattened_nodes) == 0:
+            logger.info("WARNING: Nothing to do. Try checking your model "
+                        "configs and model specification args")
+            return []
+        else:
+            logger.info("")
+
+        selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
         try:
             self.before_hooks(adapter)
             started = time.time()
@@ -263,28 +267,10 @@ class GraphRunnableTask(ManifestTask):
             elapsed_time=elapsed,
             generated_at=dbt.utils.timestring()
         )
-        return result
-
-    def run(self):
-        """
-        Run dbt for the query, based on the graph.
-        """
-        self._runtime_initialize()
-
-        if len(self._flattened_nodes) == 0:
-            logger.warning("WARNING: Nothing to do. Try checking your model "
-                           "configs and model specification args")
-            return []
-        else:
-            logger.info("")
-
-        selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
-        result = self.execute_with_hooks(selected_uids)
-
         result.write(self.result_path())
 
-        self.task_end_messages(result.results)
-        return result.results
+        self.task_end_messages(res)
+        return res
 
     def interpret_results(self, results):
         if results is None:
@@ -293,6 +279,8 @@ class GraphRunnableTask(ManifestTask):
         failures = [r for r in results if r.error or r.failed]
         return len(failures) == 0
 
+
+class RunnableTask(BaseRunnableTask):
     def get_model_schemas(self, selected_uids):
         schemas = set()
         for node in self.manifest.nodes.values():
@@ -332,44 +320,3 @@ class GraphRunnableTask(ManifestTask):
 
     def task_end_messages(self, results):
         dbt.ui.printer.print_run_end_messages(results)
-
-
-class RemoteCallable(object):
-    METHOD_NAME = None
-    is_async = False
-
-    @abstractmethod
-    def handle_request(self, **kwargs):
-        raise dbt.exceptions.NotImplementedException(
-            'from_kwargs not implemented'
-        )
-
-    def decode_sql(self, sql):
-        """Base64 decode a string. This should only be used for sql in calls.
-
-        :param str sql: The base64 encoded form of the original utf-8 string
-        :return str: The decoded utf-8 string
-        """
-        # JSON is defined as using "unicode", we'll go a step further and
-        # mandate utf-8 (though for the base64 part, it doesn't really matter!)
-        base64_sql_bytes = to_unicode(sql).encode('utf-8')
-        # in python3.x you can pass `validate=True` to b64decode to get this
-        # behavior.
-        if not re.match(b'^[A-Za-z0-9+/]*={0,2}$', base64_sql_bytes):
-            self.raise_invalid_base64(sql)
-
-        try:
-            sql_bytes = base64.b64decode(base64_sql_bytes)
-        except ValueError:
-            self.raise_invalid_base64(sql)
-
-        return sql_bytes.decode('utf-8')
-
-    @staticmethod
-    def raise_invalid_base64(sql):
-        raise rpc.invalid_params(
-            data={
-                'message': 'invalid base64-encoded sql input',
-                'sql': str(sql),
-            }
-        )

@@ -48,7 +48,7 @@
           numeric_scale
 
       from
-      {{ relation.information_schema('columns') }}
+      {{ information_schema_name(relation.database) }}.columns
 
       where table_name ilike '{{ relation.identifier }}'
         {% if relation.schema %}
@@ -67,7 +67,7 @@
 {% endmacro %}
 
 
-{% macro snowflake__list_relations_without_caching(information_schema, schema) %}
+{% macro snowflake__list_relations_without_caching(database, schema) %}
   {% call statement('list_relations_without_caching', fetch_result=True) -%}
     select
       table_catalog as database,
@@ -77,20 +77,20 @@
            when table_type = 'VIEW' then 'view'
            else table_type
       end as table_type
-    from {{ information_schema }}.tables
+    from {{ information_schema_name(database) }}.tables
     where table_schema ilike '{{ schema }}'
-      and table_catalog ilike '{{ information_schema.database.lower() }}'
+      and table_catalog ilike '{{ database }}'
   {% endcall %}
   {{ return(load_result('list_relations_without_caching').table) }}
 {% endmacro %}
 
 
-{% macro snowflake__check_schema_exists(information_schema, schema) -%}
+{% macro snowflake__check_schema_exists(database, schema) -%}
   {% call statement('check_schema_exists', fetch_result=True) -%}
         select count(*)
-        from {{ information_schema }}.schemata
+        from {{ information_schema_name(database) }}.schemata
         where upper(schema_name) = upper('{{ schema }}')
-            and upper(catalog_name) = upper('{{ information_schema.database }}')
+            and upper(catalog_name) = upper('{{ database }}')
   {%- endcall %}
   {{ return(load_result('check_schema_exists').table) }}
 {%- endmacro %}
@@ -98,10 +98,3 @@
 {% macro snowflake__current_timestamp() -%}
   convert_timezone('UTC', current_timestamp())
 {%- endmacro %}
-
-
-{% macro snowflake__rename_relation(from_relation, to_relation) -%}
-  {% call statement('rename_relation') -%}
-    alter table {{ from_relation }} rename to {{ to_relation }}
-  {%- endcall %}
-{% endmacro %}

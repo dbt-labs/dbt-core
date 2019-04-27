@@ -9,7 +9,7 @@ from dbt.adapters.redshift import RedshiftAdapter
 from dbt.exceptions import ValidationException, FailedToConnectException
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
-from .utils import config_from_parts_or_dicts, mock_connection
+from .utils import config_from_parts_or_dicts
 
 
 @classmethod
@@ -30,7 +30,7 @@ class TestRedshiftAdapter(unittest.TestCase):
                     'type': 'redshift',
                     'dbname': 'redshift',
                     'user': 'root',
-                    'host': 'thishostshouldnotexist',
+                    'host': 'database',
                     'pass': 'password',
                     'port': 5439,
                     'schema': 'public'
@@ -106,19 +106,17 @@ class TestRedshiftAdapter(unittest.TestCase):
         self.assertEqual(len(list(self.adapter.cancel_open_connections())), 0)
 
     def test_cancel_open_connections_master(self):
-        key = self.adapter.connections.get_thread_identifier()
-        self.adapter.connections.thread_connections[key] = mock_connection('master')
+        self.adapter.connections.in_use['master'] = mock.MagicMock()
         self.assertEqual(len(list(self.adapter.cancel_open_connections())), 0)
 
     def test_cancel_open_connections_single(self):
-        master = mock_connection('master')
-        model = mock_connection('model')
+        master = mock.MagicMock()
+        model = mock.MagicMock()
         model.handle.get_backend_pid.return_value = 42
 
-        key = self.adapter.connections.get_thread_identifier()
-        self.adapter.connections.thread_connections.update({
-            key: master,
-            1: model,
+        self.adapter.connections.in_use.update({
+            'master': master,
+            'model': model,
         })
         with mock.patch.object(self.adapter.connections, 'add_query') as add_query:
             query_result = mock.MagicMock()
@@ -126,7 +124,7 @@ class TestRedshiftAdapter(unittest.TestCase):
 
             self.assertEqual(len(list(self.adapter.cancel_open_connections())), 1)
 
-            add_query.assert_called_once_with('select pg_terminate_backend(42)')
+            add_query.assert_called_once_with('select pg_terminate_backend(42)', 'master')
 
         master.handle.get_backend_pid.assert_not_called()
 
@@ -137,7 +135,7 @@ class TestRedshiftAdapter(unittest.TestCase):
         psycopg2.connect.assert_called_once_with(
             dbname='redshift',
             user='root',
-            host='thishostshouldnotexist',
+            host='database',
             password='password',
             port=5439,
             connect_timeout=10,
@@ -154,7 +152,7 @@ class TestRedshiftAdapter(unittest.TestCase):
         psycopg2.connect.assert_called_once_with(
             dbname='redshift',
             user='root',
-            host='thishostshouldnotexist',
+            host='database',
             password='password',
             port=5439,
             connect_timeout=10,
@@ -170,7 +168,7 @@ class TestRedshiftAdapter(unittest.TestCase):
         psycopg2.connect.assert_called_once_with(
             dbname='redshift',
             user='root',
-            host='thishostshouldnotexist',
+            host='database',
             password='password',
             port=5439,
             connect_timeout=10)

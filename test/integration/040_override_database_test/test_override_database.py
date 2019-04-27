@@ -1,4 +1,5 @@
-from test.integration.base import DBTIntegrationTest, use_profile
+from nose.plugins.attrib import attr
+from test.integration.base import DBTIntegrationTest
 
 
 class BaseOverrideDatabase(DBTIntegrationTest):
@@ -41,11 +42,11 @@ class TestModelOverride(BaseOverrideDatabase):
             (func('view_4'), self.unique_schema(), self.alternative_database),
         ])
 
-    @use_profile('bigquery')
+    @attr(type='bigquery')
     def test_bigquery_database_override(self):
         self.run_database_override()
 
-    @use_profile('snowflake')
+    @attr(type='snowflake')
     def test_snowflake_database_override(self):
         self.run_database_override()
 
@@ -81,11 +82,11 @@ class TestProjectModelOverride(BaseOverrideDatabase):
             (func('view_4'), self.unique_schema(), self.alternative_database),
         ])
 
-    @use_profile('bigquery')
+    @attr(type='bigquery')
     def test_bigquery_database_override(self):
         self.run_database_override()
 
-    @use_profile('snowflake')
+    @attr(type='snowflake')
     def test_snowflake_database_override(self):
         self.run_database_override()
 
@@ -111,10 +112,10 @@ class TestProjectSeedOverride(BaseOverrideDatabase):
             (func('view_4'), self.unique_schema(), self.alternative_database),
         ])
 
-    @use_profile('bigquery')
+    @attr(type='bigquery')
     def test_bigquery_database_override(self):
         self.run_database_override()
 
-    @use_profile('snowflake')
+    @attr(type='snowflake')
     def test_snowflake_database_override(self):
         self.run_database_override()

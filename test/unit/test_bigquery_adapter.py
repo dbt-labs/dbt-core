@@ -69,7 +69,7 @@ class TestBigQueryAdapter(unittest.TestCase):
             profile=profile,
         )
         adapter = BigQueryAdapter(config)
-        inject_adapter(adapter)
+        inject_adapter('bigquery', adapter)
         return adapter
 
 
@@ -109,14 +109,14 @@ class TestBigQueryAdapter(unittest.TestCase):
 
     def test_cancel_open_connections_master(self):
         adapter = self.get_adapter('oauth')
-        adapter.connections.thread_connections[0] = object()
+        adapter.connections.in_use['master'] = object()
         self.assertEqual(adapter.cancel_open_connections(), None)
 
     def test_cancel_open_connections_single(self):
         adapter = self.get_adapter('oauth')
-        adapter.connections.thread_connections.update({
-            0: object(),
-            1: object(),
+        adapter.connections.in_use.update({
+            'master': object(),
+            'model': object(),
         })
         # actually does nothing
         self.assertEqual(adapter.cancel_open_connections(), None)

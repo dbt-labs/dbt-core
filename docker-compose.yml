@@ -14,7 +14,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: "/root/.virtualenvs/dbt/bin/pytest"
+    command: "/root/.virtualenvs/dbt/bin/nosetests"
     env_file:
       - ./test.env
     volumes:

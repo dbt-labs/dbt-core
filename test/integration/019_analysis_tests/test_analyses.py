@@ -1,4 +1,5 @@
-from test.integration.base import DBTIntegrationTest, use_profile
+from nose.plugins.attrib import attr
+from test.integration.base import DBTIntegrationTest
 import os
 
 
@@ -25,7 +26,7 @@ class TestAnalyses(DBTIntegrationTest):
         with open(path) as fp:
             self.assertEqual(fp.read().strip(), expected)
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test_analyses(self):
         compiled_analysis_path = os.path.normpath('target/compiled/test/analysis')
         path_1 = os.path.join(compiled_analysis_path, 'analysis.sql')

@@ -1,7 +1,6 @@
 import dbt.exceptions
 
 import dbt.context.common
-from dbt.adapters.factory import get_adapter
 
 
 execute = False
@@ -49,7 +48,7 @@ def docs(unparsed, docrefs, column_name=None):
 def source(db_wrapper, model, config, manifest):
     def do_source(source_name, table_name):
         model.sources.append([source_name, table_name])
-        return db_wrapper.adapter.Relation.create_from_node(config, model)
+        return ''
 
     return do_source
 
@@ -98,17 +97,12 @@ class Config(object):
 
 
 def generate(model, runtime_config, manifest, source_config):
-    # during parsing, we don't have a connection, but we might need one, so we
-    # have to acquire it.
-    # In the future, it would be nice to lazily open the connection, as in some
-    # projects it would be possible to parse without connecting to the db
-    with get_adapter(runtime_config).connection_named(model.get('name')):
-        return dbt.context.common.generate(
-            model, runtime_config, manifest, source_config, dbt.context.parser
-        )
+    return dbt.context.common.generate(
+        model, runtime_config, manifest, source_config, dbt.context.parser)
 
 
-def generate_macro(model, runtime_config, manifest):
+def generate_macro(model, runtime_config, manifest, connection_name):
     return dbt.context.common.generate_execute_macro(
-        model, runtime_config, manifest, dbt.context.parser
+        model, runtime_config, manifest, dbt.context.parser,
+        connection_name
     )

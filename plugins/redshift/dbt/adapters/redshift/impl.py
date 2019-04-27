@@ -1,6 +1,7 @@
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.adapters.redshift import RedshiftConnectionManager
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
+import dbt.exceptions
 
 
 class RedshiftAdapter(PostgresAdapter):
@@ -12,7 +13,7 @@ class RedshiftAdapter(PostgresAdapter):
     def date_function(cls):
         return 'getdate()'
 
-    def drop_relation(self, relation):
+    def drop_relation(self, relation, model_name=None):
         """
         In Redshift, DROP TABLE ... CASCADE should not be used
         inside a transaction. Redshift doesn't prevent the CASCADE
@@ -27,9 +28,9 @@ class RedshiftAdapter(PostgresAdapter):
 
         https://docs.aws.amazon.com/redshift/latest/dg/r_DROP_TABLE.html
         """
-        with self.connections.fresh_transaction():
+        with self.connections.fresh_transaction(model_name):
             parent = super(RedshiftAdapter, self)
-            return parent.drop_relation(relation)
+            return parent.drop_relation(relation, model_name)
 
     @classmethod
     def convert_text_type(cls, agate_table, col_idx):

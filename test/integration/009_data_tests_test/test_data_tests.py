@@ -1,4 +1,5 @@
-from test.integration.base import DBTIntegrationTest, FakeArgs, use_profile
+from nose.plugins.attrib import attr
+from test.integration.base import DBTIntegrationTest, FakeArgs
 
 from dbt.task.test import TestTask
 import os
@@ -29,7 +30,7 @@ class TestDataTests(DBTIntegrationTest):
         test_task = TestTask(args, self.config)
         return test_task.run()
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test_postgres_data_tests(self):
         self.use_profile('postgres')
 
@@ -58,7 +59,7 @@ class TestDataTests(DBTIntegrationTest):
         self.assertNotEqual(len(test_results), 0)
         self.assertEqual(len(test_results), len(defined_tests))
 
-    @use_profile('snowflake')
+    @attr(type='snowflake')
     def test_snowflake_data_tests(self):
         self.use_profile('snowflake')
 

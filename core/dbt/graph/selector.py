@@ -3,6 +3,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 
 from dbt.utils import is_enabled, get_materialization, coalesce
 from dbt.node_types import NodeType
+from dbt.contracts.graph.parsed import ParsedNode
 import dbt.exceptions
 
 SELECTOR_PARENTS = '+'

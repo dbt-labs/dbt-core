@@ -5,7 +5,6 @@ import argparse
 import os.path
 import sys
 import traceback
-from contextlib import contextmanager
 
 import dbt.version
 import dbt.flags as flags
@@ -21,8 +20,6 @@ import dbt.task.archive as archive_task
 import dbt.task.generate as generate_task
 import dbt.task.serve as serve_task
 import dbt.task.freshness as freshness_task
-import dbt.task.run_operation as run_operation_task
-from dbt.task.rpc_server import RPCServerTask
 from dbt.adapters.factory import reset_adapters
 
 import dbt.tracking
@@ -32,8 +29,9 @@ import dbt.deprecations
 import dbt.profiler
 
 from dbt.utils import ExitCodes
-from dbt.config import UserConfig, PROFILES_DIR
-from dbt.exceptions import RuntimeException
+from dbt.config import Project, UserConfig, RuntimeConfig, PROFILES_DIR, \
+    read_profiles
+from dbt.exceptions import DbtProjectError, DbtProfileError, RuntimeException
 
 
 PROFILES_HELP_MESSAGE = """
@@ -83,7 +81,7 @@ def main(args=None):
         else:
             exit_code = ExitCodes.ModelError
 
-    except KeyboardInterrupt:
+    except KeyboardInterrupt as e:
         logger.info("ctrl-c")
         exit_code = ExitCodes.UnhandledError
 
@@ -150,60 +148,138 @@ def handle_and_check(args):
 
         reset_adapters()
 
-        task, res = run_from_args(parsed)
+        try:
+            task, res = run_from_args(parsed)
+        finally:
+            dbt.tracking.flush()
+
         success = task.interpret_results(res)
 
         return res, success
 
 
-@contextmanager
-def track_run(task):
-    dbt.tracking.track_invocation_start(config=task.config, args=task.args)
-    try:
-        yield
-        dbt.tracking.track_invocation_end(
-            config=task.config, args=task.args, result_type="ok"
-        )
-    except (dbt.exceptions.NotImplementedException,
-            dbt.exceptions.FailedToConnectException) as e:
-        logger.error('ERROR: {}'.format(e))
-        dbt.tracking.track_invocation_end(
-            config=task.config, args=task.args, result_type="error"
-        )
-    except Exception:
-        dbt.tracking.track_invocation_end(
-            config=task.config, args=task.args, result_type="error"
-        )
-        raise
-    finally:
-        dbt.tracking.flush()
+def get_nearest_project_dir():
+    root_path = os.path.abspath(os.sep)
+    cwd = os.getcwd()
+
+    while cwd != root_path:
+        project_file = os.path.join(cwd, "dbt_project.yml")
+        if os.path.exists(project_file):
+            return cwd
+        cwd = os.path.dirname(cwd)
+
+    return None
 
 
 def run_from_args(parsed):
-    log_cache_events(getattr(parsed, 'log_cache_events', False))
-    update_flags(parsed)
+    task = None
+    cfg = None
 
-    logger.info("Running with dbt{}".format(dbt.version.installed))
+    if parsed.which in ('init', 'debug'):
+        # bypass looking for a project file if we're running `dbt init` or
+        # `dbt debug`
+        task = parsed.cls(args=parsed)
+    else:
+        nearest_project_dir = get_nearest_project_dir()
+        if nearest_project_dir is None:
+            raise RuntimeException(
+                "fatal: Not a dbt project (or any of the parent directories). "
+                "Missing dbt_project.yml file"
+            )
 
-    # this will convert DbtConfigErrors into RuntimeExceptions
-    task = parsed.cls.from_args(args=parsed)
-    logger.debug("running dbt with arguments %s", parsed)
+        os.chdir(nearest_project_dir)
+
+        res = invoke_dbt(parsed)
+        if res is None:
+            raise RuntimeException("Could not run dbt")
+        else:
+            task, cfg = res
 
     log_path = None
-    if task.config is not None:
-        log_path = getattr(task.config, 'log_path', None)
+
+    if cfg is not None:
+        log_path = cfg.log_path
+
     initialize_logger(parsed.debug, log_path)
     logger.debug("Tracking: {}".format(dbt.tracking.active_user.state()))
 
-    results = None
+    dbt.tracking.track_invocation_start(config=cfg, args=parsed)
 
-    with track_run(task):
-        results = task.run()
+    results = run_from_task(task, cfg, parsed)
 
     return task, results
 
 
-def update_flags(parsed):
+def run_from_task(task, cfg, parsed_args):
+    result = None
+    try:
+        result = task.run()
+        dbt.tracking.track_invocation_end(
+            config=cfg, args=parsed_args, result_type="ok"
+        )
+    except (dbt.exceptions.NotImplementedException,
+            dbt.exceptions.FailedToConnectException) as e:
+        logger.info('ERROR: {}'.format(e))
+        dbt.tracking.track_invocation_end(
+            config=cfg, args=parsed_args, result_type="error"
+        )
+    except Exception as e:
+        dbt.tracking.track_invocation_end(
+            config=cfg, args=parsed_args, result_type="error"
+        )
+        raise
+
+    return result
+
+
+def invoke_dbt(parsed):
+    task = None
+    cfg = None
+
+    log_cache_events(getattr(parsed, 'log_cache_events', False))
+    logger.info("Running with dbt{}".format(dbt.version.installed))
+
+    try:
+        if parsed.which in {'deps', 'clean'}:
+            # deps doesn't need a profile, so don't require one.
+            cfg = Project.from_current_directory(getattr(parsed, 'vars', '{}'))
+        elif parsed.which != 'debug':
+            # for debug, we will attempt to load the various configurations as
+            # part of the task, so just leave cfg=None.
+            cfg = RuntimeConfig.from_args(parsed)
+    except DbtProjectError as e:
+        logger.info("Encountered an error while reading the project:")
+        logger.info(dbt.compat.to_string(e))
+
+        dbt.tracking.track_invalid_invocation(
+            config=cfg,
+            args=parsed,
+            result_type=e.result_type)
+
+        return None
+    except DbtProfileError as e:
+        logger.info("Encountered an error while reading profiles:")
+        logger.info("  ERROR {}".format(str(e)))
+
+        all_profiles = read_profiles(parsed.profiles_dir).keys()
+
+        if len(all_profiles) > 0:
+            logger.info("Defined profiles:")
+            for profile in all_profiles:
+                logger.info(" - {}".format(profile))
+        else:
+            logger.info("There are no profiles defined in your "
+                        "profiles.yml file")
+
+        logger.info(PROFILES_HELP_MESSAGE)
+
+        dbt.tracking.track_invalid_invocation(
+            config=cfg,
+            args=parsed,
+            result_type=e.result_type)
+
+        return None
+
     flags.NON_DESTRUCTIVE = getattr(parsed, 'non_destructive', False)
     flags.USE_CACHE = getattr(parsed, 'use_cache', True)
 
@@ -221,7 +297,11 @@ def update_flags(parsed):
     elif arg_full_refresh:
         flags.FULL_REFRESH = True
 
-    flags.TEST_NEW_PARSER = getattr(parsed, 'test_new_parser', False)
+    logger.debug("running dbt with arguments %s", parsed)
+
+    task = parsed.cls(args=parsed, config=cfg)
+
+    return task, cfg
 
 
 def _build_base_subparser():
@@ -297,9 +377,9 @@ def _build_source_subparser(subparsers, base_subparser):
 
 def _build_init_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
-        'init',
-        parents=[base_subparser],
-        help="Initialize a new DBT project.")
+            'init',
+            parents=[base_subparser],
+            help="Initialize a new DBT project.")
     sub.add_argument('project_name', type=str, help='Name of the new project')
     sub.set_defaults(cls=init_task.InitTask, which='init')
     return sub
@@ -398,7 +478,7 @@ def _build_docs_generate_subparser(subparsers, base_subparser):
     return generate_sub
 
 
-def _add_selection_arguments(*subparsers):
+def _add_common_arguments(*subparsers):
     for sub in subparsers:
         sub.add_argument(
             '-m',
@@ -417,10 +497,15 @@ def _add_selection_arguments(*subparsers):
             Specify the models to exclude.
             """
         )
-
-
-def _add_table_mutability_arguments(*subparsers):
-    for sub in subparsers:
+        sub.add_argument(
+            '--threads',
+            type=int,
+            required=False,
+            help="""
+            Specify number of threads to use while executing models. Overrides
+            settings in profiles.yml.
+            """
+        )
         sub.add_argument(
             '--non-destructive',
             action='store_true',
@@ -436,19 +521,6 @@ def _add_table_mutability_arguments(*subparsers):
             If specified, DBT will drop incremental models and
             fully-recalculate the incremental table from the model definition.
             """)
-
-
-def _add_common_arguments(*subparsers):
-    for sub in subparsers:
-        sub.add_argument(
-            '--threads',
-            type=int,
-            required=False,
-            help="""
-            Specify number of threads to use while executing models. Overrides
-            settings in profiles.yml.
-            """
-        )
         sub.add_argument(
             '--no-version-check',
             dest='version_check',
@@ -511,6 +583,32 @@ def _build_test_subparser(subparsers, base_subparser):
         action='store_true',
         help='Run constraint validations from schema.yml files'
     )
+    sub.add_argument(
+        '--threads',
+        type=int,
+        required=False,
+        help="""
+        Specify number of threads to use while executing tests. Overrides
+        settings in profiles.yml
+        """
+    )
+    sub.add_argument(
+        '-m',
+        '--models',
+        required=False,
+        nargs='+',
+        help="""
+        Specify the models to test.
+        """
+    )
+    sub.add_argument(
+        '--exclude',
+        required=False,
+        nargs='+',
+        help="""
+        Specify the models to exclude from testing.
+        """
+    )
 
     sub.set_defaults(cls=test_task.TestTask, which='test')
     return sub
@@ -541,40 +639,8 @@ def _build_source_snapshot_freshness_subparser(subparsers, base_subparser):
         target/sources.json
         """
     )
-    sub.add_argument(
-        '--threads',
-        type=int,
-        required=False,
-        help="""
-        Specify number of threads to use. Overrides settings in profiles.yml
-        """
-    )
     sub.set_defaults(cls=freshness_task.FreshnessTask,
                      which='snapshot-freshness')
-    return sub
-
-
-def _build_rpc_subparser(subparsers, base_subparser):
-    sub = subparsers.add_parser(
-        'rpc',
-        parents=[base_subparser],
-        help='Start a json-rpc server',
-    )
-    sub.add_argument(
-        '--host',
-        default='0.0.0.0',
-        help='Specify the host to listen on for the rpc server.'
-    )
-    sub.add_argument(
-        '--port',
-        default=8580,
-        type=int,
-        help='Specify the port number for the rpc server.'
-    )
-    sub.set_defaults(cls=RPCServerTask, which='rpc')
-    # the rpc task does a 'compile', so we need these attributes to exist, but
-    # we don't want users to be allowed to set them.
-    sub.set_defaults(models=None, exclude=None)
     return sub
 
 
@@ -620,14 +686,6 @@ def parse_args(args):
         help='''Run schema validations at runtime. This will surface
         bugs in dbt, but may incur a performance penalty.''')
 
-    p.add_argument(
-        '--warn-error',
-        action='store_true',
-        help='''If dbt would normally warn, instead raise an exception.
-        Examples include --models that selects nothing, deprecations,
-        configurations with no associated models, invalid test configurations,
-        and missing sources/refs in tests''')
-
     # if set, run dbt in single-threaded mode: thread count is ignored, and
     # calls go through `map` instead of the thread pool. This is useful for
     # getting performance information about aspects of dbt that normally run in
@@ -637,15 +695,6 @@ def parse_args(args):
         '--single-threaded',
         action='store_true',
         help=argparse.SUPPRESS,
-    )
-
-    # if set, extract all models and blocks with the jinja block extractor, and
-    # verify that we don't fail anywhere the actual jinja parser passes. The
-    # reverse (passing files that ends up failing jinja) is fine.
-    p.add_argument(
-        '--test-new-parser',
-        action='store_true',
-        help=argparse.SUPPRESS
     )
 
     subs = p.add_subparsers(title="Available sub-commands")
@@ -662,52 +711,17 @@ def parse_args(args):
     _build_clean_subparser(subs, base_subparser)
     _build_debug_subparser(subs, base_subparser)
     _build_deps_subparser(subs, base_subparser)
+    _build_archive_subparser(subs, base_subparser)
 
-    archive_sub = _build_archive_subparser(subs, base_subparser)
-    rpc_sub = _build_rpc_subparser(subs, base_subparser)
     run_sub = _build_run_subparser(subs, base_subparser)
     compile_sub = _build_compile_subparser(subs, base_subparser)
     generate_sub = _build_docs_generate_subparser(docs_subs, base_subparser)
-    test_sub = _build_test_subparser(subs, base_subparser)
-    # --threads, --no-version-check
-    _add_common_arguments(run_sub, compile_sub, generate_sub, test_sub,
-                          rpc_sub)
-    # --models, --exclude
-    _add_selection_arguments(run_sub, compile_sub, generate_sub, test_sub,
-                             archive_sub)
-    # --full-refresh, --non-destructive
-    _add_table_mutability_arguments(run_sub, compile_sub)
+    _add_common_arguments(run_sub, compile_sub, generate_sub)
 
     _build_seed_subparser(subs, base_subparser)
     _build_docs_serve_subparser(docs_subs, base_subparser)
+    _build_test_subparser(subs, base_subparser)
     _build_source_snapshot_freshness_subparser(source_subs, base_subparser)
-
-    sub = subs.add_parser(
-        'run-operation',
-        parents=[base_subparser],
-        help="""
-            (beta) Run the named macro with any supplied arguments. This
-            subcommand is unstable and subject to change in a future release
-            of dbt. Please use it with caution"""
-    )
-    sub.add_argument(
-        '--macro',
-        required=True,
-        help="""
-            Specify the macro to invoke. dbt will call this macro with the
-            supplied arguments and then exit"""
-    )
-    sub.add_argument(
-        '--args',
-        type=str,
-        default='{}',
-        help="""
-            Supply arguments to the macro. This dictionary will be mapped
-            to the keyword arguments defined in the selected macro. This
-            argument should be a YAML string, eg. '{my_variable: my_value}'"""
-    )
-    sub.set_defaults(cls=run_operation_task.RunOperationTask,
-                     which='run-operation')
 
     if len(args) == 0:
         p.print_help()

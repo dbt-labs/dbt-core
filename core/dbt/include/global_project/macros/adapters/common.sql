@@ -94,11 +94,11 @@
 {% endmacro %}
 
 
-{% macro get_catalog(information_schemas) -%}
-  {{ return(adapter_macro('get_catalog', information_schemas)) }}
+{% macro get_catalog() -%}
+  {{ return(adapter_macro('get_catalog')) }}
 {%- endmacro %}
 
-{% macro default__get_catalog(information_schemas) -%}
+{% macro default__get_catalog() -%}
 
   {% set typename = adapter.type() %}
   {% set msg -%}
@@ -210,27 +210,27 @@
 {% endmacro %}
 
 
-{% macro check_schema_exists(information_schema, schema) -%}
-  {{ return(adapter_macro('check_schema_exists', information_schema, schema)) }}
+{% macro check_schema_exists(database, schema) -%}
+  {{ return(adapter_macro('check_schema_exists', database, schema)) }}
 {% endmacro %}
 
-{% macro default__check_schema_exists(information_schema, schema) -%}
+{% macro default__check_schema_exists(database, schema) -%}
   {% call statement('check_schema_exists', fetch_result=True, auto_begin=False) -%}
         select count(*)
-        from {{ information_schema }}.schemata
-        where catalog_name='{{ information_schema.database }}'
+        from {{ information_schema_name(database) }}.schemata
+        where catalog_name='{{ database }}'
           and schema_name='{{ schema }}'
   {%- endcall %}
   {{ return(load_result('check_schema_exists').table) }}
 {% endmacro %}
 
 
-{% macro list_relations_without_caching(information_schema, schema) %}
-  {{ return(adapter_macro('list_relations_without_caching', information_schema, schema)) }}
+{% macro list_relations_without_caching(database, schema) %}
+  {{ return(adapter_macro('list_relations_without_caching', database, schema)) }}
 {% endmacro %}
 
 
-{% macro default__list_relations_without_caching(information_schema, schema) %}
+{% macro default__list_relations_without_caching(database, schema) %}
   {{ dbt.exceptions.raise_not_implemented(
     'list_relations_without_caching macro not implemented for adapter '+adapter.type()) }}
 {% endmacro %}

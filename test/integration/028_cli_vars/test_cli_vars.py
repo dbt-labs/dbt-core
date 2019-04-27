@@ -1,4 +1,5 @@
-from test.integration.base import DBTIntegrationTest, use_profile
+from nose.plugins.attrib import attr
+from test.integration.base import DBTIntegrationTest
 import yaml
 
 
@@ -11,7 +12,7 @@ class TestCLIVars(DBTIntegrationTest):
     def models(self):
         return "test/integration/028_cli_vars/models_complex"
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test__cli_vars_longform(self):
         self.use_profile('postgres')
         self.use_default_project()
@@ -38,7 +39,7 @@ class TestCLIVarsSimple(DBTIntegrationTest):
     def models(self):
         return "test/integration/028_cli_vars/models_simple"
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test__cli_vars_shorthand(self):
         self.use_profile('postgres')
         self.use_default_project()
@@ -48,7 +49,7 @@ class TestCLIVarsSimple(DBTIntegrationTest):
         results = self.run_dbt(["test", "--vars", "simple: abc"])
         self.assertEqual(len(results), 1)
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test__cli_vars_longer(self):
         self.use_profile('postgres')
         self.use_default_project()

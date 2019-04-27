@@ -1,10 +1,10 @@
 
-{% macro redshift__get_base_catalog(information_schemas) -%}
+{% macro redshift__get_base_catalog() -%}
   {%- call statement('base_catalog', fetch_result=True) -%}
-    {% if (information_schemas | length) != 1 %}
-        {{ exceptions.raise_compiler_error('redshift get_catalog requires exactly one database') }}
+    {% if (databases | length) != 1 %}
+        exceptions.raise_compiler_error('redshift get_catalog requires exactly one database')
     {% endif %}
-    {% set database = information_schemas[0].database %}
+    {% set database = databases[0] %}
     {{ adapter.verify_database(database) }}
 
     with late_binding as (
@@ -106,7 +106,7 @@
   {{ return(load_result('base_catalog').table) }}
 {%- endmacro %}
 
-{% macro redshift__get_extended_catalog(information_schemas) %}
+{% macro redshift__get_extended_catalog() %}
   {%- call statement('extended_catalog', fetch_result=True) -%}
 
     select
@@ -218,12 +218,12 @@
 {% endmacro %}
 
 
-{% macro redshift__get_catalog(information_schemas) %}
+{% macro redshift__get_catalog() %}
 
     {#-- Compute a left-outer join in memory. Some Redshift queries are
       -- leader-only, and cannot be joined to other compute-based queries #}
 
-    {% set catalog = redshift__get_base_catalog(information_schemas) %}
+    {% set catalog = redshift__get_base_catalog() %}
 
     {% set select_extended =  redshift__can_select_from('svv_table_info') %}
     {% if select_extended %}

@@ -1,4 +1,5 @@
-from test.integration.base import DBTIntegrationTest, FakeArgs, use_profile
+from nose.plugins.attrib import attr
+from test.integration.base import DBTIntegrationTest, FakeArgs
 
 
 class TestBigqueryDatePartitioning(DBTIntegrationTest):
@@ -15,7 +16,7 @@ class TestBigqueryDatePartitioning(DBTIntegrationTest):
     def profile_config(self):
         return self.bigquery_profile()
 
-    @use_profile('bigquery')
+    @attr(type='bigquery')
     def test__bigquery_date_partitioning(self):
         results = self.run_dbt()
         self.assertEqual(len(results), 6)

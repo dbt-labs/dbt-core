@@ -19,7 +19,7 @@ jobs:
             PGUSER: root
             PGPASSWORD: password
             PGDATABASE: postgres
-      - run: tox -e flake8,unit-py27,unit-py36
+      - run: tox -e pep8,unit-py27,unit-py36
   integration-postgres-py36:
     docker: *test_and_postgres
     steps:

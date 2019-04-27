@@ -2,10 +2,10 @@ import os.path
 import os
 import shutil
 
-from dbt.task.base import ProjectOnlyTask
+from dbt.task.base_task import BaseTask
 
 
-class CleanTask(ProjectOnlyTask):
+class CleanTask(BaseTask):
 
     def __is_project_path(self, path):
         proj_path = os.path.abspath('.')

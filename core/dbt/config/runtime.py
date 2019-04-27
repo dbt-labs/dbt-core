@@ -18,10 +18,10 @@ class RuntimeConfig(Project, Profile):
     """
     def __init__(self, project_name, version, project_root, source_paths,
                  macro_paths, data_paths, test_paths, analysis_paths,
-                 docs_paths, target_path, archive_paths, clean_targets,
-                 log_path, modules_path, quoting, models, on_run_start,
-                 on_run_end, archive, seeds, dbt_version, profile_name,
-                 target_name, config, threads, credentials, packages, args):
+                 docs_paths, target_path, clean_targets, log_path,
+                 modules_path, quoting, models, on_run_start, on_run_end,
+                 archive, seeds, dbt_version, profile_name, target_name,
+                 config, threads, credentials, packages, args):
         # 'vars'
         self.args = args
         self.cli_vars = parse_cli_vars(getattr(args, 'vars', '{}'))
@@ -39,7 +39,6 @@ class RuntimeConfig(Project, Profile):
             analysis_paths=analysis_paths,
             docs_paths=docs_paths,
             target_path=target_path,
-            archive_paths=archive_paths,
             clean_targets=clean_targets,
             log_path=log_path,
             modules_path=modules_path,
@@ -88,7 +87,6 @@ class RuntimeConfig(Project, Profile):
             analysis_paths=project.analysis_paths,
             docs_paths=project.docs_paths,
             target_path=project.target_path,
-            archive_paths=project.archive_paths,
             clean_targets=project.clean_targets,
             log_path=project.log_path,
             modules_path=project.modules_path,
@@ -173,13 +171,16 @@ class RuntimeConfig(Project, Profile):
         :raises DbtProfileError: If the profile is invalid or missing.
         :raises ValidationException: If the cli variables are invalid.
         """
+        cli_vars = parse_cli_vars(getattr(args, 'vars', '{}'))
+
         # build the project and read in packages.yml
-        project = Project.from_args(args)
+        project = Project.from_current_directory(cli_vars)
 
         # build the profile
         profile = Profile.from_args(
             args=args,
-            project_profile_name=project.profile_name
+            project_profile_name=project.profile_name,
+            cli_vars=cli_vars
         )
 
         return cls.from_parts(

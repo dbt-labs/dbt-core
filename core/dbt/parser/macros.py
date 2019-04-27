@@ -28,6 +28,8 @@ class MacroParser(BaseParser):
         if tags is None:
             tags = []
 
+        context = {}
+
         # change these to actual kwargs
         base_node = UnparsedMacro(
             path=macro_file_path,

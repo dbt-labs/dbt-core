@@ -146,11 +146,17 @@ def print_test_result_line(result, schema_name, index, total):
         result.execution_time)
 
 
-def print_model_result_line(result, description, index, total):
+def print_model_result_line(result, schema_name, index, total):
+    model = result.node
+
     info, status = get_printable_result(result, 'created', 'creating')
 
     print_fancy_output_line(
-        "{info} {description}".format(info=info, description=description),
+        "{info} {model_type} model {schema}.{relation}".format(
+            info=info,
+            model_type=get_materialization(model),
+            schema=schema_name,
+            relation=model.get('alias')),
         status,
         index,
         total,
@@ -163,10 +169,9 @@ def print_archive_result_line(result, index, total):
     info, status = get_printable_result(result, 'archived', 'archiving')
     cfg = model.get('config', {})
 
-    msg = "{info} {name} --> {target_database}.{target_schema}.{name}".format(
-        info=info, name=model.name, **cfg)
     print_fancy_output_line(
-        msg,
+        "{info} {source_schema}.{source_table} --> "
+        "{target_schema}.{target_table}".format(info=info, **cfg),
         status,
         index,
         total,

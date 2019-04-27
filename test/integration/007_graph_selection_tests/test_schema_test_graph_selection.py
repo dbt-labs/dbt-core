@@ -1,4 +1,5 @@
-from test.integration.base import DBTIntegrationTest, FakeArgs, use_profile
+from nose.plugins.attrib import attr
+from test.integration.base import DBTIntegrationTest, FakeArgs
 
 from dbt.task.test import TestTask
 
@@ -25,7 +26,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
         self.run_sql_file("test/integration/007_graph_selection_tests/seed.sql")
         self.run_dbt(["deps"])
         results = self.run_dbt(['run', '--exclude', 'never_selected'])
-        self.assertEqual(len(results), 9)
+        self.assertEqual(len(results), 8)
 
         args = FakeArgs()
         args.models = include
@@ -39,7 +40,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
 
         self.assertEqual(ran_tests, expected_sorted)
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test__postgres__schema_tests_no_specifiers(self):
         self.run_schema_and_assert(
             None,
@@ -50,7 +51,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
              'unique_users_rollup_gender']
         )
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test__postgres__schema_tests_specify_model(self):
         self.run_schema_and_assert(
             ['users'],
@@ -58,7 +59,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
             ['unique_users_id']
         )
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test__postgres__schema_tests_specify_tag(self):
         self.run_schema_and_assert(
             ['tag:bi'],
@@ -67,7 +68,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
              'unique_users_rollup_gender']
         )
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test__postgres__schema_tests_specify_model_and_children(self):
         self.run_schema_and_assert(
             ['users+'],
@@ -75,7 +76,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
             ['unique_users_id', 'unique_users_rollup_gender']
         )
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test__postgres__schema_tests_specify_tag_and_children(self):
         self.run_schema_and_assert(
             ['tag:base+'],
@@ -85,7 +86,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
              'unique_users_rollup_gender']
         )
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test__postgres__schema_tests_specify_model_and_parents(self):
         self.run_schema_and_assert(
             ['+users_rollup'],
@@ -93,7 +94,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
             ['unique_users_id', 'unique_users_rollup_gender']
         )
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test__postgres__schema_tests_specify_model_and_parents_with_exclude(self):
         self.run_schema_and_assert(
             ['+users_rollup'],
@@ -101,7 +102,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
             ['unique_users_id']
         )
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test__postgres__schema_tests_specify_exclude_only(self):
         self.run_schema_and_assert(
             None,
@@ -109,7 +110,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
             ['unique_emails_email', 'unique_table_model_id', 'unique_users_id']
         )
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test__postgres__schema_tests_specify_model_in_pkg(self):
         self.run_schema_and_assert(
             ['test.users_rollup'],
@@ -119,7 +120,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
             ['unique_users_rollup_gender']
         )
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test__postgres__schema_tests_with_glob(self):
         self.run_schema_and_assert(
             ['*'],
@@ -127,7 +128,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
             ['unique_emails_email', 'unique_table_model_id', 'unique_users_rollup_gender']
         )
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test__postgres__schema_tests_dep_package_only(self):
         self.run_schema_and_assert(
             ['dbt_integration_project'],
@@ -135,7 +136,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
             ['unique_table_model_id']
         )
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test__postgres__schema_tests_model_in_dep_pkg(self):
         self.run_schema_and_assert(
             ['dbt_integration_project.table_model'],
@@ -143,7 +144,7 @@ class TestSchemaTestGraphSelection(DBTIntegrationTest):
             ['unique_table_model_id']
         )
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test__postgres__schema_tests_exclude_pkg(self):
         self.run_schema_and_assert(
             None,

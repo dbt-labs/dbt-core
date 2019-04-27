@@ -1,4 +1,5 @@
-from test.integration.base import DBTIntegrationTest, use_profile
+from nose.plugins.attrib import attr
+from test.integration.base import DBTIntegrationTest
 
 
 class TestConcurrency(DBTIntegrationTest):
@@ -10,7 +11,7 @@ class TestConcurrency(DBTIntegrationTest):
     def models(self):
         return "test/integration/021_concurrency_test/models"
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test__postgres__concurrency(self):
         self.run_sql_file("test/integration/021_concurrency_test/seed.sql")
 
@@ -36,7 +37,7 @@ class TestConcurrency(DBTIntegrationTest):
         self.assertTableDoesNotExist("invalid")
         self.assertTableDoesNotExist("skip")
 
-    @use_profile('snowflake')
+    @attr(type='snowflake')
     def test__snowflake__concurrency(self):
         self.run_sql_file("test/integration/021_concurrency_test/seed.sql")
 

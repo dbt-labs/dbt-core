@@ -1,3 +1,4 @@
+from dbt.logger import GLOBAL_LOGGER as logger
 import dbt.links
 import dbt.flags
 
@@ -27,6 +28,16 @@ class DBTRepositoriesDeprecation(DBTDeprecation):
 
 {recommendation}
   """
+
+
+class SqlWhereDeprecation(DBTDeprecation):
+    name = "sql_where"
+    description = """\
+The `sql_where` option for incremental models is deprecated and will be
+  removed in a future release. Check the docs for more information
+
+  {}
+  """.format(dbt.links.IncrementalDocs)
 
 
 class SeedDropExistingDeprecation(DBTDeprecation):
@@ -72,6 +83,7 @@ active_deprecations = set()
 deprecations_list = [
     DBTRepositoriesDeprecation(),
     SeedDropExistingDeprecation(),
+    SqlWhereDeprecation(),
 ]
 
 deprecations = {d.name: d for d in deprecations_list}

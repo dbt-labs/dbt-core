@@ -1,18 +1,25 @@
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.exceptions import NotImplementedException, CompilationException, \
     RuntimeException, InternalException, missing_materialization
-from dbt.node_types import NodeType
+from dbt.utils import get_nodes_by_tags
+from dbt.node_types import NodeType, RunHookType
+from dbt.adapters.factory import get_adapter
 from dbt.contracts.results import RunModelResult, collect_timing_info, \
-    SourceFreshnessResult, PartialResult, RemoteCompileResult, RemoteRunResult
+    SourceFreshnessResult, PartialResult
 from dbt.compilation import compile_node
 
+import dbt.clients.jinja
 import dbt.context.runtime
 import dbt.exceptions
 import dbt.utils
 import dbt.tracking
 import dbt.ui.printer
-from dbt import rpc
+import dbt.flags
+import dbt.schema
+import dbt.writer
 
+import six
+import sys
 import threading
 import time
 import traceback
@@ -39,15 +46,6 @@ def track_model_run(index, num_nodes, run_model_result):
         "hashed_contents": dbt.utils.get_hashed_contents(run_model_result.node),  # noqa
         "timing": run_model_result.timing,
     })
-
-
-class ExecutionContext(object):
-    """During execution and error handling, dbt makes use of mutable state:
-    timing information and the newest (compiled vs executed) form of the node.
-    """
-    def __init__(self, node):
-        self.timing = []
-        self.node = node
 
 
 class BaseRunner(object):
@@ -121,78 +119,67 @@ class BaseRunner(object):
             timing_info=timing_info
         )
 
-    def compile_and_execute(self, manifest, ctx):
-        result = None
-        self.adapter.acquire_connection(self.node.get('name'))
-        with collect_timing_info('compile') as timing_info:
-            # if we fail here, we still have a compiled node to return
-            # this has the benefit of showing a build path for the errant
-            # model
-            ctx.node = self.compile(manifest)
-        ctx.timing.append(timing_info)
-
-        # for ephemeral nodes, we only want to compile, not run
-        if not ctx.node.is_ephemeral_model:
-            with collect_timing_info('execute') as timing_info:
-                result = self.run(ctx.node, manifest)
-                ctx.node = result.node
-
-            ctx.timing.append(timing_info)
-
-        return result
-
-    def _handle_catchable_exception(self, e, ctx):
-        if e.node is None:
-            e.node = ctx.node
-
-        return dbt.compat.to_string(e)
-
-    def _handle_internal_exception(self, e, ctx):
-        build_path = self.node.build_path
-        prefix = 'Internal error executing {}'.format(build_path)
-
-        error = "{prefix}\n{error}\n\n{note}".format(
-            prefix=dbt.ui.printer.red(prefix),
-            error=str(e).strip(),
-            note=INTERNAL_ERROR_STRING
-        )
-        logger.debug(error)
-        return dbt.compat.to_string(e)
-
-    def _handle_generic_exception(self, e, ctx):
-        node_description = self.node.get('build_path')
-        if node_description is None:
-            node_description = self.node.unique_id
-        prefix = "Unhandled error while executing {}".format(node_description)
-        error = "{prefix}\n{error}".format(
-            prefix=dbt.ui.printer.red(prefix),
-            error=str(e).strip()
-        )
-
-        logger.error(error)
-        logger.debug('', exc_info=True)
-        return dbt.compat.to_string(e)
-
-    def handle_exception(self, e, ctx):
-        catchable_errors = (CompilationException, RuntimeException)
-        if isinstance(e, catchable_errors):
-            error = self._handle_catchable_exception(e, ctx)
-        elif isinstance(e, InternalException):
-            error = self._handle_internal_exception(e, ctx)
-        else:
-            error = self._handle_generic_exception(e, ctx)
-        return error
-
     def safe_run(self, manifest):
+        catchable_errors = (CompilationException, RuntimeException)
+
+        # result = self.DefaultResult(self.node)
         started = time.time()
-        ctx = ExecutionContext(self.node)
+        timing = []
         error = None
+        node = self.node
         result = None
 
         try:
-            result = self.compile_and_execute(manifest, ctx)
+            with collect_timing_info('compile') as timing_info:
+                # if we fail here, we still have a compiled node to return
+                # this has the benefit of showing a build path for the errant
+                # model
+                node = self.compile(manifest)
+
+            timing.append(timing_info)
+
+            # for ephemeral nodes, we only want to compile, not run
+            if not node.is_ephemeral_model:
+                with collect_timing_info('execute') as timing_info:
+                    result = self.run(node, manifest)
+                    node = result.node
+
+                timing.append(timing_info)
+
+            # result.extend(item.serialize() for item in timing)
+
+        except catchable_errors as e:
+            if e.node is None:
+                e.node = node
+
+            error = dbt.compat.to_string(e)
+
+        except InternalException as e:
+            build_path = self.node.build_path
+            prefix = 'Internal error executing {}'.format(build_path)
+
+            error = "{prefix}\n{error}\n\n{note}".format(
+                         prefix=dbt.ui.printer.red(prefix),
+                         error=str(e).strip(),
+                         note=INTERNAL_ERROR_STRING)
+            logger.debug(error)
+            error = dbt.compat.to_string(e)
+
         except Exception as e:
-            error = self.handle_exception(e, ctx)
+            node_description = self.node.get('build_path')
+            if node_description is None:
+                node_description = self.node.unique_id
+            prefix = "Unhandled error while executing {description}".format(
+                        description=node_description)
+
+            error = "{prefix}\n{error}".format(
+                         prefix=dbt.ui.printer.red(prefix),
+                         error=str(e).strip())
+
+            logger.error(error)
+            logger.debug('', exc_info=True)
+            error = dbt.compat.to_string(e)
+
         finally:
             exc_str = self._safe_release_connection()
 
@@ -203,23 +190,24 @@ class BaseRunner(object):
 
         if error is not None:
             # we could include compile time for runtime errors here
-            result = self.error_result(ctx.node, error, started, [])
+            result = self.error_result(node, error, started, [])
         elif result is not None:
-            result = self.from_run_result(result, started, ctx.timing)
+            result = self.from_run_result(result, started, timing)
         else:
-            result = self.ephemeral_result(ctx.node, started, ctx.timing)
+            result = self.ephemeral_result(node, started, timing)
         return result
 
     def _safe_release_connection(self):
         """Try to release a connection. If an exception is hit, log and return
         the error string.
         """
+        node_name = self.node.name
         try:
-            self.adapter.release_connection()
+            self.adapter.release_connection(node_name)
         except Exception as exc:
             logger.debug(
                 'Error releasing connection for node {}: {!s}\n{}'
-                .format(self.node.name, exc, traceback.format_exc())
+                .format(node_name, exc, traceback.format_exc())
             )
             return dbt.compat.to_string(exc)
 
@@ -298,17 +286,11 @@ class CompileRunner(BaseRunner):
 
 
 class ModelRunner(CompileRunner):
-    def get_node_representation(self):
-        if self.config.credentials.database == self.node.database:
-            template = "{0.schema}.{0.alias}"
-        else:
-            template = "{0.database}.{0.schema}.{0.alias}"
-
-        return template.format(self.node)
-
     def describe_node(self):
-        return "{} model {}".format(self.node.get_materialization(),
-                                    self.get_node_representation())
+        materialization = dbt.utils.get_materialization(self.node)
+        return "{0} model {1.database}.{1.schema}.{1.alias}".format(
+            materialization, self.node
+        )
 
     def print_start_line(self):
         description = self.describe_node()
@@ -316,9 +298,9 @@ class ModelRunner(CompileRunner):
                                         self.num_nodes)
 
     def print_result_line(self, result):
-        description = self.describe_node()
+        schema_name = self.node.schema
         dbt.ui.printer.print_model_result_line(result,
-                                               description,
+                                               schema_name,
                                                self.node_index,
                                                self.num_nodes)
 
@@ -383,8 +365,7 @@ class FreshnessRunner(BaseRunner):
                 continue
 
             target = target_freshness[fullkey]
-            kwname = target['period'] + 's'
-            kwargs = {kwname: target['count']}
+            kwargs = {target['period']+'s': target['count']}
             if freshness > timedelta(**kwargs).total_seconds():
                 return key
         return 'pass'
@@ -413,14 +394,11 @@ class FreshnessRunner(BaseRunner):
     def execute(self, compiled_node, manifest):
         relation = self.adapter.Relation.create_from_source(compiled_node)
         # given a Source, calculate its fresnhess.
-        with self.adapter.connection_named(compiled_node.unique_id):
-            self.adapter.clear_transaction()
-            freshness = self.adapter.calculate_freshness(
-                relation,
-                compiled_node.loaded_at_field,
-                manifest=manifest
-            )
-
+        freshness = self.adapter.calculate_freshness(
+            relation,
+            compiled_node.loaded_at_field,
+            manifest=manifest
+        )
         status = self._calculate_status(
             compiled_node.freshness,
             freshness['age']
@@ -461,6 +439,7 @@ class TestRunner(CompileRunner):
     def execute_test(self, test):
         res, table = self.adapter.execute(
             test.wrapped_sql,
+            model_name=test.name,
             auto_begin=True,
             fetch=True)
 
@@ -487,10 +466,8 @@ class TestRunner(CompileRunner):
 class ArchiveRunner(ModelRunner):
     def describe_node(self):
         cfg = self.node.get('config', {})
-        return (
-            "archive {name} --> {target_database}.{target_schema}.{name}"
-            .format(name=self.node.name, **cfg)
-        )
+        return "archive {source_database}.{source_schema}.{source_table} --> "\
+               "{target_database}.{target_schema}.{target_table}".format(**cfg)
 
     def print_result_line(self, result):
         dbt.ui.printer.print_archive_result_line(result, self.node_index,
@@ -499,7 +476,7 @@ class ArchiveRunner(ModelRunner):
 
 class SeedRunner(ModelRunner):
     def describe_node(self):
-        return "seed file {}".format(self.get_node_representation())
+        return "seed file {0.database}.{0.schema}.{0.alias}".format(self.node)
 
     def before_execute(self):
         description = self.describe_node()
@@ -515,80 +492,3 @@ class SeedRunner(ModelRunner):
                                               schema_name,
                                               self.node_index,
                                               self.num_nodes)
-
-
-class RPCCompileRunner(CompileRunner):
-    def __init__(self, config, adapter, node, node_index, num_nodes):
-        super(RPCCompileRunner, self).__init__(config, adapter, node,
-                                               node_index, num_nodes)
-
-    def handle_exception(self, e, ctx):
-        if isinstance(e, dbt.exceptions.Exception):
-            if isinstance(e, dbt.exceptions.RuntimeException):
-                e.node = ctx.node
-            return rpc.dbt_error(e)
-        elif isinstance(e, rpc.RPCException):
-            return e
-        else:
-            return rpc.server_error(e)
-
-    def before_execute(self):
-        pass
-
-    def after_execute(self, result):
-        pass
-
-    def compile(self, manifest):
-        return compile_node(self.adapter, self.config, self.node, manifest, {},
-                            write=False)
-
-    def execute(self, compiled_node, manifest):
-        return RemoteCompileResult(
-            raw_sql=compiled_node.raw_sql,
-            compiled_sql=compiled_node.injected_sql,
-            node=compiled_node
-        )
-
-    def error_result(self, node, error, start_time, timing_info):
-        raise error
-
-    def ephemeral_result(self, node, start_time, timing_info):
-        raise NotImplementedException(
-            'cannot execute ephemeral nodes remotely!'
-        )
-
-    def from_run_result(self, result, start_time, timing_info):
-        timing = [t.serialize() for t in timing_info]
-        return RemoteCompileResult(
-            raw_sql=result.raw_sql,
-            compiled_sql=result.compiled_sql,
-            node=result.node,
-            timing=timing
-        )
-
-
-class RPCExecuteRunner(RPCCompileRunner):
-    def from_run_result(self, result, start_time, timing_info):
-        timing = [t.serialize() for t in timing_info]
-        return RemoteRunResult(
-            raw_sql=result.raw_sql,
-            compiled_sql=result.compiled_sql,
-            node=result.node,
-            table=result.table,
-            timing=timing
-        )
-
-    def execute(self, compiled_node, manifest):
-        status, table = self.adapter.execute(compiled_node.injected_sql,
-                                             fetch=True)
-        table = {
-            'column_names': list(table.column_names),
-            'rows': [list(row) for row in table]
-        }
-
-        return RemoteRunResult(
-            raw_sql=compiled_node.raw_sql,
-            compiled_sql=compiled_node.injected_sql,
-            node=compiled_node,
-            table=table
-        )

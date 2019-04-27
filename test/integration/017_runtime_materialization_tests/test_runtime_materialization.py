@@ -1,4 +1,5 @@
-from test.integration.base import DBTIntegrationTest, use_profile
+from nose.plugins.attrib import attr
+from test.integration.base import DBTIntegrationTest
 
 class TestRuntimeMaterialization(DBTIntegrationTest):
 
@@ -18,7 +19,7 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
     def models(self):
         return "test/integration/017_runtime_materialization_tests/models"
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test_postgres_full_refresh(self):
         # initial full-refresh should have no effect
         results = self.run_dbt(['run', '--full-refresh'])
@@ -43,7 +44,7 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test_postgres_non_destructive(self):
         results = self.run_dbt(['run', '--non-destructive'])
         self.assertEqual(len(results), 3)
@@ -63,7 +64,7 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test_postgres_full_refresh_and_non_destructive(self):
         results = self.run_dbt(['run', '--full-refresh', '--non-destructive'])
         self.assertEqual(len(results), 3)
@@ -84,7 +85,7 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
 
-    @use_profile('postgres')
+    @attr(type='postgres')
     def test_postgres_delete__dbt_tmp_relation(self):
         # This creates a __dbt_tmp view - make sure it doesn't interfere with the dbt run
         self.run_sql_file("test/integration/017_runtime_materialization_tests/create_view__dbt_tmp.sql")
@@ -95,7 +96,7 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
         self.assertTablesEqual("seed","view")
 
 
-    @use_profile('snowflake')
+    @attr(type='snowflake')
     def test_snowflake_backup_different_type(self):
         self.run_sql_file(
             'test/integration/017_runtime_materialization_tests/create_backup_and_original.sql'

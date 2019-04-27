@@ -95,16 +95,16 @@ class RedshiftConnectionManager(PostgresConnectionManager):
         """
         with drop_lock:
 
-            connection = self.get_thread_connection()
+            connection = self.get(name)
 
             if connection.transaction_open:
-                self.commit()
+                self.commit(connection)
 
-            self.begin()
+            self.begin(connection.name)
             yield
 
-            self.commit()
-            self.begin()
+            self.commit(connection)
+            self.begin(connection.name)
 
     @classmethod
     def fetch_cluster_credentials(cls, db_user, db_name, cluster_id,
@@ -123,8 +123,8 @@ class RedshiftConnectionManager(PostgresConnectionManager):
 
         except boto_client.exceptions.ClientError as e:
             raise dbt.exceptions.FailedToConnectException(
-                "Unable to get temporary Redshift cluster credentials: {}"
-                .format(e))
+                    "Unable to get temporary Redshift cluster credentials: "
+                    "{}".format(e))
 
     @classmethod
     def get_tmp_iam_cluster_credentials(cls, credentials):
@@ -136,8 +136,8 @@ class RedshiftConnectionManager(PostgresConnectionManager):
 
         if not cluster_id:
             raise dbt.exceptions.FailedToConnectException(
-                "'cluster_id' must be provided in profile if IAM "
-                "authentication method selected")
+                    "'cluster_id' must be provided in profile if IAM "
+                    "authentication method selected")
 
         cluster_creds = cls.fetch_cluster_credentials(
             credentials.user,
@@ -167,4 +167,4 @@ class RedshiftConnectionManager(PostgresConnectionManager):
 
         else:
             raise dbt.exceptions.FailedToConnectException(
-                "Invalid 'method' in profile: '{}'".format(method))
+                    "Invalid 'method' in profile: '{}'".format(method))

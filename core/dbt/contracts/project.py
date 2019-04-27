@@ -91,10 +91,6 @@ PROJECT_CONTRACT = {
         'target-path': {
             'type': 'string',
         },
-        'archive-paths': {
-            'type': 'array',
-            'items': {'type': 'string'},
-        },
         'clean-targets': {
             'type': 'array',
             'items': {'type': 'string'},

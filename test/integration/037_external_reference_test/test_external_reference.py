@@ -29,8 +29,8 @@ class TestExternalReference(DBTIntegrationTest):
         # This has to happen before we drop the external schema, because
         # otherwise postgres hangs forever.
         self._drop_schemas()
-        with self.test_connection():
-            self.adapter.drop_schema(self.default_database, self.external_schema)
+        self.adapter.drop_schema(self.default_database, self.external_schema,
+                                 model_name='__test')
         super(TestExternalReference, self).tearDown()
 
     @use_profile('postgres')
@@ -38,7 +38,6 @@ class TestExternalReference(DBTIntegrationTest):
         self.assertEquals(len(self.run_dbt()), 1)
         # running it again should succeed
         self.assertEquals(len(self.run_dbt()), 1)
-
 
 # The opposite of the test above -- check that external relations that
 # depend on a dbt model do not create issues with caching
@@ -55,8 +54,8 @@ class TestExternalDependency(DBTIntegrationTest):
         # This has to happen before we drop the external schema, because
         # otherwise postgres hangs forever.
         self._drop_schemas()
-        with self.test_connection():
-            self.adapter.drop_schema(self.default_database, self.external_schema)
+        self.adapter.drop_schema(self.default_database, self.external_schema,
+                                 model_name='__test')
         super(TestExternalDependency, self).tearDown()
 
     @use_profile('postgres')

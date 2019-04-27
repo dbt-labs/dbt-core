@@ -1,6 +1,7 @@
 # coding=utf-8
 import os
 import platform
+import pprint
 import sys
 
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -15,7 +16,7 @@ from dbt.config import Project, Profile
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.ui.printer import green, red
 
-from dbt.task.base import BaseTask
+from dbt.task.base_task import BaseTask
 
 PROFILE_DIR_MESSAGE = """To view your profiles.yml file, run:
 
@@ -58,7 +59,7 @@ FILE_NOT_FOUND = 'file not found'
 
 
 class DebugTask(BaseTask):
-    def __init__(self, args, config):
+    def __init__(self, args, config=None):
         super(DebugTask, self).__init__(args, config)
         self.profiles_dir = getattr(self.args, 'profiles_dir',
                                     dbt.config.PROFILES_DIR)
@@ -209,7 +210,8 @@ class DebugTask(BaseTask):
         self.profile_name = self._choose_profile_name()
         self.target_name = self._choose_target_name()
         try:
-            self.profile = Profile.from_args(self.args, self.profile_name)
+            self.profile = Profile.from_args(self.args, self.profile_name,
+                                             self.cli_vars)
         except dbt.exceptions.DbtConfigError as exc:
             self.profile_fail_details = str(exc)
             return red('ERROR invalid')

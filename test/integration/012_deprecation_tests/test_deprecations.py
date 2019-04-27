@@ -29,6 +29,6 @@ class TestDeprecations(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_deprecations(self):
         self.assertEqual(deprecations.active_deprecations, set())
-        self.run_dbt(strict=False)
-        self.assertEqual({'adapter:already_exists'},
+        results = self.run_dbt(strict=False)
+        self.assertEqual({'adapter:already_exists', 'sql_where'},
                          deprecations.active_deprecations)

@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 
@@ -201,12 +202,11 @@ class GenerateTask(CompileTask):
             DOCS_INDEX_FILE_PATH,
             os.path.join(self.config.target_path, 'index.html'))
 
+        manifest = self._get_manifest()
         adapter = get_adapter(self.config)
-        with adapter.connection_named('generate_catalog'):
-            manifest = self._get_manifest()
 
-            dbt.ui.printer.print_timestamped_line("Building catalog")
-            results = adapter.get_catalog(manifest)
+        dbt.ui.printer.print_timestamped_line("Building catalog")
+        results = adapter.get_catalog(manifest)
 
         results = [
             dict(zip(results.column_names, row))
