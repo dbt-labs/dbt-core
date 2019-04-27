@@ -19,6 +19,7 @@
   -- drop the temp relations if they exists for some reason
   {{ adapter.drop_relation(intermediate_relation) }}
 
+  --- FIXME: Do we want to put this block all together? I think it serves no purpose, but need to check
   -- setup: if the target relation already exists, truncate or drop it (if it's a view)
   {# TODO: Would like to check this. New materialsiation makes these tests a bit moot. We should
   be able to deprecate non-destructive flag all together here. #}
