@@ -60,18 +60,6 @@
   );
 {% endmacro %}
 
-{# {% macro create_or_replace_table_as(relation, sql) -%}
-  {{ adapter_macro('create_or_replace_table_as', relation, sql) }}
-{%- endmacro %}
-
-{% macro default__create_or_replace_table_as(relation, sql) -%}
-  create or replace table
-    {{ relation.include(database=(not temporary), schema=(not temporary)) }}
-  as (
-    {{ sql }}
-  );
-{% endmacro %} #}
-
 {% macro create_view_as(relation, sql) -%}
   {{ adapter_macro('create_view_as', relation, sql) }}
 {%- endmacro %}
