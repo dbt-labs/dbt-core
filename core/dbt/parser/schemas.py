@@ -14,7 +14,7 @@ import dbt.contracts.project
 
 from dbt.clients.jinja import get_rendered
 from dbt.node_types import NodeType
-from dbt.compat import basestring, to_string, to_native_string
+from dbt.compat import basestring, to_string
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import get_pseudo_test_path
 from dbt.contracts.graph.unparsed import UnparsedNode, UnparsedNodeUpdate, \
@@ -194,7 +194,7 @@ def _filter_validate(filepath, location, values, validate):
         except dbt.exceptions.JSONValidationException as exc:
             # we don't want to fail the full run, but we do want to fail
             # parsing this file
-            warn_invalid(filepath, location, value, '- '+exc.msg)
+            warn_invalid(filepath, location, value, '- ' + exc.msg)
             continue
 
 
@@ -243,6 +243,10 @@ class SchemaBaseTestParser(MacrosKnownParser):
         """Returns a hashed_name, full_name pair."""
         raise NotImplementedError
 
+    @staticmethod
+    def _describe_test_target(test_target):
+        raise NotImplementedError
+
     def build_test_node(self, test_target, package_name, test, root_dir, path,
                         column_name=None):
         """Build a test node against the given target (a model or a source).
@@ -257,8 +261,9 @@ class SchemaBaseTestParser(MacrosKnownParser):
 
         source_package = self.all_projects.get(package_name)
         if source_package is None:
-            desc = '"{}" test on model "{}"'.format(test_type,
-                                                    model_name)
+            desc = '"{}" test on {}'.format(
+                test_type, self._describe_test_target(test_target)
+            )
             dbt.exceptions.raise_dep_not_found(None, desc, test_namespace)
 
         test_path = os.path.basename(path)
@@ -273,6 +278,7 @@ class SchemaBaseTestParser(MacrosKnownParser):
         full_path = get_pseudo_test_path(full_name, test_path, 'schema_test')
         raw_sql = self._build_raw_sql(test_namespace, test_target, test_type,
                                       test_args)
+
         unparsed = UnparsedNode(
             name=full_name,
             resource_type=NodeType.Test,
@@ -285,18 +291,29 @@ class SchemaBaseTestParser(MacrosKnownParser):
 
         # supply our own fqn which overrides the hashed version from the path
         # TODO: is this necessary even a little bit for tests?
-        fqn_override = self.get_fqn(full_path, source_package)
+        fqn_override = self.get_fqn(unparsed.incorporate(path=full_path),
+                                    source_package)
 
         node_path = self.get_path(NodeType.Test, unparsed.package_name,
                                   unparsed.name)
 
-        return self.parse_node(unparsed,
-                               node_path,
-                               source_package,
-                               tags=['schema'],
-                               fqn_extra=None,
-                               fqn=fqn_override,
-                               column_name=column_name)
+        result = self.parse_node(unparsed,
+                                 node_path,
+                                 source_package,
+                                 tags=['schema'],
+                                 fqn_extra=None,
+                                 fqn=fqn_override,
+                                 column_name=column_name)
+
+        parse_ok = self.check_block_parsing(full_name, test_path, raw_sql)
+        if not parse_ok:
+            # if we had a parse error in parse_node, we would not get here. So
+            # this means we rejected a good file :(
+            raise dbt.exceptions.InternalException(
+                'the block parser rejected a good node: {} was marked invalid '
+                'but is actually valid!'.format(test_path)
+            )
+        return result
 
 
 class SchemaModelParser(SchemaBaseTestParser):
@@ -305,6 +322,10 @@ class SchemaModelParser(SchemaBaseTestParser):
 
     def _generate_test_name(self, target, test_type, test_args):
         return get_nice_schema_test_name(test_type, target['name'], test_args)
+
+    @staticmethod
+    def _describe_test_target(test_target):
+        return 'model "{}"'.format(test_target)
 
     def parse_models_entry(self, model_dict, path, package_name, root_dir):
         model_name = model_dict['name']
@@ -373,10 +394,14 @@ class SchemaSourceParser(SchemaBaseTestParser):
 
     def _generate_test_name(self, target, test_type, test_args):
         return get_nice_schema_test_name(
-            'source_'+test_type,
+            'source_' + test_type,
             '{}_{}'.format(target['source']['name'], target['table']['name']),
             test_args
         )
+
+    @staticmethod
+    def _describe_test_target(test_target):
+        return 'source "{0[source]}.{0[table]}"'.format(test_target)
 
     def get_path(self, *parts):
         return '.'.join(str(s) for s in parts)
@@ -392,12 +417,17 @@ class SchemaSourceParser(SchemaBaseTestParser):
         get_rendered(description, context)
         get_rendered(source_description, context)
 
-        # we'll fill columns in later.
         freshness = dbt.utils.deep_merge(source.get('freshness', {}),
                                          table.get('freshness', {}))
 
         loaded_at_field = table.get('loaded_at_field',
                                     source.get('loaded_at_field'))
+
+        # use 'or {}' to allow quoting: null
+        source_quoting = source.get('quoting') or {}
+        table_quoting = table.get('quoting') or {}
+        quoting = dbt.utils.deep_merge(source_quoting, table_quoting)
+
         default_database = self.root_project_config.credentials.database
         return ParsedSourceDefinition(
             package_name=package_name,
@@ -417,6 +447,7 @@ class SchemaSourceParser(SchemaBaseTestParser):
             docrefs=refs.docrefs,
             loaded_at_field=loaded_at_field,
             freshness=freshness,
+            quoting=quoting,
             resource_type=NodeType.Source
         )
 

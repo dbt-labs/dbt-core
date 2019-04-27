@@ -1,22 +1,23 @@
 from dbt.node_runners import TestRunner
 from dbt.node_types import NodeType
-import dbt.ui.printer
 from dbt.task.run import RunTask
 
 
 class TestTask(RunTask):
     """
     Testing:
-        1) Create tmp views w/ 0 rows to ensure all tables, schemas, and SQL
-           statements are valid
-        2) Read schema files and validate that constraints are satisfied
-           a) not null
-           b) uniquenss
-           c) referential integrity
-           d) accepted value
+        Read schema files + custom data tests and validate that
+        constraints are satisfied.
     """
     def raise_on_first_error(self):
         return False
+
+    def before_run(self, adapter, selected_uids):
+        # Don't execute on-run-* hooks for tests
+        self.populate_adapter_cache(adapter)
+
+    def after_run(self, adapter, results):
+        pass
 
     def build_query(self):
         query = {

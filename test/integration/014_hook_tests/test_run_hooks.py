@@ -1,5 +1,4 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 class TestPrePostRunHooks(DBTIntegrationTest):
 
@@ -76,7 +75,7 @@ class TestPrePostRunHooks(DBTIntegrationTest):
 
         self.assertEqual(ctx['state'], state)
         self.assertEqual(ctx['target.dbname'], 'dbt')
-        self.assertEqual(ctx['target.host'], 'database')
+        self.assertEqual(ctx['target.host'], self.database_host)
         self.assertEqual(ctx['target.name'], 'default2')
         self.assertEqual(ctx['target.port'], 5432)
         self.assertEqual(ctx['target.schema'], self.unique_schema())
@@ -88,7 +87,7 @@ class TestPrePostRunHooks(DBTIntegrationTest):
         self.assertTrue(ctx['run_started_at'] is not None and len(ctx['run_started_at']) > 0, 'run_started_at was not set')
         self.assertTrue(ctx['invocation_id'] is not None and len(ctx['invocation_id']) > 0, 'invocation_id was not set')
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__pre_and_post_run_hooks(self):
         self.run_dbt(['run'])
 
@@ -99,7 +98,7 @@ class TestPrePostRunHooks(DBTIntegrationTest):
         self.assertTableDoesNotExist("end_hook_order_test")
         self.assert_used_schemas()
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__pre_and_post_seed_hooks(self):
         self.run_dbt(['seed'])
 

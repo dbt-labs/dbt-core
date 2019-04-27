@@ -1,4 +1,3 @@
-import abc
 from contextlib import contextmanager
 
 import google.auth
@@ -10,7 +9,6 @@ import google.cloud.bigquery
 import dbt.clients.agate_helper
 import dbt.exceptions
 from dbt.adapters.base import BaseConnectionManager, Credentials
-from dbt.compat import abstractclassmethod
 from dbt.logger import GLOBAL_LOGGER as logger
 
 
@@ -77,8 +75,11 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         raise dbt.exceptions.DatabaseException(error_msg)
 
+    def clear_transaction(self):
+        pass
+
     @contextmanager
-    def exception_handler(self, sql, connection_name='master'):
+    def exception_handler(self, sql):
         try:
             yield
 
@@ -93,6 +94,11 @@ class BigQueryConnectionManager(BaseConnectionManager):
         except Exception as e:
             logger.debug("Unhandled error while running:\n{}".format(sql))
             logger.debug(e)
+            if isinstance(e, dbt.exceptions.RuntimeException):
+                # during a sql query, an internal to dbt exception was raised.
+                # this sounds a lot like a signal handler and probably has
+                # useful information, so raise it without modification.
+                raise
             raise dbt.exceptions.RuntimeException(dbt.compat.to_string(e))
 
     def cancel_open(self):
@@ -104,10 +110,10 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         return connection
 
-    def begin(self, name):
+    def begin(self):
         pass
 
-    def commit(self, connection):
+    def commit(self):
         pass
 
     @classmethod
@@ -147,7 +153,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
         try:
             handle = cls.get_bigquery_client(connection.credentials)
 
-        except google.auth.exceptions.DefaultCredentialsError as e:
+        except google.auth.exceptions.DefaultCredentialsError:
             logger.info("Please log into GCP to continue")
             dbt.clients.gcloud.setup_default_credentials()
 
@@ -178,25 +184,25 @@ class BigQueryConnectionManager(BaseConnectionManager):
         rows = [dict(row.items()) for row in resp]
         return dbt.clients.agate_helper.table_from_data(rows, column_names)
 
-    def raw_execute(self, sql, name=None, fetch=False):
-        conn = self.get(name)
+    def raw_execute(self, sql, fetch=False):
+        conn = self.get_thread_connection()
         client = conn.handle
 
-        logger.debug('On %s: %s', name, sql)
+        logger.debug('On %s: %s', conn.name, sql)
 
         job_config = google.cloud.bigquery.QueryJobConfig()
         job_config.use_legacy_sql = False
         query_job = client.query(sql, job_config)
 
         # this blocks until the query has completed
-        with self.exception_handler(sql, conn.name):
+        with self.exception_handler(sql):
             iterator = query_job.result()
 
         return query_job, iterator
 
-    def execute(self, sql, name=None, auto_begin=False, fetch=None):
+    def execute(self, sql, auto_begin=False, fetch=None):
         # auto_begin is ignored on bigquery, and only included for consistency
-        _, iterator = self.raw_execute(sql, name=name, fetch=fetch)
+        _, iterator = self.raw_execute(sql, fetch=fetch)
 
         if fetch:
             res = self.get_table_from_response(iterator)
@@ -207,32 +213,31 @@ class BigQueryConnectionManager(BaseConnectionManager):
         status = 'OK'
         return status, res
 
-    def create_bigquery_table(self, database, schema, table_name, conn_name,
-                              callback, sql):
+    def create_bigquery_table(self, database, schema, table_name, callback,
+                              sql):
         """Create a bigquery table. The caller must supply a callback
         that takes one argument, a `google.cloud.bigquery.Table`, and mutates
         it.
         """
-        conn = self.get(conn_name)
+        conn = self.get_thread_connection()
         client = conn.handle
 
         view_ref = self.table_ref(database, schema, table_name, conn)
         view = google.cloud.bigquery.Table(view_ref)
         callback(view)
 
-        with self.exception_handler(sql, conn.name):
+        with self.exception_handler(sql):
             client.create_table(view)
 
-    def create_view(self, database, schema, table_name, conn_name, sql):
+    def create_view(self, database, schema, table_name, sql):
         def callback(table):
             table.view_query = sql
             table.view_use_legacy_sql = False
 
-        self.create_bigquery_table(database, schema, table_name, conn_name,
-                                   callback, sql)
+        self.create_bigquery_table(database, schema, table_name, callback, sql)
 
-    def create_table(self, database, schema, table_name, conn_name, sql):
-        conn = self.get(conn_name)
+    def create_table(self, database, schema, table_name, sql):
+        conn = self.get_thread_connection()
         client = conn.handle
 
         table_ref = self.table_ref(database, schema, table_name, conn)
@@ -243,16 +248,15 @@ class BigQueryConnectionManager(BaseConnectionManager):
         query_job = client.query(sql, job_config=job_config)
 
         # this waits for the job to complete
-        with self.exception_handler(sql, conn_name):
+        with self.exception_handler(sql):
             query_job.result(timeout=self.get_timeout(conn))
 
-    def create_date_partitioned_table(self, database, schema, table_name,
-                                      conn_name):
+    def create_date_partitioned_table(self, database, schema, table_name):
         def callback(table):
             table.partitioning_type = 'DAY'
 
-        self.create_bigquery_table(database, schema, table_name, conn_name,
-                                   callback, 'CREATE DAY PARTITIONED TABLE')
+        self.create_bigquery_table(database, schema, table_name, callback,
+                                   'CREATE DAY PARTITIONED TABLE')
 
     @staticmethod
     def dataset(database, schema, conn):
@@ -263,24 +267,24 @@ class BigQueryConnectionManager(BaseConnectionManager):
         dataset = self.dataset(database, schema, conn)
         return dataset.table(table_name)
 
-    def get_bq_table(self, database, schema, identifier, conn_name=None):
+    def get_bq_table(self, database, schema, identifier):
         """Get a bigquery table for a schema/model."""
-        conn = self.get(conn_name)
+        conn = self.get_thread_connection()
         table_ref = self.table_ref(database, schema, identifier, conn)
         return conn.handle.get_table(table_ref)
 
-    def drop_dataset(self, database, schema, conn_name=None):
-        conn = self.get(conn_name)
+    def drop_dataset(self, database, schema):
+        conn = self.get_thread_connection()
         dataset = self.dataset(database, schema, conn)
         client = conn.handle
 
-        with self.exception_handler('drop dataset', conn.name):
+        with self.exception_handler('drop dataset'):
             for table in client.list_tables(dataset):
                 client.delete_table(table.reference)
             client.delete_dataset(dataset)
 
-    def create_dataset(self, database, schema, conn_name=None):
-        conn = self.get(conn_name)
+    def create_dataset(self, database, schema):
+        conn = self.get_thread_connection()
         client = conn.handle
         dataset = self.dataset(database, schema, conn)
 
@@ -291,5 +295,5 @@ class BigQueryConnectionManager(BaseConnectionManager):
         except google.api_core.exceptions.NotFound:
             pass
 
-        with self.exception_handler('create dataset', conn.name):
+        with self.exception_handler('create dataset'):
             client.create_dataset(dataset)

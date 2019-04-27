@@ -5,13 +5,13 @@ import copy
 import dbt.compat
 import dbt.deprecations
 import dbt.exceptions
-import dbt.schema
 import dbt.flags as flags
 import dbt.clients.gcloud
 import dbt.clients.agate_helper
 
 from dbt.adapters.base import BaseAdapter, available
 from dbt.adapters.bigquery import BigQueryRelation
+from dbt.adapters.bigquery import BigQueryColumn
 from dbt.adapters.bigquery import BigQueryConnectionManager
 from dbt.contracts.connection import Connection
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -26,19 +26,6 @@ import time
 import agate
 
 
-def column_to_bq_schema(col):
-    """Convert a column to a bigquery schema object. This is here instead of
-    in dbt.schema to avoid importing google libraries there.
-    """
-    kwargs = {}
-    if len(col.fields) > 0:
-        fields = [column_to_bq_schema(field) for field in col.fields]
-        kwargs = {"fields": fields}
-
-    return google.cloud.bigquery.SchemaField(col.name, col.dtype, col.mode,
-                                             **kwargs)
-
-
 class BigQueryAdapter(BaseAdapter):
 
     RELATION_TYPES = {
@@ -48,7 +35,7 @@ class BigQueryAdapter(BaseAdapter):
     }
 
     Relation = BigQueryRelation
-    Column = dbt.schema.BigQueryColumn
+    Column = BigQueryColumn
     ConnectionManager = BigQueryConnectionManager
 
     AdapterSpecificConfigs = frozenset({"cluster_by", "partition_by"})
@@ -65,13 +52,12 @@ class BigQueryAdapter(BaseAdapter):
     def is_cancelable(cls):
         return False
 
-    def drop_relation(self, relation, model_name=None):
-        is_cached = self._schema_is_cached(relation.database, relation.schema,
-                                           model_name)
+    def drop_relation(self, relation):
+        is_cached = self._schema_is_cached(relation.database, relation.schema)
         if is_cached:
             self.cache.drop(relation)
 
-        conn = self.connections.get(model_name)
+        conn = self.connections.get_thread_connection()
         client = conn.handle
 
         dataset = self.connections.dataset(relation.database, relation.schema,
@@ -79,32 +65,37 @@ class BigQueryAdapter(BaseAdapter):
         relation_object = dataset.table(relation.identifier)
         client.delete_table(relation_object)
 
-    def truncate_relation(self, relation, model_name=None):
+    def truncate_relation(self, relation):
         raise dbt.exceptions.NotImplementedException(
             '`truncate` is not implemented for this adapter!'
         )
 
-    def rename_relation(self, from_relation, to_relation, model_name=None):
+    def rename_relation(self, from_relation, to_relation):
         raise dbt.exceptions.NotImplementedException(
             '`rename_relation` is not implemented for this adapter!'
         )
 
-    def list_schemas(self, database, model_name=None):
-        conn = self.connections.get(model_name)
+    @available
+    def list_schemas(self, database):
+        conn = self.connections.get_thread_connection()
         client = conn.handle
 
-        with self.connections.exception_handler('list dataset', conn.name):
+        with self.connections.exception_handler('list dataset'):
             all_datasets = client.list_datasets(project=database,
                                                 include_all=True)
             return [ds.dataset_id for ds in all_datasets]
 
-    def get_columns_in_relation(self, relation, model_name=None):
+    @available
+    def check_schema_exists(self, database, schema):
+        superself = super(BigQueryAdapter, self)
+        return superself.check_schema_exists(database, schema)
+
+    def get_columns_in_relation(self, relation):
         try:
             table = self.connections.get_bq_table(
                 database=relation.database,
                 schema=relation.schema,
-                identifier=relation.table_name,
-                conn_name=model_name
+                identifier=relation.table_name
             )
             return self._get_dbt_columns_from_bq_table(table)
 
@@ -112,17 +103,17 @@ class BigQueryAdapter(BaseAdapter):
             logger.debug("get_columns_in_relation error: {}".format(e))
             return []
 
-    def expand_column_types(self, goal, current, model_name=None):
+    def expand_column_types(self, goal, current):
         # This is a no-op on BigQuery
         pass
 
-    def list_relations_without_caching(self, database, schema,
-                                       model_name=None):
-        connection = self.connections.get(model_name)
+    def list_relations_without_caching(self, information_schema, schema):
+        connection = self.connections.get_thread_connection()
         client = connection.handle
 
-        bigquery_dataset = self.connections.dataset(database, schema,
-                                                    connection)
+        bigquery_dataset = self.connections.dataset(
+            information_schema.database, schema, connection
+        )
 
         all_tables = client.list_tables(
             bigquery_dataset,
@@ -140,18 +131,17 @@ class BigQueryAdapter(BaseAdapter):
         # the implementation of list_relations for other adapters
         try:
             return [self._bq_table_to_relation(table) for table in all_tables]
-        except google.api_core.exceptions.NotFound as e:
+        except google.api_core.exceptions.NotFound:
             return []
 
-    def get_relation(self, database, schema, identifier, model_name=None):
-        if self._schema_is_cached(database, schema, model_name):
+    def get_relation(self, database, schema, identifier):
+        if self._schema_is_cached(database, schema):
             # if it's in the cache, use the parent's model of going through
             # the relations cache and picking out the relation
             return super(BigQueryAdapter, self).get_relation(
                 database=database,
                 schema=schema,
-                identifier=identifier,
-                model_name=model_name
+                identifier=identifier
             )
 
         try:
@@ -160,16 +150,16 @@ class BigQueryAdapter(BaseAdapter):
             table = None
         return self._bq_table_to_relation(table)
 
-    def create_schema(self, database, schema, model_name=None):
+    def create_schema(self, database, schema):
         logger.debug('Creating schema "%s.%s".', database, schema)
-        self.connections.create_dataset(database, schema, model_name)
+        self.connections.create_dataset(database, schema)
 
-    def drop_schema(self, database, schema, model_name=None):
+    def drop_schema(self, database, schema):
         logger.debug('Dropping schema "%s.%s".', database, schema)
 
-        if not self.check_schema_exists(database, schema, model_name):
+        if not self.check_schema_exists(database, schema):
             return
-        self.connections.drop_dataset(database, schema, model_name)
+        self.connections.drop_dataset(database, schema)
 
     @classmethod
     def quote(cls, identifier):
@@ -231,16 +221,14 @@ class BigQueryAdapter(BaseAdapter):
     def _materialize_as_view(self, model):
         model_database = model.get('database')
         model_schema = model.get('schema')
-        model_name = model.get('name')
         model_alias = model.get('alias')
         model_sql = model.get('injected_sql')
 
-        logger.debug("Model SQL ({}):\n{}".format(model_name, model_sql))
+        logger.debug("Model SQL ({}):\n{}".format(model_alias, model_sql))
         self.connections.create_view(
             database=model_database,
             schema=model_schema,
             table_name=model_alias,
-            conn_name=model_name,
             sql=model_sql
         )
         return "CREATE VIEW"
@@ -248,7 +236,6 @@ class BigQueryAdapter(BaseAdapter):
     def _materialize_as_table(self, model, model_sql, decorator=None):
         model_database = model.get('database')
         model_schema = model.get('schema')
-        model_name = model.get('name')
         model_alias = model.get('alias')
 
         if decorator is None:
@@ -260,7 +247,6 @@ class BigQueryAdapter(BaseAdapter):
         self.connections.create_table(
             database=model_database,
             schema=model_schema,
-            conn_name=model_name,
             table_name=table_name,
             sql=model_sql
         )
@@ -306,10 +292,10 @@ class BigQueryAdapter(BaseAdapter):
                                               dbt.ui.printer.COLOR_FG_YELLOW)
 
     @available
-    def add_query(self, sql, model_name=None, auto_begin=True,
-                  bindings=None, abridge_sql_log=False):
-        if model_name in ['on-run-start', 'on-run-end']:
-            self.warning_on_hooks(model_name)
+    def add_query(self, sql, auto_begin=True, bindings=None,
+                  abridge_sql_log=False):
+        if self.nice_connection_name() in ['on-run-start', 'on-run-end']:
+            self.warning_on_hooks(self.nice_connection_name())
         else:
             raise dbt.exceptions.NotImplementedException(
                 '`add_query` is not implemented for this adapter!')
@@ -318,24 +304,24 @@ class BigQueryAdapter(BaseAdapter):
     # Special bigquery adapter methods
     ###
     @available
-    def make_date_partitioned_table(self, relation, model_name=None):
+    def make_date_partitioned_table(self, relation):
         return self.connections.create_date_partitioned_table(
             database=relation.database,
             schema=relation.schema,
-            table_name=relation.identifier,
-            conn_name=model_name
+            table_name=relation.identifier
         )
 
     @available
     def execute_model(self, model, materialization, sql_override=None,
-                      decorator=None, model_name=None):
+                      decorator=None):
 
         if sql_override is None:
             sql_override = model.get('injected_sql')
 
         if flags.STRICT_MODE:
-            connection = self.connections.get(model.get('name'))
+            connection = self.connections.get_thread_connection()
             assert isinstance(connection, Connection)
+            assert(connection.name == model.get('name'))
 
         if materialization == 'view':
             res = self._materialize_as_view(model)
@@ -348,10 +334,10 @@ class BigQueryAdapter(BaseAdapter):
         return res
 
     @available
-    def create_temporary_table(self, sql, model_name=None, **kwargs):
+    def create_temporary_table(self, sql, **kwargs):
 
         # BQ queries always return a temp table with their results
-        query_job, _ = self.connections.raw_execute(sql, model_name)
+        query_job, _ = self.connections.raw_execute(sql)
         bq_table = query_job.destination
 
         return self.Relation.create(
@@ -365,12 +351,12 @@ class BigQueryAdapter(BaseAdapter):
             type=BigQueryRelation.Table)
 
     @available
-    def alter_table_add_columns(self, relation, columns, model_name=None):
+    def alter_table_add_columns(self, relation, columns):
 
         logger.debug('Adding columns ({}) to table {}".'.format(
                      columns, relation))
 
-        conn = self.connections.get(model_name)
+        conn = self.connections.get_thread_connection()
         client = conn.handle
 
         table_ref = self.connections.table_ref(relation.database,
@@ -378,7 +364,7 @@ class BigQueryAdapter(BaseAdapter):
                                                relation.identifier, conn)
         table = client.get_table(table_ref)
 
-        new_columns = [column_to_bq_schema(col) for col in columns]
+        new_columns = [col.column_to_bq_schema() for col in columns]
         new_schema = table.schema + new_columns
 
         new_table = google.cloud.bigquery.Table(table_ref, schema=new_schema)
@@ -386,9 +372,9 @@ class BigQueryAdapter(BaseAdapter):
 
     @available
     def load_dataframe(self, database, schema, table_name, agate_table,
-                       column_override, model_name=None):
+                       column_override):
         bq_schema = self._agate_to_schema(agate_table, column_override)
-        conn = self.connections.get(model_name)
+        conn = self.connections.get_thread_connection()
         client = conn.handle
 
         table = self.connections.table_ref(database, schema, table_name, conn)
@@ -402,7 +388,7 @@ class BigQueryAdapter(BaseAdapter):
                                               job_config=load_config)
 
         timeout = self.connections.get_timeout(conn)
-        with self.connections.exception_handler("LOAD TABLE", conn.name):
+        with self.connections.exception_handler("LOAD TABLE"):
             self.poll_until_job_completes(job, timeout)
 
     ###
@@ -473,7 +459,7 @@ class BigQueryAdapter(BaseAdapter):
         return zip(column_names, column_values)
 
     def get_catalog(self, manifest):
-        connection = self.connections.get('catalog')
+        connection = self.connections.get_thread_connection()
         client = connection.handle
 
         schemas = manifest.get_used_schemas()

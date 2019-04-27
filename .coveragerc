@@ -1,4 +1,4 @@
 [report]
 include =
   core/dbt/*
-  plugins/adapters/dbt/*
+  plugins/*/dbt/*

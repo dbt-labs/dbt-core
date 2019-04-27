@@ -14,14 +14,14 @@
 
 {% macro column_list(columns) %}
   {%- for col in columns %}
-    {{ adapter.quote(col.name) }} {% if not loop.last %},{% endif %}
+    {{ col.name }} {% if not loop.last %},{% endif %}
   {% endfor -%}
 {% endmacro %}
 
 
 {% macro column_list_for_create_table(columns) %}
   {%- for col in columns %}
-    {{ adapter.quote(col.name) }} {{ col.data_type }} {%- if not loop.last %},{% endif %}
+    {{ col.name }} {{ col.data_type }} {%- if not loop.last %},{% endif %}
   {% endfor -%}
 {% endmacro %}
 
