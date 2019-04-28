@@ -16,9 +16,7 @@
   {% set source_sql -%}
      -- wrap sql in parens to make it a subquery --
      (
-        select * from (
-            {{ sql }}
-        )
+       {{ sql }}
     )
   {%- endset -%}
 
