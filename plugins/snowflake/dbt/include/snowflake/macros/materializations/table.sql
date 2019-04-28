@@ -6,10 +6,6 @@
                                                 schema=schema,
                                                 database=database, type='table') -%}
 
-  /* --TODO: Is this still up to date?
-      See ../view/view.sql for more information about this relation.
-  */
-
   {%- set exists_as_table = (old_relation is not none and old_relation.is_table) -%}
   {%- set exists_as_view = (old_relation is not none and old_relation.is_view) -%}
 
