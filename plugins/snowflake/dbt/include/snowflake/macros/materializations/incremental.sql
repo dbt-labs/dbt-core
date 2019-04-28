@@ -40,19 +40,8 @@
   {%- else -%}
     {# -- here is the incremental part #}
     {% set dest_columns = adapter.get_columns_in_relation(target_relation) %}
-    {% set dest_cols_csv = dest_columns | map(attribute='quoted') | join(', ') %}
     {%- call statement('main') -%}
-      {%- if unique_key is none -%}
-        {# -- if no unique_key is provided run regular insert as Snowflake may complain #}
-        insert into {{ target_relation }} ({{ dest_cols_csv }})
-        (
-          select {{ dest_cols_csv }}
-          from {{ source_sql }}
-        );
-      {%- else -%}
-        {# -- use merge if a unique key is provided #}
-        {{ get_merge_sql(target_relation, source_sql, unique_key, dest_columns) }}
-      {%- endif -%}
+      {{ get_merge_sql(target_relation, source_sql, unique_key, dest_columns) }}
     {% endcall %}
   {%- endif %}
 
