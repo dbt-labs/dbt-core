@@ -2,8 +2,6 @@
 {% materialization incremental, adapter='snowflake' -%}
 
   {%- set unique_key = config.get('unique_key') -%}
-  {%- set sql_where = config.get('sql_where') -%}
-  {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
   {%- set full_refresh_mode = (flags.FULL_REFRESH == True) -%}
   {%- set identifier = model['alias'] -%}
 
