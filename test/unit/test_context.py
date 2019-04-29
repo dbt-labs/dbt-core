@@ -43,14 +43,19 @@ class TestVar(unittest.TestCase):
         )
         self.context = mock.MagicMock()
 
-    def test_var_not_none_is_none(self):
-        var = Var(self.model, self.context, overrides={'foo': None})
-        var.assert_var_defined('foo', None)
-        with self.assertRaises(dbt.exceptions.CompilationException):
-            var.assert_var_not_none('foo')
+    def test_var_default_something(self):
+        var = Var(self.model, self.context, overrides={'foo': 'baz'})
+        self.assertEqual(var('foo'), 'baz')
+        self.assertEqual(var('foo', 'bar'), 'baz')
 
-    def test_var_defined_is_missing(self):
+    def test_var_default_none(self):
+        var = Var(self.model, self.context, overrides={'foo': None})
+        self.assertEqual(var('foo'), None)
+        self.assertEqual(var('foo', 'bar'), None)
+
+    def test_var_not_defined(self):
         var = Var(self.model, self.context, overrides={})
-        var.assert_var_defined('foo', 'bar')
+
+        self.assertEqual(var('foo', 'bar'), 'bar')
         with self.assertRaises(dbt.exceptions.CompilationException):
-            var.assert_var_defined('foo', None)
+            var('foo')
