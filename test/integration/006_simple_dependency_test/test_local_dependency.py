@@ -5,6 +5,7 @@ import dbt.semver
 import dbt.config
 import dbt.exceptions
 
+
 class TestSimpleDependency(DBTIntegrationTest):
 
     @property
@@ -43,6 +44,25 @@ class TestSimpleDependency(DBTIntegrationTest):
                  if r.node.schema == self.base_schema()]),
             2
         )
+
+
+class TestMissingDependency(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "local_dependency_006"
+
+    @property
+    def models(self):
+        return "test/integration/006_simple_dependency_test/sad_iteration_models"
+
+    @use_profile('postgres')
+    def test_postgres_missing_dependency(self):
+        # dbt should raise a dbt exception, not raise a parse-time TypeError.
+        with self.assertRaises(dbt.exceptions.Exception) as exc:
+            self.run_dbt(['compile'])
+        message = str(exc.exception)
+        self.assertIn('no_such_dependency', message)
+        self.assertIn('is undefined', message)
 
 
 class TestSimpleDependencyWithSchema(TestSimpleDependency):
