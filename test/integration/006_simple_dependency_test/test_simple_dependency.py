@@ -63,6 +63,35 @@ class TestSimpleDependency(DBTIntegrationTest):
         self.assertEqual(created_models['view_model'], 'view')
         self.assertEqual(created_models['view_summary'], 'view')
 
+
+class TestSimpleDependencyWithDuplicates(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "simple_dependency_006"
+
+    @property
+    def models(self):
+        return "test/integration/006_simple_dependency_test/models"
+
+    @property
+    def packages_config(self):
+        # dbt should convert these into a single dependency internally
+        return {
+            "packages": [
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project'
+                },
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project.git'
+                }
+            ]
+        }
+
+    @use_profile('postgres')
+    def test_simple_dependency(self):
+        self.run_dbt(["deps"])
+
+
 class TestSimpleDependencyBranch(DBTIntegrationTest):
 
     def setUp(self):

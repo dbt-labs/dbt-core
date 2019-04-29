@@ -216,8 +216,16 @@ class GitPackage(Package):
 
     def __init__(self, *args, **kwargs):
         super(GitPackage, self).__init__(*args, **kwargs)
+        # strip trailing '.git's from urls
         self._checkout_name = hashlib.md5(six.b(self.git)).hexdigest()
         self.version = self._contents.get('revision')
+
+    @property
+    def other_name(self):
+        if self.git.endswith('.git'):
+            return self.git[:-4]
+        else:
+            return self.git + '.git'
 
     @property
     def name(self):
@@ -368,14 +376,38 @@ def _parse_package(dict_):
 
 
 class PackageListing(AttrDict):
+    def __contains__(self, package):
+        if isinstance(package, basestring):
+            return super(PackageListing, self).__contains__(package)
+        elif isinstance(package, GitPackage):
+            return package.name in self or package.other_name in self
+        else:
+            return package.name in self
+
+    def __setitem__(self, key, value):
+        if isinstance(key, basestring):
+            super(PackageListing, self).__setitem__(key, value)
+        elif isinstance(key, GitPackage) and key.other_name in self:
+            self[key.other_name] = value
+        else:
+            self[key.name] = value
+
+    def __getitem__(self, key):
+        if isinstance(key, basestring):
+            return super(PackageListing, self).__getitem__(key)
+        elif isinstance(key, GitPackage) and key.other_name in self:
+            return self[key.other_name]
+        else:
+            return self[key.name]
 
     def incorporate(self, package):
         if not isinstance(package, Package):
             package = _parse_package(package)
-        if package.name not in self:
-            self[package.name] = package
+
+        if package in self:
+            self[package] = self[package].incorporate(package)
         else:
-            self[package.name] = self[package.name].incorporate(package)
+            self[package] = package
 
     @classmethod
     def create(cls, parsed_yaml):
