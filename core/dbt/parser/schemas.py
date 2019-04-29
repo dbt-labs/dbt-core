@@ -232,7 +232,8 @@ class SchemaBaseTestParser(MacrosKnownParser):
                 )
             except dbt.exceptions.CompilationException as exc:
                 dbt.exceptions.warn_or_error(
-                    'in {}: {}'.format(path, exc.msg), None
+                    'Compilation warning: Invalid test config given in {}:'
+                    '\n\t{}'.format(path, exc.msg), None
                 )
                 continue
 
@@ -342,7 +343,8 @@ class SchemaModelParser(SchemaBaseTestParser):
                                             root_dir, path)
             except dbt.exceptions.CompilationException as exc:
                 dbt.exceptions.warn_or_error(
-                    'in {}: {}'.format(path, exc.msg), test
+                    'Compilation warning: Invalid test config given in {}:'
+                    '\n\t{}'.format(path, exc.msg), None
                 )
                 continue
             yield 'test', node
