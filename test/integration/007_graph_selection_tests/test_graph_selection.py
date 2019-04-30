@@ -11,7 +11,7 @@ class TestGraphSelection(DBTIntegrationTest):
         return "test/integration/007_graph_selection_tests/models"
 
     def assert_correct_schemas(self):
-        with self.test_connection():
+        with self.get_connection():
             exists = self.adapter.check_schema_exists(
                 self.default_database,
                 self.unique_schema()

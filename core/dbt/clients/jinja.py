@@ -224,6 +224,72 @@ def create_macro_capture_env(node):
     return ParserMacroCapture
 
 
+def create_warn_undefined_env(node):
+    class WarnUndefined(jinja2.Undefined):
+        __slots__ = ('node',)
+
+        def __init__(self, hint=None, obj=None, name=None, exc=None):
+            super(WarnUndefined, self).__init__(hint=hint, name=name)
+            self.node = node
+
+        def _fail_or_warn_with_undefined_error(self, *args, **kwargs):
+            try:
+                self._fail_with_undefined_error(*args, **kwargs)
+            except Exception as exc:
+                if dbt.flags.WARN_ERROR:
+                    raise
+                else:
+                    msg = 'Compilation warning in {}:\n\t{}'
+                    model_desc = "{} {} ({})".format(
+                        self.node.get('resource_type'),
+                        self.node.get('name', 'unknown'),
+                        self.node.get('original_file_path')
+                    )
+                    logger.warning(msg.format(model_desc, str(exc)))
+
+        def __eq__(self, other):
+            self._fail_or_warn_with_undefined_error(other)
+
+            return type(self) is type(other)
+
+        def __ne__(self, other):
+            self._fail_or_warn_with_undefined_error(other)
+
+            return not self.__eq__(other)
+
+        def __hash__(self):
+            self._fail_or_warn_with_undefined_error()
+
+            return id(type(self))
+
+        def __str__(self):
+            self._fail_or_warn_with_undefined_error()
+
+            return u''
+
+        def __len__(self):
+            self._fail_or_warn_with_undefined_error()
+
+            return 0
+
+        def __iter__(self):
+            self._fail_or_warn_with_undefined_error()
+
+            if 0:
+                yield None
+
+        def __nonzero__(self):
+            self._fail_or_warn_with_undefined_error()
+
+            return False
+        __bool__ = __nonzero__
+
+        def __repr__(self):
+            return 'Undefined'
+
+    return WarnUndefined
+
+
 def get_environment(node=None, capture_macros=False):
     args = {
         'extensions': ['jinja2.ext.do']
@@ -231,6 +297,8 @@ def get_environment(node=None, capture_macros=False):
 
     if capture_macros:
         args['undefined'] = create_macro_capture_env(node)
+    else:
+        args['undefined'] = create_warn_undefined_env(node)
 
     args['extensions'].append(MaterializationExtension)
     args['extensions'].append(DocumentationExtension)

@@ -80,11 +80,14 @@ CONFIG_CONTRACT = {
                 }
             ]
         },
+        'severity': {
+            'enum': ['ERROR', 'WARN'],
+        },
     },
     'required': [
         'enabled', 'materialized', 'post-hook', 'pre-hook', 'vars',
         'quoting', 'column_types', 'tags'
-    ]
+    ],
 }
 
 

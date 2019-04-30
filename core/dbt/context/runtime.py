@@ -118,6 +118,10 @@ class Config:
         return to_return
 
 
+class Var(dbt.context.common.Var):
+    pass
+
+
 def generate(model, runtime_config, manifest):
     return dbt.context.common.generate(
         model, runtime_config, manifest, None, dbt.context.runtime)

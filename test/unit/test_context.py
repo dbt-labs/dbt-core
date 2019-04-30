@@ -3,7 +3,9 @@ import unittest
 
 from dbt.contracts.graph.parsed import ParsedNode
 from dbt.context.common import Var
+from dbt.context.parser import Var as ParserVar
 import dbt.exceptions
+
 
 class TestVar(unittest.TestCase):
     def setUp(self):
@@ -59,3 +61,21 @@ class TestVar(unittest.TestCase):
         self.assertEqual(var('foo', 'bar'), 'bar')
         with self.assertRaises(dbt.exceptions.CompilationException):
             var('foo')
+
+    def test_parser_var_default_something(self):
+        var = ParserVar(self.model, self.context, overrides={'foo': 'baz'})
+        self.assertEqual(var('foo'), 'baz')
+        self.assertEqual(var('foo', 'bar'), 'baz')
+
+    def test_parser_var_default_none(self):
+        var = ParserVar(self.model, self.context, overrides={'foo': None})
+        self.assertEqual(var('foo'), None)
+        self.assertEqual(var('foo', 'bar'), None)
+
+    def test_parser_var_not_defined(self):
+        # at parse-time, we should not raise if we encounter a missing var
+        # that way disabled models don't get parse errors
+        var = ParserVar(self.model, self.context, overrides={})
+
+        self.assertEqual(var('foo', 'bar'), 'bar')
+        self.assertEqual(var('foo'), None)

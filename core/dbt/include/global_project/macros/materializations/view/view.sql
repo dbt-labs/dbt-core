@@ -23,9 +23,10 @@
      exist, then there is nothing to move out of the way and subsequentally drop. In that case,
      this relation will be effectively unused.
   */
+  {%- set backup_relation_type = 'view' if old_relation is none else old_relation.type -%}
   {%- set backup_relation = api.Relation.create(identifier=backup_identifier,
                                                 schema=schema, database=database,
-                                                type=(old_relation.type or 'view')) -%}
+                                                type=backup_relation_type) -%}
 
   {%- set exists_as_view = (old_relation is not none and old_relation.is_view) -%}
 
