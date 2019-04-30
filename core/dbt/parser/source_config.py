@@ -15,6 +15,7 @@ class SourceConfig(object):
         'materialized',
         'unique_key',
         'database',
+        'severity',
     }
 
     ConfigKeys = AppendListFields | ExtendDictFields | ClobberFields
@@ -67,6 +68,9 @@ class SourceConfig(object):
             defaults['materialized'] = 'seed'
         elif self.node_type == NodeType.Archive:
             defaults['materialized'] = 'archive'
+
+        if self.node_type == NodeType.Test:
+            defaults['severity'] = 'ERROR'
 
         active_config = self.load_config_from_active_project()
 
