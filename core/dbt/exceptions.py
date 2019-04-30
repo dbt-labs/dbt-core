@@ -661,6 +661,16 @@ def warn_or_error(msg, node=None, log_fmt=None):
         logger.warning(msg)
 
 
+def warn_or_raise(exc, log_fmt=None):
+    if dbt.flags.WARN_ERROR:
+        raise exc
+    else:
+        msg = str(exc)
+        if log_fmt is not None:
+            msg = log_fmt.format(msg)
+        logger.warning(msg)
+
+
 # Update this when a new function should be added to the
 # dbt context's `exceptions` key!
 CONTEXT_EXPORTS = {
