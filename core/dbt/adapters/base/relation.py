@@ -10,11 +10,13 @@ class BaseRelation(APIObject):
     Table = "table"
     View = "view"
     CTE = "cte"
+    MaterializedView = "materializedview"
 
     RelationTypes = [
         Table,
         View,
-        CTE
+        CTE,
+        MaterializedView
     ]
 
     DEFAULTS = {

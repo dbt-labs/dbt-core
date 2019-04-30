@@ -58,6 +58,7 @@
       table_schema as schema,
       case when table_type = 'BASE TABLE' then 'table'
            when table_type = 'VIEW' then 'view'
+           when table_type = 'MATERIALIZED VIEW' then 'materializedview'
            else table_type
       end as table_type
     from {{ information_schema }}.tables
