@@ -239,7 +239,7 @@ def create_warn_undefined_env(node):
                 if dbt.flags.WARN_ERROR:
                     raise
                 else:
-                    msg = 'COMPILATION WARNING in {}:\n\t{}'
+                    msg = 'Compilation warning in {}:\n\t{}'
                     model_desc = "{} {} ({})".format(
                         self.node.get('resource_type'),
                         self.node.get('name', 'unknown'),
