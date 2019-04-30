@@ -268,7 +268,8 @@ class DebugTask(BaseTask):
     def _connection_result(self):
         adapter = get_adapter(self.profile)
         try:
-            adapter.execute('select 1 as id')
+            with adapter.connection_named('debug'):
+                adapter.execute('select 1 as id')
         except Exception as exc:
             self.messages.append(COULD_NOT_CONNECT_MESSAGE.format(
                 err=str(exc),

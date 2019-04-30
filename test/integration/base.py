@@ -9,7 +9,7 @@ import json
 from datetime import datetime
 from functools import wraps
 
-from nose.plugins.attrib import attr
+import pytest
 from mock import patch
 
 import dbt.flags as flags
@@ -998,7 +998,7 @@ def use_profile(profile_name):
             self.assertEqual(self.adapter_type, 'snowflake')
     """
     def outer(wrapped):
-        @attr(type=profile_name)
+        @getattr(pytest.mark, 'profile_'+profile_name)
         @wraps(wrapped)
         def func(self, *args, **kwargs):
             return wrapped(self, *args, **kwargs)

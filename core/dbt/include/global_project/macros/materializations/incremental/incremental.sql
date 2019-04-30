@@ -23,21 +23,16 @@
                                              schema=schema,
                                              database=database, type='table') -%}
 
-  {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
   {%- set full_refresh_mode = (flags.FULL_REFRESH == True) -%}
 
   {%- set exists_as_table = (old_relation is not none and old_relation.is_table) -%}
   {%- set exists_not_as_table = (old_relation is not none and not old_relation.is_table) -%}
 
-  {%- set should_truncate = (non_destructive_mode and full_refresh_mode and exists_as_table) -%}
-  {%- set should_drop = (not should_truncate and (full_refresh_mode or exists_not_as_table)) -%}
-  {%- set force_create = (flags.FULL_REFRESH and not flags.NON_DESTRUCTIVE) -%}
+  {%- set should_drop = (full_refresh_mode or exists_not_as_table) -%}
 
   -- setup
   {% if old_relation is none -%}
     -- noop
-  {%- elif should_truncate -%}
-    {{ adapter.truncate_relation(old_relation) }}
   {%- elif should_drop -%}
     {{ adapter.drop_relation(old_relation) }}
     {%- set old_relation = none -%}
@@ -49,7 +44,7 @@
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
   -- build model
-  {% if force_create or old_relation is none -%}
+  {% if full_refresh_mode or old_relation is none -%}
     {%- call statement('main') -%}
       {{ create_table_as(False, target_relation, sql) }}
     {%- endcall -%}

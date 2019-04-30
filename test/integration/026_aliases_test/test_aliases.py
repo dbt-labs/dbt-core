@@ -1,5 +1,4 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 
 class TestAliases(DBTIntegrationTest):
@@ -27,19 +26,19 @@ class TestAliases(DBTIntegrationTest):
             }
         }
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__alias_model_name(self):
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 4)
         self.run_dbt(['test'])
 
-    @attr(type='bigquery')
+    @use_profile('bigquery')
     def test__alias_model_name_bigquery(self):
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 4)
         self.run_dbt(['test'])
 
-    @attr(type='snowflake')
+    @use_profile('snowflake')
     def test__alias_model_name_snowflake(self):
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 4)
@@ -60,7 +59,7 @@ class TestAliasErrors(DBTIntegrationTest):
             "macro-paths": ['test/integration/026_aliases_test/macros'],
         }
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__alias_dupe_throws_exception(self):
         message = ".*identical database representation.*"
         with self.assertRaisesRegexp(Exception, message):
@@ -81,7 +80,7 @@ class TestSameAliasDifferentSchemas(DBTIntegrationTest):
             "macro-paths": ['test/integration/026_aliases_test/macros'],
         }
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__same_alias_succeeds_in_different_schemas(self):
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 3)

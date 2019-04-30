@@ -1,5 +1,4 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 class TestSimpleDependency(DBTIntegrationTest):
 
@@ -25,7 +24,7 @@ class TestSimpleDependency(DBTIntegrationTest):
             ]
         }
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_simple_dependency(self):
         self.run_dbt(["deps"])
         results = self.run_dbt(["run"])
@@ -47,7 +46,7 @@ class TestSimpleDependency(DBTIntegrationTest):
         self.assertTablesEqual("seed","view_model")
         self.assertTablesEqual("seed","incremental")
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_simple_dependency_with_models(self):
         self.run_dbt(["deps"])
         results = self.run_dbt(["run", '--models', 'view_model+'])
@@ -105,7 +104,7 @@ class TestSimpleDependencyBranch(DBTIntegrationTest):
         self.assertEqual(created_models['view_summary'], 'view')
         self.assertEqual(created_models['incremental'], 'table')
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_simple_dependency(self):
         self.deps_run_assert_equality()
 
@@ -115,7 +114,7 @@ class TestSimpleDependencyBranch(DBTIntegrationTest):
 
         self.deps_run_assert_equality()
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_empty_models_not_compiled_in_dependencies(self):
         self.deps_run_assert_equality()
 

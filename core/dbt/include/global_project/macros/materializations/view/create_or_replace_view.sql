@@ -1,12 +1,10 @@
 
-{% macro handle_existing_table(full_refresh, non_destructive_mode, old_relation) %}
-    {{ adapter_macro("dbt.handle_existing_table", full_refresh, non_destructive_mode, old_relation) }}
+{% macro handle_existing_table(full_refresh, old_relation) %}
+    {{ adapter_macro("dbt.handle_existing_table", full_refresh, old_relation) }}
 {% endmacro %}
 
-{% macro default__handle_existing_table(full_refresh, non_destructive_mode, old_relation) %}
-    {%- if not non_destructive_mode -%}
-      {{ adapter.drop_relation(old_relation) }}
-    {%- endif -%}
+{% macro default__handle_existing_table(full_refresh, old_relation) %}
+    {{ adapter.drop_relation(old_relation) }}
 {% endmacro %}
 
 {# /*
@@ -23,7 +21,6 @@
 
 {% macro create_or_replace_view(run_outside_transaction_hooks=True) %}
   {%- set identifier = model['alias'] -%}
-  {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
 
   {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) -%}
 
@@ -32,9 +29,6 @@
   {%- set target_relation = api.Relation.create(
       identifier=identifier, schema=schema, database=database,
       type='view') -%}
-
-  {%- set should_ignore = non_destructive_mode and exists_as_view %}
-  {%- set has_transactional_hooks = (hooks | selectattr('transaction', 'equalto', True) | list | length) > 0 %}
 
   {% if run_outside_transaction_hooks %}
       -- no transactions on BigQuery
@@ -48,30 +42,17 @@
   -- that's an error. If we were told to full refresh, drop it. This behavior differs
   -- for Snowflake and BigQuery, so multiple dispatch is used.
   {%- if old_relation is not none and old_relation.is_table -%}
-    {{ handle_existing_table(flags.FULL_REFRESH, non_destructive_mode, old_relation) }}
+    {{ handle_existing_table(flags.FULL_REFRESH, old_relation) }}
   {%- endif -%}
 
   -- build model
-  {% if non_destructive_mode -%}
-    {% call noop_statement('main', status="PASS", res=None) -%}
-      -- Not running : non-destructive mode
-      {{ sql }}
-    {%- endcall %}
-  {%- else -%}
-    {% call statement('main') -%}
-      {{ create_view_as(target_relation, sql) }}
-    {%- endcall %}
-  {%- endif %}
+  {% call statement('main') -%}
+    {{ create_view_as(target_relation, sql) }}
+  {%- endcall %}
 
   {{ run_hooks(post_hooks, inside_transaction=True) }}
 
-  {#
-      -- Don't commit in non-destructive mode _unless_ there are in-transaction hooks
-      -- TODO : Figure out some other way of doing this that isn't as fragile
-  #}
-  {% if has_transactional_hooks or not should_ignore %}
-      {{ adapter.commit() }}
-  {% endif %}
+  {{ adapter.commit() }}
 
   {% if run_outside_transaction_hooks %}
       -- No transactions on BigQuery
