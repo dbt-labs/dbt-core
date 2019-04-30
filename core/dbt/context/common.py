@@ -232,29 +232,32 @@ class Var(object):
     def pretty_dict(self, data):
         return json.dumps(data, sort_keys=True, indent=4)
 
+    def get_missing_var(self, var_name):
+        pretty_vars = self.pretty_dict(self.local_vars)
+        msg = self.UndefinedVarError.format(
+            var_name, self.model_name, pretty_vars
+        )
+        dbt.exceptions.raise_compiler_error(msg, self.model)
+
     def assert_var_defined(self, var_name, default):
         if var_name not in self.local_vars and default is self._VAR_NOTSET:
-            pretty_vars = self.pretty_dict(self.local_vars)
-            dbt.exceptions.raise_compiler_error(
-                self.UndefinedVarError.format(
-                    var_name, self.model_name, pretty_vars
-                ),
-                self.model
-            )
+            return self.get_missing_var(var_name)
 
-    def __call__(self, var_name, default=_VAR_NOTSET):
-        self.assert_var_defined(var_name, default)
-
-        if var_name not in self.local_vars:
-            return default
-
+    def get_rendered_var(self, var_name):
         raw = self.local_vars[var_name]
-
         # if bool/int/float/etc are passed in, don't compile anything
         if not isinstance(raw, basestring):
             return raw
 
         return dbt.clients.jinja.get_rendered(raw, self.context)
+
+    def __call__(self, var_name, default=_VAR_NOTSET):
+        if var_name in self.local_vars:
+            return self.get_rendered_var(var_name)
+        elif default is not self._VAR_NOTSET:
+            return default
+        else:
+            return self.get_missing_var(var_name)
 
 
 def write(node, target_path, subdirectory):
@@ -388,7 +391,8 @@ def generate_base(model, model_dict, config, manifest, source_config,
     return context
 
 
-def modify_generated_context(context, model, model_dict, config, manifest):
+def modify_generated_context(context, model, model_dict, config, manifest,
+                             provider):
     cli_var_overrides = config.cli_vars
 
     context = _add_tracking(context)
@@ -401,7 +405,8 @@ def modify_generated_context(context, model, model_dict, config, manifest):
 
     context["write"] = write(model_dict, config.target_path, 'run')
     context["render"] = render(context, model_dict)
-    context["var"] = Var(model, context=context, overrides=cli_var_overrides)
+    context["var"] = provider.Var(model, context=context,
+                                  overrides=cli_var_overrides)
     context['context'] = context
 
     return context
@@ -420,7 +425,7 @@ def generate_execute_macro(model, config, manifest, provider):
                             provider)
 
     return modify_generated_context(context, model, model_dict, config,
-                                    manifest)
+                                    manifest, provider)
 
 
 def generate_model(model, config, manifest, source_config, provider):
@@ -441,7 +446,7 @@ def generate_model(model, config, manifest, source_config, provider):
     })
 
     return modify_generated_context(context, model, model_dict, config,
-                                    manifest)
+                                    manifest, provider)
 
 
 def generate(model, config, manifest, source_config=None, provider=None):

@@ -2,10 +2,10 @@ import mock
 import unittest
 
 from dbt.contracts.graph.parsed import ParsedNode
-from dbt.context.common import Var
 from dbt.context import parser, runtime
 import dbt.exceptions
 from test.unit.mock_adapter import adapter_factory
+
 
 
 class TestVar(unittest.TestCase):
@@ -47,21 +47,40 @@ class TestVar(unittest.TestCase):
         self.context = mock.MagicMock()
 
     def test_var_default_something(self):
-        var = Var(self.model, self.context, overrides={'foo': 'baz'})
+        var = runtime.Var(self.model, self.context, overrides={'foo': 'baz'})
         self.assertEqual(var('foo'), 'baz')
         self.assertEqual(var('foo', 'bar'), 'baz')
 
     def test_var_default_none(self):
-        var = Var(self.model, self.context, overrides={'foo': None})
+        var = runtime.Var(self.model, self.context, overrides={'foo': None})
         self.assertEqual(var('foo'), None)
         self.assertEqual(var('foo', 'bar'), None)
 
     def test_var_not_defined(self):
-        var = Var(self.model, self.context, overrides={})
+        var = runtime.Var(self.model, self.context, overrides={})
 
         self.assertEqual(var('foo', 'bar'), 'bar')
         with self.assertRaises(dbt.exceptions.CompilationException):
             var('foo')
+    
+    def test_parser_var_default_something(self):
+        var = parser.Var(self.model, self.context, overrides={'foo': 'baz'})
+        self.assertEqual(var('foo'), 'baz')
+        self.assertEqual(var('foo', 'bar'), 'baz')
+
+    def test_parser_var_default_none(self):
+        var = parser.Var(self.model, self.context, overrides={'foo': None})
+        self.assertEqual(var('foo'), None)
+        self.assertEqual(var('foo', 'bar'), None)
+
+    def test_parser_var_not_defined(self):
+        # at parse-time, we should not raise if we encounter a missing var
+        # that way disabled models don't get parse errors
+        var = parser.Var(self.model, self.context, overrides={})
+
+        self.assertEqual(var('foo', 'bar'), 'bar')
+        self.assertEqual(var('foo'), None)
+
 
 class TestParseWrapper(unittest.TestCase):
     def setUp(self):

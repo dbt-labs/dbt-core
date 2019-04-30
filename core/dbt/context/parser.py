@@ -117,6 +117,12 @@ class DatabaseWrapper(dbt.context.common.BaseDatabaseWrapper):
             )
 
 
+class Var(dbt.context.common.Var):
+    def get_missing_var(self, var_name):
+        # in the parser, just always return None.
+        return None
+
+
 def generate(model, runtime_config, manifest, source_config):
     # during parsing, we don't have a connection, but we might need one, so we
     # have to acquire it.

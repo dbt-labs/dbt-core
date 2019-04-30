@@ -361,7 +361,7 @@ class Column(object):
 
         if self.dtype == 'text' or self.char_size is None:
             # char_size should never be None. Handle it reasonably just in case
-            return 255
+            return 256
         else:
             return int(self.char_size)
 
