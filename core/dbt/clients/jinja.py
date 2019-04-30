@@ -231,6 +231,8 @@ def get_environment(node=None, capture_macros=False):
 
     if capture_macros:
         args['undefined'] = create_macro_capture_env(node)
+    else:
+        args['undefined'] = jinja2.StrictUndefined
 
     args['extensions'].append(MaterializationExtension)
     args['extensions'].append(DocumentationExtension)

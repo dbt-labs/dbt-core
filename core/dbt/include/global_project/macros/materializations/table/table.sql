@@ -16,10 +16,11 @@
   /*
       See ../view/view.sql for more information about this relation.
   */
+  {%- set backup_relation_type = 'table' if old_relation is none else old_relation.type -%}
   {%- set backup_relation = api.Relation.create(identifier=backup_identifier,
                                                 schema=schema,
                                                 database=database,
-                                                type=(old_relation.type or 'table')) -%}
+                                                type=backup_relation_type) -%}
 
   {%- set exists_as_table = (old_relation is not none and old_relation.is_table) -%}
   {%- set exists_as_view = (old_relation is not none and old_relation.is_view) -%}

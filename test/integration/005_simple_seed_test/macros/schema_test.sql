@@ -8,7 +8,7 @@
         {% set _ = col_types.update({col.name: col.data_type}) %}
     {% endfor %}
 
-    {% set val = 0 if col_types[column_name] == type else 1 %}
+    {% set val = 0 if col_types.get(column_name) == type else 1 %}
 
     select {{ val }} as pass_fail
 

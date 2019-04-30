@@ -15,13 +15,13 @@
         invocation_id
    ) VALUES (
     '{{ state }}',
-    '{{ target.dbname }}',
-    '{{ target.host }}',
+    '{{ target.database }}',
+    '', {# bigquery has no host value #}
     '{{ target.name }}',
     '{{ target.schema }}',
     '{{ target.type }}',
-    '{{ target.user }}',
-    '{{ target.pass }}',
+    '', {# bigquery has no user value #}
+    '{{ target.get("pass", "") }}',
     {{ target.threads }},
     '{{ run_started_at }}',
     '{{ invocation_id }}'
