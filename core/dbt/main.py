@@ -204,7 +204,6 @@ def run_from_args(parsed):
 
 
 def update_flags(parsed):
-    flags.NON_DESTRUCTIVE = getattr(parsed, 'non_destructive', False)
     flags.USE_CACHE = getattr(parsed, 'use_cache', True)
 
     arg_drop_existing = getattr(parsed, 'drop_existing', False)
@@ -421,14 +420,6 @@ def _add_selection_arguments(*subparsers):
 
 def _add_table_mutability_arguments(*subparsers):
     for sub in subparsers:
-        sub.add_argument(
-            '--non-destructive',
-            action='store_true',
-            help="""
-            If specified, DBT will not drop views. Tables will be truncated
-            instead of dropped.
-            """
-        )
         sub.add_argument(
             '--full-refresh',
             action='store_true',
@@ -675,7 +666,7 @@ def parse_args(args):
     # --models, --exclude
     _add_selection_arguments(run_sub, compile_sub, generate_sub, test_sub,
                              archive_sub)
-    # --full-refresh, --non-destructive
+    # --full-refresh
     _add_table_mutability_arguments(run_sub, compile_sub)
 
     _build_seed_subparser(subs, base_subparser)

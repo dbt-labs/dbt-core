@@ -6,23 +6,20 @@
                                                 schema=schema,
                                                 database=database, type='table') -%}
 
-  {%- set exists_as_table = (old_relation is not none and old_relation.is_table) -%}
-  {%- set exists_as_view = (old_relation is not none and old_relation.is_view) -%}
-
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
 
   -- `BEGIN` happens here:
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
+  
+  {#-- Drop the relation if it was a view to "convert" it in a table. This may lead to 
+    -- downtime, but it should be a relatively infrequent occurrence  #}
+  {% if old_relation is not none and old_relation.is_view %}
+    {{ log("Dropping relation " ~ old_relation ~ " because it is of type " ~ old_relation.type) }}
+    {{ drop_relation_if_exists(old_relation) }}
+  {% endif %}
 
   --build model
   {% call statement('main') -%}
-     {# Drop the relation if it was a view to essencially "convert" it in a table. This does lead to 
-        downtime but I think it makes sense and should happen. Impact will be minimal I suspect. #}
-    {% if old_relation is not none and old_relation.type == 'view' %}
-      {{ log("Dropping relation " ~ old_relation ~ " because it is a view and this model is a table.") }}
-      {{ drop_relation_if_exists(old_relation) }}
-    {% endif %}
-
     {{ create_table_as(false, target_relation, sql) }}
   {%- endcall %}
 

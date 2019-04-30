@@ -44,47 +44,6 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
         self.assertTablesEqual("seed","materialized")
 
     @use_profile('postgres')
-    def test_postgres_non_destructive(self):
-        results = self.run_dbt(['run', '--non-destructive'])
-        self.assertEqual(len(results), 3)
-
-        self.assertTablesEqual("seed","view")
-        self.assertTablesEqual("seed","incremental")
-        self.assertTablesEqual("seed","materialized")
-        self.assertTableDoesNotExist('dependent_view')
-
-        self.run_sql_file("test/integration/017_runtime_materialization_tests/update.sql")
-
-        results = self.run_dbt(['run', '--non-destructive'])
-        self.assertEqual(len(results), 3)
-
-        self.assertTableDoesExist('dependent_view')
-        self.assertTablesEqual("seed","view")
-        self.assertTablesEqual("seed","incremental")
-        self.assertTablesEqual("seed","materialized")
-
-    @use_profile('postgres')
-    def test_postgres_full_refresh_and_non_destructive(self):
-        results = self.run_dbt(['run', '--full-refresh', '--non-destructive'])
-        self.assertEqual(len(results), 3)
-
-        self.assertTablesEqual("seed","view")
-        self.assertTablesEqual("seed","incremental")
-        self.assertTablesEqual("seed","materialized")
-        self.assertTableDoesNotExist('dependent_view')
-
-        self.run_sql_file("test/integration/017_runtime_materialization_tests/invalidate_incremental.sql")
-        self.run_sql_file("test/integration/017_runtime_materialization_tests/update.sql")
-
-        results = self.run_dbt(['run', '--full-refresh', '--non-destructive'])
-        self.assertEqual(len(results), 3)
-
-        self.assertTableDoesExist('dependent_view')
-        self.assertTablesEqual("seed","view")
-        self.assertTablesEqual("seed","incremental")
-        self.assertTablesEqual("seed","materialized")
-
-    @use_profile('postgres')
     def test_postgres_delete__dbt_tmp_relation(self):
         # This creates a __dbt_tmp view - make sure it doesn't interfere with the dbt run
         self.run_sql_file("test/integration/017_runtime_materialization_tests/create_view__dbt_tmp.sql")

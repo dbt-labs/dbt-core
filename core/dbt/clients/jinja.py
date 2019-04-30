@@ -219,7 +219,7 @@ def create_macro_capture_env(node):
             return self
 
         def __call__(self, *args, **kwargs):
-            return True
+            return self
 
     return ParserMacroCapture
 

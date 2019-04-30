@@ -206,8 +206,7 @@ def log(msg, info=False):
 class Var(object):
     UndefinedVarError = "Required var '{}' not found in config:\nVars "\
                         "supplied to {} = {}"
-    NoneVarError = "Supplied var '{}' is undefined in config:\nVars supplied "\
-                   "to {} = {}"
+    _VAR_NOTSET = object()
 
     def __init__(self, model, context, overrides):
         self.model = model
@@ -241,7 +240,7 @@ class Var(object):
         return json.dumps(data, sort_keys=True, indent=4)
 
     def assert_var_defined(self, var_name, default):
-        if var_name not in self.local_vars and default is None:
+        if var_name not in self.local_vars and default is self._VAR_NOTSET:
             pretty_vars = self.pretty_dict(self.local_vars)
             dbt.exceptions.raise_compiler_error(
                 self.UndefinedVarError.format(
@@ -250,24 +249,11 @@ class Var(object):
                 self.model
             )
 
-    def assert_var_not_none(self, var_name):
-        raw = self.local_vars[var_name]
-        if raw is None:
-            pretty_vars = self.pretty_dict(self.local_vars)
-            dbt.exceptions.raise_compiler_error(
-                self.NoneVarError.format(
-                    var_name, self.model_name, pretty_vars
-                ),
-                self.model
-            )
-
-    def __call__(self, var_name, default=None):
+    def __call__(self, var_name, default=_VAR_NOTSET):
         self.assert_var_defined(var_name, default)
 
         if var_name not in self.local_vars:
             return default
-
-        self.assert_var_not_none(var_name)
 
         raw = self.local_vars[var_name]
 
