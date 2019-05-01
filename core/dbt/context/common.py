@@ -45,7 +45,7 @@ class RelationProxy(object):
         return self.relation_type.create(*args, **kwargs)
 
 
-class DatabaseWrapper(object):
+class BaseDatabaseWrapper(object):
     """
     Wrapper for runtime database interaction. Applies the runtime quote policy
     via a relation proxy.
@@ -55,14 +55,7 @@ class DatabaseWrapper(object):
         self.Relation = RelationProxy(adapter)
 
     def __getattr__(self, name):
-        if name in self.adapter._available_:
-            return getattr(self.adapter, name)
-        else:
-            raise AttributeError(
-                "'{}' object has no attribute '{}'".format(
-                    self.__class__.__name__, name
-                )
-            )
+        raise NotImplementedError('subclasses need to implement this')
 
     @property
     def config(self):
@@ -358,7 +351,7 @@ def generate_base(model, model_dict, config, manifest, source_config,
     pre_hooks = None
     post_hooks = None
 
-    db_wrapper = DatabaseWrapper(adapter)
+    db_wrapper = provider.DatabaseWrapper(adapter)
 
     context = dbt.utils.merge(context, {
         "adapter": db_wrapper,

@@ -35,7 +35,7 @@ class SQLAdapter(BaseAdapter):
         - list_relations_without_caching
         - get_columns_in_relation
     """
-    @available
+    @available.parse(lambda *a, **k: (None, None))
     def add_query(self, sql, auto_begin=True, bindings=None,
                   abridge_sql_log=False):
         """Add a query to the current transaction. A thin wrapper around

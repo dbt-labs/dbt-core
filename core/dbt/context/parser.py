@@ -97,6 +97,26 @@ class Config(object):
         return ''
 
 
+class DatabaseWrapper(dbt.context.common.BaseDatabaseWrapper):
+    """The parser subclass of the database wrapper applies any explicit
+    parse-time overrides.
+    """
+    def __getattr__(self, name):
+        override = (name in self.adapter._available_ and
+                    name in self.adapter._parse_replacements_)
+
+        if override:
+            return self.adapter._parse_replacements_[name]
+        elif name in self.adapter._available_:
+            return getattr(self.adapter, name)
+        else:
+            raise AttributeError(
+                "'{}' object has no attribute '{}'".format(
+                    self.__class__.__name__, name
+                )
+            )
+
+
 class Var(dbt.context.common.Var):
     def get_missing_var(self, var_name):
         # in the parser, just always return None.
