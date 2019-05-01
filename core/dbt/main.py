@@ -780,7 +780,7 @@ def _build_source_freshness_subparser(subparsers, base_subparser):
 
 def _build_list_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
-        'list',
+        "list",
         parents=[base_subparser],
         help="""
         List the resources in your project
@@ -791,14 +791,14 @@ def _build_list_subparser(subparsers, base_subparser):
     resource_values: List[str] = [str(s) for s in list_task.ListTask.ALL_RESOURCE_VALUES] + [
         "default",
         "all",
-    sub.add_argument('--resource-type',
-                     choices=resource_values,
-                     action='append',
-                     default=[],
-                     dest='resource_types')
-    sub.add_argument('--output',
-                     choices=['json', 'name', 'path', 'selector'],
-                     default='selector')
+    ]
+    sub.add_argument(
+        "--resource-type",
+        choices=resource_values,
+        action="append",
+        default=[],
+        dest="resource_types",
+    )
     sub.add_argument('--output-keys')
 
     sub.add_argument(

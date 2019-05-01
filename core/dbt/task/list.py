@@ -16,30 +16,32 @@ import dbt.events.functions as event_logger
 
 
 class ListTask(GraphRunnableTask):
-    DEFAULT_RESOURCE_VALUES = frozenset((
-        NodeType.Model,
+    DEFAULT_RESOURCE_VALUES = frozenset(
+        (
             NodeType.Model,
-        NodeType.Seed,
-        NodeType.Test,
-        NodeType.Source,
+            NodeType.Snapshot,
+            NodeType.Seed,
+            NodeType.Test,
             NodeType.Source,
             NodeType.Exposure,
-    ))
-    ALL_RESOURCE_VALUES = DEFAULT_RESOURCE_VALUES | frozenset((
-        NodeType.Analysis,
-    ))
-    ALLOWED_KEYS = frozenset((
-        'alias',
-        'name',
-        'package_name',
-        'depends_on',
-        'tags',
-        'config',
-        'resource_type',
-        'source_name',
+            NodeType.Metric,
+        )
+    )
+    ALL_RESOURCE_VALUES = DEFAULT_RESOURCE_VALUES | frozenset((NodeType.Analysis,))
+    ALLOWED_KEYS = frozenset(
+        (
+            "alias",
+            "name",
+            "package_name",
+            "depends_on",
+            "tags",
+            "config",
+            "resource_type",
         'original_file_path',
         'unique_id'
-    ))
+            "unique_id",
+        )
+    )
 
     def __init__(self, args, config):
         super().__init__(args, config)
@@ -120,15 +122,17 @@ class ListTask(GraphRunnableTask):
 
     def generate_json(self):
         for node in self._iterate_selected_nodes():
-            yield json.dumps({
-                k: v
+            yield json.dumps(
+                {
                     k: v
                 if (
                     k in self.args.output_keys
                     if self.args.output_keys is not None
                     else k in self.ALLOWED_KEYS
                 )
-            })
+                    )
+                }
+            )
 
     def generate_paths(self):
         for node in self._iterate_selected_nodes():
@@ -137,13 +141,13 @@ class ListTask(GraphRunnableTask):
     def run(self):
         ManifestTask._runtime_initialize(self)
         output = self.args.output
-        if output == 'selector':
+        if output == "selector":
             generator = self.generate_selectors
-        elif output == 'name':
+        elif output == "name":
             generator = self.generate_names
-        elif output == 'json':
+        elif output == "json":
             generator = self.generate_json
-        elif output == 'path':
+        elif output == "path":
             generator = self.generate_paths
         else:
             raise InternalException(
@@ -167,11 +171,11 @@ class ListTask(GraphRunnableTask):
             return list(self.DEFAULT_RESOURCE_VALUES)
 
         values = set(self.args.resource_types)
-        if 'default' in values:
-            values.remove('default')
+        if "default" in values:
+            values.remove("default")
             values.update(self.DEFAULT_RESOURCE_VALUES)
-        if 'all' in values:
-            values.remove('all')
+        if "all" in values:
+            values.remove("all")
             values.update(self.ALL_RESOURCE_VALUES)
         return list(values)
 
