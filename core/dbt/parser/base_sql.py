@@ -47,9 +47,14 @@ class BaseSqlParser(MacrosKnownParser):
             path = self.get_compiled_path(name,
                                           file_match.get('relative_path'))
 
+            # TODO(jeb): Why would the original file path rely on the compiled
+            # path?
+            # original_file_path = os.path.join(
+            #     file_match.get('searched_path'),
+            #     path)
             original_file_path = os.path.join(
                 file_match.get('searched_path'),
-                path)
+                file_match.get('relative_path'))
 
             result.append({
                 'name': name,

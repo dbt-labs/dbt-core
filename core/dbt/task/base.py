@@ -47,6 +47,10 @@ class BaseTask(object):
         self.config = config
 
     @classmethod
+    def pre_init_hook(cls):
+        """A hook called before the task is initialized."""
+
+    @classmethod
     def from_args(cls, args):
         try:
             config = cls.ConfigType.from_args(args)

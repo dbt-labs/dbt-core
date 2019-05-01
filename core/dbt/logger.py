@@ -84,11 +84,19 @@ dbt.compat.suppress_warnings()
 initialized = False
 
 
+def _swap_handler(logger, old, new):
+    if old in logger.handlers:
+        logger.handlers.remove(old)
+    if new not in logger.handlers:
+        logger.addHandler(new)
+
+
 def log_to_stderr(logger):
-    if stdout_handler in logger.handlers:
-        logger.handlers.remove(stdout_handler)
-    if stderr_handler not in logger.handlers:
-        logger.addHandler(stderr_handler)
+    _swap_handler(logger, stdout_handler, stderr_handler)
+
+
+def log_to_stdout(logger):
+    _swap_handler(logger, stderr_handler, stdout_handler)
 
 
 def make_log_dir_if_missing(log_dir):

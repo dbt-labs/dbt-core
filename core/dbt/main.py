@@ -22,6 +22,7 @@ import dbt.task.generate as generate_task
 import dbt.task.serve as serve_task
 import dbt.task.freshness as freshness_task
 import dbt.task.run_operation as run_operation_task
+from dbt.task.list import ListTask
 from dbt.task.rpc_server import RPCServerTask
 from dbt.adapters.factory import reset_adapters
 
@@ -183,6 +184,7 @@ def run_from_args(parsed):
     log_cache_events(getattr(parsed, 'log_cache_events', False))
     update_flags(parsed)
 
+    parsed.cls.pre_init_hook()
     logger.info("Running with dbt{}".format(dbt.version.installed))
 
     # this will convert DbtConfigErrors into RuntimeExceptions
@@ -569,6 +571,42 @@ def _build_rpc_subparser(subparsers, base_subparser):
     return sub
 
 
+def _build_list_subparser(subparsers, base_subparser):
+    sub = subparsers.add_parser(
+        'list',
+        parents=[base_subparser],
+        help='list models'
+    )
+    sub.set_defaults(cls=ListTask, which='list')
+    resource_values = list(ListTask.ALL_RESOURCE_VALUES) + ['default', 'all']
+    sub.add_argument('--resource-type',
+                     choices=resource_values,
+                     action='append',
+                     default=[],
+                     dest='resource_types')
+    sub.add_argument('--output',
+                     choices=['json', 'name', 'path', 'selector'],
+                     default='selector')
+    sub.add_argument(
+        '-s',
+        '--select',
+        required=False,
+        nargs='+',
+        help="Specify the nodes to select.",
+        dest='models'
+    )
+    sub.add_argument(
+        '--exclude',
+        required=False,
+        nargs='+',
+        help="Specify the models to exclude."
+    )
+    # in python 3.x you can use the 'aliases' kwarg, but in python 2.7 you get
+    # to do this
+    subparsers._name_parser_map['ls'] = sub
+    return sub
+
+
 def parse_args(args):
     p = DBTArgumentParser(
         prog='dbt: data build tool',
@@ -645,14 +683,15 @@ def parse_args(args):
 
     # make the subcommands that have their own subcommands
     docs_sub = _build_docs_subparser(subs, base_subparser)
-    docs_subs = docs_sub.add_subparsers()
+    docs_subs = docs_sub.add_subparsers(title="Available sub-commands")
     source_sub = _build_source_subparser(subs, base_subparser)
-    source_subs = source_sub.add_subparsers()
+    source_subs = source_sub.add_subparsers(title="Available sub-commands")
 
     _build_init_subparser(subs, base_subparser)
     _build_clean_subparser(subs, base_subparser)
     _build_debug_subparser(subs, base_subparser)
     _build_deps_subparser(subs, base_subparser)
+    _build_list_subparser(subs, base_subparser)
 
     archive_sub = _build_archive_subparser(subs, base_subparser)
     rpc_sub = _build_rpc_subparser(subs, base_subparser)
