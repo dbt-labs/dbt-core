@@ -50,6 +50,11 @@ stdout_handler = logging.StreamHandler(colorama_stdout)
 stdout_handler.setFormatter(logging.Formatter('%(message)s'))
 stdout_handler.setLevel(NOTICE)
 
+stderr_handler = logging.StreamHandler()
+stderr_handler.setFormatter(logging.Formatter('%(message)s'))
+stderr_handler.setLevel(WARNING)
+
+
 logger = logging.getLogger('dbt')
 logger.addHandler(stdout_handler)
 logger.setLevel(DEBUG)
@@ -79,6 +84,13 @@ dbt.compat.suppress_warnings()
 initialized = False
 
 
+def log_to_stderr(logger):
+    if stdout_handler in logger.handlers:
+        logger.handlers.remove(stdout_handler)
+    if stderr_handler not in logger.handlers:
+        logger.addHandler(stderr_handler)
+
+
 def make_log_dir_if_missing(log_dir):
     import dbt.clients.system
     dbt.clients.system.make_directory(log_dir)
@@ -99,14 +111,17 @@ def default_formatter():
 
 
 def initialize_logger(debug_mode=False, path=None):
-    global initialized, logger, stdout_handler
+    global initialized, logger, stdout_handler, stderr_handler
 
     if initialized:
         return
 
     if debug_mode:
+        # we'll only use one of these, but just set both up
         stdout_handler.setFormatter(default_formatter())
         stdout_handler.setLevel(DEBUG)
+        stderr_handler.setFormatter(default_formatter())
+        stderr_handler.setLevel(DEBUG)
 
     if path is not None:
         make_log_dir_if_missing(path)
