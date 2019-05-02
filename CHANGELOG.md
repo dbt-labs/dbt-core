@@ -1,3 +1,22 @@
+## dbt 0.13.1 (release date TBD)
+
+### Overview
+This is a bugfix release.
+
+### Bugfixes
+- Add "MaterializedView" relation type to the Snowflake adapter ([#1430](https://github.com/fishtown-analytics/dbt/issues/1430), [#1432](https://github.com/fishtown-analytics/dbt/pull/1432))
+- Quote databases properly ([#1396](https://github.com/fishtown-analytics/dbt/issues/1396), [#1402](https://github.com/fishtown-analytics/dbt/pull/1402))
+- Use "ilike" instead of "=" for database equality when listing schemas ([#1411](https://github.com/fishtown-analytics/dbt/issues/1411), [#1412](https://github.com/fishtown-analytics/dbt/pull/1412))
+- Pass the model name along in get_relations ([#1384](https://github.com/fishtown-analytics/dbt/issues/1384), [#1388](https://github.com/fishtown-analytics/dbt/pull/1388))
+- Add logging to dbt clean ([#1261](https://github.com/fishtown-analytics/dbt/issues/1261), [#1383](https://github.com/fishtown-analytics/dbt/pull/1383), [#1391](https://github.com/fishtown-analytics/dbt/pull/1391))
+
+### Contributors:
+Thanks for your contributions to dbt!
+
+- [@emilieschario](https://github.com/emilieschario) [#1391](https://github.com/fishtown-analytics/dbt/pull/1391)
+- [@adriank-convoy](https://github.com/adriank-convoy) [#1432](https://github.com/fishtown-analytics/dbt/pull/1432)
+
+
 ## dbt 0.13.0 - Stephen Girard (March 21, 2019)
 
 ### Overview
