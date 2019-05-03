@@ -83,6 +83,8 @@ def get_counts(flat_nodes):
 
         if node.get('resource_type') == NodeType.Model:
             t = '{} {}'.format(get_materialization(node), t)
+        elif node.get('resource_type') == NodeType.Operation:
+            t = 'hook'
 
         counts[t] = counts.get(t, 0) + 1
 

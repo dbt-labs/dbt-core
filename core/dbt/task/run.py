@@ -16,6 +16,10 @@ from dbt.utils import get_nodes_by_tags
 
 
 class RunTask(CompileTask):
+    def __init__(self, args, config):
+        super(RunTask, self).__init__(args, config)
+        self.ran_hooks = []
+
     def raise_on_first_error(self):
         return False
 
@@ -33,11 +37,22 @@ class RunTask(CompileTask):
         # b/c psycopg2 automatically begins a transaction when a connection
         # is created.
         adapter.clear_transaction()
+        if not ordered_hooks:
+            return
 
-        for i, hook in enumerate(ordered_hooks):
+        plural = 'hook' if len(ordered_hooks) == 1 else 'hooks'
+        dbt.ui.printer.print_timestamped_line("")
+        dbt.ui.printer.print_timestamped_line(
+            'Running {} {} {}'.format(len(ordered_hooks), hook_type, plural)
+        )
+
+        for idx, hook in enumerate(ordered_hooks, start=1):
             compiled = compile_node(adapter, self.config, hook,
                                     self.manifest, extra_context)
             statement = compiled.wrapped_sql
+            dbt.ui.printer.print_timestamped_line(
+                '{} of {} START {}'.format(idx, len(ordered_hooks), statement)
+            )
 
             hook_index = hook.get('index', len(hooks))
             hook_dict = get_hook_dict(statement, index=hook_index)
@@ -49,6 +64,8 @@ class RunTask(CompileTask):
 
             if len(sql.strip()) > 0:
                 adapter.execute(sql, auto_begin=False, fetch=False)
+            self.ran_hooks.append(hook)
+        dbt.ui.printer.print_timestamped_line("")
 
     def safe_run_hooks(self, adapter, hook_type, extra_context):
         try:
@@ -57,9 +74,8 @@ class RunTask(CompileTask):
             logger.info("Database error while running {}".format(hook_type))
             raise
 
-    @classmethod
-    def print_results_line(cls, results, execution_time):
-        nodes = [r.node for r in results]
+    def print_results_line(self, results, execution_time):
+        nodes = [r.node for r in results] + self.ran_hooks
         stat_line = dbt.ui.printer.get_counts(nodes)
 
         execution = ""
