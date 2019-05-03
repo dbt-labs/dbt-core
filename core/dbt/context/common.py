@@ -329,6 +329,22 @@ def get_datetime_module_context():
     }
 
 
+def get_context_modules():
+    return {
+        'pytz': get_pytz_module_context(),
+        'datetime': get_datetime_module_context(),
+    }
+
+
+def generate_config_context(cli_vars):
+    context = {
+        'env_var': env_var,
+        'modules': get_context_modules(),
+    }
+    context['var'] = Var(None, context, cli_vars)
+    return _add_tracking(context)
+
+
 def generate_base(model, model_dict, config, manifest, source_config,
                   provider, adapter=None):
     """Generate the common aspects of the config dict."""
@@ -370,10 +386,7 @@ def generate_base(model, model_dict, config, manifest, source_config,
         "graph": manifest.to_flat_graph(),
         "log": log,
         "model": model_dict,
-        "modules": {
-            "pytz": get_pytz_module_context(),
-            "datetime": get_datetime_module_context(),
-        },
+        "modules": get_context_modules(),
         "post_hooks": post_hooks,
         "pre_hooks": pre_hooks,
         "ref": provider.ref(db_wrapper, model, config, manifest),
