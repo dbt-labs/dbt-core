@@ -40,6 +40,33 @@ class BaseSourcesTest(DBTIntegrationTest):
 
 
 class TestSources(BaseSourcesTest):
+    def _create_schemas(self):
+        super(TestSources, self)._create_schemas()
+        self._create_schema_named(self.default_database,
+                                  self.alternative_schema())
+
+    def alternative_schema(self):
+        return self.unique_schema() + '_other'
+
+    def setUp(self):
+        super(TestSources, self).setUp()
+        self.run_sql(
+            'create table {}.dummy_table (id int)'.format(self.unique_schema())
+        )
+        self.run_sql(
+            'create view {}.external_view as (select * from {}.dummy_table)'
+            .format(self.alternative_schema(), self.unique_schema())
+        )
+
+    def run_dbt_with_vars(self, cmd, *args, **kwargs):
+        cmd.extend([
+            '--vars',
+            '{{test_run_schema: {}, test_run_alt_schema: {}}}'.format(
+                self.unique_schema(), self.alternative_schema()
+            )
+        ])
+        return self.run_dbt(cmd, *args, **kwargs)
+
     @use_profile('postgres')
     def test_postgres_basic_source_def(self):
         results = self.run_dbt_with_vars(['run'])
@@ -112,6 +139,7 @@ class TestSources(BaseSourcesTest):
             ['expected_multi_source', 'multi_source_model'],
         )
         self.assertTableDoesNotExist('nonsource_descendant')
+
 
 class TestSourceFreshness(BaseSourcesTest):
     def setUp(self):
@@ -256,3 +284,4 @@ class TestMalformedSources(BaseSourcesTest):
     def test_postgres_malformed_schema_strict_will_break_run(self):
         with self.assertRaises(CompilationException):
             self.run_dbt_with_vars(['run'], strict=True)
+
