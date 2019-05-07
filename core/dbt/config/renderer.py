@@ -1,7 +1,6 @@
 from dbt import compat
 from dbt.clients.jinja import get_rendered
-from dbt.context.common import env_var
-from dbt.context.common import Var
+from dbt.context.common import generate_config_context
 from dbt.exceptions import DbtProfileError
 from dbt.exceptions import DbtProjectError
 from dbt.exceptions import RecursionException
@@ -13,8 +12,7 @@ class ConfigRenderer(object):
     variables and a render type.
     """
     def __init__(self, cli_vars):
-        self.context = {'env_var': env_var}
-        self.context['var'] = Var(None, self.context, cli_vars)
+        self.context = generate_config_context(cli_vars)
 
     @staticmethod
     def _is_hook_or_model_vars_path(keypath):
