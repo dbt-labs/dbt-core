@@ -1,18 +1,44 @@
 from __future__ import print_function
 
+import time
+
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType, RunHookType
 from dbt.node_runners import ModelRunner, RPCExecuteRunner
 
 import dbt.exceptions
 import dbt.flags
-import dbt.ui.printer
 from dbt.contracts.graph.parsed import Hook
 from dbt.hooks import get_hook_dict
+from dbt.ui.printer import \
+    print_hook_start_line, \
+    print_hook_end_line, \
+    print_timestamped_line, \
+    print_run_end_messages, \
+    get_counts
 
 from dbt.compilation import compile_node
 from dbt.task.compile import CompileTask, RemoteCompileTask
 from dbt.utils import get_nodes_by_tags
+
+
+class Timer(object):
+    def __init__(self):
+        self.start = None
+        self.end = None
+
+    @property
+    def elapsed(self):
+        if self.start is None or self.end is None:
+            return None
+        return self.end - self.start
+
+    def __enter__(self):
+        self.start = time.time()
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_tracebck):
+        self.end = time.time()
 
 
 class RunTask(CompileTask):
@@ -25,6 +51,16 @@ class RunTask(CompileTask):
 
     def populate_adapter_cache(self, adapter):
         adapter.set_relations_cache(self.manifest)
+
+    def get_hook_sql(self, adapter, hook, idx, num_hooks, extra_context):
+        compiled = compile_node(adapter, self.config, hook, self.manifest,
+                                extra_context)
+        statement = compiled.wrapped_sql
+        hook_index = hook.get('index', num_hooks)
+        hook_dict = get_hook_dict(statement, index=hook_index)
+        if dbt.flags.STRICT_MODE:
+            Hook(**hook_dict)
+        return hook_dict.get('sql', '')
 
     def run_hooks(self, adapter, hook_type, extra_context):
 
@@ -39,33 +75,32 @@ class RunTask(CompileTask):
         adapter.clear_transaction()
         if not ordered_hooks:
             return
+        num_hooks = len(ordered_hooks)
 
-        plural = 'hook' if len(ordered_hooks) == 1 else 'hooks'
-        dbt.ui.printer.print_timestamped_line("")
-        dbt.ui.printer.print_timestamped_line(
-            'Running {} {} {}'.format(len(ordered_hooks), hook_type, plural)
+        plural = 'hook' if num_hooks == 1 else 'hooks'
+        print_timestamped_line("")
+        print_timestamped_line(
+            'Running {} {} {}'.format(num_hooks, hook_type, plural)
         )
 
         for idx, hook in enumerate(ordered_hooks, start=1):
-            compiled = compile_node(adapter, self.config, hook,
-                                    self.manifest, extra_context)
-            statement = compiled.wrapped_sql
-            dbt.ui.printer.print_timestamped_line(
-                '{} of {} START {}'.format(idx, len(ordered_hooks), statement)
-            )
+            sql = self.get_hook_sql(adapter, hook, idx, num_hooks,
+                                    extra_context)
 
-            hook_index = hook.get('index', len(hooks))
-            hook_dict = get_hook_dict(statement, index=hook_index)
+            # convert all whitespace sequences to single spaces
+            hook_text = ' '.join(sql.split())
+            print_hook_start_line(hook_text, idx, num_hooks)
 
-            if dbt.flags.STRICT_MODE:
-                Hook(**hook_dict)
-
-            sql = hook_dict.get('sql', '')
-
-            if len(sql.strip()) > 0:
-                adapter.execute(sql, auto_begin=False, fetch=False)
+            with Timer() as timer:
+                if len(sql.strip()) > 0:
+                    status, _ = adapter.execute(sql, auto_begin=False,
+                                                fetch=False)
             self.ran_hooks.append(hook)
-        dbt.ui.printer.print_timestamped_line("")
+
+            print_hook_end_line(hook_text, status, idx, num_hooks,
+                                timer.elapsed)
+
+        print_timestamped_line("")
 
     def safe_run_hooks(self, adapter, hook_type, extra_context):
         try:
@@ -76,7 +111,7 @@ class RunTask(CompileTask):
 
     def print_results_line(self, results, execution_time):
         nodes = [r.node for r in results] + self.ran_hooks
-        stat_line = dbt.ui.printer.get_counts(nodes)
+        stat_line = get_counts(nodes)
 
         execution = ""
 
@@ -84,8 +119,8 @@ class RunTask(CompileTask):
             execution = " in {execution_time:0.2f}s".format(
                 execution_time=execution_time)
 
-        dbt.ui.printer.print_timestamped_line("")
-        dbt.ui.printer.print_timestamped_line(
+        print_timestamped_line("")
+        print_timestamped_line(
             "Finished running {stat_line}{execution}."
             .format(stat_line=stat_line, execution=execution))
 
@@ -123,7 +158,7 @@ class RunTask(CompileTask):
 
     def task_end_messages(self, results):
         if results:
-            dbt.ui.printer.print_run_end_messages(results)
+            print_run_end_messages(results)
 
 
 class RemoteRunTask(RemoteCompileTask, RunTask):
