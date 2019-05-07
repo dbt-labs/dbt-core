@@ -93,8 +93,8 @@ def main(args=None):
         exit_code = e.code
 
     except BaseException as e:
-        logger.info("Encountered an error:")
-        logger.info(str(e))
+        logger.warn("Encountered an error:")
+        logger.warn(str(e))
 
         if logger_initialized():
             logger.debug(traceback.format_exc())
@@ -592,13 +592,24 @@ def _build_list_subparser(subparsers, base_subparser):
         '--select',
         required=False,
         nargs='+',
+        metavar='SELECTOR',
         help="Specify the nodes to select.",
-        dest='models'
+    )
+    sub.add_argument(
+        '-m',
+        '--models',
+        required=False,
+        nargs='+',
+        metavar='SELECTOR',
+        help="Specify the models to select and set the resource-type to "
+              "'model'. Mutually exclusive with '--select' (or '-s') and "
+              "'--resource-type'",
     )
     sub.add_argument(
         '--exclude',
         required=False,
         nargs='+',
+        metavar='SELECTOR',
         help="Specify the models to exclude."
     )
     # in python 3.x you can use the 'aliases' kwarg, but in python 2.7 you get

@@ -33,7 +33,17 @@ class ListTask(GraphRunnableTask):
 
     def __init__(self, args, config):
         super(ListTask, self).__init__(args, config)
-        self.config.args.single_threaded = True
+        self.args.single_threaded = True
+        if self.args.models:
+            if self.args.select:
+                raise dbt.exceptions.RuntimeException(
+                    '"models" and "select" are mutually exclusive arguments'
+                )
+            if self.args.resource_types:
+                raise dbt.exceptions.RuntimeException(
+                    '"models" and "resource_type" are mutually exclusive '
+                    'arguments'
+                )
 
     @classmethod
     def pre_init_hook(cls):
@@ -96,6 +106,9 @@ class ListTask(GraphRunnableTask):
 
     @property
     def resource_types(self):
+        if self.args.models:
+            return [NodeType.Model]
+
         values = set(self.config.args.resource_types)
         if not values:
             return list(self.DEFAULT_RESOURCE_VALUES)
@@ -108,9 +121,16 @@ class ListTask(GraphRunnableTask):
             values.update(self.ALL_RESOURCE_VALUES)
         return list(values)
 
+    @property
+    def selector(self):
+        if self.args.models:
+            return self.args.models
+        else:
+            return self.args.select
+
     def build_query(self):
         return {
-            "include": self.args.models,
+            "include": self.selector,
             "exclude": self.args.exclude,
             "resource_types": self.resource_types,
             "tags": [],

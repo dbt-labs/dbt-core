@@ -50,7 +50,7 @@ stdout_handler = logging.StreamHandler(colorama_stdout)
 stdout_handler.setFormatter(logging.Formatter('%(message)s'))
 stdout_handler.setLevel(NOTICE)
 
-stderr_handler = logging.StreamHandler()
+stderr_handler = logging.StreamHandler(sys.stderr)
 stderr_handler.setFormatter(logging.Formatter('%(message)s'))
 stderr_handler.setLevel(WARNING)
 
