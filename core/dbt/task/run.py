@@ -335,8 +335,7 @@ class RunTask(CompileTask):
         for idx, hook in enumerate(ordered_hooks, start=1):
             hook._event_status["started_at"] = datetime.utcnow().isoformat()
             hook._event_status["node_status"] = RunningStatus.Started
-            sql = self.get_hook_sql(adapter, hook, idx, num_hooks,
-                                    extra_context)
+            sql = self.get_hook_sql(adapter, hook, idx, num_hooks, extra_context)
 
             hook_text = '{}.{}.{}'.format(hook.package_name, hook_type,
                                           hook.index)
