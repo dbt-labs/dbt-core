@@ -811,7 +811,7 @@ def _build_list_subparser(subparsers, base_subparser):
         Specify the models to select and set the resource-type to 'model'.
         Mutually exclusive with '--select' (or '-s') and '--resource-type'
         """,
-        metavar='SELECTOR',
+        metavar="SELECTOR",
         required=False,
     )
     sub.add_argument(

@@ -52,8 +52,7 @@ class ListTask(GraphRunnableTask):
                 )
             if self.args.resource_types:
                 raise RuntimeException(
-                    '"models" and "resource_type" are mutually exclusive '
-                    'arguments'
+                    '"models" and "resource_type" are mutually exclusive ' "arguments"
                 )
 
     @classmethod
