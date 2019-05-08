@@ -7,6 +7,7 @@ from datetime import datetime
 import pytz
 import platform
 import uuid
+import requests
 import yaml
 import os
 
@@ -25,7 +26,35 @@ PACKAGE_INSTALL_SPEC = 'iglu:com.dbt/package_install/jsonschema/1-0-0'
 
 DBT_INVOCATION_ENV = 'DBT_INVOCATION_ENV'
 
-emitter = Emitter(COLLECTOR_URL, protocol=COLLECTOR_PROTOCOL, buffer_size=1)
+
+class TimeoutEmitter(Emitter):
+    def __init__(self):
+        super(TimeoutEmitter, self).__init__(COLLECTOR_URL,
+                                             protocol=COLLECTOR_PROTOCOL,
+                                             buffer_size=1,
+                                             on_failure=self.handle_failure)
+
+    @staticmethod
+    def handle_failure(num_ok, unsent):
+        # num_ok will always be 0, unsent will always be 1 entry long, because
+        # the buffer is length 1, so not much to talk about
+        logger.warning('Error sending message, disabling tracking')
+        do_not_track()
+
+    def http_get(self, payload):
+        sp_logger.info("Sending GET request to %s..." % self.endpoint)
+        sp_logger.debug("Payload: %s" % payload)
+        r = requests.get(self.endpoint, params=payload, timeout=1.0)
+
+        msg = "GET request finished with status code: " + str(r.status_code)
+        if self.is_good_status_code(r.status_code):
+            sp_logger.info(msg)
+        else:
+            sp_logger.warn(msg)
+        return r
+
+
+emitter = TimeoutEmitter()
 tracker = Tracker(emitter, namespace="cf", app_id="dbt")
 
 active_user = None
