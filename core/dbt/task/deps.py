@@ -216,7 +216,6 @@ class GitPackage(Package):
 
     def __init__(self, *args, **kwargs):
         super(GitPackage, self).__init__(*args, **kwargs)
-        # strip trailing '.git's from urls
         self._checkout_name = hashlib.md5(six.b(self.git)).hexdigest()
         self.version = self._contents.get('revision')
 
@@ -520,16 +519,16 @@ class DepsTask(ProjectOnlyTask):
 
         while pending_deps:
             sub_deps = PackageListing.create([])
-            for name, package in pending_deps.items():
+            for package in pending_deps.values():
                 final_deps.incorporate(package)
-                final_deps[name].resolve_version()
-                target_config = final_deps[name].fetch_metadata(self.config)
+                final_deps[package].resolve_version()
+                target_config = final_deps[package].fetch_metadata(self.config)
                 sub_deps.incorporate_from_yaml(target_config.packages)
             pending_deps = sub_deps
 
         self._check_for_duplicate_project_names(final_deps)
 
-        for _, package in final_deps.items():
+        for package in final_deps.values():
             logger.info('Installing %s', package)
             package.install(self.config)
             logger.info('  Installed from %s\n', package.nice_version_name())

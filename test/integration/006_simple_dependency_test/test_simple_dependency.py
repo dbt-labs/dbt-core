@@ -1,4 +1,6 @@
+import os
 from test.integration.base import DBTIntegrationTest, use_profile
+
 
 class TestSimpleDependency(DBTIntegrationTest):
 
@@ -88,8 +90,40 @@ class TestSimpleDependencyWithDuplicates(DBTIntegrationTest):
         }
 
     @use_profile('postgres')
-    def test_simple_dependency(self):
+    def test_postgres_simple_dependency_deps(self):
         self.run_dbt(["deps"])
+
+
+class TestRekeyedDependencyWithSubduplicates(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "simple_dependency_006"
+
+    @property
+    def models(self):
+        return "test/integration/006_simple_dependency_test/models"
+
+    @property
+    def packages_config(self):
+        # dbt-event-logging@0.1.5 requires dbt-utils.git@0.1.12, which the
+        # package config handling should detect
+        return {
+            'packages': [
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-utils',
+                    'revision': '0.1.12',
+                },
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-event-logging.git',
+                    'revision': '0.1.5',
+                }
+            ]
+        }
+
+    @use_profile('postgres')
+    def test_postgres_simple_dependency_deps(self):
+        self.run_dbt(["deps"])
+        self.assertEqual(len(os.listdir('dbt_modules')), 2)
 
 
 class TestSimpleDependencyBranch(DBTIntegrationTest):
