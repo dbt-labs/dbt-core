@@ -188,6 +188,9 @@ GIT_PACKAGE_CONTRACT = {
             'items': {'type': 'string'},
             'description': 'The git revision to use, if it is not tip',
         },
+        'warn-unpinned': {
+            'type': 'boolean',
+        }
     },
     'required': ['git'],
 }

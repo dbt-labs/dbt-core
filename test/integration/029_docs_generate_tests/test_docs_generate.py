@@ -81,6 +81,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             'packages': [
                 {
                     'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'warn-unpinned': False,
                 },
             ],
         }
