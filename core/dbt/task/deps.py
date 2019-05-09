@@ -220,6 +220,13 @@ class GitPackage(Package):
         self.version = self._contents.get('revision')
 
     @property
+    def other_name(self):
+        if self.git.endswith('.git'):
+            return self.git[:-4]
+        else:
+            return self.git + '.git'
+
+    @property
     def name(self):
         return self.git
 
@@ -368,14 +375,38 @@ def _parse_package(dict_):
 
 
 class PackageListing(AttrDict):
+    def __contains__(self, package):
+        if isinstance(package, basestring):
+            return super(PackageListing, self).__contains__(package)
+        elif isinstance(package, GitPackage):
+            return package.name in self or package.other_name in self
+        else:
+            return package.name in self
+
+    def __setitem__(self, key, value):
+        if isinstance(key, basestring):
+            super(PackageListing, self).__setitem__(key, value)
+        elif isinstance(key, GitPackage) and key.other_name in self:
+            self[key.other_name] = value
+        else:
+            self[key.name] = value
+
+    def __getitem__(self, key):
+        if isinstance(key, basestring):
+            return super(PackageListing, self).__getitem__(key)
+        elif isinstance(key, GitPackage) and key.other_name in self:
+            return self[key.other_name]
+        else:
+            return self[key.name]
 
     def incorporate(self, package):
         if not isinstance(package, Package):
             package = _parse_package(package)
-        if package.name not in self:
-            self[package.name] = package
+
+        if package in self:
+            self[package] = self[package].incorporate(package)
         else:
-            self[package.name] = self[package.name].incorporate(package)
+            self[package] = package
 
     @classmethod
     def create(cls, parsed_yaml):
@@ -488,16 +519,16 @@ class DepsTask(ProjectOnlyTask):
 
         while pending_deps:
             sub_deps = PackageListing.create([])
-            for name, package in pending_deps.items():
+            for package in pending_deps.values():
                 final_deps.incorporate(package)
-                final_deps[name].resolve_version()
-                target_config = final_deps[name].fetch_metadata(self.config)
+                final_deps[package].resolve_version()
+                target_config = final_deps[package].fetch_metadata(self.config)
                 sub_deps.incorporate_from_yaml(target_config.packages)
             pending_deps = sub_deps
 
         self._check_for_duplicate_project_names(final_deps)
 
-        for _, package in final_deps.items():
+        for package in final_deps.values():
             logger.info('Installing %s', package)
             package.install(self.config)
             logger.info('  Installed from %s\n', package.nice_version_name())

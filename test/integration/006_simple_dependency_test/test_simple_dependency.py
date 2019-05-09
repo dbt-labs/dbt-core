@@ -1,4 +1,6 @@
+import os
 from test.integration.base import DBTIntegrationTest, use_profile
+
 
 class TestSimpleDependency(DBTIntegrationTest):
 
@@ -62,6 +64,67 @@ class TestSimpleDependency(DBTIntegrationTest):
 
         self.assertEqual(created_models['view_model'], 'view')
         self.assertEqual(created_models['view_summary'], 'view')
+
+
+class TestSimpleDependencyWithDuplicates(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "simple_dependency_006"
+
+    @property
+    def models(self):
+        return "test/integration/006_simple_dependency_test/models"
+
+    @property
+    def packages_config(self):
+        # dbt should convert these into a single dependency internally
+        return {
+            "packages": [
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project'
+                },
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project.git'
+                }
+            ]
+        }
+
+    @use_profile('postgres')
+    def test_postgres_simple_dependency_deps(self):
+        self.run_dbt(["deps"])
+
+
+class TestRekeyedDependencyWithSubduplicates(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "simple_dependency_006"
+
+    @property
+    def models(self):
+        return "test/integration/006_simple_dependency_test/models"
+
+    @property
+    def packages_config(self):
+        # dbt-event-logging@0.1.5 requires dbt-utils.git@0.1.12, which the
+        # package config handling should detect
+        return {
+            'packages': [
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-utils',
+                    'revision': '0.1.12',
+                },
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-event-logging.git',
+                    'revision': '0.1.5',
+                }
+            ]
+        }
+
+    @use_profile('postgres')
+    def test_postgres_simple_dependency_deps(self):
+        self.run_dbt(["deps"])
+        self.assertEqual(len(os.listdir('dbt_modules')), 2)
+
 
 class TestSimpleDependencyBranch(DBTIntegrationTest):
 
