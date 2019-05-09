@@ -49,7 +49,7 @@ class BaseSqlParser(MacrosKnownParser):
 
             original_file_path = os.path.join(
                 file_match.get('searched_path'),
-                path)
+                file_match.get('relative_path'))
 
             result.append({
                 'name': name,
