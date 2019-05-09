@@ -87,7 +87,6 @@ class RunTask(CompileTask):
             sql = self.get_hook_sql(adapter, hook, idx, num_hooks,
                                     extra_context)
 
-            # convert all whitespace sequences to single spaces
             hook_text = '{}.{}.{}'.format(hook.package_name, hook_type, idx)
             print_hook_start_line(hook_text, idx, num_hooks)
             status = 'OK'
