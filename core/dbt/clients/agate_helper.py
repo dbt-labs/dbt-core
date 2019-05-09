@@ -41,4 +41,7 @@ def as_matrix(table):
 
 
 def from_csv(abspath):
-    return agate.Table.from_csv(abspath, column_types=DEFAULT_TYPE_TESTER)
+    with open(abspath) as fp:
+        if fp.read(1) != '\ufeff':
+            fp.seek(0)
+        return agate.Table.from_csv(fp, column_types=DEFAULT_TYPE_TESTER)
