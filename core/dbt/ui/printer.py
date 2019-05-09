@@ -109,7 +109,8 @@ def print_hook_start_line(statement, index, total):
 
 def print_hook_end_line(statement, status, index, total, execution_time):
     msg = 'OK hook: {}'.format(statement)
-    print_fancy_output_line(msg, status, index, total,
+    # hooks don't fail into this path, so always green
+    print_fancy_output_line(msg, green(status), index, total,
                             execution_time=execution_time, truncate=True)
 
 

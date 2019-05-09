@@ -89,6 +89,7 @@ class RunTask(CompileTask):
 
             # convert all whitespace sequences to single spaces
             hook_text = ' '.join(sql.split())
+            hook_text = '{}.{}.{}'.format(hook.package_name, hook_type, idx)
             print_hook_start_line(hook_text, idx, num_hooks)
 
             with Timer() as timer:
