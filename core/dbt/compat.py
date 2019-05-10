@@ -82,19 +82,20 @@ def to_native_string(s):
 
 def write_file(path, s):
     if WHICH_PYTHON == 2:
-        with codecs.open(path, 'w', encoding='utf-8') as f:
-            return f.write(to_string(s))
+        open = codecs.open
     else:
-        with open(path, 'w') as f:
-            return f.write(to_string(s))
+        open = builtins.open
+    with open(path, 'w', encoding='utf-8') as f:
+        return f.write(to_string(s))
 
 
 def open_file(path):
-    """Open the path for reading"""
+    """Open the path for reading. It must be utf-8 encoded."""
     if WHICH_PYTHON == 2:
-        return codecs.open(path, encoding='utf-8')
+        open = codecs.open
     else:
-        return open(path)
+        open = builtins.open
+    return open(path, encoding='utf-8')
 
 
 if WHICH_PYTHON == 2:

@@ -13,6 +13,8 @@ SAMPLE_CSV_DATA = """a,b,c,d,e,f,g
 1,n,test,3.2,20180806T11:33:29.320Z,True,NULL
 2,y,asdf,900,20180806T11:35:29.320Z,False,a string"""
 
+SAMPLE_CSV_BOM_DATA = u'\ufeff' + SAMPLE_CSV_DATA
+
 
 EXPECTED = [
     [1, 'n', 'test', Decimal('3.2'),
@@ -36,6 +38,15 @@ class TestAgateHelper(unittest.TestCase):
         path = os.path.join(self.tempdir, 'input.csv')
         with open(path, 'wb') as fp:
             fp.write(SAMPLE_CSV_DATA.encode('utf-8'))
+        tbl = agate_helper.from_csv(path)
+        self.assertEqual(len(tbl), len(EXPECTED))
+        for idx, row in enumerate(tbl):
+            self.assertEqual(list(row), EXPECTED[idx])
+
+    def test_bom_from_csv(self):
+        path = os.path.join(self.tempdir, 'input.csv')
+        with open(path, 'wb') as fp:
+            fp.write(SAMPLE_CSV_BOM_DATA.encode('utf-8'))
         tbl = agate_helper.from_csv(path)
         self.assertEqual(len(tbl), len(EXPECTED))
         for idx, row in enumerate(tbl):
