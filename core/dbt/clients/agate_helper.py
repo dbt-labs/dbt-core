@@ -10,7 +10,7 @@ from typing import Iterable, List, Dict, Union, Optional, Any
 from dbt.exceptions import RuntimeException
 
 
-BOM = BOM_UTF8.decode('utf-8')  # '\ufeff'
+BOM = BOM_UTF8.decode("utf-8")  # '\ufeff'
 
 
 class Number(agate.data_types.Number):
