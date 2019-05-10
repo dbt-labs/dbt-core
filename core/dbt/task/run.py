@@ -337,8 +337,7 @@ class RunTask(CompileTask):
             hook._event_status["node_status"] = RunningStatus.Started
             sql = self.get_hook_sql(adapter, hook, idx, num_hooks, extra_context)
 
-            hook_text = '{}.{}.{}'.format(hook.package_name, hook_type,
-                                          hook.index)
+            hook_text = "{}.{}.{}".format(hook.package_name, hook_type, hook.index)
             hook_meta_ctx = HookMetadata(hook, self.index_offset(idx))
             with UniqueID(hook.unique_id):
                 with hook_meta_ctx, startctx:
