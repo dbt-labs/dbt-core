@@ -8,7 +8,7 @@ package_version = "0.13.1a2"
 description = """The bigquery adapter plugin for dbt (data build tool)"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
-with open(os.path.join(this_directory, 'README.md'), encoding='utf-8') as f:
+with open(os.path.join(this_directory, 'README.md')) as f:
     long_description = f.read()
 
 setup(
