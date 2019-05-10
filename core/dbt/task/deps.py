@@ -15,6 +15,7 @@ import dbt.clients.registry as registry
 from dbt.compat import basestring
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.semver import VersionSpecifier, UnboundedVersionSpecifier
+from dbt.ui import printer
 from dbt.utils import AttrDict
 from dbt.api.object import APIObject
 from dbt.contracts.project import LOCAL_PACKAGE_CONTRACT, \
@@ -255,7 +256,7 @@ class GitPackage(Package):
         return "revision {}".format(self.version_name())
 
     def incorporate(self, other):
-        # if one is True, make both be True.
+        # if one is False, make both be False.
         warn_unpinned = self.warn_unpinned and other.warn_unpinned
 
         return GitPackage(git=self.git,
@@ -300,10 +301,10 @@ class GitPackage(Package):
         path = self._checkout(project)
         if self.version[0] == 'master' and self.warn_unpinned:
             dbt.exceptions.warn_or_error(
-                'Version for {} not pinned - "master" may introduce breaking '
-                'changes without warning! See {}'
+                'The git package "{}" is not pinned.\n\tThis can introduce '
+                'breaking changes into your project without warning!\n\nSee {}'
                 .format(self.git, PIN_PACKAGE_URL),
-                log_fmt='WARNING: {}'
+                log_fmt=printer.yellow('WARNING: {}')
             )
         loaded = project.from_project_root(path, {})
         return ProjectPackageMetadata(loaded)
