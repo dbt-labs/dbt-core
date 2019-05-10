@@ -103,6 +103,7 @@ class TestDuplicateModelEnabledAcrossPackages(DBTIntegrationTest):
                 {
                     'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
                     'revision': 'master',
+                    'warn-unpinned': False,
                 },
             ],
         }
@@ -139,6 +140,7 @@ class TestDuplicateModelDisabledAcrossPackages(DBTIntegrationTest):
                 {
                     'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
                     'revision': 'master',
+                    'warn-unpinned': False,
                 },
             ],
         }

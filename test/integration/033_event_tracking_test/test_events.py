@@ -177,7 +177,7 @@ class TestEventTrackingSuccess(TestEventTracking):
     def packages_config(self):
         return {
             'packages': [
-                {'git': 'https://github.com/fishtown-analytics/dbt-integration-project'},
+                {'git': 'https://github.com/fishtown-analytics/dbt-integration-project', 'warn-unpinned': False},
             ],
         }
 

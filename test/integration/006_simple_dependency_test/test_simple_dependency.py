@@ -1,5 +1,6 @@
 import os
 from test.integration.base import DBTIntegrationTest, use_profile
+from dbt.exceptions import CompilationException
 
 
 class TestSimpleDependency(DBTIntegrationTest):
@@ -21,13 +22,14 @@ class TestSimpleDependency(DBTIntegrationTest):
         return {
             "packages": [
                 {
-                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project'
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'warn-unpinned': False,
                 }
             ]
         }
 
     @use_profile('postgres')
-    def test_simple_dependency(self):
+    def test_postgres_simple_dependency(self):
         self.run_dbt(["deps"])
         results = self.run_dbt(["run"])
         self.assertEqual(len(results),  4)
@@ -49,7 +51,7 @@ class TestSimpleDependency(DBTIntegrationTest):
         self.assertTablesEqual("seed","incremental")
 
     @use_profile('postgres')
-    def test_simple_dependency_with_models(self):
+    def test_postgres_simple_dependency_with_models(self):
         self.run_dbt(["deps"])
         results = self.run_dbt(["run", '--models', 'view_model+'])
         self.assertEqual(len(results),  2)
@@ -64,6 +66,37 @@ class TestSimpleDependency(DBTIntegrationTest):
 
         self.assertEqual(created_models['view_model'], 'view')
         self.assertEqual(created_models['view_summary'], 'view')
+
+
+class TestSimpleDependencyUnpinned(DBTIntegrationTest):
+    def setUp(self):
+        DBTIntegrationTest.setUp(self)
+        self.run_sql_file("test/integration/006_simple_dependency_test/seed.sql")
+
+    @property
+    def schema(self):
+        return "simple_dependency_006"
+
+    @property
+    def models(self):
+        return "test/integration/006_simple_dependency_test/models"
+
+    @property
+    def packages_config(self):
+        return {
+            "packages": [
+                {
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'warn-unpinned': True,
+                }
+            ]
+        }
+
+    @use_profile('postgres')
+    def test_postgres_simple_dependency(self):
+        self.run_dbt(['deps'], strict=False)
+        with self.assertRaises(CompilationException):
+            self.run_dbt(["deps"])
 
 
 class TestSimpleDependencyWithDuplicates(DBTIntegrationTest):
@@ -81,10 +114,12 @@ class TestSimpleDependencyWithDuplicates(DBTIntegrationTest):
         return {
             "packages": [
                 {
-                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project'
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'warn-unpinned': False,
                 },
                 {
-                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project.git'
+                    'git': 'https://github.com/fishtown-analytics/dbt-integration-project.git',
+                    'warn-unpinned': False,
                 }
             ]
         }
@@ -147,6 +182,7 @@ class TestSimpleDependencyBranch(DBTIntegrationTest):
                 {
                     'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
                     'revision': 'master',
+                    'warn-unpinned': False,
                 },
             ]
         }
@@ -168,7 +204,7 @@ class TestSimpleDependencyBranch(DBTIntegrationTest):
         self.assertEqual(created_models['incremental'], 'table')
 
     @use_profile('postgres')
-    def test_simple_dependency(self):
+    def test_postgres_simple_dependency(self):
         self.deps_run_assert_equality()
 
         self.assertTablesEqual("seed_summary","view_summary")
@@ -178,7 +214,7 @@ class TestSimpleDependencyBranch(DBTIntegrationTest):
         self.deps_run_assert_equality()
 
     @use_profile('postgres')
-    def test_empty_models_not_compiled_in_dependencies(self):
+    def test_postgres_empty_models_not_compiled_in_dependencies(self):
         self.deps_run_assert_equality()
 
         models = self.get_models_in_schema()

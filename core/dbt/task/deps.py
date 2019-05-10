@@ -15,6 +15,7 @@ import dbt.clients.registry as registry
 from dbt.compat import basestring
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.semver import VersionSpecifier, UnboundedVersionSpecifier
+from dbt.ui import printer
 from dbt.utils import AttrDict
 from dbt.api.object import APIObject
 from dbt.contracts.project import LOCAL_PACKAGE_CONTRACT, \
@@ -25,6 +26,7 @@ from dbt.task.base import ProjectOnlyTask
 
 DOWNLOADS_PATH = None
 REMOVE_DOWNLOADS = False
+PIN_PACKAGE_URL = 'https://docs.getdbt.com/docs/package-management#section-specifying-package-versions' # noqa
 
 
 def _initialize_downloads():
@@ -215,6 +217,8 @@ class GitPackage(Package):
     SCHEMA = GIT_PACKAGE_CONTRACT
 
     def __init__(self, *args, **kwargs):
+        if 'warn_unpinned' in kwargs:
+            kwargs['warn-unpinned'] = kwargs.pop('warn_unpinned')
         super(GitPackage, self).__init__(*args, **kwargs)
         self._checkout_name = hashlib.md5(six.b(self.git)).hexdigest()
         self.version = self._contents.get('revision')
@@ -252,8 +256,12 @@ class GitPackage(Package):
         return "revision {}".format(self.version_name())
 
     def incorporate(self, other):
+        # if one is False, make both be False.
+        warn_unpinned = self.warn_unpinned and other.warn_unpinned
+
         return GitPackage(git=self.git,
-                          revision=(self.version + other.version))
+                          revision=(self.version + other.version),
+                          warn_unpinned=warn_unpinned)
 
     def _resolve_version(self):
         requested = set(self.version)
@@ -262,6 +270,10 @@ class GitPackage(Package):
                 'git dependencies should contain exactly one version. '
                 '{} contains: {}'.format(self.git, requested))
         self.version = requested.pop()
+
+    @property
+    def warn_unpinned(self):
+        return self.get('warn-unpinned', True)
 
     def _checkout(self, project):
         """Performs a shallow clone of the repository into the downloads
@@ -287,6 +299,13 @@ class GitPackage(Package):
 
     def _fetch_metadata(self, project):
         path = self._checkout(project)
+        if self.version[0] == 'master' and self.warn_unpinned:
+            dbt.exceptions.warn_or_error(
+                'The git package "{}" is not pinned.\n\tThis can introduce '
+                'breaking changes into your project without warning!\n\nSee {}'
+                .format(self.git, PIN_PACKAGE_URL),
+                log_fmt=printer.yellow('WARNING: {}')
+            )
         loaded = project.from_project_root(path, {})
         return ProjectPackageMetadata(loaded)
 

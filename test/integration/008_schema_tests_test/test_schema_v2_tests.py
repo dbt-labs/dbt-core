@@ -145,6 +145,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
                 },
                 {
                     'git': 'https://github.com/fishtown-analytics/dbt-integration-project',
+                    'warn-unpinned': False,
                 },
             ]
         }
