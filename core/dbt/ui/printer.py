@@ -49,7 +49,8 @@ def print_timestamped_line(msg, use_color=None):
     logger.info("{} | {}".format(get_timestamp(), msg))
 
 
-def print_fancy_output_line(msg, status, index, total, execution_time=None):
+def print_fancy_output_line(msg, status, index, total, execution_time=None,
+                            truncate=False):
     if index is None or total is None:
         progress = ''
     else:
@@ -60,6 +61,8 @@ def print_fancy_output_line(msg, status, index, total, execution_time=None):
         message=msg)
 
     justified = prefix.ljust(80, ".")
+    if truncate and len(justified) > 77:
+        justified = justified[:77] + '...'
 
     if execution_time is None:
         status_time = ""
@@ -83,6 +86,8 @@ def get_counts(flat_nodes):
 
         if node.get('resource_type') == NodeType.Model:
             t = '{} {}'.format(get_materialization(node), t)
+        elif node.get('resource_type') == NodeType.Operation:
+            t = 'hook'
 
         counts[t] = counts.get(t, 0) + 1
 
@@ -95,6 +100,18 @@ def get_counts(flat_nodes):
 def print_start_line(description, index, total):
     msg = "START {}".format(description)
     print_fancy_output_line(msg, 'RUN', index, total)
+
+
+def print_hook_start_line(statement, index, total):
+    msg = 'START hook: {}'.format(statement)
+    print_fancy_output_line(msg, 'RUN', index, total, truncate=True)
+
+
+def print_hook_end_line(statement, status, index, total, execution_time):
+    msg = 'OK hook: {}'.format(statement)
+    # hooks don't fail into this path, so always green
+    print_fancy_output_line(msg, green(status), index, total,
+                            execution_time=execution_time, truncate=True)
 
 
 def print_skip_line(model, schema, relation, index, num_models):

@@ -72,6 +72,10 @@ logging.getLogger('werkzeug').setLevel(CRITICAL)
 
 # provide this for the cache.
 CACHE_LOGGER = logging.getLogger('dbt.cache')
+# add a dummy handler to avoid `No handlers could be found for logger`
+nothing_handler = logging.StreamHandler()
+nothing_handler.setLevel(CRITICAL)
+CACHE_LOGGER.addHandler(nothing_handler)
 # provide this for RPC connection logging
 RPC_LOGGER = logging.getLogger('dbt.rpc')
 
