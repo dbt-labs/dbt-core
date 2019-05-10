@@ -1,3 +1,4 @@
+import dbt.compat
 
 import agate
 
@@ -41,7 +42,7 @@ def as_matrix(table):
 
 
 def from_csv(abspath):
-    with open(abspath) as fp:
-        if fp.read(1) != '\ufeff':
+    with dbt.compat.open_file(abspath) as fp:
+        if fp.read(1) != u'\ufeff':
             fp.seek(0)
         return agate.Table.from_csv(fp, column_types=DEFAULT_TYPE_TESTER)

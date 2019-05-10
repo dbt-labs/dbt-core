@@ -89,6 +89,14 @@ def write_file(path, s):
             return f.write(to_string(s))
 
 
+def open_file(path):
+    """Open the path for reading"""
+    if WHICH_PYTHON == 2:
+        return codecs.open(path, encoding='utf-8')
+    else:
+        return open(path)
+
+
 if WHICH_PYTHON == 2:
     # In python 2, classmethod and staticmethod do not allow setters, so you
     # can't treat classmethods as first-class objects like you can regular

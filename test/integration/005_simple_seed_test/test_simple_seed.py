@@ -1,6 +1,10 @@
+import os
+
 from test.integration.base import DBTIntegrationTest, use_profile
 
 from dbt.exceptions import CompilationException
+from dbt.compat import open_file
+
 
 
 class TestSimpleSeed(DBTIntegrationTest):
@@ -186,8 +190,10 @@ class TestSimpleSeedWithBOM(DBTIntegrationTest):
     @use_profile('postgres')
     def test_simple_seed(self):
         # first make sure nobody "fixed" the file by accident
-        with open('test/integration/005_simple_seed_test/data-bom/seed_bom.csv') as fp:
-            self.assertEqual(fp.read(1), '\ufeff')
+        seed_path = os.path.join(self.config.data_paths[0], 'seed_bom.csv')
+        # 'test/integration/005_simple_seed_test/data-bom/seed_bom.csv'
+        with open_file(seed_path) as fp:
+            self.assertEqual(fp.read(1), u'\ufeff')
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         self.assertTablesEqual("seed_bom", "seed_expected")
