@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from setuptools import find_packages
 from distutils.core import setup
+import os
 
 package_name = "dbt-bigquery"
 package_version = "0.13.1a2"
