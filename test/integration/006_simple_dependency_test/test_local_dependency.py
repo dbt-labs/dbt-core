@@ -1,4 +1,5 @@
 from test.integration.base import DBTIntegrationTest, use_profile
+import json
 import mock
 
 import dbt.semver
@@ -97,3 +98,53 @@ class TestSimpleDependencyWithSchema(TestSimpleDependency):
         self.run_dbt(['deps'])
         results = self.run_dbt(['run', '--no-version-check'])
         self.assertEqual(len(results), 3)
+
+
+class TestSimpleDependencyHooks(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "hooks_dependency_006"
+
+    @property
+    def models(self):
+        return "test/integration/006_simple_dependency_test/hook_models"
+
+    @property
+    def project_config(self):
+        # these hooks should run first, so nothing to drop
+        return {
+            'on-run-start': [
+                "drop table if exists {{ var('test_create_table') }}",
+                "drop table if exists {{ var('test_create_second_table') }}",
+            ]
+        }
+
+    @property
+    def packages_config(self):
+        return {
+            "packages": [
+                {
+                    'local': 'test/integration/006_simple_dependency_test/early_hook_dependency'
+                },
+                {
+                    'local': 'test/integration/006_simple_dependency_test/late_hook_dependency'
+                }
+            ]
+        }
+
+    def base_schema(self):
+        return self.unique_schema()
+
+    def configured_schema(self):
+        return self.unique_schema() + '_configured'
+
+    @use_profile('postgres')
+    def test_postgres_hook_dependency(self):
+        cli_vars = json.dumps({
+            'test_create_table': '"{}"."hook_test"'.format(self.unique_schema()),
+            'test_create_second_table': '"{}"."hook_test_2"'.format(self.unique_schema())
+        })
+        self.run_dbt(["deps", '--vars', cli_vars])
+        results = self.run_dbt(["run", '--vars', cli_vars])
+        self.assertEqual(len(results),  2)
+        self.assertTablesEqual('actual', 'expected')

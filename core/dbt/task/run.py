@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import functools
 import time
 
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -41,6 +42,15 @@ class Timer(object):
         self.end = time.time()
 
 
+@functools.total_ordering
+class BiggestName(object):
+    def __lt__(self, other):
+        return True
+
+    def __eq__(self, other):
+        return isinstance(other, self.__class__)
+
+
 class RunTask(CompileTask):
     def __init__(self, args, config):
         super(RunTask, self).__init__(args, config)
@@ -62,12 +72,21 @@ class RunTask(CompileTask):
             Hook(**hook_dict)
         return hook_dict.get('sql', '')
 
-    def run_hooks(self, adapter, hook_type, extra_context):
+    def _hook_keyfunc(self, hook):
+        package_name = hook.package_name
+        if package_name == self.config.project_name:
+            package_name = BiggestName()
+        return package_name, hook.index
 
+    def get_hooks_by_type(self, hook_type):
         nodes = self.manifest.nodes.values()
+        # find all hooks defined in the manifest (could be multiple projects)
         hooks = get_nodes_by_tags(nodes, {hook_type}, NodeType.Operation)
+        hooks.sort(key=self._hook_keyfunc)
+        return hooks
 
-        ordered_hooks = sorted(hooks, key=lambda h: h.get('index', len(hooks)))
+    def run_hooks(self, adapter, hook_type, extra_context):
+        ordered_hooks = self.get_hooks_by_type(hook_type)
 
         # on-run-* hooks should run outside of a transaction. This happens
         # b/c psycopg2 automatically begins a transaction when a connection
@@ -87,7 +106,8 @@ class RunTask(CompileTask):
             sql = self.get_hook_sql(adapter, hook, idx, num_hooks,
                                     extra_context)
 
-            hook_text = '{}.{}.{}'.format(hook.package_name, hook_type, idx)
+            hook_text = '{}.{}.{}'.format(hook.package_name, hook_type,
+                                          hook.index)
             print_hook_start_line(hook_text, idx, num_hooks)
             status = 'OK'
 
