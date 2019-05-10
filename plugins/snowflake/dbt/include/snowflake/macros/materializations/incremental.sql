@@ -7,42 +7,47 @@
 
   {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) -%}
   {%- set target_relation = api.Relation.create(database=database, identifier=identifier, schema=schema, type='table') -%}
-  {%- set exists_as_table = (old_relation is not none and old_relation.is_table) -%}
-  {%- set exists_not_as_table = (old_relation is not none and not old_relation.is_table) -%}
-  {%- set force_create = full_refresh_mode -%}
+  {%- set tmp_relation = api.Relation.create(identifier=identifier ~ "__dbt_tmp", type='table') -%}
 
   -- setup
-
-  {% set source_sql -%}
-     {# wrap sql in parens to make it a subquery #}
-     (
-       {{ sql }}
-    )
-  {%- endset -%}
-
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
 
   -- `BEGIN` happens here:
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
+  {# -- If the destination is a view, then we have no choice but to drop it #}
+  {% if old_relation is not none and old_relation.type == 'view' %}
+      {{ log("Dropping relation " ~ old_relation ~ " because it is a view and this model is a table.") }}
+      {{ adapter.drop_relation(old_relation) }}
+      {% set old_relation = none %}
+  {% endif %}
+
   -- build model
-  {% if force_create or old_relation is none -%}
+  {% if full_refresh_mode or old_relation is none -%}
+
     {%- call statement('main') -%}
-      {# -- create or replace logic because we're in a full refresh or table is non existant. #}
-      {% if old_relation is not none and old_relation.type == 'view' %}
-          {{ log("Dropping relation " ~ old_relation ~ " because it is a view and this model is a table.") }}
-          {{ adapter.drop_relation(old_relation) }}
-      {% endif %}
-      {# -- now create (or replace) the table because we're in full-refresh #}
-      {{create_table_as(false, target_relation, source_sql)}}
+      {{ create_table_as(false, target_relation, sql) }}
     {%- endcall -%}
-  
+
   {%- else -%}
-    {# -- here is the incremental part #}
+
+    {%- call statement() -%}
+       {{ create_table_as(true, tmp_relation, sql) }}
+    {%- endcall -%}
+
+    {{ adapter.expand_target_column_types(temp_table=tmp_relation.identifier,
+                                          to_relation=target_relation) }}
+    {% set incremental_sql %}
+    (
+        select * from {{ tmp_relation }}
+    )
+    {% endset %}
+
     {% set dest_columns = adapter.get_columns_in_relation(target_relation) %}
     {%- call statement('main') -%}
-      {{ get_merge_sql(target_relation, source_sql, unique_key, dest_columns) }}
+      {{ get_merge_sql(target_relation, incremental_sql, unique_key, dest_columns) }}
     {% endcall %}
+
   {%- endif %}
 
   {{ run_hooks(post_hooks, inside_transaction=True) }}
