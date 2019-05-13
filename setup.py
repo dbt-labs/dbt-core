@@ -4,24 +4,29 @@ from distutils.core import setup
 import os
 
 
-def read(fname):
-    return open(os.path.join(os.path.dirname(__file__), fname)).read()
+this_directory = os.path.abspath(os.path.dirname(__file__))
+with open(os.path.join(this_directory, 'README.md')) as f:
+    long_description = f.read()
 
 
 package_name = "dbt"
-package_version = "0.13.0"
-description = """dbt (data build tool) is a command line tool that helps \
-analysts and engineers transform data in their warehouse more effectively"""
+package_version = "0.13.1a2"
+description = """With dbt, data analysts and engineers can build analytics \
+the way engineers build applications."""
 
 
 setup(
     name=package_name,
     version=package_version,
+
     description=description,
-    long_description=description,
+    long_description=long_description,
+    long_description_content_type='text/markdown',
+
     author="Fishtown Analytics",
     author_email="info@fishtownanalytics.com",
     url="https://github.com/fishtown-analytics/dbt",
+
     packages=find_packages(),
     install_requires=[
         'dbt-core=={}'.format(package_version),

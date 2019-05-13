@@ -53,3 +53,7 @@ sources:
     tables:
       - name: test_table
         identifier: other_source_table
+  - name: external_source
+    schema: "{{ var('test_run_alt_schema', var('test_run_schema')) }}"
+    tables:
+      - name: table

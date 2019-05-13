@@ -17,6 +17,7 @@ class BaseTestSimpleCopy(DBTIntegrationTest):
 
 
 class TestSimpleCopy(BaseTestSimpleCopy):
+
     @use_profile("postgres")
     def test__postgres__simple_copy(self):
         self.use_default_project({"data-paths": [self.dir("seed-initial")]})
@@ -83,6 +84,12 @@ class TestSimpleCopy(BaseTestSimpleCopy):
 
         self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED"])
 
+        self.use_default_project({
+            "test-paths": [self.dir("tests")],
+            "data-paths": [self.dir("seed-update")],
+        })
+        self.run_dbt(['test'])
+
     @use_profile("snowflake")
     def test__snowflake__simple_copy__quoting_off(self):
         self.use_default_project({
@@ -108,6 +115,13 @@ class TestSimpleCopy(BaseTestSimpleCopy):
 
         self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED"])
 
+        self.use_default_project({
+            "test-paths": [self.dir("tests")],
+            "data-paths": [self.dir("seed-update")],
+            "quoting": {"identifier": False},
+        })
+        self.run_dbt(['test'])
+
     @use_profile("snowflake")
     def test__snowflake__seed__quoting_switch(self):
         self.use_default_project({
@@ -123,6 +137,12 @@ class TestSimpleCopy(BaseTestSimpleCopy):
             "quoting": {"identifier": True},
         })
         results = self.run_dbt(["seed"], expect_pass=False)
+
+        self.use_default_project({
+            "test-paths": [self.dir("tests")],
+            "data-paths": [self.dir("seed-initial")],
+        })
+        self.run_dbt(['test'])
 
     @use_profile("bigquery")
     def test__bigquery__simple_copy(self):
@@ -181,6 +201,8 @@ class TestSimpleCopyQuotingIdentifierOn(BaseTestSimpleCopy):
 
         self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized"])
 
+        # can't run the test as this one's identifiers will be the wrong case
+
 
 class BaseLowercasedSchemaTest(BaseTestSimpleCopy):
     def unique_schema(self):
@@ -209,6 +231,12 @@ class TestSnowflakeSimpleLowercasedSchemaCopy(BaseLowercasedSchemaTest):
         self.assertEqual(len(results),  6)
 
         self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED"])
+
+        self.use_default_project({
+            "test-paths": [self.dir("tests")],
+            "data-paths": [self.dir("seed-update")],
+        })
+        self.run_dbt(['test'])
 
 
 class TestSnowflakeSimpleLowercasedSchemaQuoted(BaseLowercasedSchemaTest):
