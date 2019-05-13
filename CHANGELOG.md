@@ -1,4 +1,4 @@
-## dbt 0.13.1 (release date TBD)
+## dbt 0.13.1 (May 13, 2019)
 
 ### Overview
 This is a bugfix release.
