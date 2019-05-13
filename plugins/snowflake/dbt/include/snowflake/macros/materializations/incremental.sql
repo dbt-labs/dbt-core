@@ -6,8 +6,15 @@
   {%- set identifier = model['alias'] -%}
 
   {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) -%}
-  {%- set target_relation = api.Relation.create(database=database, identifier=identifier, schema=schema, type='table') -%}
-  {%- set tmp_relation = api.Relation.create(identifier=identifier ~ "__dbt_tmp", type='table') -%}
+  {%- set target_relation = api.Relation.create(database=database,
+                                                schema=schema,
+                                                identifier=identifier,
+                                                type='table') -%}
+
+  {%- set tmp_relation = api.Relation.create(database=database,
+                                             schema=schema,
+                                             identifier=identifier ~ "__dbt_tmp",
+                                             type='table') -%}
 
   -- setup
   {{ run_hooks(pre_hooks, inside_transaction=False) }}

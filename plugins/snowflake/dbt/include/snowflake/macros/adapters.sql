@@ -1,15 +1,11 @@
 {% macro snowflake__create_table_as(temporary, relation, sql) -%}
-  {% if temporary %}
-    use schema {{ adapter.quote_as_configured(schema, 'schema') }};
-  {% endif %}
-
   {%- set transient = config.get('transient', default=true) -%}
 
   create or replace {% if temporary -%}
     temporary
   {%- elif transient -%}
     transient
-  {%- endif %} table {{ relation.include(database=(not temporary), schema=(not temporary)) }}
+  {%- endif %} table {{ relation }}
   as (
     {{ sql }}
   );
