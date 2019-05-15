@@ -52,16 +52,3 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
 
         self.assertTableDoesNotExist('view__dbt_tmp')
         self.assertTablesEqual("seed","view")
-
-
-    @use_profile('snowflake')
-    def test_snowflake_backup_different_type(self):
-        self.run_sql_file(
-            'test/integration/017_runtime_materialization_tests/create_backup_and_original.sql'
-        )
-        results = self.run_dbt(['run', '--model', 'materialized'])
-        self.assertEqual(len(results), 1)
-
-        self.assertTableDoesNotExist('materialized__dbt_tmp')
-        self.assertTableDoesNotExist('materialized__dbt_backup')
-        self.assertTablesEqual("seed", "materialized")

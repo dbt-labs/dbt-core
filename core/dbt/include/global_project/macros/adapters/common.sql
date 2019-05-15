@@ -60,7 +60,6 @@
   );
 {% endmacro %}
 
-
 {% macro create_view_as(relation, sql) -%}
   {{ adapter_macro('create_view_as', relation, sql) }}
 {%- endmacro %}
