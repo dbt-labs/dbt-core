@@ -239,12 +239,14 @@ class TestProfile(BaseConfigTest):
     def test_partial_config_override(self):
         self.default_profile_data['config'] = {
             'send_anonymous_usage_stats': False,
+            'printer_width': 60
         }
         profile = self.from_raw_profiles()
         self.assertEqual(profile.profile_name, 'default')
         self.assertEqual(profile.target_name, 'postgres')
         self.assertFalse(profile.config.send_anonymous_usage_stats)
         self.assertTrue(profile.config.use_colors)
+        self.assertEqual(profile.config.printer_width, 60)
 
     def test_missing_type(self):
         del self.default_profile_data['default']['outputs']['postgres']['type']

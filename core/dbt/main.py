@@ -134,6 +134,9 @@ def initialize_config_values(parsed):
     if cfg.use_colors:
         dbt.ui.printer.use_colors()
 
+    if cfg.printer_width:
+        dbt.ui.printer.printer_width(cfg.printer_width)
+
 
 def handle_and_check(args):
     parsed = parse_args(args)
