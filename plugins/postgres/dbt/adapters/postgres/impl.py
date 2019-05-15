@@ -20,7 +20,10 @@ class PostgresAdapter(SQLAdapter):
 
     @available
     def verify_database(self, database):
-        database = database.strip('"')
+        if database.startswith('"'):
+            database = database.strip('"')
+        else:
+            database = database.lower()
         expected = self.config.credentials.database
         if database != expected:
             raise dbt.exceptions.NotImplementedException(
@@ -31,6 +34,11 @@ class PostgresAdapter(SQLAdapter):
         return ''
 
     def _link_cached_database_relations(self, schemas):
+        """
+
+        :param Set[str] schemas: The set of schemas that should have links
+            added.
+        """
         database = self.config.credentials.database
         table = self.execute_macro(GET_RELATIONS_MACRO_NAME)
 
@@ -66,8 +74,11 @@ class PostgresAdapter(SQLAdapter):
 
     def _link_cached_relations(self, manifest):
         schemas = set()
-        for db, schema in manifest.get_used_schemas():
-            self.verify_database(db)
+        # only link executable nodes
+        info_schema_name_map = self._get_cache_schemas(manifest,
+                                                       exec_only=True)
+        for db, schema in info_schema_name_map.search():
+            self.verify_database(db.database)
             schemas.add(schema)
 
         self._link_cached_database_relations(schemas)

@@ -232,6 +232,6 @@ class TestGraphSelection(DBTIntegrationTest):
         user_last_end = users.timing[1]['completed_at']
         dep_first_start = dep.timing[0]['started_at']
         self.assertTrue(
-            user_last_end < dep_first_start,
+            user_last_end <= dep_first_start,
             'dependency started before its transitive parent ({} > {})'.format(user_last_end, dep_first_start)
         )
