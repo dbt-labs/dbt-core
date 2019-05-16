@@ -183,6 +183,7 @@ class SQLAdapter(BaseAdapter):
 
         relations = []
         quote_policy = {
+            'database': True,
             'schema': True,
             'identifier': True
         }
@@ -209,7 +210,8 @@ class SQLAdapter(BaseAdapter):
 
     def check_schema_exists(self, database, schema):
         information_schema = self.Relation.create(
-            database=database, schema=schema
+            database=database, schema=schema,
+            quote_policy=self.config.quoting
         ).information_schema()
 
         kwargs = {'information_schema': information_schema, 'schema': schema}

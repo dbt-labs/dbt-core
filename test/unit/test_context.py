@@ -62,7 +62,7 @@ class TestVar(unittest.TestCase):
         self.assertEqual(var('foo', 'bar'), 'bar')
         with self.assertRaises(dbt.exceptions.CompilationException):
             var('foo')
-    
+
     def test_parser_var_default_something(self):
         var = parser.Var(self.model, self.context, overrides={'foo': 'baz'})
         self.assertEqual(var('foo'), 'baz')
@@ -103,6 +103,7 @@ class TestParseWrapper(unittest.TestCase):
 class TestRuntimeWrapper(unittest.TestCase):
     def setUp(self):
         self.mock_config = mock.MagicMock()
+        self.mock_config.quoting = {'database': True, 'schema': True, 'identifier': True}
         adapter_class = adapter_factory()
         self.mock_adapter = adapter_class(self.mock_config)
         self.wrapper = runtime.DatabaseWrapper(self.mock_adapter)

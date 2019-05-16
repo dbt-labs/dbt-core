@@ -600,7 +600,9 @@ class DBTIntegrationTest(unittest.TestCase):
                   and ({table_filter})
                 order by column_name asc"""
 
-        db_string = '' if database is None else database + '.'
+        db_string = ''
+        if database:
+            db_string = self.quote_as_configured(database, 'database') + '.'
 
         table_filters_s = " OR ".join(
             self._ilike('table_name', table.replace('"', ''))
