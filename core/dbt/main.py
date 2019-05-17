@@ -126,16 +126,7 @@ def initialize_config_values(parsed):
     except RuntimeException:
         cfg = UserConfig.from_dict(None)
 
-    if cfg.send_anonymous_usage_stats:
-        dbt.tracking.initialize_tracking(parsed.profiles_dir)
-    else:
-        dbt.tracking.do_not_track()
-
-    if cfg.use_colors:
-        dbt.ui.printer.use_colors()
-
-    if cfg.printer_width:
-        dbt.ui.printer.printer_width(cfg.printer_width)
+    cfg.set_values(parsed.profiles_dir)
 
 
 def handle_and_check(args):

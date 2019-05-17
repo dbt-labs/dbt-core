@@ -11,6 +11,8 @@ from dbt.exceptions import ValidationException
 from dbt.exceptions import RuntimeException
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import parse_cli_vars
+from dbt import tracking
+from dbt.ui import printer
 
 from .renderer import ConfigRenderer
 
@@ -94,6 +96,18 @@ class UserConfig(object):
         if profile:
             user_cfg = profile.get('config', {})
         return cls.from_dict(user_cfg)
+
+    def set_values(self, cookie_dir):
+        if self.send_anonymous_usage_stats:
+            tracking.initialize_tracking(cookie_dir)
+        else:
+            tracking.do_not_track()
+
+        if self.use_colors:
+            printer.use_colors()
+
+        if self.printer_width:
+            printer.printer_width(self.printer_width)
 
 
 class Profile(object):

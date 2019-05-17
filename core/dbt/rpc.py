@@ -16,9 +16,10 @@ import signal
 import time
 from collections import namedtuple
 
+from dbt.adapters.factory import load_plugin
+from dbt.compat import QueueEmpty
 from dbt.logger import RPC_LOGGER as logger
 from dbt.logger import add_queue_handler
-from dbt.compat import QueueEmpty
 import dbt.exceptions
 
 
@@ -130,6 +131,54 @@ class RequestDispatcher(object):
         return self.rpc_factory(task)
 
 
+def _nt_setup(config, args):
+    """
+    On windows, we have to do a some things that dbt does dynamically at
+    process load.
+
+    These things are inherited automatically on posix, where fork() keeps
+    everything in memory.
+    """
+    # reload the active plugin
+    load_plugin(config.credentials.type)
+
+    # reset tracking, etc
+    config.config.set_values(args.profiles_dir)
+
+
+def _task_bootstrap(task, queue, kwargs):
+    signal.signal(signal.SIGTERM, sigterm_handler)
+    # the first thing we do in a new process: start logging
+    add_queue_handler(queue)
+    # on windows, we need to reload our plugins because of how it starts new
+    # processes. At this point there are no adapter plugins loaded!
+    if os.name == 'nt':
+        _nt_setup(task.config, task.args)
+
+    error = None
+    result = None
+    try:
+        result = task.handle_request(**kwargs)
+    except RPCException as exc:
+        error = exc
+    except dbt.exceptions.RPCKilledException as exc:
+        # do NOT log anything here, you risk triggering a deadlock on the
+        # queue handler we inserted above
+        error = dbt_error(exc)
+    except dbt.exceptions.Exception as exc:
+        logger.debug('dbt runtime exception', exc_info=True)
+        error = dbt_error(exc)
+    except Exception as exc:
+        logger.debug('uncaught python exception', exc_info=True)
+        error = server_error(exc)
+
+    # put whatever result we got onto the queue as well.
+    if error is not None:
+        queue.put([QueueMessageType.Error, error.error])
+    else:
+        queue.put([QueueMessageType.Result, result])
+
+
 class RequestTaskHandler(object):
     def __init__(self, task, http_request, json_rpc_request):
         self.task = task
@@ -211,44 +260,17 @@ class RequestTaskHandler(object):
         result['logs'] = self.logs
         return result
 
-    def task_bootstrap(self, kwargs):
-        signal.signal(signal.SIGTERM, sigterm_handler)
-        # the first thing we do in a new process: start logging
-        add_queue_handler(self.queue)
-
-        error = None
-        result = None
-        try:
-            result = self.task.handle_request(**kwargs)
-        except RPCException as exc:
-            error = exc
-        except dbt.exceptions.RPCKilledException as exc:
-            # do NOT log anything here, you risk triggering a deadlock on the
-            # queue handler we inserted above
-            error = dbt_error(exc)
-        except dbt.exceptions.Exception as exc:
-            logger.debug('dbt runtime exception', exc_info=True)
-            error = dbt_error(exc)
-        except Exception as exc:
-            logger.debug('uncaught python exception', exc_info=True)
-            error = server_error(exc)
-
-        # put whatever result we got onto the queue as well.
-        if error is not None:
-            self.queue.put([QueueMessageType.Error, error.error])
-        else:
-            self.queue.put([QueueMessageType.Result, result])
-
     def handle(self, kwargs):
         self.started = time.time()
         self.timeout = kwargs.pop('timeout', None)
         self.queue = multiprocessing.Queue()
         self.process = multiprocessing.Process(
-            target=self.task_bootstrap,
-            args=(kwargs,)
+            target=_task_bootstrap,
+            args=(self.task, self.queue, kwargs)
         )
         self.process.start()
-        return self.get_result()
+        result = self.get_result()
+        return result
 
     @property
     def state(self):
@@ -347,7 +369,7 @@ class TaskManager(object):
     def rpc_builtin(self, method_name):
         if method_name == 'ps':
             return self.process_listing
-        if method_name == 'kill':
+        if method_name == 'kill' and os.name != 'nt':
             return self.process_kill
         return None
 
@@ -360,7 +382,9 @@ class TaskManager(object):
             self.completed[task_id] = self.tasks.pop(task_id)
 
     def methods(self):
-        rpc_builtin_methods = ['ps', 'kill']
+        rpc_builtin_methods = ['ps']
+        if os.name != 'nt':
+            rpc_builtin_methods.append('kill')
         return list(self._rpc_task_map) + rpc_builtin_methods
 
 
