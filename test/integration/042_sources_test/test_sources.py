@@ -9,6 +9,7 @@ from base64 import standard_b64encode as b64
 from datetime import datetime, timedelta
 
 import requests
+from pytest import mark
 
 from dbt.exceptions import CompilationException
 from test.integration.base import DBTIntegrationTest, use_profile, AnyFloat, \
@@ -364,7 +365,6 @@ select 1 as id
 )select * from __dbt__CTE__ephemeral_model'''
 
 
-@unittest.skipIf(os.name == 'nt', 'Windows not supported for now')
 class TestRPCServer(BaseSourcesTest):
     def setUp(self):
         super(TestRPCServer, self).setUp()
@@ -709,6 +709,7 @@ class TestRPCServer(BaseSourcesTest):
             table={'column_names': ['id'], 'rows': [[1.0]]}
         )
 
+    @mark.skipif(os.name == 'nt', reason='"kill" not supported on windows')
     @use_profile('postgres')
     def test_ps_kill_postgres(self):
         done_query = self.query('compile', 'select 1 as id', name='done').json()
@@ -794,6 +795,7 @@ class TestRPCServer(BaseSourcesTest):
 
         self.assertTrue(False, 'request ID never found running!')
 
+    @mark.skipif(os.name == 'nt', reason='"kill" not supported on windows')
     @use_profile('postgres')
     def test_ps_kill_longwait_postgres(self):
         pg_sleeper, sleep_task_id, request_id = self._get_sleep_query()
@@ -881,4 +883,6 @@ class TestRPCServer(BaseSourcesTest):
         self.assertIn('message', error_data)
         self.assertEqual(error_data['message'], 'RPC timed out after 1s')
         self.assertIn('logs', error_data)
-        self.assertTrue(len(error_data['logs']) > 0)
+        # on windows, process start is so slow that frequently we won't have collected any logs
+        if os.name != 'nt':
+            self.assertTrue(len(error_data['logs']) > 0)
