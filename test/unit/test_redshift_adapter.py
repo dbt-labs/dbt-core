@@ -170,13 +170,14 @@ class TestRedshiftAdapter(unittest.TestCase):
         connection = self.adapter.acquire_connection('dummy')
 
         psycopg2.connect.assert_called_once_with(
-            dbname='postgres',
+            dbname='redshift',
             user='root',
             host='thishostshouldnotexist',
             password='password',
-            port=5432,
+            port=5439,
             connect_timeout=10,
-            options="-c search_path=test")
+            options="-c search_path=test",
+            keepalives_idle=RedshiftAdapter.ConnectionManager.DEFAULT_TCP_KEEPALIVE)
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_schema_with_space(self, psycopg2):
@@ -186,13 +187,14 @@ class TestRedshiftAdapter(unittest.TestCase):
         connection = self.adapter.acquire_connection('dummy')
 
         psycopg2.connect.assert_called_once_with(
-            dbname='postgres',
+            dbname='redshift',
             user='root',
             host='thishostshouldnotexist',
             password='password',
-            port=5432,
+            port=5439,
             connect_timeout=10,
-            options="-c search_path=test\ test")
+            options="-c search_path=test\ test",
+            keepalives_idle=RedshiftAdapter.ConnectionManager.DEFAULT_TCP_KEEPALIVE)
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_set_zero_keepalive(self, psycopg2):
