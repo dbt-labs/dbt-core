@@ -55,6 +55,9 @@ REDSHIFT_CREDENTIALS_CONTRACT = {
                 'If using IAM auth, the ttl for the temporary credentials'
             )
         },
+        'search_path': {
+            'type': 'string',
+        },
         'keepalives_idle': {
             'type': 'integer',
         },
@@ -75,7 +78,7 @@ class RedshiftCredentials(PostgresCredentials):
         return 'redshift'
 
     def _connection_keys(self):
-        return ('host', 'port', 'user', 'database', 'schema', 'method')
+        return ('host', 'port', 'user', 'database', 'schema', 'method', 'search_path')
 
 
 class RedshiftConnectionManager(PostgresConnectionManager):

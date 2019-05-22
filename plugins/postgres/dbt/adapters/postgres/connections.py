@@ -33,6 +33,9 @@ POSTGRES_CREDENTIALS_CONTRACT = {
         'schema': {
             'type': 'string',
         },
+        'search_path': {
+            'type': 'string',
+        },
         'keepalives_idle': {
             'type': 'integer',
         },
@@ -53,12 +56,15 @@ class PostgresCredentials(Credentials):
         return 'postgres'
 
     def _connection_keys(self):
-        return ('host', 'port', 'user', 'database', 'schema')
+        return ('host', 'port', 'user', 'database', 'schema', 'search_path')
 
 
 class PostgresConnectionManager(SQLConnectionManager):
     DEFAULT_TCP_KEEPALIVE = 0  # 0 means to use the default value
     TYPE = 'postgres'
+
+    def __init__(self, profile):
+        super().__init__(profile)
 
     @contextmanager
     def exception_handler(self, sql):
@@ -106,9 +112,9 @@ class PostgresConnectionManager(SQLConnectionManager):
             kwargs['keepalives_idle'] = keepalives_idle
 
         # psycopg2 doesn't support search_path officially, see https://github.com/psycopg/psycopg2/issues/465
-        if credentials.schema is not None and credentials.schema != '':
+        if credentials.search_path is not None and credentials.search_path != '':
             # see https://www.postgresql.org/docs/9.5/libpq-connect.html#LIBPQ-CONNECT-OPTIONS
-            kwargs['options'] = '-c search_path={}'.format(credentials.schema.replace(' ', '\\ '))
+            kwargs['options'] = '-c search_path={}'.format(credentials.search_path.replace(' ', '\\ '))
 
         try:
             handle = psycopg2.connect(

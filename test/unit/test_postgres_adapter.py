@@ -107,7 +107,6 @@ class TestPostgresAdapter(unittest.TestCase):
             host='thishostshouldnotexist',
             password='password',
             port=5432,
-            options='-c search_path=public',
             connect_timeout=10)
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
@@ -124,13 +123,12 @@ class TestPostgresAdapter(unittest.TestCase):
             password='password',
             port=5432,
             connect_timeout=10,
-            options='-c search_path=public',
             keepalives_idle=256)
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
-    def test_schema(self, psycopg2):
+    def test_search_path(self, psycopg2):
         self.config.credentials = self.config.credentials.incorporate(
-            schema="test"
+            search_path="test"
         )
         connection = self.adapter.acquire_connection('dummy')
 
@@ -146,7 +144,7 @@ class TestPostgresAdapter(unittest.TestCase):
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_schema_with_space(self, psycopg2):
         self.config.credentials = self.config.credentials.incorporate(
-            schema="test test"
+            search_path="test test"
         )
         connection = self.adapter.acquire_connection('dummy')
 
@@ -172,7 +170,6 @@ class TestPostgresAdapter(unittest.TestCase):
             host='thishostshouldnotexist',
             password='password',
             port=5432,
-            options='-c search_path=public',
             connect_timeout=10)
 
     @mock.patch.object(PostgresAdapter, 'execute_macro')
