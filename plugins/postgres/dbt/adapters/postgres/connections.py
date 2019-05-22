@@ -63,9 +63,6 @@ class PostgresConnectionManager(SQLConnectionManager):
     DEFAULT_TCP_KEEPALIVE = 0  # 0 means to use the default value
     TYPE = 'postgres'
 
-    def __init__(self, profile):
-        super().__init__(profile)
-
     @contextmanager
     def exception_handler(self, sql):
         try:
