@@ -23,6 +23,7 @@ import dbt.task.serve as serve_task
 import dbt.task.freshness as freshness_task
 import dbt.task.run_operation as run_operation_task
 from dbt.task.list import ListTask
+from dbt.task.migrate import MigrationTask
 from dbt.task.rpc_server import RPCServerTask
 from dbt.adapters.factory import reset_adapters
 
@@ -624,6 +625,38 @@ def _build_run_operation_subparser(subparsers, base_subparser):
     return sub
 
 
+def _build_snapshot_migrate_subparser(subparsers, base_subparser):
+    sub = subparsers.add_parser(
+        'snapshot-migrate',
+        parents=[base_subparser],
+        help='Run the snapshot migration script'
+    )
+    sub.add_argument(
+        '--from-archive',
+        action='store_true',
+        help=('This flag is required for the 0.14.0 archive to snapshot '
+              'migration')
+    )
+    sub.add_argument(
+        '--apply-files',
+        action='store_true',
+        dest='write_files',
+        help='If set, write .sql files to disk instead of logging them'
+    )
+    sub.add_argument(
+        '--apply-database',
+        action='store_true',
+        dest='migrate_database',
+        help='If set, perform just the database migration'
+    )
+    sub.add_argument(
+        '--apply',
+        action='store_true',
+        help='If set, implies --apply-database --apply-files'
+    )
+    sub.set_defaults(cls=MigrationTask, which='migration')
+
+
 def parse_args(args):
     p = DBTArgumentParser(
         prog='dbt',
@@ -709,6 +742,7 @@ def parse_args(args):
     _build_debug_subparser(subs, base_subparser)
     _build_deps_subparser(subs, base_subparser)
     _build_list_subparser(subs, base_subparser)
+    _build_snapshot_migrate_subparser(subs, base_subparser)
 
     snapshot_sub = _build_snapshot_subparser(subs, base_subparser)
     archive_sub = _build_snapshot_subparser(subs, base_subparser, 'archive')
