@@ -102,7 +102,7 @@ class PostgresConnectionManager(SQLConnectionManager):
         # psycopg2 doesn't support search_path officially,
         # see https://github.com/psycopg/psycopg2/issues/465
         search_path = credentials.search_path
-        if search_path is not None and search_path != '':
+        if search_path is not None and search_path != "":
             # see https://postgresql.org/docs/9.5/libpq-connect.html
             kwargs['options'] = '-c search_path={}'.format(
                 search_path.replace(' ', '\\ '))
