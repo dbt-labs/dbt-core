@@ -405,6 +405,76 @@ class TestBadArchive(DBTIntegrationTest):
         self.assertIn('target_database', str(exc.exception))
 
 
+class TestConflictArchive(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "simple_archive_004"
+
+    @property
+    def models(self):
+        return "test/integration/004_simple_archive_test/models"
+
+    @property
+    def project_config(self):
+        return {}
+
+
+    @use_profile('postgres')
+    def test__postgres_archive_block_archive_collision(self):
+        self.use_default_project({
+            "archive-paths": ['test/integration/004_simple_archive_test/test-archives-pg'],
+            "archive": [
+                {
+                    "source_schema": self.unique_schema(),
+                    "target_schema": self.unique_schema(),
+                    "tables": [
+                        {
+                            "source_table": "seed",
+                            "target_table": "archive_actual",
+                            "updated_at": 'updated_at',
+                            "unique_key": '''id || '-' || first_name'''
+                        },
+                    ],
+                },
+            ],
+        })
+
+        with self.assertRaises(dbt.exceptions.CompilationException) as exc:
+            self.run_dbt(['compile'], expect_pass=False)
+
+    def test__postgres_archive_block_model_collision(self):
+        self.use_default_project({
+            "source-paths": ['test/integration/004_simple_archive_test/models-collision'],
+            "archive-paths": ['test/integration/004_simple_archive_test/test-archives-pg'],
+            "archive": [],
+        })
+
+        with self.assertRaises(dbt.exceptions.CompilationException) as exc:
+            self.run_dbt(['compile'], expect_pass=False)
+
+    def test__postgres_archive_model_collision(self):
+        self.use_default_project({
+            "source-paths": ['test/integration/004_simple_archive_test/models-collision'],
+            "archive": [
+                {
+                    "source_schema": self.unique_schema(),
+                    "target_schema": self.unique_schema(),
+                    "tables": [
+                        {
+                            "source_table": "seed",
+                            "target_table": "archive_actual",
+                            "updated_at": 'updated_at',
+                            "unique_key": '''id || '-' || first_name'''
+                        },
+                    ],
+                },
+            ],
+        })
+
+        with self.assertRaises(dbt.exceptions.CompilationException) as exc:
+            self.run_dbt(['compile'], expect_pass=False)
+
+
 class TestCheckCols(TestSimpleArchiveFiles):
     NUM_ARCHIVE_MODELS = 2
     def _assertTablesEqualSql(self, relation_a, relation_b, columns=None):
