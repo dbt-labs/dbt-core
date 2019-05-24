@@ -109,9 +109,10 @@ class PostgresConnectionManager(SQLConnectionManager):
             kwargs['keepalives_idle'] = keepalives_idle
 
         # psycopg2 doesn't support search_path officially, see https://github.com/psycopg/psycopg2/issues/465
-        if credentials.search_path is not None and credentials.search_path != '':
+        search_path = credentials.get('search_path')
+        if search_path is not None and search_path != '':
             # see https://www.postgresql.org/docs/9.5/libpq-connect.html#LIBPQ-CONNECT-OPTIONS
-            kwargs['options'] = '-c search_path={}'.format(credentials.search_path.replace(' ', '\\ '))
+            kwargs['options'] = '-c search_path={}'.format(search_path.replace(' ', '\\ '))
 
         try:
             handle = psycopg2.connect(
