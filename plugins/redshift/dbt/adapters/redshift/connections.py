@@ -10,7 +10,6 @@ import boto3
 
 drop_lock = multiprocessing.Lock()
 
-
 REDSHIFT_CREDENTIALS_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
@@ -78,7 +77,9 @@ class RedshiftCredentials(PostgresCredentials):
         return 'redshift'
 
     def _connection_keys(self):
-        return ('host', 'port', 'user', 'database', 'schema', 'method', 'search_path')
+        return (
+            'host', 'port', 'user', 'database', 'schema', 'method',
+            'search_path')
 
 
 class RedshiftConnectionManager(PostgresConnectionManager):
@@ -97,7 +98,6 @@ class RedshiftConnectionManager(PostgresConnectionManager):
             to use the default.
         """
         with drop_lock:
-
             connection = self.get_thread_connection()
 
             if connection.transaction_open:
@@ -127,7 +127,7 @@ class RedshiftConnectionManager(PostgresConnectionManager):
         except boto_client.exceptions.ClientError as e:
             raise dbt.exceptions.FailedToConnectException(
                 "Unable to get temporary Redshift cluster credentials: {}"
-                .format(e))
+                    .format(e))
 
     @classmethod
     def get_tmp_iam_cluster_credentials(cls, credentials):
