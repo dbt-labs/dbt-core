@@ -118,7 +118,7 @@ class MacrosKnownParser(BaseParser):
                 GLOBAL_PROJECT_NAME
             )
         if get_alias_macro is None:
-            def get_alias(node, custom_alias_name=None):
+            def get_alias(custom_alias_name=None, node=None):
                 if custom_alias_name is None:
                     return node.name
                 else:
