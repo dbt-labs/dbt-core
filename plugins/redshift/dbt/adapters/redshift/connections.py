@@ -127,7 +127,7 @@ class RedshiftConnectionManager(PostgresConnectionManager):
         except boto_client.exceptions.ClientError as e:
             raise dbt.exceptions.FailedToConnectException(
                 "Unable to get temporary Redshift cluster credentials: {}"
-                    .format(e))
+                .format(e))
 
     @classmethod
     def get_tmp_iam_cluster_credentials(cls, credentials):
