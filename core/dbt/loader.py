@@ -63,6 +63,18 @@ class GraphLoader(object):
                 resource_type=NodeType.Macro,
             ))
 
+    def _load_archives_from_project(self):
+        archive_parser = ArchiveParser(self.root_project, self.all_projects,
+                                       self.macro_manifest)
+        for key, node in archive_parser.load_and_parse().items():
+            # we have another archive parser, so we have to check for
+            # collisions
+            existing = self.nodes.get(key)
+            if existing:
+                dbt.exceptions.raise_duplicate_resource_name(existing, node)
+            else:
+                self.nodes[key] = node
+
     def _load_seeds(self):
         parser = SeedParser(self.root_project, self.all_projects,
                             self.macro_manifest)
@@ -86,10 +98,7 @@ class GraphLoader(object):
                                  self.macro_manifest)
         self.nodes.update(hook_parser.load_and_parse())
 
-        archive_parser = ArchiveParser(self.root_project, self.all_projects,
-                                       self.macro_manifest)
-        self.nodes.update(archive_parser.load_and_parse())
-
+        self._load_archives_from_project()
         self._load_seeds()
 
     def _load_docs(self):
