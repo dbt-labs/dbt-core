@@ -652,10 +652,16 @@ def raise_not_implemented(msg):
     raise NotImplementedException(msg)
 
 
-def warn_or_error(msg, node=None, log_fmt=None):
+_REPEAT_MESSAGE_CACHE = set()
+
+
+def warn_or_error(msg, node=None, log_fmt=None, repeat=True):
     if dbt.flags.WARN_ERROR:
         raise_compiler_error(msg, node)
     else:
+        if not repeat and msg in _REPEAT_MESSAGE_CACHE:
+            return
+        _REPEAT_MESSAGE_CACHE.add(msg)
         if log_fmt is not None:
             msg = log_fmt.format(msg)
         logger.warning(msg)
