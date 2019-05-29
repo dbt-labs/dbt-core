@@ -23,8 +23,7 @@ class BaseGraphSelectionTest(unittest.TestCase):
         }
         self.add_tags(nodes)
         self.manifest = mock.MagicMock(nodes=nodes)
-        self.linker = mock.MagicMock(graph=self.package_graph)
-        self.selector = graph_selector.NodeSelector(self.linker, self.manifest)
+        self.selector = graph_selector.NodeSelector(self.package_graph, self.manifest)
 
 
 class GraphSelectionTest(BaseGraphSelectionTest):
