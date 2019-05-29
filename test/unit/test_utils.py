@@ -18,7 +18,7 @@ class TestDeepMerge(unittest.TestCase):
 
         for case in cases:
             actual = dbt.utils.deep_merge(*case['args'])
-            self.assertEquals(
+            self.assertEqual(
                 case['expected'], actual,
                 'failed on {} (actual {}, expected {})'.format(
                     case['description'], actual, case['expected']))
@@ -38,7 +38,7 @@ class TestMerge(unittest.TestCase):
 
         for case in cases:
             actual = dbt.utils.deep_merge(*case['args'])
-            self.assertEquals(
+            self.assertEqual(
                 case['expected'], actual,
                 'failed on {} (actual {}, expected {})'.format(
                     case['description'], actual, case['expected']))
@@ -88,10 +88,10 @@ class TestDeepMap(unittest.TestCase):
             ],
         }
         actual = dbt.utils.deep_map(self.intify_all, self.input_value)
-        self.assertEquals(actual, expected)
+        self.assertEqual(actual, expected)
 
         actual = dbt.utils.deep_map(self.intify_all, expected)
-        self.assertEquals(actual, expected)
+        self.assertEqual(actual, expected)
 
 
     @staticmethod
@@ -121,20 +121,20 @@ class TestDeepMap(unittest.TestCase):
             ],
         }
         actual = dbt.utils.deep_map(self.special_keypath, self.input_value)
-        self.assertEquals(actual, expected)
+        self.assertEqual(actual, expected)
 
         actual = dbt.utils.deep_map(self.special_keypath, expected)
-        self.assertEquals(actual, expected)
+        self.assertEqual(actual, expected)
 
     def test__noop(self):
         actual = dbt.utils.deep_map(lambda x, _: x, self.input_value)
-        self.assertEquals(actual, self.input_value)
+        self.assertEqual(actual, self.input_value)
 
     def test_trivial(self):
         cases = [[], {}, 1, 'abc', None, True]
         for case in cases:
             result = dbt.utils.deep_map(lambda x, _: x, case)
-            self.assertEquals(result, case)
+            self.assertEqual(result, case)
 
         with self.assertRaises(dbt.exceptions.DbtConfigError):
             dbt.utils.deep_map(lambda x, _: x, {'foo': object()})
