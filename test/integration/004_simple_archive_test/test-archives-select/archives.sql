@@ -40,6 +40,6 @@
             updated_at='updated_at',
         )
     }}
-    select * from {{target.database}}.{{schema}}.seed where last_name = 'Kelly'
+    select * from {{database}}.{{schema}}.seed where last_name = 'Kelly'
 
 {% endarchive %}
