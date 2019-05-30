@@ -1,5 +1,4 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 class TestAdapterDDL(DBTIntegrationTest):
 
@@ -16,7 +15,7 @@ class TestAdapterDDL(DBTIntegrationTest):
     def models(self):
         return "test/integration/018_adapter_ddl_tests/models"
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_sort_and_dist_keys_are_nops_on_postgres(self):
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 1)

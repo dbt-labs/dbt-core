@@ -23,7 +23,7 @@
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
                 '{{ target.user }}',\
-                '{{ target.pass }}',\
+                '{{ target.get(\"pass\", \"\") }}',\
                 {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
@@ -51,7 +51,7 @@
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
                 '{{ target.user }}',\
-                '{{ target.pass }}',\
+                '{{ target.get(\"pass\", \"\") }}',\
                 {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\
@@ -79,7 +79,7 @@
                 '{{ target.schema }}',\
                 '{{ target.type }}',\
                 '{{ target.user }}',\
-                '{{ target.pass }}',\
+                '{{ target.get(\"pass\", \"\") }}',\
                 {{ target.port }},\
                 {{ target.threads }},\
                 '{{ run_started_at }}',\

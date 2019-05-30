@@ -35,7 +35,7 @@ class SQLAdapter(BaseAdapter):
         - list_relations_without_caching
         - get_columns_in_relation
     """
-    @available
+    @available.parse(lambda *a, **k: (None, None))
     def add_query(self, sql, auto_begin=True, bindings=None,
                   abridge_sql_log=False):
         """Add a query to the current transaction. A thin wrapper around
@@ -183,6 +183,7 @@ class SQLAdapter(BaseAdapter):
 
         relations = []
         quote_policy = {
+            'database': True,
             'schema': True,
             'identifier': True
         }
@@ -209,7 +210,8 @@ class SQLAdapter(BaseAdapter):
 
     def check_schema_exists(self, database, schema):
         information_schema = self.Relation.create(
-            database=database, schema=schema
+            database=database, schema=schema,
+            quote_policy=self.config.quoting
         ).information_schema()
 
         kwargs = {'information_schema': information_schema, 'schema': schema}

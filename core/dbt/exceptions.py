@@ -95,6 +95,17 @@ class RuntimeException(RuntimeError, Exception):
         return lines[0] + "\n" + "\n".join(
             ["  " + line for line in lines[1:]])
 
+    def data(self):
+        result = Exception.data(self)
+        if self.node is None:
+            return result
+
+        result.update({
+            'raw_sql': self.node.get('raw_sql'),
+            'compiled_sql': self.node.get('injected_sql'),
+        })
+        return result
+
 
 class RPCFailureResult(RuntimeException):
     CODE = 10002
@@ -106,12 +117,31 @@ class RPCTimeoutException(RuntimeException):
     MESSAGE = 'RPC timeout error'
 
     def __init__(self, timeout):
+        super(RPCTimeoutException, self).__init__(self.MESSAGE)
         self.timeout = timeout
 
     def data(self):
-        return {
+        result = super(RPCTimeoutException, self).data()
+        result.update({
             'timeout': self.timeout,
             'message': 'RPC timed out after {}s'.format(self.timeout),
+        })
+        return result
+
+
+class RPCKilledException(RuntimeException):
+    CODE = 10009
+    MESSAGE = 'RPC process killed'
+
+    def __init__(self, signum):
+        self.signum = signum
+        self.message = 'RPC process killed by signal {}'.format(self.signum)
+        super(RPCKilledException, self).__init__(self.message)
+
+    def data(self):
+        return {
+            'signum': self.signum,
+            'message': self.message,
         }
 
 
@@ -156,8 +186,9 @@ class JSONValidationException(ValidationException):
         self.typename = typename
         self.errors = errors
         self.errors_message = ', '.join(errors)
-        msg = ('Invalid arguments passed to "{}" instance: {}'.format(
-                self.typename, self.errors_message))
+        msg = 'Invalid arguments passed to "{}" instance: {}'.format(
+            self.typename, self.errors_message
+        )
         super(JSONValidationException, self).__init__(msg)
 
     def __reduce__(self):
@@ -562,8 +593,8 @@ def raise_ambiguous_catalog_match(unique_id, match_1, match_2):
 
     def get_match_string(match):
         return "{}.{}".format(
-                match.get('metadata', {}).get('schema'),
-                match.get('metadata', {}).get('name'))
+            match.get('metadata', {}).get('schema'),
+            match.get('metadata', {}).get('name'))
 
     raise_compiler_error(
         'dbt found two relations in your warehouse with similar database '
@@ -625,6 +656,16 @@ def warn_or_error(msg, node=None, log_fmt=None):
     if dbt.flags.WARN_ERROR:
         raise_compiler_error(msg, node)
     else:
+        if log_fmt is not None:
+            msg = log_fmt.format(msg)
+        logger.warning(msg)
+
+
+def warn_or_raise(exc, log_fmt=None):
+    if dbt.flags.WARN_ERROR:
+        raise exc
+    else:
+        msg = str(exc)
         if log_fmt is not None:
             msg = log_fmt.format(msg)
         logger.warning(msg)

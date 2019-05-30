@@ -4,10 +4,9 @@
 {% endmacro %}
 
 
-{% macro bigquery__archive_scd_hash() %}
-    to_hex(md5(concat(cast(`dbt_pk` as string), '|', cast(`dbt_updated_at` as string))))
+{% macro bigquery__archive_hash_arguments(args) %}
+  to_hex(md5(concat({% for arg in args %}coalesce(cast({{ arg }} as string), ''){% if not loop.last %}, '|',{% endif %}{% endfor %})))
 {% endmacro %}
-
 
 {% macro bigquery__create_columns(relation, columns) %}
   {{ adapter.alter_table_add_columns(relation, columns) }}
@@ -16,8 +15,8 @@
 
 {% macro bigquery__archive_update(target_relation, tmp_relation) %}
     update {{ target_relation }} as dest
-    set dest.{{ adapter.quote('valid_to') }} = tmp.{{ adapter.quote('valid_to') }}
+    set dest.dbt_valid_to = tmp.dbt_valid_to
     from {{ tmp_relation }} as tmp
-    where tmp.{{ adapter.quote('scd_id') }} = dest.{{ adapter.quote('scd_id') }}
-      and {{ adapter.quote('change_type') }} = 'update';
+    where tmp.dbt_scd_id = dest.dbt_scd_id
+      and change_type = 'update';
 {% endmacro %}

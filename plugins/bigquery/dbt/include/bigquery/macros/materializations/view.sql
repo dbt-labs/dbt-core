@@ -1,6 +1,6 @@
 
-{% macro bigquery__handle_existing_table(full_refresh, non_destructive_mode, old_relation) %}
-    {%- if full_refresh and not non_destructive_mode -%}
+{% macro bigquery__handle_existing_table(full_refresh, old_relation) %}
+    {%- if full_refresh -%}
       {{ adapter.drop_relation(old_relation) }}
     {%- else -%}
       {{ exceptions.relation_wrong_type(old_relation, 'view') }}

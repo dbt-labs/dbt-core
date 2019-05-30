@@ -4,7 +4,6 @@ import re
 import time
 from abc import abstractmethod
 from multiprocessing.dummy import Pool as ThreadPool
-from jsonrpc.exceptions import JSONRPCInvalidParams
 
 from dbt import rpc
 from dbt.task.base import ConfiguredTask
@@ -361,7 +360,7 @@ class RemoteCallable(object):
 
         try:
             sql_bytes = base64.b64decode(base64_sql_bytes)
-        except ValueError as exc:
+        except ValueError:
             self.raise_invalid_base64(sql)
 
         return sql_bytes.decode('utf-8')

@@ -161,6 +161,116 @@ class TestBlockLexer(unittest.TestCase):
         blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
         self.assertEqual(len(blocks), 0)
 
+    def test_comment_block_self_closing(self):
+        # test the case where a comment start looks a lot like it closes itself
+        # (but it doesn't in jinja!)
+        body = '{#} {% myblock foo %} {#}'
+        all_blocks = extract_toplevel_blocks(body)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
+        self.assertEqual(len(blocks), 0)
+
+    def test_embedded_self_closing_comment_block(self):
+        body = '{% myblock foo %} {#}{% endmyblock %} {#}{% endmyblock %}'
+        all_blocks = extract_toplevel_blocks(body)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
+        self.assertEqual(len(blocks), 1)
+        self.assertEqual(blocks[0].full_block, body)
+        self.assertEqual(blocks[0].contents, ' {#}{% endmyblock %} {#}')
+
+    def test_set_statement(self):
+        body = '{% set x = 1 %}{% myblock foo %}hi{% endmyblock %}'
+        all_blocks = extract_toplevel_blocks(body)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual(blocks[0].full_block, '{% set x = 1 %}')
+        self.assertEqual(blocks[1].full_block, '{% myblock foo %}hi{% endmyblock %}')
+
+    def test_set_block(self):
+        body = '{% set x %}1{% endset %}{% myblock foo %}hi{% endmyblock %}'
+        all_blocks = extract_toplevel_blocks(body)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual(blocks[0].contents, '1')
+        self.assertEqual(blocks[0].block_type_name, 'set')
+        self.assertEqual(blocks[0].block_name, 'x')
+        self.assertEqual(blocks[1].full_block, '{% myblock foo %}hi{% endmyblock %}')
+
+    def test_crazy_set_statement(self):
+        body = '{% set x = (thing("{% myblock foo %}")) %}{% otherblock bar %}x{% endotherblock %}{% set y = otherthing("{% myblock foo %}") %}'
+        all_blocks = extract_toplevel_blocks(body)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
+        self.assertEqual(len(blocks), 3)
+        self.assertEqual(blocks[0].full_block, '{% set x = (thing("{% myblock foo %}")) %}')
+        self.assertEqual(blocks[0].block_type_name, 'set')
+        self.assertEqual(blocks[1].full_block, '{% otherblock bar %}x{% endotherblock %}')
+        self.assertEqual(blocks[1].block_type_name, 'otherblock')
+        self.assertEqual(blocks[2].full_block, '{% set y = otherthing("{% myblock foo %}") %}')
+        self.assertEqual(blocks[2].block_type_name, 'set')
+
+    def test_do_statement(self):
+        body = '{% do thing.update() %}{% myblock foo %}hi{% endmyblock %}'
+        all_blocks = extract_toplevel_blocks(body)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual(blocks[0].full_block, '{% do thing.update() %}')
+        self.assertEqual(blocks[1].full_block, '{% myblock foo %}hi{% endmyblock %}')
+
+    def test_deceptive_do_statement(self):
+        body = '{% do thing %}{% myblock foo %}hi{% endmyblock %}'
+        all_blocks = extract_toplevel_blocks(body)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual(blocks[0].full_block, '{% do thing %}')
+        self.assertEqual(blocks[1].full_block, '{% myblock foo %}hi{% endmyblock %}')
+
+    def test_do_block(self):
+        body = '{% do %}thing.update(){% enddo %}{% myblock foo %}hi{% endmyblock %}'
+        all_blocks = extract_toplevel_blocks(body)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual(blocks[0].contents, 'thing.update()')
+        self.assertEqual(blocks[0].block_type_name, 'do')
+        self.assertEqual(blocks[1].full_block, '{% myblock foo %}hi{% endmyblock %}')
+
+    def test_crazy_do_statement(self):
+        body = '{% do (thing("{% myblock foo %}")) %}{% otherblock bar %}x{% endotherblock %}{% do otherthing("{% myblock foo %}") %}'
+        all_blocks = extract_toplevel_blocks(body)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
+        self.assertEqual(len(blocks), 3)
+        self.assertEqual(blocks[0].full_block, '{% do (thing("{% myblock foo %}")) %}')
+        self.assertEqual(blocks[0].block_type_name, 'do')
+        self.assertEqual(blocks[1].full_block, '{% otherblock bar %}x{% endotherblock %}')
+        self.assertEqual(blocks[1].block_type_name, 'otherblock')
+        self.assertEqual(blocks[2].full_block, '{% do otherthing("{% myblock foo %}") %}')
+        self.assertEqual(blocks[2].block_type_name, 'do')
+
+    def test_awful_jinja(self):
+        all_blocks = extract_toplevel_blocks(if_you_do_this_you_are_awful)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
+        self.assertEqual(len(blocks), 4)
+        self.assertEqual(blocks[0].block_type_name, 'do')
+        self.assertEqual(blocks[0].full_block, '''{% do\n    set('foo="bar"')\n%}''')
+        self.assertEqual(blocks[1].block_type_name, 'set')
+        self.assertEqual(blocks[1].full_block, '''{% set x = ("100" + "hello'" + '%}') %}''')
+        self.assertEqual(blocks[2].block_type_name, 'archive')
+        self.assertEqual(blocks[2].contents, '\n    '.join([
+            '''{% set x = ("{% endarchive %}" + (40 * '%})')) %}''',
+            '{# {% endarchive %} #}',
+            '{% embedded %}',
+            '    some block data right here',
+            '{% endembedded %}'
+        ]))
+        self.assertEqual(blocks[3].block_type_name, 'materialization')
+        self.assertEqual(blocks[3].contents, '\nhi\n')
+
+    def test_quoted_endblock_within_block(self):
+        body = '{% myblock something -%}  {% set x = ("{% endmyblock %}") %}  {% endmyblock %}'
+        all_blocks = extract_toplevel_blocks(body)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
+        self.assertEqual(len(blocks), 1)
+        self.assertEqual(blocks[0].block_type_name, 'myblock')
+        self.assertEqual(blocks[0].contents, '{% set x = ("{% endmyblock %}") %}  ')
+
 bar_block = '''{% mytype bar %}
 {# a comment
     that inside it has
@@ -188,3 +298,30 @@ complex_archive_file = '''
 {% mytype foo %} some stuff {% endmytype %}
 
 '''+bar_block+x_block
+
+
+if_you_do_this_you_are_awful = '''
+{#} here is a comment with a block inside {% block x %} asdf {% endblock %} {#}
+{% do
+    set('foo="bar"')
+%}
+{% set x = ("100" + "hello'" + '%}') %}
+{% archive something -%}
+    {% set x = ("{% endarchive %}" + (40 * '%})')) %}
+    {# {% endarchive %} #}
+    {% embedded %}
+        some block data right here
+    {% endembedded %}
+{%- endarchive %}
+
+{% raw %}
+    {% set x = SYNTAX ERROR}
+{% endraw %}
+
+
+{% materialization whatever, adapter='thing' %}
+hi
+{% endmaterialization %}
+'''
+
+

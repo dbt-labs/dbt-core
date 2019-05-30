@@ -60,7 +60,6 @@
   );
 {% endmacro %}
 
-
 {% macro create_view_as(relation, sql) -%}
   {{ adapter_macro('create_view_as', relation, sql) }}
 {%- endmacro %}
@@ -193,7 +192,7 @@
   {% call statement('list_schemas', fetch_result=True, auto_begin=False) %}
     select distinct schema_name
     from {{ information_schema_name(database) }}.schemata
-    where catalog_name='{{ database }}'
+    where catalog_name ilike '{{ database }}'
   {% endcall %}
   {{ return(load_result('list_schemas').table) }}
 {% endmacro %}

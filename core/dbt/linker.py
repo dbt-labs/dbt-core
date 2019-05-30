@@ -1,8 +1,6 @@
 import networkx as nx
-from collections import defaultdict
 import threading
 
-import dbt.utils
 from dbt.compat import PriorityQueue
 from dbt.node_types import NodeType
 

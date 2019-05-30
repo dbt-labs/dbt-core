@@ -30,9 +30,10 @@ class SQLConnectionManager(BaseConnectionManager):
 
     def cancel_open(self):
         names = []
+        this_connection = self.get_if_exists()
         with self.lock:
             for connection in self.thread_connections.values():
-                if connection.name == 'master':
+                if connection is this_connection:
                     continue
 
                 self.cancel(connection)

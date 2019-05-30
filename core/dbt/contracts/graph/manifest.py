@@ -1,5 +1,4 @@
 from dbt.api import APIObject
-from dbt.contracts.graph.unparsed import UNPARSED_NODE_CONTRACT
 from dbt.contracts.graph.parsed import PARSED_NODE_CONTRACT, \
     PARSED_MACRO_CONTRACT, PARSED_DOCUMENTATION_CONTRACT, \
     PARSED_SOURCE_DEFINITION_CONTRACT

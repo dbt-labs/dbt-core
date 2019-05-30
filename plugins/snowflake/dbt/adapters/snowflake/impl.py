@@ -1,12 +1,8 @@
 from __future__ import absolute_import
 
-import dbt.compat
-import dbt.exceptions
-
 from dbt.adapters.sql import SQLAdapter
 from dbt.adapters.snowflake import SnowflakeConnectionManager
 from dbt.adapters.snowflake import SnowflakeRelation
-from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import filter_null_values
 
 

@@ -361,7 +361,7 @@ UNPARSED_DOCUMENTATION_FILE_CONTRACT = {
             'type': 'string',
             'description': (
                 'Relative path to the originating file from the project root.'
-                ),
+            ),
         },
         'file_contents': {
             'type': 'string',

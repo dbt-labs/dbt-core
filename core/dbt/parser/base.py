@@ -39,8 +39,8 @@ class BaseParser(object):
         return "{}.{}.{}".format(resource_type, package_name, resource_name)
 
     @classmethod
-    def get_fqn(cls, path, package_project_config, extra=[]):
-        parts = dbt.utils.split_path(path)
+    def get_fqn(cls, node, package_project_config, extra=[]):
+        parts = dbt.utils.split_path(node.path)
         name, _ = os.path.splitext(parts[-1])
         fqn = ([package_project_config.project_name] +
                parts[:-1] +
@@ -245,7 +245,7 @@ class MacrosKnownParser(BaseParser):
         fqn_extra = coalesce(fqn_extra, [])
 
         if fqn is None:
-            fqn = self.get_fqn(node.path, package_project_config, fqn_extra)
+            fqn = self.get_fqn(node, package_project_config, fqn_extra)
 
         config = SourceConfig(
             self.root_project_config,
@@ -265,3 +265,16 @@ class MacrosKnownParser(BaseParser):
         parsed_node.validate()
 
         return parsed_node
+
+    def check_block_parsing(self, name, path, contents):
+        """Check if we were able to extract toplevel blocks from the given
+        contents. Return True if extraction was successful (no exceptions),
+        False if it fails.
+        """
+        if not dbt.flags.TEST_NEW_PARSER:
+            return True
+        try:
+            dbt.clients.jinja.extract_toplevel_blocks(contents)
+        except Exception:
+            return False
+        return True

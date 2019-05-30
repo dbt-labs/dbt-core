@@ -41,7 +41,6 @@ class TestBaseBigQueryRun(DBTIntegrationTest):
                 self.assertEqual(result.status, 0)
 
 
-
 class TestSimpleBigQueryRun(TestBaseBigQueryRun):
 
     @use_profile('bigquery')
@@ -51,15 +50,6 @@ class TestSimpleBigQueryRun(TestBaseBigQueryRun):
         self.run_dbt(['seed', '--full-refresh'])
         results = self.run_dbt()
         self.assertEqual(len(results), 5)
-        self.assert_nondupes_pass()
-
-    @use_profile('bigquery')
-    def test__bigquery_exists_non_destructive(self):
-        self.run_dbt(['seed'])
-        # first run dbt. this should work
-        self.assertEqual(len(self.run_dbt()), 5)
-        # then run dbt with --non-destructive. The view should still exist.
-        self.run_dbt(['run', '--non-destructive'])
         self.assert_nondupes_pass()
 
 

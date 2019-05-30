@@ -7,7 +7,6 @@ from dbt.config import RuntimeConfig, Project
 from dbt.config.profile import read_profile, PROFILES_DIR
 from dbt import tracking
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.compat import to_string
 import dbt.exceptions
 
 
@@ -46,6 +45,10 @@ class BaseTask(object):
     def __init__(self, args, config):
         self.args = args
         self.config = config
+
+    @classmethod
+    def pre_init_hook(cls):
+        """A hook called before the task is initialized."""
 
     @classmethod
     def from_args(cls, args):

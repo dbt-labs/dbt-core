@@ -1,7 +1,4 @@
-from copy import copy, deepcopy
-
 from dbt.api import APIObject
-from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import deep_merge
 from dbt.contracts.graph.parsed import PARSED_NODE_CONTRACT, \
     PARSED_MACRO_CONTRACT, ParsedNode

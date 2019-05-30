@@ -5,13 +5,13 @@ import copy
 import dbt.compat
 import dbt.deprecations
 import dbt.exceptions
-import dbt.schema
 import dbt.flags as flags
 import dbt.clients.gcloud
 import dbt.clients.agate_helper
 
 from dbt.adapters.base import BaseAdapter, available
 from dbt.adapters.bigquery import BigQueryRelation
+from dbt.adapters.bigquery import BigQueryColumn
 from dbt.adapters.bigquery import BigQueryConnectionManager
 from dbt.contracts.connection import Connection
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -26,17 +26,14 @@ import time
 import agate
 
 
-def column_to_bq_schema(col):
-    """Convert a column to a bigquery schema object. This is here instead of
-    in dbt.schema to avoid importing google libraries there.
-    """
-    kwargs = {}
-    if len(col.fields) > 0:
-        fields = [column_to_bq_schema(field) for field in col.fields]
-        kwargs = {"fields": fields}
-
-    return google.cloud.bigquery.SchemaField(col.name, col.dtype, col.mode,
-                                             **kwargs)
+def _stub_relation(*args, **kwargs):
+    return BigQueryRelation.create(
+        database='',
+        schema='',
+        identifier='',
+        quote_policy={},
+        type=BigQueryRelation.Table
+    )
 
 
 class BigQueryAdapter(BaseAdapter):
@@ -48,7 +45,7 @@ class BigQueryAdapter(BaseAdapter):
     }
 
     Relation = BigQueryRelation
-    Column = dbt.schema.BigQueryColumn
+    Column = BigQueryColumn
     ConnectionManager = BigQueryConnectionManager
 
     AdapterSpecificConfigs = frozenset({"cluster_by", "partition_by"})
@@ -88,6 +85,7 @@ class BigQueryAdapter(BaseAdapter):
             '`rename_relation` is not implemented for this adapter!'
         )
 
+    @available
     def list_schemas(self, database):
         conn = self.connections.get_thread_connection()
         client = conn.handle
@@ -96,6 +94,11 @@ class BigQueryAdapter(BaseAdapter):
             all_datasets = client.list_datasets(project=database,
                                                 include_all=True)
             return [ds.dataset_id for ds in all_datasets]
+
+    @available
+    def check_schema_exists(self, database, schema):
+        superself = super(BigQueryAdapter, self)
+        return superself.check_schema_exists(database, schema)
 
     def get_columns_in_relation(self, relation):
         try:
@@ -138,7 +141,7 @@ class BigQueryAdapter(BaseAdapter):
         # the implementation of list_relations for other adapters
         try:
             return [self._bq_table_to_relation(table) for table in all_tables]
-        except google.api_core.exceptions.NotFound as e:
+        except google.api_core.exceptions.NotFound:
             return []
 
     def get_relation(self, database, schema, identifier):
@@ -310,7 +313,7 @@ class BigQueryAdapter(BaseAdapter):
     ###
     # Special bigquery adapter methods
     ###
-    @available
+    @available.parse_none
     def make_date_partitioned_table(self, relation):
         return self.connections.create_date_partitioned_table(
             database=relation.database,
@@ -318,7 +321,7 @@ class BigQueryAdapter(BaseAdapter):
             table_name=relation.identifier
         )
 
-    @available
+    @available.parse(lambda *a, **k: '')
     def execute_model(self, model, materialization, sql_override=None,
                       decorator=None):
 
@@ -340,9 +343,8 @@ class BigQueryAdapter(BaseAdapter):
 
         return res
 
-    @available
+    @available.parse(_stub_relation)
     def create_temporary_table(self, sql, **kwargs):
-
         # BQ queries always return a temp table with their results
         query_job, _ = self.connections.raw_execute(sql)
         bq_table = query_job.destination
@@ -357,7 +359,7 @@ class BigQueryAdapter(BaseAdapter):
             },
             type=BigQueryRelation.Table)
 
-    @available
+    @available.parse_none
     def alter_table_add_columns(self, relation, columns):
 
         logger.debug('Adding columns ({}) to table {}".'.format(
@@ -371,13 +373,13 @@ class BigQueryAdapter(BaseAdapter):
                                                relation.identifier, conn)
         table = client.get_table(table_ref)
 
-        new_columns = [column_to_bq_schema(col) for col in columns]
+        new_columns = [col.column_to_bq_schema() for col in columns]
         new_schema = table.schema + new_columns
 
         new_table = google.cloud.bigquery.Table(table_ref, schema=new_schema)
         client.update_table(new_table, ['schema'])
 
-    @available
+    @available.parse_none
     def load_dataframe(self, database, schema, table_name, agate_table,
                        column_override):
         bq_schema = self._agate_to_schema(agate_table, column_override)

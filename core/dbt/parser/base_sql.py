@@ -9,6 +9,7 @@ import dbt.flags
 
 from dbt.contracts.graph.unparsed import UnparsedNode
 from dbt.parser.base import MacrosKnownParser
+from dbt.node_types import NodeType
 
 
 class BaseSqlParser(MacrosKnownParser):
@@ -48,7 +49,7 @@ class BaseSqlParser(MacrosKnownParser):
 
             original_file_path = os.path.join(
                 file_match.get('searched_path'),
-                path)
+                file_match.get('relative_path'))
 
             result.append({
                 'name': name,
@@ -74,30 +75,65 @@ class BaseSqlParser(MacrosKnownParser):
                                   node.name)
 
         project = self.all_projects.get(package_name)
+
+        parse_ok = True
+        if node.resource_type == NodeType.Model:
+            parse_ok = self.check_block_parsing(
+                node.name, node.original_file_path, node.raw_sql
+            )
+
         node_parsed = self.parse_node(node, unique_id, project, tags=tags)
+        if not parse_ok:
+            # if we had a parse error in parse_node, we would not get here. So
+            # this means we rejected a good file :(
+            raise dbt.exceptions.InternalException(
+                'the block parser rejected a good node: {} was marked invalid '
+                'but is actually valid!'.format(node.original_file_path)
+            )
         return unique_id, node_parsed
 
     def parse_sql_nodes(self, nodes, tags=None):
         if tags is None:
             tags = []
 
-        to_return = {}
-        disabled = []
+        results = SQLParseResult()
 
         for n in nodes:
             node_path, node_parsed = self.parse_sql_node(n, tags)
 
             # Ignore disabled nodes
             if not node_parsed.config['enabled']:
-                disabled.append(node_parsed)
+                results.disable(node_parsed)
                 continue
 
-            # Check for duplicate model names
-            existing_node = to_return.get(node_path)
-            if existing_node is not None:
-                dbt.exceptions.raise_duplicate_resource_name(
-                        existing_node, node_parsed)
+            results.keep(node_path, node_parsed)
 
-            to_return[node_path] = node_parsed
+        return results
 
-        return to_return, disabled
+
+class SQLParseResult(object):
+    def __init__(self):
+        self.parsed = {}
+        self.disabled = []
+
+    def result(self, unique_id, node):
+        if node.config['enabled']:
+            self.keep(unique_id, node)
+        else:
+            self.disable(node)
+
+    def disable(self, node):
+        self.disabled.append(node)
+
+    def keep(self, unique_id, node):
+        if unique_id in self.parsed:
+            dbt.exceptions.raise_duplicate_resource_name(
+                self.parsed[unique_id], node
+            )
+
+        self.parsed[unique_id] = node
+
+    def update(self, other):
+        self.disabled.extend(other.disabled)
+        for unique_id, node in other.parsed.items():
+            self.keep(unique_id, node)

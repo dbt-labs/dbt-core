@@ -27,8 +27,6 @@ def docs(node, manifest, config, column_name=None):
             dbt.exceptions.doc_target_not_found(node, doc_name,
                                                 doc_package_name)
 
-        target_doc_id = target_doc.unique_id
-
         return target_doc.block_contents
 
     return do_docs
@@ -126,9 +124,6 @@ class ParserUtils(object):
 
     @classmethod
     def process_docs_for_node(cls, manifest, current_project, node):
-        target_doc = None
-        target_doc_name = None
-        target_doc_package = None
         for docref in node.get('docrefs', []):
             column_name = docref.get('column_name')
             if column_name is None:
@@ -136,8 +131,6 @@ class ParserUtils(object):
             else:
                 column = cls._get_node_column(node, column_name)
                 description = column.get('description', '')
-            target_doc_name = docref['documentation_name']
-            target_doc_package = docref['documentation_package']
             context = {
                 'doc': docs(node, manifest, current_project, column_name),
             }
@@ -184,8 +177,8 @@ class ParserUtils(object):
                 # this node to the graph b/c there is no destination node
                 node.config['enabled'] = False
                 dbt.utils.invalid_ref_fail_unless_test(
-                        node, target_model_name, target_model_package,
-                        disabled=(target_model is cls.DISABLED)
+                    node, target_model_name, target_model_package,
+                    disabled=(target_model is cls.DISABLED)
                 )
 
                 continue

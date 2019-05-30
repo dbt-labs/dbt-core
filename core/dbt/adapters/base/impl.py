@@ -7,18 +7,18 @@ import six
 
 import dbt.exceptions
 import dbt.flags
-import dbt.schema
 import dbt.clients.agate_helper
 
 from dbt.compat import abstractclassmethod, classmethod
 from dbt.node_types import NodeType
 from dbt.loader import GraphLoader
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.schema import Column
 from dbt.utils import filter_null_values
 
-from dbt.adapters.base.meta import AdapterMeta, available, available_deprecated
+
+from dbt.adapters.base.meta import AdapterMeta, available
 from dbt.adapters.base import BaseRelation
+from dbt.adapters.base import Column
 from dbt.adapters.cache import RelationsCache
 
 
@@ -221,7 +221,7 @@ class BaseAdapter(object):
         finally:
             self.release_connection()
 
-    @available
+    @available.parse(lambda *a, **k: ('', dbt.clients.agate_helper()))
     def execute(self, sql, auto_begin=False, fetch=False):
         """Execute the given SQL. This is a thin wrapper around
         ConnectionManager.execute.
@@ -404,7 +404,7 @@ class BaseAdapter(object):
     # Abstract methods about relations
     ###
     @abc.abstractmethod
-    @available
+    @available.parse_none
     def drop_relation(self, relation):
         """Drop the given relation.
 
@@ -417,7 +417,7 @@ class BaseAdapter(object):
         )
 
     @abc.abstractmethod
-    @available
+    @available.parse_none
     def truncate_relation(self, relation):
         """Truncate the given relation.
 
@@ -428,7 +428,7 @@ class BaseAdapter(object):
         )
 
     @abc.abstractmethod
-    @available
+    @available.parse_none
     def rename_relation(self, from_relation, to_relation):
         """Rename the relation from from_relation to to_relation.
 
@@ -442,7 +442,7 @@ class BaseAdapter(object):
         )
 
     @abc.abstractmethod
-    @available
+    @available.parse_list
     def get_columns_in_relation(self, relation):
         """Get a list of the columns in the given Relation.
 
@@ -454,7 +454,7 @@ class BaseAdapter(object):
             '`get_columns_in_relation` is not implemented for this adapter!'
         )
 
-    @available_deprecated('get_columns_in_relation')
+    @available.deprecated('get_columns_in_relation', lambda *a, **k: [])
     def get_columns_in_table(self, schema, identifier):
         """DEPRECATED: Get a list of the columns in the given table."""
         relation = self.Relation.create(
@@ -488,7 +488,7 @@ class BaseAdapter(object):
             relations from.
         :param str schema: The name of the schema to list relations from.
         :return: The relations in schema
-        :retype: List[self.Relation]
+        :rtype: List[self.Relation]
         """
         raise dbt.exceptions.NotImplementedException(
             '`list_relations_without_caching` is not implemented for this '
@@ -498,10 +498,17 @@ class BaseAdapter(object):
     ###
     # Provided methods about relations
     ###
-    @available
+    @available.parse_list
     def get_missing_columns(self, from_relation, to_relation):
-        """Returns dict of {column:type} for columns in from_table that are
-        missing from to_relation
+        """Returns a list of Columns in from_relation that are missing from
+        to_relation.
+
+        :param Relation from_relation: The relation that might have extra
+            columns
+        :param Relation to_relation: The realtion that might have columns
+            missing
+        :return: The columns in from_relation that are missing from to_relation
+        :rtype: List[self.Relation]
         """
         if not isinstance(from_relation, self.Relation):
             dbt.exceptions.invalid_type_error(
@@ -534,7 +541,49 @@ class BaseAdapter(object):
             if col_name in missing_columns
         ]
 
-    @available
+    @available.parse_none
+    def valid_archive_target(self, relation):
+        """Ensure that the target relation is valid, by making sure it has the
+        expected columns.
+
+        :param Relation relation: The relation to check
+        :raises dbt.exceptions.CompilationException: If the columns are
+            incorrect.
+        """
+        if not isinstance(relation, self.Relation):
+            dbt.exceptions.invalid_type_error(
+                method_name='is_existing_old_style_archive',
+                arg_name='relation',
+                got_value=relation,
+                expected_type=self.Relation)
+
+        columns = self.get_columns_in_relation(relation)
+        names = set(c.name.lower() for c in columns)
+        expanded_keys = ('scd_id', 'valid_from', 'valid_to')
+        extra = []
+        missing = []
+        for legacy in expanded_keys:
+            desired = 'dbt_' + legacy
+            if desired not in names:
+                missing.append(desired)
+                if legacy in names:
+                    extra.append(legacy)
+
+        if missing:
+            if extra:
+                msg = (
+                    'Archive target has ("{}") but not ("{}") - is it an '
+                    'unmigrated previous version archive?'
+                    .format('", "'.join(extra), '", "'.join(missing))
+                )
+            else:
+                msg = (
+                    'Archive target is not an archive table (missing "{}")'
+                    .format('", "'.join(missing))
+                )
+            dbt.exceptions.raise_compiler_error(msg)
+
+    @available.parse_none
     def expand_target_column_types(self, temp_table, to_relation):
         if not isinstance(to_relation, self.Relation):
             dbt.exceptions.invalid_type_error(
@@ -559,7 +608,9 @@ class BaseAdapter(object):
         information_schema = self.Relation.create(
             database=database,
             schema=schema,
-            model_name='').information_schema()
+            model_name='',
+            quote_policy=self.config.quoting
+        ).information_schema()
 
         # we can't build the relations cache because we don't have a
         # manifest so we can't run any operations.
@@ -579,7 +630,7 @@ class BaseAdapter(object):
         if schema is not None and quoting['schema'] is False:
             schema = schema.lower()
 
-        if database is not None and quoting['schema'] is False:
+        if database is not None and quoting['database'] is False:
             database = database.lower()
 
         return filter_null_values({
@@ -600,7 +651,7 @@ class BaseAdapter(object):
 
         return matches
 
-    @available
+    @available.parse_none
     def get_relation(self, database, schema, identifier):
         relations_list = self.list_relations(database, schema)
 
@@ -622,7 +673,7 @@ class BaseAdapter(object):
 
         return None
 
-    @available_deprecated('get_relation')
+    @available.deprecated('get_relation', lambda *a, **k: False)
     def already_exists(self, schema, name):
         """DEPRECATED: Return if a model already exists in the database"""
         database = self.config.credentials.database
@@ -634,7 +685,7 @@ class BaseAdapter(object):
     #                   although some adapters may override them
     ###
     @abc.abstractmethod
-    @available
+    @available.parse_none
     def create_schema(self, database, schema):
         """Create the given schema if it does not exist.
 

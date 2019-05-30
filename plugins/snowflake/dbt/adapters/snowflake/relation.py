@@ -1,5 +1,4 @@
 from dbt.adapters.base.relation import BaseRelation
-import dbt.utils
 
 
 class SnowflakeRelation(BaseRelation):

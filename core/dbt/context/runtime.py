@@ -118,6 +118,25 @@ class Config:
         return to_return
 
 
+class DatabaseWrapper(dbt.context.common.BaseDatabaseWrapper):
+    """The runtime database wrapper exposes everything the adapter marks
+    available.
+    """
+    def __getattr__(self, name):
+        if name in self.adapter._available_:
+            return getattr(self.adapter, name)
+        else:
+            raise AttributeError(
+                "'{}' object has no attribute '{}'".format(
+                    self.__class__.__name__, name
+                )
+            )
+
+
+class Var(dbt.context.common.Var):
+    pass
+
+
 def generate(model, runtime_config, manifest):
     return dbt.context.common.generate(
         model, runtime_config, manifest, None, dbt.context.runtime)

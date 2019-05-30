@@ -84,10 +84,13 @@ CONFIG_CONTRACT = {
                 }
             ]
         },
+        'severity': {
+            'enum': ['ERROR', 'WARN'],
+        },
     },
     'required': [
-        'enabled', 'materialized', 'persist_docs', 'post-hook',
-        'pre-hook', 'vars', 'quoting', 'column_types', 'tags'
+        'enabled', 'materialized', 'post-hook', 'pre-hook', 'vars',
+        'quoting', 'column_types', 'tags', 'persist_docs', 
     ]
 }
 
@@ -443,6 +446,79 @@ class ParsedNode(APIObject):
     @config.setter
     def config(self, value):
         self._contents['config'] = value
+
+
+ARCHIVE_CONFIG_CONTRACT = {
+    'properties': {
+        'target_database': {
+            'type': 'string',
+        },
+        'target_schema': {
+            'type': 'string',
+        },
+        'unique_key': {
+            'type': 'string',
+        },
+        'anyOf': [
+            {
+                'properties': {
+                    'strategy': {
+                        'enum': ['timestamp'],
+                    },
+                    'updated_at': {
+                        'type': 'string',
+                        'description': (
+                            'The column name with the timestamp to compare'
+                        ),
+                    },
+                },
+                'required': ['updated_at'],
+            },
+            {
+                'properties': {
+                    'strategy': {
+                        'enum': ['check'],
+                    },
+                    'check_cols': {
+                        'oneOf': [
+                            {
+                                'type': 'array',
+                                'items': {'type': 'string'},
+                                'description': 'The columns to check',
+                                'minLength': 1,
+                            },
+                            {
+                                'enum': ['all'],
+                                'description': 'Check all columns',
+                            },
+                        ],
+                    },
+                },
+                'required': ['check_cols'],
+            }
+        ]
+    },
+    'required': [
+        'target_database', 'target_schema', 'unique_key', 'strategy',
+    ],
+}
+
+
+PARSED_ARCHIVE_NODE_CONTRACT = deep_merge(
+    PARSED_NODE_CONTRACT,
+    {
+        'properties': {
+            'config': ARCHIVE_CONFIG_CONTRACT,
+            'resource_type': {
+                'enum': [NodeType.Archive],
+            },
+        },
+    }
+)
+
+
+class ParsedArchiveNode(ParsedNode):
+    SCHEMA = PARSED_ARCHIVE_NODE_CONTRACT
 
 
 # The parsed node update is only the 'patch', not the test. The test became a

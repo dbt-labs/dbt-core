@@ -1,7 +1,5 @@
 
--- create a view on top of the models. Since they shouldn't be drop-cascaded,
--- this view will still be around after the dbt run --non-destructive
-
+-- create a view on top of the models
 create view {schema}.dependent_view as (
 
     select count(*) from {schema}.materialized

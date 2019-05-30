@@ -1,0 +1,12 @@
+version: 2
+models:
+- name: seed_enabled
+  columns:
+  - name: birthday
+    tests:
+    - column_type:
+        type: date
+  - name: id
+    tests:
+    - column_type:
+        type: character varying(256)

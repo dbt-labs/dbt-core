@@ -8,16 +8,15 @@ import dbt.flags
 import dbt.parser
 from dbt.parser import ModelParser, MacroParser, DataTestParser, SchemaParser, ParserUtils
 from dbt.parser.source_config import SourceConfig
-from dbt.utils import timestring
-from dbt.config import RuntimeConfig
+from dbt.utils import timestring, deep_merge
 
 from dbt.node_types import NodeType
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.parsed import ParsedNode, ParsedMacro, \
     ParsedNodePatch, ParsedSourceDefinition
-from dbt.contracts.graph.unparsed import UnparsedNode
 
 from .utils import config_from_parts_or_dicts
+
 
 def get_os_path(unix_path):
     return os.path.normpath(unix_path)
@@ -80,7 +79,6 @@ class BaseParserTest(unittest.TestCase):
 
     def tearDown(self):
         self.patcher.stop()
-
 
 class SourceConfigTest(BaseParserTest):
     def test__source_config_single_call(self):
@@ -169,6 +167,9 @@ class SchemaParserTest(BaseParserTest):
             'tags': [],
         }
 
+        self.test_config = deep_merge(self.model_config, {'severity': 'ERROR'})
+        self.warn_test_config = deep_merge(self.model_config, {'severity': 'WARN'})
+
         self.disabled_config = {
             'enabled': False,
             'materialized': 'view',
@@ -236,11 +237,11 @@ class SchemaParserTest(BaseParserTest):
                 refs=[],
                 sources=[['my_source', 'my_table']],
                 depends_on={'nodes': [], 'macros': []},
-                config=self.model_config,
+                config=self.test_config,
                 path=get_os_path(
                     'schema_test/source_accepted_values_my_source_my_table_id__a__b.sql'),
                 tags=['schema'],
-                raw_sql="{{ test_accepted_values(model=source('my_source', 'my_table'), column_name='id', values=['a', 'b']) }}",
+                raw_sql="{{ config(severity='ERROR') }}{{ test_accepted_values(model=source('my_source', 'my_table'), column_name='id', values=['a', 'b']) }}",
                 description='',
                 columns={},
                 column_name='id'
@@ -259,11 +260,11 @@ class SchemaParserTest(BaseParserTest):
                 refs=[],
                 sources=[['my_source', 'my_table']],
                 depends_on={'nodes': [], 'macros': []},
-                config=self.model_config,
+                config=self.test_config,
                 original_file_path='test_one.yml',
                 path=get_os_path('schema_test/source_not_null_my_source_my_table_id.sql'),
                 tags=['schema'],
-                raw_sql="{{ test_not_null(model=source('my_source', 'my_table'), column_name='id') }}",
+                raw_sql="{{ config(severity='ERROR') }}{{ test_not_null(model=source('my_source', 'my_table'), column_name='id') }}",
                 description='',
                 columns={},
                 column_name='id'
@@ -284,10 +285,10 @@ class SchemaParserTest(BaseParserTest):
                 refs=[['model_two']],
                 sources=[['my_source', 'my_table']],
                 depends_on={'nodes': [], 'macros': []},
-                config=self.model_config,
+                config=self.test_config,
                 path=get_os_path('schema_test/source_relationships_my_source_my_table_id__id__ref_model_two_.sql'), # noqa
                 tags=['schema'],
-                raw_sql="{{ test_relationships(model=source('my_source', 'my_table'), column_name='id', from='id', to=ref('model_two')) }}",
+                raw_sql="{{ config(severity='ERROR') }}{{ test_relationships(model=source('my_source', 'my_table'), column_name='id', from='id', to=ref('model_two')) }}",
                 description='',
                 columns={},
                 column_name='id'
@@ -298,19 +299,19 @@ class SchemaParserTest(BaseParserTest):
                 database='test',
                 schema='analytics',
                 resource_type='test',
-                unique_id='test.root.source_some_test_my_source_my_table_value',
-                fqn=['root', 'schema_test', 'source_some_test_my_source_my_table_value'],
+                unique_id='test.snowplow.source_some_test_my_source_my_table_value',
+                fqn=['snowplow', 'schema_test', 'source_some_test_my_source_my_table_value'],
                 empty=False,
-                package_name='root',
+                package_name='snowplow',
                 original_file_path='test_one.yml',
                 root_path=get_os_path('/usr/src/app'),
                 refs=[],
                 sources=[['my_source', 'my_table']],
                 depends_on={'nodes': [], 'macros': []},
-                config=self.model_config,
+                config=self.warn_test_config,
                 path=get_os_path('schema_test/source_some_test_my_source_my_table_value.sql'),
                 tags=['schema'],
-                raw_sql="{{ test_some_test(model=source('my_source', 'my_table'), key='value') }}",
+                raw_sql="{{ config(severity='WARN') }}{{ snowplow.test_some_test(model=source('my_source', 'my_table'), key='value') }}",
                 description='',
                 columns={}
             ),
@@ -328,11 +329,11 @@ class SchemaParserTest(BaseParserTest):
                 refs=[],
                 sources=[['my_source', 'my_table']],
                 depends_on={'nodes': [], 'macros': []},
-                config=self.model_config,
+                config=self.warn_test_config,
                 original_file_path='test_one.yml',
                 path=get_os_path('schema_test/source_unique_my_source_my_table_id.sql'),
                 tags=['schema'],
-                raw_sql="{{ test_unique(model=source('my_source', 'my_table'), column_name='id') }}",
+                raw_sql="{{ config(severity='WARN') }}{{ test_unique(model=source('my_source', 'my_table'), column_name='id') }}",
                 description='',
                 columns={},
                 column_name='id'
@@ -356,11 +357,11 @@ class SchemaParserTest(BaseParserTest):
                 refs=[['model_one']],
                 sources=[],
                 depends_on={'nodes': [], 'macros': []},
-                config=self.model_config,
+                config=self.test_config,
                 path=get_os_path(
                     'schema_test/accepted_values_model_one_id__a__b.sql'),
                 tags=['schema'],
-                raw_sql="{{ test_accepted_values(model=ref('model_one'), column_name='id', values=['a', 'b']) }}",
+                raw_sql="{{ config(severity='ERROR') }}{{ test_accepted_values(model=ref('model_one'), column_name='id', values=['a', 'b']) }}",
                 description='',
                 columns={},
                 column_name='id'
@@ -379,11 +380,11 @@ class SchemaParserTest(BaseParserTest):
                 refs=[['model_one']],
                 sources=[],
                 depends_on={'nodes': [], 'macros': []},
-                config=self.model_config,
+                config=self.test_config,
                 original_file_path='test_one.yml',
                 path=get_os_path('schema_test/not_null_model_one_id.sql'),
                 tags=['schema'],
-                raw_sql="{{ test_not_null(model=ref('model_one'), column_name='id') }}",
+                raw_sql="{{ config(severity='ERROR') }}{{ test_not_null(model=ref('model_one'), column_name='id') }}",
                 description='',
                 columns={},
                 column_name='id'
@@ -404,10 +405,10 @@ class SchemaParserTest(BaseParserTest):
                 refs=[['model_one'], ['model_two']],
                 sources=[],
                 depends_on={'nodes': [], 'macros': []},
-                config=self.model_config,
+                config=self.test_config,
                 path=get_os_path('schema_test/relationships_model_one_id__id__ref_model_two_.sql'), # noqa
                 tags=['schema'],
-                raw_sql="{{ test_relationships(model=ref('model_one'), column_name='id', from='id', to=ref('model_two')) }}",
+                raw_sql="{{ config(severity='ERROR') }}{{ test_relationships(model=ref('model_one'), column_name='id', from='id', to=ref('model_two')) }}",
                 description='',
                 columns={},
                 column_name='id'
@@ -418,19 +419,19 @@ class SchemaParserTest(BaseParserTest):
                 database='test',
                 schema='analytics',
                 resource_type='test',
-                unique_id='test.root.some_test_model_one_value',
-                fqn=['root', 'schema_test', 'some_test_model_one_value'],
+                unique_id='test.snowplow.some_test_model_one_value',
+                fqn=['snowplow', 'schema_test', 'some_test_model_one_value'],
                 empty=False,
-                package_name='root',
+                package_name='snowplow',
                 original_file_path='test_one.yml',
                 root_path=get_os_path('/usr/src/app'),
                 refs=[['model_one']],
                 sources=[],
                 depends_on={'nodes': [], 'macros': []},
-                config=self.model_config,
+                config=self.warn_test_config,
                 path=get_os_path('schema_test/some_test_model_one_value.sql'),
                 tags=['schema'],
-                raw_sql="{{ test_some_test(model=ref('model_one'), key='value') }}",
+                raw_sql="{{ config(severity='WARN') }}{{ snowplow.test_some_test(model=ref('model_one'), key='value') }}",
                 description='',
                 columns={}
             ),
@@ -448,11 +449,11 @@ class SchemaParserTest(BaseParserTest):
                 refs=[['model_one']],
                 sources=[],
                 depends_on={'nodes': [], 'macros': []},
-                config=self.model_config,
+                config=self.warn_test_config,
                 original_file_path='test_one.yml',
                 path=get_os_path('schema_test/unique_model_one_id.sql'),
                 tags=['schema'],
-                raw_sql="{{ test_unique(model=ref('model_one'), column_name='id') }}",
+                raw_sql="{{ config(severity='WARN') }}{{ test_unique(model=ref('model_one'), column_name='id') }}",
                 description='',
                 columns={},
                 column_name='id'
@@ -465,9 +466,10 @@ class SchemaParserTest(BaseParserTest):
             original_file_path='test_one.yml',
             columns={
                 'id': {
-                'name': 'id',
-                'description': 'user ID',
-            }},
+                    'name': 'id',
+                    'description': 'user ID',
+                },
+            },
             docrefs=[],
         )
 
@@ -504,7 +506,8 @@ class SchemaParserTest(BaseParserTest):
                         - name: id
                           description: user ID
                           tests:
-                            - unique
+                            - unique:
+                                severity: WARN
                             - not_null
                             - accepted_values:
                                 values:
@@ -514,8 +517,9 @@ class SchemaParserTest(BaseParserTest):
                                 from: id
                                 to: ref('model_two')
                       tests:
-                        - some_test:
+                        - snowplow.some_test:
                             key: value
+                            severity: WARN
         ''')
         parser = SchemaParser(
             self.root_project_config,
@@ -556,7 +560,8 @@ class SchemaParserTest(BaseParserTest):
                     - name: id
                       description: user ID
                       tests:
-                        - unique
+                        - unique:
+                            severity: WARN
                         - not_null
                         - accepted_values:
                             values:
@@ -566,7 +571,8 @@ class SchemaParserTest(BaseParserTest):
                             from: id
                             to: ref('model_two')
                   tests:
-                    - some_test:
+                    - snowplow.some_test:
+                        severity: WARN
                         key: value
         ''')
         parser = SchemaParser(
@@ -610,7 +616,8 @@ class SchemaParserTest(BaseParserTest):
                     - name: id
                       description: user ID
                       tests:
-                        - unique
+                        - unique:
+                            severity: WARN
                         - not_null
                         - accepted_values:
                             values:
@@ -620,7 +627,8 @@ class SchemaParserTest(BaseParserTest):
                             from: id
                             to: ref('model_two')
                   tests:
-                    - some_test:
+                    - snowplow.some_test:
+                        severity: WARN
                         key: value
             sources:
                 - name: my_source
@@ -652,7 +660,8 @@ class SchemaParserTest(BaseParserTest):
                         - name: id
                           description: user ID
                           tests:
-                            - unique
+                            - unique:
+                                severity: WARN
                             - not_null
                             - accepted_values:
                                 values:
@@ -662,7 +671,8 @@ class SchemaParserTest(BaseParserTest):
                                 from: id
                                 to: ref('model_two')
                       tests:
-                        - some_test:
+                        - snowplow.some_test:
+                            severity: WARN
                             key: value
         ''')
         parser = SchemaParser(
@@ -729,7 +739,8 @@ class SchemaParserTest(BaseParserTest):
                         - name: id
                           description: user ID
                           tests:
-                            - unique
+                            - unique:
+                                severity: WARN
                             - not_null
                             - accepted_values: # this test is invalid
                                 - values:
@@ -739,7 +750,8 @@ class SchemaParserTest(BaseParserTest):
                                 from: id
                                 to: ref('model_two')
                       tests:
-                        - some_test:
+                        - snowplow.some_test:
+                            severity: WARN
                             key: value
         ''')
         parser = SchemaParser(
@@ -791,7 +803,8 @@ class SchemaParserTest(BaseParserTest):
                         - name: id
                           description: user ID
                           tests:
-                            - unique
+                            - unique:
+                                severity: WARN
                             - not_null
                             - accepted_values: # this test is invalid
                                 - values:
@@ -801,7 +814,8 @@ class SchemaParserTest(BaseParserTest):
                                 from: id
                                 to: ref('model_two')
                       tests:
-                        - some_test:
+                        - snowplow.some_test:
+                            severity: WARN
                             key: value
         ''')
         parser = SchemaParser(
@@ -855,8 +869,8 @@ class SchemaParserTest(BaseParserTest):
             parser.load_and_parse(
                 'test', root_dir, relative_dirs
             )
-            self.assertIn('https://docs.getdbt.com/v0.11/docs/schemayml-files',
-                          str(cm.exception))
+        self.assertIn('https://docs.getdbt.com/docs/schemayml-files',
+                      str(cm.exception))
 
     @mock.patch.object(SchemaParser, 'find_schema_yml')
     @mock.patch.object(dbt.parser.schemas, 'logger')
@@ -878,8 +892,8 @@ class SchemaParserTest(BaseParserTest):
             parser.load_and_parse(
                 'test', root_dir, relative_dirs
             )
-            self.assertIn('https://docs.getdbt.com/v0.11/docs/schemayml-files',
-                          str(cm.exception))
+        self.assertIn('https://docs.getdbt.com/docs/schemayml-files',
+                      str(cm.exception))
 
     @mock.patch.object(SchemaParser, 'find_schema_yml')
     @mock.patch.object(dbt.parser.schemas, 'logger')
@@ -901,11 +915,15 @@ class SchemaParserTest(BaseParserTest):
             parser.load_and_parse(
                 'test', root_dir, relative_dirs
             )
-            self.assertIn('https://docs.getdbt.com/v0.11/docs/schemayml-files',
-                          str(cm.exception))
+        self.assertIn('https://docs.getdbt.com/docs/schemayml-files',
+                      str(cm.exception))
 
 
 class ParserTest(BaseParserTest):
+    def _assert_parsed_sql_nodes(self, parse_result, parsed, disabled):
+        self.assertEqual(parse_result.parsed, parsed)
+        self.assertEqual(parse_result.disabled, disabled)
+
 
     def find_input_by_name(self, models, name):
         return next(
@@ -930,6 +948,7 @@ class ParserTest(BaseParserTest):
             'tags': [],
             'persist_docs': {}
         }
+        self.test_config = deep_merge(self.model_config, {'severity': 'ERROR'})
 
         self.disabled_config = {
             'enabled': False,
@@ -942,7 +961,6 @@ class ParserTest(BaseParserTest):
             'column_types': {},
             'tags': [],
         }
-
 
     def test__single_model(self):
         models = [{
@@ -960,9 +978,9 @@ class ParserTest(BaseParserTest):
             self.macro_manifest
         )
 
-        self.assertEqual(
+        self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
-            ({
+            {
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
                     name='model_one',
@@ -989,7 +1007,8 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 )
-            }, [])
+            },
+            []
         )
 
     def test__single_model__nested_configuration(self):
@@ -1024,9 +1043,9 @@ class ParserTest(BaseParserTest):
             self.all_projects,
             self.macro_manifest
         )
-        self.assertEqual(
+        self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
-            ({
+            {
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
                     name='model_one',
@@ -1053,7 +1072,8 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 )
-            }, [])
+            },
+            []
         )
 
     def test__empty_model(self):
@@ -1074,9 +1094,9 @@ class ParserTest(BaseParserTest):
             self.macro_manifest
         )
 
-        self.assertEqual(
+        self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
-            ({
+            {
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
                     name='model_one',
@@ -1103,7 +1123,8 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 )
-            }, [])
+            },
+            []
         )
 
     def test__simple_dependency(self):
@@ -1131,9 +1152,9 @@ class ParserTest(BaseParserTest):
             self.macro_manifest
         )
 
-        self.assertEqual(
+        self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
-            ({
+            {
                 'model.root.base': ParsedNode(
                     alias='base',
                     name='base',
@@ -1187,7 +1208,8 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 )
-            }, [])
+            },
+            []
         )
 
     def test__multiple_dependencies(self):
@@ -1243,9 +1265,9 @@ class ParserTest(BaseParserTest):
             self.macro_manifest
         )
 
-        self.assertEqual(
+        self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
-            ({
+            {
                 'model.root.events': ParsedNode(
                     alias='events',
                     name='events',
@@ -1376,7 +1398,8 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 ),
-            }, [])
+            },
+            []
         )
 
     def test__multiple_dependencies__packages(self):
@@ -1434,9 +1457,9 @@ class ParserTest(BaseParserTest):
             self.macro_manifest
         )
 
-        self.assertEqual(
+        self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
-            ({
+            {
                 'model.snowplow.events': ParsedNode(
                     alias='events',
                     name='events',
@@ -1552,7 +1575,7 @@ class ParserTest(BaseParserTest):
                     empty=False,
                     package_name='root',
                     refs=[['snowplow', 'sessions_tx'],
-                             ['snowplow', 'events_tx']],
+                          ['snowplow', 'events_tx']],
                     sources=[],
                     depends_on={
                         'nodes': [],
@@ -1568,7 +1591,8 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 ),
-            }, [])
+            },
+            []
         )
 
     def test__process_refs__packages(self):
@@ -1765,9 +1789,9 @@ class ParserTest(BaseParserTest):
             self.macro_manifest
         )
 
-        self.assertEqual(
+        self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
-            ({
+            {
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
                     name='model_one',
@@ -1794,7 +1818,8 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 )
-            }, [])
+            },
+            []
         )
 
     def test__root_project_config(self):
@@ -1854,9 +1879,9 @@ class ParserTest(BaseParserTest):
             self.macro_manifest
         )
 
-        self.assertEqual(
+        self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
-            ({
+            {
                 'model.root.table': ParsedNode(
                     alias='table',
                     name='table',
@@ -1935,7 +1960,8 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 ),
-            }, [])
+            },
+            []
         )
 
     def test__other_project_config(self):
@@ -2062,9 +2088,9 @@ class ParserTest(BaseParserTest):
             self.macro_manifest
         )
 
-        self.assertEqual(
+        self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
-            ({
+            parsed={
                 'model.root.table': ParsedNode(
                     alias='table',
                     name='table',
@@ -2170,7 +2196,7 @@ class ParserTest(BaseParserTest):
                     columns={}
                 ),
             },
-            [
+            disabled=[
                 ParsedNode(
                     name='disabled',
                     resource_type='model',
@@ -2219,7 +2245,7 @@ class ParserTest(BaseParserTest):
                     fqn=['snowplow', 'views', 'package'],
                     columns={}
                 )
-            ])
+            ]
         )
 
     def test__simple_data_test(self):
@@ -2239,9 +2265,9 @@ class ParserTest(BaseParserTest):
             self.macro_manifest
         )
 
-        self.assertEqual(
+        self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(tests),
-            ({
+            {
                 'test.root.no_events': ParsedNode(
                     alias='no_events',
                     name='no_events',
@@ -2258,7 +2284,7 @@ class ParserTest(BaseParserTest):
                         'nodes': [],
                         'macros': []
                     },
-                    config=self.model_config,
+                    config=self.test_config,
                     path='no_events.sql',
                     original_file_path='no_events.sql',
                     root_path=get_os_path('/usr/src/app'),
@@ -2268,7 +2294,8 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 )
-            }, [])
+            },
+            []
         )
 
     def test__simple_macro(self):
@@ -2360,9 +2387,9 @@ class ParserTest(BaseParserTest):
             self.macro_manifest
         )
 
-        self.assertEqual(
+        self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
-            ({
+            {
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
                     name='model_one',
@@ -2389,7 +2416,8 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 )
-            }, [])
+            },
+            []
         )
 
     def test__macro_no_explicit_project_used_in_model(self):
@@ -2409,9 +2437,9 @@ class ParserTest(BaseParserTest):
             self.macro_manifest
         )
 
-        self.assertEqual(
+        self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
-            ({
+            {
                 'model.root.model_one': ParsedNode(
                     alias='model_one',
                     name='model_one',
@@ -2438,5 +2466,6 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 )
-            }, [])
+            },
+            []
         )

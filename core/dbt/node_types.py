@@ -30,6 +30,7 @@ class NodeType(object):
         return [
             cls.Model,
             cls.Seed,
+            cls.Archive,
         ]
 
 

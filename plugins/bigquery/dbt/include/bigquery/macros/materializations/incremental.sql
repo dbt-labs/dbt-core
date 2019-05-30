@@ -2,14 +2,8 @@
 {% materialization incremental, adapter='bigquery' -%}
 
   {%- set unique_key = config.get('unique_key') -%}
-  {%- set sql_where = config.get('sql_where') -%}
 
-  {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
   {%- set full_refresh_mode = (flags.FULL_REFRESH == True) -%}
-
-  {% if non_destructive_mode %}
-    {{ exceptions.raise_compiler_error("--non-destructive mode is not supported on BigQuery") }}
-  {% endif %}
 
   {%- set identifier = model['alias'] -%}
 
@@ -34,12 +28,7 @@
   {% set source_sql -%}
      {#-- wrap sql in parens to make it a subquery --#}
      (
-        select * from (
-            {{ sql }}
-        )
-        {% if sql_where %}
-            where ({{ sql_where }}) or ({{ sql_where }}) is null
-        {% endif %}
+        {{ sql }}
     )
   {%- endset -%}
 

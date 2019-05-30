@@ -1,0 +1,19 @@
+version: 2
+models:
+  - name: model
+    columns:
+      - name: email
+        tests:
+          - not_null:
+              severity: WARN
+sources:
+  - name: source
+    schema: "{{ var('test_run_schema') }}"
+    tables:
+      - name: nulls
+        identifier: null_seed
+        columns:
+          - name: email
+            tests:
+              - not_null:
+                  severity: WARN

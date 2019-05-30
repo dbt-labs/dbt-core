@@ -50,6 +50,11 @@ stdout_handler = logging.StreamHandler(colorama_stdout)
 stdout_handler.setFormatter(logging.Formatter('%(message)s'))
 stdout_handler.setLevel(NOTICE)
 
+stderr_handler = logging.StreamHandler(sys.stderr)
+stderr_handler.setFormatter(logging.Formatter('%(message)s'))
+stderr_handler.setLevel(WARNING)
+
+
 logger = logging.getLogger('dbt')
 logger.addHandler(stdout_handler)
 logger.setLevel(DEBUG)
@@ -67,6 +72,10 @@ logging.getLogger('werkzeug').setLevel(CRITICAL)
 
 # provide this for the cache.
 CACHE_LOGGER = logging.getLogger('dbt.cache')
+# add a dummy handler to avoid `No handlers could be found for logger`
+nothing_handler = logging.StreamHandler()
+nothing_handler.setLevel(CRITICAL)
+CACHE_LOGGER.addHandler(nothing_handler)
 # provide this for RPC connection logging
 RPC_LOGGER = logging.getLogger('dbt.rpc')
 
@@ -77,6 +86,21 @@ logging.captureWarnings(True)
 dbt.compat.suppress_warnings()
 
 initialized = False
+
+
+def _swap_handler(logger, old, new):
+    if old in logger.handlers:
+        logger.handlers.remove(old)
+    if new not in logger.handlers:
+        logger.addHandler(new)
+
+
+def log_to_stderr(logger):
+    _swap_handler(logger, stdout_handler, stderr_handler)
+
+
+def log_to_stdout(logger):
+    _swap_handler(logger, stderr_handler, stdout_handler)
 
 
 def make_log_dir_if_missing(log_dir):
@@ -99,14 +123,17 @@ def default_formatter():
 
 
 def initialize_logger(debug_mode=False, path=None):
-    global initialized, logger, stdout_handler
+    global initialized, logger, stdout_handler, stderr_handler
 
     if initialized:
         return
 
     if debug_mode:
+        # we'll only use one of these, but just set both up
         stdout_handler.setFormatter(default_formatter())
         stdout_handler.setLevel(DEBUG)
+        stderr_handler.setFormatter(default_formatter())
+        stderr_handler.setLevel(DEBUG)
 
     if path is not None:
         make_log_dir_if_missing(path)
@@ -159,7 +186,7 @@ class QueueFormatter(logging.Formatter):
         # python 2.x, handling weird unicode things
         try:
             return self._fmt % record.__dict__
-        except UnicodeDecodeError as e:
+        except UnicodeDecodeError:
             try:
                 record.name = record.name.decode('utf-8')
                 return self._fmt % record.__dict__

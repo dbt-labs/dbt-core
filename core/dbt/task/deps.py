@@ -15,6 +15,7 @@ import dbt.clients.registry as registry
 from dbt.compat import basestring
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.semver import VersionSpecifier, UnboundedVersionSpecifier
+from dbt.ui import printer
 from dbt.utils import AttrDict
 from dbt.api.object import APIObject
 from dbt.contracts.project import LOCAL_PACKAGE_CONTRACT, \
@@ -25,6 +26,7 @@ from dbt.task.base import ProjectOnlyTask
 
 DOWNLOADS_PATH = None
 REMOVE_DOWNLOADS = False
+PIN_PACKAGE_URL = 'https://docs.getdbt.com/docs/package-management#section-specifying-package-versions' # noqa
 
 
 def _initialize_downloads():
@@ -215,9 +217,18 @@ class GitPackage(Package):
     SCHEMA = GIT_PACKAGE_CONTRACT
 
     def __init__(self, *args, **kwargs):
+        if 'warn_unpinned' in kwargs:
+            kwargs['warn-unpinned'] = kwargs.pop('warn_unpinned')
         super(GitPackage, self).__init__(*args, **kwargs)
         self._checkout_name = hashlib.md5(six.b(self.git)).hexdigest()
         self.version = self._contents.get('revision')
+
+    @property
+    def other_name(self):
+        if self.git.endswith('.git'):
+            return self.git[:-4]
+        else:
+            return self.git + '.git'
 
     @property
     def name(self):
@@ -245,8 +256,12 @@ class GitPackage(Package):
         return "revision {}".format(self.version_name())
 
     def incorporate(self, other):
+        # if one is False, make both be False.
+        warn_unpinned = self.warn_unpinned and other.warn_unpinned
+
         return GitPackage(git=self.git,
-                          revision=(self.version + other.version))
+                          revision=(self.version + other.version),
+                          warn_unpinned=warn_unpinned)
 
     def _resolve_version(self):
         requested = set(self.version)
@@ -255,6 +270,10 @@ class GitPackage(Package):
                 'git dependencies should contain exactly one version. '
                 '{} contains: {}'.format(self.git, requested))
         self.version = requested.pop()
+
+    @property
+    def warn_unpinned(self):
+        return self.get('warn-unpinned', True)
 
     def _checkout(self, project):
         """Performs a shallow clone of the repository into the downloads
@@ -280,6 +299,13 @@ class GitPackage(Package):
 
     def _fetch_metadata(self, project):
         path = self._checkout(project)
+        if self.version[0] == 'master' and self.warn_unpinned:
+            dbt.exceptions.warn_or_error(
+                'The git package "{}" is not pinned.\n\tThis can introduce '
+                'breaking changes into your project without warning!\n\nSee {}'
+                .format(self.git, PIN_PACKAGE_URL),
+                log_fmt=printer.yellow('WARNING: {}')
+            )
         loaded = project.from_project_root(path, {})
         return ProjectPackageMetadata(loaded)
 
@@ -368,14 +394,38 @@ def _parse_package(dict_):
 
 
 class PackageListing(AttrDict):
+    def __contains__(self, package):
+        if isinstance(package, basestring):
+            return super(PackageListing, self).__contains__(package)
+        elif isinstance(package, GitPackage):
+            return package.name in self or package.other_name in self
+        else:
+            return package.name in self
+
+    def __setitem__(self, key, value):
+        if isinstance(key, basestring):
+            super(PackageListing, self).__setitem__(key, value)
+        elif isinstance(key, GitPackage) and key.other_name in self:
+            self[key.other_name] = value
+        else:
+            self[key.name] = value
+
+    def __getitem__(self, key):
+        if isinstance(key, basestring):
+            return super(PackageListing, self).__getitem__(key)
+        elif isinstance(key, GitPackage) and key.other_name in self:
+            return self[key.other_name]
+        else:
+            return self[key.name]
 
     def incorporate(self, package):
         if not isinstance(package, Package):
             package = _parse_package(package)
-        if package.name not in self:
-            self[package.name] = package
+
+        if package in self:
+            self[package] = self[package].incorporate(package)
         else:
-            self[package.name] = self[package.name].incorporate(package)
+            self[package] = package
 
     @classmethod
     def create(cls, parsed_yaml):
@@ -488,16 +538,16 @@ class DepsTask(ProjectOnlyTask):
 
         while pending_deps:
             sub_deps = PackageListing.create([])
-            for name, package in pending_deps.items():
+            for package in pending_deps.values():
                 final_deps.incorporate(package)
-                final_deps[name].resolve_version()
-                target_config = final_deps[name].fetch_metadata(self.config)
+                final_deps[package].resolve_version()
+                target_config = final_deps[package].fetch_metadata(self.config)
                 sub_deps.incorporate_from_yaml(target_config.packages)
             pending_deps = sub_deps
 
         self._check_for_duplicate_project_names(final_deps)
 
-        for _, package in final_deps.items():
+        for package in final_deps.values():
             logger.info('Installing %s', package)
             package.install(self.config)
             logger.info('  Installed from %s\n', package.nice_version_name())

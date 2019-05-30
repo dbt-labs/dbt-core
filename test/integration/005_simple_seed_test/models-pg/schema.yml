@@ -9,4 +9,4 @@ models:
   - name: id
     tests:
     - column_type:
-        type: character varying(255)
+        type: text

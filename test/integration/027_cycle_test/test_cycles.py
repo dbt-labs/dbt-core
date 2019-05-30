@@ -1,6 +1,5 @@
 from freezegun import freeze_time
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 
 class TestSimpleCycle(DBTIntegrationTest):
@@ -14,7 +13,7 @@ class TestSimpleCycle(DBTIntegrationTest):
         return "test/integration/027_cycle_test/simple_cycle_models"
 
     @property
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_simple_cycle(self):
         message = "Found a cycle.*"
         with self.assertRaisesRegexp(Exception, message):
@@ -31,7 +30,7 @@ class TestComplexCycle(DBTIntegrationTest):
         return "test/integration/027_cycle_test/complex_cycle_models"
 
     @property
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_simple_cycle(self):
         message = "Found a cycle.*"
         with self.assertRaisesRegexp(Exception, message):

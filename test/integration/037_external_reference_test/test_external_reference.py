@@ -29,7 +29,7 @@ class TestExternalReference(DBTIntegrationTest):
         # This has to happen before we drop the external schema, because
         # otherwise postgres hangs forever.
         self._drop_schemas()
-        with self.test_connection():
+        with self.get_connection():
             self.adapter.drop_schema(self.default_database, self.external_schema)
         super(TestExternalReference, self).tearDown()
 
@@ -55,7 +55,7 @@ class TestExternalDependency(DBTIntegrationTest):
         # This has to happen before we drop the external schema, because
         # otherwise postgres hangs forever.
         self._drop_schemas()
-        with self.test_connection():
+        with self.get_connection():
             self.adapter.drop_schema(self.default_database, self.external_schema)
         super(TestExternalDependency, self).tearDown()
 

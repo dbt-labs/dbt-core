@@ -91,6 +91,10 @@ PROJECT_CONTRACT = {
         'target-path': {
             'type': 'string',
         },
+        'archive-paths': {
+            'type': 'array',
+            'items': {'type': 'string'},
+        },
         'clean-targets': {
             'type': 'array',
             'items': {'type': 'string'},
@@ -184,6 +188,9 @@ GIT_PACKAGE_CONTRACT = {
             'items': {'type': 'string'},
             'description': 'The git revision to use, if it is not tip',
         },
+        'warn-unpinned': {
+            'type': 'boolean',
+        }
     },
     'required': ['git'],
 }

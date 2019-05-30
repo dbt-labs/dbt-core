@@ -31,7 +31,7 @@ class ServeTask(ProjectOnlyTask):
 
         try:
             webbrowser.open_new_tab('http://127.0.0.1:{}'.format(port))
-        except webbrowser.Error as e:
+        except webbrowser.Error:
             pass
 
         try:

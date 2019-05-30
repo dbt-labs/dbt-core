@@ -9,7 +9,7 @@ import json
 from datetime import datetime
 from functools import wraps
 
-from nose.plugins.attrib import attr
+import pytest
 from mock import patch
 
 import dbt.flags as flags
@@ -441,16 +441,25 @@ class DBTIntegrationTest(unittest.TestCase):
     def profile_config(self):
         return {}
 
-    def run_dbt(self, args=None, expect_pass=True, strict=True):
+    def run_dbt(self, args=None, expect_pass=True, strict=True, parser=True):
         if args is None:
             args = ["run"]
 
-        if strict:
-            args = ["--strict"] + args
-        args.append('--log-cache-events')
-        logger.info("Invoking dbt with {}".format(args))
+        final_args = []
 
-        res, success = dbt.handle_and_check(args)
+        if strict:
+            final_args.append('--strict')
+        if parser:
+            final_args.append('--test-new-parser')
+        if os.getenv('DBT_TEST_SINGLE_THREADED') in ('y', 'Y', '1'):
+            final_args.append('--single-threaded')
+
+        final_args.extend(args)
+        final_args.append('--log-cache-events')
+
+        logger.info("Invoking dbt with {}".format(final_args))
+
+        res, success = dbt.handle_and_check(final_args)
         self.assertEqual(
             success, expect_pass,
             "dbt exit state did not match expected")
@@ -526,23 +535,23 @@ class DBTIntegrationTest(unittest.TestCase):
             conn.transaction_open = False
 
     def run_sql_common(self, sql, fetch, conn):
-            with conn.handle.cursor() as cursor:
-                try:
-                    cursor.execute(sql)
-                    conn.handle.commit()
-                    if fetch == 'one':
-                        return cursor.fetchone()
-                    elif fetch == 'all':
-                        return cursor.fetchall()
-                    else:
-                        return
-                except BaseException as e:
-                    conn.handle.rollback()
-                    print(sql)
-                    print(e)
-                    raise e
-                finally:
-                    conn.transaction_open = False
+        with conn.handle.cursor() as cursor:
+            try:
+                cursor.execute(sql)
+                conn.handle.commit()
+                if fetch == 'one':
+                    return cursor.fetchone()
+                elif fetch == 'all':
+                    return cursor.fetchall()
+                else:
+                    return
+            except BaseException as e:
+                conn.handle.rollback()
+                print(sql)
+                print(e)
+                raise e
+            finally:
+                conn.transaction_open = False
 
     def run_sql(self, query, fetch='None', kwargs=None, connection_name=None):
         if connection_name is None:
@@ -553,7 +562,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
         sql = self.transform_sql(query, kwargs=kwargs)
 
-        with self.test_connection(connection_name) as conn:
+        with self.get_connection(connection_name) as conn:
             logger.debug('test connection "{}" executing: {}'.format(conn.name, sql))
             if self.adapter_type == 'bigquery':
                 return self.run_sql_bigquery(sql, fetch)
@@ -569,17 +578,31 @@ class DBTIntegrationTest(unittest.TestCase):
         else:
             return "{} ilike '{}'".format(target, value)
 
-    def get_many_table_columns(self, tables, schema, database=None):
-        if self.adapter_type == 'bigquery':
-            result = []
-            for table in tables:
-                relation = self._make_relation(table, schema, database)
-                columns = self.adapter.get_columns_in_relation(relation)
-                for col in columns:
-                    result.append((table, col.column, col.dtype, col.char_size))
-            result.sort(key=lambda x: '{}.{}'.format(x[0], x[1]))
-            return result
-        elif self.adapter_type == 'presto':
+    def get_many_table_columns_snowflake(self, tables, schema, database=None):
+        tables = set(tables)
+        if database is None:
+            database = self.default_database
+        sql = 'show columns in schema {database}.{schema}'.format(
+            database=self.quote_as_configured(database, 'database'),
+            schema=self.quote_as_configured(schema, 'schema')
+        )
+        # assumption: this will be much  faster than doing one query/table
+        # because in tests, we'll want most of our tables most of the time.
+        columns = self.run_sql(sql, fetch='all')
+        results = []
+        for column in columns:
+            table_name, _, column_name, json_data_type = column[:4]
+            character_maximum_length = None
+            if table_name in tables:
+                typeinfo = json.loads(json_data_type)
+                data_type = typeinfo['type']
+                if data_type == 'TEXT':
+                    character_maximum_length = max(typeinfo['length'], 16777216)
+                results.append((table_name, column_name, data_type, character_maximum_length))
+        return results
+
+    def get_many_table_columns_information_schema(self, tables, schema, database=None):
+        if self.adapter_type == 'presto':
             columns = 'table_name, column_name, data_type'
         else:
             columns = 'table_name, column_name, data_type, character_maximum_length'
@@ -591,7 +614,9 @@ class DBTIntegrationTest(unittest.TestCase):
                   and ({table_filter})
                 order by column_name asc"""
 
-        db_string = '' if database is None else database + '.'
+        db_string = ''
+        if database:
+            db_string = self.quote_as_configured(database, 'database') + '.'
 
         table_filters_s = " OR ".join(
             self._ilike('table_name', table.replace('"', ''))
@@ -606,8 +631,26 @@ class DBTIntegrationTest(unittest.TestCase):
                 db_string=db_string)
 
         columns = self.run_sql(sql, fetch='all')
-        return sorted(map(self.filter_many_columns, columns),
-                      key=lambda x: "{}.{}".format(x[0], x[1]))
+        return list(map(self.filter_many_columns, columns))
+
+    def get_many_table_columns_bigquery(self, tables, schema, database=None):
+        result = []
+        for table in tables:
+            relation = self._make_relation(table, schema, database)
+            columns = self.adapter.get_columns_in_relation(relation)
+            for col in columns:
+                result.append((table, col.column, col.dtype, col.char_size))
+        return result
+
+    def get_many_table_columns(self, tables, schema, database=None):
+        if self.adapter_type == 'snowflake':
+            result = self.get_many_table_columns_snowflake(tables, schema, database)
+        elif self.adapter_type == 'bigquery':
+            result = self.get_many_table_columns_bigquery(tables, schema, database)
+        else:
+            result = self.get_many_table_columns_information_schema(tables, schema, database)
+        result.sort(key=lambda x: '{}.{}'.format(x[0], x[1]))
+        return result
 
     def filter_many_columns(self, column):
         if len(column) == 3:
@@ -622,7 +665,7 @@ class DBTIntegrationTest(unittest.TestCase):
         return (table_name, column_name, data_type, char_size)
 
     @contextmanager
-    def test_connection(self, name=None):
+    def get_connection(self, name=None):
         """Create a test connection context where all executed macros, etc will
         get self.adapter as the adapter.
 
@@ -636,7 +679,7 @@ class DBTIntegrationTest(unittest.TestCase):
                 yield conn
 
     def get_relation_columns(self, relation):
-        with self.test_connection():
+        with self.get_connection():
             columns = self.adapter.get_columns_in_relation(relation)
 
         return sorted(((c.name, c.dtype, c.char_size) for c in columns),
@@ -665,8 +708,30 @@ class DBTIntegrationTest(unittest.TestCase):
             res[table_name].append(col_def)
         return res
 
+    def get_models_in_schema_snowflake(self, schema):
+        sql = 'show objects in schema {}.{}'.format(
+            self.quote_as_configured(self.default_database, 'database'),
+            self.quote_as_configured(schema, 'schema')
+        )
+        results = {}
+        for row in self.run_sql(sql, fetch='all'):
+            # I sure hope these never change!
+            name = row[1]
+            kind = row[4]
+
+            if kind == 'TABLE':
+                kind = 'table'
+            elif kind == 'VIEW':
+                kind = 'view'
+
+            results[name] = kind
+        return results
+
     def get_models_in_schema(self, schema=None):
         schema = self.unique_schema() if schema is None else schema
+        if self.adapter_type == 'snowflake':
+            return self.get_models_in_schema_snowflake(schema)
+
         sql = """
                 select table_name,
                         case when table_type = 'BASE TABLE' then 'table'
@@ -698,13 +763,32 @@ class DBTIntegrationTest(unittest.TestCase):
             except_operator = 'EXCEPT'
 
         sql = """
-            SELECT COUNT(*) FROM (
-                (SELECT {columns} FROM {relation_a} {except_op}
-                 SELECT {columns} FROM {relation_b})
-                 UNION ALL
-                (SELECT {columns} FROM {relation_b} {except_op}
-                 SELECT {columns} FROM {relation_a})
-            ) AS a""".format(
+            with diff_count as (
+                SELECT
+                    1 as id,
+                    COUNT(*) as num_missing FROM (
+                        (SELECT {columns} FROM {relation_a} {except_op}
+                         SELECT {columns} FROM {relation_b})
+                         UNION ALL
+                        (SELECT {columns} FROM {relation_b} {except_op}
+                         SELECT {columns} FROM {relation_a})
+                    ) as a
+            ), table_a as (
+                SELECT COUNT(*) as num_rows FROM {relation_a}
+            ), table_b as (
+                SELECT COUNT(*) as num_rows FROM {relation_b}
+            ), row_count_diff as (
+                select
+                    1 as id,
+                    table_a.num_rows - table_b.num_rows as difference
+                from table_a, table_b
+            )
+            select
+                row_count_diff.difference as row_count_difference,
+                diff_count.num_missing as num_mismatched
+            from row_count_diff
+            join diff_count using (id)
+            """.strip().format(
                 columns=columns_csv,
                 relation_a=str(relation_a),
                 relation_b=str(relation_b),
@@ -731,17 +815,20 @@ class DBTIntegrationTest(unittest.TestCase):
         relation_a = self._make_relation(table_a, table_a_schema, table_a_db)
         relation_b = self._make_relation(table_b, table_b_schema, table_b_db)
 
-
         self._assertTableColumnsEqual(relation_a, relation_b)
-        self._assertTableRowCountsEqual(relation_a, relation_b)
 
         sql = self._assertTablesEqualSql(relation_a, relation_b)
         result = self.run_sql(sql, fetch='one')
 
-        self.assertEquals(
+        self.assertEqual(
             result[0],
             0,
-            sql
+            'row_count_difference nonzero: ' + sql
+        )
+        self.assertEqual(
+            result[1],
+            0,
+            'num_mismatched nonzero: ' + sql
         )
 
     def _make_relation(self, identifier, schema=None, database=None):
@@ -777,7 +864,6 @@ class DBTIntegrationTest(unittest.TestCase):
 
         return column_specs
 
-
     def assertManyRelationsEqual(self, relations, default_schema=None, default_database=None):
         if default_schema is None:
             default_schema = self.unique_schema()
@@ -802,7 +888,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
             specs.append(relation)
 
-        with self.test_connection():
+        with self.get_connection():
             column_specs = self.get_many_relation_columns(specs)
 
         # make sure everyone has equal column definitions
@@ -818,18 +904,6 @@ class DBTIntegrationTest(unittest.TestCase):
                     '{} did not match {}'.format(str(specs[0]), str(relation))
                 )
 
-        # make sure every one has the same number of rows in each column
-        first_row_count = None
-        query = ' union all '.join(
-            'select count(*) as num_rows from {}'.format(r) for r in specs
-        )
-        table_row_counts = self.run_sql(query, fetch='all')
-        for row in table_row_counts:
-            if first_row_count is None:
-                first_row_count = row[0]
-            else:
-                self.assertEqual(first_row_count, row[0])
-
         # make sure everyone has the same data. if we got here, everyone had
         # the same column specs!
         first_relation = None
@@ -840,12 +914,20 @@ class DBTIntegrationTest(unittest.TestCase):
                 sql = self._assertTablesEqualSql(first_relation, relation,
                                                  columns=first_columns)
                 result = self.run_sql(sql, fetch='one')
-                self.assertEqual(result[0], 0, sql)
 
+                self.assertEqual(
+                    result[0],
+                    0,
+                    'row_count_difference nonzero: ' + sql
+                )
+                self.assertEqual(
+                    result[1],
+                    0,
+                    'num_mismatched nonzero: ' + sql
+                )
 
     def assertManyTablesEqual(self, *args):
         schema = self.unique_schema()
-        database = self.default_database
 
         all_tables = []
         for table_equivalencies in args:
@@ -855,29 +937,34 @@ class DBTIntegrationTest(unittest.TestCase):
 
         for table_equivalencies in args:
             first_table = table_equivalencies[0]
+            first_relation = self._make_relation(first_table)
+
+            # assert that all tables have the same columns
             base_result = all_cols[first_table]
+            self.assertTrue(len(base_result) > 0)
 
             for other_table in table_equivalencies[1:]:
                 other_result = all_cols[other_table]
+                self.assertTrue(len(other_result) > 0)
+                self.assertEqual(base_result, other_result)
 
-                self.assertEquals(base_result, other_result)
-                first_relation = self._make_relation(first_table)
                 other_relation = self._make_relation(other_table)
-
-                self._assertTableRowCountsEqual(first_relation, other_relation)
                 sql = self._assertTablesEqualSql(first_relation,
                                                  other_relation,
                                                  columns=base_result)
                 result = self.run_sql(sql, fetch='one')
 
-                self.assertEquals(
+                self.assertEqual(
                     result[0],
                     0,
-                    sql
+                    'row_count_difference nonzero: ' + sql
+                )
+                self.assertEqual(
+                    result[1],
+                    0,
+                    'num_mismatched nonzero: ' + sql
                 )
 
-                self.assertTrue(len(base_result) > 0)
-                self.assertTrue(len(other_result) > 0)
 
     def _assertTableRowCountsEqual(self, relation_a, relation_b):
         cmp_query = """
@@ -989,7 +1076,7 @@ def use_profile(profile_name):
             self.assertEqual(self.adapter_type, 'snowflake')
     """
     def outer(wrapped):
-        @attr(type=profile_name)
+        @getattr(pytest.mark, 'profile_'+profile_name)
         @wraps(wrapped)
         def func(self, *args, **kwargs):
             return wrapped(self, *args, **kwargs)
