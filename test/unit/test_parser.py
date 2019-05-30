@@ -946,7 +946,6 @@ class ParserTest(BaseParserTest):
             'quoting': {},
             'column_types': {},
             'tags': [],
-            'persist_docs': {}
         }
         self.test_config = deep_merge(self.model_config, {'severity': 'ERROR'})
 

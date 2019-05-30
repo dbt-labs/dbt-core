@@ -1,7 +1,13 @@
 version: 2
 models:
 - name: view_model
-  description: 'View model description'
+  description: |
+    View model description "with double quotes"
+    and with 'single  quotes' as welll as other;
+    '''abc123'''
+    reserved -- characters
+    --
+    /* comment */
   columns:
   - name: dupe
     tests:
@@ -18,7 +24,13 @@ models:
       name: view_model
       type: view
 - name: table_model
-  description: 'Model description'
+  description: |
+    View model description "with double quotes"
+    and with 'single  quotes' as welll as other;
+    '''abc123'''
+    reserved -- characters
+    --
+    /* comment */
   columns:
   - name: id
     tests:

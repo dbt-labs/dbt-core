@@ -1,7 +1,8 @@
 {{
   config(
     materialized = "incremental",
-    unique_key = "id"
+    unique_key = "id",
+    persist_docs = {"relation": true}
   )
 }}
 

@@ -26,29 +26,28 @@
 
 {%- endmacro -%}
 
-{% macro table_options() %}
-  {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
+{% macro bigquery_table_options(persist_docs) %}
+  {% set opts = {} %}
 
-  {%- if raw_persist_docs is mapping -%}
-    {%- set raw_relation = raw_persist_docs.get('relation', false) -%}
-    OPTIONS(
-      {%- if raw_relation -%}
-      description={{ model.description | tojson }}
-      {% endif %}
-    )
-  {%- else -%}
-    {{ exceptions.raise_compiler_error("Invalid value provided for 'persist_docs'. Expected dict but got value: " ~ raw_persist_docs) }}
+  {% set description = get_relation_comment(persist_docs, model) %}
+  {%- if description is not none -%}
+    {% do opts.update({'description': "'" ~ description ~ "'"}) %}
   {% endif %}
+
+  OPTIONS({% for opt_key, opt_val in opts.items() %}
+    {{ opt_key }}={{ opt_val }}
+  {% endfor %})
 {%- endmacro -%}
 
 {% macro bigquery__create_table_as(temporary, relation, sql) -%}
   {%- set raw_partition_by = config.get('partition_by', none) -%}
   {%- set raw_cluster_by = config.get('cluster_by', none) -%}
+  {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
 
   create or replace table {{ relation }}
   {{ partition_by(raw_partition_by) }}
   {{ cluster_by(raw_cluster_by) }}
-  {{ table_options() }}
+  {{ bigquery_table_options(persist_docs=raw_persist_docs) }}
   as (
     {{ sql }}
   );
@@ -56,8 +55,10 @@
 
 
 {% macro bigquery__create_view_as(relation, sql) -%}
+  {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
+
   create or replace view {{ relation }}
-  {{ table_options() }}
+  {{ bigquery_table_options(persist_docs=raw_persist_docs) }}
   as (
     {{ sql }}
   );

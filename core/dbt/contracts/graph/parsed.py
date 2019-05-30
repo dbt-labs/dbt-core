@@ -90,7 +90,7 @@ CONFIG_CONTRACT = {
     },
     'required': [
         'enabled', 'materialized', 'post-hook', 'pre-hook', 'vars',
-        'quoting', 'column_types', 'tags', 'persist_docs', 
+        'quoting', 'column_types', 'tags', 'persist_docs'
     ]
 }
 
