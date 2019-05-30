@@ -397,7 +397,7 @@ class TestCrossSchemaArchiveFiles(TestSimpleArchive):
         return self.run_dbt(['archive', '--vars', '{{"target_schema": {}}}'.format(self.target_schema())])
 
     @use_profile('postgres')
-    def test__postgres_ref_archive_cross_schema(self):
+    def test__postgres__simple_archive(self):
         self.run_sql_file('test/integration/004_simple_archive_test/seed_pg.sql')
 
         results = self.run_archive()
