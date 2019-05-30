@@ -1,6 +1,7 @@
 
 import dbt.exceptions
 import dbt.utils
+from dbt.node_types import NodeType
 
 
 def docs(node, manifest, config, column_name=None):
@@ -147,9 +148,26 @@ class ParserUtils(object):
                 column['description'] = description
 
     @classmethod
+    def process_docs_for_source(cls, manifest, current_project, source):
+        context = {
+            'doc': docs(source, manifest, current_project),
+        }
+        table_description = source.get('description', '')
+        source_description = source.get('source_description', '')
+        table_description = dbt.clients.jinja.get_rendered(table_description,
+                                                           context)
+        source_description = dbt.clients.jinja.get_rendered(source_description,
+                                                            context)
+        source.set('description', table_description)
+        source.set('source_description', source_description)
+
+    @classmethod
     def process_docs(cls, manifest, current_project):
         for node in manifest.nodes.values():
-            cls.process_docs_for_node(manifest, current_project, node)
+            if node.resource_type == NodeType.Source:
+                cls.process_docs_for_source(manifest, current_project, node)
+            else:
+                cls.process_docs_for_node(manifest, current_project, node)
         return manifest
 
     @classmethod

@@ -1266,7 +1266,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'resource_type': 'source',
                     'root_path': os.getcwd(),
                     'schema': my_schema_name,
-                    'source_description': "{{ doc('source_info') }}",
+                    'source_description': 'My source',
                     'source_name': 'my_source',
                     'unique_id': 'source.test.my_source.my_table'
                 }
