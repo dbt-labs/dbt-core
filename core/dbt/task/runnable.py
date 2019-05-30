@@ -60,7 +60,9 @@ class GraphRunnableTask(ManifestTask):
         self._raise_next_tick = None
 
     def select_nodes(self):
-        selector = dbt.graph.selector.NodeSelector(self.linker, self.manifest)
+        selector = dbt.graph.selector.NodeSelector(
+            self.linker.graph, self.manifest
+        )
         selected_nodes = selector.select(self.build_query())
         return selected_nodes
 

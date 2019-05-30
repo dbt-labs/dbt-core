@@ -58,15 +58,15 @@ class TestPostgresAdapter(unittest.TestCase):
         except BaseException as e:
             self.fail('acquiring connection failed with unknown exception: {}'
                       .format(str(e)))
-        self.assertEquals(connection.type, 'postgres')
+        self.assertEqual(connection.type, 'postgres')
         psycopg2.connect.assert_called_once()
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_acquire_connection(self, psycopg2):
         connection = self.adapter.acquire_connection('dummy')
 
-        self.assertEquals(connection.state, 'open')
-        self.assertNotEquals(connection.handle, None)
+        self.assertEqual(connection.state, 'open')
+        self.assertNotEqual(connection.handle, None)
         psycopg2.connect.assert_called_once()
 
     def test_cancel_open_connections_empty(self):

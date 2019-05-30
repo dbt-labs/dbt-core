@@ -16,15 +16,14 @@ class BaseGraphSelectionTest(unittest.TestCase):
         pass
 
     def setUp(self):
-        self.package_graph = self.create_graph()
+        self.package_graph = graph_selector.Graph(self.create_graph())
         nodes = {
             node: mock.MagicMock(fqn=node.split('.')[1:], tags=[])
             for node in self.package_graph
         }
         self.add_tags(nodes)
         self.manifest = mock.MagicMock(nodes=nodes)
-        self.linker = mock.MagicMock(graph=self.package_graph)
-        self.selector = graph_selector.NodeSelector(self.linker, self.manifest)
+        self.selector = graph_selector.NodeSelector(self.package_graph, self.manifest)
 
 
 class GraphSelectionTest(BaseGraphSelectionTest):
@@ -55,7 +54,7 @@ class GraphSelectionTest(BaseGraphSelectionTest):
             exclude
         )
 
-        self.assertEquals(selected, expected)
+        self.assertEqual(selected, expected)
 
 
     def test__single_node_selection_in_package(self):
@@ -177,7 +176,7 @@ class GraphSelectionTest(BaseGraphSelectionTest):
         found = graph_selector.get_package_names(self.package_graph)
 
         expected = set(['X', 'Y'])
-        self.assertEquals(found, expected)
+        self.assertEqual(found, expected)
 
     def assert_is_selected_node(self, node, spec, should_work):
         self.assertEqual(

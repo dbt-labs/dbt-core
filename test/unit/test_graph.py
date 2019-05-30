@@ -128,11 +128,11 @@ class GraphTest(unittest.TestCase):
         compiler = self.get_compiler(config)
         linker = compiler.compile(manifest)
 
-        self.assertEquals(
+        self.assertEqual(
             linker.nodes(),
             ['model.test_models_compile.model_one'])
 
-        self.assertEquals(
+        self.assertEqual(
             linker.edges(),
             [])
 
@@ -196,7 +196,7 @@ class GraphTest(unittest.TestCase):
             key = 'model.test_models_compile.{}'.format(model)
             actual = manifest.nodes[key].get('config', {}) \
                                              .get('materialized')
-            self.assertEquals(actual, expected)
+            self.assertEqual(actual, expected)
 
     def test__model_incremental(self):
         self.use_models({
