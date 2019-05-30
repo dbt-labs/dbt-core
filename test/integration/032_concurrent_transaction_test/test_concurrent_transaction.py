@@ -1,6 +1,12 @@
 from test.integration.base import DBTIntegrationTest, use_profile
 import threading
-from dbt.adapters.factory import get_adapter
+from dbt.adapters.factory import ADAPTER_TYPES
+
+
+def get_adapter_standalone(config):
+    cls = ADAPTER_TYPES[config.credentials.type]
+    return cls(config)
+
 
 class BaseTestConcurrentTransaction(DBTIntegrationTest):
 
@@ -12,7 +18,12 @@ class BaseTestConcurrentTransaction(DBTIntegrationTest):
 
     def setUp(self):
         super(BaseTestConcurrentTransaction, self).setUp()
+        self._secret_adapter = get_adapter_standalone(self.config)
         self.reset()
+
+    def tearDown(self):
+        self._secret_adapter.cleanup_connections()
+        super(BaseTestConcurrentTransaction, self).tearDown()
 
     @property
     def schema(self):
@@ -30,7 +41,7 @@ class BaseTestConcurrentTransaction(DBTIntegrationTest):
     def run_select_and_check(self, rel, sql):
         connection_name = '__test_{}'.format(id(threading.current_thread()))
         try:
-            with get_adapter(self.config).connection_named(connection_name) as conn:
+            with self._secret_adapter.connection_named(connection_name) as conn:
                 res = self.run_sql_common(self.transform_sql(sql), 'one', conn)
 
             # The result is the output of f_sleep(), which is True
