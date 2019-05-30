@@ -8,5 +8,5 @@
             updated_at='updated_at',
         )
     }}
-    select * from {{target.database}}.{{schema}}.super_long
+    select * from {{database}}.{{schema}}.super_long
 {% endarchive %}

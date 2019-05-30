@@ -9,6 +9,6 @@
             updated_at='updated_at',
         )
     }}
-    select * from `{{target.database}}`.`{{schema}}`.seed
+    select * from `{{database}}`.`{{schema}}`.seed
 
 {% endarchive %}

@@ -8,7 +8,7 @@
             check_cols=('email',),
         )
     }}
-    select * from `{{target.database}}`.`{{schema}}`.seed
+    select * from `{{database}}`.`{{schema}}`.seed
 {% endarchive %}
 
 
@@ -23,5 +23,5 @@
             check_cols='all',
         )
     }}
-    select * from `{{target.database}}`.`{{schema}}`.seed
+    select * from `{{database}}`.`{{schema}}`.seed
 {% endarchive %}

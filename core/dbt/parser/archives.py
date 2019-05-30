@@ -106,7 +106,6 @@ class ArchiveParser(MacrosKnownParser):
                 self.all_projects.get(archive.package_name),
                 archive_config=archive_config)
 
-            # TODO : Add tests for this
             to_return[node_path] = set_archive_attributes(parsed_node)
 
         return to_return
