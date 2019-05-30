@@ -51,8 +51,6 @@ class BaseTestConcurrentTransaction(DBTIntegrationTest):
                 self.query_state[rel] = 'bad'
 
         except Exception as e:
-            logger.info("Caught exception: {}".format(e))
-            traceback.print_exc()
             if 'concurrent transaction' in str(e):
                 self.query_state[rel] = 'error: {}'.format(e)
             else:
