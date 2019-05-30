@@ -5,6 +5,7 @@ from dbt.exceptions import RegistryException
 from dbt.utils import memoized
 from dbt.logger import GLOBAL_LOGGER as logger
 import os
+import time
 
 if os.getenv('DBT_PACKAGE_HUB_URL'):
     DEFAULT_REGISTRY_BASE_URL = os.getenv('DBT_PACKAGE_HUB_URL')
@@ -22,11 +23,20 @@ def _get_url(url, registry_base_url=None):
 def _wrap_exceptions(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
-        try:
-            return fn(*args, **kwargs)
-        except requests.exceptions.ConnectionError as e:
-            six.raise_from(
-                RegistryException('Unable to connect to registry hub'), e)
+        max_attempts = 5
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                return fn(*args, **kwargs)
+            except requests.exceptions.ConnectionError as exc:
+                if attempt < max_attempts:
+                    time.sleep(1)
+                    continue
+                six.raise_from(
+                    RegistryException('Unable to connect to registry hub'),
+                    exc
+                )
     return wrapper
 
 
