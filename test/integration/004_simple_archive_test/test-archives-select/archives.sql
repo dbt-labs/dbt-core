@@ -9,7 +9,7 @@
             updated_at='updated_at',
         )
     }}
-    select * from {{database}}.{{schema}}.seed where last_name = 'Castillo'
+    select * from {{target.database}}.{{schema}}.seed where last_name = 'Castillo'
 
 {% endarchive %}
 
@@ -24,7 +24,7 @@
             updated_at='updated_at',
         )
     }}
-    select * from {{database}}.{{schema}}.seed where last_name = 'Alvarez'
+    select * from {{target.database}}.{{schema}}.seed where last_name = 'Alvarez'
 
 {% endarchive %}
 
@@ -40,6 +40,6 @@
             updated_at='updated_at',
         )
     }}
-    select * from {{database}}.{{schema}}.seed where last_name = 'Kelly'
+    select * from {{target.database}}.{{schema}}.seed where last_name = 'Kelly'
 
 {% endarchive %}

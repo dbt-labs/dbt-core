@@ -382,7 +382,17 @@ class TestCrossDBArchiveFiles(TestCrossDBArchive):
         return self.run_dbt(['archive', '--vars', '{{"target_database": {}}}'.format(self.alternative_database)])
 
 
-class TestCrossSchemaArchiveFiles(TestSimpleArchive):
+class TestCrossSchemaArchiveFiles(DBTIntegrationTest):
+    NUM_ARCHIVE_MODELS = 1
+
+    @property
+    def schema(self):
+        return "simple_archive_004"
+
+    @property
+    def models(self):
+        return "test/integration/004_simple_archive_test/models"
+
     @property
     def project_config(self):
         paths = ['test/integration/004_simple_archive_test/test-archives-pg']
@@ -397,7 +407,7 @@ class TestCrossSchemaArchiveFiles(TestSimpleArchive):
         return self.run_dbt(['archive', '--vars', '{{"target_schema": {}}}'.format(self.target_schema())])
 
     @use_profile('postgres')
-    def test__postgres__simple_archive(self):
+    def test__postgres__cross_schema_archive(self):
         self.run_sql_file('test/integration/004_simple_archive_test/seed_pg.sql')
 
         results = self.run_archive()
