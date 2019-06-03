@@ -64,7 +64,7 @@ class RuntimeConfig(Project, Profile):
         self.validate()
 
     @classmethod
-    def from_parts(cls, project, profile, args):
+    def from_parts(cls, project, profile, args, allow_archive_blocks=False):
         """Instantiate a RuntimeConfig from its components.
 
         :param profile Profile: A parsed dbt Profile.
@@ -77,6 +77,12 @@ class RuntimeConfig(Project, Profile):
             .DEFAULTS['quote_policy']
         )
         quoting.update(project.quoting)
+        if project.archive and not allow_archive_blocks:
+            # if the user has an `archive` section, raise an error
+            raise DbtProjectError(
+                'Invalid project configuration: "archive" is not allowed'
+            )
+
         return cls(
             project_name=project.project_name,
             version=project.version,
@@ -163,12 +169,14 @@ class RuntimeConfig(Project, Profile):
             self.validate_version()
 
     @classmethod
-    def from_args(cls, args):
+    def from_args(cls, args, allow_archive_blocks=False):
         """Given arguments, read in dbt_project.yml from the current directory,
         read in packages.yml if it exists, and use them to find the profile to
         load.
 
         :param args argparse.Namespace: The arguments as parsed from the cli.
+        :param allow_archive_blocks bool: If True, ignore archive blocks in
+            configs. This flag exists to enable archive migration.
         :raises DbtProjectError: If the project is invalid or missing.
         :raises DbtProfileError: If the profile is invalid or missing.
         :raises ValidationException: If the cli variables are invalid.
@@ -185,5 +193,6 @@ class RuntimeConfig(Project, Profile):
         return cls.from_parts(
             project=project,
             profile=profile,
-            args=args
+            args=args,
+            allow_archive_blocks=allow_archive_blocks
         )
