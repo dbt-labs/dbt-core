@@ -77,7 +77,7 @@ class TestBlockLexer(unittest.TestCase):
         self.assertEqual(blocks[0].full_block, block_data)
 
     def test_complex_file(self):
-        all_blocks = extract_toplevel_blocks(complex_archive_file)
+        all_blocks = extract_toplevel_blocks(complex_snapshot_file)
         blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
         self.assertEqual(len(blocks), 3)
         self.assertEqual(blocks[0].block_type_name, 'mytype')
@@ -252,10 +252,10 @@ class TestBlockLexer(unittest.TestCase):
         self.assertEqual(blocks[0].full_block, '''{% do\n    set('foo="bar"')\n%}''')
         self.assertEqual(blocks[1].block_type_name, 'set')
         self.assertEqual(blocks[1].full_block, '''{% set x = ("100" + "hello'" + '%}') %}''')
-        self.assertEqual(blocks[2].block_type_name, 'archive')
+        self.assertEqual(blocks[2].block_type_name, 'snapshot')
         self.assertEqual(blocks[2].contents, '\n    '.join([
-            '''{% set x = ("{% endarchive %}" + (40 * '%})')) %}''',
-            '{# {% endarchive %} #}',
+            '''{% set x = ("{% endsnapshot %}" + (40 * '%})')) %}''',
+            '{# {% endsnapshot %} #}',
             '{% embedded %}',
             '    some block data right here',
             '{% endembedded %}'
@@ -293,7 +293,7 @@ and after
 {% endmyothertype %}
 '''
 
-complex_archive_file = '''
+complex_snapshot_file = '''
 {#some stuff {% mytype foo %} #}
 {% mytype foo %} some stuff {% endmytype %}
 
@@ -306,13 +306,13 @@ if_you_do_this_you_are_awful = '''
     set('foo="bar"')
 %}
 {% set x = ("100" + "hello'" + '%}') %}
-{% archive something -%}
-    {% set x = ("{% endarchive %}" + (40 * '%})')) %}
-    {# {% endarchive %} #}
+{% snapshot something -%}
+    {% set x = ("{% endsnapshot %}" + (40 * '%})')) %}
+    {# {% endsnapshot %} #}
     {% embedded %}
         some block data right here
     {% endembedded %}
-{%- endarchive %}
+{%- endsnapshot %}
 
 {% raw %}
     {% set x = SYNTAX ERROR}

@@ -27,7 +27,7 @@ def print_compile_stats(stats):
     names = {
         NodeType.Model: 'models',
         NodeType.Test: 'tests',
-        NodeType.Archive: 'archives',
+        NodeType.Snapshot: 'snapshots',
         NodeType.Analysis: 'analyses',
         NodeType.Macro: 'macros',
         NodeType.Operation: 'operations',

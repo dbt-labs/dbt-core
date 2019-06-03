@@ -488,12 +488,12 @@ class ArchiveRunner(ModelRunner):
     def describe_node(self):
         cfg = self.node.get('config', {})
         return (
-            "archive {name} --> {target_database}.{target_schema}.{name}"
+            "snapshot {name} --> {target_database}.{target_schema}.{name}"
             .format(name=self.node.name, **cfg)
         )
 
     def print_result_line(self, result):
-        dbt.ui.printer.print_archive_result_line(result, self.node_index,
+        dbt.ui.printer.print_snapshot_result_line(result, self.node_index,
                                                  self.num_nodes)
 
 
