@@ -4,9 +4,9 @@ from dbt import deprecations
 import dbt.exceptions
 
 
-class TestDeprecations(DBTIntegrationTest):
+class BaseTestDeprecations(DBTIntegrationTest):
     def setUp(self):
-        super(TestDeprecations, self).setUp()
+        super(BaseTestDeprecations, self).setUp()
         deprecations.reset_deprecations()
 
     @property
@@ -21,6 +21,8 @@ class TestDeprecations(DBTIntegrationTest):
     def models(self):
         return self.dir("models")
 
+
+class TestDeprecations(BaseTestDeprecations):
     @use_profile('postgres')
     def test_postgres_deprecations_fail(self):
         self.run_dbt(strict=True, expect_pass=False)
@@ -29,5 +31,29 @@ class TestDeprecations(DBTIntegrationTest):
     def test_postgres_deprecations(self):
         self.assertEqual(deprecations.active_deprecations, set())
         self.run_dbt(strict=False)
-        self.assertEqual({'adapter:already_exists'},
-                         deprecations.active_deprecations)
+        expected = {'adapter:already_exists'}
+        self.assertEqual(expected, deprecations.active_deprecations)
+
+
+class TestMacroDeprecations(BaseTestDeprecations):
+    @property
+    def models(self):
+        return self.dir('boring-models')
+
+    @property
+    def project_config(self):
+        return {
+            'macro-paths': [self.dir('macros')],
+        }
+
+    @use_profile('postgres')
+    def test_postgres_deprecations_fail(self):
+        with self.assertRaises(dbt.exceptions.CompilationException):
+            self.run_dbt(strict=True)
+
+    @use_profile('postgres')
+    def test_postgres_deprecations(self):
+        self.assertEqual(deprecations.active_deprecations, set())
+        self.run_dbt(strict=False)
+        expected = {'generate-schema-name-single-arg'}
+        self.assertEqual(expected, deprecations.active_deprecations)

@@ -13,6 +13,7 @@ from dbt.utils import coalesce
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.contracts.graph.parsed import ParsedNode
 from dbt.parser.source_config import SourceConfig
+from dbt import deprecations
 
 
 class BaseParser(object):
@@ -218,10 +219,7 @@ class MacrosKnownParser(BaseParser):
             )
             if too_many_args not in str(exc):
                 raise
-            msg = ('The generate_schema_name macro does not accept a second '
-                   'argument. This form is deprecated as of 0.14.0')
-            dbt.exceptions.warn_or_error(msg, node=parsed_node, repeat=False,
-                                         log_fmt='WARNING: {}')
+            deprecations.warn('generate-schema-name-single-arg')
             schema = get_schema(schema_override)
         parsed_node.schema = schema.strip()
 

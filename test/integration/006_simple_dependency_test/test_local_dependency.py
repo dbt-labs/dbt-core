@@ -116,34 +116,6 @@ class TestSimpleDependencyWithSchema(TestSimpleDependency):
         self.assertEqual(len(results), 3)
 
 
-class TestDependencyWithLegacySchema(BaseDependencyTest):
-    @property
-    def project_config(self):
-        return {
-            'macro-paths': ['test/integration/006_simple_dependency_test/schema_override_legacy_macros'],
-            'models': {
-                'schema': 'dbt_test',
-            }
-        }
-
-    def base_schema(self):
-        return 'dbt_test_{}_macro'.format(self.unique_schema())
-
-    def configured_schema(self):
-        return 'configured_{}_macro'.format(self.unique_schema())
-
-    @use_profile('postgres')
-    @mock.patch('dbt.config.project.get_installed_version')
-    def test_postgres_local_dependency_out_of_date_no_check_no_strict(self, mock_get):
-        mock_get.return_value = dbt.semver.VersionSpecifier.from_version_string('0.0.1')
-        self.run_dbt(['deps'])
-        results = self.run_dbt(['run', '--no-version-check'], strict=False)
-        self.assertEqual(len(results), 3)
-
-        with self.assertRaises(dbt.exceptions.CompilationException):
-            results = self.run_dbt(['run', '--no-version-check'])
-
-
 class TestSimpleDependencyHooks(DBTIntegrationTest):
     @property
     def schema(self):
