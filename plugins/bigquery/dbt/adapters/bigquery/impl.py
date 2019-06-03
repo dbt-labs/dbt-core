@@ -343,22 +343,6 @@ class BigQueryAdapter(BaseAdapter):
 
         return res
 
-    @available.parse(_stub_relation)
-    def create_temporary_table(self, sql, **kwargs):
-        # BQ queries always return a temp table with their results
-        query_job, _ = self.connections.raw_execute(sql)
-        bq_table = query_job.destination
-
-        return self.Relation.create(
-            database=bq_table.project,
-            schema=bq_table.dataset_id,
-            identifier=bq_table.table_id,
-            quote_policy={
-                'schema': True,
-                'identifier': True
-            },
-            type=BigQueryRelation.Table)
-
     @available.parse_none
     def alter_table_add_columns(self, relation, columns):
 

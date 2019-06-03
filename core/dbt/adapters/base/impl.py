@@ -387,6 +387,7 @@ class BaseAdapter(object):
             '`list_schemas` is not implemented for this adapter!'
         )
 
+    @available.parse(lambda *a, **k: False)
     def check_schema_exists(self, database, schema):
         """Check if a schema exists.
 
@@ -584,7 +585,14 @@ class BaseAdapter(object):
             dbt.exceptions.raise_compiler_error(msg)
 
     @available.parse_none
-    def expand_target_column_types(self, temp_table, to_relation):
+    def expand_target_column_types(self, from_relation, to_relation):
+        if not isinstance(from_relation, self.Relation):
+            dbt.exceptions.invalid_type_error(
+                method_name='expand_target_column_types',
+                arg_name='from_relation',
+                got_value=from_relation,
+                expected_type=self.Relation)
+
         if not isinstance(to_relation, self.Relation):
             dbt.exceptions.invalid_type_error(
                 method_name='expand_target_column_types',
@@ -592,14 +600,7 @@ class BaseAdapter(object):
                 got_value=to_relation,
                 expected_type=self.Relation)
 
-        goal = self.Relation.create(
-            database=None,
-            schema=None,
-            identifier=temp_table,
-            type='table',
-            quote_policy=self.config.quoting
-        )
-        self.expand_column_types(goal, to_relation)
+        self.expand_column_types(from_relation, to_relation)
 
     def list_relations(self, database, schema):
         if self._schema_is_cached(database, schema):

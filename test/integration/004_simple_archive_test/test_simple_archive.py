@@ -382,6 +382,41 @@ class TestCrossDBArchiveFiles(TestCrossDBArchive):
         return self.run_dbt(['archive', '--vars', '{{"target_database": {}}}'.format(self.alternative_database)])
 
 
+class TestCrossSchemaArchiveFiles(DBTIntegrationTest):
+    NUM_ARCHIVE_MODELS = 1
+
+    @property
+    def schema(self):
+        return "simple_archive_004"
+
+    @property
+    def models(self):
+        return "test/integration/004_simple_archive_test/models"
+
+    @property
+    def project_config(self):
+        paths = ['test/integration/004_simple_archive_test/test-archives-pg']
+        return {
+            'archive-paths': paths,
+        }
+
+    def target_schema(self):
+        return "{}_archived".format(self.unique_schema())
+
+    def run_archive(self):
+        return self.run_dbt(['archive', '--vars', '{{"target_schema": {}}}'.format(self.target_schema())])
+
+    @use_profile('postgres')
+    def test__postgres__cross_schema_archive(self):
+        self.run_sql_file('test/integration/004_simple_archive_test/seed_pg.sql')
+
+        results = self.run_archive()
+        self.assertEqual(len(results),  self.NUM_ARCHIVE_MODELS)
+
+        results = self.run_dbt(['run', '--vars', '{{"target_schema": {}}}'.format(self.target_schema())])
+        self.assertEqual(len(results), 1)
+
+
 class TestBadArchive(DBTIntegrationTest):
     @property
     def schema(self):

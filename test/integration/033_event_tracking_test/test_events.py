@@ -610,7 +610,7 @@ class TestEventTrackingArchive(TestEventTracking):
                 model_id='3cdcd0fef985948fd33af308468da3b9',
                 index=1,
                 total=1,
-                status='INSERT 0 1',
+                status='SELECT 1',
                 materialization='archive'
             ),
             self.build_context('archive', 'end', result_type='ok')

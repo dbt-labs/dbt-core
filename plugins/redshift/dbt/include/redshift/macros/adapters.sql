@@ -1,3 +1,4 @@
+
 {% macro dist(dist) %}
   {%- if dist is not none -%}
       {%- set dist = dist.strip().lower() -%}
@@ -55,15 +56,6 @@
     {{ sql }}
   ) {{ bind_qualifier }};
 {% endmacro %}
-
-
-{% macro redshift__create_archive_table(relation, columns) -%}
-  create table if not exists {{ relation }} (
-    {{ column_list_for_create_table(columns) }}
-  )
-  {{ dist('dbt_updated_at') }}
-  {{ sort('compound', ['dbt_scd_id']) }};
-{%- endmacro %}
 
 
 {% macro redshift__create_schema(database_name, schema_name) -%}
@@ -171,10 +163,15 @@
 {% macro redshift__check_schema_exists(information_schema, schema) -%}
   {{ return(postgres__check_schema_exists(information_schema, schema)) }}
 {%- endmacro %}
-list_schemas
-
-%}
 
 {% macro redshift__current_timestamp() -%}
   getdate()
 {%- endmacro %}
+
+{% macro redshift__archive_get_time() -%}
+  {{ current_timestamp() }}::timestamp
+{%- endmacro %}
+
+{% macro redshift__make_temp_relation(base_relation, suffix) %}
+    {% do return(postgres__make_temp_relation(base_relation, suffix)) %}
+{% endmacro %}

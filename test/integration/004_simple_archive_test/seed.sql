@@ -1,4 +1,4 @@
-    create table {database}.{schema}.seed (
+create table {database}.{schema}.seed (
 	id INTEGER,
 	first_name VARCHAR(50),
 	last_name VARCHAR(50),
@@ -20,7 +20,7 @@ create table {database}.{schema}.archive_expected (
 	updated_at TIMESTAMP WITHOUT TIME ZONE,
 	dbt_valid_from TIMESTAMP WITHOUT TIME ZONE,
 	dbt_valid_to   TIMESTAMP WITHOUT TIME ZONE,
-	dbt_scd_id     VARCHAR(256),
+	dbt_scd_id     VARCHAR(32),
 	dbt_updated_at TIMESTAMP WITHOUT TIME ZONE
 );
 
@@ -79,8 +79,6 @@ select
     md5(id || '-' || first_name || '|' || updated_at::text) as dbt_scd_id
 from {database}.{schema}.seed;
 
-
-
 create table {database}.{schema}.archive_castillo_expected (
     id INTEGER,
     first_name VARCHAR(50),
@@ -93,8 +91,9 @@ create table {database}.{schema}.archive_castillo_expected (
     updated_at TIMESTAMP WITHOUT TIME ZONE,
     dbt_valid_from TIMESTAMP WITHOUT TIME ZONE,
     dbt_valid_to   TIMESTAMP WITHOUT TIME ZONE,
-    dbt_scd_id     VARCHAR(256),
+    dbt_scd_id     VARCHAR(32),
     dbt_updated_at TIMESTAMP WITHOUT TIME ZONE
+
 );
 
 -- one entry
@@ -139,7 +138,7 @@ create table {database}.{schema}.archive_alvarez_expected (
     updated_at TIMESTAMP WITHOUT TIME ZONE,
     dbt_valid_from TIMESTAMP WITHOUT TIME ZONE,
     dbt_valid_to   TIMESTAMP WITHOUT TIME ZONE,
-    dbt_scd_id     VARCHAR(256),
+    dbt_scd_id     VARCHAR(32),
     dbt_updated_at TIMESTAMP WITHOUT TIME ZONE
 );
 
@@ -185,7 +184,7 @@ create table {database}.{schema}.archive_kelly_expected (
     updated_at TIMESTAMP WITHOUT TIME ZONE,
     dbt_valid_from TIMESTAMP WITHOUT TIME ZONE,
     dbt_valid_to   TIMESTAMP WITHOUT TIME ZONE,
-    dbt_scd_id     VARCHAR(256),
+    dbt_scd_id     VARCHAR(32),
     dbt_updated_at TIMESTAMP WITHOUT TIME ZONE
 );
 

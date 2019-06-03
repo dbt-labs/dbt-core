@@ -11,6 +11,19 @@ import dbt.utils
 import os
 
 
+def set_archive_attributes(node):
+    config_keys = {
+        'target_database': 'database',
+        'target_schema': 'schema'
+    }
+
+    for config_key, node_key in config_keys.items():
+        if config_key in node.config:
+            setattr(node, node_key, node.config[config_key])
+
+    return node
+
+
 class ArchiveParser(MacrosKnownParser):
     @classmethod
     def parse_archives_from_project(cls, config):
@@ -87,11 +100,13 @@ class ArchiveParser(MacrosKnownParser):
                                       archive.package_name,
                                       archive.name)
 
-            to_return[node_path] = self.parse_node(
+            parsed_node = self.parse_node(
                 archive,
                 node_path,
                 self.all_projects.get(archive.package_name),
                 archive_config=archive_config)
+
+            to_return[node_path] = set_archive_attributes(parsed_node)
 
         return to_return
 
@@ -138,7 +153,9 @@ class ArchiveBlockParser(BaseSqlParser):
     def validate_archives(node):
         if node.resource_type == NodeType.Archive:
             try:
-                return ParsedArchiveNode(**node.to_shallow_dict())
+                parsed_node = ParsedArchiveNode(**node.to_shallow_dict())
+                return set_archive_attributes(parsed_node)
+
             except dbt.exceptions.JSONValidationException as exc:
                 raise dbt.exceptions.CompilationException(str(exc), node)
         else:

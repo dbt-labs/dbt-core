@@ -79,6 +79,10 @@
   convert_timezone('UTC', current_timestamp())
 {%- endmacro %}
 
+{% macro snowflake__archive_get_time() -%}
+  to_timestamp_ntz({{ current_timestamp() }})
+{%- endmacro %}
+
 
 {% macro snowflake__rename_relation(from_relation, to_relation) -%}
   {% call statement('rename_relation') -%}
