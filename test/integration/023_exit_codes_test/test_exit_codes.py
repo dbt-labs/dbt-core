@@ -13,23 +13,11 @@ class TestExitCodes(DBTIntegrationTest):
     def models(self):
         return "test/integration/023_exit_codes_test/models"
 
+
     @property
     def project_config(self):
         return {
-            "archive": [
-                {
-                    "source_schema": self.unique_schema(),
-                    "target_schema": self.unique_schema(),
-                    "tables": [
-                        {
-                            "source_table": "good",
-                            "target_table": "good_archive",
-                            "updated_at": 'updated_at',
-                            "unique_key": 'id'
-                        }
-                    ]
-                }
-            ]
+            "archive-paths": ['test/integration/023_exit_codes_test/archives-good'],
         }
 
     @use_profile('postgres')
@@ -91,20 +79,7 @@ class TestExitCodesArchiveFail(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            "archive": [
-                {
-                    "source_schema": self.unique_schema(),
-                    "target_schema": self.unique_schema(),
-                    "tables": [
-                        {
-                            "source_table": "good",
-                            "target_table": "good_archive",
-                            "updated_at": 'updated_at_not_real',
-                            "unique_key": 'id'
-                        }
-                    ]
-                }
-            ]
+            "archive-paths": ['test/integration/023_exit_codes_test/archives-bad'],
         }
 
     @use_profile('postgres')
