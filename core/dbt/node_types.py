@@ -7,7 +7,7 @@ class NodeType(StrEnum):
     Model = "model"
     Analysis = "analysis"
     Test = "test"
-    Snapshot = 'snapshot'
+    Snapshot = "snapshot"
     Operation = "operation"
     Seed = "seed"
     # TODO: rm?
