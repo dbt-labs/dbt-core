@@ -1,14 +1,10 @@
-from dbt.contracts.graph.unparsed import UnparsedNode
+
 from dbt.contracts.graph.parsed import ParsedArchiveNode
 from dbt.node_types import NodeType
-from dbt.parser.base import MacrosKnownParser
 from dbt.parser.base_sql import BaseSqlParser, SQLParseResult
-from dbt.adapters.factory import get_adapter
 import dbt.clients.jinja
 import dbt.exceptions
 import dbt.utils
-
-import os
 
 
 def set_archive_attributes(node):
@@ -22,93 +18,6 @@ def set_archive_attributes(node):
             setattr(node, node_key, node.config[config_key])
 
     return node
-
-
-class ArchiveParser(MacrosKnownParser):
-    @classmethod
-    def parse_archives_from_project(cls, config):
-        archives = []
-        archive_configs = config.archive
-
-        for archive_config in archive_configs:
-            tables = archive_config.get('tables')
-
-            if tables is None:
-                continue
-
-            for table in tables:
-                cfg = table.copy()
-                source_database = archive_config.get(
-                    'source_database',
-                    config.credentials.database
-                )
-                cfg['target_database'] = archive_config.get(
-                    'target_database',
-                    config.credentials.database
-                )
-
-                source_schema = archive_config['source_schema']
-                cfg['target_schema'] = archive_config.get('target_schema')
-                # project-defined archives always use the 'timestamp' strategy.
-                cfg['strategy'] = 'timestamp'
-
-                fake_path = [cfg['target_database'], cfg['target_schema'],
-                             cfg['target_table']]
-
-                relation = get_adapter(config).Relation.create(
-                    database=source_database,
-                    schema=source_schema,
-                    identifier=table['source_table'],
-                    type='table'
-                )
-
-                raw_sql = '{{ config(materialized="archive") }}' + \
-                          'select * from {!s}'.format(relation)
-
-                archives.append({
-                    'name': table.get('target_table'),
-                    'root_path': config.project_root,
-                    'resource_type': NodeType.Archive,
-                    'path': os.path.join('archive', *fake_path),
-                    'original_file_path': 'dbt_project.yml',
-                    'package_name': config.project_name,
-                    'config': cfg,
-                    'raw_sql': raw_sql
-                })
-
-        return archives
-
-    def load_and_parse(self):
-        """Load and parse archives in a list of projects. Returns a dict
-           that maps unique ids onto ParsedNodes"""
-
-        archives = []
-        to_return = {}
-
-        for name, project in self.all_projects.items():
-            archives = archives + self.parse_archives_from_project(project)
-
-        # We're going to have a similar issue with parsed nodes, if we want to
-        # make parse_node return those.
-        for a in archives:
-            # archives have a config, but that would make for an invalid
-            # UnparsedNode, so remove it and pass it along to parse_node as an
-            # argument.
-            archive_config = a.pop('config')
-            archive = UnparsedNode(**a)
-            node_path = self.get_path(archive.resource_type,
-                                      archive.package_name,
-                                      archive.name)
-
-            parsed_node = self.parse_node(
-                archive,
-                node_path,
-                self.all_projects.get(archive.package_name),
-                archive_config=archive_config)
-
-            to_return[node_path] = set_archive_attributes(parsed_node)
-
-        return to_return
 
 
 class ArchiveBlockParser(BaseSqlParser):

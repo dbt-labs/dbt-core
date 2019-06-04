@@ -2,7 +2,7 @@ from test.integration.base import DBTIntegrationTest, use_profile
 import dbt.exceptions
 
 
-class TestSimpleArchive(DBTIntegrationTest):
+class TestSimpleArchiveFiles(DBTIntegrationTest):
     NUM_ARCHIVE_MODELS = 1
 
     @property
@@ -18,28 +18,16 @@ class TestSimpleArchive(DBTIntegrationTest):
 
     @property
     def project_config(self):
-        source_table = 'seed'
-
-        if self.adapter_type == 'snowflake':
-            source_table = source_table.upper()
-
         return {
             "data-paths": ['test/integration/004_simple_archive_test/data'],
-            "archive": [
-                {
-                    "source_schema": self.unique_schema(),
-                    "target_schema": self.unique_schema(),
-                    "tables": [
-                        {
-                            "source_table": source_table,
-                            "target_table": "archive_actual",
-                            "updated_at": 'updated_at',
-                            "unique_key": '''id || '-' || first_name'''
-                        },
-                    ],
-                },
-            ],
+            "archive-paths": ['test/integration/004_simple_archive_test/test-archives-pg'],
         }
+
+    @use_profile('postgres')
+    def test__postgres_ref_archive(self):
+        self.dbt_run_seed_archive()
+        results = self.run_dbt(['run'])
+        self.assertEqual(len(results), 1)
 
     def dbt_run_seed_archive(self):
         if self.adapter_type == 'postgres':
@@ -112,8 +100,7 @@ class TestSimpleArchive(DBTIntegrationTest):
         self.assertIn('not implemented for presto', results[0].error)
 
 
-class TestSimpleArchiveBigquery(DBTIntegrationTest):
-
+class TestSimpleArchiveFileSelects(DBTIntegrationTest):
     @property
     def schema(self):
         return "simple_archive_004"
@@ -125,20 +112,66 @@ class TestSimpleArchiveBigquery(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            "archive": [
-                {
-                    "source_schema": self.unique_schema(),
-                    "target_schema": self.unique_schema(),
-                    "tables": [
-                        {
-                            "source_table": 'seed',
-                            "target_table": "archive_actual",
-                            "updated_at": 'updated_at',
-                            "unique_key": "concat(cast(id as string) , '-', first_name)"
-                        }
-                    ]
-                }
-            ]
+            "data-paths": ['test/integration/004_simple_archive_test/data'],
+            "archive-paths": ['test/integration/004_simple_archive_test/test-archives-select',
+                              'test/integration/004_simple_archive_test/test-archives-pg'],
+        }
+
+    @use_profile('postgres')
+    def test__postgres__select_archives(self):
+        self.run_sql_file('test/integration/004_simple_archive_test/seed_pg.sql')
+
+        results = self.run_dbt(['archive'])
+        self.assertEqual(len(results),  4)
+        self.assertTablesEqual('archive_castillo', 'archive_castillo_expected')
+        self.assertTablesEqual('archive_alvarez', 'archive_alvarez_expected')
+        self.assertTablesEqual('archive_kelly', 'archive_kelly_expected')
+        self.assertTablesEqual('archive_actual', 'archive_expected')
+
+        self.run_sql_file("test/integration/004_simple_archive_test/invalidate_postgres.sql")
+        self.run_sql_file("test/integration/004_simple_archive_test/update.sql")
+
+        results = self.run_dbt(['archive'])
+        self.assertEqual(len(results),  4)
+        self.assertTablesEqual('archive_castillo', 'archive_castillo_expected')
+        self.assertTablesEqual('archive_alvarez', 'archive_alvarez_expected')
+        self.assertTablesEqual('archive_kelly', 'archive_kelly_expected')
+        self.assertTablesEqual('archive_actual', 'archive_expected')
+
+    @use_profile('postgres')
+    def test__postgres_exclude_archives(self):
+        self.run_sql_file('test/integration/004_simple_archive_test/seed_pg.sql')
+        results = self.run_dbt(['archive', '--exclude', 'archive_castillo'])
+        self.assertEqual(len(results),  3)
+        self.assertTableDoesNotExist('archive_castillo')
+        self.assertTablesEqual('archive_alvarez', 'archive_alvarez_expected')
+        self.assertTablesEqual('archive_kelly', 'archive_kelly_expected')
+        self.assertTablesEqual('archive_actual', 'archive_expected')
+
+    @use_profile('postgres')
+    def test__postgres_select_archives(self):
+        self.run_sql_file('test/integration/004_simple_archive_test/seed_pg.sql')
+        results = self.run_dbt(['archive', '--models', 'archive_castillo'])
+        self.assertEqual(len(results),  1)
+        self.assertTablesEqual('archive_castillo', 'archive_castillo_expected')
+        self.assertTableDoesNotExist('archive_alvarez')
+        self.assertTableDoesNotExist('archive_kelly')
+        self.assertTableDoesNotExist('archive_actual')
+
+
+class TestSimpleArchiveFilesBigquery(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "simple_archive_004"
+
+    @property
+    def models(self):
+        return "test/integration/004_simple_archive_test/models"
+
+    @property
+    def project_config(self):
+        return {
+            "archive-paths": ['test/integration/004_simple_archive_test/test-archives-bq'],
         }
 
     def assert_expected(self):
@@ -209,7 +242,7 @@ class TestSimpleArchiveBigquery(DBTIntegrationTest):
             self.assertEqual(expected_type, actual_type, "data types are different")
 
 
-class TestCrossDBArchive(DBTIntegrationTest):
+class TestCrossDBArchiveFiles(DBTIntegrationTest):
     setup_alternate_db = True
     @property
     def schema(self):
@@ -220,37 +253,17 @@ class TestCrossDBArchive(DBTIntegrationTest):
         return "test/integration/004_simple_archive_test/models"
 
     @property
-    def archive_project_config(self):
-        if self.adapter_type == 'snowflake':
-            return {
-                "source_table": 'SEED',
-                "target_table": "archive_actual",
-                "updated_at": 'updated_at',
-                "unique_key": '''id || '-' || first_name'''
-            }
-        else:
-            return {
-                "source_table": 'seed',
-                "target_table": "archive_actual",
-                "updated_at": 'updated_at',
-                "unique_key": "concat(cast(id as string) , '-', first_name)"
-            }
-
-    @property
     def project_config(self):
+        if self.adapter_type == 'snowflake':
+            paths = ['test/integration/004_simple_archive_test/test-archives-pg']
+        else:
+            paths = ['test/integration/004_simple_archive_test/test-archives-bq']
         return {
-            "archive": [
-                {
-                    'target_database': self.alternative_database,
-                    "source_schema": self.unique_schema(),
-                    "target_schema": self.unique_schema(),
-                    "tables": [self.archive_project_config]
-                }
-            ]
+            'archive-paths': paths,
         }
 
     def run_archive(self):
-        return self.run_dbt(['archive'])
+        return self.run_dbt(['archive', '--vars', '{{"target_database": {}}}'.format(self.alternative_database)])
 
     @use_profile('snowflake')
     def test__snowflake__cross_archive(self):
@@ -283,103 +296,6 @@ class TestCrossDBArchive(DBTIntegrationTest):
         self.run_archive()
 
         self.assertTablesEqual("archive_expected", "archive_actual", table_b_db=self.alternative_database)
-
-
-class TestSimpleArchiveFiles(TestSimpleArchive):
-    @property
-    def project_config(self):
-        return {
-            "data-paths": ['test/integration/004_simple_archive_test/data'],
-            "archive-paths": ['test/integration/004_simple_archive_test/test-archives-pg'],
-        }
-
-    @use_profile('postgres')
-    def test__postgres_ref_archive(self):
-        self.dbt_run_seed_archive()
-        results = self.run_dbt(['run'])
-        self.assertEqual(len(results), 1)
-
-
-class TestSimpleArchiveFileSelects(DBTIntegrationTest):
-    @property
-    def schema(self):
-        return "simple_archive_004"
-
-    @property
-    def models(self):
-        return "test/integration/004_simple_archive_test/models"
-
-    @property
-    def project_config(self):
-        return {
-            "data-paths": ['test/integration/004_simple_archive_test/data'],
-            "archive-paths": ['test/integration/004_simple_archive_test/test-archives-select',
-                              'test/integration/004_simple_archive_test/test-archives-pg'],
-        }
-
-    @use_profile('postgres')
-    def test__postgres__select_archives(self):
-        self.run_sql_file('test/integration/004_simple_archive_test/seed_pg.sql')
-
-        results = self.run_dbt(['archive'])
-        self.assertEqual(len(results),  4)
-        self.assertTablesEqual('archive_castillo', 'archive_castillo_expected')
-        self.assertTablesEqual('archive_alvarez', 'archive_alvarez_expected')
-        self.assertTablesEqual('archive_kelly', 'archive_kelly_expected')
-        self.assertTablesEqual('archive_actual', 'archive_expected')
-
-        self.run_sql_file("test/integration/004_simple_archive_test/invalidate_postgres.sql")
-        self.run_sql_file("test/integration/004_simple_archive_test/update.sql")
-
-        results = self.run_dbt(['archive'])
-        self.assertEqual(len(results),  4)
-        self.assertTablesEqual('archive_castillo', 'archive_castillo_expected')
-        self.assertTablesEqual('archive_alvarez', 'archive_alvarez_expected')
-        self.assertTablesEqual('archive_kelly', 'archive_kelly_expected')
-        self.assertTablesEqual('archive_actual', 'archive_expected')
-
-    @use_profile('postgres')
-    def test__postgres_exclude_archives(self):
-        self.run_sql_file('test/integration/004_simple_archive_test/seed_pg.sql')
-        results = self.run_dbt(['archive', '--exclude', 'archive_castillo'])
-        self.assertEqual(len(results),  3)
-        self.assertTableDoesNotExist('archive_castillo')
-        self.assertTablesEqual('archive_alvarez', 'archive_alvarez_expected')
-        self.assertTablesEqual('archive_kelly', 'archive_kelly_expected')
-        self.assertTablesEqual('archive_actual', 'archive_expected')
-
-    @use_profile('postgres')
-    def test__postgres_select_archives(self):
-        self.run_sql_file('test/integration/004_simple_archive_test/seed_pg.sql')
-        results = self.run_dbt(['archive', '--models', 'archive_castillo'])
-        self.assertEqual(len(results),  1)
-        self.assertTablesEqual('archive_castillo', 'archive_castillo_expected')
-        self.assertTableDoesNotExist('archive_alvarez')
-        self.assertTableDoesNotExist('archive_kelly')
-        self.assertTableDoesNotExist('archive_actual')
-
-
-class TestSimpleArchiveFilesBigquery(TestSimpleArchiveBigquery):
-    @property
-    def project_config(self):
-        return {
-            "archive-paths": ['test/integration/004_simple_archive_test/test-archives-bq'],
-        }
-
-
-class TestCrossDBArchiveFiles(TestCrossDBArchive):
-    @property
-    def project_config(self):
-        if self.adapter_type == 'snowflake':
-            paths = ['test/integration/004_simple_archive_test/test-archives-pg']
-        else:
-            paths = ['test/integration/004_simple_archive_test/test-archives-bq']
-        return {
-            'archive-paths': paths,
-        }
-
-    def run_archive(self):
-        return self.run_dbt(['archive', '--vars', '{{"target_database": {}}}'.format(self.alternative_database)])
 
 
 class TestCrossSchemaArchiveFiles(DBTIntegrationTest):
@@ -438,76 +354,6 @@ class TestBadArchive(DBTIntegrationTest):
             self.run_dbt(['compile'], expect_pass=False)
 
         self.assertIn('target_database', str(exc.exception))
-
-
-class TestConflictArchive(DBTIntegrationTest):
-    @property
-    def schema(self):
-        return "simple_archive_004"
-
-    @property
-    def models(self):
-        return "test/integration/004_simple_archive_test/models"
-
-    @property
-    def project_config(self):
-        return {}
-
-
-    @use_profile('postgres')
-    def test__postgres_archive_block_archive_collision(self):
-        self.use_default_project({
-            "archive-paths": ['test/integration/004_simple_archive_test/test-archives-pg'],
-            "archive": [
-                {
-                    "source_schema": self.unique_schema(),
-                    "target_schema": self.unique_schema(),
-                    "tables": [
-                        {
-                            "source_table": "seed",
-                            "target_table": "archive_actual",
-                            "updated_at": 'updated_at',
-                            "unique_key": '''id || '-' || first_name'''
-                        },
-                    ],
-                },
-            ],
-        })
-
-        with self.assertRaises(dbt.exceptions.CompilationException) as exc:
-            self.run_dbt(['compile'], expect_pass=False)
-
-    def test__postgres_archive_block_model_collision(self):
-        self.use_default_project({
-            "source-paths": ['test/integration/004_simple_archive_test/models-collision'],
-            "archive-paths": ['test/integration/004_simple_archive_test/test-archives-pg'],
-            "archive": [],
-        })
-
-        with self.assertRaises(dbt.exceptions.CompilationException) as exc:
-            self.run_dbt(['compile'], expect_pass=False)
-
-    def test__postgres_archive_model_collision(self):
-        self.use_default_project({
-            "source-paths": ['test/integration/004_simple_archive_test/models-collision'],
-            "archive": [
-                {
-                    "source_schema": self.unique_schema(),
-                    "target_schema": self.unique_schema(),
-                    "tables": [
-                        {
-                            "source_table": "seed",
-                            "target_table": "archive_actual",
-                            "updated_at": 'updated_at',
-                            "unique_key": '''id || '-' || first_name'''
-                        },
-                    ],
-                },
-            ],
-        })
-
-        with self.assertRaises(dbt.exceptions.CompilationException) as exc:
-            self.run_dbt(['compile'], expect_pass=False)
 
 
 class TestCheckCols(TestSimpleArchiveFiles):

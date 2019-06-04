@@ -561,20 +561,7 @@ class TestEventTrackingArchive(TestEventTracking):
     @property
     def project_config(self):
         return {
-            "archive": [
-                {
-                    "source_schema": self.unique_schema(),
-                    "target_schema": self.unique_schema(),
-                    "tables": [
-                        {
-                            "source_table": "archivable",
-                            "target_table": "archived",
-                            "updated_at": '"updated_at"',
-                            "unique_key": '"id"'
-                        }
-                    ]
-                }
-            ]
+            "archive-paths": ['test/integration/033_event_tracking_test/archives']
         }
 
     @use_profile("postgres")
