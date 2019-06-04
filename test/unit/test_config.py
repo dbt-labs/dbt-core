@@ -1066,7 +1066,7 @@ class TestRuntimeConfig(BaseConfigTest):
         profile = self.get_profile()
         with self.assertRaises(dbt.exceptions.DbtProjectError) as raised:
             dbt.config.RuntimeConfig.from_parts(project, profile, self.args)
-        self.assertIn('Invalid project configuration: "archive" is not allowed', str(raised.exception))
+        self.assertIn('The `archive` section in `dbt_project.yml` is no longer supported', str(raised.exception))
 
     def test_archive_allowed(self):
         archive_cfg = {
@@ -1086,7 +1086,7 @@ class TestRuntimeConfig(BaseConfigTest):
         profile = self.get_profile()
 
         cfg = dbt.config.RuntimeConfig.from_parts(project, profile, self.args,
-                                                  allow_archive_blocks=True)
+                                                  allow_archive_configs=True)
         self.assertEqual(cfg.archive, [archive_cfg])
 
 
@@ -1150,14 +1150,14 @@ class TestRuntimeConfigFilesWithArchive(BaseFileTest):
 
     def test_archive_ok_from_args(self):
         with temp_cd(self.project_dir):
-            config = dbt.config.RuntimeConfig.from_args(self.args, allow_archive_blocks=True)
+            config = dbt.config.RuntimeConfig.from_args(self.args, allow_archive_configs=True)
 
         self.assertEqual(config.archive, self.default_project_data['archive'])
 
     def test_archive_error(self):
         with temp_cd(self.project_dir), self.assertRaises(dbt.exceptions.DbtProjectError) as raised:
             dbt.config.RuntimeConfig.from_args(self.args)
-        self.assertIn('Invalid project configuration: "archive" is not allowed', str(raised.exception))
+        self.assertIn('The `archive` section in `dbt_project.yml` is no longer supported', str(raised.exception))
 
 
 class TestVariableRuntimeConfigFiles(BaseFileTest):
