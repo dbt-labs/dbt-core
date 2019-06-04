@@ -36,6 +36,17 @@ class SeedDropExistingDeprecation(DBTDeprecation):
   will be removed in a future version of dbt."""
 
 
+class GenerateSchemaNameSingleArgDeprecated(DBTDeprecation):
+    name = 'generate-schema-name-single-arg'
+    description = '''As of dbt v0.14.0, the `generate_schema_name` macro
+  accepts a second "node" argument. The one-argument form of `generate_schema_name`
+  is deprecated, and will become unsupported in a future release.
+
+  For more information, see:
+    https://docs.getdbt.com/v0.14/docs/upgrading-to-014
+  '''  # noqa
+
+
 _adapter_renamed_description = """\
 The adapter function `adapter.{old_name}` is deprecated and will be removed in
  a future release of dbt. Please use `adapter.{new_name}` instead.
@@ -72,6 +83,7 @@ active_deprecations = set()
 deprecations_list = [
     DBTRepositoriesDeprecation(),
     SeedDropExistingDeprecation(),
+    GenerateSchemaNameSingleArgDeprecated(),
 ]
 
 deprecations = {d.name: d for d in deprecations_list}

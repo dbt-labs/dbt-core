@@ -7,8 +7,7 @@ import dbt.config
 import dbt.exceptions
 
 
-class TestSimpleDependency(DBTIntegrationTest):
-
+class BaseDependencyTest(DBTIntegrationTest):
     @property
     def schema(self):
         return "local_dependency_006"
@@ -16,6 +15,12 @@ class TestSimpleDependency(DBTIntegrationTest):
     @property
     def models(self):
         return "test/integration/006_simple_dependency_test/local_models"
+
+    def base_schema(self):
+        return self.unique_schema()
+
+    def configured_schema(self):
+        return self.unique_schema() + '_configured'
 
     @property
     def packages_config(self):
@@ -26,6 +31,17 @@ class TestSimpleDependency(DBTIntegrationTest):
                 }
             ]
         }
+
+
+class TestSimpleDependency(BaseDependencyTest):
+
+    @property
+    def schema(self):
+        return "local_dependency_006"
+
+    @property
+    def models(self):
+        return "test/integration/006_simple_dependency_test/local_models"
 
     def base_schema(self):
         return self.unique_schema()

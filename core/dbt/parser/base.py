@@ -13,6 +13,7 @@ from dbt.utils import coalesce
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.contracts.graph.parsed import ParsedNode
 from dbt.parser.source_config import SourceConfig
+from dbt import deprecations
 
 
 class BaseParser(object):
@@ -82,8 +83,9 @@ class MacrosKnownParser(BaseParser):
                 'generate_schema_name',
                 GLOBAL_PROJECT_NAME
             )
+        # this is only true in tests!
         if get_schema_macro is None:
-            def get_schema(_):
+            def get_schema(custom_schema_name=None, node=None):
                 return self.default_schema
         else:
             root_context = dbt.context.parser.generate_macro(
@@ -117,8 +119,10 @@ class MacrosKnownParser(BaseParser):
                 'generate_alias_name',
                 GLOBAL_PROJECT_NAME
             )
+
+        # the generate_alias_name macro might not exist
         if get_alias_macro is None:
-            def get_alias(node, custom_alias_name=None):
+            def get_alias(custom_alias_name, node):
                 if custom_alias_name is None:
                     return node.name
                 else:
@@ -206,11 +210,22 @@ class MacrosKnownParser(BaseParser):
         # definition, not the current package
         schema_override = config.config.get('schema')
         get_schema = self.get_schema_func()
-        parsed_node.schema = get_schema(schema_override).strip()
+        try:
+            schema = get_schema(schema_override, parsed_node)
+        except dbt.exceptions.CompilationException as exc:
+            too_many_args = (
+                "macro 'dbt_macro__generate_schema_name' takes not more than "
+                "1 argument(s)"
+            )
+            if too_many_args not in str(exc):
+                raise
+            deprecations.warn('generate-schema-name-single-arg')
+            schema = get_schema(schema_override)
+        parsed_node.schema = schema.strip()
 
         alias_override = config.config.get('alias')
         get_alias = self.get_alias_func()
-        parsed_node.alias = get_alias(parsed_node, alias_override).strip()
+        parsed_node.alias = get_alias(alias_override, parsed_node).strip()
 
         parsed_node.database = config.config.get(
             'database', self.default_database
