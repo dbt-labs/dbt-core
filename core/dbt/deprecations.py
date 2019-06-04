@@ -29,13 +29,6 @@ class DBTRepositoriesDeprecation(DBTDeprecation):
   """
 
 
-class SeedDropExistingDeprecation(DBTDeprecation):
-    name = 'drop-existing'
-    description = """The --drop-existing argument to `dbt seed` has been
-  deprecated. Please use --full-refresh instead. The --drop-existing option
-  will be removed in a future version of dbt."""
-
-
 class GenerateSchemaNameSingleArgDeprecated(DBTDeprecation):
     name = 'generate-schema-name-single-arg'
     description = '''As of dbt v0.14.0, the `generate_schema_name` macro
@@ -82,7 +75,6 @@ active_deprecations = set()
 
 deprecations_list = [
     DBTRepositoriesDeprecation(),
-    SeedDropExistingDeprecation(),
     GenerateSchemaNameSingleArgDeprecated(),
 ]
 
