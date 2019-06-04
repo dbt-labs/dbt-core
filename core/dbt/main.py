@@ -176,7 +176,7 @@ def track_run(task):
 
 def run_from_args(parsed):
     log_cache_events(getattr(parsed, 'log_cache_events', False))
-    update_flags(parsed)
+    flags.set_from_args(parsed)
 
     parsed.cls.pre_init_hook()
     logger.info("Running with dbt{}".format(dbt.version.installed))
@@ -197,26 +197,6 @@ def run_from_args(parsed):
         results = task.run()
 
     return task, results
-
-
-def update_flags(parsed):
-    flags.USE_CACHE = getattr(parsed, 'use_cache', True)
-
-    arg_drop_existing = getattr(parsed, 'drop_existing', False)
-    arg_full_refresh = getattr(parsed, 'full_refresh', False)
-    flags.STRICT_MODE = getattr(parsed, 'strict', False)
-    flags.WARN_ERROR = (
-        flags.STRICT_MODE or
-        getattr(parsed, 'warn_error', False)
-    )
-
-    if arg_drop_existing:
-        dbt.deprecations.warn('drop-existing')
-        flags.FULL_REFRESH = True
-    elif arg_full_refresh:
-        flags.FULL_REFRESH = True
-
-    flags.TEST_NEW_PARSER = getattr(parsed, 'test_new_parser', False)
 
 
 def _build_base_subparser():
@@ -451,11 +431,6 @@ def _build_seed_subparser(subparsers, base_subparser):
         'seed',
         parents=[base_subparser],
         help="Load data from csv files into your data warehouse.")
-    seed_sub.add_argument(
-        '--drop-existing',
-        action='store_true',
-        help='(DEPRECATED) Use --full-refresh instead.'
-    )
     seed_sub.add_argument(
         '--full-refresh',
         action='store_true',

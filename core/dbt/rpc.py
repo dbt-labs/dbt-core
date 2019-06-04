@@ -18,6 +18,7 @@ from collections import namedtuple
 
 from dbt.adapters.factory import load_plugin
 from dbt.compat import QueueEmpty
+from dbt import flags
 from dbt.logger import RPC_LOGGER as logger
 from dbt.logger import add_queue_handler
 import dbt.exceptions
@@ -139,6 +140,8 @@ def _nt_setup(config, args):
     These things are inherited automatically on posix, where fork() keeps
     everything in memory.
     """
+    # reset flags
+    flags.set_from_args(args)
     # reload the active plugin
     load_plugin(config.credentials.type)
 
