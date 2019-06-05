@@ -56,9 +56,7 @@ COMMENT_START_PATTERN = regex(r"(?:(?P<comment_start>(\s*\{\#)))")
 COMMENT_END_PATTERN = regex(r"(.*?)(\s*\#\})")
 RAW_START_PATTERN = regex(r"(?:\s*\{\%\-|\{\%)\s*(?P<raw_start>(raw))\s*(?:\-\%\}\s*|\%\})")
 EXPR_START_PATTERN = regex(r"(?P<expr_start>(\{\{\s*))")
-)
-EXPR_START_PATTERN = regex(r'(?P<expr_start>(\{\{\s*))')
-EXPR_END_PATTERN = regex(r'(?P<expr_end>(\s*\}\}))')
+EXPR_END_PATTERN = regex(r"(?P<expr_end>(\s*\}\}))")
 
 BLOCK_START_PATTERN = regex(
     "".join(
