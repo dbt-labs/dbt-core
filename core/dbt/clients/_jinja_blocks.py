@@ -86,7 +86,7 @@ TAG_CLOSE_PATTERN = regex(r"(?:(?P<tag_close>(\-\%\}\s*|\%\})))")
 # the time we want to use this.
 STRING_PATTERN = regex(r"(?P<string>('([^'\\]*(?:\\.[^'\\]*)*)'|" r'"([^"\\]*(?:\\.[^"\\]*)*)"))')
 
-QUOTE_START_PATTERN = regex(r'''(?P<quote>(['"]))''')
+QUOTE_START_PATTERN = regex(r"""(?P<quote>(['"]))""")
 
 
 class TagIterator:
@@ -160,15 +160,13 @@ class TagIterator:
         """
         self.advance(match.end())
         while True:
-            match = self._expect_match('}}',
-                                       EXPR_END_PATTERN,
-                                       QUOTE_START_PATTERN)
-            if match.groupdict().get('expr_end') is not None:
+            match = self._expect_match("}}", EXPR_END_PATTERN, QUOTE_START_PATTERN)
+            if match.groupdict().get("expr_end") is not None:
                 break
             else:
                 # it's a quote. we haven't advanced for this match yet, so
                 # just slurp up the whole string, no need to rewind.
-                match = self._expect_match('string', STRING_PATTERN)
+                match = self._expect_match("string", STRING_PATTERN)
                 self.advance(match.end())
 
         self.advance(match.end())
