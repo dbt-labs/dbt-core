@@ -593,8 +593,7 @@ class BaseAdapter(metaclass=AdapterMeta):
                 )
             else:
                 msg = 'Snapshot target is not a snapshot table (missing "{}")'.format(
-                    'Snapshot target is not a snapshot table (missing "{}")'
-                    .format('", "'.join(missing))
+                    '", "'.join(missing)
                 )
             raise_compiler_error(msg)
 
