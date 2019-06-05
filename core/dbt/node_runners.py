@@ -484,7 +484,7 @@ class TestRunner(CompileRunner):
         self.print_result_line(result)
 
 
-class ArchiveRunner(ModelRunner):
+class SnapshotRunner(ModelRunner):
     def describe_node(self):
         cfg = self.node.get('config', {})
         return (
@@ -494,7 +494,7 @@ class ArchiveRunner(ModelRunner):
 
     def print_result_line(self, result):
         dbt.ui.printer.print_snapshot_result_line(result, self.node_index,
-                                                 self.num_nodes)
+                                                  self.num_nodes)
 
 
 class SeedRunner(ModelRunner):

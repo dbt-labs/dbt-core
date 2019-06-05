@@ -140,9 +140,9 @@ class Compiler(object):
                 # don't wrap schema tests or analyses.
                 injected_node.wrapped_sql = injected_node.injected_sql
 
-        elif is_type(injected_node, NodeType.Archive):
+        elif is_type(injected_node, NodeType.Snapshot):
             # unfortunately we do everything automagically for
-            # archives. in the future it'd be nice to generate
+            # snapshots. in the future it'd be nice to generate
             # the SQL at the parser level.
             pass
 
@@ -209,7 +209,7 @@ def _is_writable(node):
     if not node.injected_sql:
         return False
 
-    if dbt.utils.is_type(node, NodeType.Archive):
+    if dbt.utils.is_type(node, NodeType.Snapshot):
         return False
 
     return True

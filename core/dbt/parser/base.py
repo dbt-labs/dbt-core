@@ -139,7 +139,7 @@ class MacrosKnownParser(BaseParser):
 
     def _build_intermediate_node_dict(self, config, node_dict, node_path,
                                       package_project_config, tags, fqn,
-                                      agate_table, archive_config,
+                                      agate_table, snapshot_config,
                                       column_name):
         """Update the unparsed node dictionary and build the basis for an
         intermediate ParsedNode that will be passed into the renderer
@@ -153,7 +153,7 @@ class MacrosKnownParser(BaseParser):
         # been called from jinja yet). But the Var() call below needs info
         # about project level configs b/c they might contain refs.
         # TODO: Restructure this?
-        config_dict = coalesce(archive_config, {})
+        config_dict = coalesce(snapshot_config, {})
         config_dict.update(config.config)
 
         empty = (
@@ -246,11 +246,11 @@ class MacrosKnownParser(BaseParser):
 
     def parse_node(self, node, node_path, package_project_config, tags=None,
                    fqn_extra=None, fqn=None, agate_table=None,
-                   archive_config=None, column_name=None):
+                   snapshot_config=None, column_name=None):
         """Parse a node, given an UnparsedNode and any other required information.
 
         agate_table should be set if the node came from a seed file.
-        archive_config should be set if the node is an Archive node.
+        snapshot_config should be set if the node is an Snapshot node.
         column_name should be set if the node is a Test node associated with a
         particular column.
         """
@@ -270,7 +270,7 @@ class MacrosKnownParser(BaseParser):
 
         parsed_dict = self._build_intermediate_node_dict(
             config, node.serialize(), node_path, config, tags, fqn,
-            agate_table, archive_config, column_name
+            agate_table, snapshot_config, column_name
         )
         parsed_node = ParsedNode(**parsed_dict)
 

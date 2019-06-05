@@ -168,7 +168,7 @@
   getdate()
 {%- endmacro %}
 
-{% macro redshift__archive_get_time() -%}
+{% macro redshift__snapshot_get_time() -%}
   {{ current_timestamp() }}::timestamp
 {%- endmacro %}
 
