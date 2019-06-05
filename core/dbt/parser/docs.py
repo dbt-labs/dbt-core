@@ -3,6 +3,8 @@ from dbt.node_types import NodeType
 from dbt.parser.base import BaseParser
 from dbt.contracts.graph.unparsed import UnparsedDocumentationFile
 from dbt.contracts.graph.parsed import ParsedDocumentation
+from dbt.clients.jinja import extract_toplevel_blocks, get_template
+from dbt.clients import system
 
 import jinja2.runtime
 import os
@@ -16,14 +18,12 @@ class DocumentationParser(BaseParser):
         """
         extension = "[!.#~]*.md"
 
-        file_matches = dbt.clients.system.find_matching(
-            root_dir,
-            relative_dirs,
-            extension)
+        file_matches = system.find_matching(root_dir, relative_dirs, extension)
 
         for file_match in file_matches:
-            file_contents = dbt.clients.system.load_file_contents(
-                file_match.get('absolute_path'), strip=False)
+            file_contents = system.load_file_contents(
+                file_match.get('absolute_path'),
+                strip=False)
 
             parts = dbt.utils.split_path(file_match.get('relative_path', ''))
             name, _ = os.path.splitext(parts[-1])
@@ -44,12 +44,26 @@ class DocumentationParser(BaseParser):
 
     def parse(self, docfile):
         try:
-            template = dbt.clients.jinja.get_template(docfile.file_contents,
-                                                      {})
-        except dbt.exceptions.CompilationException as e:
-            e.node = docfile
+            blocks = extract_toplevel_blocks(docfile.file_contents)
+        except dbt.exceptions.CompilationException as exc:
+            if exc.node is None:
+                exc.node = docfile
             raise
 
+        for block in blocks:
+            if block.block_type_name != NodeType.Documentation:
+                continue
+
+            try:
+                template = get_template(block.full_block, {})
+            except dbt.exceptions.CompilationException as e:
+                e.node = docfile
+                raise
+            # in python 3.x this can just be "yield from" isntead of a loop
+            for d in self._parse_template_docs(template, docfile):
+                yield d
+
+    def _parse_template_docs(self, template, docfile):
         for key, item in template.module.__dict__.items():
             if type(item) != jinja2.runtime.Macro:
                 continue

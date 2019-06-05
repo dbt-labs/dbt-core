@@ -52,6 +52,8 @@ COMMENT_END_PATTERN = regex(r'(.*?)(\s*\#\})')
 RAW_START_PATTERN = regex(
     r'(?:\s*\{\%\-|\{\%)\s*(?P<raw_start>(raw))\s*(?:\-\%\}\s*|\%\})'
 )
+EXPR_START_PATTERN = regex(r'(?P<expr_start>(\{\{\s*))')
+EXPR_END_PATTERN = regex(r'(?P<expr_end>(\s*\}\}))')
 
 BLOCK_START_PATTERN = regex(''.join((
     r'(?:\s*\{\%\-|\{\%)\s*',
@@ -91,6 +93,8 @@ STRING_PATTERN = regex(
     r"(?P<string>('([^'\\]*(?:\\.[^'\\]*)*)'|"
     r'"([^"\\]*(?:\\.[^"\\]*)*)"))'
 )
+
+QUOTE_START_PATTERN = regex(r'''(?P<quote>(['"]))''')
 
 # any number of non-quote characters, followed by:
 # - quote: a quote mark indicating start of a string (you'll want to backtrack
@@ -179,6 +183,31 @@ class BlockIterator(object):
             dbt.exceptions.raise_compiler_error(msg)
         return match
 
+    def handle_expr(self):
+        """Handle an expression. At this point we're at a string like:
+            {{ 1 + 2 }}
+               ^ right here
+
+        We expect to find a `}}`, but we might find one in a string before
+        that. Imagine the case of `{{ 2 * "}}" }}`...
+
+        You're not allowed to have blocks or comments inside an expr so it is
+        pretty straightforward, I hope: only strings can get in the way.
+        """
+        while True:
+            match = self._expect_match('}}',
+                                       EXPR_END_PATTERN,
+                                       QUOTE_START_PATTERN)
+            if match.groupdict().get('expr_end') is not None:
+                break
+            else:
+                # it's a quote. we haven't advanced for this match yet, so
+                # just slurp up the whole string, no need to rewind.
+                match = self._expect_match('string', STRING_PATTERN)
+                self.advance(match.end())
+
+        self.advance(match.end())
+
     def handle_block(self, match, block_start=None):
         """Handle a block. The current state of the parser should be after the
         open block is completed:
@@ -197,12 +226,18 @@ class BlockIterator(object):
 
         self._block_contents = ''
 
+        search = [found.end_pat(), COMMENT_START_PATTERN, RAW_START_PATTERN,
+                  EXPR_START_PATTERN]
+
+        # docs and macros do not honor embedded quotes
+        if found.block_type_name not in ('docs', 'macro'):
+            # is this right?
+            search.append(QUOTE_START_PATTERN)
+
         # you can have as many comments in your block as you'd like!
         while True:
             match = self._expect_match(
-                '"{}"'.format(found.end_block_type_name),
-                found.end_pat(), COMMENT_START_PATTERN, RAW_START_PATTERN,
-                regex('''(?P<quote>(['"]))''')
+                '"{}"'.format(found.end_block_type_name), *search
             )
             groups = match.groupdict()
             if groups.get('endblock') is not None:
@@ -218,6 +253,8 @@ class BlockIterator(object):
                 self.rewind()
                 match = self._expect_match('any string', STRING_PATTERN)
                 self.advance(match.end())
+            elif groups.get('expr_start') is not None:
+                self.handle_expr()
             else:
                 raise dbt.exceptions.InternalException(
                     'unhandled regex in handle_block, no match: {}'
