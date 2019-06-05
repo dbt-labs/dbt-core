@@ -1,4 +1,6 @@
 import mock
+import os
+import tempfile
 import unittest
 
 import dbt.utils
@@ -6,7 +8,7 @@ import dbt.utils
 from dbt import linker
 try:
     from queue import Empty
-except KeyError:
+except ImportError:
     from Queue import Empty
 
 
@@ -32,6 +34,25 @@ class LinkerTest(unittest.TestCase):
             self.linker.add_node(node)
 
         actual_nodes = self.linker.nodes()
+        for node in expected_nodes:
+            self.assertIn(node, actual_nodes)
+
+        self.assertEqual(len(actual_nodes), len(expected_nodes))
+
+    def test_linker_write_and_read_graph(self):
+        expected_nodes = ['A', 'B', 'C']
+        for node in expected_nodes:
+            self.linker.add_node(node)
+
+        manifest = _mock_manifest('ABC')
+        (fd, fname) = tempfile.mkstemp()
+        self.linker.write_graph(fname, manifest)
+
+        new_linker = linker.from_file(fname)
+        os.close(fd)
+        os.unlink(fname)
+
+        actual_nodes = new_linker.nodes()
         for node in expected_nodes:
             self.assertIn(node, actual_nodes)
 
