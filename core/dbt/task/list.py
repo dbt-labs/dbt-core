@@ -18,7 +18,7 @@ import dbt.events.functions as event_logger
 class ListTask(GraphRunnableTask):
     DEFAULT_RESOURCE_VALUES = frozenset((
         NodeType.Model,
-        NodeType.Snapshot,
+            NodeType.Model,
         NodeType.Seed,
         NodeType.Test,
         NodeType.Source,

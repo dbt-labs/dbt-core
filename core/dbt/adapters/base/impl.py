@@ -565,7 +565,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         """
         if not isinstance(relation, self.Relation):
             invalid_type_error(
-                method_name='valid_snapshot_target',
+                method_name="valid_snapshot_target",
                 arg_name='relation',
                 got_value=relation,
                 expected_type=self.Relation)

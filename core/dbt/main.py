@@ -857,7 +857,7 @@ def _build_list_subparser(subparsers, base_subparser):
 
 def _build_run_operation_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
-        'run-operation',
+        "run-operation",
         parents=[base_subparser],
         help='''
         Run the named macro with any supplied arguments.
@@ -871,9 +871,9 @@ def _build_run_operation_subparser(subparsers, base_subparser):
         ''',
     )
     sub.add_argument(
-        '--args',
+        "--args",
         type=str,
-        default='{}',
+        default="{}",
         help='''
         Supply arguments to the macro. This dictionary will be mapped to the
         keyword arguments defined in the selected macro. This argument should

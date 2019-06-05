@@ -606,7 +606,7 @@ class Project:
                 "analysis-paths": self.analysis_paths,
             'asset-paths': self.asset_paths,
                 "asset-paths": self.asset_paths,
-            'snapshot-paths': self.snapshot_paths,
+                "target-path": self.target_path,
                 "snapshot-paths": self.snapshot_paths,
                 "clean-targets": self.clean_targets,
                 "log-path": self.log_path,
