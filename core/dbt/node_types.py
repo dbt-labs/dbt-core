@@ -8,7 +8,7 @@ class NodeType(object):
     Macro = 'macro'
     Operation = 'operation'
     Seed = 'seed'
-    Documentation = 'documentation'
+    Documentation = 'docs'
     Source = 'source'
     RPCCall = 'rpc'
 

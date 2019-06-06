@@ -271,6 +271,28 @@ class TestBlockLexer(unittest.TestCase):
         self.assertEqual(blocks[0].block_type_name, 'myblock')
         self.assertEqual(blocks[0].contents, '{% set x = ("{% endmyblock %}") %}  ')
 
+    def test_docs_block(self):
+        body = '{% docs __my_doc__ %} asdf {# nope {% enddocs %}} #} {% enddocs %} {% docs __my_other_doc__ %} asdf "{% enddocs %}'
+        all_blocks = extract_toplevel_blocks(body)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual(blocks[0].block_type_name, 'docs')
+        self.assertEqual(blocks[0].contents, ' asdf {# nope {% enddocs %}} #} ')
+        self.assertEqual(blocks[0].block_name, '__my_doc__')
+        self.assertEqual(blocks[1].block_type_name, 'docs')
+        self.assertEqual(blocks[1].contents, ' asdf "')
+        self.assertEqual(blocks[1].block_name, '__my_other_doc__')
+
+    def test_docs_block_expr(self):
+        body = '{% docs more_doc %} asdf {{ "{% enddocs %}" ~ "}}" }}{% enddocs %}'
+        all_blocks = extract_toplevel_blocks(body)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
+        self.assertEqual(len(blocks), 1)
+        self.assertEqual(blocks[0].block_type_name, 'docs')
+        self.assertEqual(blocks[0].contents, ' asdf {{ "{% enddocs %}" ~ "}}" }}')
+        self.assertEqual(blocks[0].block_name, 'more_doc')
+
+
 bar_block = '''{% mytype bar %}
 {# a comment
     that inside it has
