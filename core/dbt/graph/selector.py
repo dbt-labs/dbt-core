@@ -171,19 +171,25 @@ class NodeSelector(object):
     def get_nodes_by_source(self, graph, source_full_name):
         """yields nodes from graph are the specified source."""
         parts = source_full_name.split('.')
+        target_package = SELECTOR_GLOB
         if len(parts) == 1:
             target_source, target_table = parts[0], None
         elif len(parts) == 2:
             target_source, target_table = parts
-        else:  # len(parts) > 2 or len(parts) == 0
+        elif len(parts) == 3:
+            target_package, target_source, target_table = parts
+        else:  # len(parts) > 3 or len(parts) == 0
             msg = (
                 'Invalid source selector value "{}". Sources must be of the '
-                'form `${{source_name}}` or '
-                '`${{source_name}}.${{target_name}}`'
+                'form `${{source_name}}`, '
+                '`${{source_name}}.${{target_name}}`, or '
+                '`${{package_name}}.${{source_name}}.${{target_name}}'
             ).format(source_full_name)
             raise dbt.exceptions.RuntimeException(msg)
 
         for node, real_node in self.source_nodes(graph):
+            if target_package not in (real_node.package_name, SELECTOR_GLOB):
+                continue
             if target_source not in (real_node.source_name, SELECTOR_GLOB):
                 continue
             if target_table in (None, real_node.name, SELECTOR_GLOB):
@@ -294,7 +300,7 @@ class NodeSelector(object):
     def get_selected(self, include, exclude, resource_types, tags, required):
         graph = self.linker.graph
 
-        include = coalesce(include, ['*'])
+        include = coalesce(include, ['fqn:*', 'source:*'])
         exclude = coalesce(exclude, [])
         tags = coalesce(tags, [])
 
