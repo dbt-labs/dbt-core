@@ -319,11 +319,18 @@ def _build_deps_subparser(subparsers, base_subparser):
 
 
 def _build_snapshot_subparser(subparsers, base_subparser, which='snapshot'):
+    if which == 'archive':
+        helpmsg = (
+            'DEPRECATED: This command is deprecated and will\n'
+            'be removed in a future release. Use dbt snapshot instead.'
+        )
+    else:
+        helpmsg = 'Execute snapshots defined in your project'
+
     sub = subparsers.add_parser(
         which,
         parents=[base_subparser],
-        help="Record changes to a mutable table over time."
-             "\nMust be configured in your dbt_project.yml.")
+        help=helpmsg)
     sub.add_argument(
         '--threads',
         type=int,
@@ -619,7 +626,7 @@ def _build_run_operation_subparser(subparsers, base_subparser):
 
 def parse_args(args):
     p = DBTArgumentParser(
-        prog='dbt: data build tool',
+        prog='dbt',
         formatter_class=argparse.RawTextHelpFormatter,
         description="An ELT tool for managing your SQL "
         "transformations and data models."
