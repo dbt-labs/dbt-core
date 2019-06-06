@@ -873,7 +873,7 @@ def _build_run_operation_subparser(subparsers, base_subparser):
 
 def parse_args(args, cls=DBTArgumentParser):
     p = cls(
-        prog='dbt',
+        prog="dbt",
         description="""
         An ELT tool for managing your SQL transformations and data models.
         For more documentation on these commands, visit: docs.getdbt.com
