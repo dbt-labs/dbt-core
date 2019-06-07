@@ -236,11 +236,16 @@
                                    | rejectattr('name', 'equalto', 'DBT_UNIQUE_KEY')
                                    | list %}
 
+      {% set quoted_source_columns = [] %}
+      {% for column in source_columns %}
+        {% do quoted_source_columns.append(adapter.quote(column.name)) %}
+      {% endfor %}
+
       {% call statement('main') %}
           {{ snapshot_merge_sql(
                 target = target_relation,
                 source = staging_table,
-                insert_cols = source_columns
+                insert_cols = quoted_source_columns
              )
           }}
       {% endcall %}

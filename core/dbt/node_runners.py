@@ -486,11 +486,7 @@ class TestRunner(CompileRunner):
 
 class SnapshotRunner(ModelRunner):
     def describe_node(self):
-        cfg = self.node.get('config', {})
-        return (
-            "snapshot {name} --> {target_database}.{target_schema}.{name}"
-            .format(name=self.node.name, **cfg)
-        )
+        return "snapshot {}".format(self.node.name)
 
     def print_result_line(self, result):
         dbt.ui.printer.print_snapshot_result_line(result, self.node_index,
