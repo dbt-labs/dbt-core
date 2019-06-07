@@ -91,7 +91,7 @@ PROJECT_CONTRACT = {
         'target-path': {
             'type': 'string',
         },
-        'archive-paths': {
+        'snapshot-paths': {
             'type': 'array',
             'items': {'type': 'string'},
         },

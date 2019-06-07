@@ -185,10 +185,10 @@ def print_model_result_line(result, description, index, total):
         result.execution_time)
 
 
-def print_archive_result_line(result, index, total):
+def print_snapshot_result_line(result, index, total):
     model = result.node
 
-    info, status = get_printable_result(result, 'archived', 'archiving')
+    info, status = get_printable_result(result, 'snapshotted', 'snapshotting')
     cfg = model.get('config', {})
 
     msg = "{info} {name} --> {target_database}.{target_schema}.{name}".format(

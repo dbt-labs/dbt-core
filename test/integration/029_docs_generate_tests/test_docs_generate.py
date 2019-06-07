@@ -1282,7 +1282,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': docs_path,
                     'package_name': 'test',
                     'path': 'docs.md',
-                    'resource_type': 'documentation',
+                    'resource_type': 'docs',
                     'root_path': os.getcwd(),
                     'unique_id': 'test.ephemeral_summary'
                 },
@@ -1293,7 +1293,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': docs_path,
                     'package_name': 'test',
                     'path': 'docs.md',
-                    'resource_type': 'documentation',
+                    'resource_type': 'docs',
                     'root_path': os.getcwd(),
                     'unique_id': 'test.source_info',
                 },
@@ -1304,7 +1304,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': docs_path,
                     'package_name': 'test',
                     'path': 'docs.md',
-                    'resource_type': 'documentation',
+                    'resource_type': 'docs',
                     'root_path': os.getcwd(),
                     'unique_id': 'test.summary_count'
                 },
@@ -1315,7 +1315,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': docs_path,
                     'package_name': 'test',
                     'path': 'docs.md',
-                    'resource_type': 'documentation',
+                    'resource_type': 'docs',
                     'root_path': os.getcwd(),
                     'unique_id': 'test.summary_first_name'
                 },
@@ -1326,7 +1326,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': docs_path,
                     'package_name': 'test',
                     'path': 'docs.md',
-                    'resource_type': 'documentation',
+                    'resource_type': 'docs',
                     'root_path': os.getcwd(),
                     'unique_id': 'test.table_info'
                 },
@@ -1340,7 +1340,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': docs_path,
                     'package_name': 'test',
                     'path': 'docs.md',
-                    'resource_type': 'documentation',
+                    'resource_type': 'docs',
                     'root_path': os.getcwd(),
                     'unique_id': 'test.view_summary'
                 },
