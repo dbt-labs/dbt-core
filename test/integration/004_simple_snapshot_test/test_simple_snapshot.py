@@ -425,7 +425,7 @@ class TestCheckColsBigquery(TestSimpleSnapshotFilesBigquery):
         # this should fail because `check="all"` will try to compare the nested field
         self.run_dbt(['snapshot'], expect_pass=False)
 
-        self.run_dbt(["snapshot", '-m', 'snapshot_actual'])
+        self.run_dbt(["snapshot", '--select', 'snapshot_actual'])
 
         # A more thorough test would assert that snapshotted == expected, but BigQuery does not support the
         # "EXCEPT DISTINCT" operator on nested fields! Instead, just check that schemas are congruent.
