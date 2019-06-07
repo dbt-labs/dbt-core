@@ -2,7 +2,7 @@
 -- update records 11 - 21. Change email and updated_at field
 update {schema}.seed set
     updated_at = updated_at + interval '1 hour',
-    email      = 'new_' || email
+    email      =  case when id = 20 then 'pfoxj@creativecommons.org' else 'new_' || email end
 where id >= 10 and id <= 20;
 
 

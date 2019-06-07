@@ -46,7 +46,7 @@ insert into {database}.{schema}.seed (id, first_name, last_name, email, gender, 
 (17, 'Gary', 'Bishop', 'gbishopg@plala.or.jp', 'Male', '161.108.182.13', '2016-08-29 19:35:20'),
 (18, 'Anna', 'Riley', 'arileyh@nasa.gov', 'Female', '253.31.108.22', '2015-12-11 04:34:27'),
 (19, 'Sarah', 'Knight', 'sknighti@foxnews.com', 'Female', '222.220.3.177', '2016-09-26 00:49:06'),
-(20, 'Phyllis', 'Fox', 'pfoxj@creativecommons.org', 'Female', '163.191.232.95', '2016-08-21 10:35:19');
+(20, 'Phyllis', 'Fox', null, 'Female', '163.191.232.95', '2016-08-21 10:35:19');
 
 
 -- populate snapshot table
