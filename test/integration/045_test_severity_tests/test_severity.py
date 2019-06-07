@@ -13,6 +13,7 @@ class TestSeverity(DBTIntegrationTest):
     def project_config(self):
         return {
             'data-paths': ['data'],
+            'test-paths': ['tests'],
         }
 
     def run_dbt_with_vars(self, cmd, strict_var, *args, **kwargs):
@@ -24,7 +25,7 @@ class TestSeverity(DBTIntegrationTest):
     def test_postgres_severity_warnings(self):
         self.run_dbt_with_vars(['seed'], 'false', strict=False)
         self.run_dbt_with_vars(['run'], 'false', strict=False)
-        results = self.run_dbt_with_vars(['test'], 'false', strict=False)
+        results = self.run_dbt_with_vars(['test', '--schema'], 'false', strict=False)
         self.assertEqual(len(results), 2)
         self.assertFalse(results[0].fail)
         self.assertEqual(results[0].status, 2)
@@ -35,7 +36,7 @@ class TestSeverity(DBTIntegrationTest):
     def test_postgres_severity_rendered_errors(self):
         self.run_dbt_with_vars(['seed'], 'false', strict=False)
         self.run_dbt_with_vars(['run'], 'false', strict=False)
-        results = self.run_dbt_with_vars(['test'], 'true', strict=False, expect_pass=False)
+        results = self.run_dbt_with_vars(['test', '--schema'], 'true', strict=False, expect_pass=False)
         self.assertEqual(len(results), 2)
         self.assertTrue(results[0].fail)
         self.assertEqual(results[0].status, 2)
@@ -46,10 +47,36 @@ class TestSeverity(DBTIntegrationTest):
     def test_postgres_severity_warnings_strict(self):
         self.run_dbt_with_vars(['seed'], 'false', strict=False)
         self.run_dbt_with_vars(['run'], 'false', strict=False)
-        results = self.run_dbt_with_vars(['test'], 'false', expect_pass=False)
+        results = self.run_dbt_with_vars(['test', '--schema'], 'false', expect_pass=False)
         self.assertEqual(len(results), 2)
         self.assertTrue(results[0].fail)
         self.assertEqual(results[0].status, 2)
         self.assertTrue(results[1].fail)
         self.assertEqual(results[1].status, 2)
 
+    @use_profile('postgres')
+    def test_postgres_data_severity_warnings(self):
+        self.run_dbt_with_vars(['seed'], 'false', strict=False)
+        self.run_dbt_with_vars(['run'], 'false', strict=False)
+        results = self.run_dbt_with_vars(['test', '--data'], 'false', strict=False)
+        self.assertEqual(len(results), 1)
+        self.assertFalse(results[0].fail)
+        self.assertEqual(results[0].status, 2)
+
+    @use_profile('postgres')
+    def test_postgres_data_severity_rendered_errors(self):
+        self.run_dbt_with_vars(['seed'], 'false', strict=False)
+        self.run_dbt_with_vars(['run'], 'false', strict=False)
+        results = self.run_dbt_with_vars(['test', '--data'], 'true', strict=False, expect_pass=False)
+        self.assertEqual(len(results), 1)
+        self.assertTrue(results[0].fail)
+        self.assertEqual(results[0].status, 2)
+
+    @use_profile('postgres')
+    def test_postgres_data_severity_warnings_strict(self):
+        self.run_dbt_with_vars(['seed'], 'false', strict=False)
+        self.run_dbt_with_vars(['run'], 'false', strict=False)
+        results = self.run_dbt_with_vars(['test', '--data'], 'false', expect_pass=False)
+        self.assertEqual(len(results), 1)
+        self.assertTrue(results[0].fail)
+        self.assertEqual(results[0].status, 2)

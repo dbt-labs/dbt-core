@@ -85,7 +85,8 @@ CONFIG_CONTRACT = {
             ]
         },
         'severity': {
-            'enum': ['ERROR', 'WARN'],
+            'type': 'string',
+            'pattern': '([eE][rR][rR][oO][rR]|[wW][aA][rR][nN])',
         },
     },
     'required': [
