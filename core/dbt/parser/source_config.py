@@ -66,8 +66,8 @@ class SourceConfig(object):
 
         if self.node_type == NodeType.Seed:
             defaults['materialized'] = 'seed'
-        elif self.node_type == NodeType.Archive:
-            defaults['materialized'] = 'archive'
+        elif self.node_type == NodeType.Snapshot:
+            defaults['materialized'] = 'snapshot'
 
         if self.node_type == NodeType.Test:
             defaults['severity'] = 'ERROR'
@@ -155,7 +155,7 @@ class SourceConfig(object):
 
         if self.node_type == NodeType.Seed:
             model_configs = runtime_config.seeds
-        elif self.node_type == NodeType.Archive:
+        elif self.node_type == NodeType.Snapshot:
             model_configs = {}
         else:
             model_configs = runtime_config.models

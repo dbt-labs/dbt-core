@@ -444,7 +444,7 @@ class ParsedNode(APIObject):
         self._contents['config'] = value
 
 
-ARCHIVE_CONFIG_CONTRACT = {
+SNAPSHOT_CONFIG_CONTRACT = {
     'properties': {
         'target_database': {
             'type': 'string',
@@ -500,21 +500,21 @@ ARCHIVE_CONFIG_CONTRACT = {
 }
 
 
-PARSED_ARCHIVE_NODE_CONTRACT = deep_merge(
+PARSED_SNAPSHOT_NODE_CONTRACT = deep_merge(
     PARSED_NODE_CONTRACT,
     {
         'properties': {
-            'config': ARCHIVE_CONFIG_CONTRACT,
+            'config': SNAPSHOT_CONFIG_CONTRACT,
             'resource_type': {
-                'enum': [NodeType.Archive],
+                'enum': [NodeType.Snapshot],
             },
         },
     }
 )
 
 
-class ParsedArchiveNode(ParsedNode):
-    SCHEMA = PARSED_ARCHIVE_NODE_CONTRACT
+class ParsedSnapshotNode(ParsedNode):
+    SCHEMA = PARSED_SNAPSHOT_NODE_CONTRACT
 
 
 # The parsed node update is only the 'patch', not the test. The test became a

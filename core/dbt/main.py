@@ -17,7 +17,7 @@ import dbt.task.deps as deps_task
 import dbt.task.init as init_task
 import dbt.task.seed as seed_task
 import dbt.task.test as test_task
-import dbt.task.archive as archive_task
+import dbt.task.snapshot as snapshot_task
 import dbt.task.generate as generate_task
 import dbt.task.serve as serve_task
 import dbt.task.freshness as freshness_task
@@ -318,22 +318,29 @@ def _build_deps_subparser(subparsers, base_subparser):
     return sub
 
 
-def _build_archive_subparser(subparsers, base_subparser):
+def _build_snapshot_subparser(subparsers, base_subparser, which='snapshot'):
+    if which == 'archive':
+        helpmsg = (
+            'DEPRECATED: This command is deprecated and will\n'
+            'be removed in a future release. Use dbt snapshot instead.'
+        )
+    else:
+        helpmsg = 'Execute snapshots defined in your project'
+
     sub = subparsers.add_parser(
-        'archive',
+        which,
         parents=[base_subparser],
-        help="Record changes to a mutable table over time."
-             "\nMust be configured in your dbt_project.yml.")
+        help=helpmsg)
     sub.add_argument(
         '--threads',
         type=int,
         required=False,
         help="""
-        Specify number of threads to use while archiving tables. Overrides
+        Specify number of threads to use while snapshotting tables. Overrides
         settings in profiles.yml.
         """
     )
-    sub.set_defaults(cls=archive_task.ArchiveTask, which='archive')
+    sub.set_defaults(cls=snapshot_task.SnapshotTask, which=which)
     return sub
 
 
@@ -587,9 +594,39 @@ def _build_list_subparser(subparsers, base_subparser):
     return sub
 
 
+def _build_run_operation_subparser(subparsers, base_subparser):
+    sub = subparsers.add_parser(
+        'run-operation',
+        parents=[base_subparser],
+        help="""
+            (beta) Run the named macro with any supplied arguments. This
+            subcommand is unstable and subject to change in a future release
+            of dbt. Please use it with caution"""
+    )
+    sub.add_argument(
+        '--macro',
+        required=True,
+        help="""
+            Specify the macro to invoke. dbt will call this macro with the
+            supplied arguments and then exit"""
+    )
+    sub.add_argument(
+        '--args',
+        type=str,
+        default='{}',
+        help="""
+            Supply arguments to the macro. This dictionary will be mapped
+            to the keyword arguments defined in the selected macro. This
+            argument should be a YAML string, eg. '{my_variable: my_value}'"""
+    )
+    sub.set_defaults(cls=run_operation_task.RunOperationTask,
+                     which='run-operation')
+    return sub
+
+
 def parse_args(args):
     p = DBTArgumentParser(
-        prog='dbt: data build tool',
+        prog='dbt',
         formatter_class=argparse.RawTextHelpFormatter,
         description="An ELT tool for managing your SQL "
         "transformations and data models."
@@ -673,7 +710,8 @@ def parse_args(args):
     _build_deps_subparser(subs, base_subparser)
     _build_list_subparser(subs, base_subparser)
 
-    archive_sub = _build_archive_subparser(subs, base_subparser)
+    snapshot_sub = _build_snapshot_subparser(subs, base_subparser)
+    archive_sub = _build_snapshot_subparser(subs, base_subparser, 'archive')
     rpc_sub = _build_rpc_subparser(subs, base_subparser)
     run_sub = _build_run_subparser(subs, base_subparser)
     compile_sub = _build_compile_subparser(subs, base_subparser)
@@ -684,40 +722,14 @@ def parse_args(args):
                           rpc_sub)
     # --models, --exclude
     _add_selection_arguments(run_sub, compile_sub, generate_sub, test_sub,
-                             archive_sub)
+                             archive_sub, snapshot_sub)
     # --full-refresh
     _add_table_mutability_arguments(run_sub, compile_sub)
 
     _build_seed_subparser(subs, base_subparser)
     _build_docs_serve_subparser(docs_subs, base_subparser)
     _build_source_snapshot_freshness_subparser(source_subs, base_subparser)
-
-    sub = subs.add_parser(
-        'run-operation',
-        parents=[base_subparser],
-        help="""
-            (beta) Run the named macro with any supplied arguments. This
-            subcommand is unstable and subject to change in a future release
-            of dbt. Please use it with caution"""
-    )
-    sub.add_argument(
-        '--macro',
-        required=True,
-        help="""
-            Specify the macro to invoke. dbt will call this macro with the
-            supplied arguments and then exit"""
-    )
-    sub.add_argument(
-        '--args',
-        type=str,
-        default='{}',
-        help="""
-            Supply arguments to the macro. This dictionary will be mapped
-            to the keyword arguments defined in the selected macro. This
-            argument should be a YAML string, eg. '{my_variable: my_value}'"""
-    )
-    sub.set_defaults(cls=run_operation_task.RunOperationTask,
-                     which='run-operation')
+    _build_run_operation_subparser(subs, base_subparser)
 
     if len(args) == 0:
         p.print_help()

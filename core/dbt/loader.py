@@ -11,7 +11,7 @@ from dbt.utils import timestring
 
 from dbt.parser import MacroParser, ModelParser, SeedParser, AnalysisParser, \
     DocumentationParser, DataTestParser, HookParser, SchemaParser, \
-    ParserUtils, ArchiveBlockParser
+    ParserUtils, SnapshotParser
 
 from dbt.contracts.project import ProjectList
 
@@ -75,8 +75,8 @@ class GraphLoader(object):
 
     def _load_nodes(self):
         self._load_sql_nodes(ModelParser, NodeType.Model, 'source_paths')
-        self._load_sql_nodes(ArchiveBlockParser, NodeType.Archive,
-                             'archive_paths')
+        self._load_sql_nodes(SnapshotParser, NodeType.Snapshot,
+                             'snapshot_paths')
         self._load_sql_nodes(AnalysisParser, NodeType.Analysis,
                              'analysis_paths')
         self._load_sql_nodes(DataTestParser, NodeType.Test, 'test_paths',

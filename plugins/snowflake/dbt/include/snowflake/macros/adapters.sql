@@ -79,7 +79,7 @@
   convert_timezone('UTC', current_timestamp())
 {%- endmacro %}
 
-{% macro snowflake__archive_get_time() -%}
+{% macro snowflake__snapshot_get_time() -%}
   to_timestamp_ntz({{ current_timestamp() }})
 {%- endmacro %}
 

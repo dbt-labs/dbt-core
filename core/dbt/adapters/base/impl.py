@@ -543,7 +543,7 @@ class BaseAdapter(object):
         ]
 
     @available.parse_none
-    def valid_archive_target(self, relation):
+    def valid_snapshot_target(self, relation):
         """Ensure that the target relation is valid, by making sure it has the
         expected columns.
 
@@ -553,7 +553,7 @@ class BaseAdapter(object):
         """
         if not isinstance(relation, self.Relation):
             dbt.exceptions.invalid_type_error(
-                method_name='is_existing_old_style_archive',
+                method_name='valid_snapshot_target',
                 arg_name='relation',
                 got_value=relation,
                 expected_type=self.Relation)
@@ -573,13 +573,13 @@ class BaseAdapter(object):
         if missing:
             if extra:
                 msg = (
-                    'Archive target has ("{}") but not ("{}") - is it an '
+                    'Snapshot target has ("{}") but not ("{}") - is it an '
                     'unmigrated previous version archive?'
                     .format('", "'.join(extra), '", "'.join(missing))
                 )
             else:
                 msg = (
-                    'Archive target is not an archive table (missing "{}")'
+                    'Snapshot target is not a snapshot table (missing "{}")'
                     .format('", "'.join(missing))
                 )
             dbt.exceptions.raise_compiler_error(msg)
