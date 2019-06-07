@@ -177,6 +177,7 @@ class ParserUtils(object):
             target_model = None
             target_model_name = None
             target_model_package = None
+
             if len(ref) == 1:
                 target_model_name = ref[0]
             elif len(ref) == 2:
