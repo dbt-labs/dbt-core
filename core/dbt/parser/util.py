@@ -173,11 +173,11 @@ class ParserUtils(object):
     @classmethod
     def process_refs_for_node(cls, manifest, current_project, node):
         """Given a manifest and a node in that manifest, process its refs"""
-        target_model = None
-        target_model_name = None
-        target_model_package = None
-
         for ref in node.refs:
+            target_model = None
+            target_model_name = None
+            target_model_package = None
+
             if len(ref) == 1:
                 target_model_name = ref[0]
             elif len(ref) == 2:
