@@ -9,7 +9,7 @@ class TestChangingRelationType(DBTIntegrationTest):
 
     @staticmethod
     def dir(path):
-        return "test/integration/035_changing_relation_type_test/" + path.lstrip("/")
+        return path.lstrip("/")
 
     @property
     def models(self):

@@ -44,7 +44,7 @@ MODEL_POST_HOOK = """
 class TestBigqueryPrePostModelHooks(DBTIntegrationTest):
     def setUp(self):
         DBTIntegrationTest.setUp(self)
-        self.run_sql_file("test/integration/014_hook_tests/seed_model_bigquery.sql")
+        self.run_sql_file("seed_model_bigquery.sql")
 
         self.fields = [
             'state',
@@ -69,7 +69,7 @@ class TestBigqueryPrePostModelHooks(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            'macro-paths': ['test/integration/014_hook_tests/macros'],
+            'macro-paths': ['macros'],
             'models': {
                 'test': {
                     'pre-hook': [MODEL_PRE_HOOK],
@@ -81,7 +81,7 @@ class TestBigqueryPrePostModelHooks(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/014_hook_tests/models"
+        return "models"
 
     def get_ctx_vars(self, state):
         field_list = ", ".join(self.fields)
@@ -120,12 +120,12 @@ class TestBigqueryPrePostModelHooksOnSeeds(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/014_hook_tests/seed-models-bq"
+        return "seed-models-bq"
 
     @property
     def project_config(self):
         return {
-            'data-paths': ['test/integration/014_hook_tests/data'],
+            'data-paths': ['data'],
             'models': {},
             'seeds': {
                 'post-hook': [

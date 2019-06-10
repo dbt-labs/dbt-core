@@ -4,6 +4,7 @@ import os
 import shutil
 import yaml
 import random
+import tempfile
 import time
 import json
 from datetime import datetime
@@ -27,13 +28,6 @@ import logging
 import warnings
 
 
-DBT_CONFIG_DIR = os.path.abspath(
-    os.path.expanduser(os.environ.get("DBT_CONFIG_DIR", '/home/dbt_test_user/.dbt'))
-)
-
-DBT_PROFILES = os.path.join(DBT_CONFIG_DIR, 'profiles.yml')
-
-
 class FakeArgs(object):
     def __init__(self):
         self.threads = 1
@@ -49,7 +43,7 @@ class TestArgs(object):
     def __init__(self, kwargs):
         self.which = 'run'
         self.single_threaded = False
-        self.profiles_dir = DBT_CONFIG_DIR
+        self.profiles_dir = None
         self.__dict__.update(kwargs)
 
 
@@ -67,6 +61,21 @@ def _profile_from_test_name(test_name):
         'could not find adapter name in test name {}'.format(test_name)
     )
     return 'postgres'
+
+
+def _pytest_get_test_root():
+    test_path = os.environ['PYTEST_CURRENT_TEST'].split('::')[0]
+    relative_to = os.getcwd()
+    head = os.path.relpath(test_path, relative_to)
+
+    path_parts = []
+    while head:
+        head, tail = os.path.split(head)
+        path_parts.append(tail)
+    path_parts.reverse()
+    # dbt tests are all of the form 'test/integration/XXX_suite_name'
+    target = os.path.join(*path_parts[:3])
+    return os.path.join(relative_to, target)
 
 
 class DBTIntegrationTest(unittest.TestCase):
@@ -260,13 +269,27 @@ class DBTIntegrationTest(unittest.TestCase):
         test_name = self.id().split('.')[-1]
         return _profile_from_test_name(test_name)
 
+    def _symlink_test_folders(self):
+        for entry in os.listdir(self.test_original_source_path):
+            src = os.path.join(self.test_original_source_path, entry)
+            tst = os.path.join(self.test_root_dir, entry)
+            if os.path.isdir(src) or src.endswith('.sql'):
+                # symlink all sql files and all directories.
+                os.symlink(src, tst)
+
     def setUp(self):
+        # before we go anywhere, collect the initial path info
+        self.initial_dir = os.getcwd()
+        self.test_original_source_path = _pytest_get_test_root()
+        self.test_root_dir = tempfile.mkdtemp(prefix='dbt-int-test-')
+        os.chdir(self.test_root_dir)
+        self._symlink_test_folders()
+
         self._created_schemas = set()
         flags.reset()
         template_cache.clear()
         # disable capturing warnings
         logging.captureWarnings(False)
-        self._clean_files()
 
         self.use_profile(self._pick_profile())
         self.use_default_project()
@@ -300,10 +323,11 @@ class DBTIntegrationTest(unittest.TestCase):
         profile_config.update(default_profile_config)
         profile_config.update(self.profile_config)
 
-        if not os.path.exists(DBT_CONFIG_DIR):
-            os.makedirs(DBT_CONFIG_DIR)
+        if not os.path.exists(self.test_root_dir):
+            os.makedirs(self.test_root_dir)
 
-        with open(DBT_PROFILES, 'w') as f:
+        profiles_path = os.path.join(self.test_root_dir, 'profiles.yml')
+        with open(profiles_path, 'w') as f:
             yaml.safe_dump(profile_config, f, default_flow_style=True)
         self._profile_config = profile_config
 
@@ -319,7 +343,7 @@ class DBTIntegrationTest(unittest.TestCase):
         # we don't look into an incomplete transaction
         kwargs = {
             'profile': None,
-            'profile_dir': DBT_CONFIG_DIR,
+            'profiles_dir': self.test_root_dir,
             'target': None,
         }
 
@@ -337,23 +361,7 @@ class DBTIntegrationTest(unittest.TestCase):
     def quote_as_configured(self, value, quote_key):
         return self.adapter.quote_as_configured(value, quote_key)
 
-    def _clean_files(self):
-        if os.path.exists(DBT_PROFILES):
-            os.remove(DBT_PROFILES)
-        if os.path.exists('dbt_project.yml'):
-            os.remove("dbt_project.yml")
-        if os.path.exists('packages.yml'):
-            os.remove('packages.yml')
-        # quick fix for windows bug that prevents us from deleting dbt_modules
-        try:
-            if os.path.exists('dbt_modules'):
-                shutil.rmtree('dbt_modules')
-        except:
-            os.rename("dbt_modules", "dbt_modules-{}".format(time.time()))
-
     def tearDown(self):
-        self._clean_files()
-
         # get any current run adapter and clean up its connections before we
         # reset them. It'll probably be different from ours because
         # handle_and_check() calls reset_adapters().
@@ -367,6 +375,12 @@ class DBTIntegrationTest(unittest.TestCase):
 
         self.adapter.cleanup_connections()
         reset_adapters()
+        os.chdir(self.initial_dir)
+        try:
+            shutil.rmtree(self.test_root_dir)
+        except EnvironmentError:
+            logger.exception('Could not clean up after test - {} not removable'
+                             .format(self.test_root_dir))
 
     def _get_schema_fqn(self, database, schema):
         schema_fqn = self.quote_as_configured(schema, 'schema')
@@ -441,7 +455,16 @@ class DBTIntegrationTest(unittest.TestCase):
     def profile_config(self):
         return {}
 
-    def run_dbt(self, args=None, expect_pass=True, strict=True, parser=True):
+    def run_dbt(self, args=None, expect_pass=True, strict=True, parser=True, profiles_dir=True):
+        res, success = self.run_dbt_and_check(args=args, strict=strict, parser=parser, profiles_dir=profiles_dir)
+
+        self.assertEqual(
+            success, expect_pass,
+            "dbt exit state did not match expected")
+
+        return res
+
+    def run_dbt_and_check(self, args=None, strict=True, parser=False, profiles_dir=True):
         if args is None:
             args = ["run"]
 
@@ -455,24 +478,17 @@ class DBTIntegrationTest(unittest.TestCase):
             final_args.append('--single-threaded')
 
         final_args.extend(args)
+
+        if profiles_dir:
+            final_args.extend(['--profiles-dir', self.test_root_dir])
         final_args.append('--log-cache-events')
 
         logger.info("Invoking dbt with {}".format(final_args))
-
-        res, success = dbt.handle_and_check(final_args)
-        self.assertEqual(
-            success, expect_pass,
-            "dbt exit state did not match expected")
-
-        return res
-
-    def run_dbt_and_check(self, args=None):
         if args is None:
             args = ["run"]
 
-        args = ["--strict"] + args
         logger.info("Invoking dbt with {}".format(args))
-        return dbt.handle_and_check(args)
+        return dbt.handle_and_check(final_args)
 
     def run_sql_file(self, path, kwargs=None):
         with open(path, 'r') as f:
@@ -1059,6 +1075,7 @@ class DBTIntegrationTest(unittest.TestCase):
                 parsed,
                 end.strftime(datefmt))
         )
+
 
 def use_profile(profile_name):
     """A decorator to declare a test method as using a particular profile.

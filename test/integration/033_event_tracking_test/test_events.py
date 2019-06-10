@@ -28,7 +28,7 @@ class TestEventTracking(DBTIntegrationTest):
 
     @staticmethod
     def dir(path):
-        return "test/integration/033_event_tracking_test/" + path.lstrip("/")
+        return path.lstrip("/")
 
     @property
     def models(self):
@@ -561,7 +561,7 @@ class TestEventTrackingSnapshot(TestEventTracking):
     @property
     def project_config(self):
         return {
-            "snapshot-paths": ['test/integration/033_event_tracking_test/snapshots']
+            "snapshot-paths": ['snapshots']
         }
 
     @use_profile("postgres")

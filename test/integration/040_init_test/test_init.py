@@ -22,7 +22,7 @@ class TestInit(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/040_init_test/models"
+        return "models"
 
     @use_profile('postgres')
     def test_postgres_init_task(self):

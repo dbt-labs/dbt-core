@@ -32,7 +32,7 @@ class BaseTestConcurrentTransaction(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            "macro-paths": ["test/integration/032_concurrent_transaction_test/macros"],
+            "macro-paths": ["macros"],
             "on-run-start": [
                 "{{ create_udfs() }}",
             ],
@@ -102,7 +102,7 @@ class BaseTestConcurrentTransaction(DBTIntegrationTest):
 class TableTestConcurrentTransaction(BaseTestConcurrentTransaction):
     @property
     def models(self):
-        return "test/integration/032_concurrent_transaction_test/models-table"
+        return "models-table"
 
     @use_profile("redshift")
     def test__redshift__concurrent_transaction_table(self):
@@ -112,7 +112,7 @@ class TableTestConcurrentTransaction(BaseTestConcurrentTransaction):
 class ViewTestConcurrentTransaction(BaseTestConcurrentTransaction):
     @property
     def models(self):
-        return "test/integration/032_concurrent_transaction_test/models-view"
+        return "models-view"
 
     @use_profile("redshift")
     def test__redshift__concurrent_transaction_view(self):
@@ -122,7 +122,7 @@ class ViewTestConcurrentTransaction(BaseTestConcurrentTransaction):
 class IncrementalTestConcurrentTransaction(BaseTestConcurrentTransaction):
     @property
     def models(self):
-        return "test/integration/032_concurrent_transaction_test/models-incremental"
+        return "models-incremental"
 
     @use_profile("redshift")
     def test__redshift__concurrent_transaction_incremental(self):

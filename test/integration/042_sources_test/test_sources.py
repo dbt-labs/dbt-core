@@ -24,12 +24,12 @@ class BaseSourcesTest(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/042_sources_test/models"
+        return "models"
 
     @property
     def project_config(self):
         return {
-            'data-paths': ['test/integration/042_sources_test/data'],
+            'data-paths': ['data'],
             'quoting': {'database': True, 'schema': True, 'identifier': True},
         }
 
@@ -266,7 +266,7 @@ class TestSourceFreshness(BaseSourcesTest):
 class TestSourceFreshnessErrors(BaseSourcesTest):
     @property
     def models(self):
-        return "test/integration/042_sources_test/error_models"
+        return "error_models"
 
     @use_profile('postgres')
     def test_postgres_error(self):
@@ -283,7 +283,7 @@ class TestSourceFreshnessErrors(BaseSourcesTest):
 class TestMalformedSources(BaseSourcesTest):
     @property
     def models(self):
-        return "test/integration/042_sources_test/malformed_models"
+        return "malformed_models"
 
     @use_profile('postgres')
     def test_postgres_malformed_schema_nonstrict_will_not_break_run(self):
@@ -294,12 +294,14 @@ class TestMalformedSources(BaseSourcesTest):
         with self.assertRaises(CompilationException):
             self.run_dbt_with_vars(['run'], strict=True)
 
+
 class ServerProcess(multiprocessing.Process):
-    def __init__(self, cli_vars=None):
+    def __init__(self, profiles_dir, cli_vars=None):
         self.port = 22991
         handle_and_check_args = [
             '--strict', 'rpc', '--log-cache-events',
             '--port', str(self.port),
+            '--profiles-dir', profiles_dir
         ]
         if cli_vars:
             handle_and_check_args.extend(['--vars', cli_vars])
@@ -369,7 +371,8 @@ class TestRPCServer(BaseSourcesTest):
     def setUp(self):
         super(TestRPCServer, self).setUp()
         self._server = ServerProcess(
-            cli_vars='{{test_run_schema: {}}}'.format(self.unique_schema())
+            cli_vars='{{test_run_schema: {}}}'.format(self.unique_schema()),
+            profiles_dir=self.test_root_dir
         )
         self._server.start()
 
@@ -380,9 +383,9 @@ class TestRPCServer(BaseSourcesTest):
     @property
     def project_config(self):
         return {
-            'data-paths': ['test/integration/042_sources_test/data'],
+            'data-paths': ['data'],
             'quoting': {'database': True, 'schema': True, 'identifier': True},
-            'macro-paths': ['test/integration/042_sources_test/macros'],
+            'macro-paths': ['macros'],
         }
 
     def build_query(self, method, kwargs, sql=None, test_request_id=1,

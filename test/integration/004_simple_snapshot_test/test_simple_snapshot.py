@@ -11,7 +11,7 @@ class TestSimpleSnapshotFiles(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/004_simple_snapshot_test/models"
+        return "models"
 
     def run_snapshot(self):
         return self.run_dbt(['snapshot'])
@@ -19,8 +19,8 @@ class TestSimpleSnapshotFiles(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            "data-paths": ['test/integration/004_simple_snapshot_test/data'],
-            "snapshot-paths": ['test/integration/004_simple_snapshot_test/test-snapshots-pg'],
+            "data-paths": ['data'],
+            "snapshot-paths": ['test-snapshots-pg'],
         }
 
     @use_profile('postgres')
@@ -31,9 +31,9 @@ class TestSimpleSnapshotFiles(DBTIntegrationTest):
 
     def dbt_run_seed_snapshot(self):
         if self.adapter_type == 'postgres':
-            self.run_sql_file('test/integration/004_simple_snapshot_test/seed_pg.sql')
+            self.run_sql_file('seed_pg.sql')
         else:
-            self.run_sql_file('test/integration/004_simple_snapshot_test/seed.sql')
+            self.run_sql_file('seed.sql')
 
         results = self.run_snapshot()
         self.assertEqual(len(results),  self.NUM_SNAPSHOT_MODELS)
@@ -54,8 +54,8 @@ class TestSimpleSnapshotFiles(DBTIntegrationTest):
 
         self.assert_expected()
 
-        self.run_sql_file("test/integration/004_simple_snapshot_test/invalidate_postgres.sql")
-        self.run_sql_file("test/integration/004_simple_snapshot_test/update.sql")
+        self.run_sql_file("invalidate_postgres.sql")
+        self.run_sql_file("update.sql")
 
         results = self.run_snapshot()
         self.assertEqual(len(results),  self.NUM_SNAPSHOT_MODELS)
@@ -68,8 +68,8 @@ class TestSimpleSnapshotFiles(DBTIntegrationTest):
 
         self.assert_expected()
 
-        self.run_sql_file("test/integration/004_simple_snapshot_test/invalidate_snowflake.sql")
-        self.run_sql_file("test/integration/004_simple_snapshot_test/update.sql")
+        self.run_sql_file("invalidate_snowflake.sql")
+        self.run_sql_file("update.sql")
 
         results = self.run_snapshot()
         self.assertEqual(len(results),  self.NUM_SNAPSHOT_MODELS)
@@ -82,8 +82,8 @@ class TestSimpleSnapshotFiles(DBTIntegrationTest):
 
         self.assert_expected()
 
-        self.run_sql_file("test/integration/004_simple_snapshot_test/invalidate_postgres.sql")
-        self.run_sql_file("test/integration/004_simple_snapshot_test/update.sql")
+        self.run_sql_file("invalidate_postgres.sql")
+        self.run_sql_file("update.sql")
 
         results = self.run_snapshot()
         self.assertEqual(len(results),  self.NUM_SNAPSHOT_MODELS)
@@ -107,19 +107,19 @@ class TestSimpleSnapshotFileSelects(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/004_simple_snapshot_test/models"
+        return "models"
 
     @property
     def project_config(self):
         return {
-            "data-paths": ['test/integration/004_simple_snapshot_test/data'],
-            "snapshot-paths": ['test/integration/004_simple_snapshot_test/test-snapshots-select',
-                              'test/integration/004_simple_snapshot_test/test-snapshots-pg'],
+            "data-paths": ['data'],
+            "snapshot-paths": ['test-snapshots-select',
+                              'test-snapshots-pg'],
         }
 
     @use_profile('postgres')
     def test__postgres__select_snapshots(self):
-        self.run_sql_file('test/integration/004_simple_snapshot_test/seed_pg.sql')
+        self.run_sql_file('seed_pg.sql')
 
         results = self.run_dbt(['snapshot'])
         self.assertEqual(len(results),  4)
@@ -128,8 +128,8 @@ class TestSimpleSnapshotFileSelects(DBTIntegrationTest):
         self.assertTablesEqual('snapshot_kelly', 'snapshot_kelly_expected')
         self.assertTablesEqual('snapshot_actual', 'snapshot_expected')
 
-        self.run_sql_file("test/integration/004_simple_snapshot_test/invalidate_postgres.sql")
-        self.run_sql_file("test/integration/004_simple_snapshot_test/update.sql")
+        self.run_sql_file("invalidate_postgres.sql")
+        self.run_sql_file("update.sql")
 
         results = self.run_dbt(['snapshot'])
         self.assertEqual(len(results),  4)
@@ -140,7 +140,7 @@ class TestSimpleSnapshotFileSelects(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test__postgres_exclude_snapshots(self):
-        self.run_sql_file('test/integration/004_simple_snapshot_test/seed_pg.sql')
+        self.run_sql_file('seed_pg.sql')
         results = self.run_dbt(['snapshot', '--exclude', 'snapshot_castillo'])
         self.assertEqual(len(results),  3)
         self.assertTableDoesNotExist('snapshot_castillo')
@@ -150,7 +150,7 @@ class TestSimpleSnapshotFileSelects(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test__postgres_select_snapshots(self):
-        self.run_sql_file('test/integration/004_simple_snapshot_test/seed_pg.sql')
+        self.run_sql_file('seed_pg.sql')
         results = self.run_dbt(['snapshot', '--models', 'snapshot_castillo'])
         self.assertEqual(len(results),  1)
         self.assertTablesEqual('snapshot_castillo', 'snapshot_castillo_expected')
@@ -166,12 +166,12 @@ class TestSimpleSnapshotFilesBigquery(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/004_simple_snapshot_test/models"
+        return "models"
 
     @property
     def project_config(self):
         return {
-            "snapshot-paths": ['test/integration/004_simple_snapshot_test/test-snapshots-bq'],
+            "snapshot-paths": ['test-snapshots-bq'],
         }
 
     def assert_expected(self):
@@ -182,14 +182,14 @@ class TestSimpleSnapshotFilesBigquery(DBTIntegrationTest):
         self.use_default_project()
         self.use_profile('bigquery')
 
-        self.run_sql_file("test/integration/004_simple_snapshot_test/seed_bq.sql")
+        self.run_sql_file("seed_bq.sql")
 
         self.run_dbt(["snapshot"])
 
         self.assert_expected()
 
-        self.run_sql_file("test/integration/004_simple_snapshot_test/invalidate_bigquery.sql")
-        self.run_sql_file("test/integration/004_simple_snapshot_test/update_bq.sql")
+        self.run_sql_file("invalidate_bigquery.sql")
+        self.run_sql_file("update_bq.sql")
 
         self.run_dbt(["snapshot"])
 
@@ -201,17 +201,17 @@ class TestSimpleSnapshotFilesBigquery(DBTIntegrationTest):
         self.use_default_project()
         self.use_profile('bigquery')
 
-        self.run_sql_file("test/integration/004_simple_snapshot_test/seed_bq.sql")
+        self.run_sql_file("seed_bq.sql")
 
         self.run_dbt(["snapshot"])
 
         self.assertTablesEqual("snapshot_expected", "snapshot_actual")
 
-        self.run_sql_file("test/integration/004_simple_snapshot_test/invalidate_bigquery.sql")
-        self.run_sql_file("test/integration/004_simple_snapshot_test/update_bq.sql")
+        self.run_sql_file("invalidate_bigquery.sql")
+        self.run_sql_file("update_bq.sql")
 
         # This adds new fields to the source table, and updates the expected snapshot output accordingly
-        self.run_sql_file("test/integration/004_simple_snapshot_test/add_column_to_source_bq.sql")
+        self.run_sql_file("add_column_to_source_bq.sql")
 
         self.run_dbt(["snapshot"])
 
@@ -250,14 +250,14 @@ class TestCrossDBSnapshotFiles(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/004_simple_snapshot_test/models"
+        return "models"
 
     @property
     def project_config(self):
         if self.adapter_type == 'snowflake':
-            paths = ['test/integration/004_simple_snapshot_test/test-snapshots-pg']
+            paths = ['test-snapshots-pg']
         else:
-            paths = ['test/integration/004_simple_snapshot_test/test-snapshots-bq']
+            paths = ['test-snapshots-bq']
         return {
             'snapshot-paths': paths,
         }
@@ -267,15 +267,15 @@ class TestCrossDBSnapshotFiles(DBTIntegrationTest):
 
     @use_profile('snowflake')
     def test__snowflake__cross_snapshot(self):
-        self.run_sql_file("test/integration/004_simple_snapshot_test/seed.sql")
+        self.run_sql_file("seed.sql")
 
         results = self.run_snapshot()
         self.assertEqual(len(results),  1)
 
         self.assertTablesEqual("SNAPSHOT_EXPECTED", "SNAPSHOT_ACTUAL", table_b_db=self.alternative_database)
 
-        self.run_sql_file("test/integration/004_simple_snapshot_test/invalidate_snowflake.sql")
-        self.run_sql_file("test/integration/004_simple_snapshot_test/update.sql")
+        self.run_sql_file("invalidate_snowflake.sql")
+        self.run_sql_file("update.sql")
 
         results = self.run_snapshot()
         self.assertEqual(len(results),  1)
@@ -284,14 +284,14 @@ class TestCrossDBSnapshotFiles(DBTIntegrationTest):
 
     @use_profile('bigquery')
     def test__bigquery__cross_snapshot(self):
-        self.run_sql_file("test/integration/004_simple_snapshot_test/seed_bq.sql")
+        self.run_sql_file("seed_bq.sql")
 
         self.run_snapshot()
 
         self.assertTablesEqual("snapshot_expected", "snapshot_actual", table_b_db=self.alternative_database)
 
-        self.run_sql_file("test/integration/004_simple_snapshot_test/invalidate_bigquery.sql")
-        self.run_sql_file("test/integration/004_simple_snapshot_test/update_bq.sql")
+        self.run_sql_file("invalidate_bigquery.sql")
+        self.run_sql_file("update_bq.sql")
 
         self.run_snapshot()
 
@@ -307,11 +307,11 @@ class TestCrossSchemaSnapshotFiles(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/004_simple_snapshot_test/models"
+        return "models"
 
     @property
     def project_config(self):
-        paths = ['test/integration/004_simple_snapshot_test/test-snapshots-pg']
+        paths = ['test-snapshots-pg']
         return {
             'snapshot-paths': paths,
         }
@@ -324,7 +324,7 @@ class TestCrossSchemaSnapshotFiles(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test__postgres__cross_schema_snapshot(self):
-        self.run_sql_file('test/integration/004_simple_snapshot_test/seed_pg.sql')
+        self.run_sql_file('seed_pg.sql')
 
         results = self.run_snapshot()
         self.assertEqual(len(results),  self.NUM_SNAPSHOT_MODELS)
@@ -340,12 +340,12 @@ class TestBadSnapshot(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/004_simple_snapshot_test/models"
+        return "models"
 
     @property
     def project_config(self):
         return {
-            "snapshot-paths": ['test/integration/004_simple_snapshot_test/test-snapshots-invalid'],
+            "snapshot-paths": ['test-snapshots-invalid'],
         }
 
     @use_profile('postgres')
@@ -376,8 +376,8 @@ class TestCheckCols(TestSimpleSnapshotFiles):
     @property
     def project_config(self):
         return {
-            "data-paths": ['test/integration/004_simple_snapshot_test/data'],
-            "snapshot-paths": ['test/integration/004_simple_snapshot_test/test-check-col-snapshots'],
+            "data-paths": ['data'],
+            "snapshot-paths": ['test-check-col-snapshots'],
         }
 
 
@@ -400,8 +400,8 @@ class TestCheckColsBigquery(TestSimpleSnapshotFilesBigquery):
     @property
     def project_config(self):
         return {
-            "data-paths": ['test/integration/004_simple_snapshot_test/data'],
-            "snapshot-paths": ['test/integration/004_simple_snapshot_test/test-check-col-snapshots-bq'],
+            "data-paths": ['data'],
+            "snapshot-paths": ['test-check-col-snapshots-bq'],
         }
 
     @use_profile('bigquery')
@@ -409,18 +409,18 @@ class TestCheckColsBigquery(TestSimpleSnapshotFilesBigquery):
         self.use_default_project()
         self.use_profile('bigquery')
 
-        self.run_sql_file("test/integration/004_simple_snapshot_test/seed_bq.sql")
+        self.run_sql_file("seed_bq.sql")
 
         self.run_dbt(["snapshot"])
 
         self.assertTablesEqual("snapshot_expected", "snapshot_actual")
         self.assertTablesEqual("snapshot_expected", "snapshot_checkall")
 
-        self.run_sql_file("test/integration/004_simple_snapshot_test/invalidate_bigquery.sql")
-        self.run_sql_file("test/integration/004_simple_snapshot_test/update_bq.sql")
+        self.run_sql_file("invalidate_bigquery.sql")
+        self.run_sql_file("update_bq.sql")
 
         # This adds new fields to the source table, and updates the expected snapshot output accordingly
-        self.run_sql_file("test/integration/004_simple_snapshot_test/add_column_to_source_bq.sql")
+        self.run_sql_file("add_column_to_source_bq.sql")
 
         # this should fail because `check="all"` will try to compare the nested field
         self.run_dbt(['snapshot'], expect_pass=False)
@@ -462,7 +462,7 @@ class TestLongText(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/004_simple_snapshot_test/models"
+        return "models"
 
     def run_snapshot(self):
         return self.run_dbt(['snapshot'])
@@ -470,12 +470,12 @@ class TestLongText(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            "snapshot-paths": ['test/integration/004_simple_snapshot_test/test-snapshots-longtext'],
+            "snapshot-paths": ['test-snapshots-longtext'],
         }
 
     @use_profile('postgres')
     def test__postgres__long_text(self):
-        self.run_sql_file('test/integration/004_simple_snapshot_test/seed_longtext.sql')
+        self.run_sql_file('seed_longtext.sql')
         results = self.run_dbt(['snapshot'])
         self.assertEqual(len(results), 1)
 

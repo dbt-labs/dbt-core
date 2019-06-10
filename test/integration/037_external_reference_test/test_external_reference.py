@@ -7,7 +7,7 @@ class TestExternalReference(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/037_external_reference_test/models"
+        return "models"
 
     def setUp(self):
         super(TestExternalReference, self).setUp()
@@ -49,7 +49,7 @@ class TestExternalDependency(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/037_external_reference_test/standalone_models"
+        return "standalone_models"
 
     def tearDown(self):
         # This has to happen before we drop the external schema, because

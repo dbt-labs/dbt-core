@@ -11,7 +11,7 @@ class BaseOverrideDatabase(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/040_override_database_test/models"
+        return "models"
 
     @property
     def alternative_database(self):
@@ -55,7 +55,7 @@ class BaseOverrideDatabase(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            "data-paths": ['test/integration/040_override_database_test/data'],
+            "data-paths": ['data'],
             'models': {
                 'vars': {
                     'alternate_db': self.alternative_database,

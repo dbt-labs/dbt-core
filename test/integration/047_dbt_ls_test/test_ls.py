@@ -1,8 +1,8 @@
 from test.integration.base import DBTIntegrationTest, use_profile
+import os
 from dbt.logger import log_to_stdout, GLOBAL_LOGGER
 
 import json
-import os
 
 
 class TestStrictUndefined(DBTIntegrationTest):
@@ -13,7 +13,7 @@ class TestStrictUndefined(DBTIntegrationTest):
 
     @staticmethod
     def dir(value):
-        return os.path.normpath('test/integration/047_dbt_ls_test/' + value)
+        return os.path.normpath(value)
 
     @property
     def models(self):

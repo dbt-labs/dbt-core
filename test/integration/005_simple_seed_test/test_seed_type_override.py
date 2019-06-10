@@ -10,8 +10,8 @@ class TestSimpleSeedColumnOverride(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            "data-paths": ['test/integration/005_simple_seed_test/data-config'],
-            "macro-paths": ['test/integration/005_simple_seed_test/macros'],
+            "data-paths": ['data-config'],
+            "macro-paths": ['macros'],
             "seeds": {
                 "test": {
                     "enabled": False,
@@ -27,7 +27,7 @@ class TestSimpleSeedColumnOverride(DBTIntegrationTest):
 class TestSimpleSeedColumnOverridePostgres(TestSimpleSeedColumnOverride):
     @property
     def models(self):
-        return "test/integration/005_simple_seed_test/models-pg"
+        return "models-pg"
 
     @property
     def profile_config(self):
@@ -50,7 +50,7 @@ class TestSimpleSeedColumnOverridePostgres(TestSimpleSeedColumnOverride):
 class TestSimpleSeedColumnOverrideRedshift(TestSimpleSeedColumnOverride):
     @property
     def models(self):
-        return "test/integration/005_simple_seed_test/models-rs"
+        return "models-rs"
 
     @property
     def profile_config(self):
@@ -73,7 +73,7 @@ class TestSimpleSeedColumnOverrideRedshift(TestSimpleSeedColumnOverride):
 class TestSimpleSeedColumnOverrideSnowflake(TestSimpleSeedColumnOverride):
     @property
     def models(self):
-        return "test/integration/005_simple_seed_test/models-snowflake"
+        return "models-snowflake"
 
     def seed_types(self):
         return {
@@ -96,7 +96,7 @@ class TestSimpleSeedColumnOverrideSnowflake(TestSimpleSeedColumnOverride):
 class TestSimpleSeedColumnOverrideBQ(TestSimpleSeedColumnOverride):
     @property
     def models(self):
-        return "test/integration/005_simple_seed_test/models-bq"
+        return "models-bq"
 
     def seed_types(self):
         return {

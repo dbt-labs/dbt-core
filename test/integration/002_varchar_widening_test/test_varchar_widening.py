@@ -7,11 +7,11 @@ class TestVarcharWidening(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/002_varchar_widening_test/models"
+        return "models"
 
     @use_profile('postgres')
     def test__postgres__varchar_widening(self):
-        self.run_sql_file("test/integration/002_varchar_widening_test/seed.sql")
+        self.run_sql_file("seed.sql")
 
         results = self.run_dbt()
         self.assertEqual(len(results),  2)
@@ -19,7 +19,7 @@ class TestVarcharWidening(DBTIntegrationTest):
         self.assertTablesEqual("seed","incremental")
         self.assertTablesEqual("seed","materialized")
 
-        self.run_sql_file("test/integration/002_varchar_widening_test/update.sql")
+        self.run_sql_file("update.sql")
 
         results = self.run_dbt()
         self.assertEqual(len(results),  2)
@@ -29,14 +29,14 @@ class TestVarcharWidening(DBTIntegrationTest):
 
     @use_profile('snowflake')
     def test__snowflake__varchar_widening(self):
-        self.run_sql_file("test/integration/002_varchar_widening_test/seed.sql")
+        self.run_sql_file("seed.sql")
 
         results = self.run_dbt()
         self.assertEqual(len(results),  2)
 
         self.assertManyTablesEqual(["SEED", "INCREMENTAL", "MATERIALIZED"])
 
-        self.run_sql_file("test/integration/002_varchar_widening_test/update.sql")
+        self.run_sql_file("update.sql")
 
         results = self.run_dbt()
         self.assertEqual(len(results),  2)

@@ -67,9 +67,7 @@ class TestDocsGenerate(DBTIntegrationTest):
 
     @staticmethod
     def dir(path):
-        return _normalize(
-            os.path.join('test/integration/029_docs_generate_tests', path)
-        )
+        return _normalize(path)
 
     @property
     def models(self):

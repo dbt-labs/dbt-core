@@ -6,7 +6,7 @@ class TestBigqueryPrePostRunHooks(DBTIntegrationTest):
         DBTIntegrationTest.setUp(self)
         self.use_profile('bigquery')
         self.use_default_project()
-        self.run_sql_file("test/integration/014_hook_tests/seed_run_bigquery.sql")
+        self.run_sql_file("seed_run_bigquery.sql")
 
         self.fields = [
             'state',
@@ -32,8 +32,8 @@ class TestBigqueryPrePostRunHooks(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            'macro-paths': ['test/integration/014_hook_tests/macros'],
-            'data-paths': ['test/integration/014_hook_tests/data'],
+            'macro-paths': ['macros'],
+            'data-paths': ['data'],
 
             # The create and drop table statements here validate that these hooks run
             # in the same order that they are defined. Drop before create is an error.
@@ -52,7 +52,7 @@ class TestBigqueryPrePostRunHooks(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/014_hook_tests/models"
+        return "models"
 
     def get_ctx_vars(self, state):
         field_list = ", ".join(self.fields)

@@ -7,7 +7,7 @@ class TestSimpleDependency(DBTIntegrationTest):
 
     def setUp(self):
         DBTIntegrationTest.setUp(self)
-        self.run_sql_file("test/integration/006_simple_dependency_test/seed.sql")
+        self.run_sql_file("seed.sql")
 
     @property
     def schema(self):
@@ -15,7 +15,7 @@ class TestSimpleDependency(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/006_simple_dependency_test/models"
+        return "models"
 
     @property
     def packages_config(self):
@@ -40,7 +40,7 @@ class TestSimpleDependency(DBTIntegrationTest):
 
         self.assertTablesEqual("seed_summary","view_summary")
 
-        self.run_sql_file("test/integration/006_simple_dependency_test/update.sql")
+        self.run_sql_file("update.sql")
 
         self.run_dbt(["deps"])
         results = self.run_dbt(["run"])
@@ -71,7 +71,7 @@ class TestSimpleDependency(DBTIntegrationTest):
 class TestSimpleDependencyUnpinned(DBTIntegrationTest):
     def setUp(self):
         DBTIntegrationTest.setUp(self)
-        self.run_sql_file("test/integration/006_simple_dependency_test/seed.sql")
+        self.run_sql_file("seed.sql")
 
     @property
     def schema(self):
@@ -79,7 +79,7 @@ class TestSimpleDependencyUnpinned(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/006_simple_dependency_test/models"
+        return "models"
 
     @property
     def packages_config(self):
@@ -106,7 +106,7 @@ class TestSimpleDependencyWithDuplicates(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/006_simple_dependency_test/models"
+        return "models"
 
     @property
     def packages_config(self):
@@ -136,7 +136,7 @@ class TestRekeyedDependencyWithSubduplicates(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/006_simple_dependency_test/models"
+        return "models"
 
     @property
     def packages_config(self):
@@ -165,7 +165,7 @@ class TestSimpleDependencyBranch(DBTIntegrationTest):
 
     def setUp(self):
         DBTIntegrationTest.setUp(self)
-        self.run_sql_file("test/integration/006_simple_dependency_test/seed.sql")
+        self.run_sql_file("seed.sql")
 
     @property
     def schema(self):
@@ -173,7 +173,7 @@ class TestSimpleDependencyBranch(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/006_simple_dependency_test/models"
+        return "models"
 
     @property
     def packages_config(self):
@@ -209,7 +209,7 @@ class TestSimpleDependencyBranch(DBTIntegrationTest):
 
         self.assertTablesEqual("seed_summary","view_summary")
 
-        self.run_sql_file("test/integration/006_simple_dependency_test/update.sql")
+        self.run_sql_file("update.sql")
 
         self.deps_run_assert_equality()
 

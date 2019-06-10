@@ -5,7 +5,7 @@ class TestMacros(DBTIntegrationTest):
 
     def setUp(self):
         DBTIntegrationTest.setUp(self)
-        self.run_sql_file("test/integration/016_macro_tests/seed.sql")
+        self.run_sql_file("seed.sql")
 
     @property
     def schema(self):
@@ -13,7 +13,7 @@ class TestMacros(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/016_macro_tests/models"
+        return "models"
 
     @property
     def packages_config(self):
@@ -31,7 +31,7 @@ class TestMacros(DBTIntegrationTest):
                     "test": "DUMMY"
                 }
             },
-            "macro-paths": ["test/integration/016_macro_tests/macros"],
+            "macro-paths": ["macros"],
         }
 
     @use_profile('postgres')
@@ -55,12 +55,12 @@ class TestInvalidMacros(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/016_macro_tests/models"
+        return "models"
 
     @property
     def project_config(self):
         return {
-            "macro-paths": ["test/integration/016_macro_tests/bad-macros"]
+            "macro-paths": ["bad-macros"]
         }
 
     @use_profile('postgres')
@@ -86,7 +86,7 @@ class TestMisusedMacros(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/016_macro_tests/bad-models"
+        return "bad-models"
 
     @property
     def packages_config(self):
@@ -99,7 +99,7 @@ class TestMisusedMacros(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            "macro-paths": ["test/integration/016_macro_tests/macros"],
+            "macro-paths": ["macros"],
         }
 
     # TODO: compilation no longer exists, so while the model calling this macro

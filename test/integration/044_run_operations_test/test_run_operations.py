@@ -9,12 +9,12 @@ class TestOperations(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/044_run_operations_test/models"
+        return "models"
 
     @property
     def project_config(self):
         return {
-            "macro-paths": ['test/integration/044_run_operations_test/macros'],
+            "macro-paths": ['macros'],
         }
 
     def run_operation(self, macro, expect_pass=True, extra_args=None, **kwargs):

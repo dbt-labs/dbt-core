@@ -66,7 +66,7 @@ class BaseTestPrePost(DBTIntegrationTest):
     def setUp(self):
         DBTIntegrationTest.setUp(self)
 
-        self.run_sql_file("test/integration/014_hook_tests/seed_model.sql")
+        self.run_sql_file("seed_model.sql")
 
         self.fields = [
             'state',
@@ -119,7 +119,7 @@ class TestPrePostModelHooks(BaseTestPrePost):
     @property
     def project_config(self):
         return {
-            'macro-paths': ['test/integration/014_hook_tests/macros'],
+            'macro-paths': ['macros'],
             'models': {
                 'test': {
                     'pre-hook': [
@@ -143,7 +143,7 @@ class TestPrePostModelHooks(BaseTestPrePost):
 
     @property
     def models(self):
-        return "test/integration/014_hook_tests/models"
+        return "models"
 
     @use_profile('postgres')
     def test_postgres_pre_and_post_model_hooks(self):
@@ -160,12 +160,12 @@ class TestPrePostModelHooksOnSeeds(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/014_hook_tests/seed-models"
+        return "seed-models"
 
     @property
     def project_config(self):
         return {
-            'data-paths': ['test/integration/014_hook_tests/data'],
+            'data-paths': ['data'],
             'models': {},
             'seeds': {
                 'post-hook': [
@@ -187,12 +187,12 @@ class TestPrePostModelHooksInConfig(BaseTestPrePost):
     @property
     def project_config(self):
         return {
-            'macro-paths': ['test/integration/014_hook_tests/macros'],
+            'macro-paths': ['macros'],
         }
 
     @property
     def models(self):
-        return "test/integration/014_hook_tests/configured-models"
+        return "configured-models"
 
     @use_profile('postgres')
     def test_postgres_pre_and_post_model_hooks_model(self):
@@ -233,7 +233,7 @@ class TestPrePostModelHooksInConfigKwargs(TestPrePostModelHooksInConfig):
 
     @property
     def models(self):
-        return "test/integration/014_hook_tests/kwargs-models"
+        return "kwargs-models"
 
 
 
@@ -244,7 +244,7 @@ class TestDuplicateHooksInConfigs(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/014_hook_tests/error-models"
+        return "error-models"
 
     @use_profile('postgres')
     def test_postgres_run_duplicate_hook_defs(self):
