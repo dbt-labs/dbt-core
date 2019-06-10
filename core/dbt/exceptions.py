@@ -516,8 +516,8 @@ def ref_invalid_args(model, args) -> NoReturn:
 
 
 def ref_bad_context(model, args) -> NoReturn:
-    ref_args = ', '.join("'{}'".format(a) for a in args)
-    ref_string = '{{{{ ref({}) }}}}'.format(ref_args)
+    ref_args = ", ".join("'{}'".format(a) for a in args)
+    ref_string = "{{{{ ref({}) }}}}".format(ref_args)
 
     base_error_msg = """dbt was unable to infer all dependencies for the model "{model_name}".
 This typically happens when ref() is placed within a conditional block.
