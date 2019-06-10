@@ -68,6 +68,22 @@ class BaseDatabaseWrapper(object):
         return self.adapter.commit_if_has_connection()
 
 
+class BaseResolver(object):
+    def __init__(self, db_wrapper, model, config, manifest):
+        self.db_wrapper = db_wrapper
+        self.model = model
+        self.config = config
+        self.manifest = manifest
+
+    @property
+    def current_project(self):
+        return self.config.project_name
+
+    @property
+    def Relation(self):
+        return self.db_wrapper.Relation
+
+
 def _add_macro_map(context, package_name, macro_map):
     """Update an existing context in-place, adding the given macro map to the
     appropriate package namespace. Adapter packages get inserted into the

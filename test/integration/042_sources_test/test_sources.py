@@ -49,6 +49,14 @@ class BaseSourcesTest(DBTIntegrationTest):
 
 
 class TestSources(BaseSourcesTest):
+    @property
+    def project_config(self):
+        cfg = super(TestSources, self).project_config
+        cfg.update({
+            'macro-paths': ['macros'],
+        })
+        return cfg
+
     def _create_schemas(self):
         super(TestSources, self)._create_schemas()
         self._create_schema_named(self.default_database,
@@ -138,7 +146,7 @@ class TestSources(BaseSourcesTest):
         self.assertTableDoesNotExist('nonsource_descendant')
 
     @use_profile('postgres')
-    def test_source_childrens_parents(self):
+    def test_postgres_source_childrens_parents(self):
         results = self.run_dbt_with_vars([
             'run', '--models', '@source:test_source'
         ])
@@ -148,6 +156,13 @@ class TestSources(BaseSourcesTest):
             ['expected_multi_source', 'multi_source_model'],
         )
         self.assertTableDoesNotExist('nonsource_descendant')
+
+    @use_profile('postgres')
+    def test_postgres_run_operation_source(self):
+        kwargs = '{"source_name": "test_source", "table_name": "test_table"}'
+        self.run_dbt_with_vars([
+            'run-operation', 'vacuum_source', '--args', kwargs
+        ])
 
 
 class TestSourceFreshness(BaseSourcesTest):

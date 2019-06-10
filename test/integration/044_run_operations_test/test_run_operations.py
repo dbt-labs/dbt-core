@@ -18,9 +18,7 @@ class TestOperations(DBTIntegrationTest):
         }
 
     def run_operation(self, macro, expect_pass=True, extra_args=None, **kwargs):
-        args = ['run-operation']
-        if macro:
-            args.extend(('--macro', macro))
+        args = ['run-operation', macro]
         if kwargs:
             args.extend(('--args', yaml.safe_dump(kwargs)))
         if extra_args:
@@ -56,3 +54,9 @@ class TestOperations(DBTIntegrationTest):
         self.run_dbt(['run'])
         # this should succeed
         self.run_operation('vacuum', table_name='model')
+
+    @use_profile('postgres')
+    def test__postgres_vacuum_ref(self):
+        self.run_dbt(['run'])
+        # this should succeed
+        self.run_operation('vacuum_ref', ref_target='model')

@@ -880,8 +880,8 @@ class BaseAdapter(object):
             )
         # This causes a reference cycle, as dbt.context.runtime.generate()
         # ends up calling get_adapter, so the import has to be here.
-        import dbt.context.runtime
-        macro_context = dbt.context.runtime.generate_macro(
+        import dbt.context.operation
+        macro_context = dbt.context.operation.generate(
             macro,
             self.config,
             manifest
