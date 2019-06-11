@@ -1,31 +1,33 @@
-import unittest
-import dbt.main as dbt
+
+import json
+import logging
 import os
-import shutil
-import yaml
 import random
+import shutil
 import tempfile
 import time
-import json
+import traceback
+import unittest
+import warnings
+from contextlib import contextmanager
 from datetime import datetime
 from functools import wraps
 
 import pytest
+import yaml
 from mock import patch
 
+import dbt.main as dbt
 import dbt.flags as flags
-
 from dbt.adapters.factory import get_adapter, reset_adapters
 from dbt.clients.jinja import template_cache
 from dbt.config import RuntimeConfig
 from dbt.compat import basestring
 from dbt.context import common
-
-from contextlib import contextmanager
-
 from dbt.logger import GLOBAL_LOGGER as logger
-import logging
-import warnings
+
+
+INITIAL_ROOT = os.getcwd()
 
 
 class FakeArgs(object):
@@ -63,9 +65,13 @@ def _profile_from_test_name(test_name):
     return 'postgres'
 
 
+def _pytest_test_name():
+    return os.environ['PYTEST_CURRENT_TEST'].split()[0]
+
+
 def _pytest_get_test_root():
-    test_path = os.environ['PYTEST_CURRENT_TEST'].split('::')[0]
-    relative_to = os.getcwd()
+    test_path = _pytest_test_name().split('::')[0]
+    relative_to = INITIAL_ROOT
     head = os.path.relpath(test_path, relative_to)
 
     path_parts = []
@@ -76,6 +82,14 @@ def _pytest_get_test_root():
     # dbt tests are all of the form 'test/integration/XXX_suite_name'
     target = os.path.join(*path_parts[:3])
     return os.path.join(relative_to, target)
+
+
+def _really_makedirs(path):
+    while not os.path.exists(path):
+        try:
+            os.makedirs(path)
+        except EnvironmentError:
+            raise
 
 
 class DBTIntegrationTest(unittest.TestCase):
@@ -276,14 +290,36 @@ class DBTIntegrationTest(unittest.TestCase):
             if os.path.isdir(src) or src.endswith('.sql'):
                 # symlink all sql files and all directories.
                 os.symlink(src, tst)
+        os.symlink(self._logs_dir, os.path.join(self.test_root_dir, 'logs'))
 
     def setUp(self):
+        self.initial_dir = INITIAL_ROOT
+        os.chdir(self.initial_dir)
         # before we go anywhere, collect the initial path info
-        self.initial_dir = os.getcwd()
+        self._logs_dir = os.path.join(self.initial_dir, 'logs', self.prefix)
+        print('initial_dir={}'.format(self.initial_dir))
+        _really_makedirs(self._logs_dir)
         self.test_original_source_path = _pytest_get_test_root()
+        print('test_original_source_path={}'.format(self.test_original_source_path))
         self.test_root_dir = tempfile.mkdtemp(prefix='dbt-int-test-')
+        print('test_root_dir={}'.format(self.test_root_dir))
         os.chdir(self.test_root_dir)
-        self._symlink_test_folders()
+        try:
+            self._symlink_test_folders()
+        except Exception as exc:
+            msg = '\n\t'.join((
+                'Failed to symlink test folders!',
+                'initial_dir={0.initial_dir}',
+                'test_original_source_path={0.test_original_source_path}',
+                'test_root_dir={0.test_root_dir}'
+            )).format(self)
+            logger.exception(msg)
+
+            # if logging isn't set up, I still really want this message.
+            print(msg)
+            traceback.print_exc()
+
+            raise
 
         self._created_schemas = set()
         flags.reset()
@@ -375,7 +411,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
         self.adapter.cleanup_connections()
         reset_adapters()
-        os.chdir(self.initial_dir)
+        os.chdir(INITIAL_ROOT)
         try:
             shutil.rmtree(self.test_root_dir)
         except EnvironmentError:

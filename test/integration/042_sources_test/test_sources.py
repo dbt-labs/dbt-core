@@ -1,10 +1,10 @@
 import json
 import multiprocessing
 import os
+import random
 import socket
 import sys
 import time
-import unittest
 from base64 import standard_b64encode as b64
 from datetime import datetime, timedelta
 
@@ -296,8 +296,8 @@ class TestMalformedSources(BaseSourcesTest):
 
 
 class ServerProcess(multiprocessing.Process):
-    def __init__(self, profiles_dir, cli_vars=None):
-        self.port = 22991
+    def __init__(self, port, profiles_dir, cli_vars=None):
+        self.port = port
         handle_and_check_args = [
             '--strict', 'rpc', '--log-cache-events',
             '--port', str(self.port),
@@ -360,6 +360,7 @@ class BackgroundQueryProcess(multiprocessing.Process):
         else:
             return result
 
+
 _select_from_ephemeral = '''with __dbt__CTE__ephemeral_model as (
 
 
@@ -367,12 +368,24 @@ select 1 as id
 )select * from __dbt__CTE__ephemeral_model'''
 
 
+def addr_in_use(err, *args):
+    msg = str(err)
+    if 'Address already in use' in msg:
+        return True
+    if 'server never appeared!' in msg:
+        return True  # this can happen because of the above
+    return False
+
+
+@mark.flaky(rerun_filter=addr_in_use)
 class TestRPCServer(BaseSourcesTest):
     def setUp(self):
         super(TestRPCServer, self).setUp()
+        port = random.randint(20000, 65535)
         self._server = ServerProcess(
             cli_vars='{{test_run_schema: {}}}'.format(self.unique_schema()),
-            profiles_dir=self.test_root_dir
+            profiles_dir=self.test_root_dir,
+            port=port
         )
         self._server.start()
 
@@ -713,6 +726,7 @@ class TestRPCServer(BaseSourcesTest):
         )
 
     @mark.skipif(os.name == 'nt', reason='"kill" not supported on windows')
+    @mark.flaky(rerun_filter=None)
     @use_profile('postgres')
     def test_ps_kill_postgres(self):
         done_query = self.query('compile', 'select 1 as id', name='done').json()
@@ -799,6 +813,7 @@ class TestRPCServer(BaseSourcesTest):
         self.assertTrue(False, 'request ID never found running!')
 
     @mark.skipif(os.name == 'nt', reason='"kill" not supported on windows')
+    @mark.flaky(rerun_filter=lambda *a, **kw: True)
     @use_profile('postgres')
     def test_ps_kill_longwait_postgres(self):
         pg_sleeper, sleep_task_id, request_id = self._get_sleep_query()
