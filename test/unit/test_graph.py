@@ -14,7 +14,7 @@ import dbt.loader
 
 try:
     from queue import Empty
-except KeyError:
+except ImportError:
     from Queue import Empty
 
 
@@ -128,12 +128,12 @@ class GraphTest(unittest.TestCase):
         compiler = self.get_compiler(config)
         linker = compiler.compile(manifest)
 
-        self.assertEquals(
-            linker.nodes(),
+        self.assertEqual(
+            list(linker.nodes()),
             ['model.test_models_compile.model_one'])
 
-        self.assertEquals(
-            linker.edges(),
+        self.assertEqual(
+            list(linker.edges()),
             [])
 
     def test__two_models_simple_ref(self):
@@ -196,7 +196,7 @@ class GraphTest(unittest.TestCase):
             key = 'model.test_models_compile.{}'.format(model)
             actual = manifest.nodes[key].get('config', {}) \
                                              .get('materialized')
-            self.assertEquals(actual, expected)
+            self.assertEqual(actual, expected)
 
     def test__model_incremental(self):
         self.use_models({
@@ -221,8 +221,8 @@ class GraphTest(unittest.TestCase):
 
         node = 'model.test_models_compile.model_one'
 
-        self.assertEqual(linker.nodes(), [node])
-        self.assertEqual(linker.edges(), [])
+        self.assertEqual(list(linker.nodes()), [node])
+        self.assertEqual(list(linker.edges()), [])
 
         self.assertEqual(
             manifest.nodes[node].get('config', {}).get('materialized'),
