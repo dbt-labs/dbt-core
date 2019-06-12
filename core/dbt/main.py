@@ -106,6 +106,8 @@ def main(args=None):
             logger.error(traceback.format_exc())
         exit_code = ExitCodes.UnhandledError
 
+    _python2_compatibility_message()
+
     sys.exit(exit_code)
 
 
@@ -173,6 +175,22 @@ def track_run(task):
         raise
     finally:
         dbt.tracking.flush()
+
+
+_PYTHON_27_WARNING = '''
+Python 2.7 will reach the end of its life on January 1st, 2020.
+Please upgrade your Python as Python 2.7 won't be maintained after that date.
+A future version of dbt will drop support for Python 2.7.
+'''.strip()
+
+
+def _python2_compatibility_message():
+    if dbt.compat.WHICH_PYTHON != 2:
+        return
+
+    logger.critical(
+        dbt.ui.printer.red('DEPRECATION: ') + _PYTHON_27_WARNING
+    )
 
 
 def run_from_args(parsed):
