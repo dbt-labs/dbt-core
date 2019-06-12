@@ -151,7 +151,7 @@ class TestSimpleSnapshotFileSelects(DBTIntegrationTest):
     @use_profile('postgres')
     def test__postgres_select_snapshots(self):
         self.run_sql_file('seed_pg.sql')
-        results = self.run_dbt(['snapshot', '--models', 'snapshot_castillo'])
+        results = self.run_dbt(['snapshot', '--select', 'snapshot_castillo'])
         self.assertEqual(len(results),  1)
         self.assertTablesEqual('snapshot_castillo', 'snapshot_castillo_expected')
         self.assertTableDoesNotExist('snapshot_alvarez')
@@ -425,7 +425,7 @@ class TestCheckColsBigquery(TestSimpleSnapshotFilesBigquery):
         # this should fail because `check="all"` will try to compare the nested field
         self.run_dbt(['snapshot'], expect_pass=False)
 
-        self.run_dbt(["snapshot", '-m', 'snapshot_actual'])
+        self.run_dbt(["snapshot", '--select', 'snapshot_actual'])
 
         # A more thorough test would assert that snapshotted == expected, but BigQuery does not support the
         # "EXCEPT DISTINCT" operator on nested fields! Instead, just check that schemas are congruent.
