@@ -10,7 +10,7 @@ class TestSimpleCycle(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/027_cycle_test/simple_cycle_models"
+        return "simple_cycle_models"
 
     @property
     @use_profile('postgres')
@@ -27,7 +27,7 @@ class TestComplexCycle(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/027_cycle_test/complex_cycle_models"
+        return "complex_cycle_models"
 
     @property
     @use_profile('postgres')

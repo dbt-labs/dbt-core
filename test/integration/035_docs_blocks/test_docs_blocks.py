@@ -12,9 +12,7 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
 
     @staticmethod
     def dir(path):
-        return os.path.normpath(
-            os.path.join('test/integration/035_docs_blocks', path)
-        )
+        return os.path.normpath(path)
 
     @property
     def models(self):
@@ -111,9 +109,7 @@ class TestMissingDocsBlocks(DBTIntegrationTest):
 
     @staticmethod
     def dir(path):
-        return os.path.normpath(
-            os.path.join('test/integration/035_docs_blocks', path)
-        )
+        return os.path.normpath(path)
 
     @property
     def models(self):
@@ -132,9 +128,7 @@ class TestBadDocsBlocks(DBTIntegrationTest):
 
     @staticmethod
     def dir(path):
-        return os.path.normpath(
-            os.path.join('test/integration/035_docs_blocks', path)
-        )
+        return os.path.normpath(path)
 
     @property
     def models(self):

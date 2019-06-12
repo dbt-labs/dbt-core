@@ -9,7 +9,7 @@ class TestCLIVarOverride(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/028_cli_vars/models_override"
+        return "models_override"
 
     @property
     def project_config(self):
@@ -38,7 +38,7 @@ class TestCLIVarOverridePorject(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/028_cli_vars/models_override"
+        return "models_override"
 
     @property
     def project_config(self):

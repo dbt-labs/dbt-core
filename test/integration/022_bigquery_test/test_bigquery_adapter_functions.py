@@ -9,7 +9,7 @@ class TestBigqueryAdapterFunctions(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/022_bigquery_test/adapter-models"
+        return "adapter-models"
 
     @property
     def profile_config(self):

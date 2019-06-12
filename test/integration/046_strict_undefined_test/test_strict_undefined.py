@@ -9,7 +9,7 @@ class TestStrictUndefined(DBTIntegrationTest):
 
     @property
     def models(self):
-        return 'test/integration/046_strict_undefined_test/models'
+        return 'models'
 
     @use_profile('postgres')
     def test_postgres_strict_undefined(self):

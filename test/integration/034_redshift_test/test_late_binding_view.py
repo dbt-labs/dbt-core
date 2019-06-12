@@ -1,4 +1,3 @@
-import json
 import os
 
 from test.integration.base import DBTIntegrationTest, use_profile
@@ -11,9 +10,7 @@ class TestLateBindingView(DBTIntegrationTest):
 
     @staticmethod
     def dir(path):
-        return os.path.normpath(
-            os.path.join('test/integration/034_redshift_test', path)
-        )
+        return os.path.normpath(path)
 
     @property
     def models(self):

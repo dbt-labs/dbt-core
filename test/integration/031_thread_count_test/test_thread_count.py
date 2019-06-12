@@ -20,7 +20,7 @@ class TestThreadCount(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/031_thread_count_test/models"
+        return "models"
 
     @use_profile('postgres')
     def test_postgres_threading_8x(self):

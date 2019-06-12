@@ -8,12 +8,12 @@ class TestAliases(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/026_aliases_test/models"
+        return "models"
 
     @property
     def project_config(self):
         return {
-            "macro-paths": ['test/integration/026_aliases_test/macros'],
+            "macro-paths": ['macros'],
             "models": {
                 "test": {
                     "alias_in_project": {
@@ -51,12 +51,12 @@ class TestAliasErrors(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/026_aliases_test/models-dupe"
+        return "models-dupe"
 
     @property
     def project_config(self):
         return {
-            "macro-paths": ['test/integration/026_aliases_test/macros'],
+            "macro-paths": ['macros'],
         }
 
     @use_profile('postgres')
@@ -72,12 +72,12 @@ class TestSameAliasDifferentSchemas(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/026_aliases_test/models-dupe-custom-schema"
+        return "models-dupe-custom-schema"
 
     @property
     def project_config(self):
         return {
-            "macro-paths": ['test/integration/026_aliases_test/macros'],
+            "macro-paths": ['macros'],
         }
 
     @use_profile('postgres')

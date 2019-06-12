@@ -8,7 +8,7 @@ class TestInvalidDisabledModels(DBTIntegrationTest):
     def setUp(self):
         DBTIntegrationTest.setUp(self)
 
-        self.run_sql_file("test/integration/011_invalid_model_tests/seed.sql")
+        self.run_sql_file("seed.sql")
 
     @property
     def schema(self):
@@ -16,7 +16,7 @@ class TestInvalidDisabledModels(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/011_invalid_model_tests/models-2"
+        return "models-2"
 
     @use_profile('postgres')
     def test_view_with_incremental_attributes(self):
@@ -34,7 +34,7 @@ class TestInvalidModelReference(DBTIntegrationTest):
     def setUp(self):
         DBTIntegrationTest.setUp(self)
 
-        self.run_sql_file("test/integration/011_invalid_model_tests/seed.sql")
+        self.run_sql_file("seed.sql")
 
     @property
     def schema(self):
@@ -42,7 +42,7 @@ class TestInvalidModelReference(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/011_invalid_model_tests/models-3"
+        return "models-3"
 
     @use_profile('postgres')
     def test_view_with_incremental_attributes(self):

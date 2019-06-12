@@ -15,7 +15,7 @@ class BaseTestDeprecations(DBTIntegrationTest):
 
     @staticmethod
     def dir(path):
-        return "test/integration/012_deprecation_tests/" + path.lstrip("/")
+        return path.lstrip("/")
 
     @property
     def models(self):
@@ -43,7 +43,7 @@ class TestMacroDeprecations(BaseTestDeprecations):
     @property
     def project_config(self):
         return {
-            'macro-paths': [self.dir('macros')],
+            'macro-paths': [self.dir('deprecated-macros')],
         }
 
     @use_profile('postgres')

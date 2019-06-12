@@ -9,7 +9,7 @@ class TestStatements(DBTIntegrationTest):
 
     @staticmethod
     def dir(path):
-        return "test/integration/030_statement_test/" + path.lstrip("/")
+        return path.lstrip("/")
 
     @property
     def models(self):
@@ -56,7 +56,7 @@ class TestStatementsBigquery(DBTIntegrationTest):
 
     @staticmethod
     def dir(path):
-        return "test/integration/030_statement_test/" + path.lstrip("/")
+        return path.lstrip("/")
 
     @property
     def models(self):

@@ -10,10 +10,10 @@ class TestAnalyses(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/019_analysis_tests/models"
+        return "models"
 
     def analysis_path(self):
-        return "test/integration/019_analysis_tests/analysis"
+        return "analysis"
 
     @property
     def project_config(self):

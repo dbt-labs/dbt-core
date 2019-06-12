@@ -36,7 +36,7 @@ class TestBaseCaching(DBTIntegrationTest):
 class TestCachingLowercaseModel(TestBaseCaching):
     @property
     def models(self):
-        return "test/integration/038_caching_test/models"
+        return "models"
 
     @use_profile('snowflake')
     def test_snowflake_cache(self):
@@ -49,7 +49,7 @@ class TestCachingLowercaseModel(TestBaseCaching):
 class TestCachingUppercaseModel(TestBaseCaching):
     @property
     def models(self):
-        return "test/integration/038_caching_test/shouting_models"
+        return "shouting_models"
 
     @use_profile('snowflake')
     def test_snowflake_cache(self):

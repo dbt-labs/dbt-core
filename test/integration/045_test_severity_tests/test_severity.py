@@ -7,12 +7,12 @@ class TestSeverity(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/045_test_severity_tests/models"
+        return "models"
 
     @property
     def project_config(self):
         return {
-            'data-paths': ['test/integration/045_test_severity_tests/data'],
+            'data-paths': ['data'],
         }
 
     def run_dbt_with_vars(self, cmd, *args, **kwargs):

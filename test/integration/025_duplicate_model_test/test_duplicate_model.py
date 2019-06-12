@@ -10,7 +10,7 @@ class TestDuplicateModelEnabled(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/025_duplicate_model_test/models-1"
+        return "models-1"
 
     @property
     def profile_config(self):
@@ -50,7 +50,7 @@ class TestDuplicateModelDisabled(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/025_duplicate_model_test/models-2"
+        return "models-2"
 
     @property
     def profile_config(self):
@@ -94,7 +94,7 @@ class TestDuplicateModelEnabledAcrossPackages(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/025_duplicate_model_test/models-3"
+        return "models-3"
 
     @property
     def packages_config(self):
@@ -123,7 +123,7 @@ class TestDuplicateModelDisabledAcrossPackages(DBTIntegrationTest):
 
     def setUp(self):
         DBTIntegrationTest.setUp(self)
-        self.run_sql_file("test/integration/025_duplicate_model_test/seed.sql")
+        self.run_sql_file("seed.sql")
 
     @property
     def schema(self):
@@ -131,7 +131,7 @@ class TestDuplicateModelDisabledAcrossPackages(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/025_duplicate_model_test/models-4"
+        return "models-4"
 
     @property
     def packages_config(self):

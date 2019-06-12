@@ -8,12 +8,12 @@ class TestAliases(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/043_custom_aliases_test/models"
+        return "models"
 
     @property
     def project_config(self):
         return {
-            "macro-paths": ['test/integration/043_custom_aliases_test/macros'],
+            "macro-paths": ['macros'],
         }
 
     @use_profile('postgres')
