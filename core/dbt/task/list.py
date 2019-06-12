@@ -12,7 +12,7 @@ from dbt.logger import log_to_stderr
 class ListTask(GraphRunnableTask):
     DEFAULT_RESOURCE_VALUES = frozenset((
         NodeType.Model,
-        NodeType.Archive,
+        NodeType.Snapshot,
         NodeType.Seed,
         NodeType.Test,
         NodeType.Source,

@@ -143,7 +143,7 @@ def _parse_versions(versions):
 class Project(object):
     def __init__(self, project_name, version, project_root, profile_name,
                  source_paths, macro_paths, data_paths, test_paths,
-                 analysis_paths, docs_paths, target_path, archive_paths,
+                 analysis_paths, docs_paths, target_path, snapshot_paths,
                  clean_targets, log_path, modules_path, quoting, models,
                  on_run_start, on_run_end, archive, seeds, dbt_version,
                  packages):
@@ -158,7 +158,7 @@ class Project(object):
         self.analysis_paths = analysis_paths
         self.docs_paths = docs_paths
         self.target_path = target_path
-        self.archive_paths = archive_paths
+        self.snapshot_paths = snapshot_paths
         self.clean_targets = clean_targets
         self.log_path = log_path
         self.modules_path = modules_path
@@ -241,7 +241,7 @@ class Project(object):
         analysis_paths = project_dict.get('analysis-paths', [])
         docs_paths = project_dict.get('docs-paths', source_paths[:])
         target_path = project_dict.get('target-path', 'target')
-        archive_paths = project_dict.get('archive-paths', ['archives'])
+        snapshot_paths = project_dict.get('snapshot-paths', ['snapshots'])
         # should this also include the modules path by default?
         clean_targets = project_dict.get('clean-targets', [target_path])
         log_path = project_dict.get('log-path', 'logs')
@@ -275,7 +275,7 @@ class Project(object):
             analysis_paths=analysis_paths,
             docs_paths=docs_paths,
             target_path=target_path,
-            archive_paths=archive_paths,
+            snapshot_paths=snapshot_paths,
             clean_targets=clean_targets,
             log_path=log_path,
             modules_path=modules_path,
@@ -323,7 +323,7 @@ class Project(object):
             'analysis-paths': self.analysis_paths,
             'docs-paths': self.docs_paths,
             'target-path': self.target_path,
-            'archive-paths': self.archive_paths,
+            'snapshot-paths': self.snapshot_paths,
             'clean-targets': self.clean_targets,
             'log-path': self.log_path,
             'quoting': self.quoting,

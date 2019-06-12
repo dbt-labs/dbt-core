@@ -1049,6 +1049,45 @@ class TestRuntimeConfig(BaseConfigTest):
         raised = self.from_parts(dbt.exceptions.DbtProjectError)
         self.assertIn('The package version requirement can never be satisfied', str(raised.exception))
 
+    def test_archive_not_allowed(self):
+        self.default_project_data['archive'] = [{
+            "source_schema": 'a',
+            "target_schema": 'b',
+            "tables": [
+                {
+                    "source_table": "seed",
+                    "target_table": "archive_actual",
+                    "updated_at": 'updated_at',
+                    "unique_key": '''id || '-' || first_name'''
+                },
+            ],
+        }]
+        project = self.get_project()
+        profile = self.get_profile()
+        with self.assertRaises(dbt.exceptions.DbtProjectError) as raised:
+            dbt.config.RuntimeConfig.from_parts(project, profile, self.args)
+        self.assertIn('The `archive` section in `dbt_project.yml` is no longer supported', str(raised.exception))
+
+    def test_archive_allowed(self):
+        archive_cfg = {
+            "source_schema": 'a',
+            "target_schema": 'b',
+            "tables": [
+                {
+                    "source_table": "seed",
+                    "target_table": "archive_actual",
+                    "updated_at": 'updated_at',
+                    "unique_key": '''id || '-' || first_name'''
+                },
+            ],
+        }
+        self.default_project_data['archive'] = [archive_cfg]
+        project = self.get_project()
+        profile = self.get_profile()
+
+        cfg = dbt.config.RuntimeConfig.from_parts(project, profile, self.args,
+                                                  allow_archive_configs=True)
+        self.assertEqual(cfg.archive, [archive_cfg])
 
 
 class TestRuntimeConfigFiles(BaseFileTest):
@@ -1062,7 +1101,6 @@ class TestRuntimeConfigFiles(BaseFileTest):
     def test_from_args(self):
         with temp_cd(self.project_dir):
             config = dbt.config.RuntimeConfig.from_args(self.args)
-        self.assertEqual(config.project_name, 'my_test_project')
         self.assertEqual(config.version, '0.0.1')
         self.assertEqual(config.profile_name, 'default')
         # on osx, for example, these are not necessarily equal due to /private
@@ -1085,6 +1123,41 @@ class TestRuntimeConfigFiles(BaseFileTest):
         self.assertEqual(config.archive, [])
         self.assertEqual(config.seeds, {})
         self.assertEqual(config.packages, PackageConfig(packages=[]))
+        self.assertEqual(config.project_name, 'my_test_project')
+
+
+class TestRuntimeConfigFilesWithArchive(BaseFileTest):
+    def setUp(self):
+        super(TestRuntimeConfigFilesWithArchive, self).setUp()
+        self.default_project_data['archive'] = [
+            {
+                "source_schema": 'a',
+                "target_schema": 'b',
+                "tables": [
+                    {
+                        "source_table": "c",
+                        "target_table": "d",
+                        "updated_at": 'date_field',
+                        "unique_key": 'id',
+                    },
+                ],
+            }
+        ]
+        self.write_profile(self.default_profile_data)
+        self.write_project(self.default_project_data)
+        # and after the fact, add the project root
+        self.default_project_data['project-root'] = self.project_dir
+
+    def test_archive_ok_from_args(self):
+        with temp_cd(self.project_dir):
+            config = dbt.config.RuntimeConfig.from_args(self.args, allow_archive_configs=True)
+
+        self.assertEqual(config.archive, self.default_project_data['archive'])
+
+    def test_archive_error(self):
+        with temp_cd(self.project_dir), self.assertRaises(dbt.exceptions.DbtProjectError) as raised:
+            dbt.config.RuntimeConfig.from_args(self.args)
+        self.assertIn('The `archive` section in `dbt_project.yml` is no longer supported', str(raised.exception))
 
 
 class TestVariableRuntimeConfigFiles(BaseFileTest):
@@ -1136,4 +1209,3 @@ class TestVariableRuntimeConfigFiles(BaseFileTest):
         self.assertEqual(config.models['bar']['materialized'], 'blah')
         self.assertEqual(config.seeds['foo']['post-hook'], "{{ env_var('env_value_target') }}")
         self.assertEqual(config.seeds['bar']['materialized'], 'blah')
-

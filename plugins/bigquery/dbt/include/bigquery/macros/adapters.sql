@@ -26,12 +26,15 @@
 
 {%- endmacro -%}
 
-{% macro bigquery_table_options(persist_docs) %}
+{% macro bigquery_table_options(persist_docs, temporary) %}
   {% set opts = {} %}
 
   {% set description = get_relation_comment(persist_docs, model) %}
   {%- if description is not none -%}
     {% do opts.update({'description': "'" ~ description ~ "'"}) %}
+  {% endif %}
+  {% if temporary %}
+    {% do opts.update({'expiration_timestamp': 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)'}) %}
   {% endif %}
 
   OPTIONS({% for opt_key, opt_val in opts.items() %}
@@ -47,7 +50,7 @@
   create or replace table {{ relation }}
   {{ partition_by(raw_partition_by) }}
   {{ cluster_by(raw_cluster_by) }}
-  {{ bigquery_table_options(persist_docs=raw_persist_docs) }}
+  {{ bigquery_table_options(persist_docs=raw_persist_docs, temporary=temporary) }}
   as (
     {{ sql }}
   );
@@ -58,7 +61,7 @@
   {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
 
   create or replace view {{ relation }}
-  {{ bigquery_table_options(persist_docs=raw_persist_docs) }}
+  {{ bigquery_table_options(persist_docs=raw_persist_docs, temporary=false) }}
   as (
     {{ sql }}
   );
@@ -70,6 +73,12 @@
 
 {% macro bigquery__drop_schema(database_name, schema_name) -%}
   {{ adapter.drop_schema(database_name, schema_name) }}
+{% endmacro %}
+
+{% macro bigquery__drop_relation(relation) -%}
+  {% call statement('drop_relation') -%}
+    drop {{ relation.type }} if exists {{ relation }}
+  {%- endcall %}
 {% endmacro %}
 
 {% macro bigquery__get_columns_in_relation(relation) -%}

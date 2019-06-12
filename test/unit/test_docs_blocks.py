@@ -2,15 +2,11 @@ import os
 import mock
 import unittest
 
-from dbt.config import RuntimeConfig
 from dbt.node_types import NodeType
-import dbt.utils
 from dbt.parser import docs
 from dbt.contracts.graph.unparsed import UnparsedDocumentationFile
 
 from .utils import config_from_parts_or_dicts
-
-#DocumentationParser
 
 
 SNOWPLOW_SESSIONS_DOCS = r'''
@@ -98,7 +94,8 @@ class DocumentationParserTest(unittest.TestCase):
         self.subdir_project_config = config_from_parts_or_dicts(
             project=subdir_project, profile=profile_data
         )
-    @mock.patch('dbt.clients.system')
+
+    @mock.patch('dbt.parser.docs.system')
     def test_load_file(self, system):
         system.load_file_contents.return_value = TEST_DOCUMENTATION_FILE
         system.find_matching.return_value = [{

@@ -10,8 +10,8 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.utils import timestring
 
 from dbt.parser import MacroParser, ModelParser, SeedParser, AnalysisParser, \
-    DocumentationParser, DataTestParser, HookParser, ArchiveParser, \
-    SchemaParser, ParserUtils, ArchiveBlockParser
+    DocumentationParser, DataTestParser, HookParser, SchemaParser, \
+    ParserUtils, SnapshotParser
 
 from dbt.contracts.project import ProjectList
 
@@ -75,8 +75,8 @@ class GraphLoader(object):
 
     def _load_nodes(self):
         self._load_sql_nodes(ModelParser, NodeType.Model, 'source_paths')
-        self._load_sql_nodes(ArchiveBlockParser, NodeType.Archive,
-                             'archive_paths')
+        self._load_sql_nodes(SnapshotParser, NodeType.Snapshot,
+                             'snapshot_paths')
         self._load_sql_nodes(AnalysisParser, NodeType.Analysis,
                              'analysis_paths')
         self._load_sql_nodes(DataTestParser, NodeType.Test, 'test_paths',
@@ -85,10 +85,6 @@ class GraphLoader(object):
         hook_parser = HookParser(self.root_project, self.all_projects,
                                  self.macro_manifest)
         self.nodes.update(hook_parser.load_and_parse())
-
-        archive_parser = ArchiveParser(self.root_project, self.all_projects,
-                                       self.macro_manifest)
-        self.nodes.update(archive_parser.load_and_parse())
 
         self._load_seeds()
 
