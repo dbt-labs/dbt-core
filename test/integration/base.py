@@ -804,10 +804,7 @@ class DBTIntegrationTest(unittest.TestCase):
         if columns is None:
             columns = self.get_relation_columns(relation_a)
 
-        if self.adapter_type == 'snowflake':
-            columns_csv = ", ".join(['"{}"'.format(record[0]) for record in columns])
-        else:
-            columns_csv = ", ".join(['{}'.format(record[0]) for record in columns])
+        columns_csv = ', '.join([self.adapter.quote(record[0]) for record in columns])
 
         if self.adapter_type == 'bigquery':
             except_operator = 'EXCEPT DISTINCT'

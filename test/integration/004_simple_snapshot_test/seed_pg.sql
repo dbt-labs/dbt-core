@@ -90,7 +90,7 @@ create table {database}.{schema}.snapshot_castillo_expected (
     ip_address VARCHAR(20),
 
     -- snapshotting fields
-    updated_at TIMESTAMP WITHOUT TIME ZONE,
+    "1-updated_at" TIMESTAMP WITHOUT TIME ZONE,
     dbt_valid_from TIMESTAMP WITHOUT TIME ZONE,
     dbt_valid_to   TIMESTAMP WITHOUT TIME ZONE,
     dbt_scd_id     TEXT,
@@ -105,7 +105,7 @@ insert into {database}.{schema}.snapshot_castillo_expected (
     email,
     gender,
     ip_address,
-    updated_at,
+    "1-updated_at",
     dbt_valid_from,
     dbt_valid_to,
     dbt_updated_at,

@@ -191,7 +191,7 @@ def print_snapshot_result_line(result, index, total):
     info, status = get_printable_result(result, 'snapshotted', 'snapshotting')
     cfg = model.get('config', {})
 
-    msg = "{info} {name} --> {target_database}.{target_schema}.{name}".format(
+    msg = "{info} {name}".format(
         info=info, name=model.name, **cfg)
     print_fancy_output_line(
         msg,
