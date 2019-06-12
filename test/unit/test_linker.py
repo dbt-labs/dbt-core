@@ -46,11 +46,12 @@ class LinkerTest(unittest.TestCase):
 
         manifest = _mock_manifest('ABC')
         (fd, fname) = tempfile.mkstemp()
-        self.linker.write_graph(fname, manifest)
-
-        new_linker = linker.from_file(fname)
         os.close(fd)
-        os.unlink(fname)
+        try:
+            self.linker.write_graph(fname, manifest)
+            new_linker = linker.from_file(fname)
+        finally:
+            os.unlink(fname)
 
         actual_nodes = new_linker.nodes()
         for node in expected_nodes:
