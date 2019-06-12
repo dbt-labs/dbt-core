@@ -380,11 +380,13 @@ def _build_docs_generate_subparser(subparsers, base_subparser):
     return generate_sub
 
 
-def _add_selection_arguments(*subparsers):
+def _add_selection_arguments(*subparsers, **kwargs):
+    models_name = kwargs.get('models_name', 'models')
     for sub in subparsers:
         sub.add_argument(
-            '-m',
-            '--models',
+            '-{}'.format(models_name[0]),
+            '--{}'.format(models_name),
+            dest='models',
             required=False,
             nargs='+',
             help="""
@@ -722,7 +724,8 @@ def parse_args(args):
                           rpc_sub)
     # --models, --exclude
     _add_selection_arguments(run_sub, compile_sub, generate_sub, test_sub,
-                             archive_sub, snapshot_sub)
+                             archive_sub)
+    _add_selection_arguments(snapshot_sub, models_name='select')
     # --full-refresh
     _add_table_mutability_arguments(run_sub, compile_sub)
 
