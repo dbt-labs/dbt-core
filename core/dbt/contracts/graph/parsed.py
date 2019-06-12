@@ -47,6 +47,10 @@ CONFIG_CONTRACT = {
         'materialized': {
             'type': 'string',
         },
+        'persist_docs': {
+            'type': 'object',
+            'additionalProperties': True,
+        },
         'post-hook': {
             'type': 'array',
             'items': HOOK_CONTRACT,
@@ -86,8 +90,8 @@ CONFIG_CONTRACT = {
     },
     'required': [
         'enabled', 'materialized', 'post-hook', 'pre-hook', 'vars',
-        'quoting', 'column_types', 'tags'
-    ],
+        'quoting', 'column_types', 'tags', 'persist_docs'
+    ]
 }
 
 

@@ -26,19 +26,31 @@
 
 {%- endmacro -%}
 
+{% macro bigquery_table_options(persist_docs, temporary) %}
+  {% set opts = {} %}
+
+  {% set description = get_relation_comment(persist_docs, model) %}
+  {%- if description is not none -%}
+    {% do opts.update({'description': "'" ~ description ~ "'"}) %}
+  {% endif %}
+  {% if temporary %}
+    {% do opts.update({'expiration_timestamp': 'TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)'}) %}
+  {% endif %}
+
+  OPTIONS({% for opt_key, opt_val in opts.items() %}
+    {{ opt_key }}={{ opt_val }}
+  {% endfor %})
+{%- endmacro -%}
 
 {% macro bigquery__create_table_as(temporary, relation, sql) -%}
   {%- set raw_partition_by = config.get('partition_by', none) -%}
   {%- set raw_cluster_by = config.get('cluster_by', none) -%}
+  {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
 
   create or replace table {{ relation }}
   {{ partition_by(raw_partition_by) }}
   {{ cluster_by(raw_cluster_by) }}
-  {% if temporary %}
-  OPTIONS(
-      expiration_timestamp=TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)
-  )
-  {% endif %}
+  {{ bigquery_table_options(persist_docs=raw_persist_docs, temporary=temporary) }}
   as (
     {{ sql }}
   );
@@ -46,7 +58,11 @@
 
 
 {% macro bigquery__create_view_as(relation, sql) -%}
-  create or replace view {{ relation }} as (
+  {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
+
+  create or replace view {{ relation }}
+  {{ bigquery_table_options(persist_docs=raw_persist_docs, temporary=false) }}
+  as (
     {{ sql }}
   );
 {% endmacro %}

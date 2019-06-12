@@ -7,7 +7,7 @@ from dbt.adapters.factory import get_adapter_class_by_name
 
 class SourceConfig(object):
     AppendListFields = {'pre-hook', 'post-hook', 'tags'}
-    ExtendDictFields = {'vars', 'column_types', 'quoting'}
+    ExtendDictFields = {'vars', 'column_types', 'quoting', 'persist_docs'}
     ClobberFields = {
         'alias',
         'schema',
@@ -100,11 +100,12 @@ class SourceConfig(object):
                 self.in_model_config[key] = current
             elif key in self.ExtendDictFields:
                 current = self.in_model_config.get(key, {})
-                if not isinstance(current, dict):
+                try:
+                    current.update(value)
+                except (ValueError, TypeError, AttributeError):
                     dbt.exceptions.raise_compiler_error(
                         'Invalid config field: "{}" must be a dict'.format(key)
                     )
-                current.update(value)
                 self.in_model_config[key] = current
             else:  # key in self.ClobberFields or self.AdapterSpecificConfigs
                 self.in_model_config[key] = value

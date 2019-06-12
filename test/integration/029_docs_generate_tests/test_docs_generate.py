@@ -131,18 +131,18 @@ class TestDocsGenerate(DBTIntegrationTest):
     def _redshift_stats(self):
         return {
             "has_stats": {
-              "id": "has_stats",
-              "label": "Has Stats?",
-              "value": True,
-              "description": "Indicates whether there are statistics for this table",
-              "include": False
+                "id": "has_stats",
+                "label": "Has Stats?",
+                "value": True,
+                "description": "Indicates whether there are statistics for this table",
+                "include": False
             },
             "encoded": {
-              "id": "encoded",
-              "label": "Encoded",
-              "value": "Y",
-              "description": "Indicates whether any column in the table has compression encoding defined.",
-              "include": True
+                "id": "encoded",
+                "label": "Encoded",
+                "value": "Y",
+                "description": "Indicates whether any column in the table has compression encoding defined.",
+                "include": True
             },
             "diststyle": {
               "id": "diststyle",
@@ -152,39 +152,39 @@ class TestDocsGenerate(DBTIntegrationTest):
               "include": True
             },
             "max_varchar": {
-              "id": "max_varchar",
-              "label": "Max Varchar",
-              "value": AnyFloat(),
-              "description": "Size of the largest column that uses a VARCHAR data type.",
-              "include": True
+                "id": "max_varchar",
+                "label": "Max Varchar",
+                "value": AnyFloat(),
+                "description": "Size of the largest column that uses a VARCHAR data type.",
+                "include": True
             },
             "size": {
-              "id": "size",
-              "label": "Approximate Size",
-              "value": AnyFloat(),
-              "description": "Approximate size of the table, calculated from a count of 1MB blocks",
-              "include": True
+                "id": "size",
+                "label": "Approximate Size",
+                "value": AnyFloat(),
+                "description": "Approximate size of the table, calculated from a count of 1MB blocks",
+                "include": True
             },
             "pct_used": {
-              "id": "pct_used",
-              "label": "Disk Utilization",
-              "value": AnyFloat(),
-              "description": "Percent of available space that is used by the table.",
-              "include": True
+                "id": "pct_used",
+                "label": "Disk Utilization",
+                "value": AnyFloat(),
+                "description": "Percent of available space that is used by the table.",
+                "include": True
             },
             "stats_off": {
-              "id": "stats_off",
-              "label": "Stats Off",
-              "value": AnyFloat(),
-              "description": "Number that indicates how stale the table statistics are; 0 is current, 100 is out of date.",
-              "include": True
+                "id": "stats_off",
+                "label": "Stats Off",
+                "value": AnyFloat(),
+                "description": "Number that indicates how stale the table statistics are; 0 is current, 100 is out of date.",
+                "include": True
             },
             "rows": {
-              "id": "rows",
-              "label": "Approximate Row Count",
-              "value": AnyFloat(),
-              "description": "Approximate number of rows in the table. This value includes rows marked for deletion, but not yet vacuumed.",
-              "include": True
+                "id": "rows",
+                "label": "Approximate Row Count",
+                "value": AnyFloat(),
+                "description": "Approximate number of rows in the table. This value includes rows marked for deletion, but not yet vacuumed.",
+                "include": True
             },
         }
 
@@ -226,7 +226,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'id': 'location',
                 'label': 'Location',
                 'value': 'US',
-                'description':  'The geographic location of this table',
+                'description': 'The geographic location of this table',
                 'include': True,
             },
         }
@@ -541,7 +541,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         clustering_stats = self._bigquery_stats(True, partition='DAY',
                                                 cluster='first_name')
         multi_clustering_stats = self._bigquery_stats(True, partition='DAY',
-                                                cluster='first_name,email')
+                                                      cluster='first_name,email')
         nesting_columns = {
             'field_1': {
                 "name": "field_1",
@@ -787,7 +787,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'original_file_path': helpers_path,
                 'package_name': 'dbt',
                 'root_path': _normalize(os.path.join(
-                    os.getcwd(), 'core', 'dbt','include', 'global_project'
+                    os.getcwd(), 'core', 'dbt', 'include', 'global_project'
                 )),
                 'name': 'column_list',
                 'unique_id': 'macro.dbt.column_list',
@@ -818,6 +818,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             'column_types': {},
             'quoting': {},
             'tags': [],
+            'persist_docs': {},
         }
 
         return {
@@ -886,6 +887,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'config': {
                         'enabled': True,
                         'materialized': 'seed',
+                        'persist_docs': {},
                         'pre-hook': [],
                         'post-hook': [],
                         'vars': {},
@@ -907,6 +909,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'column_types': {},
                         'enabled': True,
                         'materialized': 'view',
+                        'persist_docs': {},
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
@@ -939,6 +942,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'column_types': {},
                         'enabled': True,
                         'materialized': 'view',
+                        'persist_docs': {},
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
@@ -972,6 +976,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'column_types': {},
                         'enabled': True,
                         'materialized': 'view',
+                        'persist_docs': {},
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
@@ -1043,6 +1048,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'column_types': {},
                         'enabled': True,
                         'materialized': 'ephemeral',
+                        'persist_docs': {},
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
@@ -1089,6 +1095,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'column_types': {},
                         'enabled': True,
                         'materialized': 'table',
+                        'persist_docs': {},
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
@@ -1153,6 +1160,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'column_types': {},
                         'enabled': True,
                         'materialized': 'view',
+                        'persist_docs': {},
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
@@ -1208,6 +1216,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'column_types': {},
                         'enabled': True,
                         'materialized': 'seed',
+                        'persist_docs': {},
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
@@ -1384,6 +1393,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'enabled': True,
                         'materialized': 'table',
                         'partition_by': 'updated_at',
+                        'persist_docs': {},
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
@@ -1435,11 +1445,12 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.multi_clustered': {
                     'alias': 'multi_clustered',
                     'config': {
-                        'cluster_by': ['first_name','email'],
+                        'cluster_by': ['first_name', 'email'],
                         'column_types': {},
                         'enabled': True,
                         'materialized': 'table',
                         'partition_by': 'updated_at',
+                        'persist_docs': {},
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
@@ -1494,6 +1505,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'column_types': {},
                         'enabled': True,
                         'materialized': 'view',
+                        'persist_docs': {},
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
@@ -1551,6 +1563,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'column_types': {},
                         'enabled': True,
                         'materialized': 'table',
+                        'persist_docs': {},
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
@@ -1600,6 +1613,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'config': {
                         'enabled': True,
                         'materialized': 'seed',
+                        'persist_docs': {},
                         'pre-hook': [],
                         'post-hook': [],
                         'vars': {},
@@ -1619,7 +1633,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'model.test.multi_clustered': [],
                 'model.test.nested_table': ['model.test.nested_view'],
                 'model.test.nested_view': [],
-                'seed.test.seed': ['model.test.clustered','model.test.multi_clustered']
+                'seed.test.seed': ['model.test.clustered', 'model.test.multi_clustered']
             },
             'parent_map': {
                 'model.test.clustered': ['seed.test.seed'],
@@ -1665,14 +1679,15 @@ class TestDocsGenerate(DBTIntegrationTest):
                     "tags": [],
                     "config": {
                         "bind": False,
+                        "column_types": {},
                         "enabled": True,
                         "materialized": "view",
-                        "pre-hook": [],
+                        "persist_docs": {},
                         "post-hook": [],
-                        "vars": config_vars,
-                        "column_types": {},
+                        "pre-hook": [],
                         "quoting": {},
                         "tags": [],
+                        "vars": config_vars,
                     },
                     "schema": my_schema_name,
                     'database': self.default_database,
@@ -1722,14 +1737,15 @@ class TestDocsGenerate(DBTIntegrationTest):
                     "fqn": ["test", "seed"],
                     "tags": [],
                     "config": {
+                        "column_types": {},
                         "enabled": True,
                         "materialized": "seed",
-                        "pre-hook": [],
+                        "persist_docs": {},
                         "post-hook": [],
-                        "vars": {},
-                        "column_types": {},
+                        "pre-hook": [],
                         "quoting": {},
                         "tags": [],
+                        "vars": {},
                     },
                     "schema": my_schema_name,
                     'database': self.default_database,
@@ -1802,6 +1818,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             'database': model_database,
             'enabled': True,
             'materialized': 'view',
+            'persist_docs': {},
             'pre-hook': [],
             'post-hook': [],
             'vars': config_vars,
@@ -1843,7 +1860,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'first_name': {'description': "The user's first name", 'name': 'first_name'},
                         'email': {'description': "The user's email", 'name': 'email'},
                         'ip_address': {'description': "The user's IP address", 'name': 'ip_address'},
-                        'updated_at': {'description': "The last time this user's email was updated", 'name': 'updated_at'}
+                        'updated_at': {'description': "The last time this user's email was updated",
+                                       'name': 'updated_at'}
                     },
                     'compiled': True,
                     'compiled_sql': compiled_sql,
@@ -1896,6 +1914,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'column_types': {},
                         'enabled': True,
                         'materialized': 'seed',
+                        'persist_docs': {},
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
@@ -1935,15 +1954,16 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'fail': None,
                 'node': {
                     'alias': 'not_null_model_id',
-                     'build_path': _normalize('target/compiled/test/schema_test/not_null_model_id.sql'),
-                     'column_name': 'id',
-                     'columns': {},
-                     'compiled': True,
-                     'compiled_sql': AnyStringWith('id is null'),
-                     'config': {
+                    'build_path': _normalize('target/compiled/test/schema_test/not_null_model_id.sql'),
+                    'column_name': 'id',
+                    'columns': {},
+                    'compiled': True,
+                    'compiled_sql': AnyStringWith('id is null'),
+                    'config': {
                         'column_types': {},
                         'enabled': True,
                         'materialized': 'view',
+                        'persist_docs': {},
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
@@ -1992,6 +2012,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'column_types': {},
                         'enabled': True,
                         'materialized': 'view',
+                        'persist_docs': {},
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
@@ -2006,7 +2027,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes': [],
                     'extra_ctes_injected': True,
                     'fqn': ['test', 'schema_test', 'nothing_model_'],
-                    'injected_sql':  AnyStringWith('select 0'),
+                    'injected_sql': AnyStringWith('select 0'),
                     'name': 'nothing_model_',
                     'original_file_path': schema_yml_path,
                     'package_name': 'test',
@@ -2019,7 +2040,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'database': self.default_database,
                     'tags': ['schema'],
                     'unique_id': 'test.test.nothing_model_',
-                    'wrapped_sql':  AnyStringWith('select 0'),
+                    'wrapped_sql': AnyStringWith('select 0'),
                 },
                 'thread_id': ANY,
                 'timing': [ANY, ANY],
@@ -2041,6 +2062,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'column_types': {},
                         'enabled': True,
                         'materialized': 'view',
+                        'persist_docs': {},
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
@@ -2126,6 +2148,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'config': {
                         'enabled': True,
                         'materialized': 'table',
+                        'persist_docs': {},
                         'pre-hook': [],
                         'post-hook': [],
                         'vars': config_vars,
@@ -2214,6 +2237,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'config': {
                         'enabled': True,
                         'materialized': 'view',
+                        'persist_docs': {},
                         'pre-hook': [],
                         'post-hook': [],
                         'vars': config_vars,
@@ -2291,6 +2315,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'column_types': {},
                         'enabled': True,
                         'materialized': 'seed',
+                        'persist_docs': {},
                         'post-hook': [],
                         'pre-hook': [],
                         'quoting': {},
@@ -2385,11 +2410,13 @@ class TestDocsGenerate(DBTIntegrationTest):
         # accordingly, only run it when we think snowflake things should work
         from dbt.adapters.snowflake import connections as snowflake_conn
         old_connect = snowflake_conn.snowflake.connector.connect
+
         def connect(*args, **kwargs):
             kwargs['session_parameters'] = {
-                'QUOTED_IDENTIFIERS_IGNORE_CASE':True
+                'QUOTED_IDENTIFIERS_IGNORE_CASE': True
             }
             return old_connect(*args, **kwargs)
+
         with patch.object(snowflake_conn.snowflake.connector, 'connect', connect):
             self.run_and_generate({
                 'quoting': {
