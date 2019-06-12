@@ -161,6 +161,40 @@ class TestRedshiftAdapter(unittest.TestCase):
             keepalives_idle=256)
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
+    def test_search_path(self, psycopg2):
+        self.config.credentials = self.config.credentials.incorporate(
+            search_path="test"
+        )
+        connection = self.adapter.acquire_connection('dummy')
+
+        psycopg2.connect.assert_called_once_with(
+            dbname='redshift',
+            user='root',
+            host='thishostshouldnotexist',
+            password='password',
+            port=5439,
+            connect_timeout=10,
+            options="-c search_path=test",
+            keepalives_idle=RedshiftAdapter.ConnectionManager.DEFAULT_TCP_KEEPALIVE)
+
+    @mock.patch('dbt.adapters.postgres.connections.psycopg2')
+    def test_search_path_with_space(self, psycopg2):
+        self.config.credentials = self.config.credentials.incorporate(
+            search_path="test test"
+        )
+        connection = self.adapter.acquire_connection('dummy')
+
+        psycopg2.connect.assert_called_once_with(
+            dbname='redshift',
+            user='root',
+            host='thishostshouldnotexist',
+            password='password',
+            port=5439,
+            connect_timeout=10,
+            options="-c search_path=test\ test",
+            keepalives_idle=RedshiftAdapter.ConnectionManager.DEFAULT_TCP_KEEPALIVE)
+
+    @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_set_zero_keepalive(self, psycopg2):
         self.config.credentials = self.config.credentials.incorporate(
             keepalives_idle=0

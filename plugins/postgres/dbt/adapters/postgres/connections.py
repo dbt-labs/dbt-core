@@ -33,6 +33,9 @@ POSTGRES_CREDENTIALS_CONTRACT = {
         'schema': {
             'type': 'string',
         },
+        'search_path': {
+            'type': 'string',
+        },
         'keepalives_idle': {
             'type': 'integer',
         },
@@ -53,7 +56,7 @@ class PostgresCredentials(Credentials):
         return 'postgres'
 
     def _connection_keys(self):
-        return ('host', 'port', 'user', 'database', 'schema')
+        return ('host', 'port', 'user', 'database', 'schema', 'search_path')
 
 
 class PostgresConnectionManager(SQLConnectionManager):
@@ -104,6 +107,14 @@ class PostgresConnectionManager(SQLConnectionManager):
         # call an invalid setsockopt() call (contrary to the docs).
         if keepalives_idle:
             kwargs['keepalives_idle'] = keepalives_idle
+
+        # psycopg2 doesn't support search_path officially,
+        # see https://github.com/psycopg/psycopg2/issues/465
+        search_path = credentials.get('search_path')
+        if search_path is not None and search_path != '':
+            # see https://postgresql.org/docs/9.5/libpq-connect.html
+            kwargs['options'] = '-c search_path={}'.format(
+                search_path.replace(' ', '\\ '))
 
         try:
             handle = psycopg2.connect(
