@@ -240,11 +240,14 @@ def create_warn_undefined_env(node):
                     raise
                 else:
                     msg = 'Compilation warning in {}:\n\t{}'
-                    model_desc = "{} {} ({})".format(
-                        self.node.get('resource_type'),
-                        self.node.get('name', 'unknown'),
-                        self.node.get('original_file_path')
-                    )
+                    if self.node is None:
+                        model_desc = 'rendering'
+                    else:
+                        model_desc = "{} {} ({})".format(
+                            self.node.get('resource_type'),
+                            self.node.get('name', 'unknown'),
+                            self.node.get('original_file_path')
+                        )
                     logger.warning(msg.format(model_desc, str(exc)))
 
         def __eq__(self, other):
