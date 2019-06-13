@@ -625,8 +625,7 @@ def _build_run_operation_subparser(subparsers, base_subparser):
             of dbt. Please use it with caution"""
     )
     sub.add_argument(
-        '--macro',
-        required=True,
+        'macro',
         help="""
             Specify the macro to invoke. dbt will call this macro with the
             supplied arguments and then exit"""

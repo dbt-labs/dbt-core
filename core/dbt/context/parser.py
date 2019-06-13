@@ -4,23 +4,6 @@ import dbt.context.common
 from dbt.adapters.factory import get_adapter
 
 
-execute = False
-
-
-def ref(db_wrapper, model, config, manifest):
-
-    def ref(*args):
-        if len(args) == 1 or len(args) == 2:
-            model.refs.append(list(args))
-
-        else:
-            dbt.exceptions.ref_invalid_args(model, args)
-
-        return db_wrapper.adapter.Relation.create_from_node(config, model)
-
-    return ref
-
-
 def docs(unparsed, docrefs, column_name=None):
 
     def do_docs(*args):
@@ -44,14 +27,6 @@ def docs(unparsed, docrefs, column_name=None):
         return True
 
     return do_docs
-
-
-def source(db_wrapper, model, config, manifest):
-    def do_source(source_name, table_name):
-        model.sources.append([source_name, table_name])
-        return db_wrapper.adapter.Relation.create_from_node(config, model)
-
-    return do_source
 
 
 class Config(object):
@@ -123,6 +98,34 @@ class Var(dbt.context.common.Var):
         return None
 
 
+class RefResolver(dbt.context.common.BaseResolver):
+    def __call__(self, *args):
+        # When you call ref(), this is what happens at parse time
+        if len(args) == 1 or len(args) == 2:
+            self.model.refs.append(list(args))
+
+        else:
+            dbt.exceptions.ref_invalid_args(self.model, args)
+
+        return self.Relation.create_from_node(self.config, self.model)
+
+
+class SourceResolver(dbt.context.common.BaseResolver):
+    def __call__(self, source_name, table_name):
+        # When you call source(), this is what happens at parse time
+        self.model.sources.append([source_name, table_name])
+        return self.Relation.create_from_node(self.config, self.model)
+
+
+class Provider(object):
+    execute = False
+    Config = Config
+    DatabaseWrapper = DatabaseWrapper
+    Var = Var
+    ref = RefResolver
+    source = SourceResolver
+
+
 def generate(model, runtime_config, manifest, source_config):
     # during parsing, we don't have a connection, but we might need one, so we
     # have to acquire it.
@@ -130,11 +133,14 @@ def generate(model, runtime_config, manifest, source_config):
     # projects it would be possible to parse without connecting to the db
     with get_adapter(runtime_config).connection_named(model.get('name')):
         return dbt.context.common.generate(
-            model, runtime_config, manifest, source_config, dbt.context.parser
+            model, runtime_config, manifest, source_config, Provider()
         )
 
 
 def generate_macro(model, runtime_config, manifest):
+    # parser.generate_macro is called by the get_${attr}_func family of Parser
+    # methods, which preparse and cache the generate_${attr}_name family of
+    # macros for use during parsing
     return dbt.context.common.generate_execute_macro(
-        model, runtime_config, manifest, dbt.context.parser
+        model, runtime_config, manifest, Provider()
     )
