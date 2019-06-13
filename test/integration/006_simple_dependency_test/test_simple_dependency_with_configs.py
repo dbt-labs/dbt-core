@@ -4,7 +4,7 @@ class BaseTestSimpleDependencyWithConfigs(DBTIntegrationTest):
 
     def setUp(self):
         DBTIntegrationTest.setUp(self)
-        self.run_sql_file("test/integration/006_simple_dependency_test/seed.sql")
+        self.run_sql_file("seed.sql")
 
     @property
     def schema(self):
@@ -12,7 +12,7 @@ class BaseTestSimpleDependencyWithConfigs(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/006_simple_dependency_test/models"
+        return "models"
 
 class TestSimpleDependencyWithConfigs(BaseTestSimpleDependencyWithConfigs):
     @property

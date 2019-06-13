@@ -28,7 +28,7 @@ class TestEventTracking(DBTIntegrationTest):
 
     @staticmethod
     def dir(path):
-        return "test/integration/033_event_tracking_test/" + path.lstrip("/")
+        return path.lstrip("/")
 
     @property
     def models(self):
@@ -557,29 +557,16 @@ class TestEventTrackingUnableToConnect(TestEventTracking):
         )
 
 
-class TestEventTrackingArchive(TestEventTracking):
+class TestEventTrackingSnapshot(TestEventTracking):
     @property
     def project_config(self):
         return {
-            "archive": [
-                {
-                    "source_schema": self.unique_schema(),
-                    "target_schema": self.unique_schema(),
-                    "tables": [
-                        {
-                            "source_table": "archivable",
-                            "target_table": "archived",
-                            "updated_at": '"updated_at"',
-                            "unique_key": '"id"'
-                        }
-                    ]
-                }
-            ]
+            "snapshot-paths": ['snapshots']
         }
 
     @use_profile("postgres")
-    def test__event_tracking_archive(self):
-        self.run_dbt(["run", "--models", "archivable"])
+    def test__event_tracking_snapshot(self):
+        self.run_dbt(["run", "--models", "snapshottable"])
 
         expected_calls = [
             call(
@@ -604,20 +591,20 @@ class TestEventTrackingArchive(TestEventTracking):
 
         # the model here has a raw_sql that contains the schema, which changes
         expected_contexts = [
-            self.build_context('archive', 'start'),
+            self.build_context('snapshot', 'start'),
             self.run_context(
                 hashed_contents=ANY,
-                model_id='3cdcd0fef985948fd33af308468da3b9',
+                model_id='820793a4def8d8a38d109a9709374849',
                 index=1,
                 total=1,
-                status='INSERT 0 1',
-                materialization='archive'
+                status='SELECT 1',
+                materialization='snapshot'
             ),
-            self.build_context('archive', 'end', result_type='ok')
+            self.build_context('snapshot', 'end', result_type='ok')
         ]
 
         self.run_event_test(
-            ["archive"],
+            ["snapshot"],
             expected_calls,
             expected_contexts
         )

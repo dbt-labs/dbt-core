@@ -9,8 +9,8 @@ class TestSchemaTests(DBTIntegrationTest):
 
     def setUp(self):
         DBTIntegrationTest.setUp(self)
-        self.run_sql_file("test/integration/008_schema_tests_test/seed.sql")
-        self.run_sql_file("test/integration/008_schema_tests_test/seed_failure.sql")
+        self.run_sql_file("seed.sql")
+        self.run_sql_file("seed_failure.sql")
 
     @property
     def schema(self):
@@ -18,7 +18,7 @@ class TestSchemaTests(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/008_schema_tests_test/models-v2/models"
+        return "models-v2/models"
 
     def run_schema_validations(self):
         args = FakeArgs()
@@ -60,7 +60,7 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
 
     def setUp(self):
         DBTIntegrationTest.setUp(self)
-        self.run_sql_file("test/integration/008_schema_tests_test/seed.sql")
+        self.run_sql_file("seed.sql")
 
     @property
     def schema(self):
@@ -68,7 +68,7 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/008_schema_tests_test/models-v2/malformed"
+        return "models-v2/malformed"
 
     def run_schema_validations(self):
         args = FakeArgs()
@@ -102,7 +102,7 @@ class TestHooksInTests(DBTIntegrationTest):
     @property
     def models(self):
         # test ephemeral models so we don't need to do a run (which would fail)
-        return "test/integration/008_schema_tests_test/ephemeral"
+        return "ephemeral"
 
     @property
     def project_config(self):
@@ -129,7 +129,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
 
     def setUp(self):
         DBTIntegrationTest.setUp(self)
-        self.run_sql_file("test/integration/008_schema_tests_test/seed.sql")
+        self.run_sql_file("seed.sql")
 
     @property
     def schema(self):
@@ -156,12 +156,12 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         # dbt-integration-project contains a schema.yml file
         # both should work!
         return {
-            "macro-paths": ["test/integration/008_schema_tests_test/macros-v2"],
+            "macro-paths": ["macros-v2"],
         }
 
     @property
     def models(self):
-        return "test/integration/008_schema_tests_test/models-v2/custom"
+        return "models-v2/custom"
 
     def run_schema_validations(self):
         args = FakeArgs()
@@ -193,12 +193,12 @@ class TestBQSchemaTests(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/008_schema_tests_test/models-v2/bq-models"
+        return "models-v2/bq-models"
 
     @staticmethod
     def dir(path):
         return os.path.normpath(
-            os.path.join('test/integration/008_schema_tests_test/models-v2', path))
+            os.path.join('models-v2', path))
 
     def run_schema_validations(self):
         args = FakeArgs()

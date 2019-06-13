@@ -4,11 +4,11 @@ class NodeType(object):
     Model = 'model'
     Analysis = 'analysis'
     Test = 'test'
-    Archive = 'archive'
+    Snapshot = 'snapshot'
     Macro = 'macro'
     Operation = 'operation'
     Seed = 'seed'
-    Documentation = 'documentation'
+    Documentation = 'docs'
     Source = 'source'
     RPCCall = 'rpc'
 
@@ -17,7 +17,7 @@ class NodeType(object):
         return [
             cls.Model,
             cls.Test,
-            cls.Archive,
+            cls.Snapshot,
             cls.Analysis,
             cls.Operation,
             cls.Seed,
@@ -30,7 +30,7 @@ class NodeType(object):
         return [
             cls.Model,
             cls.Seed,
-            cls.Archive,
+            cls.Snapshot,
         ]
 
 

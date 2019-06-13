@@ -7,7 +7,33 @@ import dbt.config
 import dbt.exceptions
 
 
-class TestSimpleDependency(DBTIntegrationTest):
+class BaseDependencyTest(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "local_dependency_006"
+
+    @property
+    def models(self):
+        return "local_models"
+
+    def base_schema(self):
+        return self.unique_schema()
+
+    def configured_schema(self):
+        return self.unique_schema() + '_configured'
+
+    @property
+    def packages_config(self):
+        return {
+            "packages": [
+                {
+                    'local': 'local_dependency'
+                }
+            ]
+        }
+
+
+class TestSimpleDependency(BaseDependencyTest):
 
     @property
     def schema(self):
@@ -15,17 +41,7 @@ class TestSimpleDependency(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/006_simple_dependency_test/local_models"
-
-    @property
-    def packages_config(self):
-        return {
-            "packages": [
-                {
-                    'local': 'test/integration/006_simple_dependency_test/local_dependency'
-                }
-            ]
-        }
+        return "local_models"
 
     def base_schema(self):
         return self.unique_schema()
@@ -54,7 +70,7 @@ class TestMissingDependency(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/006_simple_dependency_test/sad_iteration_models"
+        return "sad_iteration_models"
 
     @use_profile('postgres')
     def test_postgres_missing_dependency(self):
@@ -70,7 +86,7 @@ class TestSimpleDependencyWithSchema(TestSimpleDependency):
     @property
     def project_config(self):
         return {
-            'macro-paths': ['test/integration/006_simple_dependency_test/schema_override_macros'],
+            'macro-paths': ['schema_override_macros'],
             'models': {
                 'schema': 'dbt_test',
             }
@@ -107,7 +123,7 @@ class TestSimpleDependencyHooks(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/006_simple_dependency_test/hook_models"
+        return "hook_models"
 
     @property
     def project_config(self):
@@ -124,10 +140,10 @@ class TestSimpleDependencyHooks(DBTIntegrationTest):
         return {
             "packages": [
                 {
-                    'local': 'test/integration/006_simple_dependency_test/early_hook_dependency'
+                    'local': 'early_hook_dependency'
                 },
                 {
-                    'local': 'test/integration/006_simple_dependency_test/late_hook_dependency'
+                    'local': 'late_hook_dependency'
                 }
             ]
         }

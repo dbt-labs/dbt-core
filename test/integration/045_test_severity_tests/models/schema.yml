@@ -5,7 +5,7 @@ models:
       - name: email
         tests:
           - not_null:
-              severity: WARN
+              severity: "{{ 'error' if var('strict', false) else 'warn' }}"
 sources:
   - name: source
     schema: "{{ var('test_run_schema') }}"
@@ -16,4 +16,4 @@ sources:
           - name: email
             tests:
               - not_null:
-                  severity: WARN
+                  severity: "{{ 'error' if var('strict', false) else 'warn' }}"

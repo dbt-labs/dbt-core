@@ -8,7 +8,7 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
 
     @property
     def project_config(self):
-        return {"data-paths": ["test/integration/017_runtime_materialization_tests/data"]}
+        return {"data-paths": ["data"]}
 
     @property
     def schema(self):
@@ -16,7 +16,7 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/017_runtime_materialization_tests/models"
+        return "models"
 
     @use_profile('postgres')
     def test_postgres_full_refresh(self):
@@ -29,12 +29,12 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
         self.assertTablesEqual("seed","materialized")
 
         # adds one record to the incremental model. full-refresh should truncate then re-run
-        self.run_sql_file("test/integration/017_runtime_materialization_tests/invalidate_incremental.sql")
+        self.run_sql_file("invalidate_incremental.sql")
         results = self.run_dbt(['run', '--full-refresh'])
         self.assertEqual(len(results), 3)
         self.assertTablesEqual("seed","incremental")
 
-        self.run_sql_file("test/integration/017_runtime_materialization_tests/update.sql")
+        self.run_sql_file("update.sql")
 
         results = self.run_dbt(['run', '--full-refresh'])
         self.assertEqual(len(results), 3)
@@ -46,7 +46,7 @@ class TestRuntimeMaterialization(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_delete__dbt_tmp_relation(self):
         # This creates a __dbt_tmp view - make sure it doesn't interfere with the dbt run
-        self.run_sql_file("test/integration/017_runtime_materialization_tests/create_view__dbt_tmp.sql")
+        self.run_sql_file("create_view__dbt_tmp.sql")
         results = self.run_dbt(['run', '--model', 'view'])
         self.assertEqual(len(results), 1)
 

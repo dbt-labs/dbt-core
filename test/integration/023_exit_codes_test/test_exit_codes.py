@@ -11,43 +11,31 @@ class TestExitCodes(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/023_exit_codes_test/models"
+        return "models"
+
 
     @property
     def project_config(self):
         return {
-            "archive": [
-                {
-                    "source_schema": self.unique_schema(),
-                    "target_schema": self.unique_schema(),
-                    "tables": [
-                        {
-                            "source_table": "good",
-                            "target_table": "good_archive",
-                            "updated_at": 'updated_at',
-                            "unique_key": 'id'
-                        }
-                    ]
-                }
-            ]
+            "snapshot-paths": ['snapshots-good'],
         }
 
     @use_profile('postgres')
-    def test_exit_code_run_succeed(self):
+    def test_postgres_exit_code_run_succeed(self):
         results, success = self.run_dbt_and_check(['run', '--model', 'good'])
         self.assertEqual(len(results), 1)
         self.assertTrue(success)
         self.assertTableDoesExist('good')
 
     @use_profile('postgres')
-    def test__exit_code_run_fail(self):
+    def test__postgres_exit_code_run_fail(self):
         results, success = self.run_dbt_and_check(['run', '--model', 'bad'])
         self.assertEqual(len(results), 1)
         self.assertFalse(success)
         self.assertTableDoesNotExist('bad')
 
     @use_profile('postgres')
-    def test___schema_test_pass(self):
+    def test__postgres_schema_test_pass(self):
         results, success = self.run_dbt_and_check(['run', '--model', 'good'])
         self.assertEqual(len(results), 1)
         self.assertTrue(success)
@@ -56,7 +44,7 @@ class TestExitCodes(DBTIntegrationTest):
         self.assertTrue(success)
 
     @use_profile('postgres')
-    def test___schema_test_fail(self):
+    def test__postgres_schema_test_fail(self):
         results, success = self.run_dbt_and_check(['run', '--model', 'dupe'])
         self.assertEqual(len(results), 1)
         self.assertTrue(success)
@@ -65,20 +53,20 @@ class TestExitCodes(DBTIntegrationTest):
         self.assertFalse(success)
 
     @use_profile('postgres')
-    def test___compile(self):
+    def test__postgres_compile(self):
         results, success = self.run_dbt_and_check(['compile'])
         self.assertEqual(len(results), 7)
         self.assertTrue(success)
 
     @use_profile('postgres')
-    def test___archive_pass(self):
+    def test__postgres_snapshot_pass(self):
         self.run_dbt_and_check(['run', '--model', 'good'])
-        results, success = self.run_dbt_and_check(['archive'])
+        results, success = self.run_dbt_and_check(['snapshot'])
         self.assertEqual(len(results), 1)
-        self.assertTableDoesExist('good_archive')
+        self.assertTableDoesExist('good_snapshot')
         self.assertTrue(success)
 
-class TestExitCodesArchiveFail(DBTIntegrationTest):
+class TestExitCodesSnapshotFail(DBTIntegrationTest):
 
     @property
     def schema(self):
@@ -86,36 +74,23 @@ class TestExitCodesArchiveFail(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/023_exit_codes_test/models"
+        return "models"
 
     @property
     def project_config(self):
         return {
-            "archive": [
-                {
-                    "source_schema": self.unique_schema(),
-                    "target_schema": self.unique_schema(),
-                    "tables": [
-                        {
-                            "source_table": "good",
-                            "target_table": "good_archive",
-                            "updated_at": 'updated_at_not_real',
-                            "unique_key": 'id'
-                        }
-                    ]
-                }
-            ]
+            "snapshot-paths": ['snapshots-bad'],
         }
 
     @use_profile('postgres')
-    def test___archive_fail(self):
+    def test___snapshot_fail(self):
         results, success = self.run_dbt_and_check(['run', '--model', 'good'])
         self.assertTrue(success)
         self.assertEqual(len(results), 1)
 
-        results, success = self.run_dbt_and_check(['archive'])
+        results, success = self.run_dbt_and_check(['snapshot'])
         self.assertEqual(len(results), 1)
-        self.assertTableDoesNotExist('good_archive')
+        self.assertTableDoesNotExist('good_snapshot')
         self.assertFalse(success)
 
 class TestExitCodesDeps(DBTIntegrationTest):
@@ -126,7 +101,7 @@ class TestExitCodesDeps(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/023_exit_codes_test/models"
+        return "models"
 
     @property
     def packages_config(self):
@@ -148,7 +123,7 @@ class TestExitCodesDepsFail(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/023_exit_codes_test/models"
+        return "models"
 
 
     @property
@@ -178,12 +153,12 @@ class TestExitCodesSeed(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/023_exit_codes_test/models"
+        return "models"
 
     @property
     def project_config(self):
         return {
-            "data-paths": ['test/integration/023_exit_codes_test/data-good']
+            "data-paths": ['data-good']
         }
 
     @use_profile('postgres')
@@ -199,12 +174,12 @@ class TestExitCodesSeedFail(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/023_exit_codes_test/models"
+        return "models"
 
     @property
     def project_config(self):
         return {
-            "data-paths": ['test/integration/023_exit_codes_test/data-bad']
+            "data-paths": ['data-bad']
         }
 
     @use_profile('postgres')

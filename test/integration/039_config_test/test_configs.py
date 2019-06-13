@@ -16,7 +16,7 @@ class TestConfigs(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            'data-paths': ['test/integration/039_config_test/data'],
+            'data-paths': ['data'],
             'models': {
                 'test': {
                     # the model configs will override this
@@ -29,7 +29,7 @@ class TestConfigs(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/039_config_test/models"
+        return "models"
 
     @use_profile('postgres')
     def test_postgres_config_layering(self):
@@ -54,7 +54,7 @@ class TestTargetConfigs(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/039_config_test/models"
+        return "models"
 
     def setUp(self):
         super(TestTargetConfigs, self).setUp()
@@ -73,7 +73,7 @@ class TestTargetConfigs(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            'data-paths': ['test/integration/039_config_test/data'],
+            'data-paths': ['data'],
             'target-path': "target_{{ modules.datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%S') }}"
         }
 

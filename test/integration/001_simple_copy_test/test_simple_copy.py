@@ -8,7 +8,7 @@ class BaseTestSimpleCopy(DBTIntegrationTest):
 
     @staticmethod
     def dir(path):
-        return "test/integration/001_simple_copy_test/" + path.lstrip("/")
+        return path.lstrip('/')
 
     @property
     def models(self):

@@ -152,7 +152,8 @@ def print_test_result_line(result, schema_name, index, total):
         color = red
 
     elif result.status > 0:
-        if result.node.config['severity'] == 'ERROR' or dbt.flags.WARN_ERROR:
+        severity = result.node.config['severity'].upper()
+        if severity == 'ERROR' or dbt.flags.WARN_ERROR:
             info = 'FAIL {}'.format(result.status)
             color = red
             result.fail = True
@@ -185,13 +186,13 @@ def print_model_result_line(result, description, index, total):
         result.execution_time)
 
 
-def print_archive_result_line(result, index, total):
+def print_snapshot_result_line(result, index, total):
     model = result.node
 
-    info, status = get_printable_result(result, 'archived', 'archiving')
+    info, status = get_printable_result(result, 'snapshotted', 'snapshotting')
     cfg = model.get('config', {})
 
-    msg = "{info} {name} --> {target_database}.{target_schema}.{name}".format(
+    msg = "{info} {name}".format(
         info=info, name=model.name, **cfg)
     print_fancy_output_line(
         msg,

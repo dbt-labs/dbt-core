@@ -8,12 +8,12 @@ class TestSnowflakeLateBindingViewDependency(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/036_snowflake_view_dependency_test/models"
+        return "models"
 
     @property
     def project_config(self):
         return {
-            "data-paths": ["test/integration/036_snowflake_view_dependency_test/data"],
+            "data-paths": ["data"],
             "quoting": {
                 "schema": False,
                 "identifier": False

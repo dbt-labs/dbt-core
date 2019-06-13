@@ -12,13 +12,22 @@ from .profile import Profile
 from .project import Project
 
 
+_ARCHIVE_REMOVED_MESSAGE = '''
+The `archive` section in `dbt_project.yml` is no longer supported. Please use a
+`snapshot` block instead. For more information on snapshot blocks and a script
+to help migrate these archives, please consult the 0.14.0 migration guide:
+
+https://docs.getdbt.com/v0.14/docs/upgrading-to-014
+'''.strip()
+
+
 class RuntimeConfig(Project, Profile):
     """The runtime configuration, as constructed from its components. There's a
     lot because there is a lot of stuff!
     """
     def __init__(self, project_name, version, project_root, source_paths,
                  macro_paths, data_paths, test_paths, analysis_paths,
-                 docs_paths, target_path, archive_paths, clean_targets,
+                 docs_paths, target_path, snapshot_paths, clean_targets,
                  log_path, modules_path, quoting, models, on_run_start,
                  on_run_end, archive, seeds, dbt_version, profile_name,
                  target_name, config, threads, credentials, packages, args):
@@ -39,7 +48,7 @@ class RuntimeConfig(Project, Profile):
             analysis_paths=analysis_paths,
             docs_paths=docs_paths,
             target_path=target_path,
-            archive_paths=archive_paths,
+            snapshot_paths=snapshot_paths,
             clean_targets=clean_targets,
             log_path=log_path,
             modules_path=modules_path,
@@ -64,12 +73,14 @@ class RuntimeConfig(Project, Profile):
         self.validate()
 
     @classmethod
-    def from_parts(cls, project, profile, args):
+    def from_parts(cls, project, profile, args, allow_archive_configs=False):
         """Instantiate a RuntimeConfig from its components.
 
         :param profile Profile: A parsed dbt Profile.
         :param project Project: A parsed dbt Project.
         :param args argparse.Namespace: The parsed command-line arguments.
+        :param allow_archive_configs bool: If True, ignore archive blocks in
+            configs. This flag exists to enable archive migration.
         :returns RuntimeConfig: The new configuration.
         """
         quoting = deepcopy(
@@ -77,6 +88,10 @@ class RuntimeConfig(Project, Profile):
             .DEFAULTS['quote_policy']
         )
         quoting.update(project.quoting)
+        if project.archive and not allow_archive_configs:
+            # if the user has an `archive` section, raise an error
+            raise DbtProjectError(_ARCHIVE_REMOVED_MESSAGE)
+
         return cls(
             project_name=project.project_name,
             version=project.version,
@@ -88,7 +103,7 @@ class RuntimeConfig(Project, Profile):
             analysis_paths=project.analysis_paths,
             docs_paths=project.docs_paths,
             target_path=project.target_path,
-            archive_paths=project.archive_paths,
+            snapshot_paths=project.snapshot_paths,
             clean_targets=project.clean_targets,
             log_path=project.log_path,
             modules_path=project.modules_path,
@@ -163,12 +178,14 @@ class RuntimeConfig(Project, Profile):
             self.validate_version()
 
     @classmethod
-    def from_args(cls, args):
+    def from_args(cls, args, allow_archive_configs=False):
         """Given arguments, read in dbt_project.yml from the current directory,
         read in packages.yml if it exists, and use them to find the profile to
         load.
 
         :param args argparse.Namespace: The arguments as parsed from the cli.
+        :param allow_archive_configs bool: If True, ignore archive blocks in
+            configs. This flag exists to enable archive migration.
         :raises DbtProjectError: If the project is invalid or missing.
         :raises DbtProfileError: If the profile is invalid or missing.
         :raises ValidationException: If the cli variables are invalid.
@@ -185,5 +202,6 @@ class RuntimeConfig(Project, Profile):
         return cls.from_parts(
             project=project,
             profile=profile,
-            args=args
+            args=args,
+            allow_archive_configs=allow_archive_configs
         )

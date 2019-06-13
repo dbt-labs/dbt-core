@@ -9,12 +9,11 @@ class TestCustomSchema(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/024_custom_schema_test/models"
+        return "models"
 
     @use_profile('postgres')
     def test__postgres__custom_schema_no_prefix(self):
-        self.use_default_project()
-        self.run_sql_file("test/integration/024_custom_schema_test/seed.sql")
+        self.run_sql_file("seed.sql")
 
         results = self.run_dbt()
         self.assertEqual(len(results), 3)
@@ -23,9 +22,9 @@ class TestCustomSchema(DBTIntegrationTest):
         v2_schema = "{}_custom".format(schema)
         xf_schema = "{}_test".format(schema)
 
-        self.assertTablesEqual("seed","view_1")
-        self.assertTablesEqual("seed","view_2", schema, v2_schema)
-        self.assertTablesEqual("agg","view_3", schema, xf_schema)
+        self.assertTablesEqual("seed", "view_1")
+        self.assertTablesEqual("seed", "view_2", schema, v2_schema)
+        self.assertTablesEqual("agg", "view_3", schema, xf_schema)
 
 
 class TestCustomProjectSchemaWithPrefix(DBTIntegrationTest):
@@ -36,7 +35,7 @@ class TestCustomProjectSchemaWithPrefix(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/024_custom_schema_test/models"
+        return "models"
 
     @property
     def profile_config(self):
@@ -68,8 +67,7 @@ class TestCustomProjectSchemaWithPrefix(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test__postgres__custom_schema_with_prefix(self):
-        self.use_default_project()
-        self.run_sql_file("test/integration/024_custom_schema_test/seed.sql")
+        self.run_sql_file("seed.sql")
 
         results = self.run_dbt()
         self.assertEqual(len(results), 3)
@@ -79,9 +77,9 @@ class TestCustomProjectSchemaWithPrefix(DBTIntegrationTest):
         v2_schema = "{}_custom".format(schema)
         xf_schema = "{}_test".format(schema)
 
-        self.assertTablesEqual("seed","view_1", schema, v1_schema)
-        self.assertTablesEqual("seed","view_2", schema, v2_schema)
-        self.assertTablesEqual("agg","view_3", schema, xf_schema)
+        self.assertTablesEqual("seed", "view_1", schema, v1_schema)
+        self.assertTablesEqual("seed", "view_2", schema, v2_schema)
+        self.assertTablesEqual("agg", "view_3", schema, xf_schema)
 
 
 class TestCustomProjectSchemaWithPrefixSnowflake(DBTIntegrationTest):
@@ -92,7 +90,7 @@ class TestCustomProjectSchemaWithPrefixSnowflake(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/024_custom_schema_test/models"
+        return "models"
 
     @property
     def project_config(self):
@@ -104,8 +102,7 @@ class TestCustomProjectSchemaWithPrefixSnowflake(DBTIntegrationTest):
 
     @use_profile('snowflake')
     def test__snowflake__custom_schema_with_prefix(self):
-        self.use_default_project()
-        self.run_sql_file("test/integration/024_custom_schema_test/seed.sql")
+        self.run_sql_file("seed.sql")
 
         results = self.run_dbt()
         self.assertEqual(len(results), 3)
@@ -115,9 +112,9 @@ class TestCustomProjectSchemaWithPrefixSnowflake(DBTIntegrationTest):
         v2_schema = "{}_CUSTOM".format(schema)
         xf_schema = "{}_TEST".format(schema)
 
-        self.assertTablesEqual("SEED","VIEW_1", schema, v1_schema)
-        self.assertTablesEqual("SEED","VIEW_2", schema, v2_schema)
-        self.assertTablesEqual("AGG","VIEW_3", schema, xf_schema)
+        self.assertTablesEqual("SEED", "VIEW_1", schema, v1_schema)
+        self.assertTablesEqual("SEED", "VIEW_2", schema, v2_schema)
+        self.assertTablesEqual("AGG", "VIEW_3", schema, xf_schema)
 
 
 class TestCustomSchemaWithCustomMacro(DBTIntegrationTest):
@@ -128,7 +125,7 @@ class TestCustomSchemaWithCustomMacro(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/024_custom_schema_test/models"
+        return "models"
 
     @property
     def profile_config(self):
@@ -153,7 +150,7 @@ class TestCustomSchemaWithCustomMacro(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            'macro-paths': ['test/integration/024_custom_schema_test/macros'],
+            'macro-paths': ['custom-macros'],
             'models': {
                 'schema': 'dbt_test'
             }
@@ -161,8 +158,7 @@ class TestCustomSchemaWithCustomMacro(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test__postgres__custom_schema_from_macro(self):
-        self.use_default_project()
-        self.run_sql_file("test/integration/024_custom_schema_test/seed.sql")
+        self.run_sql_file("seed.sql")
 
         results = self.run_dbt()
         self.assertEqual(len(results), 3)
@@ -172,6 +168,6 @@ class TestCustomSchemaWithCustomMacro(DBTIntegrationTest):
         v2_schema = "custom_{}_macro".format(schema)
         xf_schema = "test_{}_macro".format(schema)
 
-        self.assertTablesEqual("seed","view_1", schema, v1_schema)
-        self.assertTablesEqual("seed","view_2", schema, v2_schema)
-        self.assertTablesEqual("agg","view_3", schema, xf_schema)
+        self.assertTablesEqual("seed", "view_1", schema, v1_schema)
+        self.assertTablesEqual("seed", "view_2", schema, v2_schema)
+        self.assertTablesEqual("agg", "view_3", schema, xf_schema)

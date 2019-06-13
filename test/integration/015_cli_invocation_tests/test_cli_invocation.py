@@ -1,12 +1,26 @@
-from test.integration.base import DBTIntegrationTest, DBT_PROFILES, use_profile
-import os, shutil, yaml
+from test.integration.base import DBTIntegrationTest, use_profile
+import os
+import shutil
+import yaml
 
-class TestCLIInvocation(DBTIntegrationTest):
+
+class ModelCopyingIntegrationTest(DBTIntegrationTest):
+    def _symlink_test_folders(self):
+        # dbt's normal symlink behavior breaks this test, so special-case it
+        for entry in os.listdir(self.test_original_source_path):
+            src = os.path.join(self.test_original_source_path, entry)
+            tst = os.path.join(self.test_root_dir, entry)
+            if entry == 'models':
+                shutil.copytree(src, tst)
+            elif os.path.isdir(entry) or entry.endswith('.sql'):
+                os.symlink(src, tst)
+
+
+class TestCLIInvocation(ModelCopyingIntegrationTest):
 
     def setUp(self):
-        DBTIntegrationTest.setUp(self)
-
-        self.run_sql_file("test/integration/015_cli_invocation_tests/seed.sql")
+        super(TestCLIInvocation, self).setUp()
+        self.run_sql_file("seed.sql")
 
     @property
     def schema(self):
@@ -14,7 +28,7 @@ class TestCLIInvocation(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/015_cli_invocation_tests/models"
+        return "models"
 
     @use_profile('postgres')
     def test_toplevel_dbt_run(self):
@@ -30,26 +44,23 @@ class TestCLIInvocation(DBTIntegrationTest):
         self.assertEqual(len(results), 1)
         self.assertTablesEqual("seed", "model")
 
-class TestCLIInvocationWithProfilesDir(DBTIntegrationTest):
+
+class TestCLIInvocationWithProfilesDir(ModelCopyingIntegrationTest):
 
     def setUp(self):
-        DBTIntegrationTest.setUp(self)
+        super(TestCLIInvocationWithProfilesDir, self).setUp()
 
         self.run_sql("DROP SCHEMA IF EXISTS {} CASCADE;".format(self.custom_schema))
         self.run_sql("CREATE SCHEMA {};".format(self.custom_schema))
 
+        # the test framework will remove this in teardown for us.
         if not os.path.exists('./dbt-profile'):
             os.makedirs('./dbt-profile')
 
         with open("./dbt-profile/profiles.yml", 'w') as f:
             yaml.safe_dump(self.custom_profile_config(), f, default_flow_style=True)
 
-        self.run_sql_file("test/integration/015_cli_invocation_tests/seed_custom.sql")
-
-    def tearDown(self):
-        DBTIntegrationTest.tearDown(self)
-
-        shutil.rmtree("./dbt-profile")
+        self.run_sql_file("seed_custom.sql")
 
     def custom_profile_config(self):
         return {
@@ -83,11 +94,11 @@ class TestCLIInvocationWithProfilesDir(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/015_cli_invocation_tests/models"
+        return "models"
 
     @use_profile('postgres')
     def test_toplevel_dbt_run_with_profile_dir_arg(self):
-        results = self.run_dbt(['run', '--profiles-dir', 'dbt-profile'])
+        results = self.run_dbt(['run', '--profiles-dir', 'dbt-profile'], profiles_dir=False)
         self.assertEqual(len(results), 1)
 
         actual = self.run_sql("select id from {}.model".format(self.custom_schema), fetch='one')
@@ -95,7 +106,7 @@ class TestCLIInvocationWithProfilesDir(DBTIntegrationTest):
         expected = (1, )
         self.assertEqual(actual, expected)
 
-        res = self.run_dbt(['test', '--profiles-dir', 'dbt-profile'])
+        res = self.run_dbt(['test', '--profiles-dir', 'dbt-profile'], profiles_dir=False)
 
         # make sure the test runs against `custom_schema`
         for test_result in res:

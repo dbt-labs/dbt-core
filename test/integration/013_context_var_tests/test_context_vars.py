@@ -37,7 +37,7 @@ class TestContextVars(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/013_context_var_tests/models"
+        return "models"
 
     @property
     def profile_config(self):

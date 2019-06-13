@@ -10,7 +10,6 @@ import boto3
 
 drop_lock = multiprocessing.Lock()
 
-
 REDSHIFT_CREDENTIALS_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
@@ -55,6 +54,9 @@ REDSHIFT_CREDENTIALS_CONTRACT = {
                 'If using IAM auth, the ttl for the temporary credentials'
             )
         },
+        'search_path': {
+            'type': 'string',
+        },
         'keepalives_idle': {
             'type': 'integer',
         },
@@ -75,7 +77,9 @@ class RedshiftCredentials(PostgresCredentials):
         return 'redshift'
 
     def _connection_keys(self):
-        return ('host', 'port', 'user', 'database', 'schema', 'method')
+        return (
+            'host', 'port', 'user', 'database', 'schema', 'method',
+            'search_path')
 
 
 class RedshiftConnectionManager(PostgresConnectionManager):
@@ -94,7 +98,6 @@ class RedshiftConnectionManager(PostgresConnectionManager):
             to use the default.
         """
         with drop_lock:
-
             connection = self.get_thread_connection()
 
             if connection.transaction_open:

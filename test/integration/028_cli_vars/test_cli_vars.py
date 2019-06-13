@@ -9,7 +9,7 @@ class TestCLIVars(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/028_cli_vars/models_complex"
+        return "models_complex"
 
     @use_profile('postgres')
     def test__cli_vars_longform(self):
@@ -36,7 +36,7 @@ class TestCLIVarsSimple(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/028_cli_vars/models_simple"
+        return "models_simple"
 
     @use_profile('postgres')
     def test__cli_vars_shorthand(self):

@@ -28,6 +28,22 @@
   {%- endif -%}
 {%- endmacro %}
 
+{% macro get_columns_in_query(select_sql) -%}
+  {{ return(adapter_macro('get_columns_in_query', select_sql)) }}
+{% endmacro %}
+
+{% macro default__get_columns_in_query(select_sql) %}
+    {% call statement('get_columns_in_query', fetch_result=True, auto_begin=False) -%}
+        select * from (
+            {{ select_sql }}
+        ) as __dbt_sbq
+        where false
+        limit 0
+    {% endcall %}
+
+    {{ return(load_result('get_columns_in_query').table.columns | map(attribute='name') | list) }}
+{% endmacro %}
+
 {% macro create_schema(database_name, schema_name) -%}
   {{ adapter_macro('create_schema', database_name, schema_name) }}
 {% endmacro %}
@@ -67,17 +83,6 @@
 {% macro default__create_view_as(relation, sql) -%}
   create view {{ relation }} as (
     {{ sql }}
-  );
-{% endmacro %}
-
-
-{% macro create_archive_table(relation, columns) -%}
-  {{ adapter_macro('create_archive_table', relation, columns) }}
-{%- endmacro %}
-
-{% macro default__create_archive_table(relation, columns) -%}
-  create table if not exists {{ relation }} (
-    {{ column_list_for_create_table(columns) }}
   );
 {% endmacro %}
 
@@ -248,4 +253,17 @@
     from {{ source }}
   {% endcall %}
   {{ return(load_result('check_schema_exists').table) }}
+{% endmacro %}
+
+{% macro make_temp_relation(base_relation, suffix='__dbt_tmp') %}
+  {{ return(adapter_macro('make_temp_relation', base_relation, suffix))}}
+{% endmacro %}
+
+{% macro default__make_temp_relation(base_relation, suffix) %}
+    {% set tmp_identifier = base_relation.identifier ~ suffix %}
+    {% set tmp_relation = base_relation.incorporate(
+                                path={"identifier": tmp_identifier},
+                                table_name=tmp_identifier) -%}
+
+    {% do return(tmp_relation) %}
 {% endmacro %}

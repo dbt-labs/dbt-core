@@ -1,8 +1,8 @@
 from test.integration.base import DBTIntegrationTest, use_profile
+import os
 from dbt.logger import log_to_stdout, GLOBAL_LOGGER
 
 import json
-import os
 
 
 class TestStrictUndefined(DBTIntegrationTest):
@@ -13,7 +13,7 @@ class TestStrictUndefined(DBTIntegrationTest):
 
     @staticmethod
     def dir(value):
-        return os.path.normpath('test/integration/047_dbt_ls_test/' + value)
+        return os.path.normpath(value)
 
     @property
     def models(self):
@@ -23,7 +23,7 @@ class TestStrictUndefined(DBTIntegrationTest):
     def project_config(self):
         return {
             'analysis-paths': [self.dir('analyses')],
-            'archive-paths': [self.dir('archives')],
+            'snapshot-paths': [self.dir('snapshots')],
             'macro-paths': [self.dir('macros')],
             'data-paths': [self.dir('data')],
         }
@@ -55,36 +55,37 @@ class TestStrictUndefined(DBTIntegrationTest):
                 else:
                     self.assertEqual(got, expected)
 
-    def expect_archive_output(self):
+    def expect_snapshot_output(self):
         expectations = {
-            'name': 'my_archive',
-            'selector': 'archive.test.my_archive',
+            'name': 'my_snapshot',
+            'selector': 'snapshot.test.my_snapshot',
             'json': {
-                'name': 'my_archive',
+                'name': 'my_snapshot',
                 'package_name': 'test',
                 'depends_on': {'nodes': [], 'macros': []},
                 'tags': [],
                 'config': {
                     'enabled': True,
-                    'materialized': 'archive',
+                    'materialized': 'snapshot',
                     'post-hook': [],
                     'tags': [],
                     'pre-hook': [],
                     'quoting': {},
                     'vars': {},
                     'column_types': {},
+                    'persist_docs': {},
                     'target_database': self.default_database,
                     'target_schema': self.unique_schema(),
                     'unique_key': 'id',
                     'strategy': 'timestamp',
                     'updated_at': 'updated_at'
                 },
-                'alias': 'my_archive',
-                'resource_type': 'archive',
+                'alias': 'my_snapshot',
+                'resource_type': 'snapshot',
             },
-            'path': self.dir('archives/archive.sql'),
+            'path': self.dir('snapshots/snapshot.sql'),
         }
-        self.expect_given_output(['--resource-type', 'archive'], expectations)
+        self.expect_given_output(['--resource-type', 'snapshot'], expectations)
 
     def expect_analyses_output(self):
         expectations = {
@@ -104,6 +105,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'quoting': {},
                     'vars': {},
                     'column_types': {},
+                    'persist_docs': {},
                 },
                 'alias': 'analysis',
                 'resource_type': 'analysis',
@@ -131,6 +133,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                         'quoting': {},
                         'vars': {},
                         'column_types': {},
+                        'persist_docs': {},
                     },
                     'alias': 'inner',
                     'resource_type': 'model',
@@ -149,6 +152,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                         'quoting': {},
                         'vars': {},
                         'column_types': {},
+                        'persist_docs': {},
                     },
                     'alias': 'outer',
                     'resource_type': 'model',
@@ -192,6 +196,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'quoting': {},
                     'vars': {},
                     'column_types': {},
+                    'persist_docs': {},
                 },
                 'alias': 'seed',
                 'resource_type': 'seed',
@@ -220,6 +225,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                         'quoting': {},
                         'vars': {},
                         'column_types': {},
+                        'persist_docs': {},
                     },
                     'alias': 'not_null_outer_id',
                     'resource_type': 'test',
@@ -240,6 +246,7 @@ class TestStrictUndefined(DBTIntegrationTest):
                         'quoting': {},
                         'vars': {},
                         'column_types': {},
+                        'persist_docs': {},
                     },
                     'alias': 'unique_outer_id',
                     'resource_type': 'test',
@@ -251,7 +258,7 @@ class TestStrictUndefined(DBTIntegrationTest):
 
     def expect_all_output(self):
         expected_default = {
-            'archive.test.my_archive',
+            'snapshot.test.my_snapshot',
             'model.test.inner',
             'model.test.outer',
             'seed.test.seed',
@@ -289,7 +296,7 @@ class TestStrictUndefined(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_postgres_ls(self):
-        self.expect_archive_output()
+        self.expect_snapshot_output()
         self.expect_analyses_output()
         self.expect_model_output()
         self.expect_source_output()

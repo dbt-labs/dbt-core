@@ -14,7 +14,7 @@ import dbt.loader
 
 try:
     from queue import Empty
-except KeyError:
+except ImportError:
     from Queue import Empty
 
 
@@ -129,11 +129,11 @@ class GraphTest(unittest.TestCase):
         linker = compiler.compile(manifest)
 
         self.assertEqual(
-            linker.nodes(),
+            list(linker.nodes()),
             ['model.test_models_compile.model_one'])
 
         self.assertEqual(
-            linker.edges(),
+            list(linker.edges()),
             [])
 
     def test__two_models_simple_ref(self):
@@ -221,8 +221,8 @@ class GraphTest(unittest.TestCase):
 
         node = 'model.test_models_compile.model_one'
 
-        self.assertEqual(linker.nodes(), [node])
-        self.assertEqual(linker.edges(), [])
+        self.assertEqual(list(linker.nodes()), [node])
+        self.assertEqual(list(linker.edges()), [])
 
         self.assertEqual(
             manifest.nodes[node].get('config', {}).get('materialized'),

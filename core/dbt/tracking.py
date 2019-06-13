@@ -44,7 +44,7 @@ class TimeoutEmitter(Emitter):
     def http_get(self, payload):
         sp_logger.info("Sending GET request to %s..." % self.endpoint)
         sp_logger.debug("Payload: %s" % payload)
-        r = requests.get(self.endpoint, params=payload, timeout=2.0)
+        r = requests.get(self.endpoint, params=payload, timeout=5.0)
 
         msg = "GET request finished with status code: " + str(r.status_code)
         if self.is_good_status_code(r.status_code):

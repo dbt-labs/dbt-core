@@ -5,7 +5,7 @@ class TestPrePostRunHooks(DBTIntegrationTest):
     def setUp(self):
         DBTIntegrationTest.setUp(self)
 
-        self.run_sql_file("test/integration/014_hook_tests/seed_run.sql")
+        self.run_sql_file("seed_run.sql")
 
         self.fields = [
             'state',
@@ -29,8 +29,8 @@ class TestPrePostRunHooks(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            'macro-paths': ['test/integration/014_hook_tests/macros'],
-            'data-paths': ['test/integration/014_hook_tests/data'],
+            'macro-paths': ['macros'],
+            'data-paths': ['data'],
 
             # The create and drop table statements here validate that these hooks run
             # in the same order that they are defined. Drop before create is an error.
@@ -51,7 +51,7 @@ class TestPrePostRunHooks(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/014_hook_tests/models"
+        return "models"
 
     def get_ctx_vars(self, state):
         field_list = ", ".join(['"{}"'.format(f) for f in self.fields])

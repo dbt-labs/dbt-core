@@ -1,4 +1,0 @@
-[report]
-include =
-  core/dbt/*
-  plugins/*/dbt/*
