@@ -12,6 +12,7 @@ import dbt.clients.yaml_helper
 import dbt.context.parser
 import dbt.contracts.project
 
+from dbt.context.common import generate_config_context
 from dbt.clients.jinja import get_rendered
 from dbt.node_types import NodeType
 from dbt.compat import basestring, to_string
@@ -84,7 +85,7 @@ class TestBuilder(object):
     # map magic keys to default values
     MODIFIER_ARGS = {'severity': 'ERROR'}
 
-    def __init__(self, test, target, column_name, package_name):
+    def __init__(self, test, target, column_name, package_name, render_ctx):
         test_name, test_args = self.extract_test_args(test, column_name)
         self.args = test_args
         self.package_name = package_name
@@ -102,7 +103,10 @@ class TestBuilder(object):
         self.namespace = groups['test_namespace']
         self.modifiers = {}
         for key, default in self.MODIFIER_ARGS.items():
-            self.modifiers[key] = self.args.pop(key, default)
+            value = self.args.pop(key, default)
+            if isinstance(value, basestring):
+                value = get_rendered(value, render_ctx)
+            self.modifiers[key] = value
 
         if self.namespace is not None:
             self.package_name = self.namespace
@@ -283,7 +287,10 @@ class SchemaBaseTestParser(MacrosKnownParser):
         if isinstance(test, basestring):
             test = {test: {}}
 
-        test_info = self.Builder(test, test_target, column_name, package_name)
+        ctx = generate_config_context(self.root_project_config.cli_vars)
+
+        test_info = self.Builder(test, test_target, column_name, package_name,
+                                 ctx)
 
         source_package = self.all_projects.get(test_info.package_name)
         if source_package is None:

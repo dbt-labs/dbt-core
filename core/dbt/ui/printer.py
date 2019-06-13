@@ -152,7 +152,8 @@ def print_test_result_line(result, schema_name, index, total):
         color = red
 
     elif result.status > 0:
-        if result.node.config['severity'] == 'ERROR' or dbt.flags.WARN_ERROR:
+        severity = result.node.config['severity'].upper()
+        if severity == 'ERROR' or dbt.flags.WARN_ERROR:
             info = 'FAIL {}'.format(result.status)
             color = red
             result.fail = True
