@@ -62,6 +62,7 @@ BLOCK_START_PATTERN = regex(''.join((
     r'(?:\s+(?P<block_name>({})))?'.format(_NAME_PATTERN),
 )))
 
+
 TAG_CLOSE_PATTERN = regex(r'(?:(?P<tag_close>(\-\%\}\s*|\%\})))')
 # if you do {% materialization foo, adapter="myadapter' %} and end up with
 # mismatched quotes this will still match, but jinja will fail somewhere
@@ -119,22 +120,13 @@ class BlockIterator(object):
     def __init__(self, data):
         self.data = data
         self.blocks = []
-        self._block_contents = None
         self._parenthesis_stack = []
         self.pos = 0
 
     def advance(self, new_position):
-        blk = self.data[self.pos:new_position]
-
-        if self._block_contents is not None:
-            self._block_contents += blk
-
         self.pos = new_position
 
     def rewind(self, amount=1):
-        if self._block_contents is not None:
-            self._block_contents = self._block_contents[:-amount]
-
         self.pos -= amount
 
     def _search(self, pattern):
@@ -143,20 +135,16 @@ class BlockIterator(object):
     def _match(self, pattern):
         return pattern.match(self.data, self.pos)
 
-    def expect_comment_end(self):
-        """Expect a comment end and return the match object.
-        """
-        match = self._expect_match('#}', COMMENT_END_PATTERN)
-        self.advance(match.end())
-
-    def expect_raw_end(self):
+    def handle_raw(self, match):
+        start = match.end()
         end_pat = BlockTag('raw', None).end_pat()
-        match = self._search(end_pat)
-        if match is None:
+        end_match = self._search(end_pat)
+        if end_match is None:
             dbt.exceptions.raise_compiler_error(
                 'unexpected EOF, expected {% endraw %}'
             )
-        self.advance(match.end())
+        self.advance(end_match.end())
+        return BlockData(self.data[start:end_match.start()])
 
     def _first_match(self, *patterns, **kwargs):
         matches = []
@@ -183,10 +171,12 @@ class BlockIterator(object):
             dbt.exceptions.raise_compiler_error(msg)
         return match
 
-    def handle_expr(self):
+    def handle_expr(self, match):
         """Handle an expression. At this point we're at a string like:
             {{ 1 + 2 }}
-               ^ right here
+            ^ right here
+
+        And the match contains "{{ "
 
         We expect to find a `}}`, but we might find one in a string before
         that. Imagine the case of `{{ 2 * "}}" }}`...
@@ -194,6 +184,7 @@ class BlockIterator(object):
         You're not allowed to have blocks or comments inside an expr so it is
         pretty straightforward, I hope: only strings can get in the way.
         """
+        self.advance(match.end())
         while True:
             match = self._expect_match('}}',
                                        EXPR_END_PATTERN,
@@ -208,9 +199,52 @@ class BlockIterator(object):
 
         self.advance(match.end())
 
-    def handle_block(self, match, block_start=None):
+    def _advance_to_tag_close(self):
+        endtag = self._expect_match('%}', TAG_CLOSE_PATTERN)
+        self.advance(endtag.end())
+
+    def _consume_to_tag(self, tag_name, start):
+        def block_handler(block_match):
+            block_type_name = block_match.groupdict()['block_type_name']
+            if block_type_name == tag_name:
+                self.advance(block_match.end())
+                self._advance_to_tag_close()
+                return self.data[start:block_match.start()]
+            else:
+                # must be a new block
+                self.handle_block(block_match)
+
+        return self.next_block(block_handler)
+
+    def _consume_block_contents(self, match):
+        """Find a block's end. The current state of the parser should be after
+        the open block is completed:
+
+            {% blk foo %}my data {% endblk %}
+                         ^ right here
+
+        This will recurse!
+
+        :param re.Match match: The regex match for the block tag to look for
+            the end of.
+        :return re.Match: An end pattern match for the block. Should be an
+            re.Match correspondding to
+            `BlockTag(**match.groupdict()).end_pat()`
+        """
+        block = BlockTag(**match.groupdict())
+
+        contents = self._consume_to_tag(block.end_block_type_name, self.pos)
+        if contents is None:
+            dbt.exceptions.raise_compiler_error(
+                'Never found a close tag for the open tag {} ("{}")'
+                .format(block.block_type_name, block.end_block_type_name)
+            )
+        block.contents = contents
+        return block
+
+    def handle_top_block(self, match):
         """Handle a block. The current state of the parser should be after the
-        open block is completed:
+        block open tag is completed:
             {% blk foo %}my data {% endblk %}
                          ^ right here
         """
@@ -218,68 +252,30 @@ class BlockIterator(object):
         # {% blk foo %}asdf {# {% endblk %} #} {%endblk%}
         # they still end up in the data/raw_data of the block itself, but we
         # have to know to ignore stuff until the end comment marker!
-        found = BlockTag(**match.groupdict())
+
         # the full block started at the given match start, which may include
         # prefixed whitespace! we'll strip it later
-        if block_start is None:
-            block_start = match.start()
-
-        self._block_contents = ''
-
-        search = [found.end_pat(), COMMENT_START_PATTERN, RAW_START_PATTERN,
-                  EXPR_START_PATTERN]
-
-        # docs and macros do not honor embedded quotes
-        if found.block_type_name not in ('docs', 'macro'):
-            # is this right?
-            search.append(QUOTE_START_PATTERN)
-
-        # you can have as many comments in your block as you'd like!
-        while True:
-            match = self._expect_match(
-                '"{}"'.format(found.end_block_type_name), *search
-            )
-            groups = match.groupdict()
-            if groups.get('endblock') is not None:
-                break
-
-            self.advance(match.end())
-
-            if groups.get('comment_start') is not None:
-                self.expect_comment_end()
-            elif groups.get('raw_start') is not None:
-                self.expect_raw_end()
-            elif groups.get('quote') is not None:
-                self.rewind()
-                match = self._expect_match('any string', STRING_PATTERN)
-                self.advance(match.end())
-            elif groups.get('expr_start') is not None:
-                self.handle_expr()
-            else:
-                raise dbt.exceptions.InternalException(
-                    'unhandled regex in handle_block, no match: {}'
-                    .format(groups)
-                )
-
-        # we want to advance to just the end tag at first, to extract the
-        # contents
-        self.advance(match.start())
-        found.contents = self._block_contents
-        self._block_contents = None
-        # now advance to the end
-        self.advance(match.end())
+        block_start = match.start()
+        found = self.handle_block(match)
         found.full_block = self.data[block_start:self.pos]
         return found
 
-    def handle_materialization(self, match):
+    def handle_materialization_block(self, match):
+        """Handle a materialization block. The current status of the parser
+        should be:
+            {% materialization custom, default %}
+            ^ right here
+
+        And the match should be for "{% materialization custom"
+        """
+        self.advance(match.end())
         self._expect_match('materialization args',
                            MATERIALIZATION_ARGS_PATTERN)
-        endtag = self._expect_match('%}', TAG_CLOSE_PATTERN)
-        self.advance(endtag.end())
-        # handle the block we started with!
-        self.blocks.append(self.handle_block(match))
+        self._advance_to_tag_close()
+        # Now we're just looking for {% endmaterialization %}
+        return self._consume_block_contents(match)
 
-    def handle_do(self, match, expect_block):
+    def handle_do_block(self, match, expect_block):
         if expect_block:
             # we might be wrong to expect a block ({% do (...) %}, for example)
             # so see if there's more data before the tag closes. if there
@@ -292,17 +288,20 @@ class BlockIterator(object):
             # if we're here, expect_block is True and we must have set
             # close_match
             self.advance(close_match.end())
-            block = self.handle_block(match)
+            block = self._consume_block_contents(match)
         else:
             # we have a do-statement like {% do thing() %}, so no {% enddo %}
             # also, we don't want to advance to the end of the match, as it
             # might be inside a string or something! So go back and figure out
+            # this should get us past "{% do"
+            self.advance(match.end())
             self._process_rval_components()
             block = BlockTag('do', None,
                              full_block=self.data[match.start():self.pos])
-        self.blocks.append(block)
+        return block
 
-    def handle_set(self, match):
+    def handle_set_block(self, match):
+        self.advance(match.end())
         equal_or_close = self._expect_match('%} or =',
                                             TAG_CLOSE_PATTERN, regex(r'='))
         self.advance(equal_or_close.end())
@@ -314,67 +313,34 @@ class BlockIterator(object):
                              **match.groupdict())
         else:
             # it's a tag close, must be like {% set x %}...{% endset %}
-            block = self.handle_block(match)
-        self.blocks.append(block)
+            block = self._consume_block_contents(match)
+        return block
 
-    def find_block(self):
-        open_block = (
-            r'(?:\s*\{\%\-|\{\%)\s*'
-            r'(?P<block_type_name>([A-Za-z_][A-Za-z_0-9]*))'
-            # some blocks have a 'block name'.
-            r'(?:\s+(?P<block_name>([A-Za-z_][A-Za-z_0-9]*)))?'
-        )
+    def handle_if_block(self, match):
+        self.advance(match.end())
+        self._process_rval_components()
+        return self._consume_block_contents(match)
 
-        match = self._first_match(regex(open_block), COMMENT_START_PATTERN)
-        if match is None:
-            return False
+    def handle_elif_block(self, match):
+        self.advance(match.end())
+        self._process_rval_components()
 
-        raw_toplevel = self.data[self.pos:match.start()]
-        if len(raw_toplevel) > 0:
-            self.blocks.append(BlockData(raw_toplevel))
+    def handle_else_block(self, match):
+        self.advance(match.end())
+        self._advance_to_tag_close()
 
-        matchgroups = match.groupdict()
+    def handle_comment(self, match):
+        self.advance(match.end())
+        match = self._expect_match('#}', COMMENT_END_PATTERN)
+        self.advance(match.end())
 
-        # comments are easy
-        if matchgroups.get('comment_start') is not None:
-            start = match.start()
-            self.advance(match.end())
-            self.expect_comment_end()
-            self.blocks.append(BlockData(self.data[start:self.pos]))
-            return True
-
-        block_type_name = matchgroups.get('block_type_name')
-
-        if block_type_name == 'raw':
-            start = match.start()
-            self.expect_raw_end()
-            self.blocks.append(BlockData(self.data[start:self.pos]))
-            return True
-
-        if block_type_name == 'materialization':
-            self.advance(match.end())
-            self.handle_materialization(match)
-            return True
-
-        if block_type_name == 'do':
-            # if there is a "block_name" in the match groups, we don't expect a
-            # block as the "block name" is actually part of the do-statement.
-            # we need to do this to handle the (weird and probably wrong!) case
-            # of a do-statement that is only a single identifier - techincally
-            # allowed in jinja. (for example, {% do thing %})
-            expect_block = matchgroups.get('block_name') is None
-            self.handle_do(match, expect_block=expect_block)
-            return True
-
-        if block_type_name == 'set':
-            self.advance(match.end())
-            self.handle_set(match)
-            return True
-
-        # we're somewhere like this {% block_type_name block_type
+    def handle_normal_block(self, match):
+        # once we've advanced to the end of the given match, we're somewhere
+        # like this: {% block_type_name block_type
         # we've either got arguments, a close of tag (%}), or bad input.
         # we've handled materializations already (they're weird!)
         # thankfully, comments aren't allowed *inside* a block def...
+        self.advance(match.end())
         block_end_match = self._expect_match('%} or (...)',
                                              TAG_CLOSE_PATTERN,
                                              MACRO_ARGS_START_PATTERN)
@@ -383,11 +349,108 @@ class BlockIterator(object):
             # we've hit our first parenthesis!
             self._parenthesis_stack = [True]
             self._process_macro_args()
-            self.advance(self._expect_match('%}', TAG_CLOSE_PATTERN).end())
+            self._advance_to_tag_close()
 
         # tag close time!
-        self.blocks.append(self.handle_block(match))
-        return True
+        return self._consume_block_contents(match)
+
+    def handle_block(self, match):
+        matchgroups = match.groupdict()
+        if 'block_type_name' not in matchgroups:
+            raise dbt.exceptions.InternalException(
+                'Got bad matchgroups {} in handle_block'.format(matchgroups)
+            )
+        block_type_name = matchgroups['block_type_name']
+        if block_type_name == 'raw':
+            block = self.handle_raw(match)
+        elif block_type_name == 'materialization':
+            block = self.handle_materialization_block(match)
+        elif block_type_name == 'do':
+            # if there is a "block_name" in the match groups, we don't expect a
+            # block as the "block name" is actually part of the do-statement.
+            # we need to do this to handle the (weird and probably wrong!) case
+            # of a do-statement that is only a single identifier - techincally
+            # allowed in jinja. (for example, {% do thing %})
+            expect_block = matchgroups.get('block_name') is None
+            block = self.handle_do_block(match, expect_block=expect_block)
+        elif block_type_name == 'set':
+            block = self.handle_set_block(match)
+        elif block_type_name == 'if':
+            block = self.handle_if_block(match)
+        elif block_type_name == 'elif':
+            block = self.handle_elif_block(match)
+        elif block_type_name == 'else':
+            block = self.handle_else_block(match)
+        else:
+            block = self.handle_normal_block(match)
+        return block
+
+    def next_block(self, block_handler, include_toplevel=False):
+        """Return the next block, advancing the position as appropriate.
+
+        If include_toplevel is True, next_block will return a BlockData
+        containing any extra pre-match space
+
+        """
+        while True:
+            match = self._first_match(
+                BLOCK_START_PATTERN,
+                COMMENT_START_PATTERN,
+                EXPR_START_PATTERN)
+
+            if match is None:
+                # raise StopIteration?
+                return None
+
+            raw_toplevel = self.data[self.pos:match.start()]
+            if len(raw_toplevel) > 0:
+                self.advance(match.start())
+                if include_toplevel:
+                    return BlockData(raw_toplevel)
+
+            start = self.pos
+
+            groups = match.groupdict()
+            comment_start = groups.get('comment_start')
+            expr_start = groups.get('expr_start')
+            block_type_name = groups.get('block_type_name')
+
+            if comment_start is not None:
+                self.handle_comment(match)
+                if include_toplevel:
+                    return BlockData(self.data[start:self.pos])
+            elif expr_start is not None:
+                self.handle_expr(match)
+                if include_toplevel:
+                    return BlockData(self.data[start:self.pos])
+            elif block_type_name is not None:
+                block = block_handler(match)
+                if block is not None:
+                    return block
+                elif include_toplevel:
+                    return BlockData(self.data[start:self.pos])
+            else:
+                raise dbt.exceptions.InternalException(
+                    'Invalid regex match in next_block, expected block start, '
+                    'expr start, or comment start'
+                )
+
+    def find_blocks(self):
+        def block_handler(match):
+            block_start = match.start()
+            block = self.handle_block(match)
+            block.full_block = self.data[block_start:self.pos]
+            return block
+
+        while self.data[self.pos:]:
+            block = self.next_block(block_handler, include_toplevel=True)
+            if block is None:
+                break
+            yield block
+
+        raw_toplevel = self.data[self.pos:]
+        if len(raw_toplevel) > 0:
+            yield BlockData(raw_toplevel)
 
     def _process_rval_components(self):
         """This is suspiciously similar to _process_macro_default_arg, probably
@@ -506,13 +569,4 @@ class BlockIterator(object):
             # on the next loop around
 
     def lex_for_blocks(self):
-        while self.data[self.pos:]:
-            found = self.find_block()
-            if not found:
-                break
-
-        raw_toplevel = self.data[self.pos:]
-        if len(raw_toplevel) > 0:
-            self.blocks.append(BlockData(raw_toplevel))
-
-        return self.blocks
+        return list(self.find_blocks())
