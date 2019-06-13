@@ -223,7 +223,7 @@ class TagIterator:
         # might be None
         block_name = groups.get("block_name")
         start_pos = self.pos
-        if block_type_name == 'raw':
+        if block_type_name == "raw":
             match = self._expect_match("{% raw %}...{% endraw %}", RAW_BLOCK_PATTERN)
             self.advance(match.end())
         else:
@@ -247,9 +247,9 @@ class TagIterator:
             # start = self.pos
 
             groups = match.groupdict()
-            comment_start = groups.get('comment_start')
-            expr_start = groups.get('expr_start')
-            block_type_name = groups.get('block_type_name')
+            comment_start = groups.get("comment_start")
+            expr_start = groups.get("expr_start")
+            block_type_name = groups.get("block_type_name")
 
             if comment_start is not None:
                 self.handle_comment(match)
@@ -259,8 +259,8 @@ class TagIterator:
                 yield self.handle_tag(match)
             else:
                 raise dbt.exceptions.InternalException(
-                    'Invalid regex match in next_block, expected block start, '
-                    'expr start, or comment start'
+                    "Invalid regex match in next_block, expected block start, "
+                    "expr start, or comment start"
                 )
 
     def __iter__(self):
