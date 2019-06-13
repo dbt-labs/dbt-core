@@ -91,8 +91,9 @@ class BigQueryAdapter(BaseAdapter):
         client = conn.handle
 
         with self.connections.exception_handler('list dataset'):
+            # this is similar to how we have to deal with listing tables
             all_datasets = client.list_datasets(project=database,
-                                                include_all=True)
+                                                max_results=10000)
             return [ds.dataset_id for ds in all_datasets]
 
     @available
