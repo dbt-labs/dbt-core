@@ -15,7 +15,7 @@
         case tbl.relkind
             when 'r' then 'BASE TABLE'
             else 'VIEW'
-        end as table_kind,
+        end as table_type,
         null::text as table_comment,
         col.attname as column_name,
         col.attnum as column_index,
