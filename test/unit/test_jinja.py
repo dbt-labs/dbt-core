@@ -131,12 +131,16 @@ class TestBlockLexer(unittest.TestCase):
         self.assertEqual(blocks[0].block_name, 'xxx')
         self.assertEqual(blocks[0].full_block, body)
 
-    def test_nested_failure(self):
+    def test_nested_ok(self):
         # we don't allow nesting same blocks
         # ideally we would not allow nesting any, but that's much harder
         body = '{% myblock a %} {% myblock b %} {% endmyblock %} {% endmyblock %}'
-        with self.assertRaises(CompilationException):
-            extract_toplevel_blocks(body)
+        blocks = extract_toplevel_blocks(body)
+        self.assertEqual(len(blocks), 1)
+        self.assertEqual(blocks[0].block_type_name, 'myblock')
+        self.assertEqual(blocks[0].block_name, 'a')
+        self.assertEqual(blocks[0].contents, ' {% myblock b %} {% endmyblock %} ')
+        self.assertEqual(blocks[0].full_block, body)
 
     def test_incomplete_block_failure(self):
         fullbody = '{% myblock foo %} {% endblock %}'
@@ -292,6 +296,16 @@ class TestBlockLexer(unittest.TestCase):
         self.assertEqual(blocks[0].contents, ' asdf {{ "{% enddocs %}" ~ "}}" }}')
         self.assertEqual(blocks[0].block_name, 'more_doc')
 
+    def test_unclosed_model_quotes(self):
+        # test case for https://github.com/fishtown-analytics/dbt/issues/1533
+        body = '{% model my_model -%} select * from "something"."something_else{% endmodel %}'
+        all_blocks = extract_toplevel_blocks(body)
+        blocks = [b for b in all_blocks if b.block_type_name != '__dbt__data']
+        self.assertEqual(len(blocks), 1)
+        self.assertEqual(blocks[0].block_type_name, 'model')
+        self.assertEqual(blocks[0].contents, 'select * from "something"."something_else')
+        self.assertEqual(blocks[0].block_name, 'my_model')
+
 
 bar_block = '''{% mytype bar %}
 {# a comment
@@ -345,5 +359,4 @@ if_you_do_this_you_are_awful = '''
 hi
 {% endmaterialization %}
 '''
-
 
