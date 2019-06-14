@@ -6,7 +6,7 @@ import agate
 
 BOM = BOM_UTF8.decode('utf-8')  # '\ufeff'
 
-DEFAULT_TYPE_TESTER = agate.TypeTester(types=[
+DEFAULT_TYPES = [
     agate.data_types.Number(null_values=('null', '')),
     agate.data_types.TimeDelta(null_values=('null', '')),
     agate.data_types.Date(null_values=('null', '')),
@@ -15,7 +15,7 @@ DEFAULT_TYPE_TESTER = agate.TypeTester(types=[
                              false_values=('false',),
                              null_values=('null', '')),
     agate.data_types.Text(null_values=('null', ''))
-])
+]
 
 
 def table_from_data(data, column_names):
@@ -29,7 +29,8 @@ def table_from_data(data, column_names):
     if len(data) == 0:
         return agate.Table([], column_names=column_names)
     else:
-        table = agate.Table.from_object(data, column_types=DEFAULT_TYPE_TESTER)
+        type_tester = agate.TypeTester(types=DEFAULT_TYPES)
+        table = agate.Table.from_object(data, column_types=type_tester)
         return table.select(column_names)
 
 
@@ -45,8 +46,14 @@ def as_matrix(table):
     return [r.values() for r in table.rows.values()]
 
 
-def from_csv(abspath):
+def from_csv(abspath, text_columns):
+    text_tester = agate.data_types.Text(null_values=('null', ''))
+    type_tester = agate.TypeTester(
+        force={column: text_tester for column in text_columns},
+        types=DEFAULT_TYPES
+    )
     with dbt.compat.open_file(abspath) as fp:
         if fp.read(1) != BOM:
             fp.seek(0)
-        return agate.Table.from_csv(fp, column_types=DEFAULT_TYPE_TESTER)
+        t = agate.Table.from_csv(fp, column_types=type_tester)
+        return t

@@ -15,7 +15,7 @@ from dbt.parser.base import MacrosKnownParser
 
 class SeedParser(MacrosKnownParser):
     @classmethod
-    def parse_seed_file(cls, file_match, root_dir, package_name, should_parse):
+    def parse_seed_file(cls, file_match, root_dir, package_name, should_parse, seed_config):
         """Parse the given seed file, returning an UnparsedNode and the agate
         table.
         """
@@ -36,13 +36,29 @@ class SeedParser(MacrosKnownParser):
         )
         if should_parse:
             try:
-                table = dbt.clients.agate_helper.from_csv(abspath)
+                text_columns = SeedParser._column_type_overrides(seed_config,
+                                                                 package_name,
+                                                                 table_name)
+                table = dbt.clients.agate_helper.from_csv(abspath,
+                                                          text_columns)
             except ValueError as e:
                 dbt.exceptions.raise_compiler_error(str(e), node)
         else:
             table = dbt.clients.agate_helper.empty_table()
         table.original_abspath = abspath
         return node, table
+
+    @staticmethod
+    def _column_type_overrides(seed_config, package_name, table_name):
+        """ Get the names of the columns with a type set in the project
+        config. We force agate to load these columns as Text, to prevent type
+        casting side-effects (e.g., removing leading zeroes)
+        """
+        table_config = seed_config.get(table_name)
+        if table_config:
+            column_types = table_config.get('column_types', {})
+            column_names = list(column_types.keys())
+        return column_names
 
     def load_and_parse(self, package_name, root_dir, relative_dirs, tags=None):
         """Load and parse seed files in a list of directories. Returns a dict
@@ -62,9 +78,11 @@ class SeedParser(MacrosKnownParser):
 
         result = {}
         for file_match in file_matches:
+            seed_config = self.root_project_config.seeds[package_name]
             node, agate_table = self.parse_seed_file(file_match, root_dir,
                                                      package_name,
-                                                     should_parse)
+                                                     should_parse,
+                                                     seed_config)
             node_path = self.get_path(NodeType.Seed, package_name, node.name)
             parsed = self.parse_node(node, node_path,
                                      self.all_projects.get(package_name),
