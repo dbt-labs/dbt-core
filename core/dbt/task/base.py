@@ -92,7 +92,19 @@ class BaseTask(object):
         return True
 
 
-def get_nearest_project_dir():
+def get_nearest_project_dir(args):
+    # If the user provides an explicit project directory, use that
+    # but don't look at parent directories.
+    if args.project_dir:
+        project_file = os.path.join(args.project_dir, "dbt_project.yml")
+        if os.path.exists(project_file):
+            return args.project_dir
+        else:
+            raise dbt.exceptions.RuntimeException(
+                "fatal: Invalid --project-dir flag. Not a dbt project. "
+                "Missing dbt_project.yml file"
+	    )
+
     root_path = os.path.abspath(os.sep)
     cwd = os.getcwd()
 
@@ -102,24 +114,21 @@ def get_nearest_project_dir():
             return cwd
         cwd = os.path.dirname(cwd)
 
-    return None
+    raise dbt.exceptions.RuntimeException(
+        "fatal: Not a dbt project (or any of the parent directories). "
+        "Missing dbt_project.yml file"
+    )
 
 
-def move_to_nearest_project_dir():
-    nearest_project_dir = get_nearest_project_dir()
-    if nearest_project_dir is None:
-        raise dbt.exceptions.RuntimeException(
-            "fatal: Not a dbt project (or any of the parent directories). "
-            "Missing dbt_project.yml file"
-        )
-
+def move_to_nearest_project_dir(args):
+    nearest_project_dir = get_nearest_project_dir(args)
     os.chdir(nearest_project_dir)
 
 
 class RequiresProjectTask(BaseTask):
     @classmethod
     def from_args(cls, args):
-        move_to_nearest_project_dir()
+        move_to_nearest_project_dir(args)
         return super(RequiresProjectTask, cls).from_args(args)
 
 
