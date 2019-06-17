@@ -239,7 +239,7 @@ def _build_base_subparser():
     base_subparser = argparse.ArgumentParser(add_help=False)
 
     base_subparser.add_argument(
-        '--project-dir',
+        "--project-dir",
         default=None,
         type=str,
         help='''
