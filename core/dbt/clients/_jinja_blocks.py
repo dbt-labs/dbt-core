@@ -236,9 +236,7 @@ class TagIterator:
     def find_tags(self):
         while True:
             match = self._first_match(
-                BLOCK_START_PATTERN,
-                COMMENT_START_PATTERN,
-                EXPR_START_PATTERN
+                BLOCK_START_PATTERN, COMMENT_START_PATTERN, EXPR_START_PATTERN
             )
             if match is None:
                 break
