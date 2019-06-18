@@ -354,5 +354,7 @@ def undefined_error(msg):
     raise jinja2.exceptions.UndefinedError(msg)
 
 
-def extract_toplevel_blocks(data):
-    return BlockIterator(data).lex_for_blocks()
+def extract_toplevel_blocks(data, allowed=None, collect_raw_data=True):
+    bi = BlockIterator(data)
+    return bi.lex_for_blocks(allowed=allowed,
+                             collect_raw_data=collect_raw_data)
