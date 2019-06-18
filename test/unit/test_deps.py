@@ -73,7 +73,7 @@ class TestHubPackage(unittest.TestCase):
         self.assertEqual(a.source_type(), 'hub')
 
     def test_invalid(self):
-        with self.assertRaises(dbt.exceptions.ValidationException):
+        with self.assertRaises(dbt.exceptions.DependencyException):
             RegistryPackage(package='namespace/name', key='invalid')
 
     def test_resolve_ok(self):
