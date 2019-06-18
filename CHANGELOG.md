@@ -1,31 +1,31 @@
 ## dbt 0.14.0 - Wilt Chamberlain (Unreleased)
 
+### Overview
+- Replace Archives with Snapshots
+- Add three new top-level commands:
+  - `dbt ls`
+  - `dbt run-operation`
+  - `dbt rpc`
+- Support the specification of severity levels for schema and data tests
+- Many new quality of life improvements and bugfixes
 
 ### Breaking changes
-- During parsing, dbt now stubs out many adapter methods ([#1413](https://github.com/fishtown-analytics/dbt/pull/1413))
+- Stub out adapter methods at parse-time to speed up parsing ([#1413](https://github.com/fishtown-analytics/dbt/pull/1413))
 - Made jinja's Undefined now strict at runtime ([#1416](https://github.com/fishtown-analytics/dbt/pull/1416), [#1489](https://github.com/fishtown-analytics/dbt/issues/1389))
-- Removed the `--non-destructive` flag ([#1419](https://github.com/fishtown-analytics/dbt/pull/1419), [#1415](https://github.com/fishtown-analytics/dbt/issues/1415))
-- Archive meta-column names have changed ([#1361](https://github.com/fishtown-analytics/dbt/pull/1361), [#251](https://github.com/fishtown-analytics/dbt/issues/251))
-- Removed `sql_where` ([#1408](https://github.com/fishtown-analytics/dbt/pull/1408), [#1351](https://github.com/fishtown-analytics/dbt/issues/1351))
+- Removed support for the `--non-destructive` flag ([#1419](https://github.com/fishtown-analytics/dbt/pull/1419), [#1415](https://github.com/fishtown-analytics/dbt/issues/1415))
+- Removed support for the `sql_where` config to incremental models ([#1408](https://github.com/fishtown-analytics/dbt/pull/1408), [#1351](https://github.com/fishtown-analytics/dbt/issues/1351))
 - Changed `expand_target_column_types` to take a Relation instead of a string ([#1478](https://github.com/fishtown-analytics/dbt/pull/1478))
-
+- Replaced Archives with Snapshots
+  - Normalized meta-column names in Snapshot tables ([#1361](https://github.com/fishtown-analytics/dbt/pull/1361), [#251](https://github.com/fishtown-analytics/dbt/issues/251))
 
 ### Features
-- Add ability to invoke macros from the CLI ([#1328](https://github.com/fishtown-analytics/dbt/pull/1328))
-- Add a test "severity" level, presented as a keyword argument to the test ([#1410](https://github.com/fishtown-analytics/dbt/pull/1410), [#1005](https://github.com/fishtown-analytics/dbt/issues/1005))
-- Add a `generate_alias_name` macro ([#1363](https://github.com/fishtown-analytics/dbt/pull/1363))
-- Add a `dbt ls` command ([#1436](https://github.com/fishtown-analytics/dbt/pull/1436), [#467](https://github.com/fishtown-analytics/dbt/issues/467))
-- Use `create or replace` on Snowflake to rebuild tables and views ([#1101](https://github.com/fishtown-analytics/dbt/issues/1101), [#1409](https://github.com/fishtown-analytics/dbt/pull/1409))
-- Use `merge` statement for incremental models on Snowflake ([#1414](https://github.com/fishtown-analytics/dbt/issues/1414), [#1307](https://github.com/fishtown-analytics/dbt/pull/1307), [#1409](https://github.com/fishtown-analytics/dbt/pull/1409)) 
-- Support seed CSV files that start with a UTF-8 BOM (`\ufeff`) ([#1452](https://github.com/fishtown-analytics/dbt/pull/1452), [#1177](https://github.com/fishtown-analytics/dbt/issues/1177))
-- Warn when git packages are not pinned to a version ([#1453](https://github.com/fishtown-analytics/dbt/pull/1453), [#1446](https://github.com/fishtown-analytics/dbt/issues/1446))
-- Log on-run-start and on-run-end hooks to stdout ([#1440](https://github.com/fishtown-analytics/dbt/pull/1440), [#696](https://github.com/fishtown-analytics/dbt/issues/696))
-- Add modules and tracking information to the rendering context for configuration files ([#1441](https://github.com/fishtown-analytics/dbt/pull/1441), [#1320](https://github.com/fishtown-analytics/dbt/issues/1320))
-- Allow vars to be `null`, and distinguish `null` vars from unset vars ([#1426](https://github.com/fishtown-analytics/dbt/pull/1426), [#608](https://github.com/fishtown-analytics/dbt/issues/608))
-- Archives can now be specified in block form ([#1361](https://github.com/fishtown-analytics/dbt/pull/1361), [#1175](https://github.com/fishtown-analytics/dbt/issues/1175))
-    - Add the 'check' archival strategy ([#1361](https://github.com/fishtown-analytics/dbt/pull/1361), [#706](https://github.com/fishtown-analytics/dbt/issues/706))
-    - Support Archival across logical databases ([#1455](https://github.com/fishtown-analytics/dbt/issues/1455))
-    - Implement Archival using a merge statement where supported ([#1478](https://github.com/fishtown-analytics/dbt/pull/1478))
+- Add `run-operation` command which invokes macros directly from the CLI ([#1328](https://github.com/fishtown-analytics/dbt/pull/1328))
+- Add a `dbt ls` command which lists resources in your project ([#1436](https://github.com/fishtown-analytics/dbt/pull/1436), [#467](https://github.com/fishtown-analytics/dbt/issues/467))
+- Add Snapshots, an improvement over Archives ([#1361](https://github.com/fishtown-analytics/dbt/pull/1361), [#1175](https://github.com/fishtown-analytics/dbt/issues/1175))
+  - Add the 'check' snapshot strategy ([#1361](https://github.com/fishtown-analytics/dbt/pull/1361), [#706](https://github.com/fishtown-analytics/dbt/issues/706))
+  - Support Snapshots across logical databases ([#1455](https://github.com/fishtown-analytics/dbt/issues/1455))
+  - Implement Snapshots using a merge statement where supported ([#1478](https://github.com/fishtown-analytics/dbt/pull/1478))
+  - Support Snapshot selection using `--select` ([#1520](https://github.com/fishtown-analytics/dbt/pull/1520), [#1512](https://github.com/fishtown-analytics/dbt/issues/1512))
 - Add an RPC server via `dbt rpc` ([#1301](https://github.com/fishtown-analytics/dbt/pull/1301), [#1274](https://github.com/fishtown-analytics/dbt/issues/1274))
   - Add `ps` and `kill` commands to the rpc server ([#1380](https://github.com/fishtown-analytics/dbt/pull/1380/), [#1369](https://github.com/fishtown-analytics/dbt/issues/1369), [#1370](https://github.com/fishtown-analytics/dbt/issues/1370))
   - Add support for ephemeral nodes to the rpc server ([#1373](https://github.com/fishtown-analytics/dbt/pull/1373), [#1368](https://github.com/fishtown-analytics/dbt/issues/1368))
@@ -33,25 +33,43 @@
   - Improve error handling in the rpc server ([#1341](https://github.com/fishtown-analytics/dbt/pull/1341), [#1309](https://github.com/fishtown-analytics/dbt/issues/1309), [#1310](https://github.com/fishtown-analytics/dbt/issues/1310))
 - Made printer width configurable ([#1026](https://github.com/fishtown-analytics/dbt/issues/1026), [#1247](https://github.com/fishtown-analytics/dbt/pull/1247))
 - Retry package downloads from the hub.getdbt.com ([#1451](https://github.com/fishtown-analytics/dbt/issues/1451), [#1491](https://github.com/fishtown-analytics/dbt/pull/1491))
-- Make the `search_path` configurable in Postgres/Redshift profiles ([#1477](https://github.com/fishtown-analytics/dbt/issues/1477), [#1476](https://github.com/fishtown-analytics/dbt/pull/1476))
-- Optionally persist documentation as `descriptions` for tables and views on BigQuery ([#1031](https://github.com/fishtown-analytics/dbt/issues/1031), [#1285](https://github.com/fishtown-analytics/dbt/pull/1285))
+- Add a test "severity" level, presented as a keyword argument to schema tests ([#1410](https://github.com/fishtown-analytics/dbt/pull/1410), [#1005](https://github.com/fishtown-analytics/dbt/issues/1005))
+- Add a `generate_alias_name` macro to configure alias names dynamically ([#1363](https://github.com/fishtown-analytics/dbt/pull/1363))
+- Add a `node` argument to `generate_schema_name` to configure schema names dynamically ([#1483](https://github.com/fishtown-analytics/dbt/pull/1483), [#1463](https://github.com/fishtown-analytics/dbt/issues/1463))
+- Use `create or replace` on Snowflake to rebuild tables and views atomically ([#1101](https://github.com/fishtown-analytics/dbt/issues/1101), [#1409](https://github.com/fishtown-analytics/dbt/pull/1409))
+- Use `merge` statement for incremental models on Snowflake ([#1414](https://github.com/fishtown-analytics/dbt/issues/1414), [#1307](https://github.com/fishtown-analytics/dbt/pull/1307), [#1409](https://github.com/fishtown-analytics/dbt/pull/1409)) 
+- Add support seed CSV files that start with a UTF-8 Byte Order Mark (BOM) ([#1452](https://github.com/fishtown-analytics/dbt/pull/1452), [#1177](https://github.com/fishtown-analytics/dbt/issues/1177))
+- Add a warning when git packages are not pinned to a version ([#1453](https://github.com/fishtown-analytics/dbt/pull/1453), [#1446](https://github.com/fishtown-analytics/dbt/issues/1446))
+- Add logging for `on-run-start` and `on-run-end hooks` to console output ([#1440](https://github.com/fishtown-analytics/dbt/pull/1440), [#696](https://github.com/fishtown-analytics/dbt/issues/696))
+- Add modules and tracking information to the rendering context for configuration files ([#1441](https://github.com/fishtown-analytics/dbt/pull/1441), [#1320](https://github.com/fishtown-analytics/dbt/issues/1320))
+- Add support for `null` vars, and distinguish `null` vars from unset vars ([#1426](https://github.com/fishtown-analytics/dbt/pull/1426), [#608](https://github.com/fishtown-analytics/dbt/issues/608))
+- Add support for the `search_path` configuration in Postgres/Redshift profiles ([#1477](https://github.com/fishtown-analytics/dbt/issues/1477), [#1476](https://github.com/fishtown-analytics/dbt/pull/1476))
+- Add support for persisting documentation as `descriptions` for tables and views on BigQuery ([#1031](https://github.com/fishtown-analytics/dbt/issues/1031), [#1285](https://github.com/fishtown-analytics/dbt/pull/1285))
+
+### dbt docs Changes
+- Add searching by tag name ([#32](https://github.com/fishtown-analytics/dbt-docs/pull/32))
+- Add context menu link to export graph viz as a PNG ([#34](https://github.com/fishtown-analytics/dbt-docs/pull/34))
+- Fix for clicking models in left-nav while search results are open ([#31](https://github.com/fishtown-analytics/dbt-docs/pull/31))
  
 ### Fixes
-- Improved error handling in anonymous tracking: Add a timeout and after the first failure make no more attempts ([#1445](https://github.com/fishtown-analytics/dbt/pull/1445), [#1063](https://github.com/fishtown-analytics/dbt/issues/1063))
-- On mostly-duplicate git urls, pick the one that came first. ([#1428](https://github.com/fishtown-analytics/dbt/pull/1428), [#1084](https://github.com/fishtown-analytics/dbt/issues/1084))
+- Fix for unduly long timeouts when anonymous event tracking is blocked ([#1445](https://github.com/fishtown-analytics/dbt/pull/1445), [#1063](https://github.com/fishtown-analytics/dbt/issues/1063))
+- Fix for error with mostly-duplicate git urls in packages, picking the one that came first. ([#1428](https://github.com/fishtown-analytics/dbt/pull/1428), [#1084](https://github.com/fishtown-analytics/dbt/issues/1084))
+- Fix for unrendered `description` field as jinja in top-level Source specification ([#1484](https://github.com/fishtown-analytics/dbt/issues/1484), [#1494](https://github.com/fishtown-analytics/dbt/issues/1494))
+- Fix for API error when very large temp tables are created in BigQuery ([#1423](https://github.com/fishtown-analytics/dbt/issues/1423), [#1478](https://github.com/fishtown-analytics/dbt/pull/1478))
+- Fix for compiler errors that occurred if jinja code was present outside of a docs blocks in .md files ([#1513](https://github.com/fishtown-analytics/dbt/pull/1513), [#988](https://github.com/fishtown-analytics/dbt/issues/988))
 - Fix `TEXT` handling on postgres and redshift ([#1420](https://github.com/fishtown-analytics/dbt/pull/1420), [#781](https://github.com/fishtown-analytics/dbt/issues/781))
-- Missing vars in disabled models no longer fail compilation ([#1429](https://github.com/fishtown-analytics/dbt/pull/1429), [#434](https://github.com/fishtown-analytics/dbt/issues/434))
+- Fix for compiler error when vars are undefined but only used in disabled models ([#1429](https://github.com/fishtown-analytics/dbt/pull/1429), [#434](https://github.com/fishtown-analytics/dbt/issues/434))
 - Improved the error message when iterating over the results of a macro that doesn't exist ([#1425](https://github.com/fishtown-analytics/dbt/pull/1425), [#1424](https://github.com/fishtown-analytics/dbt/issues/1424))
 - Improved the error message when tests have invalid parameter definitions ([#1427](https://github.com/fishtown-analytics/dbt/pull/1427), [#1325](https://github.com/fishtown-analytics/dbt/issues/1325))
-- Improved error messaging when a user tries to archive a non-existent table ([#1361](https://github.com/fishtown-analytics/dbt/pull/1361), [#1066](https://github.com/fishtown-analytics/dbt/issues/1066))
-- In archival, don't create schemas if they already exist ([#1398](https://github.com/fishtown-analytics/dbt/pull/1398), [#758](https://github.com/fishtown-analytics/dbt/issues/758))
-- When dbt runs an operation, set a non-zero return code on errors. ([#1406](https://github.com/fishtown-analytics/dbt/pull/1406), [#1377](https://github.com/fishtown-analytics/dbt/issues/1377))
-- In the rpc server, report the compiled sql that failed on an error ([#1381](https://github.com/fishtown-analytics/dbt/pull/1381), [#1371](https://github.com/fishtown-analytics/dbt/issues/1371))
-- Update a broken link in the profile.yml generated by `dbt init` ([#1366](https://github.com/fishtown-analytics/dbt/pull/1366), [#1344](https://github.com/fishtown-analytics/dbt/issues/1344))
+- Improved the error message when a user tries to archive a non-existent table ([#1361](https://github.com/fishtown-analytics/dbt/pull/1361), [#1066](https://github.com/fishtown-analytics/dbt/issues/1066))
+- Fix for archive logic which tried to create already-existing destination schemas ([#1398](https://github.com/fishtown-analytics/dbt/pull/1398), [#758](https://github.com/fishtown-analytics/dbt/issues/758))
+- Fix for incorrect error codes when Operations exit with an error ([#1406](https://github.com/fishtown-analytics/dbt/pull/1406), [#1377](https://github.com/fishtown-analytics/dbt/issues/1377))
+- Fix for missing compiled SQL when the rpc server encounters a database error ([#1381](https://github.com/fishtown-analytics/dbt/pull/1381), [#1371](https://github.com/fishtown-analytics/dbt/issues/1371))
+- Fix for broken link in the profile.yml generated by `dbt init` ([#1366](https://github.com/fishtown-analytics/dbt/pull/1366), [#1344](https://github.com/fishtown-analytics/dbt/issues/1344))
 - Fix the sample test.env file's redshift password field ([#1364](https://github.com/fishtown-analytics/dbt/pull/1364))
 - Fix collisions on models running concurrently that have duplicate names but have distinguishing aliases ([#1342](https://github.com/fishtown-analytics/dbt/pull/1342), [#1321](https://github.com/fishtown-analytics/dbt/issues/1321))
-- Render `description` field as jinja in top-level Source specification ([#1484](https://github.com/fishtown-analytics/dbt/issues/1484), [#1494](https://github.com/fishtown-analytics/dbt/issues/1494))
-- Use `destination` field when creating temp tables on BigQuery ([#1423](https://github.com/fishtown-analytics/dbt/issues/1423), [#1478](https://github.com/fishtown-analytics/dbt/pull/1478))
+- Fix for a bad error message when a `version` is missing from a package spec in `packages.yml` ([#1551](https://github.com/fishtown-analytics/dbt/pull/1551), [#1546](https://github.com/fishtown-analytics/dbt/issues/1546))
+- Fix for wrong package scope when the two-arg method of `ref` is used ([#1515](https://github.com/fishtown-analytics/dbt/pull/1515), [#1504](https://github.com/fishtown-analytics/dbt/issues/1504))
 
 
 ### Under the hood
@@ -59,9 +77,11 @@
 - Use flake8 for linting ([#1361](https://github.com/fishtown-analytics/dbt/pull/1361), [#1333](https://github.com/fishtown-analytics/dbt/issues/1333))
 - Added a flag for wrapping models and tests in jinja blocks ([#1407](https://github.com/fishtown-analytics/dbt/pull/1407), [#1400](https://github.com/fishtown-analytics/dbt/issues/1400))
 - Connection management: Bind connections threads rather than to names ([#1336](https://github.com/fishtown-analytics/dbt/pull/1336), [#1312](https://github.com/fishtown-analytics/dbt/issues/1312))
+- Add deprecation warning for dbt users on Python2 ([#1534](https://github.com/fishtown-analytics/dbt/pull/1534), [#1531](https://github.com/fishtown-analytics/dbt/issues/1531))
+- Upgrade networkx to v2.x ([#1509](https://github.com/fishtown-analytics/dbt/pull/1509), [#https://github.com/fishtown-analytics/dbt/issues/1496])
 
 ### Contributors:
-Thanks for your contributions to dbt!
+Almost a dozen contributors wrote code for this release of dbt! Thanks for taking the time, and nice work :)
 
 - [@nydnarb](https://github.com/nydnarb) [#1363](https://github.com/fishtown-analytics/dbt/issues/1363)
 - [@emilieschario](https://github.com/emilieschario) [#1366](https://github.com/fishtown-analytics/dbt/pull/1366)
@@ -70,6 +90,10 @@ Thanks for your contributions to dbt!
 - [@Blakewell](https://github.com/Blakewell) [#1307](https://github.com/fishtown-analytics/dbt/pull/1307)
 - [@buremba](https://github.com/buremba) [#1476](https://github.com/fishtown-analytics/dbt/pull/1476)
 - [@darrenhaken](https://github.com/darrenhaken) [#1285](https://github.com/fishtown-analytics/dbt/pull/1285)
+- [@tbescherer](https://github.com/tbescherer) [#1504](https://github.com/fishtown-analytics/dbt/issues/1504)
+- [@heisencoder](https://github.com/heisencoder) [#1509](https://github.com/fishtown-analytics/dbt/pull/1509)
+- [@rmgpinto](https://github.com/rmgpinto) [docs#31](https://github.com/fishtown-analytics/dbt-docs/pull/31), [docs#32](https://github.com/fishtown-analytics/dbt-docs/pull/32)
+- [@groodt](https://github.com/groodt) [docs#34](https://github.com/fishtown-analytics/dbt-docs/pull/34)
 
 
 ## dbt 0.13.1 (May 13, 2019)
