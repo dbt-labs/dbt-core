@@ -103,7 +103,7 @@ def get_nearest_project_dir(args):
             raise dbt.exceptions.RuntimeException(
                 "fatal: Invalid --project-dir flag. Not a dbt project. "
                 "Missing dbt_project.yml file"
-	    )
+            )
 
     root_path = os.path.abspath(os.sep)
     cwd = os.getcwd()
