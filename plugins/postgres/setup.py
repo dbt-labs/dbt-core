@@ -25,6 +25,7 @@ setup(
         'dbt': [
             'include/postgres/dbt_project.yml',
             'include/postgres/macros/*.sql',
+            'include/postgres/macros/**/*.sql',
         ]
     },
     install_requires=[
