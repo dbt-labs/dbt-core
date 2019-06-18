@@ -47,7 +47,7 @@ class BlockTag:
         return regex(pattern)
 
 
-Tag = namedtuple('Tag', 'block_type_name block_name start end')
+Tag = namedtuple("Tag", "block_type_name block_name start end")
 
 
 _NAME_PATTERN = r"[A-Za-z_][A-Za-z_0-9]*"
@@ -72,17 +72,17 @@ BLOCK_START_PATTERN = regex(
 )
 
 
-RAW_BLOCK_PATTERN = regex(''.join((
-    r'(?:\s*\{\%\-|\{\%)\s*raw\s*(?:\-\%\}\s*|\%\})',
+RAW_BLOCK_PATTERN = regex(
+    "".join(
     r'(?:.*?)',
-    r'(?:\s*\{\%\-|\{\%)\s*endraw\s*(?:\-\%\}\s*|\%\})',
+            r"(?:\s*\{\%\-|\{\%)\s*raw\s*(?:\-\%\}\s*|\%\})",
             r"(?:.*?)",
             r"(?:\s*\{\%\-|\{\%)\s*endraw\s*(?:\-\%\}\s*|\%\})",
         )
     )
 )
 
-TAG_CLOSE_PATTERN = regex(r'(?:(?P<tag_close>(\-\%\}\s*|\%\})))')
+TAG_CLOSE_PATTERN = regex(r"(?:(?P<tag_close>(\-\%\}\s*|\%\})))")
 
 # stolen from jinja's lexer. Note that we've consumed all prefix whitespace by
 # the time we want to use this.
@@ -177,7 +177,7 @@ class TagIterator:
 
     def handle_comment(self, match):
         self.advance(match.end())
-        match = self._expect_match('#}', COMMENT_END_PATTERN)
+        match = self._expect_match("#}", COMMENT_END_PATTERN)
         self.advance(match.end())
 
     def _expect_block_close(self):
@@ -194,22 +194,19 @@ class TagIterator:
         """
         while True:
             end_match = self._expect_match(
-                'tag close ("%}")',
-                QUOTE_START_PATTERN,
-                TAG_CLOSE_PATTERN
+                'tag close ("%}")', QUOTE_START_PATTERN, TAG_CLOSE_PATTERN
             )
             self.advance(end_match.end())
-            if end_match.groupdict().get('tag_close') is not None:
+            if end_match.groupdict().get("tag_close") is not None:
                 return
             # must be a string. Rewind to its start and advance past it.
             self.rewind()
-            string_match = self._expect_match('string', STRING_PATTERN)
+            string_match = self._expect_match("string", STRING_PATTERN)
             self.advance(string_match.end())
 
     def handle_raw(self):
         # raw blocks are super special, they are a single complete regex
-        match = self._expect_match('{% raw %}...{% endraw %}',
-                                   RAW_BLOCK_PATTERN)
+        match = self._expect_match("{% raw %}...{% endraw %}", RAW_BLOCK_PATTERN)
         self.advance(match.end())
         return match.end()
 
@@ -226,22 +223,18 @@ class TagIterator:
         """
         groups = match.groupdict()
         # always a value
-        block_type_name = groups['block_type_name']
+        block_type_name = groups["block_type_name"]
         # might be None
-        block_name = groups.get('block_name')
+        block_name = groups.get("block_name")
         start_pos = self.pos
         if block_type_name == 'raw':
-            match = self._expect_match('{% raw %}...{% endraw %}',
-                                       RAW_BLOCK_PATTERN)
+            match = self._expect_match("{% raw %}...{% endraw %}", RAW_BLOCK_PATTERN)
             self.advance(match.end())
         else:
             self.advance(match.end())
             self._expect_block_close()
         return Tag(
-            block_type_name=block_type_name,
-            block_name=block_name,
-            start=start_pos,
-            end=self.pos
+            block_type_name=block_type_name, block_name=block_name, start=start_pos, end=self.pos
         )
 
     def find_tags(self):
@@ -279,21 +272,18 @@ class TagIterator:
 
 
 duplicate_tags = (
-    'Got nested tags: {outer.block_type_name} (started at {outer.start}) did '
-    'not have a matching {{% end{outer.block_type_name} %}} before a '
-    'subsequent {inner.block_type_name} was found (started at {inner.start})'
+    "Got nested tags: {outer.block_type_name} (started at {outer.start}) did "
+    "not have a matching {{% end{outer.block_type_name} %}} before a "
+    "subsequent {inner.block_type_name} was found (started at {inner.start})"
 )
 
 
 _CONTROL_FLOW_TAGS = {
-    'if': 'endif',
-    'for': 'endfor',
+    "if": "endif",
+    "for": "endfor",
 }
 
-_CONTROL_FLOW_END_TAGS = {
-    v: k
-    for k, v in _CONTROL_FLOW_TAGS.items()
-}
+_CONTROL_FLOW_END_TAGS = {v: k for k, v in _CONTROL_FLOW_TAGS.items()}
 
 
 class BlockIterator:
@@ -316,9 +306,9 @@ class BlockIterator:
 
     def is_current_end(self, tag):
         return (
-            tag.block_type_name.startswith('end') and
-            self.current is not None and
-            tag.block_type_name[3:] == self.current.block_type_name
+            tag.block_type_name.startswith("end")
+            and self.current is not None
+            and tag.block_type_name[3:] == self.current.block_type_name
         )
 
     def find_blocks(self, allowed_blocks=None, collect_raw_data=True):
@@ -345,9 +335,9 @@ class BlockIterator:
                     ))
                 expected = _CONTROL_FLOW_TAGS[found]
                 if expected != tag.block_type_name:
-                    dbt.exceptions.raise_compiler_error((
+                    dbt.exceptions.raise_compiler_error(
                         'Got an unexpected control flow end tag, got {} but '
-                        'expected {} next (@ {})'
+                            "Got an unexpected control flow end tag, got {} but "
                     ).format(
                         tag.block_type_name,
                         expected,
@@ -356,16 +346,16 @@ class BlockIterator:
 
             if tag.block_type_name in allowed_blocks:
                 if self.stack:
-                    dbt.exceptions.raise_compiler_error((
-                        'Got a block definition inside control flow at {}. '
-                        'All dbt block definitions must be at the top level'
+                    dbt.exceptions.raise_compiler_error(
+                        (
+                            "Got a block definition inside control flow at {}. "
                     ).format(self.tag_parser.linepos(tag.start)))
                 if self.current is not None:
                     dbt.exceptions.raise_compiler_error(
                         duplicate_tags.format(outer=self.current, inner=tag)
                     )
                 if collect_raw_data:
-                    raw_data = self.data[self.last_position:tag.start]
+                    raw_data = self.data[self.last_position : tag.start]
                     self.last_position = tag.start
                     if raw_data:
                         yield BlockData(raw_data)
@@ -377,23 +367,24 @@ class BlockIterator:
                 yield BlockTag(
                     block_type_name=self.current.block_type_name,
                     block_name=self.current.block_name,
-                    contents=self.data[self.current.end:tag.start],
-                    full_block=self.data[self.current.start:tag.end]
+                    contents=self.data[self.current.end : tag.start],
+                    full_block=self.data[self.current.start : tag.end],
                 )
                 self.current = None
 
         if self.current:
             linecount = self.data[:self.current.end].count('\n') + 1
-            dbt.exceptions.raise_compiler_error((
+            dbt.exceptions.raise_compiler_error(
                 'Reached EOF without finding a close tag for '
                 '{} (searched from line {})'
             ).format(self.current.block_type_name, linecount))
 
         if collect_raw_data:
-            raw_data = self.data[self.last_position:]
+            raw_data = self.data[self.last_position :]
             if raw_data:
                 yield BlockData(raw_data)
 
     def lex_for_blocks(self, allowed_blocks=None, collect_raw_data=True):
         return list(self.find_blocks(allowed_blocks=allowed_blocks,
-                                     collect_raw_data=collect_raw_data))
+            self.find_blocks(allowed_blocks=allowed_blocks, collect_raw_data=collect_raw_data)
+        )
