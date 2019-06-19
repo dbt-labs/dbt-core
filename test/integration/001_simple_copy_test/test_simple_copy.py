@@ -24,17 +24,17 @@ class TestSimpleCopy(BaseTestSimpleCopy):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  6)
+        self.assertEqual(len(results),  7)
 
-        self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized"])
+        self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized", "get_and_ref"])
 
         self.use_default_project({"data-paths": [self.dir("seed-update")]})
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  6)
+        self.assertEqual(len(results),  7)
 
-        self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized"])
+        self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized", "get_and_ref"])
 
     @use_profile("postgres")
     def test__postgres__dbt_doesnt_run_empty_models(self):
@@ -43,7 +43,7 @@ class TestSimpleCopy(BaseTestSimpleCopy):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  6)
+        self.assertEqual(len(results),  7)
 
         models = self.get_models_in_schema()
 
@@ -57,7 +57,7 @@ class TestSimpleCopy(BaseTestSimpleCopy):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt(expect_pass=False)
-        self.assertEqual(len(results),  6)
+        self.assertEqual(len(results),  7)
         for result in results:
             if 'incremental' in result.node.name:
                 self.assertIn('not implemented for presto', result.error)
@@ -71,17 +71,17 @@ class TestSimpleCopy(BaseTestSimpleCopy):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  6)
+        self.assertEqual(len(results),  7)
 
-        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED"])
+        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED", "GET_AND_REF"])
 
         self.use_default_project({"data-paths": [self.dir("seed-update")]})
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  6)
+        self.assertEqual(len(results),  7)
 
-        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED"])
+        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED", "GET_AND_REF"])
 
         self.use_default_project({
             "test-paths": [self.dir("tests")],
@@ -99,9 +99,9 @@ class TestSimpleCopy(BaseTestSimpleCopy):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  6)
+        self.assertEqual(len(results),  7)
 
-        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED"])
+        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED", "GET_AND_REF"])
 
         self.use_default_project({
             "data-paths": [self.dir("seed-update")],
@@ -110,9 +110,9 @@ class TestSimpleCopy(BaseTestSimpleCopy):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  6)
+        self.assertEqual(len(results),  7)
 
-        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED"])
+        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED", "GET_AND_REF"])
 
         self.use_default_project({
             "test-paths": [self.dir("tests")],
@@ -150,22 +150,24 @@ class TestSimpleCopy(BaseTestSimpleCopy):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  6)
+        self.assertEqual(len(results),  7)
 
-        self.assertTablesEqual("seed","view_model")
-        self.assertTablesEqual("seed","incremental")
-        self.assertTablesEqual("seed","materialized")
+        self.assertTablesEqual("seed", "view_model")
+        self.assertTablesEqual("seed", "incremental")
+        self.assertTablesEqual("seed", "materialized")
+        self.assertTablesEqual("seed", "get_and_ref")
 
         self.use_default_project({"data-paths": [self.dir("seed-update")]})
 
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  6)
+        self.assertEqual(len(results),  7)
 
-        self.assertTablesEqual("seed","view_model")
-        self.assertTablesEqual("seed","incremental")
-        self.assertTablesEqual("seed","materialized")
+        self.assertTablesEqual("seed", "view_model")
+        self.assertTablesEqual("seed", "incremental")
+        self.assertTablesEqual("seed", "materialized")
+        self.assertTablesEqual("seed", "get_and_ref")
 
 
 class TestSimpleCopyQuotingIdentifierOn(BaseTestSimpleCopy):
@@ -186,9 +188,9 @@ class TestSimpleCopyQuotingIdentifierOn(BaseTestSimpleCopy):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  6)
+        self.assertEqual(len(results),  7)
 
-        self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized"])
+        self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized", "get_and_ref"])
 
         self.use_default_project({
             "data-paths": [self.dir("seed-update")],
@@ -196,9 +198,9 @@ class TestSimpleCopyQuotingIdentifierOn(BaseTestSimpleCopy):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  6)
+        self.assertEqual(len(results),  7)
 
-        self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized"])
+        self.assertManyTablesEqual(["seed", "view_model", "incremental", "materialized", "get_and_ref"])
 
         # can't run the test as this one's identifiers will be the wrong case
 
@@ -218,18 +220,18 @@ class TestSnowflakeSimpleLowercasedSchemaCopy(BaseLowercasedSchemaTest):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  6)
+        self.assertEqual(len(results),  7)
 
-        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED"])
+        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED", "GET_AND_REF"])
 
         self.use_default_project({"data-paths": [self.dir("seed-update")]})
 
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt()
-        self.assertEqual(len(results),  6)
+        self.assertEqual(len(results),  7)
 
-        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED"])
+        self.assertManyTablesEqual(["SEED", "VIEW_MODEL", "INCREMENTAL", "MATERIALIZED", "GET_AND_REF"])
 
         self.use_default_project({
             "test-paths": [self.dir("tests")],
