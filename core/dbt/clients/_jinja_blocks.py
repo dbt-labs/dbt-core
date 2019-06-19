@@ -308,7 +308,7 @@ class BlockIterator:
     def find_blocks(self, allowed_blocks=None, collect_raw_data=True):
         """Find all top-level blocks in the data."""
         if allowed_blocks is None:
-            allowed_blocks = {'snapshot', 'macro', 'materialization', 'docs'}
+            allowed_blocks = {"snapshot", "macro", "materialization", "docs"}
 
         for tag in self.tag_parser.find_tags():
             if tag.block_type_name in _CONTROL_FLOW_TAGS:
@@ -319,16 +319,16 @@ class BlockIterator:
                     found = self.stack.pop()
                 else:
                     expected = _CONTROL_FLOW_END_TAGS[tag.block_type_name]
-                    dbt.exceptions.raise_compiler_error((
-                        'Got an unexpected control flow end tag, got {} but '
-                        'never saw a preceeding {} (@ {})'
+                    dbt.exceptions.raise_compiler_error(
+                        (
+                            "Got an unexpected control flow end tag, got {} but "
                             "never saw a preceeding {} (@ {})"
                         ).format(tag.block_type_name, expected, self.tag_parser.linepos(tag.start))
                     )
                 expected = _CONTROL_FLOW_TAGS[found]
                 if expected != tag.block_type_name:
                     dbt.exceptions.raise_compiler_error(
-                        'Got an unexpected control flow end tag, got {} but '
+                        (
                             "Got an unexpected control flow end tag, got {} but "
                             "expected {} next (@ {})"
                         ).format(tag.block_type_name, expected, self.tag_parser.linepos(tag.start))
@@ -377,6 +377,6 @@ class BlockIterator:
                 yield BlockData(raw_data)
 
     def lex_for_blocks(self, allowed_blocks=None, collect_raw_data=True):
-        return list(self.find_blocks(allowed_blocks=allowed_blocks,
+        return list(
             self.find_blocks(allowed_blocks=allowed_blocks, collect_raw_data=collect_raw_data)
         )
