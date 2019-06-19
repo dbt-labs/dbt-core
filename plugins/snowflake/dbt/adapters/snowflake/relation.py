@@ -16,7 +16,8 @@ class SnowflakeRelation(BaseRelation):
             'database': True,
             'schema': True,
             'identifier': True,
-        }
+        },
+        'dbt_created': False,
     }
 
     SCHEMA = {
@@ -38,9 +39,10 @@ class SnowflakeRelation(BaseRelation):
             'include_policy': BaseRelation.POLICY_SCHEMA,
             'quote_policy': BaseRelation.POLICY_SCHEMA,
             'quote_character': {'type': 'string'},
+            'dbt_created': {'type': 'boolean'},
         },
         'required': ['metadata', 'type', 'path', 'include_policy',
-                     'quote_policy', 'quote_character']
+                     'quote_policy', 'quote_character', 'dbt_created']
     }
 
     @classmethod

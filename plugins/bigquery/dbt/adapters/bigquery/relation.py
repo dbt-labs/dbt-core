@@ -15,13 +15,14 @@ class BigQueryRelation(BaseRelation):
         'quote_policy': {
             'database': True,
             'schema': True,
-            'identifier': True
+            'identifier': True,
         },
         'include_policy': {
             'database': True,
             'schema': True,
-            'identifier': True
-        }
+            'identifier': True,
+        },
+        'dbt_created': False,
     }
 
     SCHEMA = {
@@ -43,9 +44,10 @@ class BigQueryRelation(BaseRelation):
             'include_policy': BaseRelation.POLICY_SCHEMA,
             'quote_policy': BaseRelation.POLICY_SCHEMA,
             'quote_character': {'type': 'string'},
+            'dbt_created': {'type': 'boolean'},
         },
         'required': ['metadata', 'type', 'path', 'include_policy',
-                     'quote_policy', 'quote_character']
+                     'quote_policy', 'quote_character', 'dbt_created']
     }
 
     def matches(self, database=None, schema=None, identifier=None):
@@ -60,7 +62,7 @@ class BigQueryRelation(BaseRelation):
             pass
 
         for k, v in search.items():
-            if self.get_path_part(k) != v:
+            if not self._is_exactish_match(k, v):
                 return False
 
         return True
