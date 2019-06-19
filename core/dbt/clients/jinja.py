@@ -354,7 +354,23 @@ def undefined_error(msg):
     raise jinja2.exceptions.UndefinedError(msg)
 
 
-def extract_toplevel_blocks(data, allowed=None, collect_raw_data=True):
-    bi = BlockIterator(data)
-    return bi.lex_for_blocks(allowed=allowed,
-                             collect_raw_data=collect_raw_data)
+def extract_toplevel_blocks(data, allowed_blocks=None, collect_raw_data=True):
+    """Extract the top level blocks with matching block types from a jinja
+    file, with some special handling for block nesting.
+
+    :param str data: The data to extract blocks from.
+    :param Optional[Set[str]] allowed_blocks: The names of the blocks to
+        extract from the file. They may not be nested within if/for blocks.
+        If None, use the default values.
+    :param bool collect_raw_data: If set, raw data between matched blocks will
+        also be part of the results, as `BlockData` objects. They have a
+        `block_type_name` field of `'__dbt_data'` and will never have a
+        `block_name`.
+    :return List[Union[BlockData, BlockTag]]: A list of `BlockTag`s matching
+        the allowed block types and (if `collect_raw_data` is `True`)
+        `BlockData` objects.
+    """
+    return BlockIterator(data).lex_for_blocks(
+        allowed_blocks=allowed_blocks,
+        collect_raw_data=collect_raw_data
+    )

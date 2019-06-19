@@ -303,10 +303,10 @@ class BlockIterator(object):
             tag.block_type_name[3:] == self.current.block_type_name
         )
 
-    def find_blocks(self, allowed=None, collect_raw_data=True):
+    def find_blocks(self, allowed_blocks=None, collect_raw_data=True):
         """Find all top-level blocks in the data."""
-        if allowed is None:
-            allowed = {'snapshot', 'macro', 'materialization', 'docs'}
+        if allowed_blocks is None:
+            allowed_blocks = {'snapshot', 'macro', 'materialization', 'docs'}
 
         for tag in self.tag_parser.find_tags():
             if tag.block_type_name in _CONTROL_FLOW_TAGS:
@@ -315,16 +315,20 @@ class BlockIterator(object):
                 found = None
                 if self.stack:
                     found = self.stack.pop()
-                expected = None
-                if found:
-                    expected = _CONTROL_FLOW_TAGS[found]
+                else:
+                    expected = _CONTROL_FLOW_END_TAGS[tag.block_type_name]
+                    dbt.exceptions.raise_compiler_error((
+                        'Got an unexpected control flow end tag, got {} but '
+                        'never saw a preceeding {} (@ {})'
+                    ).format(tag.block_type_name, expected, tag.start))
+                expected = _CONTROL_FLOW_TAGS[found]
                 if expected != tag.block_type_name:
                     dbt.exceptions.raise_compiler_error((
-                        'Got unexpected control flow end tag, got {} but '
+                        'Got an unexpected control flow end tag, got {} but '
                         'expected {} next (@ {})'
                     ).format(tag.block_type_name, expected, tag.start))
 
-            if tag.block_type_name in allowed:
+            if tag.block_type_name in allowed_blocks:
                 if self.stack:
                     dbt.exceptions.raise_compiler_error((
                         'Got a block definition inside control flow at {}. '
@@ -362,6 +366,6 @@ class BlockIterator(object):
             if raw_data:
                 yield BlockData(raw_data)
 
-    def lex_for_blocks(self, allowed=None, collect_raw_data=True):
-        return list(self.find_blocks(allowed=allowed,
+    def lex_for_blocks(self, allowed_blocks=None, collect_raw_data=True):
+        return list(self.find_blocks(allowed_blocks=allowed_blocks,
                                      collect_raw_data=collect_raw_data))

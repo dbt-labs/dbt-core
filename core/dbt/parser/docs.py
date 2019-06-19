@@ -46,7 +46,7 @@ class DocumentationParser(BaseParser):
         try:
             blocks = extract_toplevel_blocks(
                 docfile.file_contents,
-                allowed={'docs'},
+                allowed_blocks={'docs'},
                 collect_raw_data=False
             )
         except dbt.exceptions.CompilationException as exc:

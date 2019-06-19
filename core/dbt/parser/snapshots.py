@@ -27,7 +27,7 @@ class SnapshotParser(BaseSqlParser):
         try:
             blocks = dbt.clients.jinja.extract_toplevel_blocks(
                 file_node['raw_sql'],
-                allowed={'snapshot'},
+                allowed_blocks={'snapshot'},
                 collect_raw_data=False
             )
         except dbt.exceptions.CompilationException as exc:
