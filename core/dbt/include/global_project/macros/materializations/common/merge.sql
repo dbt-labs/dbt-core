@@ -4,6 +4,10 @@
   {{ adapter_macro('get_merge_sql', target, source, unique_key, dest_columns) }}
 {%- endmacro %}
 
+{% macro get_overwrite_merge_sql(target, source, unique_key, dest_columns) -%}
+  {{ adapter_macro('get_overwrite_merge_sql', target, source, unique_key, dest_columns) }}
+{%- endmacro %}
+
 
 {% macro common_get_merge_sql(target, source, unique_key, dest_columns) -%}
     {%- set dest_cols_csv = dest_columns | map(attribute="name") | join(', ') -%}
@@ -30,7 +34,7 @@
     values
         ({{ dest_cols_csv }})
 
-{% endmacro %}
+{%- endmacro %}
 
 {% macro default__get_merge_sql(target, source, unique_key, dest_columns) -%}
     {% set typename = adapter.type() %}
@@ -40,4 +44,28 @@
        )
     }}
 
+{% endmacro %}
+
+
+{% macro common_get_overwrite_merge_sql(target, source, unique_key, dest_columns) -%}
+    {%- set dest_cols_csv = dest_columns | map(attribute="name") | join(', ') -%}
+
+    {% if unique_key is not none %}
+    delete from {{ target }}
+    where ({{ unique_key }}) in (
+        select ({{ unique_key }})
+        from {{ source }}
+    );
+    {% endif %}
+
+    insert into {{ target }} ({{ dest_cols_csv }})
+    (
+        select {{ dest_cols_csv }}
+        from {{ source }}
+    );
+
+{%- endmacro %}
+
+{% macro default__get_overwrite_merge_sql(target, source, unique_key, dest_columns) -%}
+    {{ common_get_overwrite_merge_sql(target, source, unique_key, dest_columns) }}
 {% endmacro %}
