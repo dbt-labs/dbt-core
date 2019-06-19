@@ -45,6 +45,7 @@
 - Add support for `null` vars, and distinguish `null` vars from unset vars ([#1426](https://github.com/fishtown-analytics/dbt/pull/1426), [#608](https://github.com/fishtown-analytics/dbt/issues/608))
 - Add support for the `search_path` configuration in Postgres/Redshift profiles ([#1477](https://github.com/fishtown-analytics/dbt/issues/1477), [#1476](https://github.com/fishtown-analytics/dbt/pull/1476))
 - Add support for persisting documentation as `descriptions` for tables and views on BigQuery ([#1031](https://github.com/fishtown-analytics/dbt/issues/1031), [#1285](https://github.com/fishtown-analytics/dbt/pull/1285))
+- Add a `--project-dir` path which will invoke dbt in the specified directory ([#1549](https://github.com/fishtown-analytics/dbt/pull/1549), [#1544](https://github.com/fishtown-analytics/dbt/issues/1544))
 
 ### dbt docs Changes
 - Add searching by tag name ([#32](https://github.com/fishtown-analytics/dbt-docs/pull/32))
@@ -91,7 +92,7 @@ Almost a dozen contributors wrote code for this release of dbt! Thanks for takin
 - [@buremba](https://github.com/buremba) [#1476](https://github.com/fishtown-analytics/dbt/pull/1476)
 - [@darrenhaken](https://github.com/darrenhaken) [#1285](https://github.com/fishtown-analytics/dbt/pull/1285)
 - [@tbescherer](https://github.com/tbescherer) [#1504](https://github.com/fishtown-analytics/dbt/issues/1504)
-- [@heisencoder](https://github.com/heisencoder) [#1509](https://github.com/fishtown-analytics/dbt/pull/1509)
+- [@heisencoder](https://github.com/heisencoder) [#1509](https://github.com/fishtown-analytics/dbt/pull/1509), [#1549](https://github.com/fishtown-analytics/dbt/pull/1549)
 - [@rmgpinto](https://github.com/rmgpinto) [docs#31](https://github.com/fishtown-analytics/dbt-docs/pull/31), [docs#32](https://github.com/fishtown-analytics/dbt-docs/pull/32)
 - [@groodt](https://github.com/groodt) [docs#34](https://github.com/fishtown-analytics/dbt-docs/pull/34)
 
