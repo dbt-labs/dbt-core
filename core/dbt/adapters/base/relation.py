@@ -99,9 +99,7 @@ class BaseRelation(FakeAPIObject, Hashable):
                 approximate_match = False
 
         if approximate_match and not exact_match:
-            target = self.create(
-                database=database, schema=schema, identifier=identifier
-            )
+            target = self.create(database=database, schema=schema, identifier=identifier)
             dbt.exceptions.approximate_relation_match(target, self)
 
         return exact_match
