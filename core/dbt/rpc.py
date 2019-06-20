@@ -267,12 +267,28 @@ class RequestTaskHandler(object):
         self.started = time.time()
         self.timeout = kwargs.pop('timeout', None)
         self.queue = multiprocessing.Queue()
-        self.process = multiprocessing.Process(
-            target=_task_bootstrap,
-            args=(self.task, self.queue, kwargs)
-        )
-        self.process.start()
-        result = self.get_result()
+        if self.task.args.single_threaded:
+            _task_bootstrap(self.task, self.queue, kwargs)
+            try:
+                msgtype, result = self._wait_for_results()
+            except dbt.exceptions.RPCTimeoutException:
+                raise timeout_error(self.timeout)
+            except dbt.exceptions.Exception as exc:
+                raise dbt_error(exc)
+            except Exception as exc:
+                raise server_error(exc)
+
+            if msgtype == QueueMessageType.Error:
+                raise RPCException.from_error(result)
+
+            return result
+        else:
+            self.process = multiprocessing.Process(
+                target=_task_bootstrap,
+                args=(self.task, self.queue, kwargs)
+            )
+            self.process.start()
+            result = self.get_result()
         return result
 
     @property

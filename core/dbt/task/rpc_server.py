@@ -60,7 +60,7 @@ class RPCServerTask(ConfiguredTask):
         # easier as well). The alternative involves tracking metadata+state in
         # a multiprocessing.Manager, adds polling the manager to the request
         # task handler and in general gets messy fast.
-        run_simple(host, port, app, threaded=True)
+        run_simple(host, port, app, threaded=not self.args.single_threaded)
 
     @Request.application
     def handle_jsonrpc_request(self, request):

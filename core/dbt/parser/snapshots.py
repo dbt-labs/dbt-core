@@ -26,16 +26,15 @@ class SnapshotParser(BaseSqlParser):
         # (we hope!) `snapshot` blocks
         try:
             blocks = dbt.clients.jinja.extract_toplevel_blocks(
-                file_node['raw_sql']
+                file_node['raw_sql'],
+                allowed_blocks={'snapshot'},
+                collect_raw_data=False
             )
         except dbt.exceptions.CompilationException as exc:
             if exc.node is None:
                 exc.node = file_node
             raise
         for block in blocks:
-            if block.block_type_name != NodeType.Snapshot:
-                # non-snapshot blocks are just ignored
-                continue
             name = block.block_name
             raw_sql = block.contents
             updates = {
