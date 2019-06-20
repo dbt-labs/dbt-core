@@ -243,7 +243,7 @@ REGISTRY_PACKAGE_CONTRACT = {
             'description': 'The version of the package',
         },
     },
-    'required': ['package'],
+    'required': ['package', 'version'],
 }
 
 

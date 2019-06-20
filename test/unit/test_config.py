@@ -15,6 +15,10 @@ from dbt.adapters.postgres import PostgresCredentials
 from dbt.adapters.redshift import RedshiftCredentials
 from dbt.contracts.project import PackageConfig
 from dbt.semver import VersionSpecifier
+from dbt.task.run_operation import RunOperationTask
+
+
+INITIAL_ROOT = os.getcwd()
 
 
 @contextmanager
@@ -65,7 +69,7 @@ model_fqns = frozenset((
 
 class Args(object):
     def __init__(self, profiles_dir=None, threads=None, profile=None,
-                 cli_vars=None, version_check=None):
+                 cli_vars=None, version_check=None, project_dir=None):
         self.profile = profile
         if threads is not None:
             self.threads = threads
@@ -75,11 +79,13 @@ class Args(object):
             self.vars = cli_vars
         if version_check is not None:
             self.version_check = version_check
+        if project_dir is not None:
+            self.project_dir = project_dir
 
 
 class BaseConfigTest(unittest.TestCase):
     """Subclass this, and before calling the superclass setUp, set
-    profiles_dir.
+    self.profiles_dir and self.project_dir.
     """
     def setUp(self):
         self.default_project_data = {
@@ -147,7 +153,7 @@ class BaseConfigTest(unittest.TestCase):
             }
         }
         self.args = Args(profiles_dir=self.profiles_dir, cli_vars='{}',
-                         version_check=True)
+                         version_check=True, project_dir=self.project_dir)
         self.env_override = {
             'env_value_type': 'postgres',
             'env_value_host': 'env-postgres-host',
@@ -176,7 +182,7 @@ class BaseFileTest(BaseConfigTest):
         except EnvironmentError:
             pass
 
-    def proejct_path(self, name):
+    def project_path(self, name):
         return os.path.join(self.project_dir, name)
 
     def profile_path(self, name):
@@ -185,11 +191,11 @@ class BaseFileTest(BaseConfigTest):
     def write_project(self, project_data=None):
         if project_data is None:
             project_data = self.project_data
-        with open(self.proejct_path('dbt_project.yml'), 'w') as fp:
+        with open(self.project_path('dbt_project.yml'), 'w') as fp:
             yaml.dump(project_data, fp)
 
     def write_packages(self, package_data):
-        with open(self.proejct_path('packages.yml'), 'w') as fp:
+        with open(self.project_path('packages.yml'), 'w') as fp:
             yaml.dump(package_data, fp)
 
     def write_profile(self, profile_data=None):
@@ -202,6 +208,7 @@ class BaseFileTest(BaseConfigTest):
 class TestProfile(BaseConfigTest):
     def setUp(self):
         self.profiles_dir = '/invalid-path'
+        self.project_dir = '/invalid-project-path'
         super(TestProfile, self).setUp()
 
     def from_raw_profiles(self):
@@ -926,6 +933,30 @@ class TestProjectFile(BaseFileTest):
         self.write_packages({'invalid': ['not a package of any kind']})
         with self.assertRaises(dbt.exceptions.DbtProjectError):
             dbt.config.Project.from_project_root(self.project_dir, {})
+
+
+class TestRunOperationTask(BaseFileTest):
+    def setUp(self):
+        super(TestRunOperationTask, self).setUp()
+        self.write_project(self.default_project_data)
+        self.write_profile(self.default_profile_data)
+
+    def tearDown(self):
+        super(TestRunOperationTask, self).tearDown()
+        # These tests will change the directory to the project path,
+        # so it's necessary to change it back at the end.
+        os.chdir(INITIAL_ROOT)
+
+    def test_run_operation_task(self):
+        self.assertEqual(os.getcwd(), INITIAL_ROOT)
+        self.assertNotEqual(INITIAL_ROOT, self.project_dir)
+        new_task = RunOperationTask.from_args(self.args)
+        self.assertEqual(os.getcwd(), self.project_dir)
+
+    def test_run_operation_task_with_bad_path(self):
+        self.args.project_dir = 'bad_path'
+        with self.assertRaises(dbt.exceptions.RuntimeException):
+            new_task = RunOperationTask.from_args(self.args)
 
 
 class TestVariableProjectFile(BaseFileTest):
