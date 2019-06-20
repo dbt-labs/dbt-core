@@ -14,14 +14,13 @@
   {%- set tmp_relation = make_temp_relation(target_relation) %}
 
   {#-- Find and validate the incremental strategy #}
-  {%- set incremental_strategy = config.get("incremental.strategy", default="merge") -%}
-  {%- set strategy = config.get('strategy', default=incremental_strategy) -%}
+  {%- set strategy = config.get("incremental_strategy", default="merge") -%}
 
   {% set invalid_strategy_msg -%}
     Invalid incremental strategy provided: {{ strategy }}
-    Expected one of: 'merge', 'overwrite'
+    Expected one of: 'merge', 'delete+insert'
   {%- endset %}
-  {% if strategy not in ['merge', 'overwrite'] %}
+  {% if strategy not in ['merge', 'delete+insert'] %}
     {% do exceptions.raise_compiler_error(invalid_strategy_msg) %}
   {% endif %}
 
@@ -57,8 +56,8 @@
     {%- call statement('main') -%}
       {% if strategy == 'merge' %}
         {{ get_merge_sql(target_relation, tmp_relation, unique_key, dest_columns) }}
-      {% elif strategy == 'overwrite' %}
-        {{ get_overwrite_merge_sql(target_relation, tmp_relation, unique_key, dest_columns) }}
+      {% elif strategy == 'delete+insert' %}
+        {{ get_delete_insert_merge_sql(target_relation, tmp_relation, unique_key, dest_columns) }}
       {% else %}
         {% do exceptions.raise_compiler_error('invalid strategy: ' ~ strategy) %}
       {% endif %}

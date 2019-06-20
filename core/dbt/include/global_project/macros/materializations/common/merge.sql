@@ -4,8 +4,8 @@
   {{ adapter_macro('get_merge_sql', target, source, unique_key, dest_columns) }}
 {%- endmacro %}
 
-{% macro get_overwrite_merge_sql(target, source, unique_key, dest_columns) -%}
-  {{ adapter_macro('get_overwrite_merge_sql', target, source, unique_key, dest_columns) }}
+{% macro get_delete_insert_merge_sql(target, source, unique_key, dest_columns) -%}
+  {{ adapter_macro('get_delete_insert_merge_sql', target, source, unique_key, dest_columns) }}
 {%- endmacro %}
 
 
@@ -47,7 +47,7 @@
 {% endmacro %}
 
 
-{% macro common_get_overwrite_merge_sql(target, source, unique_key, dest_columns) -%}
+{% macro common_get_delete_insert_merge_sql(target, source, unique_key, dest_columns) -%}
     {%- set dest_cols_csv = dest_columns | map(attribute="name") | join(', ') -%}
 
     {% if unique_key is not none %}
@@ -66,6 +66,6 @@
 
 {%- endmacro %}
 
-{% macro default__get_overwrite_merge_sql(target, source, unique_key, dest_columns) -%}
-    {{ common_get_overwrite_merge_sql(target, source, unique_key, dest_columns) }}
+{% macro default__get_delete_insert_merge_sql(target, source, unique_key, dest_columns) -%}
+    {{ common_get_delete_insert_merge_sql(target, source, unique_key, dest_columns) }}
 {% endmacro %}

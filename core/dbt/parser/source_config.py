@@ -17,8 +17,7 @@ class SourceConfig(object):
         'database',
         'severity',
 
-        'strategy',
-        'incremental.strategy'
+        'incremental_strategy'
     }
 
     ConfigKeys = AppendListFields | ExtendDictFields | ClobberFields

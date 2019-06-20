@@ -259,3 +259,27 @@ class TestSnowflakeSimpleLowercasedSchemaQuoted(BaseLowercasedSchemaTest):
             "quoting": {"identifier": False, "schema": False},
         })
         results = self.run_dbt(["seed"], expect_pass=False)
+
+
+class TestSnowflakeIncrementalOverwrite(BaseTestSimpleCopy):
+    @property
+    def models(self):
+        return self.dir("models-snowflake")
+
+    @use_profile("snowflake")
+    def test__snowflake__incremental_overwrite(self):
+        results = self.run_dbt(["run"])
+        self.assertEqual(len(results),  1)
+
+        results = self.run_dbt(["run"], expect_pass=False)
+        self.assertEqual(len(results),  1)
+
+        # Setting the incremental_strategy should make this succeed
+        self.use_default_project({
+            "models": {"incremental_strategy": "delete+insert"}
+        })
+
+        results = self.run_dbt(["run"])
+        self.assertEqual(len(results),  1)
+
+
