@@ -473,7 +473,8 @@ class SchemaSourceParser(SchemaBaseTestParser):
             loaded_at_field=loaded_at_field,
             freshness=freshness,
             quoting=quoting,
-            resource_type=NodeType.Source
+            resource_type=NodeType.Source,
+            fqn=[package_name, source.name, table.name]
         )
 
     def parse_source_table(self, source, table, path, package_name, root_dir):

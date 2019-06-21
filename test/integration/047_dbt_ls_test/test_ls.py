@@ -26,6 +26,7 @@ class TestStrictUndefined(DBTIntegrationTest):
             'snapshot-paths': [self.dir('snapshots')],
             'macro-paths': [self.dir('macros')],
             'data-paths': [self.dir('data')],
+            'test-paths': [self.dir('tests')],
         }
 
     def run_dbt_ls(self, args=None, expect_pass=True):
@@ -58,7 +59,7 @@ class TestStrictUndefined(DBTIntegrationTest):
     def expect_snapshot_output(self):
         expectations = {
             'name': 'my_snapshot',
-            'selector': 'snapshot.test.my_snapshot',
+            'selector': 'test.my_snapshot',
             'json': {
                 'name': 'my_snapshot',
                 'package_name': 'test',
@@ -89,10 +90,10 @@ class TestStrictUndefined(DBTIntegrationTest):
 
     def expect_analyses_output(self):
         expectations = {
-            'name': 'analysis',
-            'selector': 'analysis.test.analysis',
+            'name': 'a',
+            'selector': 'test.analysis.a',
             'json': {
-                'name': 'analysis',
+                'name': 'a',
                 'package_name': 'test',
                 'depends_on': {'nodes': [], 'macros': []},
                 'tags': [],
@@ -107,17 +108,17 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'column_types': {},
                     'persist_docs': {},
                 },
-                'alias': 'analysis',
+                'alias': 'a',
                 'resource_type': 'analysis',
             },
-            'path': self.dir('analyses/analysis.sql'),
+            'path': self.dir('analyses/a.sql'),
         }
         self.expect_given_output(['--resource-type', 'analysis'], expectations)
 
     def expect_model_output(self):
         expectations = {
             'name': ('inner', 'outer'),
-            'selector': ('model.test.inner', 'model.test.outer'),
+            'selector': ('test.sub.inner', 'test.outer'),
             'json': (
                 {
                     'name': 'inner',
@@ -165,7 +166,7 @@ class TestStrictUndefined(DBTIntegrationTest):
     def expect_source_output(self):
         expectations = {
             'name': 'my_source.my_table',
-            'selector': 'source:source.test.my_source.my_table',
+            'selector': 'source:test.my_source.my_table',
             'json': {
                 'package_name': 'test',
                 'name': 'my_table',
@@ -181,7 +182,7 @@ class TestStrictUndefined(DBTIntegrationTest):
     def expect_seed_output(self):
         expectations = {
             'name': 'seed',
-            'selector': 'seed.test.seed',
+            'selector': 'test.seed',
             'json': {
                 'name': 'seed',
                 'package_name': 'test',
@@ -207,8 +208,8 @@ class TestStrictUndefined(DBTIntegrationTest):
 
     def expect_test_output(self):
         expectations = {
-            'name': ('not_null_outer_id', 'unique_outer_id'),
-            'selector': ('test.test.not_null_outer_id', 'test.test.unique_outer_id'),
+            'name': ('not_null_outer_id', 't', 'unique_outer_id'),
+            'selector': ('test.schema_test.not_null_outer_id', 'test.data_test.t', 'test.schema_test.unique_outer_id'),
             'json': (
                 {
                     'name': 'not_null_outer_id',
@@ -232,6 +233,26 @@ class TestStrictUndefined(DBTIntegrationTest):
 
                 },
                 {
+                    'name': 't',
+                    'package_name': 'test',
+                    'depends_on': {'nodes': [], 'macros': []},
+                    'tags': ['data'],
+                    'config': {
+                        'enabled': True,
+                        'materialized': 'view',
+                        'post-hook': [],
+                        'severity': 'ERROR',
+                        'tags': [],
+                        'pre-hook': [],
+                        'quoting': {},
+                        'vars': {},
+                        'column_types': {},
+                        'persist_docs': {},
+                    },
+                    'alias': 't',
+                    'resource_type': 'test',
+                },
+                {
                     'name': 'unique_outer_id',
                     'package_name': 'test',
                     'depends_on': {'nodes': ['model.test.outer'], 'macros': []},
@@ -252,21 +273,26 @@ class TestStrictUndefined(DBTIntegrationTest):
                     'resource_type': 'test',
                 },
             ),
-            'path': (self.dir('models/schema.yml'), self.dir('models/schema.yml')),
+            'path': (self.dir('models/schema.yml'), self.dir('tests/t.sql'), self.dir('models/schema.yml')),
         }
         self.expect_given_output(['--resource-type', 'test'], expectations)
 
     def expect_all_output(self):
+        # tests have their type inserted into their fqn, after the package
+        # but models don't! they just have (package.name)
+        # sources are like models - (package.source_name.table_name)
         expected_default = {
-            'snapshot.test.my_snapshot',
-            'model.test.inner',
-            'model.test.outer',
-            'seed.test.seed',
-            'source:source.test.my_source.my_table',
-            'test.test.not_null_outer_id',
-            'test.test.unique_outer_id',
+            'test.my_snapshot',
+            'test.sub.inner',
+            'test.outer',
+            'test.seed',
+            'source:test.my_source.my_table',
+            'test.schema_test.not_null_outer_id',
+            'test.schema_test.unique_outer_id',
+            'test.data_test.t',
         }
-        expected_all = expected_default | {'analysis.test.analysis'}
+        # analyses have their type inserted into their fqn like tests
+        expected_all = expected_default | {'test.analysis.a'}
 
         results = self.run_dbt_ls(['--resource-type', 'all', '--select', '*', 'source:*'])
         self.assertEqual(set(results), expected_all)
@@ -281,18 +307,18 @@ class TestStrictUndefined(DBTIntegrationTest):
 
     def expect_select(self):
         results = self.run_dbt_ls(['--resource-type', 'test', '--select', 'outer'])
-        self.assertEqual(set(results), {'test.test.not_null_outer_id', 'test.test.unique_outer_id'})
+        self.assertEqual(set(results), {'test.schema_test.not_null_outer_id', 'test.schema_test.unique_outer_id'})
 
         self.run_dbt_ls(['--resource-type', 'test', '--select', 'inner'], expect_pass=False)
 
         results = self.run_dbt_ls(['--resource-type', 'test', '--select', '+inner'])
-        self.assertEqual(set(results), {'test.test.not_null_outer_id', 'test.test.unique_outer_id'})
+        self.assertEqual(set(results), {'test.schema_test.not_null_outer_id', 'test.schema_test.unique_outer_id'})
 
         results = self.run_dbt_ls(['--resource-type', 'model', '--select', 'outer+'])
-        self.assertEqual(set(results), {'model.test.outer', 'model.test.inner'})
+        self.assertEqual(set(results), {'test.outer', 'test.sub.inner'})
 
         results = self.run_dbt_ls(['--resource-type', 'model', '--exclude', 'inner'])
-        self.assertEqual(set(results), {'model.test.outer'})
+        self.assertEqual(set(results), {'test.outer'})
 
     @use_profile('postgres')
     def test_postgres_ls(self):

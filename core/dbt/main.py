@@ -106,6 +106,8 @@ def main(args=None):
             logger.error(traceback.format_exc())
         exit_code = ExitCodes.UnhandledError
 
+    _python2_compatibility_message()
+
     sys.exit(exit_code)
 
 
@@ -175,6 +177,22 @@ def track_run(task):
         dbt.tracking.flush()
 
 
+_PYTHON_27_WARNING = '''
+Python 2.7 will reach the end of its life on January 1st, 2020.
+Please upgrade your Python as Python 2.7 won't be maintained after that date.
+A future version of dbt will drop support for Python 2.7.
+'''.strip()
+
+
+def _python2_compatibility_message():
+    if dbt.compat.WHICH_PYTHON != 2:
+        return
+
+    logger.critical(
+        dbt.ui.printer.red('DEPRECATION: ') + _PYTHON_27_WARNING
+    )
+
+
 def run_from_args(parsed):
     log_cache_events(getattr(parsed, 'log_cache_events', False))
     flags.set_from_args(parsed)
@@ -202,6 +220,16 @@ def run_from_args(parsed):
 
 def _build_base_subparser():
     base_subparser = argparse.ArgumentParser(add_help=False)
+
+    base_subparser.add_argument(
+        '--project-dir',
+        default=None,
+        type=str,
+        help="""
+        Which directory to look in for the dbt_project.yml file.
+        Default is the current working directory and its parents.
+        """
+    )
 
     base_subparser.add_argument(
         '--profiles-dir',
@@ -607,8 +635,7 @@ def _build_run_operation_subparser(subparsers, base_subparser):
             of dbt. Please use it with caution"""
     )
     sub.add_argument(
-        '--macro',
-        required=True,
+        'macro',
         help="""
             Specify the macro to invoke. dbt will call this macro with the
             supplied arguments and then exit"""

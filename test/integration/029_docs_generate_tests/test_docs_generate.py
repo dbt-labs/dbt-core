@@ -1,8 +1,7 @@
 from __future__ import unicode_literals
 import json
-from numbers import Integral
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from mock import ANY, patch
 
 from test.integration.base import DBTIntegrationTest, use_profile, AnyFloat, \
@@ -23,7 +22,7 @@ class LineIndifferent(object):
         return self.expected == other.replace('\r', '')
 
     def __repr__(self):
-        return 'LineIndifferent("{}")'.format(self.expected)
+        return 'LineIndifferent({!r})'.format(self.expected)
 
     def __str__(self):
         return self.__repr__()
@@ -471,7 +470,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'owner': role,
                 },
                 "stats": stats,
-                'columns': seed_columns
+                'columns': seed_columns,
             },
         }
 
@@ -1289,7 +1288,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'schema': my_schema_name,
                     'source_description': 'My source',
                     'source_name': 'my_source',
-                    'unique_id': 'source.test.my_source.my_table'
+                    'unique_id': 'source.test.my_source.my_table',
+                    'fqn': ['test', 'my_source', 'my_table'],
                 }
             },
             'docs': {

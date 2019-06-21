@@ -22,3 +22,10 @@
     vacuum "{{ schema }}"."{{ table_name }}"
   {% endcall %}
 {% endmacro %}
+
+
+{% macro vacuum_ref(ref_target) %}
+  {% call statement('stmt', auto_begin=false) %}
+    vacuum {{ ref(ref_target) }}
+  {% endcall %}
+{% endmacro %}

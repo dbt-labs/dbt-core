@@ -13,6 +13,17 @@
 
   {%- set tmp_relation = make_temp_relation(target_relation) %}
 
+  {#-- Find and validate the incremental strategy #}
+  {%- set strategy = config.get("incremental_strategy", default="merge") -%}
+
+  {% set invalid_strategy_msg -%}
+    Invalid incremental strategy provided: {{ strategy }}
+    Expected one of: 'merge', 'delete+insert'
+  {%- endset %}
+  {% if strategy not in ['merge', 'delete+insert'] %}
+    {% do exceptions.raise_compiler_error(invalid_strategy_msg) %}
+  {% endif %}
+
   -- setup
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
 
@@ -41,15 +52,15 @@
 
     {{ adapter.expand_target_column_types(from_relation=tmp_relation,
                                           to_relation=target_relation) }}
-    {% set incremental_sql %}
-    (
-        select * from {{ tmp_relation }}
-    )
-    {% endset %}
-
     {% set dest_columns = adapter.get_columns_in_relation(target_relation) %}
     {%- call statement('main') -%}
-      {{ get_merge_sql(target_relation, incremental_sql, unique_key, dest_columns) }}
+      {% if strategy == 'merge' %}
+        {{ get_merge_sql(target_relation, tmp_relation, unique_key, dest_columns) }}
+      {% elif strategy == 'delete+insert' %}
+        {{ get_delete_insert_merge_sql(target_relation, tmp_relation, unique_key, dest_columns) }}
+      {% else %}
+        {% do exceptions.raise_compiler_error('invalid strategy: ' ~ strategy) %}
+      {% endif %}
     {% endcall %}
 
   {%- endif %}

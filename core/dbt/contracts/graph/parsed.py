@@ -738,6 +738,7 @@ PARSED_SOURCE_DEFINITION_CONTRACT = deep_merge(
     HAS_UNIQUE_ID_CONTRACT,
     HAS_DOCREFS_CONTRACT,
     HAS_RELATION_METADATA_CONTRACT,
+    HAS_FQN_CONTRACT,
     {
         'description': (
             'A source table definition, as parsed from the one provided in the'

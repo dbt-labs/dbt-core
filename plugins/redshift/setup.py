@@ -25,6 +25,7 @@ setup(
         'dbt': [
             'include/redshift/dbt_project.yml',
             'include/redshift/macros/*.sql',
+            'include/redshift/macros/**/*.sql',
         ]
     },
     install_requires=[

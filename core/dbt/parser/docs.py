@@ -44,16 +44,17 @@ class DocumentationParser(BaseParser):
 
     def parse(self, docfile):
         try:
-            blocks = extract_toplevel_blocks(docfile.file_contents)
+            blocks = extract_toplevel_blocks(
+                docfile.file_contents,
+                allowed_blocks={'docs'},
+                collect_raw_data=False
+            )
         except dbt.exceptions.CompilationException as exc:
             if exc.node is None:
                 exc.node = docfile
             raise
 
         for block in blocks:
-            if block.block_type_name != NodeType.Documentation:
-                continue
-
             try:
                 template = get_template(block.full_block, {})
             except dbt.exceptions.CompilationException as e:

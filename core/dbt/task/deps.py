@@ -118,6 +118,11 @@ class RegistryPackage(Package):
     SCHEMA = REGISTRY_PACKAGE_CONTRACT
 
     def __init__(self, *args, **kwargs):
+        if 'version' not in kwargs:
+            dbt.exceptions.raise_dependency_error(
+                'package dependency {} is missing a "version" field'
+                .format(kwargs.get('package'))
+            )
         super(RegistryPackage, self).__init__(*args, **kwargs)
         self._version = self._sanitize_version(self._contents['version'])
 
