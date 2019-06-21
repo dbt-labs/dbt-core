@@ -60,3 +60,7 @@ class TestOperations(DBTIntegrationTest):
         self.run_dbt(['run'])
         # this should succeed
         self.run_operation('vacuum_ref', ref_target='model')
+
+    @use_profile('postgres')
+    def test__postgres_select(self):
+        self.run_operation('select_something', name='world')
