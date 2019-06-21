@@ -1084,6 +1084,7 @@ def wrapper(model):
             except RuntimeException as exc:
                 exc.add_node(model)
                 raise exc
+
         return inner
     return wrap
 

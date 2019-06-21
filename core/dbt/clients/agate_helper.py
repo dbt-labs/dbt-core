@@ -137,7 +137,7 @@ def as_matrix(table):
 
 def from_csv(abspath, text_columns):
     type_tester = build_type_tester(text_columns=text_columns)
-    with open(abspath, encoding='utf-8') as fp:
+    with open(abspath, encoding="utf-8") as fp:
         if fp.read(1) != BOM:
             fp.seek(0)
         return agate.Table.from_csv(fp, column_types=type_tester)
