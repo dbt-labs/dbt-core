@@ -2,7 +2,7 @@ import dbt.links
 import dbt.flags
 
 
-class DBTDeprecation(object):
+class DBTDeprecation:
     name = None
     description = None
 

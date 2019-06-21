@@ -5,7 +5,7 @@ from dbt.node_types import NodeType
 from dbt.adapters.factory import get_adapter_class_by_name
 
 
-class SourceConfig(object):
+class SourceConfig:
     AppendListFields = {'pre-hook', 'post-hook', 'tags'}
     ExtendDictFields = {'vars', 'column_types', 'quoting', 'persist_docs'}
     ClobberFields = {

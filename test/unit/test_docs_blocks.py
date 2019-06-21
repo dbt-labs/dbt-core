@@ -1,6 +1,6 @@
 import os
-import mock
 import unittest
+from unittest import mock
 
 from dbt.node_types import NodeType
 from dbt.parser import docs

@@ -1,6 +1,6 @@
 from test.integration.base import DBTIntegrationTest, use_profile
 import json
-import mock
+from unittest import mock
 
 import dbt.semver
 import dbt.config

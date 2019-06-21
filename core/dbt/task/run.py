@@ -23,7 +23,7 @@ from dbt.task.compile import CompileTask, RemoteCompileTask
 from dbt.utils import get_nodes_by_tags
 
 
-class Timer(object):
+class Timer:
     def __init__(self):
         self.start = None
         self.end = None
@@ -43,7 +43,7 @@ class Timer(object):
 
 
 @functools.total_ordering
-class BiggestName(object):
+class BiggestName:
     def __lt__(self, other):
         return True
 
@@ -53,7 +53,7 @@ class BiggestName(object):
 
 class RunTask(CompileTask):
     def __init__(self, args, config):
-        super(RunTask, self).__init__(args, config)
+        super().__init__(args, config)
         self.ran_hooks = []
 
     def raise_on_first_error(self):

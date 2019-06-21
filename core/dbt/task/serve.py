@@ -3,7 +3,8 @@ import os
 import webbrowser
 
 from dbt.include.global_project import DOCS_INDEX_FILE_PATH
-from dbt.compat import SimpleHTTPRequestHandler, TCPServer
+from http.server import SimpleHTTPRequestHandler
+from socketserver import TCPServer
 from dbt.logger import GLOBAL_LOGGER as logger
 
 from dbt.task.base import ProjectOnlyTask

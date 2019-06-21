@@ -41,7 +41,7 @@ def track_model_run(index, num_nodes, run_model_result):
     })
 
 
-class ExecutionContext(object):
+class ExecutionContext:
     """During execution and error handling, dbt makes use of mutable state:
     timing information and the newest (compiled vs executed) form of the node.
     """
@@ -50,7 +50,7 @@ class ExecutionContext(object):
         self.node = node
 
 
-class BaseRunner(object):
+class BaseRunner:
     def __init__(self, config, adapter, node, node_index, num_nodes):
         self.config = config
         self.adapter = adapter
@@ -145,7 +145,7 @@ class BaseRunner(object):
         if e.node is None:
             e.node = ctx.node
 
-        return dbt.compat.to_string(e)
+        return str(e)
 
     def _handle_internal_exception(self, e, ctx):
         build_path = self.node.build_path
@@ -157,7 +157,7 @@ class BaseRunner(object):
             note=INTERNAL_ERROR_STRING
         )
         logger.debug(error)
-        return dbt.compat.to_string(e)
+        return str(e)
 
     def _handle_generic_exception(self, e, ctx):
         node_description = self.node.get('build_path')
@@ -171,7 +171,7 @@ class BaseRunner(object):
 
         logger.error(error)
         logger.debug('', exc_info=True)
-        return dbt.compat.to_string(e)
+        return str(e)
 
     def handle_exception(self, e, ctx):
         catchable_errors = (CompilationException, RuntimeException)
@@ -221,7 +221,7 @@ class BaseRunner(object):
                 'Error releasing connection for node {}: {!s}\n{}'
                 .format(self.node.name, exc, traceback.format_exc())
             )
-            return dbt.compat.to_string(exc)
+            return str(exc)
 
         return None
 
@@ -516,8 +516,7 @@ class SeedRunner(ModelRunner):
 
 class RPCCompileRunner(CompileRunner):
     def __init__(self, config, adapter, node, node_index, num_nodes):
-        super(RPCCompileRunner, self).__init__(config, adapter, node,
-                                               node_index, num_nodes)
+        super().__init__(config, adapter, node, node_index, num_nodes)
 
     def handle_exception(self, e, ctx):
         if isinstance(e, dbt.exceptions.Exception):

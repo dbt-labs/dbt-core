@@ -1,5 +1,7 @@
+from enum import Enum
 
-class NodeType(object):
+
+class NodeType(str, Enum):
     Base = 'base'
     Model = 'model'
     Analysis = 'analysis'
@@ -12,9 +14,12 @@ class NodeType(object):
     Source = 'source'
     RPCCall = 'rpc'
 
+    def __str__(self):
+        return self._value_
+
     @classmethod
     def executable(cls):
-        return [
+        return [v.value for v in [
             cls.Model,
             cls.Test,
             cls.Snapshot,
@@ -23,18 +28,20 @@ class NodeType(object):
             cls.Seed,
             cls.Documentation,
             cls.RPCCall,
-        ]
+        ]]
 
     @classmethod
     def refable(cls):
-        return [
+        return [v.value for v in [
             cls.Model,
             cls.Seed,
             cls.Snapshot,
-        ]
+        ]]
 
 
-class RunHookType:
+class RunHookType(str, Enum):
     Start = 'on-run-start'
     End = 'on-run-end'
-    Both = [Start, End]
+
+    def __str__(self):
+        return self._value_

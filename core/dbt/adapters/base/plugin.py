@@ -1,7 +1,7 @@
 from dbt.config.project import Project
 
 
-class AdapterPlugin(object):
+class AdapterPlugin:
     """Defines the basic requirements for a dbt adapter plugin.
 
     :param type adapter: An adapter class, derived from BaseAdapter

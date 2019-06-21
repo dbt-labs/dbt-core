@@ -15,7 +15,6 @@ import dbt.contracts.project
 from dbt.context.common import generate_config_context
 from dbt.clients.jinja import get_rendered
 from dbt.node_types import NodeType
-from dbt.compat import basestring, to_string
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import get_pseudo_test_path
 from dbt.contracts.graph.unparsed import UnparsedNode, UnparsedNodeUpdate, \
@@ -55,7 +54,7 @@ def get_nice_schema_test_name(test_type, test_name, args):
 
 
 def as_kwarg(key, value):
-    test_value = to_string(value)
+    test_value = str(value)
     is_function = re.match(r'^\s*(env_var|ref|var|source|doc)\s*\(.+\)\s*$',
                            test_value)
 
@@ -68,7 +67,7 @@ def as_kwarg(key, value):
     return "{key}={value}".format(key=key, value=formatted_value)
 
 
-class TestBuilder(object):
+class TestBuilder:
     """An object to hold assorted test settings and perform basic parsing
 
     Test names have the following pattern:
@@ -104,7 +103,7 @@ class TestBuilder(object):
         self.modifiers = {}
         for key, default in self.MODIFIER_ARGS.items():
             value = self.args.pop(key, default)
-            if isinstance(value, basestring):
+            if isinstance(value, str):
                 value = get_rendered(value, render_ctx)
             self.modifiers[key] = value
 
@@ -134,7 +133,7 @@ class TestBuilder(object):
                     type(test_args), test_args
                 )
             )
-        if not isinstance(test_name, basestring):
+        if not isinstance(test_name, str):
             dbt.exceptions.raise_compiler_error(
                 'test name must be a str, got {} (value {})'.format(
                     type(test_name), test_name
@@ -237,7 +236,7 @@ def _filter_validate(filepath, location, values, validate):
             continue
 
 
-class ParserRef(object):
+class ParserRef:
     """A helper object to hold parse-time references."""
     def __init__(self):
         self.column_info = {}
@@ -284,7 +283,7 @@ class SchemaBaseTestParser(MacrosKnownParser):
 
         :param test_target: An unparsed form of the target.
         """
-        if isinstance(test, basestring):
+        if isinstance(test, str):
             test = {test: {}}
 
         ctx = generate_config_context(self.root_project_config.cli_vars)
@@ -405,7 +404,7 @@ class SchemaSourceParser(SchemaBaseTestParser):
     Builder = SourceTestBuilder
 
     def __init__(self, root_project_config, all_projects, macro_manifest):
-        super(SchemaSourceParser, self).__init__(
+        super().__init__(
             root_project_config=root_project_config,
             all_projects=all_projects,
             macro_manifest=macro_manifest
@@ -535,7 +534,7 @@ class SchemaSourceParser(SchemaBaseTestParser):
             yield node_type, node
 
 
-class SchemaParser(object):
+class SchemaParser:
     def __init__(self, root_project_config, all_projects, macro_manifest):
         self.root_project_config = root_project_config
         self.all_projects = all_projects

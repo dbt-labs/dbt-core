@@ -1,6 +1,8 @@
-import networkx as nx
-from dbt.logger import GLOBAL_LOGGER as logger
+from enum import Enum
 
+import networkx as nx
+
+from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import is_enabled, get_materialization, coalesce
 from dbt.node_types import NodeType
 import dbt.exceptions
@@ -12,7 +14,7 @@ SELECTOR_CHILDREN_AND_ANCESTORS = '@'
 SELECTOR_DELIMITER = ':'
 
 
-class SelectionCriteria(object):
+class SelectionCriteria:
     def __init__(self, node_spec):
         self.raw = node_spec
         self.select_children = False
@@ -45,10 +47,13 @@ class SelectionCriteria(object):
             self.selector_value = node_spec
 
 
-class SELECTOR_FILTERS(object):
+class SELECTOR_FILTERS(str, Enum):
     FQN = 'fqn'
     TAG = 'tag'
     SOURCE = 'source'
+
+    def __str__(self):
+        return self._value_
 
 
 def split_specs(node_specs):
@@ -125,7 +130,7 @@ def warn_if_useless_spec(spec, nodes):
     dbt.exceptions.warn_or_error(msg, log_fmt='{} and was ignored\n')
 
 
-class ManifestSelector(object):
+class ManifestSelector:
     def __init__(self, manifest):
         self.manifest = manifest
 
@@ -215,7 +220,7 @@ class InvalidSelectorError(Exception):
     pass
 
 
-class MultiSelector(object):
+class MultiSelector:
     """The base class of the node selector. It only about the manifest and
     selector types, including the glob operator, but does not handle any graph
     related behavior.
@@ -237,7 +242,7 @@ class MultiSelector(object):
         return set(selector.search(included_nodes, selector_value))
 
 
-class Graph(object):
+class Graph:
     """A wrapper around the networkx graph that understands SelectionCriteria
     and how they interact with the graph.
     """
@@ -290,7 +295,7 @@ class Graph(object):
 class NodeSelector(MultiSelector):
     def __init__(self, graph, manifest):
         self.full_graph = Graph(graph)
-        super(NodeSelector, self).__init__(manifest)
+        super().__init__(manifest)
 
     def get_nodes_from_spec(self, graph, spec):
         try:

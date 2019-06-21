@@ -1,8 +1,7 @@
 import unittest
-import mock
+from unittest import mock
 
 import copy
-import os
 
 import dbt.flags
 from dbt import tracking
@@ -11,6 +10,7 @@ from dbt.contracts.graph.parsed import ParsedNode
 from dbt.contracts.graph.compiled import CompiledNode
 from dbt.utils import timestring
 import freezegun
+
 
 class ManifestTest(unittest.TestCase):
     def setUp(self):

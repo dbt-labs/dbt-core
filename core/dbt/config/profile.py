@@ -60,7 +60,7 @@ def read_profile(profiles_dir):
     return {}
 
 
-class UserConfig(object):
+class UserConfig:
     def __init__(self, send_anonymous_usage_stats, use_colors, printer_width):
         self.send_anonymous_usage_stats = send_anonymous_usage_stats
         self.use_colors = use_colors
@@ -110,7 +110,7 @@ class UserConfig(object):
             printer.printer_width(self.printer_width)
 
 
-class Profile(object):
+class Profile:
     def __init__(self, profile_name, target_name, config, threads,
                  credentials):
         self.profile_name = profile_name

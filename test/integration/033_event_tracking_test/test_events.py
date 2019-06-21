@@ -1,9 +1,8 @@
 from test.integration.base import DBTIntegrationTest, use_profile
-import mock
 import hashlib
 import os
 
-from mock import call, ANY
+from unittest.mock import call, ANY, patch
 
 import dbt.exceptions
 import dbt.version
@@ -37,7 +36,7 @@ class TestEventTracking(DBTIntegrationTest):
     # TODO : Handle the subject. Should be the same every time!
     # TODO : Regex match a uuid for user_id, invocation_id?
 
-    @mock.patch('dbt.tracking.tracker.track_struct_event')
+    @patch('dbt.tracking.tracker.track_struct_event')
     def run_event_test(
         self,
         cmd,

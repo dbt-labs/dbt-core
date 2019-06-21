@@ -3,7 +3,6 @@ import hashlib
 import os
 import pprint
 
-from dbt import compat
 from dbt.clients.system import resolve_path_from_base
 from dbt.clients.system import path_exists
 from dbt.clients.system import load_file_contents
@@ -66,7 +65,7 @@ def _dict_if_none(value):
 
 def _list_if_none_or_string(value):
     value = _list_if_none(value)
-    if isinstance(value, compat.basestring):
+    if isinstance(value, str):
         return [value]
     return value
 
@@ -135,12 +134,12 @@ def _parse_versions(versions):
 
     Regardless, this will return a list of VersionSpecifiers
     """
-    if isinstance(versions, compat.basestring):
+    if isinstance(versions, str):
         versions = versions.split(',')
     return [VersionSpecifier.from_version_string(v) for v in versions]
 
 
-class Project(object):
+class Project:
     def __init__(self, project_name, version, project_root, profile_name,
                  source_paths, macro_paths, data_paths, test_paths,
                  analysis_paths, docs_paths, target_path, snapshot_paths,
@@ -366,7 +365,7 @@ class Project(object):
                 .format(project_yaml_filepath)
             )
 
-        if isinstance(cli_vars, compat.basestring):
+        if isinstance(cli_vars, str):
             cli_vars = parse_cli_vars(cli_vars)
         renderer = ConfigRenderer(cli_vars)
 

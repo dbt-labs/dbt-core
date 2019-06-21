@@ -1,9 +1,9 @@
-import dbt.compat
 import dbt.flags
 import logging
 import logging.handlers
 import os
 import sys
+import warnings
 
 import colorama
 
@@ -83,7 +83,8 @@ RPC_LOGGER = logging.getLogger('dbt.rpc')
 # Redirect warnings through our logging setup
 # They will be logged to a file below
 logging.captureWarnings(True)
-dbt.compat.suppress_warnings()
+warnings.filterwarnings("ignore", category=ResourceWarning,
+                        message="unclosed.*<socket.socket.*>")
 
 initialized = False
 
@@ -110,7 +111,7 @@ def make_log_dir_if_missing(log_dir):
 
 class ColorFilter(logging.Filter):
     def filter(self, record):
-        subbed = dbt.compat.to_string(record.msg)
+        subbed = str(record.msg)
         for escape_sequence in dbt.ui.colors.COLORS.values():
             subbed = subbed.replace(escape_sequence, '')
         record.msg = subbed
@@ -177,22 +178,6 @@ GLOBAL_LOGGER = logger
 
 
 class QueueFormatter(logging.Formatter):
-    def formatMessage(self, record):
-        superself = super(QueueFormatter, self)
-        if hasattr(superself, 'formatMessage'):
-            # python 3.x
-            return superself.formatMessage(record)
-
-        # python 2.x, handling weird unicode things
-        try:
-            return self._fmt % record.__dict__
-        except UnicodeDecodeError:
-            try:
-                record.name = record.name.decode('utf-8')
-                return self._fmt % record.__dict__
-            except UnicodeDecodeError as e:
-                raise e
-
     def format(self, record):
         record.message = record.getMessage()
         record.asctime = self.formatTime(record, self.datefmt)
@@ -213,7 +198,7 @@ class QueueFormatter(logging.Formatter):
 
 class QueueLogHandler(logging.Handler):
     def __init__(self, queue):
-        super(QueueLogHandler, self).__init__()
+        super().__init__()
         self.queue = queue
 
     def emit(self, record):

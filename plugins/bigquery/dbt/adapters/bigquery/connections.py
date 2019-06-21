@@ -99,7 +99,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
                 # this sounds a lot like a signal handler and probably has
                 # useful information, so raise it without modification.
                 raise
-            raise dbt.exceptions.RuntimeException(dbt.compat.to_string(e))
+            raise dbt.exceptions.RuntimeException(str(e))
 
     def cancel_open(self):
         pass

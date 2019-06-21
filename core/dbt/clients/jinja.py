@@ -9,7 +9,6 @@ import jinja2.nodes
 import jinja2.parser
 import jinja2.sandbox
 
-import dbt.compat
 import dbt.exceptions
 import dbt.utils
 
@@ -60,10 +59,10 @@ class MacroFuzzEnvironment(jinja2.sandbox.SandboxedEnvironment):
                 filename
             )
 
-        return super(MacroFuzzEnvironment, self)._compile(source, filename)
+        return super()._compile(source, filename)
 
 
-class TemplateCache(object):
+class TemplateCache:
 
     def __init__(self):
         self.file_cache = {}
@@ -176,7 +175,7 @@ def create_macro_capture_env(node):
         This class sets up the parser to capture macros.
         """
         def __init__(self, hint=None, obj=None, name=None, exc=None):
-            super(ParserMacroCapture, self).__init__(hint=hint, name=name)
+            super().__init__(hint=hint, name=name)
             self.node = node
             self.name = name
             self.package_name = node.get('package_name')
@@ -224,6 +223,75 @@ def create_macro_capture_env(node):
     return ParserMacroCapture
 
 
+def create_warn_undefined_env(node):
+    class WarnUndefined(jinja2.Undefined):
+        __slots__ = ('node',)
+
+        def __init__(self, hint=None, obj=None, name=None, exc=None):
+            super().__init__(hint=hint, name=name)
+            self.node = node
+
+        def _fail_or_warn_with_undefined_error(self, *args, **kwargs):
+            try:
+                self._fail_with_undefined_error(*args, **kwargs)
+            except Exception as exc:
+                if dbt.flags.WARN_ERROR:
+                    raise
+                else:
+                    msg = 'Compilation warning in {}:\n\t{}'
+                    if self.node is None:
+                        model_desc = 'rendering'
+                    else:
+                        model_desc = "{} {} ({})".format(
+                            self.node.get('resource_type'),
+                            self.node.get('name', 'unknown'),
+                            self.node.get('original_file_path')
+                        )
+                    logger.warning(msg.format(model_desc, str(exc)))
+
+        def __eq__(self, other):
+            self._fail_or_warn_with_undefined_error(other)
+
+            return type(self) is type(other)
+
+        def __ne__(self, other):
+            self._fail_or_warn_with_undefined_error(other)
+
+            return not self.__eq__(other)
+
+        def __hash__(self):
+            self._fail_or_warn_with_undefined_error()
+
+            return id(type(self))
+
+        def __str__(self):
+            self._fail_or_warn_with_undefined_error()
+
+            return u''
+
+        def __len__(self):
+            self._fail_or_warn_with_undefined_error()
+
+            return 0
+
+        def __iter__(self):
+            self._fail_or_warn_with_undefined_error()
+
+            if 0:
+                yield None
+
+        def __nonzero__(self):
+            self._fail_or_warn_with_undefined_error()
+
+            return False
+        __bool__ = __nonzero__
+
+        def __repr__(self):
+            return 'Undefined'
+
+    return WarnUndefined
+
+
 def get_environment(node=None, capture_macros=False):
     args = {
         'extensions': ['jinja2.ext.do']
@@ -240,7 +308,7 @@ def get_environment(node=None, capture_macros=False):
 
 def parse(string):
     try:
-        return get_environment().parse(dbt.compat.to_string(string))
+        return get_environment().parse(str(string))
 
     except (jinja2.exceptions.TemplateSyntaxError,
             jinja2.exceptions.UndefinedError) as e:
@@ -252,7 +320,7 @@ def get_template(string, ctx, node=None, capture_macros=False):
     try:
         env = get_environment(node, capture_macros)
 
-        template_source = dbt.compat.to_string(string)
+        template_source = str(string)
         return env.from_string(template_source, globals=ctx)
 
     except (jinja2.exceptions.TemplateSyntaxError,

@@ -1,5 +1,5 @@
 import unittest
-from mock import patch, MagicMock
+from unittest.mock import patch, MagicMock
 
 import dbt.flags as flags
 
@@ -138,7 +138,7 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
 class TestConnectionNamePassthrough(BaseTestBigQueryAdapter):
 
     def setUp(self):
-        super(TestConnectionNamePassthrough, self).setUp()
+        super().setUp()
         self._conn_patch = patch.object(BigQueryAdapter, 'ConnectionManager')
         self.conn_manager_cls = self._conn_patch.start()
 
@@ -152,7 +152,7 @@ class TestConnectionNamePassthrough(BaseTestBigQueryAdapter):
         self.adapter = self.get_adapter('oauth')
 
     def tearDown(self):
-        super(TestConnectionNamePassthrough, self).tearDown()
+        super().tearDown()
         self._conn_patch.stop()
         self._relation_patch.stop()
 

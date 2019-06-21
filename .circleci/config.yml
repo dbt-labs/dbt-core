@@ -19,7 +19,7 @@ jobs:
             PGUSER: root
             PGPASSWORD: password
             PGDATABASE: postgres
-      - run: tox -e flake8,unit-py27,unit-py36
+      - run: tox -e flake8,unit-py36
   integration-postgres-py36:
     docker: *test_and_postgres
     steps:
@@ -59,44 +59,6 @@ jobs:
           command: tox -e integration-bigquery-py36
       - store_artifacts:
           path: ./logs
-  integration-postgres-py27:
-    docker: *test_and_postgres
-    steps:
-      - checkout
-      - run: *setupdb
-      - run:
-          name: Run tests
-          command: tox -e integration-postgres-py27
-      - store_artifacts:
-          path: ./logs
-  integration-snowflake-py27:
-    docker: *test_only
-    steps:
-      - checkout
-      - run:
-          name: Run tests
-          command: tox -e integration-snowflake-py27
-          no_output_timeout: 1h
-      - store_artifacts:
-          path: ./logs
-  integration-redshift-py27:
-    docker: *test_only
-    steps:
-      - checkout
-      - run:
-          name: Run tests
-          command: tox -e integration-redshift-py27
-      - store_artifacts:
-          path: ./logs
-  integration-bigquery-py27:
-    docker: *test_only
-    steps:
-      - checkout
-      - run:
-          name: Run tests
-          command: tox -e integration-bigquery-py27
-      - store_artifacts:
-          path: ./logs
 
 workflows:
   version: 2
@@ -106,18 +68,6 @@ workflows:
       - integration-postgres-py36:
           requires:
             - unit
-      - integration-postgres-py27:
-          requires:
-            - unit
-      - integration-redshift-py27:
-          requires:
-            - integration-postgres-py27
-      - integration-bigquery-py27:
-          requires:
-            - integration-postgres-py27
-      - integration-snowflake-py27:
-          requires:
-            - integration-postgres-py27
       - integration-redshift-py36:
           requires:
             - integration-postgres-py36

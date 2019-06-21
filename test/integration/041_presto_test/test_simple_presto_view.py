@@ -44,7 +44,7 @@ class TestBasePrestoRun(DBTIntegrationTest):
 
 class TestSimplePrestoRun(TestBasePrestoRun):
     def setUp(self):
-        super(TestSimplePrestoRun, self).setUp()
+        super().setUp()
         for conn in self.adapter.connections.in_use.values():
             conn.transaction_open
 

@@ -1,4 +1,3 @@
-from dbt import compat
 from dbt.clients.jinja import get_rendered
 from dbt.context.common import generate_config_context
 from dbt.exceptions import DbtProfileError
@@ -7,7 +6,7 @@ from dbt.exceptions import RecursionException
 from dbt.utils import deep_map
 
 
-class ConfigRenderer(object):
+class ConfigRenderer:
     """A renderer provides configuration rendering for a given set of cli
     variables and a render type.
     """
@@ -56,11 +55,9 @@ class ConfigRenderer(object):
     def render_value(self, value, keypath=None):
         # keypath is ignored.
         # if it wasn't read as a string, ignore it
-        if not isinstance(value, compat.basestring):
+        if not isinstance(value, str):
             return value
-        # force the result of rendering into this python version's native
-        # string type
-        return compat.to_native_string(get_rendered(value, self.context))
+        return str(get_rendered(value, self.context))
 
     def _render_profile_data(self, value, keypath):
         result = self.render_value(value)

@@ -1,13 +1,11 @@
 import abc
 import multiprocessing
 import os
-
-import six
+from threading import get_ident
 
 import dbt.exceptions
 import dbt.flags
 from dbt.api import APIObject
-from dbt.compat import abstractclassmethod, get_ident
 from dbt.contracts.connection import Connection
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import translate_aliases
@@ -21,7 +19,7 @@ class Credentials(APIObject):
 
     def __init__(self, **kwargs):
         renamed = self.translate_aliases(kwargs)
-        super(Credentials, self).__init__(**renamed)
+        super().__init__(**renamed)
 
     @property
     def type(self):
@@ -47,10 +45,10 @@ class Credentials(APIObject):
         # incorporate(alias_name=...) will result in duplicate keys in the
         # merged dict that APIObject.incorporate() creates.
         renamed = self.translate_aliases(kwargs)
-        return super(Credentials, self).incorporate(**renamed)
+        return super().incorporate(**renamed)
 
     def serialize(self, with_aliases=False):
-        serialized = super(Credentials, self).serialize()
+        serialized = super().serialize()
         if with_aliases:
             serialized.update({
                 new_name: serialized[canonical_name]
@@ -64,8 +62,7 @@ class Credentials(APIObject):
         return translate_aliases(kwargs, cls.ALIASES)
 
 
-@six.add_metaclass(abc.ABCMeta)
-class BaseConnectionManager(object):
+class BaseConnectionManager(metaclass=abc.ABCMeta):
     """Methods to implement:
         - exception_handler
         - cancel_open
@@ -179,7 +176,7 @@ class BaseConnectionManager(object):
             '`cancel_open` is not implemented for this adapter!'
         )
 
-    @abstractclassmethod
+    @abc.abstractclassmethod
     def open(cls, connection):
         """Open a connection on the adapter.
 

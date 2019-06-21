@@ -8,7 +8,7 @@ def regex(pat):
     return re.compile(pat, re.DOTALL | re.MULTILINE)
 
 
-class BlockData(object):
+class BlockData:
     """raw plaintext data from the top level of the file."""
     def __init__(self, contents):
         self.block_type_name = '__dbt__data'
@@ -16,7 +16,7 @@ class BlockData(object):
         self.full_block = contents
 
 
-class BlockTag(object):
+class BlockTag:
     def __init__(self, block_type_name, block_name, contents=None,
                  full_block=None, **kw):
         self.block_type_name = block_type_name
@@ -85,7 +85,7 @@ STRING_PATTERN = regex(
 QUOTE_START_PATTERN = regex(r'''(?P<quote>(['"]))''')
 
 
-class TagIterator(object):
+class TagIterator:
     def __init__(self, data):
         self.data = data
         self.blocks = []
@@ -278,7 +278,7 @@ _CONTROL_FLOW_END_TAGS = {
 }
 
 
-class BlockIterator(object):
+class BlockIterator:
     def __init__(self, data):
         self.tag_parser = TagIterator(data)
         self.current = None

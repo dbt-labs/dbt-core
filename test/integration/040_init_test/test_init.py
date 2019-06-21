@@ -11,7 +11,7 @@ class TestInit(DBTIntegrationTest):
         if os.path.exists(project_name):
             shutil.rmtree(project_name)
 
-        super(TestInit, self).tearDown()
+        super().tearDown()
 
     def get_project_name(self):
         return "my_project_{}".format(self.unique_schema())

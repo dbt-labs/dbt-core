@@ -17,13 +17,13 @@ class BaseTestConcurrentTransaction(DBTIntegrationTest):
         }
 
     def setUp(self):
-        super(BaseTestConcurrentTransaction, self).setUp()
+        super().setUp()
         self._secret_adapter = get_adapter_standalone(self.config)
         self.reset()
 
     def tearDown(self):
         self._secret_adapter.cleanup_connections()
-        super(BaseTestConcurrentTransaction, self).tearDown()
+        super().tearDown()
 
     @property
     def schema(self):

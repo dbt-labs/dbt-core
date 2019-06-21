@@ -29,7 +29,7 @@ def docs(unparsed, docrefs, column_name=None):
     return do_docs
 
 
-class Config(object):
+class Config:
     def __init__(self, model, source_config):
         self.model = model
         self.source_config = source_config
@@ -117,7 +117,7 @@ class SourceResolver(dbt.context.common.BaseResolver):
         return self.Relation.create_from_node(self.config, self.model)
 
 
-class Provider(object):
+class Provider:
     execute = False
     Config = Config
     DatabaseWrapper = DatabaseWrapper

@@ -8,16 +8,17 @@ from jsonrpc import JSONRPCResponseManager
 from jsonrpc.jsonrpc import JSONRPCRequest
 from jsonrpc.jsonrpc2 import JSONRPC20Response
 
+from enum import Enum
 import json
-import uuid
 import multiprocessing
 import os
 import signal
 import time
+import uuid
 from collections import namedtuple
+from queue import Empty as QueueEmpty
 
 from dbt.adapters.factory import load_plugin
-from dbt.compat import QueueEmpty
 from dbt import flags
 from dbt.logger import RPC_LOGGER as logger
 from dbt.logger import add_queue_handler
@@ -33,8 +34,7 @@ class RPCException(JSONRPCDispatchException):
         if data is None:
             data = {}
 
-        super(RPCException, self).__init__(code=code, message=message,
-                                           data=data)
+        super().__init__(code=code, message=message, data=data)
         self.logs = logs
 
     def __str__(self):
@@ -82,10 +82,13 @@ def dbt_error(exc, logs=None):
     return exc
 
 
-class QueueMessageType(object):
+class QueueMessageType(str, Enum):
     Error = 'error'
     Result = 'result'
     Log = 'log'
+
+    def __str__(self):
+        return self._value_
 
     @classmethod
     def terminating(cls):
@@ -99,7 +102,7 @@ def sigterm_handler(signum, frame):
     raise dbt.exceptions.RPCKilledException(signum)
 
 
-class RequestDispatcher(object):
+class RequestDispatcher:
     """A special dispatcher that knows about requests."""
     def __init__(self, http_request, json_rpc_request, manager):
         self.http_request = http_request
@@ -182,7 +185,7 @@ def _task_bootstrap(task, queue, kwargs):
         queue.put([QueueMessageType.Result, result])
 
 
-class RequestTaskHandler(object):
+class RequestTaskHandler:
     def __init__(self, task, http_request, json_rpc_request):
         self.task = task
         self.http_request = http_request
@@ -309,7 +312,7 @@ TaskRow = namedtuple(
 )
 
 
-class TaskManager(object):
+class TaskManager:
     def __init__(self):
         self.tasks = {}
         self.completed = {}

@@ -41,7 +41,7 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
     METHOD_NAME = 'compile'
 
     def __init__(self, args, config, manifest):
-        super(RemoteCompileTask, self).__init__(args, config)
+        super().__init__(args, config)
         self._base_manifest = manifest.deepcopy(config=config)
 
     def get_runner_type(self):

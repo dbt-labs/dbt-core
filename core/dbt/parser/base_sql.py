@@ -111,7 +111,7 @@ class BaseSqlParser(MacrosKnownParser):
         return results
 
 
-class SQLParseResult(object):
+class SQLParseResult:
     def __init__(self):
         self.parsed = {}
         self.disabled = []

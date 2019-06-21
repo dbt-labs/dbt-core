@@ -353,7 +353,7 @@ class ParsedNode(APIObject):
         self.agate_table = agate_table
         kwargs.setdefault('columns', {})
         kwargs.setdefault('description', '')
-        super(ParsedNode, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
     @property
     def is_refable(self):

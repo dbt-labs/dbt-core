@@ -123,7 +123,7 @@ PACKAGE_PATH = os.path.dirname(__file__)
 '''.lstrip()
 
 
-class Builder(object):
+class Builder:
     def __init__(self, args):
         self.args = args
         self.dest = pj(self.args.root, self.args.adapter)

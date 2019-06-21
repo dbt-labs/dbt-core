@@ -23,8 +23,7 @@ class SnowflakeAdapter(SQLAdapter):
         lowered = table.rename(
             column_names=[c.lower() for c in table.column_names]
         )
-        return super(SnowflakeAdapter, cls)._catalog_filter_table(lowered,
-                                                                  manifest)
+        return super()._catalog_filter_table(lowered, manifest)
 
     def _make_match_kwargs(self, database, schema, identifier):
         quoting = self.config.quoting

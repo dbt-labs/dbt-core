@@ -87,8 +87,7 @@ available.parse_list = available_parse(lambda *a, **k: [])
 
 class AdapterMeta(abc.ABCMeta):
     def __new__(mcls, name, bases, namespace, **kwargs):
-        cls = super(AdapterMeta, mcls).__new__(mcls, name, bases, namespace,
-                                               **kwargs)
+        cls = super().__new__(mcls, name, bases, namespace, **kwargs)
 
         # this is very much inspired by ABCMeta's own implementation
 

@@ -1,9 +1,8 @@
-import mock
 import unittest
+from unittest import mock
 
 import dbt.flags as flags
 
-import dbt.adapters
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.exceptions import ValidationException
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa

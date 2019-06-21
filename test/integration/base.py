@@ -15,14 +15,13 @@ from functools import wraps
 
 import pytest
 import yaml
-from mock import patch
+from unittest.mock import patch
 
 import dbt.main as dbt
 import dbt.flags as flags
 from dbt.adapters.factory import get_adapter, reset_adapters
 from dbt.clients.jinja import template_cache
 from dbt.config import RuntimeConfig
-from dbt.compat import basestring
 from dbt.context import common
 from dbt.logger import GLOBAL_LOGGER as logger
 
@@ -30,7 +29,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 INITIAL_ROOT = os.getcwd()
 
 
-class FakeArgs(object):
+class FakeArgs:
     def __init__(self):
         self.threads = 1
         self.data = False
@@ -41,7 +40,7 @@ class FakeArgs(object):
         self.single_threaded = False
 
 
-class TestArgs(object):
+class TestArgs:
     def __init__(self, kwargs):
         self.which = 'run'
         self.single_threaded = False
@@ -1136,19 +1135,19 @@ def use_profile(profile_name):
     return outer
 
 
-class AnyFloat(object):
+class AnyFloat:
     """Any float. Use this in assertEqual() calls to assert that it is a float.
     """
     def __eq__(self, other):
         return isinstance(other, float)
 
 
-class AnyStringWith(object):
+class AnyStringWith:
     def __init__(self, contains=None):
         self.contains = contains
 
     def __eq__(self, other):
-        if not isinstance(other, basestring):
+        if not isinstance(other, str):
             return False
 
         if self.contains is None:

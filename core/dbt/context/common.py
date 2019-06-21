@@ -2,7 +2,6 @@ import json
 import os
 
 from dbt.adapters.factory import get_adapter
-from dbt.compat import basestring
 from dbt.node_types import NodeType
 from dbt.contracts.graph.parsed import ParsedMacro, ParsedNode
 from dbt.include.global_project import PACKAGES
@@ -24,7 +23,7 @@ import pytz
 import datetime
 
 
-class RelationProxy(object):
+class RelationProxy:
     def __init__(self, adapter):
         self.quoting_config = adapter.config.quoting
         self.relation_type = adapter.Relation
@@ -45,7 +44,7 @@ class RelationProxy(object):
         return self.relation_type.create(*args, **kwargs)
 
 
-class BaseDatabaseWrapper(object):
+class BaseDatabaseWrapper:
     """
     Wrapper for runtime database interaction. Applies the runtime quote policy
     via a relation proxy.
@@ -68,7 +67,7 @@ class BaseDatabaseWrapper(object):
         return self.adapter.commit_if_has_connection()
 
 
-class BaseResolver(object):
+class BaseResolver:
     def __init__(self, db_wrapper, model, config, manifest):
         self.db_wrapper = db_wrapper
         self.model = model
@@ -212,7 +211,7 @@ def log(msg, info=False):
     return ''
 
 
-class Var(object):
+class Var:
     UndefinedVarError = "Required var '{}' not found in config:\nVars "\
                         "supplied to {} = {}"
     _VAR_NOTSET = object()
@@ -262,7 +261,7 @@ class Var(object):
     def get_rendered_var(self, var_name):
         raw = self.local_vars[var_name]
         # if bool/int/float/etc are passed in, don't compile anything
-        if not isinstance(raw, basestring):
+        if not isinstance(raw, str):
             return raw
 
         return dbt.clients.jinja.get_rendered(raw, self.context)

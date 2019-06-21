@@ -10,7 +10,7 @@ class TestExternalReference(DBTIntegrationTest):
         return "models"
 
     def setUp(self):
-        super(TestExternalReference, self).setUp()
+        super().setUp()
         self.use_default_project()
         self.external_schema = self.unique_schema()+'z'
         self.run_sql(
@@ -31,7 +31,7 @@ class TestExternalReference(DBTIntegrationTest):
         self._drop_schemas()
         with self.get_connection():
             self.adapter.drop_schema(self.default_database, self.external_schema)
-        super(TestExternalReference, self).tearDown()
+        super().tearDown()
 
     @use_profile('postgres')
     def test__postgres__external_reference(self):
@@ -57,7 +57,7 @@ class TestExternalDependency(DBTIntegrationTest):
         self._drop_schemas()
         with self.get_connection():
             self.adapter.drop_schema(self.default_database, self.external_schema)
-        super(TestExternalDependency, self).tearDown()
+        super().tearDown()
 
     @use_profile('postgres')
     def test__postgres__external_reference(self):

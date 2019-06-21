@@ -46,8 +46,7 @@ class Connection(APIObject):
     def __init__(self, credentials, *args, **kwargs):
         # we can't serialize handles
         self._handle = kwargs.pop('handle')
-        super(Connection, self).__init__(credentials=credentials.serialize(),
-                                         *args, **kwargs)
+        super().__init__(credentials=credentials.serialize(), *args, **kwargs)
         # this will validate itself in its own __init__.
         self._credentials = credentials
 

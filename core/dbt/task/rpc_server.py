@@ -15,7 +15,7 @@ from dbt import rpc
 
 class RPCServerTask(ConfiguredTask):
     def __init__(self, args, config, tasks=None):
-        super(RPCServerTask, self).__init__(args, config)
+        super().__init__(args, config)
         # compile locally
         self.manifest = self._compile_manifest()
         self.task_manager = rpc.TaskManager()

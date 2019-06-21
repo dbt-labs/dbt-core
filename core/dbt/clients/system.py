@@ -10,7 +10,6 @@ import tarfile
 import requests
 import stat
 
-import dbt.compat
 import dbt.exceptions
 import dbt.utils
 
@@ -115,7 +114,8 @@ def supports_symlinks():
 
 def write_file(path, contents=''):
     make_directory(os.path.dirname(path))
-    dbt.compat.write_file(path, contents)
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(str(contents))
 
     return True
 
