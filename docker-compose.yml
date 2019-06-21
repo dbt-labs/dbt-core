@@ -18,8 +18,8 @@ services:
     env_file:
       - ./test.env
     volumes:
-      - .:/usr/src/app
-    working_dir: /usr/src/app
+      - .:/usr/app
+    working_dir: /usr/app
     depends_on:
       - database
 
