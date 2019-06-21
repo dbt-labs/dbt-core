@@ -27,13 +27,14 @@ class BaseRelation(APIObject):
         'quote_policy': {
             'database': True,
             'schema': True,
-            'identifier': True
+            'identifier': True,
         },
         'include_policy': {
             'database': True,
             'schema': True,
-            'identifier': True
+            'identifier': True,
         },
+        'dbt_created': False,
     }
 
     PATH_SCHEMA = {
@@ -75,12 +76,19 @@ class BaseRelation(APIObject):
             'include_policy': POLICY_SCHEMA,
             'quote_policy': POLICY_SCHEMA,
             'quote_character': {'type': 'string'},
+            'dbt_created': {'type': 'boolean'},
         },
         'required': ['metadata', 'type', 'path', 'include_policy',
-                     'quote_policy', 'quote_character']
+                     'quote_policy', 'quote_character', 'dbt_created']
     }
 
     PATH_ELEMENTS = ['database', 'schema', 'identifier']
+
+    def _is_exactish_match(self, field, value):
+        if self.dbt_created and self.quote_policy.get(field) is False:
+            return self.get_path_part(field).lower() == value.lower()
+        else:
+            return self.get_path_part(field) == value
 
     def matches(self, database=None, schema=None, identifier=None):
         search = filter_null_values({
@@ -98,7 +106,7 @@ class BaseRelation(APIObject):
         approximate_match = True
 
         for k, v in search.items():
-            if self.get_path_part(k) != v:
+            if not self._is_exactish_match(k, v):
                 exact_match = False
 
             if self.get_path_part(k).lower() != v.lower():
@@ -106,7 +114,8 @@ class BaseRelation(APIObject):
 
         if approximate_match and not exact_match:
             target = self.create(
-                database=database, schema=schema, identifier=identifier)
+                database=database, schema=schema, identifier=identifier
+            )
             dbt.exceptions.approximate_relation_match(target, self)
 
         return exact_match
