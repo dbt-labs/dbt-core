@@ -32,10 +32,7 @@ class PostgresCredentials(Credentials):
     sslrootcert: Optional[str] = None
     application_name: Optional[str] = "dbt"
 
-    _ALIASES = {
-        'dbname': 'database',
-        'pass': 'password'
-    }
+    _ALIASES = {"dbname": "database", "pass": "password"}
 
     @property
     def type(self):
