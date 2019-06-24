@@ -10,7 +10,7 @@ from dbt.clients.yaml_helper import load_yaml_text
 from dbt.exceptions import DbtProjectError
 from dbt.exceptions import RecursionException
 from dbt.exceptions import SemverException
-from dbt.exceptions import ValidationException
+from dbt.exceptions import validator_error_message
 from dbt.exceptions import warn_or_error
 from dbt.semver import VersionSpecifier
 from dbt.semver import versions_compatible
@@ -22,6 +22,8 @@ from dbt.parser.source_config import SourceConfig
 
 from dbt.contracts.project import Project as ProjectContract
 from dbt.contracts.project import PackageConfig
+
+from hologram import ValidationError
 
 from .renderer import ConfigRenderer
 
@@ -118,9 +120,11 @@ def package_config_from_data(packages_data):
         packages_data = {'packages': []}
 
     try:
-        packages = PackageConfig(**packages_data)
-    except ValidationException as e:
-        raise DbtProjectError('Invalid package config: {}'.format(str(e)))
+        packages = PackageConfig.from_dict(packages_data)
+    except ValidationError as e:
+        raise DbtProjectError(
+            'Invalid package config: {}'.format(validator_error_message(e))
+        ) from e
     return packages
 
 
@@ -215,9 +219,9 @@ class Project:
             )
         # just for validation.
         try:
-            ProjectContract(**project_dict)
-        except ValidationException as e:
-            raise DbtProjectError(str(e))
+            ProjectContract.from_dict(project_dict)
+        except ValidationError as e:
+            raise DbtProjectError(validator_error_message(e)) from e
 
         # name/version are required in the Project definition, so we can assume
         # they are present
@@ -254,9 +258,12 @@ class Project:
         try:
             dbt_version = _parse_versions(dbt_raw_version)
         except SemverException as e:
-            raise DbtProjectError(str(e))
+            raise DbtProjectError(str(e)) from e
 
-        packages = package_config_from_data(packages_dict)
+        try:
+            packages = package_config_from_data(packages_dict)
+        except ValidationError as e:
+            raise DbtProjectError(validator_error_message(e)) from e
 
         project = cls(
             project_name=name,
@@ -330,14 +337,14 @@ class Project:
             ],
         })
         if with_packages:
-            result.update(self.packages.serialize())
+            result.update(self.packages.to_dict())
         return result
 
     def validate(self):
         try:
-            ProjectContract(**self.to_project_config())
-        except ValidationException as exc:
-            raise DbtProjectError(str(exc))
+            ProjectContract.from_dict(self.to_project_config())
+        except ValidationError as e:
+            raise DbtProjectError(validator_error_message(e)) from e
 
     @classmethod
     def from_project_root(cls, project_root, cli_vars):

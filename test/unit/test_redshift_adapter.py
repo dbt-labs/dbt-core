@@ -6,7 +6,7 @@ import dbt.flags as flags
 import dbt.utils
 
 from dbt.adapters.redshift import RedshiftAdapter
-from dbt.exceptions import ValidationException, FailedToConnectException
+from dbt.exceptions import FailedToConnectException
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 from .utils import config_from_parts_or_dicts, mock_connection
@@ -70,7 +70,7 @@ class TestRedshiftAdapter(unittest.TestCase):
         self.assertEqual(creds, self.config.credentials)
 
     def test_explicit_iam_conn(self):
-        self.config.credentials = self.config.credentials.incorporate(
+        self.config.credentials = self.config.credentials.replace(
             method='iam',
             cluster_id='my_redshift',
             iam_duration_seconds=1200
@@ -79,24 +79,22 @@ class TestRedshiftAdapter(unittest.TestCase):
         with mock.patch.object(RedshiftAdapter.ConnectionManager, 'fetch_cluster_credentials', new=fetch_cluster_credentials):
             creds = RedshiftAdapter.ConnectionManager.get_credentials(self.config.credentials)
 
-        expected_creds = self.config.credentials.incorporate(password='tmp_password')
+        expected_creds = self.config.credentials.replace(password='tmp_password')
         self.assertEqual(creds, expected_creds)
 
     def test_invalid_auth_method(self):
         # we have to set method this way, otherwise it won't validate
-        self.config.credentials._contents['method'] = 'badmethod'
+        self.config.credentials.method = 'badmethod'
 
-        with self.assertRaises(dbt.exceptions.FailedToConnectException) as context:
+        with self.assertRaises(FailedToConnectException) as context:
             with mock.patch.object(RedshiftAdapter.ConnectionManager, 'fetch_cluster_credentials', new=fetch_cluster_credentials):
                 RedshiftAdapter.ConnectionManager.get_credentials(self.config.credentials)
 
         self.assertTrue('badmethod' in context.exception.msg)
 
     def test_invalid_iam_no_cluster_id(self):
-        self.config.credentials = self.config.credentials.incorporate(
-            method='iam'
-        )
-        with self.assertRaises(dbt.exceptions.FailedToConnectException) as context:
+        self.config.credentials = self.config.credentials.replace(method='iam')
+        with self.assertRaises(FailedToConnectException) as context:
             with mock.patch.object(RedshiftAdapter.ConnectionManager, 'fetch_cluster_credentials', new=fetch_cluster_credentials):
                 RedshiftAdapter.ConnectionManager.get_credentials(self.config.credentials)
 
@@ -141,14 +139,12 @@ class TestRedshiftAdapter(unittest.TestCase):
             password='password',
             port=5439,
             connect_timeout=10,
-            keepalives_idle=RedshiftAdapter.ConnectionManager.DEFAULT_TCP_KEEPALIVE
+            keepalives_idle=240
         )
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_changed_keepalive(self, psycopg2):
-        self.config.credentials = self.config.credentials.incorporate(
-            keepalives_idle=256
-        )
+        self.config.credentials = self.config.credentials.replace(keepalives_idle=256)
         connection = self.adapter.acquire_connection('dummy')
 
         psycopg2.connect.assert_called_once_with(
@@ -162,9 +158,7 @@ class TestRedshiftAdapter(unittest.TestCase):
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_search_path(self, psycopg2):
-        self.config.credentials = self.config.credentials.incorporate(
-            search_path="test"
-        )
+        self.config.credentials = self.config.credentials.replace(search_path="test")
         connection = self.adapter.acquire_connection('dummy')
 
         psycopg2.connect.assert_called_once_with(
@@ -175,13 +169,11 @@ class TestRedshiftAdapter(unittest.TestCase):
             port=5439,
             connect_timeout=10,
             options="-c search_path=test",
-            keepalives_idle=RedshiftAdapter.ConnectionManager.DEFAULT_TCP_KEEPALIVE)
+            keepalives_idle=240)
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_search_path_with_space(self, psycopg2):
-        self.config.credentials = self.config.credentials.incorporate(
-            search_path="test test"
-        )
+        self.config.credentials = self.config.credentials.replace(search_path="test test")
         connection = self.adapter.acquire_connection('dummy')
 
         psycopg2.connect.assert_called_once_with(
@@ -192,13 +184,11 @@ class TestRedshiftAdapter(unittest.TestCase):
             port=5439,
             connect_timeout=10,
             options="-c search_path=test\ test",
-            keepalives_idle=RedshiftAdapter.ConnectionManager.DEFAULT_TCP_KEEPALIVE)
+            keepalives_idle=240)
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_set_zero_keepalive(self, psycopg2):
-        self.config.credentials = self.config.credentials.incorporate(
-            keepalives_idle=0
-        )
+        self.config.credentials = self.config.credentials.replace(keepalives_idle=0)
         connection = self.adapter.acquire_connection('dummy')
 
         psycopg2.connect.assert_called_once_with(

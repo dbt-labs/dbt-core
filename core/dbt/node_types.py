@@ -1,21 +1,17 @@
-from enum import Enum
+from hologram.helpers import StrEnum
 
 
-class NodeType(str, Enum):
-    Base = 'base'
+class NodeType(StrEnum):
     Model = 'model'
     Analysis = 'analysis'
     Test = 'test'
     Snapshot = 'snapshot'
-    Macro = 'macro'
     Operation = 'operation'
     Seed = 'seed'
+    RPCCall = 'rpc'
     Documentation = 'docs'
     Source = 'source'
-    RPCCall = 'rpc'
-
-    def __str__(self):
-        return self._value_
+    Macro = 'macro'
 
     @classmethod
     def executable(cls):
@@ -39,9 +35,40 @@ class NodeType(str, Enum):
         ]]
 
 
-class RunHookType(str, Enum):
+class UnparsedNodeType(StrEnum):
+    Model = str(NodeType.Model)
+    Analysis = str(NodeType.Analysis)
+    Test = str(NodeType.Test)
+    Snapshot = str(NodeType.Snapshot)
+    Operation = str(NodeType.Operation)
+    Seed = str(NodeType.Seed)
+    RPCCall = str(NodeType.RPCCall)
+
+
+class DocumentationType(StrEnum):
+    Documentation = str(NodeType.Documentation)
+
+
+class RunHookType(StrEnum):
     Start = 'on-run-start'
     End = 'on-run-end'
 
-    def __str__(self):
-        return self._value_
+
+class OperationType(StrEnum):
+    Operation = str(NodeType.Operation)
+
+
+class SnapshotType(StrEnum):
+    Snapshot = str(NodeType.Snapshot)
+
+
+class MacroType(StrEnum):
+    Macro = str(NodeType.Macro)
+
+
+class SourceType(StrEnum):
+    Source = str(NodeType.Source)
+
+
+class TestType(StrEnum):
+    Test = str(NodeType.Test)

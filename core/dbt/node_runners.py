@@ -2,8 +2,10 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.exceptions import NotImplementedException, CompilationException, \
     RuntimeException, InternalException, missing_materialization
 from dbt.node_types import NodeType
-from dbt.contracts.results import RunModelResult, collect_timing_info, \
-    SourceFreshnessResult, PartialResult, RemoteCompileResult, RemoteRunResult
+from dbt.contracts.results import (
+    RunModelResult, collect_timing_info, SourceFreshnessResult, PartialResult,
+    RemoteCompileResult, RemoteRunResult, ResultTable,
+)
 from dbt.compilation import compile_node
 
 import dbt.context.runtime
@@ -16,7 +18,6 @@ from dbt import rpc
 import threading
 import time
 import traceback
-from datetime import timedelta
 
 
 INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If \
@@ -77,19 +78,18 @@ class BaseRunner:
         return result
 
     def _build_run_result(self, node, start_time, error, status, timing_info,
-                          skip=False, failed=None, agate_table=None):
+                          skip=False, fail=None, agate_table=None):
         execution_time = time.time() - start_time
         thread_id = threading.current_thread().name
-        timing = [t.serialize() for t in timing_info]
         return RunModelResult(
             node=node,
             error=error,
             skip=skip,
             status=status,
-            failed=failed,
+            fail=fail,
             execution_time=execution_time,
             thread_id=thread_id,
-            timing=timing,
+            timing=timing_info,
             agate_table=agate_table,
         )
 
@@ -118,14 +118,14 @@ class BaseRunner:
             error=result.error,
             skip=result.skip,
             status=result.status,
-            failed=result.failed,
+            fail=result.fail,
             timing_info=timing_info,
             agate_table=result.agate_table,
         )
 
     def compile_and_execute(self, manifest, ctx):
         result = None
-        self.adapter.acquire_connection(self.node.get('name'))
+        self.adapter.acquire_connection(self.node.name)
         with collect_timing_info('compile') as timing_info:
             # if we fail here, we still have a compiled node to return
             # this has the benefit of showing a build path for the errant
@@ -147,6 +147,7 @@ class BaseRunner:
         if e.node is None:
             e.node = ctx.node
 
+        logger.debug(str(e), exc_info=True)
         return str(e)
 
     def _handle_internal_exception(self, e, ctx):
@@ -158,11 +159,11 @@ class BaseRunner:
             error=str(e).strip(),
             note=INTERNAL_ERROR_STRING
         )
-        logger.debug(error)
+        logger.debug(error, exc_info=True)
         return str(e)
 
     def _handle_generic_exception(self, e, ctx):
-        node_description = self.node.get('build_path')
+        node_description = self.node.build_path
         if node_description is None:
             node_description = self.node.unique_id
         prefix = "Unhandled error while executing {}".format(node_description)
@@ -372,33 +373,10 @@ class FreshnessRunner(BaseRunner):
                                                    self.node_index,
                                                    self.num_nodes)
 
-    def _calculate_status(self, target_freshness, freshness):
-        """Calculate the status of a run.
-
-        :param dict target_freshness: The target freshness dictionary. It must
-            match the freshness spec.
-        :param timedelta freshness: The actual freshness of the data, as
-            calculated from the database's timestamps
-        """
-        # if freshness > warn_after > error_after, you'll get an error, not a
-        # warning
-        for key in ('error', 'warn'):
-            fullkey = '{}_after'.format(key)
-            if fullkey not in target_freshness:
-                continue
-
-            target = target_freshness[fullkey]
-            kwname = target['period'] + 's'
-            kwargs = {kwname: target['count']}
-            if freshness > timedelta(**kwargs).total_seconds():
-                return key
-        return 'pass'
-
     def _build_run_result(self, node, start_time, error, status, timing_info,
                           skip=False, failed=None):
         execution_time = time.time() - start_time
         thread_id = threading.current_thread().name
-        timing = [t.serialize() for t in timing_info]
         if status is not None:
             status = status.lower()
         return PartialResult(
@@ -407,12 +385,12 @@ class FreshnessRunner(BaseRunner):
             error=error,
             execution_time=execution_time,
             thread_id=thread_id,
-            timing=timing
+            timing=timing_info,
         )
 
     def from_run_result(self, result, start_time, timing_info):
         result.execution_time = (time.time() - start_time)
-        result.timing.extend(t.serialize() for t in timing_info)
+        result.timing.extend(timing_info)
         return result
 
     def execute(self, compiled_node, manifest):
@@ -426,10 +404,7 @@ class FreshnessRunner(BaseRunner):
                 manifest=manifest
             )
 
-        status = self._calculate_status(
-            compiled_node.freshness,
-            freshness['age']
-        )
+        status = compiled_node.freshness.status(freshness['age'])
 
         return SourceFreshnessResult(
             node=compiled_node,
@@ -474,7 +449,7 @@ class TestRunner(CompileRunner):
             num_cols = len(table.columns)
             raise RuntimeError(
                 "Bad test {name}: Returned {rows} rows and {cols} cols"
-                .format(name=test.get('name'), rows=num_rows, cols=num_cols))
+                .format(name=test.name, rows=num_rows, cols=num_cols))
 
         return table[0][0]
 
@@ -529,6 +504,7 @@ class RPCCompileRunner(CompileRunner):
         super().__init__(config, adapter, node, node_index, num_nodes)
 
     def handle_exception(self, e, ctx):
+        logger.debug('Got an exception: {}'.format(e), exc_info=True)
         if isinstance(e, dbt.exceptions.Exception):
             if isinstance(e, dbt.exceptions.RuntimeException):
                 e.node = ctx.node
@@ -552,7 +528,8 @@ class RPCCompileRunner(CompileRunner):
         return RemoteCompileResult(
             raw_sql=compiled_node.raw_sql,
             compiled_sql=compiled_node.injected_sql,
-            node=compiled_node
+            node=compiled_node,
+            timing=[],  # this will get added later
         )
 
     def error_result(self, node, error, start_time, timing_info):
@@ -564,37 +541,37 @@ class RPCCompileRunner(CompileRunner):
         )
 
     def from_run_result(self, result, start_time, timing_info):
-        timing = [t.serialize() for t in timing_info]
         return RemoteCompileResult(
             raw_sql=result.raw_sql,
             compiled_sql=result.compiled_sql,
             node=result.node,
-            timing=timing
+            timing=timing_info,
         )
 
 
 class RPCExecuteRunner(RPCCompileRunner):
     def from_run_result(self, result, start_time, timing_info):
-        timing = [t.serialize() for t in timing_info]
         return RemoteRunResult(
             raw_sql=result.raw_sql,
             compiled_sql=result.compiled_sql,
             node=result.node,
             table=result.table,
-            timing=timing
+            timing=timing_info,
         )
 
     def execute(self, compiled_node, manifest):
         status, table = self.adapter.execute(compiled_node.injected_sql,
                                              fetch=True)
-        table = {
-            'column_names': list(table.column_names),
-            'rows': [list(row) for row in table]
-        }
+
+        table = ResultTable(
+            column_names=list(table.column_names),
+            rows=[list(row) for row in table],
+        )
 
         return RemoteRunResult(
             raw_sql=compiled_node.raw_sql,
             compiled_sql=compiled_node.injected_sql,
             node=compiled_node,
-            table=table
+            table=table,
+            timing=[],
         )

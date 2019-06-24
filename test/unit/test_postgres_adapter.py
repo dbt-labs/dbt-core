@@ -110,9 +110,7 @@ class TestPostgresAdapter(unittest.TestCase):
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_changed_keepalive(self, psycopg2):
-        self.config.credentials = self.config.credentials.incorporate(
-            keepalives_idle=256
-        )
+        self.config.credentials = self.config.credentials.replace(keepalives_idle=256)
         connection = self.adapter.acquire_connection('dummy')
 
         psycopg2.connect.assert_called_once_with(
@@ -126,9 +124,7 @@ class TestPostgresAdapter(unittest.TestCase):
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_search_path(self, psycopg2):
-        self.config.credentials = self.config.credentials.incorporate(
-            search_path="test"
-        )
+        self.config.credentials = self.config.credentials.replace(search_path="test")
         connection = self.adapter.acquire_connection('dummy')
 
         psycopg2.connect.assert_called_once_with(
@@ -142,9 +138,7 @@ class TestPostgresAdapter(unittest.TestCase):
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_schema_with_space(self, psycopg2):
-        self.config.credentials = self.config.credentials.incorporate(
-            search_path="test test"
-        )
+        self.config.credentials = self.config.credentials.replace(search_path="test test")
         connection = self.adapter.acquire_connection('dummy')
 
         psycopg2.connect.assert_called_once_with(
@@ -158,9 +152,7 @@ class TestPostgresAdapter(unittest.TestCase):
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_set_zero_keepalive(self, psycopg2):
-        self.config.credentials = self.config.credentials.incorporate(
-            keepalives_idle=0
-        )
+        self.config.credentials = self.config.credentials.replace(keepalives_idle=0)
         connection = self.adapter.acquire_connection('dummy')
 
         psycopg2.connect.assert_called_once_with(

@@ -1,58 +1,53 @@
-from dbt.api.object import APIObject
-from dbt.contracts.common import named_property
+from hologram.helpers import StrEnum, NewPatternType, ExtensibleJsonSchemaMixin
+from hologram import JsonSchemaMixin
+from dbt.contracts.util import Replaceable
+
+from dataclasses import dataclass
+from typing import Any, Optional
 
 
-CONNECTION_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'properties': {
-        'type': {
-            'type': 'string',
-            # valid python identifiers only
-            'pattern': r'^[A-Za-z_][A-Za-z0-9_]+$',
-        },
-        'name': {
-            'type': ['null', 'string'],
-        },
-        'state': {
-            'enum': ['init', 'open', 'closed', 'fail'],
-        },
-        'transaction_open': {
-            'type': 'boolean',
-        },
-        # we can't serialize this so we can't require it as part of the
-        # contract.
-        # 'handle': {
-        #     'type': ['null', 'object'],
-        # },
-        # credentials are validated separately by the adapter packages
-        'credentials': {
-            'description': (
-                'The credentials object here should match the connection type.'
-            ),
-            'type': 'object',
-            'additionalProperties': True,
-        }
-    },
-    'required': [
-        'type', 'name', 'state', 'transaction_open', 'credentials'
-    ],
-}
+Identifier = NewPatternType('Identifier', r'^[A-Za-z_][A-Za-z0-9_]+$')
 
 
-class Connection(APIObject):
-    SCHEMA = CONNECTION_CONTRACT
+class ConnectionState(StrEnum):
+    INIT = 'init'
+    OPEN = 'open'
+    CLOSED = 'closed'
+    FAIL = 'fail'
 
-    def __init__(self, credentials, *args, **kwargs):
-        # we can't serialize handles
-        self._handle = kwargs.pop('handle')
-        super().__init__(credentials=credentials.serialize(), *args, **kwargs)
-        # this will validate itself in its own __init__.
-        self._credentials = credentials
+
+@dataclass(init=False)
+class Connection(ExtensibleJsonSchemaMixin, Replaceable):
+    type: Identifier
+    name: Optional[str]
+    _credentials: JsonSchemaMixin = None  # underscore to prevent serialization
+    state: ConnectionState = ConnectionState.INIT
+    transaction_open: bool = False
+    _handle: Optional[Any] = None  # underscore to prevent serialization
+
+    def __init__(
+        self,
+        type: Identifier,
+        name: Optional[str],
+        credentials: JsonSchemaMixin,
+        state: ConnectionState = ConnectionState.INIT,
+        transaction_open: bool = False,
+        handle: Optional[Any] = None,
+    ) -> None:
+        self.type = type
+        self.name = name
+        self.credentials = credentials
+        self.state = state
+        self.transaction_open = transaction_open
+        self.handle = handle
 
     @property
     def credentials(self):
         return self._credentials
+
+    @credentials.setter
+    def credentials(self, value):
+        self._credentials = value
 
     @property
     def handle(self):
@@ -61,10 +56,3 @@ class Connection(APIObject):
     @handle.setter
     def handle(self, value):
         self._handle = value
-
-    name = named_property('name', 'The name of this connection')
-    state = named_property('state', 'The state of the connection')
-    transaction_open = named_property(
-        'transaction_open',
-        'True if there is an open transaction, False otherwise.'
-    )

@@ -77,13 +77,13 @@ class ListTask(GraphRunnableTask):
         for node in self._iterate_selected_nodes():
             yield json.dumps({
                 k: v
-                for k, v in node.serialize().items()
+                for k, v in node.to_dict(omit_none=False).items()
                 if k in self.ALLOWED_KEYS
             })
 
     def generate_paths(self):
         for node in self._iterate_selected_nodes():
-            yield node.get('original_file_path')
+            yield node.original_file_path
 
     def run(self):
         ManifestTask._runtime_initialize(self)

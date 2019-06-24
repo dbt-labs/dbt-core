@@ -803,7 +803,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'unique_id': 'macro.dbt.column_list',
                 'tags': [],
                 'resource_type': 'macro',
-                'depends_on': {'macros': []}
+                'depends_on': {'macros': []},
             }
         )
 
@@ -834,6 +834,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         return {
             'nodes': {
                 'model.test.model': {
+                    'build_path': None,
                     'name': 'model',
                     'root_path': OneOf(self.test_root_dir, self.initial_dir),
                     'resource_type': 'model',
@@ -845,8 +846,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'sources': [],
                     'depends_on': {'nodes': ['seed.test.seed'], 'macros': []},
                     'unique_id': 'model.test.model',
-                    'empty': False,
                     'fqn': ['test', 'model'],
+                    'index': None,
                     'tags': [],
                     'config': model_config,
                     'schema': my_schema_name,
@@ -879,6 +880,20 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'docrefs': [],
                 },
                 'seed.test.seed': {
+                    'build_path': None,
+                    'config': {
+                        'enabled': True,
+                        'materialized': 'seed',
+                        'persist_docs': {},
+                        'pre-hook': [],
+                        'post-hook': [],
+                        'vars': {},
+                        'column_types': {},
+                        'quoting': {},
+                        'tags': [],
+                    },
+                    'index': None,
+                    'patch_path': None,
                     'path': 'seed.csv',
                     'name': 'seed',
                     'root_path': OneOf(self.test_root_dir, self.initial_dir),
@@ -891,28 +906,18 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'sources': [],
                     'depends_on': {'nodes': [], 'macros': []},
                     'unique_id': 'seed.test.seed',
-                    'empty': False,
                     'fqn': ['test', 'seed'],
                     'tags': [],
-                    'config': {
-                        'enabled': True,
-                        'materialized': 'seed',
-                        'persist_docs': {},
-                        'pre-hook': [],
-                        'post-hook': [],
-                        'vars': {},
-                        'column_types': {},
-                        'quoting': {},
-                        'tags': [],
-                    },
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'alias': 'seed',
                     'description': '',
                     'columns': {},
+                    'docrefs': [],
                 },
                 'test.test.not_null_model_id': {
                     'alias': 'not_null_model_id',
+                    'build_path': None,
                     'column_name': 'id',
                     'columns': {},
                     'config': {
@@ -930,11 +935,11 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['model.test.model']},
                     'description': '',
-                    'empty': False,
                     'fqn': ['test', 'schema_test', 'not_null_model_id'],
                     'name': 'not_null_model_id',
                     'original_file_path': schema_yml_path,
                     'package_name': 'test',
+                    'patch_path': None,
                     'path': _normalize('schema_test/not_null_model_id.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_not_null(model=ref('model'), column_name='id') }}",
                     'refs': [['model']],
@@ -943,10 +948,13 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'tags': ['schema'],
-                    'unique_id': 'test.test.not_null_model_id'
+                    'unique_id': 'test.test.not_null_model_id',
+                    'docrefs': [],
                 },
                 'test.test.nothing_model_': {
                     'alias': 'nothing_model_',
+                    'build_path': None,
+                    'column_name': None,
                     'columns': {},
                     'config': {
                         'column_types': {},
@@ -963,11 +971,11 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['model.test.model']},
                     'description': '',
-                    'empty': False,
                     'fqn': ['test', 'schema_test', 'nothing_model_'],
                     'name': 'nothing_model_',
                     'original_file_path': schema_yml_path,
                     'package_name': 'test',
+                    'patch_path': None,
                     'path': _normalize('schema_test/nothing_model_.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test.test_nothing(model=ref('model'), ) }}",
                     'refs': [['model']],
@@ -976,10 +984,12 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'tags': ['schema'],
-                    'unique_id': 'test.test.nothing_model_'
+                    'unique_id': 'test.test.nothing_model_',
+                    'docrefs': [],
                 },
                 'test.test.unique_model_id': {
                     'alias': 'unique_model_id',
+                    'build_path': None,
                     'column_name': 'id',
                     'columns': {},
                     'config': {
@@ -997,11 +1007,11 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['model.test.model']},
                     'description': '',
-                    'empty': False,
                     'fqn': ['test', 'schema_test', 'unique_model_id'],
                     'name': 'unique_model_id',
                     'original_file_path': schema_yml_path,
                     'package_name': 'test',
+                    'patch_path': None,
                     'path': _normalize('schema_test/unique_model_id.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_unique(model=ref('model'), column_name='id') }}",
                     'refs': [['model']],
@@ -1011,6 +1021,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'database': self.default_database,
                     'tags': ['schema'],
                     'unique_id': 'test.test.unique_model_id',
+                    'docrefs': [],
                 },
             },
             'parent_map': {
@@ -1036,8 +1047,8 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
             'metadata': {
                 'project_id': '098f6bcd4621d373cade4e832627b4f6',
-                'user_id': None,
                 'send_anonymous_usage_stats': False,
+                'user_id': None,
             },
             'disabled': [],
         }
@@ -1053,6 +1064,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             'nodes': {
                 'model.test.ephemeral_copy': {
                     'alias': 'ephemeral_copy',
+                    'build_path': None,
                     'columns': {},
                     'config': {
                         'column_types': {},
@@ -1071,11 +1083,13 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'nodes': ['source.test.my_source.my_table']
                     },
                     'description': '',
-                    'empty': False,
+                    'docrefs': [],
                     'fqn': ['test', 'ephemeral_copy'],
+                    'index': None,
                     'name': 'ephemeral_copy',
                     'original_file_path': self.dir('ref_models/ephemeral_copy.sql'),
                     'package_name': 'test',
+                    'patch_path': None,
                     'path': 'ephemeral_copy.sql',
                     'raw_sql': LineIndifferent(
                         '{{\n  config(\n    materialized = "ephemeral"\n  )\n}}'
@@ -1087,10 +1101,11 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'tags': [],
-                    'unique_id': 'model.test.ephemeral_copy'
+                    'unique_id': 'model.test.ephemeral_copy',
                 },
                 'model.test.ephemeral_summary': {
                     'alias': 'ephemeral_summary',
+                    'build_path': None,
                     'columns': {
                         'first_name': {
                             'description': 'The first name being summarized',
@@ -1130,12 +1145,13 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'documentation_package': ''
                         },
                         {
+                            'column_name': None,
                             'documentation_name': 'ephemeral_summary',
                             'documentation_package': ''
                         }
                     ],
-                    'empty': False,
                     'fqn': ['test', 'ephemeral_summary'],
+                    'index': None,
                     'name': 'ephemeral_summary',
                     'original_file_path': self.dir('ref_models/ephemeral_summary.sql'),
                     'package_name': 'test',
@@ -1156,6 +1172,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unique_id': 'model.test.ephemeral_summary'},
                 'model.test.view_summary': {
                     'alias': 'view_summary',
+                    'build_path': None,
                     'columns': {
                         'first_name': {
                             'description': 'The first name being summarized',
@@ -1177,7 +1194,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'vars': config_vars,
                         'tags': [],
                     },
-                    'sources': [],
+                    'database': self.default_database,
                     'depends_on': {
                         'macros': [],
                         'nodes': ['model.test.ephemeral_summary']
@@ -1195,12 +1212,13 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'documentation_package': ''
                         },
                         {
+                            'column_name': None,
                             'documentation_name': 'view_summary',
                             'documentation_package': ''
                         }
                     ],
-                    'empty': False,
                     'fqn': ['test', 'view_summary'],
+                    'index': None,
                     'name': 'view_summary',
                     'original_file_path': self.dir('ref_models/view_summary.sql'),
                     'package_name': 'test',
@@ -1215,12 +1233,13 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'resource_type': 'model',
                     'root_path': OneOf(self.test_root_dir, self.initial_dir),
                     'schema': my_schema_name,
-                    'database': self.default_database,
+                    'sources': [],
                     'tags': [],
                     'unique_id': 'model.test.view_summary'
                 },
                 'seed.test.seed': {
                     'alias': 'seed',
+                    'build_path': None,
                     'columns': {},
                     'config': {
                         'column_types': {},
@@ -1236,11 +1255,13 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},
                     'description': '',
-                    'empty': False,
+                    'docrefs': [],
                     'fqn': ['test', 'seed'],
+                    'index': None,
                     'name': 'seed',
                     'original_file_path': self.dir('seed/seed.csv'),
                     'package_name': 'test',
+                    'patch_path': None,
                     'path': 'seed.csv',
                     'raw_sql': '-- csv --',
                     'refs': [],
@@ -1260,21 +1281,24 @@ class TestDocsGenerate(DBTIntegrationTest):
                     },
                     'quoting': {
                         'database': False,
+                        'schema': None,
                         'identifier': True,
                     },
                     'database': self.default_database,
                     'description': 'My table',
                     'docrefs': [
                          {
-                             'documentation_name': 'table_info',
-                             'documentation_package': ''
+                            'column_name': None,
+                            'documentation_name': 'table_info',
+                            'documentation_package': '',
                          },
                          {
-                             'documentation_name': 'source_info',
-                             'documentation_package': ''
+                            'column_name': None,
+                            'documentation_name': 'source_info',
+                            'documentation_package': '',
                          }
                      ],
-                    'freshness': {},
+                    'freshness': {'error_after': None, 'warn_after': None},
                     'identifier': 'seed',
                     'loaded_at_field': None,
                     'loader': 'a_loader',
@@ -1302,7 +1326,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': docs_path,
                     'package_name': 'test',
                     'path': 'docs.md',
-                    'resource_type': 'docs',
                     'root_path': OneOf(self.test_root_dir, self.initial_dir),
                     'unique_id': 'test.ephemeral_summary'
                 },
@@ -1313,7 +1336,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': docs_path,
                     'package_name': 'test',
                     'path': 'docs.md',
-                    'resource_type': 'docs',
                     'root_path': OneOf(self.test_root_dir, self.initial_dir),
                     'unique_id': 'test.source_info',
                 },
@@ -1324,7 +1346,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': docs_path,
                     'package_name': 'test',
                     'path': 'docs.md',
-                    'resource_type': 'docs',
                     'root_path': OneOf(self.test_root_dir, self.initial_dir),
                     'unique_id': 'test.summary_count'
                 },
@@ -1335,7 +1356,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': docs_path,
                     'package_name': 'test',
                     'path': 'docs.md',
-                    'resource_type': 'docs',
                     'root_path': OneOf(self.test_root_dir, self.initial_dir),
                     'unique_id': 'test.summary_first_name'
                 },
@@ -1346,7 +1366,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': docs_path,
                     'package_name': 'test',
                     'path': 'docs.md',
-                    'resource_type': 'docs',
                     'root_path': OneOf(self.test_root_dir, self.initial_dir),
                     'unique_id': 'test.table_info'
                 },
@@ -1360,7 +1379,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'original_file_path': docs_path,
                     'package_name': 'test',
                     'path': 'docs.md',
-                    'resource_type': 'docs',
                     'root_path': OneOf(self.test_root_dir, self.initial_dir),
                     'unique_id': 'test.view_summary'
                 },
@@ -1381,8 +1399,8 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
             'metadata': {
                 'project_id': '098f6bcd4621d373cade4e832627b4f6',
-                'user_id': None,
                 'send_anonymous_usage_stats': False,
+                'user_id': None,
             },
             'disabled': [],
         }
@@ -1413,8 +1431,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['seed.test.seed']},
-                    'empty': False,
                     'fqn': ['test', 'clustered'],
+                    'index': None,
+                    'build_path': None,
                     'name': 'clustered',
                     'original_file_path': clustered_sql_path,
                     'package_name': 'test',
@@ -1455,6 +1474,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'model.test.multi_clustered': {
                     'alias': 'multi_clustered',
+                    'build_path': None,
                     'config': {
                         'cluster_by': ['first_name', 'email'],
                         'column_types': {},
@@ -1470,8 +1490,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     },
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['seed.test.seed']},
-                    'empty': False,
                     'fqn': ['test', 'multi_clustered'],
+                    'index': None,
                     'name': 'multi_clustered',
                     'original_file_path': multi_clustered_sql_path,
                     'package_name': 'test',
@@ -1512,6 +1532,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'model.test.nested_view': {
                     'alias': 'nested_view',
+                    'build_path': None,
                     'config': {
                         'column_types': {},
                         'enabled': True,
@@ -1528,8 +1549,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'macros': [],
                         'nodes': ['model.test.nested_table']
                     },
-                    'empty': False,
                     'fqn': ['test', 'nested_view'],
+                    'index': None,
                     'name': 'nested_view',
                     'original_file_path': nested_view_sql_path,
                     'package_name': 'test',
@@ -1570,6 +1591,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 },
                 'model.test.nested_table': {
                     'alias': 'nested_table',
+                    'build_path': None,
                     'config': {
                         'column_types': {},
                         'enabled': True,
@@ -1586,11 +1608,12 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'macros': [],
                         'nodes': []
                     },
-                    'empty': False,
                     'fqn': ['test', 'nested_table'],
+                    'index': None,
                     'name': 'nested_table',
                     'original_file_path': nested_table_sql_path,
                     'package_name': 'test',
+                    'patch_path': None,
                     'path': 'nested_table.sql',
                     'raw_sql': LineIndifferent(_read_file(nested_table_sql_path).rstrip('\r\n')),
                     'refs': [],
@@ -1602,8 +1625,12 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'unique_id': 'model.test.nested_table',
                     'columns': {},
                     'description': '',
+                    'docrefs': [],
                 },
                 'seed.test.seed': {
+                    'build_path': None,
+                    'index': None,
+                    'patch_path': None,
                     'path': 'seed.csv',
                     'name': 'seed',
                     'root_path': OneOf(self.test_root_dir, self.initial_dir),
@@ -1618,7 +1645,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'macros': [],
                     },
                     'unique_id': 'seed.test.seed',
-                    'empty': False,
                     'fqn': ['test', 'seed'],
                     'tags': [],
                     'config': {
@@ -1637,6 +1663,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'alias': 'seed',
                     'columns': {},
                     'description': '',
+                    'docrefs': [],
                 },
             },
             'child_map': {
@@ -1658,8 +1685,8 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
             'metadata': {
                 'project_id': '098f6bcd4621d373cade4e832627b4f6',
-                'user_id': None,
                 'send_anonymous_usage_stats': False,
+                'user_id': None,
             },
             'disabled': [],
         }
@@ -1671,6 +1698,8 @@ class TestDocsGenerate(DBTIntegrationTest):
         return {
             "nodes": {
                 "model.test.model": {
+                    "build_path": None,
+                    "index": None,
                     "name": "model",
                     "root_path": self.test_root_dir,
                     "resource_type": "model",
@@ -1685,7 +1714,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                         "macros": [],
                     },
                     "unique_id": "model.test.model",
-                    "empty": False,
                     "fqn": ["test", "model"],
                     "tags": [],
                     "config": {
@@ -1730,6 +1758,9 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'docrefs': [],
                 },
                 "seed.test.seed": {
+                    "build_path": None,
+                    "index": None,
+                    "patch_path": None,
                     "path": "seed.csv",
                     "name": "seed",
                     "root_path": self.test_root_dir,
@@ -1744,7 +1775,6 @@ class TestDocsGenerate(DBTIntegrationTest):
                         "macros": [],
                     },
                     "unique_id": "seed.test.seed",
-                    "empty": False,
                     "fqn": ["test", "seed"],
                     "tags": [],
                     "config": {
@@ -1763,6 +1793,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     "alias": "seed",
                     'columns': {},
                     'description': '',
+                    'docrefs': [],
                 },
             },
             "parent_map": {
@@ -1778,8 +1809,8 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
             'metadata': {
                 'project_id': '098f6bcd4621d373cade4e832627b4f6',
-                'user_id': None,
                 'send_anonymous_usage_stats': False,
+                'user_id': None,
             },
             'disabled': [],
         }
@@ -1847,7 +1878,6 @@ class TestDocsGenerate(DBTIntegrationTest):
         compiled_seed = self._quote('seed') if quote_model else 'seed'
 
         if self.adapter_type == 'bigquery':
-            status = 'OK'
             compiled_sql = '\n\nselect * from `{}`.`{}`.seed'.format(
                 self.default_database, schema
             )
@@ -1884,10 +1914,10 @@ class TestDocsGenerate(DBTIntegrationTest):
                     },
                     'description': 'The test model',
                     'docrefs': [],
-                    'empty': False,
                     'extra_ctes': [],
                     'extra_ctes_injected': True,
                     'fqn': ['test', 'model'],
+                    'index': None,
                     'injected_sql': compiled_sql,
                     'name': 'model',
                     'original_file_path': model_sql_path,
@@ -1935,14 +1965,16 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},
                     'description': '',
-                    'empty': False,
+                    'docrefs': [],
                     'extra_ctes': [],
                     'extra_ctes_injected': True,
                     'fqn': ['test', 'seed'],
+                    'index': None,
                     'injected_sql': '-- csv --',
                     'name': 'seed',
                     'original_file_path': self.dir('seed/seed.csv'),
                     'package_name': 'test',
+                    'patch_path': None,
                     'path': 'seed.csv',
                     'raw_sql': '-- csv --',
                     'refs': [],
@@ -1952,7 +1984,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'database': self.default_database,
                     'tags': [],
                     'unique_id': 'seed.test.seed',
-                    'wrapped_sql': 'None'
+                    'wrapped_sql': 'None',
                 },
                 'thread_id': ANY,
                 'timing': [ANY, ANY],
@@ -1985,7 +2017,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['model.test.model']},
                     'description': '',
-                    'empty': False,
+                    'docrefs': [],
                     'extra_ctes': [],
                     'extra_ctes_injected': True,
                     'fqn': ['test', 'schema_test', 'not_null_model_id'],
@@ -1993,6 +2025,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'not_null_model_id',
                     'original_file_path': schema_yml_path,
                     'package_name': 'test',
+                    'patch_path': None,
                     'path': _normalize('schema_test/not_null_model_id.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_not_null(model=ref('model'), column_name='id') }}",
                     'refs': [['model']],
@@ -2016,6 +2049,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'node': {
                     'alias': 'nothing_model_',
                     'build_path': _normalize('target/compiled/test/schema_test/nothing_model_.sql'),
+                    'column_name': None,
                     'columns': {},
                     'compiled': True,
                     'compiled_sql': AnyStringWith('select 0'),
@@ -2031,10 +2065,10 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'tags': [],
                         'severity': 'ERROR',
                     },
-                    'sources': [],
+                    'database': self.default_database,
                     'depends_on': {'macros': [], 'nodes': ['model.test.model']},
                     'description': '',
-                    'empty': False,
+                    'docrefs': [],
                     'extra_ctes': [],
                     'extra_ctes_injected': True,
                     'fqn': ['test', 'schema_test', 'nothing_model_'],
@@ -2042,13 +2076,14 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'nothing_model_',
                     'original_file_path': schema_yml_path,
                     'package_name': 'test',
+                    'patch_path': None,
                     'path': _normalize('schema_test/nothing_model_.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test.test_nothing(model=ref('model'), ) }}",
                     'refs': [['model']],
                     'resource_type': 'test',
                     'root_path': OneOf(self.test_root_dir, self.initial_dir),
                     'schema': schema,
-                    'database': self.default_database,
+                    'sources': [],
                     'tags': ['schema'],
                     'unique_id': 'test.test.nothing_model_',
                     'wrapped_sql': AnyStringWith('select 0'),
@@ -2081,10 +2116,10 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'tags': [],
                         'severity': 'ERROR',
                     },
-                    'sources': [],
+                    'database': self.default_database,
                     'depends_on': {'macros': [], 'nodes': ['model.test.model']},
                     'description': '',
-                    'empty': False,
+                    'docrefs': [],
                     'extra_ctes': [],
                     'extra_ctes_injected': True,
                     'fqn': ['test', 'schema_test', 'unique_model_id'],
@@ -2092,13 +2127,14 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'name': 'unique_model_id',
                     'original_file_path': schema_yml_path,
                     'package_name': 'test',
+                    'patch_path': None,
                     'path': _normalize('schema_test/unique_model_id.sql'),
                     'raw_sql': "{{ config(severity='ERROR') }}{{ test_unique(model=ref('model'), column_name='id') }}",
                     'refs': [['model']],
                     'resource_type': 'test',
                     'root_path': OneOf(self.test_root_dir, self.initial_dir),
                     'schema': schema,
-                    'database': self.default_database,
+                    'sources': [],
                     'tags': ['schema'],
                     'unique_id': 'test.test.unique_model_id',
                     'wrapped_sql': AnyStringWith('count(*)')
@@ -2187,16 +2223,17 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'documentation_package': ''
                         },
                         {
+                            'column_name': None,
                             'documentation_name': 'ephemeral_summary',
                             'documentation_package': ''
                         }
                     ],
-                    'empty': False,
                     'extra_ctes': [
                         {'id': 'model.test.ephemeral_copy', 'sql': cte_sql},
                     ],
                     'extra_ctes_injected': True,
                     'fqn': ['test', 'ephemeral_summary'],
+                    'index': None,
                     'injected_sql': ephemeral_injected_sql,
                     'name': 'ephemeral_summary',
                     'original_file_path': self.dir('ref_models/ephemeral_summary.sql'),
@@ -2277,14 +2314,15 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'documentation_package': ''
                         },
                         {
+                            'column_name': None,
                             'documentation_name': 'view_summary',
                             'documentation_package': ''
                         }
                     ],
-                    'empty': False,
                     'extra_ctes': [],
                     'extra_ctes_injected': True,
                     'fqn': ['test', 'view_summary'],
+                    'index': None,
                     'injected_sql': view_compiled_sql,
                     'name': 'view_summary',
                     'original_file_path': self.dir('ref_models/view_summary.sql'),
@@ -2336,14 +2374,16 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': []},
                     'description': '',
-                    'empty': False,
+                    'docrefs': [],
                     'extra_ctes': [],
                     'extra_ctes_injected': True,
                     'fqn': ['test', 'seed'],
+                    'index': None,
                     'injected_sql': '-- csv --',
                     'name': 'seed',
                     'original_file_path': self.dir('seed/seed.csv'),
                     'package_name': 'test',
+                    'patch_path': None,
                     'path': 'seed.csv',
                     'raw_sql': '-- csv --',
                     'refs': [],

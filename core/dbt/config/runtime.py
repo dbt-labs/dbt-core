@@ -5,11 +5,13 @@ import pprint
 from dbt.utils import parse_cli_vars
 from dbt.contracts.project import Configuration
 from dbt.exceptions import DbtProjectError
-from dbt.exceptions import ValidationException
+from dbt.exceptions import validator_error_message
 from dbt.adapters.factory import get_relation_class_by_name
 
 from .profile import Profile
 from .project import Project
+
+from hologram import ValidationError
 
 
 class RuntimeConfig(Project, Profile):
@@ -154,9 +156,9 @@ class RuntimeConfig(Project, Profile):
         :raises DbtProjectError: If the configuration fails validation.
         """
         try:
-            Configuration(**self.serialize())
-        except ValidationException as e:
-            raise DbtProjectError(str(e))
+            Configuration.from_dict(self.serialize())
+        except ValidationError as e:
+            raise DbtProjectError(validator_error_message(e)) from e
 
         if getattr(self.args, 'version_check', False):
             self.validate_version()

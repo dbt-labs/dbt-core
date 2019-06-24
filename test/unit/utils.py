@@ -4,6 +4,9 @@ Note that all imports should be inside the functions to avoid import/mocking
 issues.
 """
 from unittest import mock
+from unittest import TestCase
+
+from hologram import ValidationError
 
 
 class Obj:
@@ -46,3 +49,30 @@ def inject_adapter(value):
     key = value.type()
     factory._ADAPTERS[key] = value
     factory.ADAPTER_TYPES[key] = type(value)
+
+
+class ContractTestCase(TestCase):
+    ContractType = None
+
+    def setUp(self):
+        self.maxDiff = None
+        super().setUp()
+
+    def assert_to_dict(self, obj, dct):
+        self.assertEqual(obj.to_dict(), dct)
+
+    def assert_from_dict(self, obj, dct, cls=None):
+        if cls is None:
+            cls = self.ContractType
+        self.assertEqual(cls.from_dict(dct),  obj)
+
+    def assert_symmetric(self, obj, dct, cls=None):
+        self.assert_to_dict(obj, dct)
+        self.assert_from_dict(obj, dct, cls)
+
+    def assert_fails_validation(self, dct, cls=None):
+        if cls is None:
+            cls = self.ContractType
+
+        with self.assertRaises(ValidationError):
+            cls.from_dict(dct)

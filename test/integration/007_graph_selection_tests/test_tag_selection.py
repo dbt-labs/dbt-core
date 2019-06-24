@@ -33,7 +33,7 @@ class TestGraphSelection(DBTIntegrationTest):
         results = self.run_dbt(['run', '--models', 'tag:specified_as_string'])
         self.assertEqual(len(results), 1)
 
-        models_run = [r.node['name'] for r in results]
+        models_run = [r.node.name for r in results]
         self.assertTrue('users' in models_run)
 
     @use_profile('postgres')
@@ -43,7 +43,7 @@ class TestGraphSelection(DBTIntegrationTest):
         results = self.run_dbt(['run', '--models', '+tag:specified_in_project+'])
         self.assertEqual(len(results), 3)
 
-        models_run = [r.node['name'] for r in results]
+        models_run = [r.node.name for r in results]
         self.assertTrue('users' in models_run)
         self.assertTrue('users_rollup' in models_run)
 
@@ -55,7 +55,7 @@ class TestGraphSelection(DBTIntegrationTest):
         results = self.run_dbt(['run', '--models', 'tag:bi'])
         self.assertEqual(len(results), 2)
 
-        models_run = [r.node['name'] for r in results]
+        models_run = [r.node.name for r in results]
         self.assertTrue('users' in models_run)
         self.assertTrue('users_rollup' in models_run)
 
@@ -67,7 +67,7 @@ class TestGraphSelection(DBTIntegrationTest):
         results = self.run_dbt(['run', '--models', '@tag:users'])
         self.assertEqual(len(results), 4)
 
-        models_run = set(r.node['name'] for r in results)
+        models_run = set(r.node.name for r in results)
         self.assertEqual(
             {'users', 'users_rollup', 'emails_alt', 'users_rollup_dependency'},
             models_run

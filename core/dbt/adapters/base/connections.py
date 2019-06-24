@@ -5,23 +5,26 @@ from threading import get_ident
 
 import dbt.exceptions
 import dbt.flags
-from dbt.api import APIObject
 from dbt.contracts.connection import Connection
+from dbt.contracts.util import Replaceable
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import translate_aliases
 
+from hologram.helpers import ExtensibleJsonSchemaMixin
 
-class Credentials(APIObject):
-    """Common base class for credentials. This is not valid to instantiate"""
-    SCHEMA = NotImplemented
-    # map credential aliases to their canonical names.
-    ALIASES = {}
+from dataclasses import dataclass, field
+from typing import Any, ClassVar, Dict, Tuple
 
-    def __init__(self, **kwargs):
-        renamed = self.translate_aliases(kwargs)
-        super().__init__(**renamed)
 
-    @property
+@dataclass
+class Credentials(
+    ExtensibleJsonSchemaMixin,
+    Replaceable,
+    metaclass=abc.ABCMeta
+):
+    _ALIASES: ClassVar[Dict[str, str]] = field(default={}, init=False)
+
+    @abc.abstractproperty
     def type(self):
         raise NotImplementedError(
             'type not implemented for base credentials class'
@@ -30,36 +33,33 @@ class Credentials(APIObject):
     def connection_info(self):
         """Return an ordered iterator of key/value pairs for pretty-printing.
         """
+        as_dict = self.to_dict()
         for key in self._connection_keys():
-            if key in self._contents:
-                yield key, self._contents[key]
+            if key in as_dict:
+                yield key, as_dict[key]
 
-    def _connection_keys(self):
-        """The credential object keys that should be printed to users in
-        'dbt debug' output. This is specific to each adapter.
-        """
+    @abc.abstractmethod
+    def _connection_keys(self) -> Tuple[str, ...]:
         raise NotImplementedError
 
-    def incorporate(self, **kwargs):
-        # implementation note: we have to do this here, or
-        # incorporate(alias_name=...) will result in duplicate keys in the
-        # merged dict that APIObject.incorporate() creates.
-        renamed = self.translate_aliases(kwargs)
-        return super().incorporate(**renamed)
+    @classmethod
+    def from_dict(cls, data):
+        data = cls.translate_aliases(data)
+        return super().from_dict(data)
 
-    def serialize(self, with_aliases=False):
-        serialized = super().serialize()
+    @classmethod
+    def translate_aliases(cls, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        return translate_aliases(kwargs, cls._ALIASES)
+
+    def to_dict(self, omit_none=True, validate=False, with_aliases=False):
+        serialized = super().to_dict(omit_none=omit_none, validate=validate)
         if with_aliases:
             serialized.update({
                 new_name: serialized[canonical_name]
-                for new_name, canonical_name in self.ALIASES.items()
+                for new_name, canonical_name in self._ALIASES.items()
                 if canonical_name in serialized
             })
         return serialized
-
-    @classmethod
-    def translate_aliases(cls, kwargs):
-        return translate_aliases(kwargs, cls.ALIASES)
 
 
 class BaseConnectionManager(metaclass=abc.ABCMeta):

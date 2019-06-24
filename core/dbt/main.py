@@ -32,7 +32,7 @@ import dbt.deprecations
 import dbt.profiler
 
 from dbt.utils import ExitCodes
-from dbt.config import UserConfig, PROFILES_DIR
+from dbt.config import PROFILES_DIR, read_user_config
 from dbt.exceptions import RuntimeException
 
 
@@ -120,11 +120,7 @@ def initialize_config_values(parsed):
     twice, but dbt's intialization is not structured in a way that makes that
     easy.
     """
-    try:
-        cfg = UserConfig.from_directory(parsed.profiles_dir)
-    except RuntimeException:
-        cfg = UserConfig.from_dict(None)
-
+    cfg = read_user_config(parsed.profiles_dir)
     cfg.set_values(parsed.profiles_dir)
 
 

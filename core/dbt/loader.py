@@ -7,13 +7,12 @@ import dbt.flags
 
 from dbt.node_types import NodeType
 from dbt.contracts.graph.manifest import Manifest
-from dbt.utils import timestring
 
 from dbt.parser import MacroParser, ModelParser, SeedParser, AnalysisParser, \
     DocumentationParser, DataTestParser, HookParser, SchemaParser, \
     ParserUtils, SnapshotParser
 
-from dbt.contracts.project import ProjectList
+from datetime import datetime
 
 
 class GraphLoader:
@@ -132,7 +131,8 @@ class GraphLoader:
         self._load_macros(internal_manifest=internal_manifest)
         # make a manifest with just the macros to get the context
         self.macro_manifest = Manifest(macros=self.macros, nodes={}, docs={},
-                                       generated_at=timestring(), disabled=[])
+                                       generated_at=datetime.utcnow(),
+                                       disabled=[])
         self._load_nodes()
         self._load_docs()
         self._load_schema_tests()
@@ -142,7 +142,7 @@ class GraphLoader:
             nodes=self.nodes,
             macros=self.macros,
             docs=self.docs,
-            generated_at=timestring(),
+            generated_at=datetime.utcnow(),
             config=self.root_project,
             disabled=self.disabled
         )
@@ -156,9 +156,6 @@ class GraphLoader:
 
     @classmethod
     def _load_from_projects(cls, root_config, projects, internal_manifest):
-        if dbt.flags.STRICT_MODE:
-            ProjectList(**projects)
-
         loader = cls(root_config, projects)
         loader.load(internal_manifest=internal_manifest)
         return loader.create_manifest()

@@ -20,7 +20,8 @@ sources:
       - name: test_table
         identifier: source
         loaded_at_field: updated_at
-        error_after: {count: 18, period: hour}
+        freshness:
+          error_after: {count: 18, period: hour}
         columns:
           - name: favorite_color
             description: The favorite color

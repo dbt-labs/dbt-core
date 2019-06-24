@@ -1,366 +1,167 @@
-from dbt.api.object import APIObject
+from dbt.contracts.util import Replaceable, Mergeable
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
-from dbt.utils import deep_merge
+from dbt import tracking
+from dbt.ui import printer
+# from dbt.utils import JSONEncoder
+
+from hologram import JsonSchemaMixin
+from hologram.helpers import HyphenatedJsonSchemaMixin, NewPatternType, \
+    ExtensibleJsonSchemaMixin
+
+from dataclasses import dataclass, field
+from typing import Optional, List, Dict, Union, Any
+
+PIN_PACKAGE_URL = 'https://docs.getdbt.com/docs/package-management#section-specifying-package-versions' # noqa
+DEFAULT_SEND_ANONYMOUS_USAGE_STATS = True
+DEFAULT_USE_COLORS = True
 
 
-PROJECT_CONTRACT = {
-    'type': 'object',
-    'description': 'The project configuration.',
-    'additionalProperties': False,
-    'properties': {
-        'name': {
-            'type': 'string',
-            'pattern': r'^[^\d\W]\w*\Z',
-        },
-        'version': {
-            'anyOf': [
-                {
-                    'type': 'string',
-                    'pattern': (
-                        # this does not support the full semver (does not
-                        # allow a trailing -fooXYZ) and is not restrictive
-                        # enough for full semver, (allows '1.0'). But it's like
-                        # 'semver lite'.
-                        r'^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(\.(?:0|[1-9]\d*))?$'
-                    ),
-                },
-                {
-                    # the internal global_project/dbt_project.yml is actually
-                    # 1.0. Heaven only knows how many users have done the same
-                    'type': 'number',
-                },
-            ],
-        },
-        'project-root': {
-            'type': 'string',
-        },
-        'source-paths': {
-            'type': 'array',
-            'items': {'type': 'string'},
-        },
-        'macro-paths': {
-            'type': 'array',
-            'items': {'type': 'string'},
-        },
-        'data-paths': {
-            'type': 'array',
-            'items': {'type': 'string'},
-        },
-        'test-paths': {
-            'type': 'array',
-            'items': {'type': 'string'},
-        },
-        'analysis-paths': {
-            'type': 'array',
-            'items': {'type': 'string'},
-        },
-        'docs-paths': {
-            'type': 'array',
-            'items': {'type': 'string'},
-        },
-        'target-path': {
-            'type': 'string',
-        },
-        'snapshot-paths': {
-            'type': 'array',
-            'items': {'type': 'string'},
-        },
-        'clean-targets': {
-            'type': 'array',
-            'items': {'type': 'string'},
-        },
-        'profile': {
-            'type': ['null', 'string'],
-        },
-        'log-path': {
-            'type': 'string',
-        },
-        'modules-path': {
-            'type': 'string',
-        },
-        'quoting': {
-            'type': 'object',
-            'additionalProperties': False,
-            'properties': {
-                'identifier': {
-                    'type': 'boolean',
-                },
-                'schema': {
-                    'type': 'boolean',
-                },
-                'database': {
-                    'type': 'boolean',
-                },
-                'project': {
-                    'type': 'boolean',
-                }
-            },
-        },
-        'models': {
-            'type': 'object',
-            'additionalProperties': True,
-        },
-        'on-run-start': {
-            'type': 'array',
-            'items': {'type': 'string'},
-        },
-        'on-run-end': {
-            'type': 'array',
-            'items': {'type': 'string'},
-        },
-        'seeds': {
-            'type': 'object',
-            'additionalProperties': True,
-        },
-        # we validate the regex separately, using the pattern in dbt.semver
-        'require-dbt-version': {
-            'type': ['string', 'array'],
-            'items': {'type': 'string'},
-        },
-    },
-    'required': ['name', 'version'],
-}
+Name = NewPatternType('Name', r'^[^\d\W]\w*\Z')
 
-
-class Project(APIObject):
-    SCHEMA = PROJECT_CONTRACT
-
-
-LOCAL_PACKAGE_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'properties': {
-        'local': {
-            'type': 'string',
-            'description': 'The absolute path to the local package.',
-        },
-        'required': ['local'],
-    },
-}
-
-
-GIT_PACKAGE_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'properties': {
-        'git': {
-            'type': 'string',
-            'description': (
-                'The URL to the git repository that stores the pacakge'
-            ),
-        },
-        'revision': {
-            'type': ['string', 'array'],
-            'items': {'type': 'string'},
-            'description': 'The git revision to use, if it is not tip',
-        },
-        'warn-unpinned': {
-            'type': 'boolean',
-        }
-    },
-    'required': ['git'],
-}
-
-
-VERSION_SPECIFICATION_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'properties': {
-        'major': {
-            'type': ['string', 'null'],
-        },
-        'minor': {
-            'type': ['string', 'null'],
-        },
-        'patch': {
-            'type': ['string', 'null'],
-        },
-        'prerelease': {
-            'type': ['string', 'null'],
-        },
-        'build': {
-            'type': ['string', 'null'],
-        },
-        'matcher': {
-            'type': 'string',
-            'enum': ['=', '>=', '<=', '>', '<'],
-        },
-    },
-    'required': ['major', 'minor', 'patch', 'prerelease', 'build', 'matcher'],
-}
-
-
-REGISTRY_PACKAGE_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'properties': {
-        'package': {
-            'type': 'string',
-            'description': 'The name of the package',
-        },
-        'version': {
-            'type': ['string', 'array'],
-            'items': {
-                'anyOf': [
-                    VERSION_SPECIFICATION_CONTRACT,
-                    {'type': 'string'}
-                ],
-            },
-            'description': 'The version of the package',
-        },
-    },
-    'required': ['package', 'version'],
-}
-
-
-PACKAGE_FILE_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'properties': {
-        'packages': {
-            'type': 'array',
-            'items': {
-                'anyOf': [
-                    LOCAL_PACKAGE_CONTRACT,
-                    GIT_PACKAGE_CONTRACT,
-                    REGISTRY_PACKAGE_CONTRACT,
-                ],
-            },
-        },
-    },
-    'required': ['packages'],
-}
-
-
-# the metadata from the registry has extra things that we don't care about.
-REGISTRY_PACKAGE_METADATA_CONTRACT = deep_merge(
-    PACKAGE_FILE_CONTRACT,
-    {
-        'additionalProperties': True,
-        'properties': {
-            'name': {
-                'type': 'string',
-            },
-            'downloads': {
-                'type': 'object',
-                'additionalProperties': True,
-                'properties': {
-                    'tarball': {
-                        'type': 'string',
-                    },
-                },
-                'required': ['tarball']
-            },
-        },
-        'required': PACKAGE_FILE_CONTRACT['required'][:] + ['downloads']
-    }
+# this does not support the full semver (does not allow a trailing -fooXYZ) and
+# is not restrictive enough for full semver, (allows '1.0'). But it's like
+# 'semver lite'.
+SemverString = NewPatternType(
+    'SemverString',
+    r'^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(\.(?:0|[1-9]\d*))?$',
 )
 
 
-class PackageConfig(APIObject):
-    SCHEMA = PACKAGE_FILE_CONTRACT
+@dataclass
+class Quoting(JsonSchemaMixin, Mergeable):
+    identifier: Optional[bool]
+    schema: Optional[bool]
+    database: Optional[bool]
+    project: Optional[bool]
 
 
-USER_CONFIG_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': True,
-    'properties': {
-        'send_anonymous_usage_stats': {
-            'type': 'boolean',
-        },
-        'use_colors': {
-            'type': 'boolean',
-        },
-    },
-}
+@dataclass
+class Package(Replaceable, HyphenatedJsonSchemaMixin):
+    pass
 
 
-PROFILE_INFO_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'properties': {
-        'profile_name': {
-            'type': 'string',
-        },
-        'target_name': {
-            'type': 'string',
-        },
-        'config': USER_CONFIG_CONTRACT,
-        'threads': {
-            'type': 'number',
-        },
-        'credentials': {
-            'type': 'object',
-            'additionalProperties': True,
-        },
-    },
-    'required': [
-        'profile_name', 'target_name', 'config', 'threads', 'credentials'
-    ],
-}
+@dataclass
+class LocalPackage(Package):
+    local: str
 
 
-class ProfileConfig(APIObject):
-    SCHEMA = PROFILE_INFO_CONTRACT
+@dataclass
+class GitPackage(Package):
+    git: str
+    revision: Optional[str]
+    warn_unpinned: Optional[bool] = None
 
 
-def _merge_requirements(base, *args):
-    required = base[:]
-    for arg in args:
-        required.extend(arg['required'])
-    return required
+@dataclass
+class RegistryPackage(Package):
+    package: str
+    version: Union[str, List[str]]
 
 
-CONFIG_CONTRACT = deep_merge(
-    PROJECT_CONTRACT,
-    PACKAGE_FILE_CONTRACT,
-    PROFILE_INFO_CONTRACT,
-    {
-        'properties': {
-            'cli_vars': {
-                'type': 'object',
-                'additionalProperties': True,
-            },
-            # override quoting: both 'identifier' and 'schema' must be
-            # populated
-            'quoting': {
-                'required': ['identifier', 'schema'],
-            },
-        },
-        'required': _merge_requirements(
-            ['cli_vars'],
-            PROJECT_CONTRACT,
-            PACKAGE_FILE_CONTRACT,
-            PROFILE_INFO_CONTRACT
-        ),
-    },
-)
+PackageSpec = Union[LocalPackage, GitPackage, RegistryPackage]
 
 
-def update_config_contract(typename, connection):
-    PROFILE_INFO_CONTRACT['properties']['credentials']['anyOf'].append(
-        connection.SCHEMA
+@dataclass
+class PackageConfig(JsonSchemaMixin, Replaceable):
+    packages: List[PackageSpec]
+
+
+@dataclass
+class ProjectPackageMetadata:
+    name: str
+    packages: List[PackageSpec]
+
+    @classmethod
+    def from_project(cls, project):
+        return cls(name=project.project_name,
+                   packages=project.packages.packages)
+
+
+@dataclass
+class Downloads(ExtensibleJsonSchemaMixin, Replaceable):
+    tarball: str
+
+
+@dataclass
+class RegistryPackageMetadata(
+    ExtensibleJsonSchemaMixin,
+    ProjectPackageMetadata,
+):
+    downloads: Downloads
+
+
+@dataclass
+class Project(HyphenatedJsonSchemaMixin, Replaceable):
+    name: Name
+    version: Union[SemverString, float]
+    project_root: Optional[str]
+    source_paths: Optional[List[str]]
+    macro_paths: Optional[List[str]]
+    data_paths: Optional[List[str]]
+    test_paths: Optional[List[str]]
+    analysis_paths: Optional[List[str]]
+    docs_paths: Optional[List[str]]
+    target_path: Optional[str]
+    snapshot_paths: Optional[List[str]]
+    clean_targets: Optional[List[str]]
+    profile: Optional[str]
+    log_path: Optional[str]
+    modules_path: Optional[str]
+    quoting: Optional[Quoting]
+    on_run_start: Optional[List[str]] = field(default_factory=list)
+    on_run_end: Optional[List[str]] = field(default_factory=list)
+    require_dbt_version: Optional[Union[List[str], str]] = None
+    models: Dict[str, Any] = field(default_factory=dict)
+    seeds: Dict[str, Any] = field(default_factory=dict)
+    packages: List[PackageSpec] = field(default_factory=list)
+
+
+@dataclass
+class UserConfig(ExtensibleJsonSchemaMixin, Replaceable):
+    send_anonymous_usage_stats: bool = DEFAULT_SEND_ANONYMOUS_USAGE_STATS
+    use_colors: bool = DEFAULT_USE_COLORS
+    printer_width: Optional[int] = None
+
+    def set_values(self, cookie_dir):
+        if self.send_anonymous_usage_stats:
+            tracking.initialize_tracking(cookie_dir)
+        else:
+            tracking.do_not_track()
+
+        if self.use_colors:
+            printer.use_colors()
+
+        if self.printer_width:
+            printer.printer_width(self.printer_width)
+
+
+@dataclass
+class ProfileConfig(HyphenatedJsonSchemaMixin, Replaceable):
+    profile_name: str = field(metadata={'preserve_underscore': True})
+    target_name: str = field(metadata={'preserve_underscore': True})
+    config: UserConfig
+    threads: int
+    # TODO: make this a dynamic union of some kind?
+    credentials: Optional[Any]
+
+
+@dataclass
+class ConfiguredQuoting(JsonSchemaMixin, Replaceable):
+    identifier: bool
+    schema: bool
+    database: Optional[bool]
+    project: Optional[bool]
+
+
+@dataclass
+class Configuration(Project, ProfileConfig):
+    cli_vars: Dict[str, Any] = field(
+        default_factory=dict,
+        metadata={'preserve_underscore': True},
     )
-    CONFIG_CONTRACT['properties']['credentials']['anyOf'].append(
-        connection.SCHEMA
-    )
+    quoting: Optional[ConfiguredQuoting] = None
 
 
-class Configuration(APIObject):
-    SCHEMA = CONFIG_CONTRACT
-
-
-PROJECTS_LIST_PROJECT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'patternProperties': {
-        '.*': CONFIG_CONTRACT,
-    },
-}
-
-
-class ProjectList(APIObject):
-    SCHEMA = PROJECTS_LIST_PROJECT
-
-    def serialize(self):
-        return {k: v.serialize() for k, v in self._contents.items()}
+@dataclass
+class ProjectList(JsonSchemaMixin):
+    projects: Dict[str, Project]

@@ -3,7 +3,6 @@ import os
 
 from dbt.adapters.factory import get_adapter
 from dbt.node_types import NodeType
-from dbt.contracts.graph.parsed import ParsedMacro, ParsedNode
 from dbt.include.global_project import PACKAGES
 from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 
@@ -225,23 +224,13 @@ class Var:
         # precedence over context-based var definitions
         self.overrides = overrides
 
-        if isinstance(model, dict) and model.get('unique_id'):
-            local_vars = model.get('config', {}).get('vars', {})
-            self.model_name = model.get('name')
-        elif isinstance(model, ParsedMacro):
-            local_vars = {}  # macros have no config
-            self.model_name = model.name
-        elif isinstance(model, ParsedNode):
-            local_vars = model.config.get('vars', {})
-            self.model_name = model.name
-        elif model is None:
+        if model is None:
             # during config parsing we have no model and no local vars
             self.model_name = '<Configuration>'
             local_vars = {}
         else:
-            # still used for wrapping
-            self.model_name = model.nice_name
-            local_vars = model.config.get('vars', {})
+            self.model_name = model.name
+            local_vars = model.local_vars()
 
         self.local_vars = dbt.utils.merge(local_vars, overrides)
 
@@ -278,7 +267,7 @@ class Var:
 
 def write(node, target_path, subdirectory):
     def fn(payload):
-        node['build_path'] = dbt.writer.write_node(
+        node.build_path = dbt.writer.write_node(
             node, target_path, subdirectory, payload)
         return ''
 
@@ -383,9 +372,10 @@ def generate_base(model, model_dict, config, manifest, source_config,
     target_name = config.target_name
     target = config.to_profile_info()
     del target['credentials']
-    target.update(config.credentials.serialize(with_aliases=True))
+    target.update(config.credentials.to_dict(with_aliases=True))
     target['type'] = config.credentials.type
     target.pop('pass', None)
+    target.pop('password', None)
     target['name'] = target_name
 
     adapter = get_adapter(config)
@@ -404,14 +394,12 @@ def generate_base(model, model_dict, config, manifest, source_config,
             "Column": adapter.Column,
         },
         "column": adapter.Column,
-        "config": provider.Config(model_dict, source_config),
+        "config": provider.Config(model, source_config),
         "database": config.credentials.database,
         "env_var": env_var,
         "exceptions": dbt.exceptions.wrapped_exports(model),
         "execute": provider.execute,
         "flags": dbt.flags,
-        # TODO: Do we have to leave this in?
-        "graph": manifest.to_flat_graph(),
         "load_agate_table": _build_load_agate_table(model),
         "log": log,
         "model": model_dict,
@@ -433,8 +421,7 @@ def generate_base(model, model_dict, config, manifest, source_config,
     return context
 
 
-def modify_generated_context(context, model, model_dict, config, manifest,
-                             provider):
+def modify_generated_context(context, model, config, manifest, provider):
     cli_var_overrides = config.cli_vars
 
     context = _add_tracking(context)
@@ -445,8 +432,8 @@ def modify_generated_context(context, model, model_dict, config, manifest,
 
     context = _add_macros(context, model, manifest)
 
-    context["write"] = write(model_dict, config.target_path, 'run')
-    context["render"] = render(context, model_dict)
+    context["write"] = write(model, config.target_path, 'run')
+    context["render"] = render(context, model)
     context["var"] = provider.Var(model, context=context,
                                   overrides=cli_var_overrides)
     context['context'] = context
@@ -462,12 +449,11 @@ def generate_execute_macro(model, config, manifest, provider):
         - 'schema' does not use any 'model' information
      - they can't be configured with config() directives
     """
-    model_dict = model.serialize()
+    model_dict = model.to_dict()
     context = generate_base(model, model_dict, config, manifest, None,
                             provider)
 
-    return modify_generated_context(context, model, model_dict, config,
-                                    manifest, provider)
+    return modify_generated_context(context, model, config, manifest, provider)
 
 
 def generate_model(model, config, manifest, source_config, provider):
@@ -476,19 +462,20 @@ def generate_model(model, config, manifest, source_config, provider):
                             source_config, provider)
     # operations (hooks) don't get a 'this'
     if model.resource_type != NodeType.Operation:
-        this = get_this_relation(context['adapter'], config, model_dict)
+        this = get_this_relation(context['adapter'], config, model)
         context['this'] = this
     # overwrite schema/database if we have them, and hooks + sql
+    # the hooks should come in as dicts, at least for the `run_hooks` macro
+    # TODO: do we have to preserve this as backwards a compatibility thing?
     context.update({
-        'schema': model.get('schema', context['schema']),
-        'database': model.get('database', context['database']),
-        'pre_hooks': model.config.get('pre-hook'),
-        'post_hooks': model.config.get('post-hook'),
-        'sql': model.get('injected_sql'),
+        'schema': getattr(model, 'schema', context['schema']),
+        'database': getattr(model, 'database', context['database']),
+        'pre_hooks': [h.to_dict() for h in model.config.pre_hook],
+        'post_hooks': [h.to_dict() for h in model.config.post_hook],
+        'sql': getattr(model, 'injected_sql', None),
     })
 
-    return modify_generated_context(context, model, model_dict, config,
-                                    manifest, provider)
+    return modify_generated_context(context, model, config, manifest, provider)
 
 
 def generate(model, config, manifest, source_config=None, provider=None):

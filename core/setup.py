@@ -54,5 +54,7 @@ setup(
         'jsonschema>=3.0.1,<4',
         'json-rpc>=1.12,<2',
         'werkzeug>=0.14.1,<0.15',
+        'dataclasses;python_version<"3.7"',
+        'hologram @ git+https://github.com/fishtown-analytics/hologram.git@master#egg=hologram',
     ]
 )

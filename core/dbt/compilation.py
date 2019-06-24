@@ -15,11 +15,19 @@ import dbt.exceptions
 import dbt.flags
 import dbt.loader
 import dbt.config
-from dbt.contracts.graph.compiled import CompiledNode
+from dbt.contracts.graph.compiled import InjectedCTE, CompiledNode, \
+    CompiledTestNode
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
 graph_file_name = 'graph.gpickle'
+
+
+def _compiled_type_for(model):
+    if model.resource_type == NodeType.Test:
+        return CompiledTestNode
+    else:
+        return CompiledNode
 
 
 def print_compile_stats(stats):
@@ -44,9 +52,9 @@ def print_compile_stats(stats):
 
 
 def _add_prepended_cte(prepended_ctes, new_cte):
-    for dct in prepended_ctes:
-        if dct['id'] == new_cte['id']:
-            dct['sql'] = new_cte['sql']
+    for cte in prepended_ctes:
+        if cte.id == new_cte.id:
+            cte.sql = new_cte.sql
             return
     prepended_ctes.append(new_cte)
 
@@ -67,20 +75,19 @@ def recursively_prepend_ctes(model, manifest):
         return (model, model.extra_ctes, manifest)
 
     if dbt.flags.STRICT_MODE:
-        # ensure that the cte we're adding to is compiled
-        CompiledNode(**model.serialize())
+        assert isinstance(model, (CompiledNode, CompiledTestNode))
 
     prepended_ctes = []
 
     for cte in model.extra_ctes:
-        cte_id = cte['id']
+        cte_id = cte.id
         cte_to_add = manifest.nodes.get(cte_id)
         cte_to_add, new_prepended_ctes, manifest = recursively_prepend_ctes(
             cte_to_add, manifest)
         _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
-        new_cte_name = '__dbt__CTE__{}'.format(cte_to_add.get('name'))
+        new_cte_name = '__dbt__CTE__{}'.format(cte_to_add.name)
         sql = ' {} as (\n{}\n)'.format(new_cte_name, cte_to_add.compiled_sql)
-        _add_prepended_cte(prepended_ctes, {'id': cte_id, 'sql': sql})
+        _add_prepended_cte(prepended_ctes, InjectedCTE(id=cte_id, sql=sql))
 
     model.prepend_ctes(prepended_ctes)
 
@@ -101,7 +108,7 @@ class Compiler:
         if extra_context is None:
             extra_context = {}
 
-        logger.debug("Compiling {}".format(node.get('unique_id')))
+        logger.debug("Compiling {}".format(node.unique_id))
 
         data = node.to_dict()
         data.update({
@@ -111,14 +118,14 @@ class Compiler:
             'extra_ctes': [],
             'injected_sql': None,
         })
-        compiled_node = CompiledNode(**data)
+        compiled_node = _compiled_type_for(node).from_dict(data)
 
         context = dbt.context.runtime.generate(
             compiled_node, self.config, manifest)
         context.update(extra_context)
 
         compiled_node.compiled_sql = dbt.clients.jinja.get_rendered(
-            node.get('raw_sql'),
+            node.raw_sql,
             context,
             node)
 

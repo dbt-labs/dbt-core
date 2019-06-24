@@ -2,14 +2,29 @@ import unittest
 from unittest import mock
 
 import copy
+from datetime import datetime
 
 import dbt.flags
 from dbt import tracking
-from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.parsed import ParsedNode
+from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
+from dbt.contracts.graph.parsed import ParsedNode, DependsOn, NodeConfig
 from dbt.contracts.graph.compiled import CompiledNode
-from dbt.utils import timestring
+from dbt.node_types import NodeType
 import freezegun
+
+
+REQUIRED_PARSED_NODE_KEYS = frozenset({
+    'alias', 'tags', 'config', 'unique_id', 'refs', 'sources',
+    'depends_on', 'database', 'schema', 'name', 'resource_type',
+    'package_name', 'root_path', 'path', 'original_file_path', 'raw_sql',
+    'docrefs', 'description', 'columns', 'fqn', 'build_path', 'patch_path',
+    'index',
+})
+
+REQUIRED_COMPILED_NODE_KEYS = frozenset(REQUIRED_PARSED_NODE_KEYS | {
+    'compiled', 'extra_ctes_injected', 'extra_ctes', 'compiled_sql',
+    'injected_sql', 'wrapped_sql'
+})
 
 
 class ManifestTest(unittest.TestCase):
@@ -18,7 +33,7 @@ class ManifestTest(unittest.TestCase):
 
         self.maxDiff = None
 
-        self.model_config = {
+        self.model_config = NodeConfig.from_dict({
             'enabled': True,
             'materialized': 'view',
             'persist_docs': {},
@@ -28,7 +43,7 @@ class ManifestTest(unittest.TestCase):
             'quoting': {},
             'column_types': {},
             'tags': [],
-        }
+        })
 
         self.nested_nodes = {
             'model.snowplow.events': ParsedNode(
@@ -36,17 +51,13 @@ class ManifestTest(unittest.TestCase):
                 database='dbt',
                 schema='analytics',
                 alias='events',
-                resource_type='model',
+                resource_type=NodeType.Model,
                 unique_id='model.snowplow.events',
                 fqn=['snowplow', 'events'],
-                empty=False,
                 package_name='snowplow',
                 refs=[],
                 sources=[],
-                depends_on={
-                    'nodes': [],
-                    'macros': []
-                },
+                depends_on=DependsOn(),
                 config=self.model_config,
                 tags=[],
                 path='events.sql',
@@ -59,17 +70,13 @@ class ManifestTest(unittest.TestCase):
                 database='dbt',
                 schema='analytics',
                 alias='events',
-                resource_type='model',
+                resource_type=NodeType.Model,
                 unique_id='model.root.events',
                 fqn=['root', 'events'],
-                empty=False,
                 package_name='root',
                 refs=[],
                 sources=[],
-                depends_on={
-                    'nodes': [],
-                    'macros': []
-                },
+                depends_on=DependsOn(),
                 config=self.model_config,
                 tags=[],
                 path='events.sql',
@@ -82,17 +89,13 @@ class ManifestTest(unittest.TestCase):
                 database='dbt',
                 schema='analytics',
                 alias='dep',
-                resource_type='model',
+                resource_type=NodeType.Model,
                 unique_id='model.root.dep',
                 fqn=['root', 'dep'],
-                empty=False,
                 package_name='root',
                 refs=[['events']],
                 sources=[],
-                depends_on={
-                    'nodes': ['model.root.events'],
-                    'macros': []
-                },
+                depends_on=DependsOn(nodes=['model.root.events']),
                 config=self.model_config,
                 tags=[],
                 path='multi.sql',
@@ -105,17 +108,13 @@ class ManifestTest(unittest.TestCase):
                 database='dbt',
                 schema='analytics',
                 alias='nested',
-                resource_type='model',
+                resource_type=NodeType.Model,
                 unique_id='model.root.nested',
                 fqn=['root', 'nested'],
-                empty=False,
                 package_name='root',
                 refs=[['events']],
                 sources=[],
-                depends_on={
-                    'nodes': ['model.root.dep'],
-                    'macros': []
-                },
+                depends_on=DependsOn(nodes=['model.root.dep']),
                 config=self.model_config,
                 tags=[],
                 path='multi.sql',
@@ -128,17 +127,13 @@ class ManifestTest(unittest.TestCase):
                 database='dbt',
                 schema='analytics',
                 alias='sibling',
-                resource_type='model',
+                resource_type=NodeType.Model,
                 unique_id='model.root.sibling',
                 fqn=['root', 'sibling'],
-                empty=False,
                 package_name='root',
                 refs=[['events']],
                 sources=[],
-                depends_on={
-                    'nodes': ['model.root.events'],
-                    'macros': []
-                },
+                depends_on=DependsOn(nodes=['model.root.events']),
                 config=self.model_config,
                 tags=[],
                 path='multi.sql',
@@ -151,17 +146,13 @@ class ManifestTest(unittest.TestCase):
                 database='dbt',
                 schema='analytics',
                 alias='multi',
-                resource_type='model',
+                resource_type=NodeType.Model,
                 unique_id='model.root.multi',
                 fqn=['root', 'multi'],
-                empty=False,
                 package_name='root',
                 refs=[['events']],
                 sources=[],
-                depends_on={
-                    'nodes': ['model.root.nested', 'model.root.sibling'],
-                    'macros': []
-                },
+                depends_on=DependsOn(nodes=['model.root.nested', 'model.root.sibling']),
                 config=self.model_config,
                 tags=[],
                 path='multi.sql',
@@ -170,13 +161,15 @@ class ManifestTest(unittest.TestCase):
                 raw_sql='does not matter'
             ),
         }
+        for node in self.nested_nodes.values():
+            node.validate(node.to_dict())
 
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
     def test__no_nodes(self):
         manifest = Manifest(nodes={}, macros={}, docs={},
-                            generated_at=timestring(), disabled=[])
+                            generated_at=datetime.utcnow(), disabled=[])
         self.assertEqual(
-            manifest.serialize(),
+            manifest.writable_manifest().to_dict(),
             {
                 'nodes': {},
                 'macros': {},
@@ -184,11 +177,7 @@ class ManifestTest(unittest.TestCase):
                 'child_map': {},
                 'generated_at': '2018-02-14T09:15:13Z',
                 'docs': {},
-                'metadata': {
-                    'project_id': None,
-                    'user_id': None,
-                    'send_anonymous_usage_stats': None,
-                },
+                'metadata': {},
                 'disabled': [],
             }
         )
@@ -197,8 +186,8 @@ class ManifestTest(unittest.TestCase):
     def test__nested_nodes(self):
         nodes = copy.copy(self.nested_nodes)
         manifest = Manifest(nodes=nodes, macros={}, docs={},
-                            generated_at=timestring(), disabled=[])
-        serialized = manifest.serialize()
+                            generated_at=datetime.utcnow(), disabled=[])
+        serialized = manifest.writable_manifest().to_dict()
         self.assertEqual(serialized['generated_at'], '2018-02-14T09:15:13Z')
         self.assertEqual(serialized['docs'], {})
         self.assertEqual(serialized['disabled'], [])
@@ -261,15 +250,14 @@ class ManifestTest(unittest.TestCase):
     def test__to_flat_graph(self):
         nodes = copy.copy(self.nested_nodes)
         manifest = Manifest(nodes=nodes, macros={}, docs={},
-                            generated_at=timestring(), disabled=[])
+                            generated_at=datetime.utcnow(), disabled=[])
         flat_graph = manifest.to_flat_graph()
         flat_nodes = flat_graph['nodes']
         self.assertEqual(set(flat_graph), set(['nodes', 'macros']))
         self.assertEqual(flat_graph['macros'], {})
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
-        expected_keys = set(ParsedNode.SCHEMA['required'])
         for node in flat_nodes.values():
-            self.assertEqual(set(node), expected_keys)
+            self.assertEqual(frozenset(node), REQUIRED_PARSED_NODE_KEYS)
 
     @mock.patch.object(tracking, 'active_user')
     def test_get_metadata(self, mock_user):
@@ -280,11 +268,11 @@ class ManifestTest(unittest.TestCase):
         config.hashed_name.return_value = '098f6bcd4621d373cade4e832627b4f6'
         self.assertEqual(
             Manifest.get_metadata(config),
-            {
-                'project_id': '098f6bcd4621d373cade4e832627b4f6',
-                'user_id': 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf',
-                'send_anonymous_usage_stats': False,
-            }
+            ManifestMetadata(
+                project_id='098f6bcd4621d373cade4e832627b4f6',
+                user_id='cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf',
+                send_anonymous_usage_stats=False,
+            )
         )
 
     @mock.patch.object(tracking, 'active_user')
@@ -296,7 +284,7 @@ class ManifestTest(unittest.TestCase):
         # md5 of 'test'
         config.hashed_name.return_value = '098f6bcd4621d373cade4e832627b4f6'
         manifest = Manifest(nodes={}, macros={}, docs={},
-                            generated_at=timestring(), disabled=[],
+                            generated_at=datetime.utcnow(), disabled=[],
                             config=config)
         metadata = {
             'project_id': '098f6bcd4621d373cade4e832627b4f6',
@@ -304,7 +292,7 @@ class ManifestTest(unittest.TestCase):
             'send_anonymous_usage_stats': False,
         }
         self.assertEqual(
-            manifest.serialize(),
+            manifest.writable_manifest().to_dict(),
             {
                 'nodes': {},
                 'macros': {},
@@ -323,7 +311,7 @@ class ManifestTest(unittest.TestCase):
 
     def test_get_resource_fqns_empty(self):
         manifest = Manifest(nodes={}, macros={}, docs={},
-                            generated_at=timestring(), disabled=[])
+                            generated_at=datetime.utcnow(), disabled=[])
         self.assertEqual(manifest.get_resource_fqns(), {})
 
     def test_get_resource_fqns(self):
@@ -336,14 +324,10 @@ class ManifestTest(unittest.TestCase):
             resource_type='seed',
             unique_id='seed.root.seed',
             fqn=['root', 'seed'],
-            empty=False,
             package_name='root',
             refs=[['events']],
             sources=[],
-            depends_on={
-                'nodes': [],
-                'macros': []
-            },
+            depends_on=DependsOn(),
             config=self.model_config,
             tags=[],
             path='seed.csv',
@@ -352,7 +336,7 @@ class ManifestTest(unittest.TestCase):
             raw_sql='-- csv --'
         )
         manifest = Manifest(nodes=nodes, macros={}, docs={},
-                            generated_at=timestring(), disabled=[])
+                            generated_at=datetime.utcnow(), disabled=[])
         expect = {
             'models': frozenset([
                 ('snowplow', 'events'),
@@ -374,7 +358,7 @@ class MixedManifestTest(unittest.TestCase):
 
         self.maxDiff = None
 
-        self.model_config = {
+        self.model_config = NodeConfig.from_dict({
             'enabled': True,
             'materialized': 'view',
             'persist_docs': {},
@@ -384,7 +368,7 @@ class MixedManifestTest(unittest.TestCase):
             'quoting': {},
             'column_types': {},
             'tags': [],
-        }
+        })
 
         self.nested_nodes = {
             'model.snowplow.events': CompiledNode(
@@ -392,17 +376,13 @@ class MixedManifestTest(unittest.TestCase):
                 database='dbt',
                 schema='analytics',
                 alias='events',
-                resource_type='model',
+                resource_type=NodeType.Model,
                 unique_id='model.snowplow.events',
                 fqn=['snowplow', 'events'],
-                empty=False,
                 package_name='snowplow',
                 refs=[],
                 sources=[],
-                depends_on={
-                    'nodes': [],
-                    'macros': []
-                },
+                depends_on=DependsOn(),
                 config=self.model_config,
                 tags=[],
                 path='events.sql',
@@ -420,17 +400,13 @@ class MixedManifestTest(unittest.TestCase):
                 database='dbt',
                 schema='analytics',
                 alias='events',
-                resource_type='model',
+                resource_type=NodeType.Model,
                 unique_id='model.root.events',
                 fqn=['root', 'events'],
-                empty=False,
                 package_name='root',
                 refs=[],
                 sources=[],
-                depends_on={
-                    'nodes': [],
-                    'macros': []
-                },
+                depends_on=DependsOn(),
                 config=self.model_config,
                 tags=[],
                 path='events.sql',
@@ -448,17 +424,13 @@ class MixedManifestTest(unittest.TestCase):
                 database='dbt',
                 schema='analytics',
                 alias='dep',
-                resource_type='model',
+                resource_type=NodeType.Model,
                 unique_id='model.root.dep',
                 fqn=['root', 'dep'],
-                empty=False,
                 package_name='root',
                 refs=[['events']],
                 sources=[],
-                depends_on={
-                    'nodes': ['model.root.events'],
-                    'macros': []
-                },
+                depends_on=DependsOn(nodes=['model.root.events']),
                 config=self.model_config,
                 tags=[],
                 path='multi.sql',
@@ -471,17 +443,13 @@ class MixedManifestTest(unittest.TestCase):
                 database='dbt',
                 schema='analytics',
                 alias='nested',
-                resource_type='model',
+                resource_type=NodeType.Model,
                 unique_id='model.root.nested',
                 fqn=['root', 'nested'],
-                empty=False,
                 package_name='root',
                 refs=[['events']],
                 sources=[],
-                depends_on={
-                    'nodes': ['model.root.dep'],
-                    'macros': []
-                },
+                depends_on=DependsOn(nodes=['model.root.dep']),
                 config=self.model_config,
                 tags=[],
                 path='multi.sql',
@@ -494,17 +462,13 @@ class MixedManifestTest(unittest.TestCase):
                 database='dbt',
                 schema='analytics',
                 alias='sibling',
-                resource_type='model',
+                resource_type=NodeType.Model,
                 unique_id='model.root.sibling',
                 fqn=['root', 'sibling'],
-                empty=False,
                 package_name='root',
                 refs=[['events']],
                 sources=[],
-                depends_on={
-                    'nodes': ['model.root.events'],
-                    'macros': []
-                },
+                depends_on=DependsOn(nodes=['model.root.events']),
                 config=self.model_config,
                 tags=[],
                 path='multi.sql',
@@ -517,17 +481,13 @@ class MixedManifestTest(unittest.TestCase):
                 database='dbt',
                 schema='analytics',
                 alias='multi',
-                resource_type='model',
+                resource_type=NodeType.Model,
                 unique_id='model.root.multi',
                 fqn=['root', 'multi'],
-                empty=False,
                 package_name='root',
                 refs=[['events']],
                 sources=[],
-                depends_on={
-                    'nodes': ['model.root.nested', 'model.root.sibling'],
-                    'macros': []
-                },
+                depends_on=DependsOn(nodes=['model.root.nested', 'model.root.sibling']),
                 config=self.model_config,
                 tags=[],
                 path='multi.sql',
@@ -540,9 +500,9 @@ class MixedManifestTest(unittest.TestCase):
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
     def test__no_nodes(self):
         manifest = Manifest(nodes={}, macros={}, docs={},
-                            generated_at=timestring(), disabled=[])
+                            generated_at=datetime.utcnow(), disabled=[])
         self.assertEqual(
-            manifest.serialize(),
+            manifest.writable_manifest().to_dict(),
             {
                 'nodes': {},
                 'macros': {},
@@ -550,11 +510,7 @@ class MixedManifestTest(unittest.TestCase):
                 'child_map': {},
                 'generated_at': '2018-02-14T09:15:13Z',
                 'docs': {},
-                'metadata': {
-                    'project_id': None,
-                    'user_id': None,
-                    'send_anonymous_usage_stats': None,
-                },
+                'metadata': {},
                 'disabled': [],
             }
         )
@@ -563,8 +519,8 @@ class MixedManifestTest(unittest.TestCase):
     def test__nested_nodes(self):
         nodes = copy.copy(self.nested_nodes)
         manifest = Manifest(nodes=nodes, macros={}, docs={},
-                            generated_at=timestring(), disabled=[])
-        serialized = manifest.serialize()
+                            generated_at=datetime.utcnow(), disabled=[])
+        serialized = manifest.writable_manifest().to_dict()
         self.assertEqual(serialized['generated_at'], '2018-02-14T09:15:13Z')
         self.assertEqual(serialized['disabled'], [])
         parent_map = serialized['parent_map']
@@ -626,19 +582,17 @@ class MixedManifestTest(unittest.TestCase):
     def test__to_flat_graph(self):
         nodes = copy.copy(self.nested_nodes)
         manifest = Manifest(nodes=nodes, macros={}, docs={},
-                            generated_at=timestring(), disabled=[])
+                            generated_at=datetime.utcnow(), disabled=[])
         flat_graph = manifest.to_flat_graph()
         flat_nodes = flat_graph['nodes']
         self.assertEqual(set(flat_graph), set(['nodes', 'macros']))
         self.assertEqual(flat_graph['macros'], {})
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
-        parsed_keys = set(ParsedNode.SCHEMA['required'])
-        compiled_keys = set(CompiledNode.SCHEMA['required'])
         compiled_count = 0
         for node in flat_nodes.values():
             if node.get('compiled'):
-                self.assertEqual(set(node), compiled_keys)
+                self.assertEqual(frozenset(node), REQUIRED_COMPILED_NODE_KEYS)
                 compiled_count += 1
             else:
-                self.assertEqual(set(node), parsed_keys)
+                self.assertEqual(frozenset(node), REQUIRED_PARSED_NODE_KEYS)
         self.assertEqual(compiled_count, 2)

@@ -259,6 +259,6 @@ class Linker:
 def _updated_graph(graph, manifest):
     graph = graph.copy()
     for node_id in graph.nodes():
-        data = manifest.nodes[node_id].serialize()
+        data = manifest.nodes[node_id].to_dict()
         graph.add_node(node_id, **data)
     return graph

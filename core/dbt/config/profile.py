@@ -1,24 +1,23 @@
 import os
 import pprint
 
+from hologram import ValidationError
+
 from dbt.adapters.factory import load_plugin
 from dbt.clients.system import load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
-from dbt.contracts.project import ProfileConfig
+from dbt.contracts.project import ProfileConfig, UserConfig
 from dbt.exceptions import DbtProfileError
 from dbt.exceptions import DbtProjectError
 from dbt.exceptions import ValidationException
 from dbt.exceptions import RuntimeException
+from dbt.exceptions import validator_error_message
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import parse_cli_vars
-from dbt import tracking
-from dbt.ui import printer
 
 from .renderer import ConfigRenderer
 
 DEFAULT_THREADS = 1
-DEFAULT_SEND_ANONYMOUS_USAGE_STATS = True
-DEFAULT_USE_COLORS = True
 DEFAULT_PROFILES_DIR = os.path.join(os.path.expanduser('~'), '.dbt')
 PROFILES_DIR = os.path.expanduser(
     os.environ.get('DBT_PROFILES_DIR', DEFAULT_PROFILES_DIR)
@@ -55,59 +54,20 @@ def read_profile(profiles_dir):
             return load_yaml_text(contents)
         except ValidationException as e:
             msg = INVALID_PROFILE_MESSAGE.format(error_string=e)
-            raise ValidationException(msg)
+            raise ValidationException(msg) from e
 
     return {}
 
 
-class UserConfig:
-    def __init__(self, send_anonymous_usage_stats, use_colors, printer_width):
-        self.send_anonymous_usage_stats = send_anonymous_usage_stats
-        self.use_colors = use_colors
-        self.printer_width = printer_width
-
-    @classmethod
-    def from_dict(cls, cfg=None):
-        if cfg is None:
-            cfg = {}
-        send_anonymous_usage_stats = cfg.get(
-            'send_anonymous_usage_stats',
-            DEFAULT_SEND_ANONYMOUS_USAGE_STATS
-        )
-        use_colors = cfg.get(
-            'use_colors',
-            DEFAULT_USE_COLORS
-        )
-        printer_width = cfg.get(
-            'printer_width'
-        )
-        return cls(send_anonymous_usage_stats, use_colors, printer_width)
-
-    def to_dict(self):
-        return {
-            'send_anonymous_usage_stats': self.send_anonymous_usage_stats,
-            'use_colors': self.use_colors,
-        }
-
-    @classmethod
-    def from_directory(cls, directory):
+def read_user_config(directory):
+    try:
         user_cfg = None
         profile = read_profile(directory)
         if profile:
             user_cfg = profile.get('config', {})
-        return cls.from_dict(user_cfg)
-
-    def set_values(self, cookie_dir):
-        if self.send_anonymous_usage_stats:
-            tracking.initialize_tracking(cookie_dir)
-        else:
-            tracking.do_not_track()
-
-        if self.use_colors:
-            printer.use_colors()
-
-        if self.printer_width:
-            printer.printer_width(self.printer_width)
+        return UserConfig.from_dict(user_cfg)
+    except (RuntimeException, ValidationError):
+        return UserConfig()
 
 
 class Profile:
@@ -135,10 +95,10 @@ class Profile:
             'target_name': self.target_name,
             'config': self.config.to_dict(),
             'threads': self.threads,
-            'credentials': self.credentials.incorporate(),
+            'credentials': self.credentials,
         }
         if serialize_credentials:
-            result['credentials'] = result['credentials'].serialize()
+            result['credentials'] = result['credentials'].to_dict()
         return result
 
     def __str__(self):
@@ -152,12 +112,14 @@ class Profile:
         return self.to_profile_info() == other.to_profile_info()
 
     def validate(self):
-        if self.credentials:
-            self.credentials.validate()
         try:
-            ProfileConfig(**self.to_profile_info(serialize_credentials=True))
-        except ValidationException as exc:
-            raise DbtProfileError(str(exc))
+            if self.credentials:
+                self.credentials.to_dict(validate=True)
+            ProfileConfig.from_dict(
+                self.to_profile_info(serialize_credentials=True)
+            )
+        except ValidationError as exc:
+            raise DbtProfileError(validator_error_message(exc)) from exc
 
     @staticmethod
     def _credentials_from_profile(profile, profile_name, target_name):
@@ -172,12 +134,14 @@ class Profile:
 
         try:
             cls = load_plugin(typename)
-            credentials = cls(**profile)
-        except RuntimeException as e:
+            credentials = cls.from_dict(profile)
+        except (RuntimeException, ValidationError) as e:
+            msg = str(e) if isinstance(e, RuntimeException) else e.message
             raise DbtProfileError(
                 'Credentials in profile "{}", target "{}" invalid: {}'
-                .format(profile_name, target_name, str(e))
-            )
+                .format(profile_name, target_name, msg)
+            ) from e
+
         return credentials
 
     @staticmethod
@@ -222,7 +186,10 @@ class Profile:
         :raises DbtProfileError: If the profile is invalid.
         :returns Profile: The new Profile object.
         """
+        if user_cfg is None:
+            user_cfg = {}
         config = UserConfig.from_dict(user_cfg)
+
         profile = cls(
             profile_name=profile_name,
             target_name=target_name,

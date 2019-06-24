@@ -2,6 +2,7 @@
 import dbt.exceptions
 import dbt.utils
 from dbt.node_types import NodeType
+from dbt.contracts.graph.parsed import ColumnInfo
 
 
 def docs(node, manifest, config, column_name=None):
@@ -112,54 +113,49 @@ class ParserUtils:
         reference to the dict that refers to the given column, creating it if
         it doesn't yet exist.
         """
-        if not hasattr(node, 'columns'):
-            node.set('columns', {})
+        # if not hasattr(node, 'columns'):
+        #     node.set('columns', {})
 
         if column_name in node.columns:
             column = node.columns[column_name]
         else:
-            column = {'name': column_name, 'description': ''}
+            node.columns[column_name] = ColumnInfo(name=column_name)
             node.columns[column_name] = column
 
         return column
 
     @classmethod
     def process_docs_for_node(cls, manifest, current_project, node):
-        for docref in node.get('docrefs', []):
-            column_name = docref.get('column_name')
+        for docref in node.docrefs:
+            column_name = docref.column_name
+
             if column_name is None:
-                description = node.get('description', '')
+                obj = node
             else:
-                column = cls._get_node_column(node, column_name)
-                description = column.get('description', '')
+                obj = cls._get_node_column(node, column_name)
+
             context = {
                 'doc': docs(node, manifest, current_project, column_name),
             }
 
-            # At this point, target_doc is a ParsedDocumentation, and we
-            # know that our documentation string has a 'docs("...")'
-            # pointing at it. We want to render it.
-            description = dbt.clients.jinja.get_rendered(description,
-                                                         context)
-            # now put it back.
-            if column_name is None:
-                node.set('description', description)
-            else:
-                column['description'] = description
+            raw = obj.description or ''
+            # At this point, we know that our documentation string has a
+            # 'docs("...")' pointing at it. We want to render it.
+            obj.description = dbt.clients.jinja.get_rendered(raw, context)
 
     @classmethod
     def process_docs_for_source(cls, manifest, current_project, source):
         context = {
             'doc': docs(source, manifest, current_project),
         }
-        table_description = source.get('description', '')
-        source_description = source.get('source_description', '')
+        table_description = source.description
+        source_description = source.source_description
         table_description = dbt.clients.jinja.get_rendered(table_description,
                                                            context)
         source_description = dbt.clients.jinja.get_rendered(source_description,
                                                             context)
-        source.set('description', table_description)
-        source.set('source_description', source_description)
+        source.description = table_description
+        source.source_description = source_description
 
     @classmethod
     def process_docs(cls, manifest, current_project):
@@ -188,12 +184,12 @@ class ParserUtils:
                 target_model_name,
                 target_model_package,
                 current_project,
-                node.get('package_name'))
+                node.package_name)
 
             if target_model is None or target_model is cls.DISABLED:
                 # This may raise. Even if it doesn't, we don't want to add
                 # this node to the graph b/c there is no destination node
-                node.config['enabled'] = False
+                node.config.enabled = False
                 dbt.utils.invalid_ref_fail_unless_test(
                     node, target_model_name, target_model_package,
                     disabled=(target_model is cls.DISABLED)
@@ -201,10 +197,10 @@ class ParserUtils:
 
                 continue
 
-            target_model_id = target_model.get('unique_id')
+            target_model_id = target_model.unique_id
 
-            node.depends_on['nodes'].append(target_model_id)
-            manifest.nodes[node['unique_id']] = node
+            node.depends_on.nodes.append(target_model_id)
+            manifest.nodes[node.unique_id] = node
 
     @classmethod
     def process_refs(cls, manifest, current_project):
@@ -221,19 +217,19 @@ class ParserUtils:
                 source_name,
                 table_name,
                 current_project,
-                node.get('package_name'))
+                node.package_name)
 
             if target_source is None:
                 # this folows the same pattern as refs
-                node.config['enabled'] = False
+                node.config.enabled = False
                 dbt.utils.invalid_source_fail_unless_test(
                     node,
                     source_name,
                     table_name)
                 continue
             target_source_id = target_source.unique_id
-            node.depends_on['nodes'].append(target_source_id)
-            manifest.nodes[node['unique_id']] = node
+            node.depends_on.nodes.append(target_source_id)
+            manifest.nodes[node.unique_id] = node
 
     @classmethod
     def process_sources(cls, manifest, current_project):

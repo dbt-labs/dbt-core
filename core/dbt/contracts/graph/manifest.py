@@ -1,144 +1,30 @@
-from dbt.api import APIObject
-from dbt.contracts.graph.parsed import PARSED_NODE_CONTRACT, \
-    PARSED_MACRO_CONTRACT, PARSED_DOCUMENTATION_CONTRACT, \
-    PARSED_SOURCE_DEFINITION_CONTRACT
-from dbt.contracts.graph.compiled import COMPILED_NODE_CONTRACT, CompiledNode
+from dbt.contracts.graph.parsed import ParsedNode, ParsedMacro, \
+    ParsedDocumentation
+from dbt.contracts.graph.compiled import CompileResultNode
+from dbt.contracts.util import Writable, Replaceable
+from dbt.config import Project
 from dbt.exceptions import raise_duplicate_resource_name
 from dbt.node_types import NodeType
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt import tracking
 import dbt.utils
 
-# We allow either parsed or compiled nodes, or parsed sources, as some
-# 'compile()' calls in the runner actually just return the original parsed
-# node they were given.
-COMPILE_RESULT_NODE_CONTRACT = {
-    'anyOf': [
-        PARSED_NODE_CONTRACT,
-        COMPILED_NODE_CONTRACT,
-        PARSED_SOURCE_DEFINITION_CONTRACT,
-    ]
-}
+from hologram import JsonSchemaMixin
+
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Dict, List, Optional
+from uuid import UUID
 
 
-COMPILE_RESULT_NODES_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': (
-        'A collection of the parsed nodes, stored by their unique IDs.'
-    ),
-    'patternProperties': {
-        '.*': COMPILE_RESULT_NODE_CONTRACT
-    },
-}
+NodeEdgeMap = Dict[str, List[str]]
 
 
-PARSED_MACROS_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': (
-        'A collection of the parsed macros, stored by their unique IDs.'
-    ),
-    'patternProperties': {
-        '.*': PARSED_MACRO_CONTRACT
-    },
-}
-
-
-PARSED_DOCUMENTATIONS_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': (
-        'A collection of the parsed docs, stored by their uniqe IDs.'
-    ),
-    'patternProperties': {
-        '.*': PARSED_DOCUMENTATION_CONTRACT,
-    },
-}
-
-
-NODE_EDGE_MAP = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': 'A map of node relationships',
-    'patternProperties': {
-        '.*': {
-            'type': 'array',
-            'items': {
-                'type': 'string',
-                'description': 'A node name',
-            }
-        }
-    }
-}
-
-
-PARSED_MANIFEST_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'description': (
-        'The full parsed manifest of the graph, with both the required nodes'
-        ' and required macros.'
-    ),
-    'properties': {
-        'nodes': COMPILE_RESULT_NODES_CONTRACT,
-        'macros': PARSED_MACROS_CONTRACT,
-        'docs': PARSED_DOCUMENTATIONS_CONTRACT,
-        'disabled': {
-            'type': 'array',
-            'items': PARSED_NODE_CONTRACT,
-            'description': 'An array of disabled nodes',
-        },
-        'generated_at': {
-            'type': 'string',
-            'format': 'date-time',
-            'description': (
-                'The time at which the manifest was generated'
-            ),
-        },
-        'parent_map': NODE_EDGE_MAP,
-        'child_map': NODE_EDGE_MAP,
-        'metadata': {
-            'type': 'object',
-            'additionalProperties': False,
-            'properties': {
-                'project_id': {
-                    'type': ('string', 'null'),
-                    'description': (
-                        'The anonymized ID of the project. Persists as long '
-                        'as the project name stays the same.'
-                    ),
-                    'pattern': '[0-9a-f]{32}',
-                },
-                'user_id': {
-                    'type': ('string', 'null'),
-                    'description': (
-                        'The user ID assigned by dbt. Persists per-user as '
-                        'long as the user cookie file remains in place.'
-                    ),
-                    'pattern': (
-                        '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-'
-                        '[0-9a-f]{12}'
-                    ),
-                },
-                'send_anonymous_usage_stats': {
-                    'type': ('boolean', 'null'),
-                    'description': (
-                        'Whether or not to send anonymized usage statistics.'
-                    ),
-                },
-            },
-            'required': [
-                'project_id', 'user_id', 'send_anonymous_usage_stats',
-            ],
-        },
-    },
-    'required': ['nodes', 'macros', 'docs', 'generated_at', 'metadata'],
-}
-
-
-class CompileResultNode(CompiledNode):
-    SCHEMA = COMPILE_RESULT_NODE_CONTRACT
+@dataclass
+class ManifestMetadata(JsonSchemaMixin, Replaceable):
+    project_id: Optional[str]
+    user_id: Optional[UUID]
+    send_anonymous_usage_stats: Optional[bool]
 
 
 def _sort_values(dct):
@@ -163,32 +49,39 @@ def build_edges(nodes):
     return _sort_values(forward_edges), _sort_values(backward_edges)
 
 
-class Manifest(APIObject):
-    SCHEMA = PARSED_MANIFEST_CONTRACT
+def _deepcopy(value):
+    return value.from_dict(value.to_dict())
+
+
+@dataclass(init=False)
+class Manifest:
     """The manifest for the full graph, after parsing and during compilation.
-    Nodes may be either ParsedNodes or CompiledNodes or a mix, depending upon
-    the current state of the compiler. Macros will always be ParsedMacros and
-    docs will always be ParsedDocumentations.
     """
-    def __init__(self, nodes, macros, docs, generated_at, disabled,
-                 config=None):
-        """The constructor. nodes and macros are dictionaries mapping unique
-        IDs to ParsedNode/CompiledNode and ParsedMacro objects, respectively.
-        docs is a dictionary mapping unique IDs to ParsedDocumentation objects.
-        generated_at is a text timestamp in RFC 3339 format.
-        disabled is a list of disabled FQNs (as strings).
-        """
-        metadata = self.get_metadata(config)
+    nodes: Dict[str, CompileResultNode]
+    macros: Dict[str, ParsedMacro]
+    docs: Dict[str, ParsedDocumentation]
+    generated_at: datetime
+    disabled: List[ParsedNode]
+    metadata: ManifestMetadata = field(init=False)
+
+    def __init__(
+        self,
+        nodes: Dict[str, CompileResultNode],
+        macros: Dict[str, ParsedMacro],
+        docs: Dict[str, ParsedDocumentation],
+        generated_at: datetime,
+        disabled: List[ParsedNode],
+        config: Optional[Project] = None
+    ) -> None:
+        self.metadata = self.get_metadata(config)
         self.nodes = nodes
         self.macros = macros
         self.docs = docs
         self.generated_at = generated_at
-        self.metadata = metadata
         self.disabled = disabled
-        super().__init__()
 
     @staticmethod
-    def get_metadata(config):
+    def get_metadata(config: Optional[Project]) -> ManifestMetadata:
         project_id = None
         user_id = None
         send_anonymous_usage_stats = None
@@ -200,11 +93,11 @@ class Manifest(APIObject):
             user_id = tracking.active_user.id
             send_anonymous_usage_stats = not tracking.active_user.do_not_track
 
-        return {
-            'project_id': project_id,
-            'user_id': user_id,
-            'send_anonymous_usage_stats': send_anonymous_usage_stats,
-        }
+        return ManifestMetadata(
+            project_id=project_id,
+            user_id=user_id,
+            send_anonymous_usage_stats=send_anonymous_usage_stats,
+        )
 
     def serialize(self):
         """Convert the parsed manifest to a nested dict structure that we can
@@ -213,14 +106,14 @@ class Manifest(APIObject):
         forward_edges, backward_edges = build_edges(self.nodes.values())
 
         return {
-            'nodes': {k: v.serialize() for k, v in self.nodes.items()},
-            'macros': {k: v.serialize() for k, v in self.macros.items()},
-            'docs': {k: v.serialize() for k, v in self.docs.items()},
+            'nodes': {k: v.to_dict() for k, v in self.nodes.items()},
+            'macros': {k: v.to_dict() for k, v in self.macros.items()},
+            'docs': {k: v.to_dict() for k, v in self.docs.items()},
             'parent_map': backward_edges,
             'child_map': forward_edges,
             'generated_at': self.generated_at,
             'metadata': self.metadata,
-            'disabled': [v.serialize() for v in self.disabled],
+            'disabled': [v.to_dict() for v in self.disabled],
         }
 
     def find_disabled_by_name(self, name, package=None):
@@ -344,7 +237,7 @@ class Manifest(APIObject):
             return self._model_matches_schema_and_table(schema, table, model)
 
         matching = list(self._filter_subgraph(self.nodes, predicate))
-        return [match.get('unique_id') for match in matching]
+        return [match.unique_id for match in matching]
 
     def add_nodes(self, new_nodes):
         """Add the given dict of new nodes to the manifest."""
@@ -391,7 +284,10 @@ class Manifest(APIObject):
         Ideally in the future we won't need to have this method.
         """
         return {
-            'nodes': {k: v.to_shallow_dict() for k, v in self.nodes.items()},
+            'nodes': {
+                k: v.to_dict(omit_none=False)
+                for k, v in self.nodes.items()
+            },
             'macros': self.macros,
         }
 
@@ -412,10 +308,61 @@ class Manifest(APIObject):
 
     def deepcopy(self, config=None):
         return Manifest(
-            nodes={k: v.incorporate() for k, v in self.nodes.items()},
-            macros={k: v.incorporate() for k, v in self.macros.items()},
-            docs={k: v.incorporate() for k, v in self.docs.items()},
+            nodes={k: _deepcopy(v) for k, v in self.nodes.items()},
+            macros={k: _deepcopy(v) for k, v in self.macros.items()},
+            docs={k: _deepcopy(v) for k, v in self.docs.items()},
             generated_at=self.generated_at,
-            disabled=[n.incorporate() for n in self.disabled],
+            disabled=[_deepcopy(n) for n in self.disabled],
             config=config
         )
+
+    def writable_manifest(self):
+        forward_edges, backward_edges = build_edges(self.nodes.values())
+        return WritableManifest(
+            nodes=self.nodes,
+            macros=self.macros,
+            docs=self.docs,
+            generated_at=self.generated_at,
+            metadata=self.metadata,
+            disabled=self.disabled,
+            child_map=forward_edges,
+            parent_map=backward_edges
+        )
+
+    @classmethod
+    def from_writable_manifest(cls, writable):
+        self = cls(
+            nodes=writable.nodes,
+            macros=writable.macros,
+            docs=writable.docs,
+            generated_at=writable.generated_at,
+            metadata=writable.metadata,
+            disabled=writable.disabled,
+        )
+        self.metadata = writable.metadata
+        return self
+
+    @classmethod
+    def from_dict(cls, data, validate=True):
+        writable = WritableManifest.from_dict(data=data, validate=validate)
+        return cls.from_writable_manifest(writable)
+
+    def to_dict(self, omit_none=True, validate=False):
+        return self.writable_manifest().to_dict(
+            omit_none=omit_none, validate=validate
+        )
+
+    def write(self, path):
+        self.writable_manifest().write(path)
+
+
+@dataclass
+class WritableManifest(JsonSchemaMixin, Writable):
+    nodes: Dict[str, CompileResultNode]
+    macros: Dict[str, ParsedMacro]
+    docs: Dict[str, ParsedDocumentation]
+    disabled: Optional[List[ParsedNode]]
+    generated_at: datetime
+    parent_map: Optional[NodeEdgeMap]
+    child_map: Optional[NodeEdgeMap]
+    metadata: ManifestMetadata

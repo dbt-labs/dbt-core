@@ -41,8 +41,6 @@ class SeedParser(MacrosKnownParser):
            that maps unique ids onto ParsedNodes"""
 
         extension = "[!.#~]*.csv"
-        if dbt.flags.STRICT_MODE:
-            dbt.contracts.project.ProjectList(**self.all_projects)
 
         file_matches = dbt.clients.system.find_matching(
             root_dir,

@@ -124,6 +124,7 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
         try:
             self.node_results.append(runner.safe_run(self.manifest))
         except Exception as exc:
+            rpc_logger.debug('Got exception {}'.format(exc), exc_info=True)
             self._raise_next_tick = exc
         finally:
             thread_done.set()
@@ -160,4 +161,4 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
             raise dbt.exceptions.RPCKilledException(signal.SIGINT)
 
         self._raise_set_error()
-        return self.node_results[0].serialize()
+        return self.node_results[0].to_dict()

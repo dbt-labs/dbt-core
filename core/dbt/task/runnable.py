@@ -2,6 +2,7 @@ import base64
 import os
 import time
 from abc import abstractmethod
+from datetime import datetime
 from multiprocessing.dummy import Pool as ThreadPool
 
 from dbt import rpc
@@ -9,7 +10,6 @@ from dbt.task.base import ConfiguredTask
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.compilation import compile_manifest
-from dbt.contracts.graph.manifest import CompileResultNode
 from dbt.contracts.results import ExecutionResult
 from dbt.loader import GraphLoader
 
@@ -174,7 +174,7 @@ class GraphRunnableTask(ManifestTask):
         if not is_ephemeral:
             self.node_results.append(result)
 
-        node = CompileResultNode(**result.node)
+        node = result.node
         node_id = node.unique_id
         self.manifest.nodes[node_id] = node
 
@@ -261,7 +261,7 @@ class GraphRunnableTask(ManifestTask):
         result = self.get_result(
             results=res,
             elapsed_time=elapsed,
-            generated_at=dbt.utils.timestring()
+            generated_at=datetime.utcnow()
         )
         return result
 
@@ -290,7 +290,7 @@ class GraphRunnableTask(ManifestTask):
         if results is None:
             return False
 
-        failures = [r for r in results if r.error or r.failed]
+        failures = [r for r in results if r.error or r.fail]
         return len(failures) == 0
 
     def get_model_schemas(self, selected_uids):
