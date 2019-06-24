@@ -324,12 +324,7 @@ class VersionRange:
 class UnboundedVersionSpecifier(VersionSpecifier):
     def __init__(self, *args, **kwargs):
         super().__init__(
-            matcher=Matchers.EXACT,
-            major=None,
-            minor=None,
-            patch=None,
-            prerelease=None,
-            build=None
+            matcher=Matchers.EXACT, major=None, minor=None, patch=None, prerelease=None, build=None
         )
 
     def __str__(self):
