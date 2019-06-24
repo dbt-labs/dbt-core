@@ -1,17 +1,16 @@
 ## dbt 0.14.0 - Wilt Chamberlain (Unreleased)
 
 ### Overview
-- Replace Archives with Snapshots
+- Replace Archives with Snapshots ([docs](https://docs.getdbt.com/v0.14/docs/snapshots), [migration guide](https://docs.getdbt.com/v0.14/docs/upgrading-to-014))
 - Add three new top-level commands:
-  - `dbt ls`
-  - `dbt run-operation`
-  - `dbt rpc`
-- Support the specification of severity levels for schema and data tests
+  - `dbt ls` ([docs](https://docs.getdbt.com/v0.14/reference#list))
+  - `dbt run-operation` ([docs](https://docs.getdbt.com/v0.14/reference#run-operation))
+  - `dbt rpc` ([docs](https://docs.getdbt.com/v0.14/reference#rpc))
+- Support the specification of severity levels for schema and data tests ([docs](https://docs.getdbt.com/v0.14/docs/testing#section-test-severity))
 - Many new quality of life improvements and bugfixes
 
 ### Breaking changes
 - Stub out adapter methods at parse-time to speed up parsing ([#1413](https://github.com/fishtown-analytics/dbt/pull/1413))
-- Made jinja's Undefined now strict at runtime ([#1416](https://github.com/fishtown-analytics/dbt/pull/1416), [#1489](https://github.com/fishtown-analytics/dbt/issues/1389))
 - Removed support for the `--non-destructive` flag ([#1419](https://github.com/fishtown-analytics/dbt/pull/1419), [#1415](https://github.com/fishtown-analytics/dbt/issues/1415))
 - Removed support for the `sql_where` config to incremental models ([#1408](https://github.com/fishtown-analytics/dbt/pull/1408), [#1351](https://github.com/fishtown-analytics/dbt/issues/1351))
 - Changed `expand_target_column_types` to take a Relation instead of a string ([#1478](https://github.com/fishtown-analytics/dbt/pull/1478))
@@ -19,32 +18,32 @@
   - Normalized meta-column names in Snapshot tables ([#1361](https://github.com/fishtown-analytics/dbt/pull/1361), [#251](https://github.com/fishtown-analytics/dbt/issues/251))
 
 ### Features
-- Add `run-operation` command which invokes macros directly from the CLI ([#1328](https://github.com/fishtown-analytics/dbt/pull/1328))
-- Add a `dbt ls` command which lists resources in your project ([#1436](https://github.com/fishtown-analytics/dbt/pull/1436), [#467](https://github.com/fishtown-analytics/dbt/issues/467))
-- Add Snapshots, an improvement over Archives ([#1361](https://github.com/fishtown-analytics/dbt/pull/1361), [#1175](https://github.com/fishtown-analytics/dbt/issues/1175))
+- Add `run-operation` command which invokes macros directly from the CLI ([#1328](https://github.com/fishtown-analytics/dbt/pull/1328)) ([docs](https://docs.getdbt.com/v0.14/reference#run-operation))
+- Add a `dbt ls` command which lists resources in your project ([#1436](https://github.com/fishtown-analytics/dbt/pull/1436), [#467](https://github.com/fishtown-analytics/dbt/issues/467)) ([docs](https://docs.getdbt.com/v0.14/reference#list))
+- Add Snapshots, an improvement over Archives ([#1361](https://github.com/fishtown-analytics/dbt/pull/1361), [#1175](https://github.com/fishtown-analytics/dbt/issues/1175)) ([docs](https://docs.getdbt.com/v0.14/docs/snapshots))
   - Add the 'check' snapshot strategy ([#1361](https://github.com/fishtown-analytics/dbt/pull/1361), [#706](https://github.com/fishtown-analytics/dbt/issues/706))
   - Support Snapshots across logical databases ([#1455](https://github.com/fishtown-analytics/dbt/issues/1455))
   - Implement Snapshots using a merge statement where supported ([#1478](https://github.com/fishtown-analytics/dbt/pull/1478))
   - Support Snapshot selection using `--select` ([#1520](https://github.com/fishtown-analytics/dbt/pull/1520), [#1512](https://github.com/fishtown-analytics/dbt/issues/1512))
-- Add an RPC server via `dbt rpc` ([#1301](https://github.com/fishtown-analytics/dbt/pull/1301), [#1274](https://github.com/fishtown-analytics/dbt/issues/1274))
+- Add an RPC server via `dbt rpc` ([#1301](https://github.com/fishtown-analytics/dbt/pull/1301), [#1274](https://github.com/fishtown-analytics/dbt/issues/1274)) ([docs](https://docs.getdbt.com/v0.14/reference#rpc))
   - Add `ps` and `kill` commands to the rpc server ([#1380](https://github.com/fishtown-analytics/dbt/pull/1380/), [#1369](https://github.com/fishtown-analytics/dbt/issues/1369), [#1370](https://github.com/fishtown-analytics/dbt/issues/1370))
   - Add support for ephemeral nodes to the rpc server ([#1373](https://github.com/fishtown-analytics/dbt/pull/1373), [#1368](https://github.com/fishtown-analytics/dbt/issues/1368))
   - Add support for inline macros to the rpc server ([#1375](https://github.com/fishtown-analytics/dbt/pull/1375), [#1372](https://github.com/fishtown-analytics/dbt/issues/1372), [#1348](https://github.com/fishtown-analytics/dbt/pull/1348))
   - Improve error handling in the rpc server ([#1341](https://github.com/fishtown-analytics/dbt/pull/1341), [#1309](https://github.com/fishtown-analytics/dbt/issues/1309), [#1310](https://github.com/fishtown-analytics/dbt/issues/1310))
-- Made printer width configurable ([#1026](https://github.com/fishtown-analytics/dbt/issues/1026), [#1247](https://github.com/fishtown-analytics/dbt/pull/1247))
+- Made printer width configurable ([#1026](https://github.com/fishtown-analytics/dbt/issues/1026), [#1247](https://github.com/fishtown-analytics/dbt/pull/1247)) ([docs](https://docs.getdbt.com/v0.14/docs/configure-your-profile#section-additional-profile-configurations))
 - Retry package downloads from the hub.getdbt.com ([#1451](https://github.com/fishtown-analytics/dbt/issues/1451), [#1491](https://github.com/fishtown-analytics/dbt/pull/1491))
-- Add a test "severity" level, presented as a keyword argument to schema tests ([#1410](https://github.com/fishtown-analytics/dbt/pull/1410), [#1005](https://github.com/fishtown-analytics/dbt/issues/1005))
-- Add a `generate_alias_name` macro to configure alias names dynamically ([#1363](https://github.com/fishtown-analytics/dbt/pull/1363))
-- Add a `node` argument to `generate_schema_name` to configure schema names dynamically ([#1483](https://github.com/fishtown-analytics/dbt/pull/1483), [#1463](https://github.com/fishtown-analytics/dbt/issues/1463))
+- Add a test "severity" level, presented as a keyword argument to schema tests ([#1410](https://github.com/fishtown-analytics/dbt/pull/1410), [#1005](https://github.com/fishtown-analytics/dbt/issues/1005)) ([docs](https://docs.getdbt.com/v0.14/docs/testing#section-test-severity))
+- Add a `generate_alias_name` macro to configure alias names dynamically ([#1363](https://github.com/fishtown-analytics/dbt/pull/1363)) ([docs](https://docs.getdbt.com/v0.14/docs/using-custom-aliases#section-generate_alias_name))
+- Add a `node` argument to `generate_schema_name` to configure schema names dynamically ([#1483](https://github.com/fishtown-analytics/dbt/pull/1483), [#1463](https://github.com/fishtown-analytics/dbt/issues/1463)) ([docs](https://docs.getdbt.com/v0.14/docs/using-custom-schemas#section-generate_schema_name-arguments))
 - Use `create or replace` on Snowflake to rebuild tables and views atomically ([#1101](https://github.com/fishtown-analytics/dbt/issues/1101), [#1409](https://github.com/fishtown-analytics/dbt/pull/1409))
-- Use `merge` statement for incremental models on Snowflake ([#1414](https://github.com/fishtown-analytics/dbt/issues/1414), [#1307](https://github.com/fishtown-analytics/dbt/pull/1307), [#1409](https://github.com/fishtown-analytics/dbt/pull/1409)) 
+- Use `merge` statement for incremental models on Snowflake ([#1414](https://github.com/fishtown-analytics/dbt/issues/1414), [#1307](https://github.com/fishtown-analytics/dbt/pull/1307), [#1409](https://github.com/fishtown-analytics/dbt/pull/1409)) ([docs](https://docs.getdbt.com/v0.14/docs/snowflake-configs#section-merge-behavior-incremental-models-))
 - Add support seed CSV files that start with a UTF-8 Byte Order Mark (BOM) ([#1452](https://github.com/fishtown-analytics/dbt/pull/1452), [#1177](https://github.com/fishtown-analytics/dbt/issues/1177))
 - Add a warning when git packages are not pinned to a version ([#1453](https://github.com/fishtown-analytics/dbt/pull/1453), [#1446](https://github.com/fishtown-analytics/dbt/issues/1446))
 - Add logging for `on-run-start` and `on-run-end hooks` to console output ([#1440](https://github.com/fishtown-analytics/dbt/pull/1440), [#696](https://github.com/fishtown-analytics/dbt/issues/696))
 - Add modules and tracking information to the rendering context for configuration files ([#1441](https://github.com/fishtown-analytics/dbt/pull/1441), [#1320](https://github.com/fishtown-analytics/dbt/issues/1320))
 - Add support for `null` vars, and distinguish `null` vars from unset vars ([#1426](https://github.com/fishtown-analytics/dbt/pull/1426), [#608](https://github.com/fishtown-analytics/dbt/issues/608))
-- Add support for the `search_path` configuration in Postgres/Redshift profiles ([#1477](https://github.com/fishtown-analytics/dbt/issues/1477), [#1476](https://github.com/fishtown-analytics/dbt/pull/1476))
-- Add support for persisting documentation as `descriptions` for tables and views on BigQuery ([#1031](https://github.com/fishtown-analytics/dbt/issues/1031), [#1285](https://github.com/fishtown-analytics/dbt/pull/1285))
+- Add support for the `search_path` configuration in Postgres/Redshift profiles ([#1477](https://github.com/fishtown-analytics/dbt/issues/1477), [#1476](https://github.com/fishtown-analytics/dbt/pull/1476)) ([docs (postgres)](https://docs.getdbt.com/v0.14/docs/profile-postgres), [docs (redshift)](https://docs.getdbt.com/v0.14/docs/profile-redshift))
+- Add support for persisting documentation as `descriptions` for tables and views on BigQuery ([#1031](https://github.com/fishtown-analytics/dbt/issues/1031), [#1285](https://github.com/fishtown-analytics/dbt/pull/1285)) ([docs](https://docs.getdbt.com/v0.14/docs/bigquery-configs#section-persisting-model-descriptions))
 - Add a `--project-dir` path which will invoke dbt in the specified directory ([#1549](https://github.com/fishtown-analytics/dbt/pull/1549), [#1544](https://github.com/fishtown-analytics/dbt/issues/1544))
 
 ### dbt docs Changes
