@@ -554,11 +554,7 @@ def doc_target_not_found(
         target_package_string = "in package '{}' ".format(target_doc_package)
 
     msg = ("Documentation for '{}' depends on doc '{}' {} which was not found").format(
-        "Documentation for '{}' depends on doc '{}' {} which was not found"
-    ).format(
-        model.unique_id,
-        target_doc_name,
-        target_package_string
+        model.unique_id, target_doc_name, target_package_string
     )
     raise_compiler_error(msg, model)
 
