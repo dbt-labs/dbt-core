@@ -420,11 +420,7 @@ class GraphRunnableTask(ManifestTask):
         finally:
             adapter.cleanup_connections()
 
-        result = self.get_result(
-            results=res,
-            elapsed_time=elapsed,
-            generated_at=datetime.utcnow()
-        )
+        result = self.get_result(results=res, elapsed_time=elapsed, generated_at=datetime.utcnow())
         return result
 
     def write_result(self, result):
