@@ -77,10 +77,7 @@ class RuntimeException(RuntimeError, Exception):
             # out the path we know at least. This indicates an error during
             # block parsing.
             return "{}".format(node.path.original_file_path)
-        return "{} {} ({})".format(
-            node.resource_type,
-            node.name,
-            node.original_file_path)
+        return "{} {} ({})".format(node.resource_type, node.name, node.original_file_path)
 
     def process_stack(self):
         lines = []
