@@ -273,7 +273,7 @@ class SourceFreshnessResult(NodeResult):
 
 
 class FreshnessErrorEnum(StrEnum):
-    runtime_error = 'runtime error'
+    runtime_error = "runtime error"
 
 
 @dataclass

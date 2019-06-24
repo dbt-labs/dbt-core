@@ -36,10 +36,10 @@ class AdapterResponse(dbtClassMixin):
 
 
 class ConnectionState(StrEnum):
-    INIT = 'init'
-    OPEN = 'open'
-    CLOSED = 'closed'
-    FAIL = 'fail'
+    INIT = "init"
+    OPEN = "open"
+    CLOSED = "closed"
+    FAIL = "fail"
 
 
 @dataclass(init=False)

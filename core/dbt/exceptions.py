@@ -18,7 +18,7 @@ def validator_error_message(exc):
     if not isinstance(exc, dbt.dataclass_schema.ValidationError):
         return str(exc)
     path = "[%s]" % "][".join(map(repr, exc.relative_path))
-    return 'at path {}: {}'.format(path, exc.message)
+    return "at path {}: {}".format(path, exc.message)
 
 
 class Exception(builtins.Exception):
@@ -68,12 +68,9 @@ class RuntimeException(RuntimeError, Exception):
     def node_to_string(self, node):
         if node is None:
             return "<Unknown>"
-        if not hasattr(node, 'name'):
+        if not hasattr(node, "name"):
             # we probably failed to parse a block, so we can't know the name
-            return '{} ({})'.format(
-                node.resource_type,
-                node.original_file_path
-            )
+            return "{} ({})".format(node.resource_type, node.original_file_path)
 
         if hasattr(node, 'contents'):
             # handle FileBlocks. They aren't really nodes but we want to render
@@ -131,8 +128,8 @@ class RuntimeException(RuntimeError, Exception):
             return result
 
         result.update({
-            'raw_sql': self.node.raw_sql,
-            # the node isn't always compiled, but if it is, include that!
+            {
+                "raw_sql": self.node.raw_sql,
             'compiled_sql': getattr(self.node, 'compiled_sql', None),
         })
         return result
@@ -215,7 +212,7 @@ class DatabaseException(RuntimeException):
     def process_stack(self):
         lines = []
 
-        if hasattr(self.node, 'build_path') and self.node.build_path:
+        if hasattr(self.node, "build_path") and self.node.build_path:
             lines.append("compiled SQL at {}".format(self.node.build_path))
 
         return lines + RuntimeException.process_stack(self)
@@ -588,7 +585,7 @@ def _get_target_failure_msg(
 
     source_path_string = ''
     if include_path:
-        source_path_string = ' ({})'.format(model.original_file_path)
+        source_path_string = " ({})".format(model.original_file_path)
 
     return "{} '{}'{} depends on a {} named '{}' {}which {}".format(
         model.resource_type.title(),
@@ -663,7 +660,7 @@ def source_target_not_found(
 def dependency_not_found(model, target_model_name):
     raise_compiler_error(
         "'{}' depends on '{}' which is not in the graph!"
-        .format(model.unique_id, target_model_name),
+            model.unique_id, target_model_name
         model)
 
 
@@ -671,7 +668,9 @@ def macro_not_found(model, target_macro_id):
     raise_compiler_error(
         model,
         "'{}' references macro '{}' which is not defined!"
-        .format(model.unique_id, target_macro_id))
+            model.unique_id, target_macro_id
+        ),
+    )
 
 
 def macro_invalid_dispatch_arg(macro_name) -> NoReturn:
@@ -724,7 +723,7 @@ def raise_cache_inconsistent(message):
 def missing_config(model, name):
     raise_compiler_error(
         "Model '{}' does not define a required config parameter '{}'."
-        .format(model.unique_id, name),
+            model.unique_id, name
         model)
 
 
@@ -863,8 +862,12 @@ def raise_duplicate_resource_name(node_1, node_2):
         'these resources:\n- {} ({})\n- {} ({})'.format(
             duped_name,
             get_func,
-            node_1.unique_id, node_1.original_file_path,
-            node_2.unique_id, node_2.original_file_path))
+            node_1.unique_id,
+            node_1.original_file_path,
+            node_2.unique_id,
+            node_2.original_file_path,
+        )
+    )
 
 
 def raise_ambiguous_alias(node_1, node_2, duped_name=None):
@@ -877,8 +880,12 @@ def raise_ambiguous_alias(node_1, node_2, duped_name=None):
         'To fix this,\nchange the configuration of one of these resources:'
         '\n- {} ({})\n- {} ({})'.format(
             duped_name,
-            node_1.unique_id, node_1.original_file_path,
-            node_2.unique_id, node_2.original_file_path))
+            node_1.unique_id,
+            node_1.original_file_path,
+            node_2.unique_id,
+            node_2.original_file_path,
+        )
+    )
 
 
 def raise_ambiguous_catalog_match(unique_id, match_1, match_2):

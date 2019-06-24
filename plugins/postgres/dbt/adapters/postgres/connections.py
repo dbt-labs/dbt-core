@@ -92,7 +92,7 @@ class PostgresConnectionManager(SQLConnectionManager):
         # we don't want to pass 0 along to connect() as postgres will try to
         # call an invalid setsockopt() call (contrary to the docs).
         if credentials.keepalives_idle:
-            kwargs['keepalives_idle'] = credentials.keepalives_idle
+            kwargs["keepalives_idle"] = credentials.keepalives_idle
 
         # psycopg2 doesn't support search_path officially,
         # see https://github.com/psycopg/psycopg2/issues/465

@@ -13,11 +13,11 @@ from typing import Optional
 
 
 class Matchers(StrEnum):
-    GREATER_THAN = '>'
-    GREATER_THAN_OR_EQUAL = '>='
-    LESS_THAN = '<'
-    LESS_THAN_OR_EQUAL = '<='
-    EXACT = '='
+    GREATER_THAN = ">"
+    GREATER_THAN_OR_EQUAL = ">="
+    LESS_THAN = "<"
+    LESS_THAN_OR_EQUAL = "<="
+    EXACT = "="
 
 
 @dataclass

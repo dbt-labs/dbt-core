@@ -300,7 +300,7 @@ class RunTask(CompileTask):
         statement = compiled.compiled_sql
         hook_index = hook.index or num_hooks
         hook_obj = get_hook(statement, index=hook_index)
-        return hook_obj.sql or ''
+        return hook_obj.sql or ""
 
     def _hook_keyfunc(self, hook: ParsedHookNode) -> Tuple[str, Optional[int]]:
         package_name = hook.package_name

@@ -51,7 +51,7 @@ class ColumnInfo(
     Replaceable
 ):
     name: str
-    description: str = ''
+    description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
     data_type: Optional[str] = None
     quote: Optional[bool] = None
@@ -133,7 +133,7 @@ class ParsedNodeMixins(dbtClassMixin):
 
     @property
     def is_ephemeral(self):
-        return self.config.materialized == 'ephemeral'
+        return self.config.materialized == "ephemeral"
 
     @property
     def is_ephemeral_model(self):
@@ -202,7 +202,7 @@ class ParsedNodeDefaults(NodeInfoMixin, ParsedNodeMandatory):
     refs: List[List[str]] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
-    description: str = field(default='')
+    description: str = field(default="")
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
     docs: Docs = field(default_factory=Docs)
@@ -651,7 +651,7 @@ class ParsedSourceDefinition(
     loaded_at_field: Optional[str] = None
     freshness: Optional[FreshnessThreshold] = None
     external: Optional[ExternalTable] = None
-    description: str = ''
+    description: str = ""
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
     source_meta: Dict[str, Any] = field(default_factory=dict)

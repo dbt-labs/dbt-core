@@ -64,9 +64,9 @@ def get_model_name_or_none(model):
         name = model
     elif isinstance(model, dict):
         name = model.get('alias', model.get('name'))
-    elif hasattr(model, 'alias'):
+    elif hasattr(model, "alias"):
         name = model.alias
-    elif hasattr(model, 'name'):
+    elif hasattr(model, "name"):
         name = model.name
     else:
         name = str(model)
@@ -79,13 +79,13 @@ DOCS_PREFIX = 'dbt_docs__'
 
 def get_dbt_macro_name(name):
     if name is None:
-        raise dbt.exceptions.InternalException('Got None for a macro name!')
+        raise dbt.exceptions.InternalException("Got None for a macro name!")
     return f'{MACRO_PREFIX}{name}'
 
 
 def get_dbt_docs_name(name):
     if name is None:
-        raise dbt.exceptions.InternalException('Got None for a doc name!')
+        raise dbt.exceptions.InternalException("Got None for a doc name!")
     return f'{DOCS_PREFIX}{name}'
 
 
@@ -257,11 +257,11 @@ def md5(string):
 
 
 def get_hash(model):
-    return hashlib.md5(model.unique_id.encode('utf-8')).hexdigest()
+    return hashlib.md5(model.unique_id.encode("utf-8")).hexdigest()
 
 
 def get_hashed_contents(model):
-    return hashlib.md5(model.raw_sql.encode('utf-8')).hexdigest()
+    return hashlib.md5(model.raw_sql.encode("utf-8")).hexdigest()
 
 
 def flatten_nodes(dep_list):

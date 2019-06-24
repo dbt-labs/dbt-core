@@ -18,4 +18,4 @@ def get_hook_dict(source: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
     try:
         return json.loads(source)
     except ValueError:
-        return {'sql': source}
+        return {"sql": source}

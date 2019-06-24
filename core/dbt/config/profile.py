@@ -128,7 +128,7 @@ class Profile(HasCredentials):
             "target_name": self.target_name,
             'user_config': self.user_config,
             "threads": self.threads,
-            'credentials': self.credentials,
+            "credentials": self.credentials,
         }
         if serialize_credentials:
             result['user_config'] = self.user_config.to_dict(omit_none=True)
@@ -189,7 +189,8 @@ class Profile(HasCredentials):
             msg = str(e) if isinstance(e, RuntimeException) else e.message
             raise DbtProfileError(
                 'Credentials in profile "{}", target "{}" invalid: {}'.format(
-                .format(profile_name, target_name, msg)
+                    profile_name, target_name, msg
+                )
             ) from e
 
         return credentials

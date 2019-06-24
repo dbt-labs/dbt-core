@@ -11,11 +11,11 @@ class NodeType(StrEnum):
     Operation = 'operation'
     Seed = "seed"
     # TODO: rm?
-    RPCCall = 'rpc'
+    RPCCall = "rpc"
     SqlOperation = 'sql'
     Documentation = 'docs'
     Source = 'source'
-    Macro = 'macro'
+    Macro = "macro"
     Exposure = 'exposure'
     Metric = 'metric'
 

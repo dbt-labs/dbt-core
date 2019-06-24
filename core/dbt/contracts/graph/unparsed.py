@@ -85,7 +85,7 @@ class Docs(dbtClassMixin, Replaceable):
 class HasDocs(AdditionalPropertiesMixin, ExtensibleDbtClassMixin,
               Replaceable):
     name: str
-    description: str = ''
+    description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
     data_type: Optional[str] = None
     docs: Docs = field(default_factory=Docs)
@@ -159,12 +159,12 @@ class UnparsedMacroUpdate(HasConfig, HasDocs, HasYamlMetadata):
 
 
 class TimePeriod(StrEnum):
-    minute = 'minute'
-    hour = 'hour'
-    day = 'day'
+    minute = "minute"
+    hour = "hour"
+    day = "day"
 
     def plural(self) -> str:
-        return str(self) + 's'
+        return str(self) + "s"
 
 
 @dataclass
@@ -265,11 +265,11 @@ class UnparsedSourceTableDefinition(HasColumnTests, HasTests):
 @dataclass
 class UnparsedSourceDefinition(dbtClassMixin, Replaceable):
     name: str
-    description: str = ''
+    description: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
     database: Optional[str] = None
     schema: Optional[str] = None
-    loader: str = ''
+    loader: str = ""
     quoting: Quoting = field(default_factory=Quoting)
     freshness: Optional[FreshnessThreshold] = field(
         default_factory=FreshnessThreshold

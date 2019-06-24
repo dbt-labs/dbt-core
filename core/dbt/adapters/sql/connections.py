@@ -133,7 +133,8 @@ class SQLConnectionManager(BaseConnectionManager):
         if connection.transaction_open is True:
             raise dbt.exceptions.InternalException(
                 'Tried to begin a new transaction on connection "{}", but '
-                'it already had one open!'.format(connection.name))
+                "it already had one open!".format(connection.name)
+            )
 
         self.add_begin_query()
 

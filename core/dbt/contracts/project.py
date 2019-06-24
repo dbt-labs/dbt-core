@@ -117,8 +117,7 @@ class ProjectPackageMetadata:
 
     @classmethod
     def from_project(cls, project):
-        return cls(name=project.project_name,
-                   packages=project.packages.packages)
+        return cls(name=project.project_name, packages=project.packages.packages)
 
 
 @dataclass
@@ -255,8 +254,8 @@ class UserConfig(ExtensibleDbtClassMixin, Replaceable, UserConfigContract):
 
 @dataclass
 class ProfileConfig(HyphenatedDbtClassMixin, Replaceable):
-    profile_name: str = field(metadata={'preserve_underscore': True})
-    target_name: str = field(metadata={'preserve_underscore': True})
+    profile_name: str = field(metadata={"preserve_underscore": True})
+    target_name: str = field(metadata={"preserve_underscore": True})
     user_config: UserConfig = field(metadata={'preserve_underscore': True})
     threads: int
     # TODO: make this a dynamic union of some kind?
@@ -275,7 +274,7 @@ class ConfiguredQuoting(Quoting, Replaceable):
 class Configuration(Project, ProfileConfig):
     cli_vars: Dict[str, Any] = field(
         default_factory=dict,
-        metadata={'preserve_underscore': True},
+        metadata={"preserve_underscore": True},
     )
     quoting: Optional[ConfiguredQuoting] = None
 
