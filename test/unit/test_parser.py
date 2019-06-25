@@ -1707,7 +1707,6 @@ class ParserTest(BaseParserTest):
                         'original_file_path': 'events.sql',
                         'root_path': get_os_path('/usr/src/app'),
                         'raw_sql': 'does not matter',
-                        'agate_table': None,
                         'columns': {},
                         'description': '',
                     },
@@ -1733,7 +1732,6 @@ class ParserTest(BaseParserTest):
                         'original_file_path': 'events.sql',
                         'root_path': get_os_path('/usr/src/app'),
                         'raw_sql': 'does not matter',
-                        'agate_table': None,
                         'columns': {},
                         'description': '',
                     },
@@ -1759,7 +1757,6 @@ class ParserTest(BaseParserTest):
                         'original_file_path': 'multi.sql',
                         'root_path': get_os_path('/usr/src/app'),
                         'raw_sql': 'does not matter',
-                        'agate_table': None,
                         'columns': {},
                         'description': '',
                     }

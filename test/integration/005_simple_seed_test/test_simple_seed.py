@@ -161,8 +161,7 @@ class TestSeedParsing(DBTIntegrationTest):
         self.assertEqual(len(self.run_dbt(['run'])), 1)
 
         # make sure 'dbt seed' fails, otherwise our test is invalid!
-        with self.assertRaises(CompilationException):
-            self.run_dbt(['seed'])
+        self.run_dbt(['seed'], expect_pass=False)
 
 
 class TestSimpleSeedWithBOM(DBTIntegrationTest):

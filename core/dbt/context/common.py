@@ -9,6 +9,7 @@ from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 
 import dbt.clients.jinja
 import dbt.clients.agate_helper
+import dbt.exceptions
 import dbt.flags
 import dbt.tracking
 import dbt.writer
@@ -360,6 +361,15 @@ def generate_config_context(cli_vars):
     return _add_tracking(context)
 
 
+def _load_agate_table(path):
+    try:
+        table = dbt.clients.agate_helper.from_csv(path)
+    except ValueError as e:
+        dbt.exceptions.raise_compiler_error(str(e))
+    table.original_abspath = os.path.abspath(path)
+    return table
+
+
 def generate_base(model, model_dict, config, manifest, source_config,
                   provider, adapter=None):
     """Generate the common aspects of the config dict."""
@@ -399,6 +409,7 @@ def generate_base(model, model_dict, config, manifest, source_config,
         "flags": dbt.flags,
         # TODO: Do we have to leave this in?
         "graph": manifest.to_flat_graph(),
+        "load_agate_table": _load_agate_table,
         "log": log,
         "model": model_dict,
         "modules": get_context_modules(),
