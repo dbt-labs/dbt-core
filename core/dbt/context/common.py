@@ -361,13 +361,16 @@ def generate_config_context(cli_vars):
     return _add_tracking(context)
 
 
-def _load_agate_table(path):
-    try:
-        table = dbt.clients.agate_helper.from_csv(path)
-    except ValueError as e:
-        dbt.exceptions.raise_compiler_error(str(e))
-    table.original_abspath = os.path.abspath(path)
-    return table
+def _build_load_agate_table(model):
+    def load_agate_table():
+        path = model.original_file_path
+        try:
+            table = dbt.clients.agate_helper.from_csv(path)
+        except ValueError as e:
+            dbt.exceptions.raise_compiler_error(str(e))
+        table.original_abspath = os.path.abspath(path)
+        return table
+    return load_agate_table
 
 
 def generate_base(model, model_dict, config, manifest, source_config,
@@ -409,7 +412,7 @@ def generate_base(model, model_dict, config, manifest, source_config,
         "flags": dbt.flags,
         # TODO: Do we have to leave this in?
         "graph": manifest.to_flat_graph(),
-        "load_agate_table": _load_agate_table,
+        "load_agate_table": _build_load_agate_table(model),
         "log": log,
         "model": model_dict,
         "modules": get_context_modules(),
