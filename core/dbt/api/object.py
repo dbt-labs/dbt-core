@@ -30,9 +30,9 @@ class APIObject(Mapping):
         """
         Create and validate an instance. Note that if you override this, you
         will want to do so by modifying kwargs and only then calling
-        super(NewClass, self).__init__(**kwargs).
+        super().__init__(**kwargs).
         """
-        super(APIObject, self).__init__()
+        super().__init__()
         # note: deep_merge does a deep copy on its arguments.
         self._contents = deep_merge(self.DEFAULTS, kwargs)
         self.validate()

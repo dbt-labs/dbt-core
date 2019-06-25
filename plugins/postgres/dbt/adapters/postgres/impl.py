@@ -2,7 +2,6 @@ from dbt.adapters.base.meta import available
 from dbt.adapters.sql import SQLAdapter
 from dbt.adapters.postgres import PostgresConnectionManager
 from dbt.adapters.postgres import PostgresColumn
-import dbt.compat
 import dbt.exceptions
 
 
@@ -61,8 +60,7 @@ class PostgresAdapter(SQLAdapter):
 
     def _get_cache_schemas(self, manifest, exec_only=False):
         # postgres/redshift only allow one database (the main one)
-        superself = super(PostgresAdapter, self)
-        schemas = superself._get_cache_schemas(manifest, exec_only=exec_only)
+        schemas = super()._get_cache_schemas(manifest, exec_only=exec_only)
         try:
             return schemas.flatten()
         except dbt.exceptions.RuntimeException as exc:
@@ -84,5 +82,5 @@ class PostgresAdapter(SQLAdapter):
         self._link_cached_database_relations(schemas)
 
     def _relations_cache_for_schemas(self, manifest):
-        super(PostgresAdapter, self)._relations_cache_for_schemas(manifest)
+        super()._relations_cache_for_schemas(manifest)
         self._link_cached_relations(manifest)

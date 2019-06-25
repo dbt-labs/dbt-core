@@ -3,7 +3,6 @@ import shutil
 
 from dbt.adapters.factory import get_adapter
 from dbt.clients.system import write_json
-from dbt.compat import bigint
 from dbt.include.global_project import DOCS_INDEX_FILE_PATH
 import dbt.ui.printer
 import dbt.utils
@@ -116,7 +115,7 @@ def unflatten(columns):
                         "id": {
                             'type': 'integer',
                             'comment': None,
-                            'index': bigint(1),
+                            'index': 1,
                             'name': 'id'
                         }
                     }
@@ -156,7 +155,7 @@ def unflatten(columns):
 
         # the index should really never be that big so it's ok to end up
         # serializing this to JSON (2^53 is the max safe value there)
-        column['index'] = bigint(column['index'])
+        column['index'] = int(column['index'])
         table['columns'][column['name']] = column
     return structured
 
@@ -190,7 +189,7 @@ class GenerateTask(CompileTask):
     def run(self):
         compile_results = None
         if self.args.compile:
-            compile_results = super(GenerateTask, self).run()
+            compile_results = super().run()
             if any(r.error is not None for r in compile_results):
                 dbt.ui.printer.print_timestamped_line(
                     'compile failed, cannot generate docs'
@@ -236,4 +235,4 @@ class GenerateTask(CompileTask):
         if compile_results is None:
             return True
 
-        return super(GenerateTask, self).interpret_results(compile_results)
+        return super().interpret_results(compile_results)

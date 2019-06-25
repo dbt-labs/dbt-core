@@ -29,10 +29,8 @@ DBT_INVOCATION_ENV = 'DBT_INVOCATION_ENV'
 
 class TimeoutEmitter(Emitter):
     def __init__(self):
-        super(TimeoutEmitter, self).__init__(COLLECTOR_URL,
-                                             protocol=COLLECTOR_PROTOCOL,
-                                             buffer_size=1,
-                                             on_failure=self.handle_failure)
+        super().__init__(COLLECTOR_URL, protocol=COLLECTOR_PROTOCOL,
+                         buffer_size=1, on_failure=self.handle_failure)
 
     @staticmethod
     def handle_failure(num_ok, unsent):
@@ -60,7 +58,7 @@ tracker = Tracker(emitter, namespace="cf", app_id="dbt")
 active_user = None
 
 
-class User(object):
+class User:
 
     def __init__(self, cookie_dir):
         self.do_not_track = True

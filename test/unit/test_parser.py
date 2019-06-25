@@ -1,5 +1,5 @@
 import unittest
-import mock
+from unittest import mock
 
 import os
 import yaml
@@ -148,7 +148,7 @@ class SchemaParserTest(BaseParserTest):
     maxDiff = None
 
     def setUp(self):
-        super(SchemaParserTest, self).setUp()
+        super().setUp()
         self.maxDiff = None
 
 
@@ -932,7 +932,7 @@ class ParserTest(BaseParserTest):
             {})
 
     def setUp(self):
-        super(ParserTest, self).setUp()
+        super().setUp()
 
         self.macro_manifest = Manifest(macros={}, nodes={}, docs={},
                                        generated_at=timestring(), disabled=[])

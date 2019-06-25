@@ -29,7 +29,6 @@ from dbt.adapters.factory import reset_adapters
 
 import dbt.tracking
 import dbt.ui.printer
-import dbt.compat
 import dbt.deprecations
 import dbt.profiler
 
@@ -55,7 +54,7 @@ class DBTVersion(argparse.Action):
                  dest=argparse.SUPPRESS,
                  default=argparse.SUPPRESS,
                  help="show program's version number and exit"):
-        super(DBTVersion, self).__init__(
+        super().__init__(
             option_strings=option_strings,
             dest=dest,
             default=default,
@@ -70,7 +69,7 @@ class DBTVersion(argparse.Action):
 
 class DBTArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
-        super(DBTArgumentParser, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.register('action', 'dbtversion', DBTVersion)
 
 
@@ -81,13 +80,13 @@ def main(args=None):
     try:
         results, succeeded = handle_and_check(args)
         if succeeded:
-            exit_code = ExitCodes.Success
+            exit_code = ExitCodes.Success.value
         else:
-            exit_code = ExitCodes.ModelError
+            exit_code = ExitCodes.ModelError.value
 
     except KeyboardInterrupt:
         logger.info("ctrl-c")
-        exit_code = ExitCodes.UnhandledError
+        exit_code = ExitCodes.UnhandledError.value
 
     # This can be thrown by eg. argparse
     except SystemExit as e:
@@ -104,9 +103,7 @@ def main(args=None):
             # initialized (so there's no safe path to log to), log the stack
             # trace at error level.
             logger.error(traceback.format_exc())
-        exit_code = ExitCodes.UnhandledError
-
-    _python2_compatibility_message()
+        exit_code = ExitCodes.UnhandledError.value
 
     sys.exit(exit_code)
 
@@ -175,22 +172,6 @@ def track_run(task):
         raise
     finally:
         dbt.tracking.flush()
-
-
-_PYTHON_27_WARNING = '''
-Python 2.7 will reach the end of its life on January 1st, 2020.
-Please upgrade your Python as Python 2.7 won't be maintained after that date.
-A future version of dbt will drop support for Python 2.7.
-'''.strip()
-
-
-def _python2_compatibility_message():
-    if dbt.compat.WHICH_PYTHON != 2:
-        return
-
-    logger.critical(
-        dbt.ui.printer.red('DEPRECATION: ') + _PYTHON_27_WARNING
-    )
 
 
 def run_from_args(parsed):
@@ -582,7 +563,8 @@ def _build_list_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
         'list',
         parents=[base_subparser],
-        help='list models'
+        help='list models',
+        aliases=['ls']
     )
     sub.set_defaults(cls=ListTask, which='list')
     resource_values = list(ListTask.ALL_RESOURCE_VALUES) + ['default', 'all']
@@ -619,9 +601,6 @@ def _build_list_subparser(subparsers, base_subparser):
         metavar='SELECTOR',
         help="Specify the models to exclude."
     )
-    # in python 3.x you can use the 'aliases' kwarg, but in python 2.7 you get
-    # to do this
-    subparsers._name_parser_map['ls'] = sub
     return sub
 
 

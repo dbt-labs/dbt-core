@@ -2,7 +2,6 @@ import os
 import shutil
 import hashlib
 import tempfile
-import six
 import yaml
 
 import dbt.utils
@@ -12,7 +11,6 @@ import dbt.clients.git
 import dbt.clients.system
 import dbt.clients.registry as registry
 
-from dbt.compat import basestring
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.semver import VersionSpecifier, UnboundedVersionSpecifier
 from dbt.ui import printer
@@ -50,7 +48,7 @@ class Package(APIObject):
     SCHEMA = NotImplemented
 
     def __init__(self, *args, **kwargs):
-        super(Package, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._cached_metadata = None
 
     @property
@@ -69,7 +67,7 @@ class Package(APIObject):
     def version_to_list(cls, version):
         if version is None:
             return []
-        if not isinstance(version, (list, basestring)):
+        if not isinstance(version, (list, str)):
             dbt.exceptions.raise_dependency_error(
                 'version must be list or string, got {}'
                 .format(type(version)))
@@ -86,7 +84,7 @@ class Package(APIObject):
         except dbt.exceptions.VersionsNotCompatibleException as e:
             new_msg = ('Version error for package {}: {}'
                        .format(self.name, e))
-            six.raise_from(dbt.exceptions.DependencyException(new_msg), e)
+            raise dbt.exceptions.DependencyException(new_msg) from e
 
     def source_type(self):
         raise NotImplementedError()
@@ -123,7 +121,7 @@ class RegistryPackage(Package):
                 'package dependency {} is missing a "version" field'
                 .format(kwargs.get('package'))
             )
-        super(RegistryPackage, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._version = self._sanitize_version(self._contents['version'])
 
     @property
@@ -212,10 +210,14 @@ class RegistryPackageMetadata(PackageConfig):
     SCHEMA = REGISTRY_PACKAGE_METADATA_CONTRACT
 
 
-class ProjectPackageMetadata(object):
+class ProjectPackageMetadata:
     def __init__(self, project):
         self.name = project.project_name
         self.packages = project.packages.packages
+
+
+def md5sum(s: str):
+    return hashlib.md5(s.encode('latin-1')).hexdigest()
 
 
 class GitPackage(Package):
@@ -224,8 +226,9 @@ class GitPackage(Package):
     def __init__(self, *args, **kwargs):
         if 'warn_unpinned' in kwargs:
             kwargs['warn-unpinned'] = kwargs.pop('warn_unpinned')
-        super(GitPackage, self).__init__(*args, **kwargs)
-        self._checkout_name = hashlib.md5(six.b(self.git)).hexdigest()
+        super().__init__(*args, **kwargs)
+
+        self._checkout_name = md5sum(self.git)
         self.version = self._contents.get('revision')
 
     @property
@@ -400,24 +403,24 @@ def _parse_package(dict_):
 
 class PackageListing(AttrDict):
     def __contains__(self, package):
-        if isinstance(package, basestring):
-            return super(PackageListing, self).__contains__(package)
+        if isinstance(package, str):
+            return super().__contains__(package)
         elif isinstance(package, GitPackage):
             return package.name in self or package.other_name in self
         else:
             return package.name in self
 
     def __setitem__(self, key, value):
-        if isinstance(key, basestring):
-            super(PackageListing, self).__setitem__(key, value)
+        if isinstance(key, str):
+            super().__setitem__(key, value)
         elif isinstance(key, GitPackage) and key.other_name in self:
             self[key.other_name] = value
         else:
             self[key.name] = value
 
     def __getitem__(self, key):
-        if isinstance(key, basestring):
-            return super(PackageListing, self).__getitem__(key)
+        if isinstance(key, str):
+            return super().__getitem__(key)
         elif isinstance(key, GitPackage) and key.other_name in self:
             return self[key.other_name]
         else:
@@ -497,7 +500,7 @@ def _read_packages(project_yaml):
 
 class DepsTask(ProjectOnlyTask):
     def __init__(self, args, config=None):
-        super(DepsTask, self).__init__(args=args, config=config)
+        super().__init__(args=args, config=config)
         self._downloads_path = None
 
     @property

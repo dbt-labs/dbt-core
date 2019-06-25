@@ -208,8 +208,7 @@ class TestSimpleCopyQuotingIdentifierOn(BaseTestSimpleCopy):
 class BaseLowercasedSchemaTest(BaseTestSimpleCopy):
     def unique_schema(self):
         # bypass the forced uppercasing that unique_schema() does on snowflake
-        schema = super(BaseLowercasedSchemaTest, self).unique_schema()
-        return schema.lower()
+        return super().unique_schema().lower()
 
 
 class TestSnowflakeSimpleLowercasedSchemaCopy(BaseLowercasedSchemaTest):

@@ -1,12 +1,13 @@
-
+from enum import Enum
 import json
-from dbt.compat import to_string
 
 
-class ModelHookType:
+class ModelHookType(str, Enum):
     PreHook = 'pre-hook'
     PostHook = 'post-hook'
-    Both = [PreHook, PostHook]
+
+    def __str__(self):
+        return self._value_
 
 
 def _parse_hook_to_dict(hook_string):
@@ -25,7 +26,7 @@ def get_hook_dict(hook, index):
     if isinstance(hook, dict):
         hook_dict = hook
     else:
-        hook_dict = _parse_hook_to_dict(to_string(hook))
+        hook_dict = _parse_hook_to_dict(hook)
 
     hook_dict['index'] = index
     return hook_dict

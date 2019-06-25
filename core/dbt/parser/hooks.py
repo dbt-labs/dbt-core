@@ -64,7 +64,7 @@ class HookParser(BaseSqlParser):
             dbt.contracts.project.ProjectList(**self.all_projects)
 
         hook_nodes = {}
-        for hook_type in RunHookType.Both:
+        for hook_type in RunHookType:
             project_hooks = self.load_and_parse_run_hook_type(
                 hook_type,
             )

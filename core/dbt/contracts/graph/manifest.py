@@ -185,7 +185,7 @@ class Manifest(APIObject):
         self.generated_at = generated_at
         self.metadata = metadata
         self.disabled = disabled
-        super(Manifest, self).__init__()
+        super().__init__()
 
     @staticmethod
     def get_metadata(config):

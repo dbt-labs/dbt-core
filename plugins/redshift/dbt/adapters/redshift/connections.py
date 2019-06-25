@@ -70,7 +70,7 @@ class RedshiftCredentials(PostgresCredentials):
 
     def __init__(self, *args, **kwargs):
         kwargs.setdefault('method', 'database')
-        super(RedshiftCredentials, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     @property
     def type(self):

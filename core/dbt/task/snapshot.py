@@ -6,7 +6,7 @@ from dbt.deprecations import warn
 
 class SnapshotTask(RunTask):
     def __init__(self, args, config):
-        super(SnapshotTask, self).__init__(args, config)
+        super().__init__(args, config)
         if args.which == 'archive':
             warn('archives')
 

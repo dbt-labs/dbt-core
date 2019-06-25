@@ -1,7 +1,8 @@
 import networkx as nx
+from queue import PriorityQueue
 import threading
 
-from dbt.compat import PriorityQueue
+
 from dbt.node_types import NodeType
 
 
@@ -21,7 +22,7 @@ def is_blocking_dependency(node):
     return node.resource_type == NodeType.Model
 
 
-class GraphQueue(object):
+class GraphQueue:
     """A fancy queue that is backed by the dependency graph.
     Note: this will mutate input!
 
@@ -194,7 +195,7 @@ def _subset_graph(graph, include_nodes):
     return new_graph
 
 
-class Linker(object):
+class Linker:
     def __init__(self, data=None):
         if data is None:
             data = {}

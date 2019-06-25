@@ -7,4 +7,4 @@ class PostgresColumn(Column):
         # on postgres, do not convert 'text' to 'varchar()'
         if self.dtype.lower() == 'text':
             return self.dtype
-        return super(PostgresColumn, self).data_type
+        return super().data_type

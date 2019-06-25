@@ -1,3 +1,4 @@
+from enum import Enum
 import re
 import logging
 
@@ -45,12 +46,15 @@ $
 _VERSION_REGEX = re.compile(_VERSION_REGEX_PAT_STR, re.VERBOSE)
 
 
-class Matchers:
+class Matchers(str, Enum):
     GREATER_THAN = '>'
     GREATER_THAN_OR_EQUAL = '>='
     LESS_THAN = '<'
     LESS_THAN_OR_EQUAL = '<='
     EXACT = '='
+
+    def __str__(self):
+        return self._value_
 
 
 class VersionRange(dbt.utils.AttrDict):
@@ -169,7 +173,7 @@ class VersionSpecifier(APIObject):
         kwargs = dict(*args, **kwargs)
         if kwargs.get('matcher') is None:
             kwargs['matcher'] = Matchers.EXACT
-        super(VersionSpecifier, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
     def to_version_string(self, skip_matcher=False):
         prerelease = ''
@@ -295,7 +299,7 @@ class VersionSpecifier(APIObject):
 
 class UnboundedVersionSpecifier(VersionSpecifier):
     def __init__(self, *args, **kwargs):
-        super(UnboundedVersionSpecifier, self).__init__(
+        super().__init__(
             matcher='=',
             major=None,
             minor=None,

@@ -60,9 +60,7 @@ class DocumentationParser(BaseParser):
             except dbt.exceptions.CompilationException as e:
                 e.node = docfile
                 raise
-            # in python 3.x this can just be "yield from" isntead of a loop
-            for d in self._parse_template_docs(template, docfile):
-                yield d
+            yield from self._parse_template_docs(template, docfile)
 
     def _parse_template_docs(self, template, docfile):
         for key, item in template.module.__dict__.items():

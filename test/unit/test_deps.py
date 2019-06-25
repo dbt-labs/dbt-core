@@ -1,9 +1,10 @@
 import unittest
-import mock
+from unittest import mock
 
 import dbt.exceptions
 from dbt.task.deps import GitPackage, LocalPackage, RegistryPackage
 from dbt.semver import VersionSpecifier
+
 
 class TestLocalPackage(unittest.TestCase):
     def test_init(self):

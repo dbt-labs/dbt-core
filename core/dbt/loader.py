@@ -16,7 +16,7 @@ from dbt.parser import MacroParser, ModelParser, SeedParser, AnalysisParser, \
 from dbt.contracts.project import ProjectList
 
 
-class GraphLoader(object):
+class GraphLoader:
     def __init__(self, root_project, all_projects):
         self.root_project = root_project
         self.all_projects = all_projects

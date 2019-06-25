@@ -1,13 +1,9 @@
-from mock import patch
-
-import mock
 import unittest
+from unittest import mock
 
 import dbt.flags as flags
 
-import dbt.adapters
 from dbt.adapters.snowflake import SnowflakeAdapter
-from dbt.exceptions import ValidationException
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from snowflake import connector as snowflake_connector
 
@@ -225,7 +221,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
                 private_key=None)
         ])
 
-    @patch('dbt.adapters.snowflake.SnowflakeConnectionManager._get_private_key', return_value='test_key')
+    @mock.patch('dbt.adapters.snowflake.SnowflakeConnectionManager._get_private_key', return_value='test_key')
     def test_authenticator_private_key_authentication(self, mock_get_private_key):
         self.config.credentials = self.config.credentials.incorporate(
             private_key_path='/tmp/test_key.p8',

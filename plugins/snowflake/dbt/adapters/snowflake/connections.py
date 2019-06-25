@@ -5,7 +5,6 @@ from contextlib import contextmanager
 import snowflake.connector
 import snowflake.connector.errors
 
-import dbt.compat
 import dbt.exceptions
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
@@ -76,7 +75,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
         try:
             yield
         except snowflake.connector.errors.ProgrammingError as e:
-            msg = dbt.compat.to_string(e)
+            msg = str(e)
 
             logger.debug('Snowflake error: {}'.format(msg))
 
@@ -174,7 +173,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
     def _split_queries(cls, sql):
         "Splits sql statements at semicolons into discrete queries"
 
-        sql_s = dbt.compat.to_string(sql)
+        sql_s = str(sql)
         sql_buf = StringIO(sql_s)
         split_query = snowflake.connector.util_text.split_statements(sql_buf)
         return [part[0] for part in split_query]
@@ -220,8 +219,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
             if without_comments == "":
                 continue
 
-            parent = super(SnowflakeConnectionManager, self)
-            connection, cursor = parent.add_query(
+            connection, cursor = super().add_query(
                 individual_query, auto_begin,
                 bindings=bindings,
                 abridge_sql_log=abridge_sql_log
@@ -246,6 +244,6 @@ class SnowflakeConnectionManager(SQLConnectionManager):
         try:
             connection.handle.rollback()
         except snowflake.connector.errors.ProgrammingError as e:
-            msg = dbt.compat.to_string(e)
+            msg = str(e)
             if 'Session no longer exists' not in msg:
                 raise

@@ -3,8 +3,6 @@ from dbt.utils import deep_merge
 from dbt.contracts.graph.parsed import PARSED_NODE_CONTRACT, \
     PARSED_MACRO_CONTRACT, ParsedNode
 
-import dbt.compat
-
 import sqlparse
 
 INJECTED_CTE_CONTRACT = {
@@ -167,7 +165,7 @@ def _inject_ctes_into_sql(sql, ctes):
     )
     parsed.insert_after(with_stmt, token)
 
-    return dbt.compat.to_string(parsed)
+    return str(parsed)
 
 
 class CompiledNode(ParsedNode):

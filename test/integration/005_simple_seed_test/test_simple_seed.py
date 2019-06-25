@@ -3,8 +3,6 @@ import os
 from test.integration.base import DBTIntegrationTest, use_profile
 
 from dbt.exceptions import CompilationException
-from dbt.compat import open_file
-
 
 
 class TestSimpleSeed(DBTIntegrationTest):
@@ -140,7 +138,7 @@ class TestSimpleSeedDisabled(DBTIntegrationTest):
 
 class TestSeedParsing(DBTIntegrationTest):
     def setUp(self):
-        super(TestSeedParsing, self).setUp()
+        super().setUp()
         self.run_sql_file("seed.sql")
 
     @property
@@ -192,7 +190,7 @@ class TestSimpleSeedWithBOM(DBTIntegrationTest):
         # first make sure nobody "fixed" the file by accident
         seed_path = os.path.join(self.config.data_paths[0], 'seed_bom.csv')
         # 'data-bom/seed_bom.csv'
-        with open_file(seed_path) as fp:
+        with open(seed_path, encoding='utf-8') as fp:
             self.assertEqual(fp.read(1), u'\ufeff')
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)

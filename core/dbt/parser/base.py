@@ -16,7 +16,7 @@ from dbt.parser.source_config import SourceConfig
 from dbt import deprecations
 
 
-class BaseParser(object):
+class BaseParser:
     def __init__(self, root_project_config, all_projects):
         self.root_project_config = root_project_config
         self.all_projects = all_projects
@@ -53,7 +53,7 @@ class BaseParser(object):
 
 class MacrosKnownParser(BaseParser):
     def __init__(self, root_project_config, all_projects, macro_manifest):
-        super(MacrosKnownParser, self).__init__(
+        super().__init__(
             root_project_config=root_project_config,
             all_projects=all_projects
         )
@@ -240,7 +240,7 @@ class MacrosKnownParser(BaseParser):
         config_dict.update(config.config)
         parsed_node.config = config_dict
 
-        for hook_type in dbt.hooks.ModelHookType.Both:
+        for hook_type in dbt.hooks.ModelHookType:
             parsed_node.config[hook_type] = dbt.hooks.get_hooks(parsed_node,
                                                                 hook_type)
 

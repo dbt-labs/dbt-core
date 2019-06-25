@@ -1,7 +1,6 @@
-from mock import MagicMock, patch
 import os
-import six
 import unittest
+from unittest.mock import MagicMock, patch
 
 import dbt.clients.system
 import dbt.compilation
@@ -16,9 +15,6 @@ try:
     from queue import Empty
 except ImportError:
     from Queue import Empty
-
-
-import networkx as nx
 
 from dbt.logger import GLOBAL_LOGGER as logger # noqa
 
@@ -147,17 +143,18 @@ class GraphTest(unittest.TestCase):
         compiler = self.get_compiler(config)
         linker = compiler.compile(manifest)
 
-        six.assertCountEqual(self,
-                             linker.nodes(),
-                             [
-                                 'model.test_models_compile.model_one',
-                                 'model.test_models_compile.model_two',
-                             ])
+        self.assertCountEqual(
+            linker.nodes(),
+            [
+                'model.test_models_compile.model_one',
+                'model.test_models_compile.model_two',
+            ]
+        )
 
-        six.assertCountEqual(
-            self,
+        self.assertCountEqual(
             linker.edges(),
-            [ ('model.test_models_compile.model_one','model.test_models_compile.model_two',) ])
+            [('model.test_models_compile.model_one', 'model.test_models_compile.model_two',)]
+        )
 
     def test__model_materializations(self):
         self.use_models({

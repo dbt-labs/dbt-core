@@ -27,7 +27,7 @@ SNAPSHOT_TEMPLATE = '''
 '''
 
 
-class Migrator(object):
+class Migrator:
     """Migrate a single archive config"""
     def __init__(self, manager, adapter, archive_def):
         self.manager = manager
@@ -198,8 +198,7 @@ class Migrator(object):
 class ArchiveOkConfig(RuntimeConfig):
     @classmethod
     def from_args(cls, args, allow_archive_configs=True):
-        supercls = super(ArchiveOkConfig, cls)
-        return supercls.from_args(
+        return super().from_args(
             args=args,
             allow_archive_configs=allow_archive_configs
         )
@@ -216,7 +215,7 @@ class MigrationTask(BaseTask):
         if args.apply:
             args.write_files = True
             args.migrate_database = True
-        super(MigrationTask, self).__init__(args, config)
+        super().__init__(args, config)
 
         self.snapshot_root = os.path.normpath(self.config.snapshot_paths[0])
         system.make_directory(self.snapshot_root)

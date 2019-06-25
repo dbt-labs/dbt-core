@@ -33,7 +33,7 @@ def dot_separated(key):
     return '.'.join(map(str, key))
 
 
-class _CachedRelation(object):
+class _CachedRelation:
     """Nothing about _CachedRelation is guaranteed to be thread-safe!
 
     :attr str schema: The schema of this relation.
@@ -163,7 +163,7 @@ class _CachedRelation(object):
         return [dot_separated(r) for r in self.referenced_by]
 
 
-class RelationsCache(object):
+class RelationsCache:
     """A cache of the relations known to dbt. Keeps track of relationships
     declared between tables and handles renames/drops as a real database would.
 

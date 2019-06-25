@@ -59,7 +59,7 @@ FILE_NOT_FOUND = 'file not found'
 
 class DebugTask(BaseTask):
     def __init__(self, args, config):
-        super(DebugTask, self).__init__(args, config)
+        super().__init__(args, config)
         self.profiles_dir = getattr(self.args, 'profiles_dir',
                                     dbt.config.PROFILES_DIR)
         self.profile_path = os.path.join(self.profiles_dir, 'profiles.yml')

@@ -1,5 +1,5 @@
 import unittest
-import mock
+from unittest import mock
 
 import dbt.adapters
 import dbt.flags as flags

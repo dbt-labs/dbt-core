@@ -33,7 +33,7 @@ def docs(node, manifest, config, column_name=None):
     return do_docs
 
 
-class ParserUtils(object):
+class ParserUtils:
     DISABLED = object()
 
     @classmethod

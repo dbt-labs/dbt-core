@@ -123,7 +123,7 @@ class BigQueryColumn(Column):
     }
 
     def __init__(self, column, dtype, fields=None, mode='NULLABLE'):
-        super(BigQueryColumn, self).__init__(column, dtype)
+        super().__init__(column, dtype)
 
         if fields is None:
             fields = []

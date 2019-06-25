@@ -6,7 +6,7 @@ import dbt.exceptions
 
 class BaseTestDeprecations(DBTIntegrationTest):
     def setUp(self):
-        super(BaseTestDeprecations, self).setUp()
+        super().setUp()
         deprecations.reset_deprecations()
 
     @property

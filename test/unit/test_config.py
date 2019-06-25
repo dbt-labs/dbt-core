@@ -6,7 +6,7 @@ import shutil
 import tempfile
 import unittest
 
-import mock
+from unittest import mock
 import yaml
 
 import dbt.config
@@ -67,7 +67,7 @@ model_fqns = frozenset((
 ))
 
 
-class Args(object):
+class Args:
     def __init__(self, profiles_dir=None, threads=None, profile=None,
                  cli_vars=None, version_check=None, project_dir=None):
         self.profile = profile
@@ -170,7 +170,7 @@ class BaseFileTest(BaseConfigTest):
     def setUp(self):
         self.project_dir = os.path.normpath(tempfile.mkdtemp())
         self.profiles_dir = os.path.normpath(tempfile.mkdtemp())
-        super(BaseFileTest, self).setUp()
+        super().setUp()
 
     def tearDown(self):
         try:
@@ -209,7 +209,7 @@ class TestProfile(BaseConfigTest):
     def setUp(self):
         self.profiles_dir = '/invalid-path'
         self.project_dir = '/invalid-project-path'
-        super(TestProfile, self).setUp()
+        super().setUp()
 
     def from_raw_profiles(self):
         return dbt.config.Profile.from_raw_profiles(
@@ -347,7 +347,7 @@ class TestProfile(BaseConfigTest):
 
 class TestProfileFile(BaseFileTest):
     def setUp(self):
-        super(TestProfileFile, self).setUp()
+        super().setUp()
         self.write_profile(self.default_profile_data)
 
     def from_raw_profile_info(self, raw_profile=None, profile_name='default', **kwargs):
@@ -519,7 +519,7 @@ class TestProject(BaseConfigTest):
     def setUp(self):
         self.profiles_dir = '/invalid-profiles-path'
         self.project_dir = '/invalid-root-path'
-        super(TestProject, self).setUp()
+        super().setUp()
         self.default_project_data['project-root'] = self.project_dir
 
     def test_defaults(self):
@@ -864,7 +864,7 @@ class TestProjectWithConfigs(BaseConfigTest):
     def setUp(self):
         self.profiles_dir = '/invalid-profiles-path'
         self.project_dir = '/invalid-root-path'
-        super(TestProjectWithConfigs, self).setUp()
+        super().setUp()
         self.default_project_data['project-root'] = self.project_dir
         self.default_project_data['models'] = {
             'enabled': True,
@@ -915,7 +915,7 @@ class TestProjectWithConfigs(BaseConfigTest):
 
 class TestProjectFile(BaseFileTest):
     def setUp(self):
-        super(TestProjectFile, self).setUp()
+        super().setUp()
         self.write_project(self.default_project_data)
         # and after the fact, add the project root
         self.default_project_data['project-root'] = self.project_dir
@@ -937,12 +937,12 @@ class TestProjectFile(BaseFileTest):
 
 class TestRunOperationTask(BaseFileTest):
     def setUp(self):
-        super(TestRunOperationTask, self).setUp()
+        super().setUp()
         self.write_project(self.default_project_data)
         self.write_profile(self.default_profile_data)
 
     def tearDown(self):
-        super(TestRunOperationTask, self).tearDown()
+        super().tearDown()
         # These tests will change the directory to the project path,
         # so it's necessary to change it back at the end.
         os.chdir(INITIAL_ROOT)
@@ -961,7 +961,7 @@ class TestRunOperationTask(BaseFileTest):
 
 class TestVariableProjectFile(BaseFileTest):
     def setUp(self):
-        super(TestVariableProjectFile, self).setUp()
+        super().setUp()
         self.default_project_data['version'] = "{{ var('cli_version') }}"
         self.default_project_data['name'] = "{{ env_var('env_value_project') }}"
         self.write_project(self.default_project_data)
@@ -984,7 +984,7 @@ class TestRuntimeConfig(BaseConfigTest):
     def setUp(self):
         self.profiles_dir = '/invalid-profiles-path'
         self.project_dir = '/invalid-root-path'
-        super(TestRuntimeConfig, self).setUp()
+        super().setUp()
         self.default_project_data['project-root'] = self.project_dir
 
     def get_project(self):
@@ -1123,7 +1123,7 @@ class TestRuntimeConfig(BaseConfigTest):
 
 class TestRuntimeConfigFiles(BaseFileTest):
     def setUp(self):
-        super(TestRuntimeConfigFiles, self).setUp()
+        super().setUp()
         self.write_profile(self.default_profile_data)
         self.write_project(self.default_project_data)
         # and after the fact, add the project root
@@ -1159,7 +1159,7 @@ class TestRuntimeConfigFiles(BaseFileTest):
 
 class TestRuntimeConfigFilesWithArchive(BaseFileTest):
     def setUp(self):
-        super(TestRuntimeConfigFilesWithArchive, self).setUp()
+        super().setUp()
         self.default_project_data['archive'] = [
             {
                 "source_schema": 'a',
@@ -1193,7 +1193,7 @@ class TestRuntimeConfigFilesWithArchive(BaseFileTest):
 
 class TestVariableRuntimeConfigFiles(BaseFileTest):
     def setUp(self):
-        super(TestVariableRuntimeConfigFiles, self).setUp()
+        super().setUp()
         self.default_project_data.update({
             'version': "{{ var('cli_version') }}",
             'name': "{{ env_var('env_value_project') }}",

@@ -52,9 +52,8 @@ class collect_timing_info:
 
 
 class NodeSerializable(APIObject):
-
     def serialize(self):
-        result = super(NodeSerializable, self).serialize()
+        result = super().serialize()
         result['node'] = self.node.serialize()
         return result
 
@@ -103,7 +102,7 @@ class PartialResult(NodeSerializable):
                  thread_id=None, timing=None):
         if timing is None:
             timing = []
-        super(PartialResult, self).__init__(
+        super().__init__(
             node=node,
             error=error,
             status=status,
@@ -148,7 +147,7 @@ class RunModelResult(NodeSerializable):
                  thread_id=None, timing=None, execution_time=0):
         if timing is None:
             timing = []
-        super(RunModelResult, self).__init__(
+        super().__init__(
             node=node,
             error=error,
             skip=skip,
@@ -262,7 +261,7 @@ class SourceFreshnessResult(NodeSerializable):
         snapshotted_at = snapshotted_at.isoformat()
         if timing is None:
             timing = []
-        super(SourceFreshnessResult, self).__init__(
+        super().__init__(
             node=node,
             max_loaded_at=max_loaded_at,
             snapshotted_at=snapshotted_at,
@@ -327,7 +326,7 @@ class FreshnessExecutionResult(APIObject):
     SCHEMA = FRESHNESS_RESULTS_CONTRACT
 
     def __init__(self, elapsed_time, generated_at, results):
-        super(FreshnessExecutionResult, self).__init__(
+        super().__init__(
             elapsed_time=elapsed_time,
             generated_at=generated_at,
             results=results
@@ -454,7 +453,7 @@ class FreshnessRunOutput(APIObject):
     SCHEMA = FRESHNESS_RUN_OUTPUT_CONTRACT
 
     def __init__(self, meta, sources):
-        super(FreshnessRunOutput, self).__init__(meta=meta, sources=sources)
+        super().__init__(meta=meta, sources=sources)
 
 
 REMOTE_COMPILE_RESULT_CONTRACT = {
@@ -484,7 +483,7 @@ class RemoteCompileResult(APIObject):
             timing = []
         # this should not show up in the serialized output.
         self.node = node
-        super(RemoteCompileResult, self).__init__(
+        super().__init__(
             raw_sql=raw_sql,
             compiled_sql=compiled_sql,
             timing=timing,
@@ -523,7 +522,7 @@ class RemoteRunResult(RemoteCompileResult):
     def __init__(self, raw_sql, compiled_sql, node, timing=None, table=None):
         if table is None:
             table = []
-        super(RemoteRunResult, self).__init__(
+        super().__init__(
             raw_sql=raw_sql,
             compiled_sql=compiled_sql,
             timing=timing,

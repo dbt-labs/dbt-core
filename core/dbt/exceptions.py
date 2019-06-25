@@ -1,8 +1,6 @@
-import sys
-import six
+import builtins
 import functools
 
-from dbt.compat import builtins
 from dbt.logger import GLOBAL_LOGGER as logger
 import dbt.flags
 
@@ -84,7 +82,6 @@ class RuntimeException(RuntimeError, Exception):
         if hasattr(self.msg, 'split'):
             split_msg = self.msg.split("\n")
         else:
-            # can't use basestring here, as on python2 it's an abstract class
             split_msg = str(self.msg).split("\n")
 
         lines = ["{}{}".format(self.type + ' Error',
@@ -117,11 +114,11 @@ class RPCTimeoutException(RuntimeException):
     MESSAGE = 'RPC timeout error'
 
     def __init__(self, timeout):
-        super(RPCTimeoutException, self).__init__(self.MESSAGE)
+        super().__init__(self.MESSAGE)
         self.timeout = timeout
 
     def data(self):
-        result = super(RPCTimeoutException, self).data()
+        result = super().data()
         result.update({
             'timeout': self.timeout,
             'message': 'RPC timed out after {}s'.format(self.timeout),
@@ -136,7 +133,7 @@ class RPCKilledException(RuntimeException):
     def __init__(self, signum):
         self.signum = signum
         self.message = 'RPC process killed by signal {}'.format(self.signum)
-        super(RPCKilledException, self).__init__(self.message)
+        super().__init__(self.message)
 
     def data(self):
         return {
@@ -189,7 +186,7 @@ class JSONValidationException(ValidationException):
         msg = 'Invalid arguments passed to "{}" instance: {}'.format(
             self.typename, self.errors_message
         )
-        super(JSONValidationException, self).__init__(msg)
+        super().__init__(msg)
 
     def __reduce__(self):
         # see https://stackoverflow.com/a/36342588 for why this is necessary
@@ -212,7 +209,7 @@ class DbtConfigError(RuntimeException):
 
     def __init__(self, message, project=None, result_type='invalid_project'):
         self.project = project
-        super(DbtConfigError, self).__init__(message)
+        super().__init__(message)
         self.result_type = result_type
 
 
@@ -228,7 +225,9 @@ class SemverException(Exception):
     def __init__(self, msg=None):
         self.msg = msg
         if msg is not None:
-            super(SemverException, self).__init__(msg)
+            super().__init__(msg)
+        else:
+            super().__init__()
 
 
 class VersionsNotCompatibleException(SemverException):
@@ -245,7 +244,7 @@ class FailedToConnectException(DatabaseException):
 
 class CommandError(RuntimeException):
     def __init__(self, cwd, cmd, message='Error running command'):
-        super(CommandError, self).__init__(message)
+        super().__init__(message)
         self.cwd = cwd
         self.cmd = cmd
         self.args = (cwd, cmd, message)
@@ -258,12 +257,12 @@ class CommandError(RuntimeException):
 
 class ExecutableError(CommandError):
     def __init__(self, cwd, cmd, message):
-        super(ExecutableError, self).__init__(cwd, cmd, message)
+        super().__init__(cwd, cmd, message)
 
 
 class WorkingDirectoryError(CommandError):
     def __init__(self, cwd, cmd, message):
-        super(WorkingDirectoryError, self).__init__(cwd, cmd, message)
+        super().__init__(cwd, cmd, message)
 
     def __str__(self):
         return '{}: "{}"'.format(self.msg, self.cwd)
@@ -272,7 +271,7 @@ class WorkingDirectoryError(CommandError):
 class CommandResultError(CommandError):
     def __init__(self, cwd, cmd, returncode, stdout, stderr,
                  message='Got a non-zero returncode'):
-        super(CommandResultError, self).__init__(cwd, cmd, message)
+        super().__init__(cwd, cmd, message)
         self.returncode = returncode
         self.stdout = stdout
         self.stderr = stderr
@@ -698,11 +697,10 @@ def wrapper(model):
         def inner(*args, **kwargs):
             try:
                 return func(*args, **kwargs)
-            except Exception:
-                exc_type, exc, exc_tb = sys.exc_info()
+            except Exception as exc:
                 if hasattr(exc, 'node') and exc.node is None:
                     exc.node = model
-                six.reraise(exc_type, exc, exc_tb)
+                raise exc
 
         return inner
     return wrap

@@ -80,9 +80,7 @@ class SnapshotParser(BaseSqlParser):
             snapshot_nodes = list(
                 self.parse_snapshots_from_file(file_node, tags=tags)
             )
-            found = super(SnapshotParser, self).parse_sql_nodes(
-                nodes=snapshot_nodes, tags=tags
-            )
+            found = super().parse_sql_nodes(nodes=snapshot_nodes, tags=tags)
             # make sure our blocks are going to work when we try to snapshot
             # them!
             found.parsed = {k: self.validate_snapshots(v) for

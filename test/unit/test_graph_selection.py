@@ -1,12 +1,12 @@
 import unittest
-import mock
+from unittest import mock
 
-import os
 import string
 import dbt.exceptions
 import dbt.graph.selector as graph_selector
 
 import networkx as nx
+
 
 class BaseGraphSelectionTest(unittest.TestCase):
     def create_graph(self):

@@ -1,24 +1,36 @@
 import collections
 import copy
 import datetime
+import decimal
 import functools
 import hashlib
 import itertools
 import json
 import os
+from enum import Enum
 
 import dbt.exceptions
 
-from dbt.compat import basestring, DECIMALS
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt.clients import yaml_helper
 
+try:
+    import cdecimal
+except ImportError:
+    DECIMALS = (decimal.Decimal,)
+else:
+    DECIMALS = (decimal.Decimal, cdecimal.Decimal)
 
-class ExitCodes(object):
+
+class ExitCodes(int, Enum):
     Success = 0
     ModelError = 1
     UnhandledError = 2
+
+
+def to_bytes(s):
+    return s.encode('latin-1')
 
 
 def coalesce(*args):
@@ -44,7 +56,7 @@ def get_model_name_or_none(model):
     if model is None:
         name = '<None>'
 
-    elif isinstance(model, basestring):
+    elif isinstance(model, str):
         name = model
     elif isinstance(model, dict):
         name = model.get('alias', model.get('name'))
@@ -77,7 +89,7 @@ def id_matches(unique_id, target_name, target_package, nodetypes, model):
         dbt.exceptions.raise_compiler_error(msg, model)
 
     resource_type, package_name, node_name = node_parts
-    if node_type == NodeType.Source:
+    if node_type == NodeType.Source.value:
         if node_name.count('.') != 1:
             msg = "{} names must contain exactly 1 '.' character"\
                 .format(node_type)
@@ -216,7 +228,7 @@ def deep_merge_item(destination, key, value):
 
 
 def _deep_map(func, value, keypath):
-    atomic_types = (int, float, basestring, type(None), bool)
+    atomic_types = (int, float, str, type(None), bool)
 
     if isinstance(value, list):
         ret = [
@@ -268,7 +280,7 @@ def deep_map(func, value):
 
 class AttrDict(dict):
     def __init__(self, *args, **kwargs):
-        super(AttrDict, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.__dict__ = self
 
 
@@ -297,6 +309,8 @@ def is_enabled(node):
 
 
 def is_type(node, _type):
+    if hasattr(_type, 'value'):
+        _type = _type.value
     return node.get('resource_type') == _type
 
 
@@ -339,7 +353,7 @@ def flatten_nodes(dep_list):
     return list(itertools.chain.from_iterable(dep_list))
 
 
-class memoized(object):
+class memoized:
     '''Decorator. Caches a function's return value each time it is called. If
     called later with the same arguments, the cached value is returned (not
     reevaluated).
@@ -384,7 +398,7 @@ def invalid_ref_test_message(node, target_model_name, target_model_package,
 
 def invalid_ref_fail_unless_test(node, target_model_name,
                                  target_model_package, disabled):
-    if node.get('resource_type') == NodeType.Test:
+    if is_type(node, NodeType.Test):
         msg = invalid_ref_test_message(node, target_model_name,
                                        target_model_package, disabled)
         if disabled:
@@ -400,7 +414,7 @@ def invalid_ref_fail_unless_test(node, target_model_name,
 
 
 def invalid_source_fail_unless_test(node, target_name, target_table_name):
-    if node.get('resource_type') == NodeType.Test:
+    if is_type(node, NodeType.Test):
         msg = dbt.exceptions.source_disabled_message(node, target_name,
                                                      target_table_name)
         dbt.exceptions.warn_or_error(msg, log_fmt='WARNING: {}')
@@ -453,7 +467,7 @@ class JSONEncoder(json.JSONEncoder):
         if isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
             return obj.isoformat()
 
-        return super(JSONEncoder, self).default(obj)
+        return super().default(obj)
 
 
 def translate_aliases(kwargs, aliases):

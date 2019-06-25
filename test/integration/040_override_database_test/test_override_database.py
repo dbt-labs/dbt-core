@@ -18,7 +18,7 @@ class BaseOverrideDatabase(DBTIntegrationTest):
         if self.adapter_type == 'snowflake':
             return os.getenv('SNOWFLAKE_TEST_DATABASE')
         else:
-            return super(BaseOverrideDatabase, self).alternative_database
+            return super().alternative_database
 
     def snowflake_profile(self):
         return {

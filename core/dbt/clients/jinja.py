@@ -9,7 +9,6 @@ import jinja2.nodes
 import jinja2.parser
 import jinja2.sandbox
 
-import dbt.compat
 import dbt.exceptions
 import dbt.utils
 
@@ -60,10 +59,10 @@ class MacroFuzzEnvironment(jinja2.sandbox.SandboxedEnvironment):
                 filename
             )
 
-        return super(MacroFuzzEnvironment, self)._compile(source, filename)
+        return super()._compile(source, filename)
 
 
-class TemplateCache(object):
+class TemplateCache:
 
     def __init__(self):
         self.file_cache = {}
@@ -176,7 +175,7 @@ def create_macro_capture_env(node):
         This class sets up the parser to capture macros.
         """
         def __init__(self, hint=None, obj=None, name=None, exc=None):
-            super(ParserMacroCapture, self).__init__(hint=hint, name=name)
+            super().__init__(hint=hint, name=name)
             self.node = node
             self.name = name
             self.package_name = node.get('package_name')
@@ -240,7 +239,7 @@ def get_environment(node=None, capture_macros=False):
 
 def parse(string):
     try:
-        return get_environment().parse(dbt.compat.to_string(string))
+        return get_environment().parse(str(string))
 
     except (jinja2.exceptions.TemplateSyntaxError,
             jinja2.exceptions.UndefinedError) as e:
@@ -252,7 +251,7 @@ def get_template(string, ctx, node=None, capture_macros=False):
     try:
         env = get_environment(node, capture_macros)
 
-        template_source = dbt.compat.to_string(string)
+        template_source = str(string)
         return env.from_string(template_source, globals=ctx)
 
     except (jinja2.exceptions.TemplateSyntaxError,

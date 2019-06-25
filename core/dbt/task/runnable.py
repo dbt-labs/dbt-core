@@ -1,6 +1,5 @@
 import base64
 import os
-import re
 import time
 from abc import abstractmethod
 from multiprocessing.dummy import Pool as ThreadPool
@@ -9,7 +8,6 @@ from dbt import rpc
 from dbt.task.base import ConfiguredTask
 from dbt.adapters.factory import get_adapter
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.compat import to_unicode
 from dbt.compilation import compile_manifest
 from dbt.contracts.graph.manifest import CompileResultNode
 from dbt.contracts.results import ExecutionResult
@@ -38,7 +36,7 @@ def load_manifest(config):
 
 class ManifestTask(ConfiguredTask):
     def __init__(self, args, config):
-        super(ManifestTask, self).__init__(args, config)
+        super().__init__(args, config)
         self.manifest = None
         self.linker = None
 
@@ -49,7 +47,7 @@ class ManifestTask(ConfiguredTask):
 
 class GraphRunnableTask(ManifestTask):
     def __init__(self, args, config):
-        super(GraphRunnableTask, self).__init__(args, config)
+        super().__init__(args, config)
         self.job_queue = None
         self._flattened_nodes = None
 
@@ -67,7 +65,7 @@ class GraphRunnableTask(ManifestTask):
         return selected_nodes
 
     def _runtime_initialize(self):
-        super(GraphRunnableTask, self)._runtime_initialize()
+        super()._runtime_initialize()
         selected_nodes = self.select_nodes()
         self.job_queue = self.linker.as_graph_queue(self.manifest,
                                                     selected_nodes)
@@ -336,7 +334,7 @@ class GraphRunnableTask(ManifestTask):
         dbt.ui.printer.print_run_end_messages(results)
 
 
-class RemoteCallable(object):
+class RemoteCallable:
     METHOD_NAME = None
     is_async = False
 
@@ -354,14 +352,10 @@ class RemoteCallable(object):
         """
         # JSON is defined as using "unicode", we'll go a step further and
         # mandate utf-8 (though for the base64 part, it doesn't really matter!)
-        base64_sql_bytes = to_unicode(sql).encode('utf-8')
-        # in python3.x you can pass `validate=True` to b64decode to get this
-        # behavior.
-        if not re.match(b'^[A-Za-z0-9+/]*={0,2}$', base64_sql_bytes):
-            self.raise_invalid_base64(sql)
+        base64_sql_bytes = str(sql).encode('utf-8')
 
         try:
-            sql_bytes = base64.b64decode(base64_sql_bytes)
+            sql_bytes = base64.b64decode(base64_sql_bytes, validate=True)
         except ValueError:
             self.raise_invalid_base64(sql)
 

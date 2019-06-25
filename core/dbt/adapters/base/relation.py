@@ -316,7 +316,7 @@ class BaseRelation(APIObject):
         return self.type == self.View
 
 
-class Column(object):
+class Column:
     TYPE_LABELS = {
         'STRING': 'TEXT',
         'TIMESTAMP': 'TIMESTAMP',

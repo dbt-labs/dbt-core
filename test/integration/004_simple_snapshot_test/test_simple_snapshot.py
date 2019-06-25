@@ -358,19 +358,16 @@ class TestBadSnapshot(DBTIntegrationTest):
 
 class TestCheckCols(TestSimpleSnapshotFiles):
     NUM_SNAPSHOT_MODELS = 2
+
     def _assertTablesEqualSql(self, relation_a, relation_b, columns=None):
         # When building the equality tests, only test columns that don't start
         # with 'dbt_', because those are time-sensitive
         if columns is None:
             columns = [c for c in self.get_relation_columns(relation_a) if not c[0].lower().startswith('dbt_')]
-        return super(TestCheckCols, self)._assertTablesEqualSql(
-            relation_a,
-            relation_b,
-            columns=columns
-        )
+        return super()._assertTablesEqualSql(relation_a, relation_b, columns=columns)
 
     def assert_expected(self):
-        super(TestCheckCols, self).assert_expected()
+        super().assert_expected()
         self.assert_case_tables_equal('snapshot_checkall', 'snapshot_expected')
 
     @property
@@ -387,14 +384,10 @@ class TestCheckColsBigquery(TestSimpleSnapshotFilesBigquery):
         # with 'dbt_', because those are time-sensitive
         if columns is None:
             columns = [c for c in self.get_relation_columns(relation_a) if not c[0].lower().startswith('dbt_')]
-        return super(TestCheckColsBigquery, self)._assertTablesEqualSql(
-            relation_a,
-            relation_b,
-            columns=columns
-        )
+        return super()._assertTablesEqualSql(relation_a, relation_b, columns=columns)
 
     def assert_expected(self):
-        super(TestCheckColsBigquery, self).assert_expected()
+        super().assert_expected()
         self.assertTablesEqual('snapshot_checkall', 'snapshot_expected')
 
     @property

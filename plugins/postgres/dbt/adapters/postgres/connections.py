@@ -2,7 +2,6 @@ from contextlib import contextmanager
 
 import psycopg2
 
-import dbt.compat
 import dbt.exceptions
 from dbt.adapters.base import Credentials
 from dbt.adapters.sql import SQLConnectionManager
@@ -78,8 +77,7 @@ class PostgresConnectionManager(SQLConnectionManager):
                 logger.debug("Failed to release connection!")
                 pass
 
-            raise dbt.exceptions.DatabaseException(
-                dbt.compat.to_string(e).strip())
+            raise dbt.exceptions.DatabaseException(str(e).strip())
 
         except Exception as e:
             logger.debug("Error running SQL: %s", sql)

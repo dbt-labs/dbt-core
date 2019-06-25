@@ -124,7 +124,7 @@ cp test.env.sample test.env
 
 If you want to test snowflake/bigquery/redshift locally you'll need to get credentials and add them to this file. But, to start, you can just focus on postgres tests. They have the best coverage, are the fastest, and are the easiest to set up.
 
-To run the unit tests, use `make test-unit` - it will run the unit tests on python 2.7 and 3.6, and a pep8 linter.
+To run the unit tests, use `make test-unit` - it will run the unit tests on python 3.6 and a pep8 linter.
 
 To run the postgres+python 3.6 integration tests, you'll have to do one extra step of setting up the database:
 

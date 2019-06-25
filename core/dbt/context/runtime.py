@@ -136,7 +136,7 @@ class Var(dbt.context.common.Var):
     pass
 
 
-class Provider(object):
+class Provider:
     execute = True
     Config = Config
     DatabaseWrapper = DatabaseWrapper

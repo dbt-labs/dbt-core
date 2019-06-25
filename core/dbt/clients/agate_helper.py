@@ -1,7 +1,5 @@
 from codecs import BOM_UTF8
 
-import dbt.compat
-
 import agate
 
 BOM = BOM_UTF8.decode('utf-8')  # '\ufeff'
@@ -46,7 +44,7 @@ def as_matrix(table):
 
 
 def from_csv(abspath):
-    with dbt.compat.open_file(abspath) as fp:
+    with open(abspath, encoding='utf-8') as fp:
         if fp.read(1) != BOM:
             fp.seek(0)
         return agate.Table.from_csv(fp, column_types=DEFAULT_TYPE_TESTER)

@@ -19,7 +19,7 @@ class ModelCopyingIntegrationTest(DBTIntegrationTest):
 class TestCLIInvocation(ModelCopyingIntegrationTest):
 
     def setUp(self):
-        super(TestCLIInvocation, self).setUp()
+        super().setUp()
         self.run_sql_file("seed.sql")
 
     @property
@@ -48,7 +48,7 @@ class TestCLIInvocation(ModelCopyingIntegrationTest):
 class TestCLIInvocationWithProfilesDir(ModelCopyingIntegrationTest):
 
     def setUp(self):
-        super(TestCLIInvocationWithProfilesDir, self).setUp()
+        super().setUp()
 
         self.run_sql("DROP SCHEMA IF EXISTS {} CASCADE;".format(self.custom_schema))
         self.run_sql("CREATE SCHEMA {};".format(self.custom_schema))

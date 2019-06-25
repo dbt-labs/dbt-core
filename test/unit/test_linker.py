@@ -1,9 +1,7 @@
-import mock
 import os
 import tempfile
 import unittest
-
-import dbt.utils
+from unittest import mock
 
 from dbt import linker
 try:

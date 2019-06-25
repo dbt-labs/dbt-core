@@ -9,7 +9,6 @@ import dbt.tracking
 from dbt.utils import get_materialization, NodeType, is_type
 from dbt.linker import Linker
 
-import dbt.compat
 import dbt.context.runtime
 import dbt.contracts.project
 import dbt.exceptions
@@ -90,7 +89,7 @@ def recursively_prepend_ctes(model, manifest):
     return (model, prepended_ctes, manifest)
 
 
-class Compiler(object):
+class Compiler:
     def __init__(self, config):
         self.config = config
 

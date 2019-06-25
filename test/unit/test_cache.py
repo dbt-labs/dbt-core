@@ -51,7 +51,7 @@ class TestEmpty(TestCache):
 
 class TestDrop(TestCache):
     def setUp(self):
-        super(TestDrop, self).setUp()
+        super().setUp()
         self.cache.add(make_relation('dbt', 'foo', 'bar'))
 
     def test_missing_identifier_ignored(self):
@@ -77,7 +77,7 @@ class TestDrop(TestCache):
 
 class TestAddLink(TestCache):
     def setUp(self):
-        super(TestAddLink, self).setUp()
+        super().setUp()
         self.cache.add(make_relation('dbt', 'schema', 'foo'))
         self.cache.add(make_relation('dbt_2', 'schema', 'bar'))
         self.cache.add(make_relation('dbt', 'schema_2', 'bar'))
@@ -97,7 +97,7 @@ class TestAddLink(TestCache):
 
 class TestRename(TestCache):
     def setUp(self):
-        super(TestRename, self).setUp()
+        super().setUp()
         self.cache.add(make_relation('DBT', 'schema', 'foo'))
         self.assert_relations_exist('DBT', 'schema', 'foo')
         self.assertEqual(self.cache.schemas, {('dbt', 'schema')})
@@ -182,7 +182,7 @@ class TestRename(TestCache):
 
 class TestGetRelations(TestCache):
     def setUp(self):
-        super(TestGetRelations, self).setUp()
+        super().setUp()
         self.relation = make_relation('dbt', 'foo', 'bar')
         self.cache.add(self.relation)
 
@@ -217,7 +217,7 @@ class TestGetRelations(TestCache):
 
 class TestAdd(TestCache):
     def setUp(self):
-        super(TestAdd, self).setUp()
+        super().setUp()
         self.relation = make_relation('dbt', 'foo', 'bar')
         self.cache.add(self.relation)
 

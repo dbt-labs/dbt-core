@@ -3,7 +3,6 @@ import unittest
 import os
 
 import dbt.flags
-from dbt.compat import bigint
 from dbt.task import generate
 
 
@@ -43,7 +42,7 @@ class GenerateTest(unittest.TestCase):
                         'id': {
                             'type': 'integer',
                             'comment': None,
-                            'index': bigint(1),
+                            'index': 1,
                             'name': 'id'
                         },
                     },
@@ -139,7 +138,7 @@ class GenerateTest(unittest.TestCase):
                         'id': {
                             'type': 'integer',
                             'comment': None,
-                            'index': bigint(1),
+                            'index': 1,
                             'name': 'id'
                         },
                         'name': {
@@ -170,7 +169,7 @@ class GenerateTest(unittest.TestCase):
                         'id': {
                             'type': 'integer',
                             'comment': None,
-                            'index': bigint(1),
+                            'index': 1,
                             'name': 'id'
                         },
                         'email': {
@@ -203,7 +202,7 @@ class GenerateTest(unittest.TestCase):
                         'id': {
                             'type': 'integer',
                             'comment': None,
-                            'index': bigint(1),
+                            'index': 1,
                             'name': 'id'
                         },
                         'name': {
