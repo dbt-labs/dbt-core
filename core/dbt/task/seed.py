@@ -27,7 +27,7 @@ class SeedTask(RunTask):
         dbt.ui.printer.print_run_end_messages(results)
 
     def show_table(self, result):
-        table = result.node.agate_table
+        table = result.agate_table
         rand_table = table.order_by(lambda x: random.random())
 
         schema = result.node.schema
