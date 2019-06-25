@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+import os
 
 import google.auth
 import google.api_core
@@ -192,7 +193,13 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         job_config = google.cloud.bigquery.QueryJobConfig()
         job_config.use_legacy_sql = False
+        job_config.dry_run = not fetch
+
         query_job = client.query(sql, job_config)
+
+        # there's no results for dry run queries, so we bail early
+        if not fetch:
+            return query_job, None
 
         # this blocks until the query has completed
         with self.exception_handler(sql):
@@ -201,6 +208,11 @@ class BigQueryConnectionManager(BaseConnectionManager):
         return query_job, iterator
 
     def execute(self, sql, auto_begin=False, fetch=None):
+
+        if bool(os.getenv("DRY_RUN")):
+            logger.info("Performing a dry run..")
+            fetch = False
+
         # auto_begin is ignored on bigquery, and only included for consistency
         _, iterator = self.raw_execute(sql, fetch=fetch)
 
