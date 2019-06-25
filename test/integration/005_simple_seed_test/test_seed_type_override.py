@@ -41,7 +41,7 @@ class TestSimpleSeedColumnOverridePostgres(TestSimpleSeedColumnOverride):
 
     @use_profile('postgres')
     def test_simple_seed_with_column_override_postgres(self):
-        results = self.run_dbt(["seed"])
+        results = self.run_dbt(["seed", "--show"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt(["test"])
         self.assertEqual(len(results),  2)
@@ -64,7 +64,7 @@ class TestSimpleSeedColumnOverrideRedshift(TestSimpleSeedColumnOverride):
 
     @use_profile('redshift')
     def test_simple_seed_with_column_override_redshift(self):
-        results = self.run_dbt(["seed"])
+        results = self.run_dbt(["seed", "--show"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt(["test"])
         self.assertEqual(len(results),  2)
@@ -87,7 +87,7 @@ class TestSimpleSeedColumnOverrideSnowflake(TestSimpleSeedColumnOverride):
 
     @use_profile('snowflake')
     def test_simple_seed_with_column_override_snowflake(self):
-        results = self.run_dbt(["seed"])
+        results = self.run_dbt(["seed", "--show"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt(["test"])
         self.assertEqual(len(results),  2)
@@ -110,7 +110,7 @@ class TestSimpleSeedColumnOverrideBQ(TestSimpleSeedColumnOverride):
 
     @use_profile('bigquery')
     def test_simple_seed_with_column_override_bigquery(self):
-        results = self.run_dbt(["seed"])
+        results = self.run_dbt(["seed", "--show"])
         self.assertEqual(len(results),  1)
         results = self.run_dbt(["test"])
         self.assertEqual(len(results),  2)

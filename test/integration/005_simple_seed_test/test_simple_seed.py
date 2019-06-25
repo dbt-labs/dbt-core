@@ -33,8 +33,7 @@ class TestSimpleSeed(DBTIntegrationTest):
         self.assertTablesEqual("seed_actual","seed_expected")
 
         # this should truncate the seed_actual table, then re-insert.
-        # also, '--show' should not crash dbt!
-        results = self.run_dbt(["seed", '--show'])
+        results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         self.assertTablesEqual("seed_actual","seed_expected")
 
