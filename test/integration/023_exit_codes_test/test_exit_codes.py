@@ -116,6 +116,7 @@ class TestExitCodesDeps(DBTIntegrationTest):
         _, success = self.run_dbt_and_check(['deps'])
         self.assertTrue(success)
 
+
 class TestExitCodesDepsFail(DBTIntegrationTest):
     @property
     def schema(self):
@@ -124,7 +125,6 @@ class TestExitCodesDepsFail(DBTIntegrationTest):
     @property
     def models(self):
         return "models"
-
 
     @property
     def packages_config(self):
@@ -139,12 +139,10 @@ class TestExitCodesDepsFail(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_deps(self):
-        # this should fail
-        try:
-            _, success = self.run_dbt_and_check(['deps'])
-            self.assertTrue(False)
-        except dbt.exceptions.InternalException as e:
-            pass
+        with self.assertRaises(dbt.exceptions.InternalException):
+            # this should fail
+            self.run_dbt_and_check(['deps'])
+
 
 class TestExitCodesSeed(DBTIntegrationTest):
     @property
@@ -167,6 +165,7 @@ class TestExitCodesSeed(DBTIntegrationTest):
         self.assertEqual(len(results), 1)
         self.assertTrue(success)
 
+
 class TestExitCodesSeedFail(DBTIntegrationTest):
     @property
     def schema(self):
@@ -184,8 +183,5 @@ class TestExitCodesSeedFail(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_seed(self):
-        try:
-            _, success = self.run_dbt_and_check(['seed'])
-            self.assertTrue(False)
-        except dbt.exceptions.CompilationException as e:
-            pass
+        _, success = self.run_dbt_and_check(['seed'])
+        self.assertFalse(success)

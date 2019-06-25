@@ -77,7 +77,7 @@ class BaseRunner:
         return result
 
     def _build_run_result(self, node, start_time, error, status, timing_info,
-                          skip=False, failed=None):
+                          skip=False, failed=None, agate_table=None):
         execution_time = time.time() - start_time
         thread_id = threading.current_thread().name
         timing = [t.serialize() for t in timing_info]
@@ -89,7 +89,8 @@ class BaseRunner:
             failed=failed,
             execution_time=execution_time,
             thread_id=thread_id,
-            timing=timing
+            timing=timing,
+            agate_table=agate_table,
         )
 
     def error_result(self, node, error, start_time, timing_info):
@@ -118,7 +119,8 @@ class BaseRunner:
             skip=result.skip,
             status=result.status,
             failed=result.failed,
-            timing_info=timing_info
+            timing_info=timing_info,
+            agate_table=result.agate_table,
         )
 
     def compile_and_execute(self, manifest, ctx):
@@ -329,6 +331,10 @@ class ModelRunner(CompileRunner):
         track_model_run(self.node_index, self.num_nodes, result)
         self.print_result_line(result)
 
+    def _build_run_model_result(self, model, context):
+        result = context['load_result']('main')
+        return RunModelResult(model, status=result.status)
+
     def execute(self, model, manifest):
         context = dbt.context.runtime.generate(
             model, self.config, manifest)
@@ -347,9 +353,7 @@ class ModelRunner(CompileRunner):
                                                           dbt_created=True)
         self.adapter.cache_new_relation(relation)
 
-        result = context['load_result']('main')
-
-        return RunModelResult(model, status=result.status)
+        return self._build_run_model_result(model, context)
 
 
 class FreshnessRunner(BaseRunner):
@@ -502,6 +506,12 @@ class SeedRunner(ModelRunner):
         description = self.describe_node()
         dbt.ui.printer.print_start_line(description, self.node_index,
                                         self.num_nodes)
+
+    def _build_run_model_result(self, model, context):
+        result = super()._build_run_model_result(model, context)
+        agate_result = context['load_result']('agate_table')
+        result.agate_table = agate_result.table
+        return result
 
     def compile(self, manifest):
         return self.node

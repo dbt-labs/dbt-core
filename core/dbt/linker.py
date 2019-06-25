@@ -6,11 +6,6 @@ import threading
 from dbt.node_types import NodeType
 
 
-GRAPH_SERIALIZE_BLACKLIST = [
-    'agate_table'
-]
-
-
 def from_file(graph_file):
     linker = Linker()
     linker.read_graph(graph_file)
@@ -264,10 +259,6 @@ class Linker:
 def _updated_graph(graph, manifest):
     graph = graph.copy()
     for node_id in graph.nodes():
-        # serialize() removes the agate table
         data = manifest.nodes[node_id].serialize()
-        for key in GRAPH_SERIALIZE_BLACKLIST:
-            if key in data:
-                del data[key]
         graph.add_node(node_id, **data)
     return graph

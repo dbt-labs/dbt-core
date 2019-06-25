@@ -267,7 +267,7 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(set(flat_graph), set(['nodes', 'macros']))
         self.assertEqual(flat_graph['macros'], {})
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
-        expected_keys = set(ParsedNode.SCHEMA['required']) | {'agate_table'}
+        expected_keys = set(ParsedNode.SCHEMA['required'])
         for node in flat_nodes.values():
             self.assertEqual(set(node), expected_keys)
 
@@ -632,8 +632,8 @@ class MixedManifestTest(unittest.TestCase):
         self.assertEqual(set(flat_graph), set(['nodes', 'macros']))
         self.assertEqual(flat_graph['macros'], {})
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
-        parsed_keys = set(ParsedNode.SCHEMA['required']) | {'agate_table'}
-        compiled_keys = set(CompiledNode.SCHEMA['required']) | {'agate_table'}
+        parsed_keys = set(ParsedNode.SCHEMA['required'])
+        compiled_keys = set(CompiledNode.SCHEMA['required'])
         compiled_count = 0
         for node in flat_nodes.values():
             if node.get('compiled'):

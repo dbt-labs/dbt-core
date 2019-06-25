@@ -144,9 +144,11 @@ class RunModelResult(NodeSerializable):
     SCHEMA = RUN_MODEL_RESULT_CONTRACT
 
     def __init__(self, node, error=None, skip=False, status=None, failed=None,
-                 thread_id=None, timing=None, execution_time=0):
+                 thread_id=None, timing=None, execution_time=0,
+                 agate_table=None):
         if timing is None:
             timing = []
+        self.agate_table = agate_table
         super().__init__(
             node=node,
             error=error,

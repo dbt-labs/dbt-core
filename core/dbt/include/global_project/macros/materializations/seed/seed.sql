@@ -1,18 +1,17 @@
 
-{% macro create_csv_table(model) -%}
-  {{ adapter_macro('create_csv_table', model) }}
+{% macro create_csv_table(model, agate_table) -%}
+  {{ adapter_macro('create_csv_table', model, agate_table) }}
 {%- endmacro %}
 
-{% macro reset_csv_table(model, full_refresh, old_relation) -%}
-  {{ adapter_macro('reset_csv_table', model, full_refresh, old_relation) }}
+{% macro reset_csv_table(model, full_refresh, old_relation, agate_table) -%}
+  {{ adapter_macro('reset_csv_table', model, full_refresh, old_relation, agate_table) }}
 {%- endmacro %}
 
-{% macro load_csv_rows(model) -%}
-  {{ adapter_macro('load_csv_rows', model) }}
+{% macro load_csv_rows(model, agate_table) -%}
+  {{ adapter_macro('load_csv_rows', model, agate_table) }}
 {%- endmacro %}
 
-{% macro default__create_csv_table(model) %}
-  {%- set agate_table = model['agate_table'] -%}
+{% macro default__create_csv_table(model, agate_table) %}
   {%- set column_override = model['config'].get('column_types', {}) -%}
 
   {% set sql %}
@@ -33,11 +32,11 @@
 {% endmacro %}
 
 
-{% macro default__reset_csv_table(model, full_refresh, old_relation) %}
+{% macro default__reset_csv_table(model, full_refresh, old_relation, agate_table) %}
     {% set sql = "" %}
     {% if full_refresh %}
         {{ adapter.drop_relation(old_relation) }}
-        {% set sql = create_csv_table(model) %}
+        {% set sql = create_csv_table(model, agate_table) %}
     {% else %}
         {{ adapter.truncate_relation(old_relation) }}
         {% set sql = "truncate table " ~ old_relation %}
@@ -47,8 +46,7 @@
 {% endmacro %}
 
 
-{% macro basic_load_csv_rows(model, batch_size) %}
-    {% set agate_table = model['agate_table'] %}
+{% macro basic_load_csv_rows(model, batch_size, agate_table) %}
     {% set cols_sql = ", ".join(agate_table.column_names) %}
     {% set bindings = [] %}
 
@@ -84,8 +82,8 @@
 {% endmacro %}
 
 
-{% macro default__load_csv_rows(model) %}
-  {{ return(basic_load_csv_rows(model, 10000) )}}
+{% macro default__load_csv_rows(model, agate_table) %}
+  {{ return(basic_load_csv_rows(model, 10000, agate_table) )}}
 {% endmacro %}
 
 
@@ -99,7 +97,8 @@
   {%- set exists_as_table = (old_relation is not none and old_relation.is_table) -%}
   {%- set exists_as_view = (old_relation is not none and old_relation.is_view) -%}
 
-  {%- set csv_table = model["agate_table"] -%}
+  {%- set agate_table = load_agate_table() -%}
+  {%- do store_result('agate_table', status='OK', agate_table=agate_table) -%}
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
 
@@ -111,14 +110,14 @@
   {% if exists_as_view %}
     {{ exceptions.raise_compiler_error("Cannot seed to '{}', it is a view".format(old_relation)) }}
   {% elif exists_as_table %}
-    {% set create_table_sql = reset_csv_table(model, full_refresh_mode, old_relation) %}
+    {% set create_table_sql = reset_csv_table(model, full_refresh_mode, old_relation, agate_table) %}
   {% else %}
-    {% set create_table_sql = create_csv_table(model) %}
+    {% set create_table_sql = create_csv_table(model, agate_table) %}
   {% endif %}
 
   {% set status = 'CREATE' if full_refresh_mode else 'INSERT' %}
-  {% set num_rows = (csv_table.rows | length) %}
-  {% set sql = load_csv_rows(model) %}
+  {% set num_rows = (agate_table.rows | length) %}
+  {% set sql = load_csv_rows(model, agate_table) %}
 
   {% call noop_statement('main', status ~ ' ' ~ num_rows) %}
     {{ create_table_sql }};
