@@ -70,6 +70,8 @@
 - Fix collisions on models running concurrently that have duplicate names but have distinguishing aliases ([#1342](https://github.com/fishtown-analytics/dbt/pull/1342), [#1321](https://github.com/fishtown-analytics/dbt/issues/1321))
 - Fix for a bad error message when a `version` is missing from a package spec in `packages.yml` ([#1551](https://github.com/fishtown-analytics/dbt/pull/1551), [#1546](https://github.com/fishtown-analytics/dbt/issues/1546))
 - Fix for wrong package scope when the two-arg method of `ref` is used ([#1515](https://github.com/fishtown-analytics/dbt/pull/1515), [#1504](https://github.com/fishtown-analytics/dbt/issues/1504))
+- Fix missing import in test suite ([#1572](https://github.com/fishtown-analytics/dbt/pull/1572))
+- Fix for a Snowflake error when an external table exists in a schema that dbt operates on ([#1571](https://github.com/fishtown-analytics/dbt/pull/1571), [#1505](https://github.com/fishtown-analytics/dbt/issues/1505))
 
 
 ### Under the hood
@@ -82,19 +84,21 @@
 - Anonymously track adapter type and rpc requests when tracking is enabled ([#1575](https://github.com/fishtown-analytics/dbt/pull/1575), [#1574](https://github.com/fishtown-analytics/dbt/issues/1574))
 
 ### Contributors:
-Almost a dozen contributors wrote code for this release of dbt! Thanks for taking the time, and nice work :)
+Over a dozen contributors wrote code for this release of dbt! Thanks for taking the time, and nice work y'all! :)
 
-- [@nydnarb](https://github.com/nydnarb) [#1363](https://github.com/fishtown-analytics/dbt/issues/1363)
-- [@emilieschario](https://github.com/emilieschario) [#1366](https://github.com/fishtown-analytics/dbt/pull/1366)
-- [@bastienboutonnet](https://github.com/bastienboutonnet) [#1409](https://github.com/fishtown-analytics/dbt/pull/1409)
-- [@kasanchez](https://github.com/kasanchez) [#1247](https://github.com/fishtown-analytics/dbt/pull/1247)
-- [@Blakewell](https://github.com/Blakewell) [#1307](https://github.com/fishtown-analytics/dbt/pull/1307)
-- [@buremba](https://github.com/buremba) [#1476](https://github.com/fishtown-analytics/dbt/pull/1476)
-- [@darrenhaken](https://github.com/darrenhaken) [#1285](https://github.com/fishtown-analytics/dbt/pull/1285)
-- [@tbescherer](https://github.com/tbescherer) [#1504](https://github.com/fishtown-analytics/dbt/issues/1504)
-- [@heisencoder](https://github.com/heisencoder) [#1509](https://github.com/fishtown-analytics/dbt/pull/1509), [#1549](https://github.com/fishtown-analytics/dbt/pull/1549)
-- [@rmgpinto](https://github.com/rmgpinto) [docs#31](https://github.com/fishtown-analytics/dbt-docs/pull/31), [docs#32](https://github.com/fishtown-analytics/dbt-docs/pull/32)
-- [@groodt](https://github.com/groodt) [docs#34](https://github.com/fishtown-analytics/dbt-docs/pull/34)
+- [@nydnarb](https://github.com/nydnarb) ([#1363](https://github.com/fishtown-analytics/dbt/issues/1363))
+- [@emilieschario](https://github.com/emilieschario) ([#1366](https://github.com/fishtown-analytics/dbt/pull/1366))
+- [@bastienboutonnet](https://github.com/bastienboutonnet) ([#1409](https://github.com/fishtown-analytics/dbt/pull/1409))
+- [@kasanchez](https://github.com/kasanchez) ([#1247](https://github.com/fishtown-analytics/dbt/pull/1247))
+- [@Blakewell](https://github.com/Blakewell) ([#1307](https://github.com/fishtown-analytics/dbt/pull/1307))
+- [@buremba](https://github.com/buremba) ([#1476](https://github.com/fishtown-analytics/dbt/pull/1476))
+- [@darrenhaken](https://github.com/darrenhaken) ([#1285](https://github.com/fishtown-analytics/dbt/pull/1285))
+- [@tbescherer](https://github.com/tbescherer) ([#1504](https://github.com/fishtown-analytics/dbt/issues/1504))
+- [@heisencoder](https://github.com/heisencoder) ([#1509](https://github.com/fishtown-analytics/dbt/pull/1509), [#1549](https://github.com/fishtown-analytics/dbt/pull/1549))
+- [@cclauss](https://github.com/cclauss) ([#1572](https://github.com/fishtown-analytics/dbt/pull/1572))
+- [@josegalarza](https://github.com/josegalarza) ([#1571](https://github.com/fishtown-analytics/dbt/pull/1571))
+- [@rmgpinto](https://github.com/rmgpinto) ([docs#31](https://github.com/fishtown-analytics/dbt-docs/pull/31), [docs#32](https://github.com/fishtown-analytics/dbt-docs/pull/32))
+- [@groodt](https://github.com/groodt) ([docs#34](https://github.com/fishtown-analytics/dbt-docs/pull/34))
 
 
 ## dbt 0.13.1 (May 13, 2019)
