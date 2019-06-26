@@ -11,12 +11,14 @@ class BaseRelation(APIObject):
     View = "view"
     CTE = "cte"
     MaterializedView = "materializedview"
+    ExternalTable = "externaltable"
 
     RelationTypes = [
         Table,
         View,
         CTE,
-        MaterializedView
+        MaterializedView,
+        ExternalTable
     ]
 
     DEFAULTS = {
