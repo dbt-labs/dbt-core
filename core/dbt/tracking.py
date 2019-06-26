@@ -38,7 +38,7 @@ PLATFORM_SPEC = "iglu:com.dbt/platform/jsonschema/1-0-0"
 RUN_MODEL_SPEC = "iglu:com.dbt/run_model/jsonschema/1-0-1"
 INVOCATION_ENV_SPEC = "iglu:com.dbt/invocation_env/jsonschema/1-0-0"
 PACKAGE_INSTALL_SPEC = "iglu:com.dbt/package_install/jsonschema/1-0-0"
-RPC_REQUEST_SPEC = 'iglu:com.dbt/rpc_request/jsonschema/1-0-1'
+RPC_REQUEST_SPEC = "iglu:com.dbt/rpc_request/jsonschema/1-0-1"
 DEPRECATION_WARN_SPEC = 'iglu:com.dbt/deprecation_warn/jsonschema/1-0-0'
 LOAD_ALL_TIMING_SPEC = "iglu:com.dbt/load_all_timing/jsonschema/1-0-3"
 RESOURCE_COUNTS = 'iglu:com.dbt/resource_counts/jsonschema/1-0-0'
@@ -339,9 +339,9 @@ def track_rpc_request(options):
     track(
         active_user,
         category="dbt",
-        action='rpc_request',
+        action="rpc_request",
         label=get_invocation_id(),
-        context=context
+        context=context,
     )
 
 
