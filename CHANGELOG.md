@@ -78,7 +78,8 @@
 - Added a flag for wrapping models and tests in jinja blocks ([#1407](https://github.com/fishtown-analytics/dbt/pull/1407), [#1400](https://github.com/fishtown-analytics/dbt/issues/1400))
 - Connection management: Bind connections threads rather than to names ([#1336](https://github.com/fishtown-analytics/dbt/pull/1336), [#1312](https://github.com/fishtown-analytics/dbt/issues/1312))
 - Add deprecation warning for dbt users on Python2 ([#1534](https://github.com/fishtown-analytics/dbt/pull/1534), [#1531](https://github.com/fishtown-analytics/dbt/issues/1531))
-- Upgrade networkx to v2.x ([#1509](https://github.com/fishtown-analytics/dbt/pull/1509), [#https://github.com/fishtown-analytics/dbt/issues/1496])
+- Upgrade networkx to v2.x ([#1509](https://github.com/fishtown-analytics/dbt/pull/1509), [#1496](https://github.com/fishtown-analytics/dbt/issues/1496))
+- Anonymously track adapter type and rpc requests when tracking is enabled ([#1575](https://github.com/fishtown-analytics/dbt/pull/1575), [#1574](https://github.com/fishtown-analytics/dbt/issues/1574))
 
 ### Contributors:
 Almost a dozen contributors wrote code for this release of dbt! Thanks for taking the time, and nice work :)
