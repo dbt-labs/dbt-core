@@ -92,7 +92,8 @@ class TestEventTracking(DBTIntegrationTest):
         self,
         command,
         progress,
-        result_type=None
+        result_type=None,
+        adapter_type='postgres'
     ):
 
         def populate(
@@ -103,7 +104,7 @@ class TestEventTracking(DBTIntegrationTest):
         ):
             return [
                 {
-                    'schema': 'iglu:com.dbt/invocation/jsonschema/1-0-0',
+                    'schema': 'iglu:com.dbt/invocation/jsonschema/1-0-1',
                     'data': {
                         'project_id': project_id,
                         'user_id': user_id,
@@ -116,7 +117,8 @@ class TestEventTracking(DBTIntegrationTest):
 
                         'options': None,  # TODO : Add options to compile cmd!
                         'result_type': result_type,
-                        'result': None
+                        'result': None,
+                        'adapter_type': adapter_type
                     }
                 },
                 {
@@ -252,9 +254,9 @@ class TestEventTrackingSuccess(TestEventTracking):
         ]
 
         expected_contexts = [
-            self.build_context('deps', 'start'),
+            self.build_context('deps', 'start', adapter_type=None),
             package_context,
-            self.build_context('deps', 'end', result_type='ok')
+            self.build_context('deps', 'end', result_type='ok', adapter_type=None)
         ]
 
         self.run_event_test(["deps"], expected_calls, expected_contexts)

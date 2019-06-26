@@ -4,6 +4,8 @@ from snowplow_tracker import Subject, Tracker, Emitter, logger as sp_logger
 from snowplow_tracker import SelfDescribingJson
 from datetime import datetime
 
+from dbt.adapters.factory import get_adapter
+
 import pytz
 import platform
 import uuid
@@ -18,11 +20,12 @@ sp_logger.setLevel(100)
 COLLECTOR_URL = "fishtownanalytics.sinter-collect.com"
 COLLECTOR_PROTOCOL = "https"
 
-INVOCATION_SPEC = 'iglu:com.dbt/invocation/jsonschema/1-0-0'
+INVOCATION_SPEC = 'iglu:com.dbt/invocation/jsonschema/1-0-1'
 PLATFORM_SPEC = 'iglu:com.dbt/platform/jsonschema/1-0-0'
 RUN_MODEL_SPEC = 'iglu:com.dbt/run_model/jsonschema/1-0-1'
 INVOCATION_ENV_SPEC = 'iglu:com.dbt/invocation_env/jsonschema/1-0-0'
 PACKAGE_INSTALL_SPEC = 'iglu:com.dbt/package_install/jsonschema/1-0-0'
+RPC_REQUEST_SPEC = 'iglu:com.dbt/rpc_request/jsonschema/1-0-1'
 
 DBT_INVOCATION_ENV = 'DBT_INVOCATION_ENV'
 
@@ -116,6 +119,11 @@ def get_run_type(args):
 
 
 def get_invocation_context(user, config, args):
+    try:
+        adapter_type = get_adapter(config).type()
+    except Exception:
+        adapter_type = None
+
     return {
         "project_id": None if config is None else config.hashed_name(),
         "user_id": user.id,
@@ -126,6 +134,7 @@ def get_invocation_context(user, config, args):
         "version": str(dbt_version.installed),
 
         "run_type": get_run_type(args),
+        "adapter_type": adapter_type,
     }
 
 
@@ -228,6 +237,18 @@ def track_model_run(options):
         active_user,
         category="dbt",
         action='run_model',
+        label=active_user.invocation_id,
+        context=context
+    )
+
+
+def track_rpc_request(options):
+    context = [SelfDescribingJson(RPC_REQUEST_SPEC, options)]
+
+    track(
+        active_user,
+        category="dbt",
+        action='rpc_request',
         label=active_user.invocation_id,
         context=context
     )

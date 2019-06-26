@@ -22,6 +22,7 @@ from dbt import flags
 from dbt.logger import RPC_LOGGER as logger
 from dbt.logger import add_queue_handler
 import dbt.exceptions
+import dbt.tracking
 
 
 class RPCException(JSONRPCDispatchException):
@@ -56,6 +57,12 @@ class RPCException(JSONRPCDispatchException):
     @classmethod
     def from_error(cls, err):
         return cls(err.code, err.message, err.data, err.data.get('logs'))
+
+
+def track_rpc_request(task):
+    dbt.tracking.track_rpc_request({
+        "task": task
+    })
 
 
 def invalid_params(data):
@@ -429,6 +436,7 @@ class ResponseManager(JSONRPCResponseManager):
         except JSONRPCInvalidRequestException:
             return JSONRPC20Response(error=JSONRPCInvalidRequest()._data)
 
+        track_rpc_request(request.method)
         dispatcher = RequestDispatcher(
             http_request,
             request,
