@@ -61,13 +61,13 @@ class TestRedshiftAdapter(unittest.TestCase):
 
     def test_implicit_database_conn(self):
         creds = RedshiftAdapter.ConnectionManager.get_credentials(self.config.credentials)
-        self.assertEquals(creds, self.config.credentials)
+        self.assertEqual(creds, self.config.credentials)
 
     def test_explicit_database_conn(self):
         self.config.method = 'database'
 
         creds = RedshiftAdapter.ConnectionManager.get_credentials(self.config.credentials)
-        self.assertEquals(creds, self.config.credentials)
+        self.assertEqual(creds, self.config.credentials)
 
     def test_explicit_iam_conn(self):
         self.config.credentials = self.config.credentials.incorporate(
@@ -80,7 +80,7 @@ class TestRedshiftAdapter(unittest.TestCase):
             creds = RedshiftAdapter.ConnectionManager.get_credentials(self.config.credentials)
 
         expected_creds = self.config.credentials.incorporate(password='tmp_password')
-        self.assertEquals(creds, expected_creds)
+        self.assertEqual(creds, expected_creds)
 
     def test_invalid_auth_method(self):
         # we have to set method this way, otherwise it won't validate

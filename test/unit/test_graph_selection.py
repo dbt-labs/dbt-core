@@ -55,7 +55,7 @@ class GraphSelectionTest(BaseGraphSelectionTest):
             exclude
         )
 
-        self.assertEquals(selected, expected)
+        self.assertEqual(selected, expected)
 
 
     def test__single_node_selection_in_package(self):
@@ -177,7 +177,7 @@ class GraphSelectionTest(BaseGraphSelectionTest):
         found = graph_selector.get_package_names(self.package_graph)
 
         expected = set(['X', 'Y'])
-        self.assertEquals(found, expected)
+        self.assertEqual(found, expected)
 
     def assert_is_selected_node(self, node, spec, should_work):
         self.assertEqual(
