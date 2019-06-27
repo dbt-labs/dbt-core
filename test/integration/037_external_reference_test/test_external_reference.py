@@ -35,9 +35,9 @@ class TestExternalReference(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test__postgres__external_reference(self):
-        self.assertEquals(len(self.run_dbt()), 1)
+        self.assertEqual(len(self.run_dbt()), 1)
         # running it again should succeed
-        self.assertEquals(len(self.run_dbt()), 1)
+        self.assertEqual(len(self.run_dbt()), 1)
 
 
 # The opposite of the test above -- check that external relations that
@@ -61,7 +61,7 @@ class TestExternalDependency(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test__postgres__external_reference(self):
-        self.assertEquals(len(self.run_dbt()), 1)
+        self.assertEqual(len(self.run_dbt()), 1)
 
         # create a view outside of the dbt schema that depends on this model
         self.external_schema = self.unique_schema()+'zz'
@@ -74,5 +74,5 @@ class TestExternalDependency(DBTIntegrationTest):
         )
 
         # running it again should succeed
-        self.assertEquals(len(self.run_dbt()), 1)
+        self.assertEqual(len(self.run_dbt()), 1)
 
