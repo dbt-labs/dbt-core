@@ -4,7 +4,7 @@ import unittest
 from dbt.contracts.graph.parsed import ParsedNode
 from dbt.context import parser, runtime
 import dbt.exceptions
-from test.unit.mock_adapter import adapter_factory
+from .mock_adapter import adapter_factory
 
 
 
