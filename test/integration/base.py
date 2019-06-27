@@ -1035,7 +1035,7 @@ class DBTIntegrationTest(unittest.TestCase):
 
         res = self.run_sql(cmp_query, fetch='one')
 
-        self.assertEquals(int(res[0]), 0, "Row count of table {} doesn't match row count of table {}. ({} rows different)".format(
+        self.assertEqual(int(res[0]), 0, "Row count of table {} doesn't match row count of table {}. ({} rows different)".format(
                 relation_a.identifier,
                 relation_b.identifier,
                 res[0]
@@ -1045,7 +1045,7 @@ class DBTIntegrationTest(unittest.TestCase):
     def assertTableDoesNotExist(self, table, schema=None):
         columns = self.get_table_columns(table, schema)
 
-        self.assertEquals(
+        self.assertEqual(
             len(columns),
             0
         )
