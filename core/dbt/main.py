@@ -23,7 +23,6 @@ import dbt.task.serve as serve_task
 import dbt.task.freshness as freshness_task
 import dbt.task.run_operation as run_operation_task
 from dbt.task.list import ListTask
-from dbt.task.migrate import MigrationTask
 from dbt.task.rpc_server import RPCServerTask
 from dbt.adapters.factory import reset_adapters
 
@@ -328,19 +327,11 @@ def _build_deps_subparser(subparsers, base_subparser):
     return sub
 
 
-def _build_snapshot_subparser(subparsers, base_subparser, which='snapshot'):
-    if which == 'archive':
-        helpmsg = (
-            'DEPRECATED: This command is deprecated and will\n'
-            'be removed in a future release. Use dbt snapshot instead.'
-        )
-    else:
-        helpmsg = 'Execute snapshots defined in your project'
-
+def _build_snapshot_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
-        which,
+        'snapshot',
         parents=[base_subparser],
-        help=helpmsg)
+        help='Execute snapshots defined in your project')
     sub.add_argument(
         '--threads',
         type=int,
@@ -350,7 +341,7 @@ def _build_snapshot_subparser(subparsers, base_subparser, which='snapshot'):
         settings in profiles.yml.
         """
     )
-    sub.set_defaults(cls=snapshot_task.SnapshotTask, which=which)
+    sub.set_defaults(cls=snapshot_task.SnapshotTask, which='snapshot')
     return sub
 
 
@@ -633,38 +624,6 @@ def _build_run_operation_subparser(subparsers, base_subparser):
     return sub
 
 
-def _build_snapshot_migrate_subparser(subparsers, base_subparser):
-    sub = subparsers.add_parser(
-        'snapshot-migrate',
-        parents=[base_subparser],
-        help='Run the snapshot migration script'
-    )
-    sub.add_argument(
-        '--from-archive',
-        action='store_true',
-        help=('This flag is required for the 0.14.0 archive to snapshot '
-              'migration')
-    )
-    sub.add_argument(
-        '--apply-files',
-        action='store_true',
-        dest='write_files',
-        help='If set, write .sql files to disk instead of logging them'
-    )
-    sub.add_argument(
-        '--apply-database',
-        action='store_true',
-        dest='migrate_database',
-        help='If set, perform just the database migration'
-    )
-    sub.add_argument(
-        '--apply',
-        action='store_true',
-        help='If set, implies --apply-database --apply-files'
-    )
-    sub.set_defaults(cls=MigrationTask, which='migration')
-
-
 def parse_args(args):
     p = DBTArgumentParser(
         prog='dbt',
@@ -750,10 +709,8 @@ def parse_args(args):
     _build_debug_subparser(subs, base_subparser)
     _build_deps_subparser(subs, base_subparser)
     _build_list_subparser(subs, base_subparser)
-    _build_snapshot_migrate_subparser(subs, base_subparser)
 
     snapshot_sub = _build_snapshot_subparser(subs, base_subparser)
-    archive_sub = _build_snapshot_subparser(subs, base_subparser, 'archive')
     rpc_sub = _build_rpc_subparser(subs, base_subparser)
     run_sub = _build_run_subparser(subs, base_subparser)
     compile_sub = _build_compile_subparser(subs, base_subparser)
@@ -763,8 +720,7 @@ def parse_args(args):
     _add_common_arguments(run_sub, compile_sub, generate_sub, test_sub,
                           rpc_sub)
     # --models, --exclude
-    _add_selection_arguments(run_sub, compile_sub, generate_sub, test_sub,
-                             archive_sub)
+    _add_selection_arguments(run_sub, compile_sub, generate_sub, test_sub)
     _add_selection_arguments(snapshot_sub, models_name='select')
     # --full-refresh
     _add_table_mutability_arguments(run_sub, compile_sub)

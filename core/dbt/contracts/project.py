@@ -3,36 +3,6 @@ from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.utils import deep_merge
 
 
-ARCHIVE_TABLE_CONFIG_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'properties': {
-        'source_table': {'type': 'string'},
-        'target_table': {'type': 'string'},
-        'updated_at': {'type': 'string'},
-        'unique_key': {'type': 'string'},
-    },
-    'required': ['source_table', 'target_table', 'updated_at', 'unique_key'],
-}
-
-
-ARCHIVE_CONFIG_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'properties': {
-        'source_database': {'type': 'string'},
-        'target_database': {'type': 'string'},
-        'source_schema': {'type': 'string'},
-        'target_schema': {'type': 'string'},
-        'tables': {
-            'type': 'array',
-            'items': ARCHIVE_TABLE_CONFIG_CONTRACT,
-        }
-    },
-    'required': ['source_schema', 'target_schema', 'tables'],
-}
-
-
 PROJECT_CONTRACT = {
     'type': 'object',
     'description': 'The project configuration.',
@@ -137,10 +107,6 @@ PROJECT_CONTRACT = {
         'on-run-end': {
             'type': 'array',
             'items': {'type': 'string'},
-        },
-        'archive': {
-            'type': 'array',
-            'items': ARCHIVE_CONFIG_CONTRACT,
         },
         'seeds': {
             'type': 'object',

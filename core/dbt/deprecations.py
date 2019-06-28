@@ -40,17 +40,6 @@ class GenerateSchemaNameSingleArgDeprecated(DBTDeprecation):
   '''  # noqa
 
 
-class ArchiveDeprecated(DBTDeprecation):
-    name = 'archives'
-    description = '''As of dbt v0.14.0, the `dbt archive` command is renamed to
-  `dbt snapshot` and "archives" are "snapshots". The `dbt archive` command will
-  be removed in a future release.
-
-  For more information, see:
-    https://docs.getdbt.com/v0.14/docs/upgrading-to-014
-  '''
-
-
 _adapter_renamed_description = """\
 The adapter function `adapter.{old_name}` is deprecated and will be removed in
  a future release of dbt. Please use `adapter.{new_name}` instead.
@@ -87,7 +76,6 @@ active_deprecations = set()
 deprecations_list = [
     DBTRepositoriesDeprecation(),
     GenerateSchemaNameSingleArgDeprecated(),
-    ArchiveDeprecated(),
 ]
 
 deprecations = {d.name: d for d in deprecations_list}
