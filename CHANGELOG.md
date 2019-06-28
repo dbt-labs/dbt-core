@@ -82,6 +82,7 @@
 - Add deprecation warning for dbt users on Python2 ([#1534](https://github.com/fishtown-analytics/dbt/pull/1534), [#1531](https://github.com/fishtown-analytics/dbt/issues/1531))
 - Upgrade networkx to v2.x ([#1509](https://github.com/fishtown-analytics/dbt/pull/1509), [#1496](https://github.com/fishtown-analytics/dbt/issues/1496))
 - Anonymously track adapter type and rpc requests when tracking is enabled ([#1575](https://github.com/fishtown-analytics/dbt/pull/1575), [#1574](https://github.com/fishtown-analytics/dbt/issues/1574))
+- Fix for test warnings and general test suite cleanup ([#1578](https://github.com/fishtown-analytics/dbt/pull/1578))
 
 ### Contributors:
 Over a dozen contributors wrote code for this release of dbt! Thanks for taking the time, and nice work y'all! :)
@@ -94,7 +95,7 @@ Over a dozen contributors wrote code for this release of dbt! Thanks for taking 
 - [@buremba](https://github.com/buremba) ([#1476](https://github.com/fishtown-analytics/dbt/pull/1476))
 - [@darrenhaken](https://github.com/darrenhaken) ([#1285](https://github.com/fishtown-analytics/dbt/pull/1285))
 - [@tbescherer](https://github.com/tbescherer) ([#1504](https://github.com/fishtown-analytics/dbt/issues/1504))
-- [@heisencoder](https://github.com/heisencoder) ([#1509](https://github.com/fishtown-analytics/dbt/pull/1509), [#1549](https://github.com/fishtown-analytics/dbt/pull/1549))
+- [@heisencoder](https://github.com/heisencoder) ([#1509](https://github.com/fishtown-analytics/dbt/pull/1509), [#1549](https://github.com/fishtown-analytics/dbt/pull/1549). [#1578](https://github.com/fishtown-analytics/dbt/pull/1578))
 - [@cclauss](https://github.com/cclauss) ([#1572](https://github.com/fishtown-analytics/dbt/pull/1572))
 - [@josegalarza](https://github.com/josegalarza) ([#1571](https://github.com/fishtown-analytics/dbt/pull/1571))
 - [@rmgpinto](https://github.com/rmgpinto) ([docs#31](https://github.com/fishtown-analytics/dbt-docs/pull/31), [docs#32](https://github.com/fishtown-analytics/dbt-docs/pull/32))
