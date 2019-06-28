@@ -458,7 +458,7 @@ def _build_deps_subparser(subparsers, base_subparser):
 
 def _build_snapshot_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
-        'snapshot',
+        "snapshot",
         parents=[base_subparser],
         help="""
         Execute snapshots defined in your project
