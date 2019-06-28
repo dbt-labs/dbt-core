@@ -144,8 +144,7 @@ class Project:
                  source_paths, macro_paths, data_paths, test_paths,
                  analysis_paths, docs_paths, target_path, snapshot_paths,
                  clean_targets, log_path, modules_path, quoting, models,
-                 on_run_start, on_run_end, archive, seeds, dbt_version,
-                 packages):
+                 on_run_start, on_run_end, seeds, dbt_version, packages):
         self.project_name = project_name
         self.version = version
         self.project_root = project_root
@@ -165,7 +164,6 @@ class Project:
         self.models = models
         self.on_run_start = on_run_start
         self.on_run_end = on_run_end
-        self.archive = archive
         self.seeds = seeds
         self.dbt_version = dbt_version
         self.packages = packages
@@ -176,7 +174,6 @@ class Project:
         into empty containers, and to turn strings into arrays of strings.
         """
         handlers = {
-            ('archive',): _list_if_none,
             ('on-run-start',): _list_if_none_or_string,
             ('on-run-end',): _list_if_none_or_string,
         }
@@ -251,7 +248,6 @@ class Project:
         models = project_dict.get('models', {})
         on_run_start = project_dict.get('on-run-start', [])
         on_run_end = project_dict.get('on-run-end', [])
-        archive = project_dict.get('archive', [])
         seeds = project_dict.get('seeds', {})
         dbt_raw_version = project_dict.get('require-dbt-version', '>=0.0.0')
 
@@ -282,7 +278,6 @@ class Project:
             models=models,
             on_run_start=on_run_start,
             on_run_end=on_run_end,
-            archive=archive,
             seeds=seeds,
             dbt_version=dbt_version,
             packages=packages
@@ -329,7 +324,6 @@ class Project:
             'models': self.models,
             'on-run-start': self.on_run_start,
             'on-run-end': self.on_run_end,
-            'archive': self.archive,
             'seeds': self.seeds,
             'require-dbt-version': [
                 v.to_version_string() for v in self.dbt_version

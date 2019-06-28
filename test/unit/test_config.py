@@ -544,7 +544,6 @@ class TestProject(BaseConfigTest):
         self.assertEqual(project.models, {})
         self.assertEqual(project.on_run_start, [])
         self.assertEqual(project.on_run_end, [])
-        self.assertEqual(project.archive, [])
         self.assertEqual(project.seeds, {})
         self.assertEqual(project.dbt_version,
                          [VersionSpecifier.from_version_string('>=0.0.0')])
@@ -624,20 +623,6 @@ class TestProject(BaseConfigTest):
             'on-run-end': [
                 '{{ logging.log_run_end_event() }}',
             ],
-            'archive': [
-                {
-                    'source_schema': 'my_schema',
-                    'target_schema': 'my_other_schema',
-                    'tables': [
-                        {
-                            'source_table': 'my_table',
-                            'target_table': 'my_table_archived',
-                            'updated_at': 'updated_at_field',
-                            'unique_key': 'table_id',
-                        },
-                    ],
-                },
-            ],
             'seeds': {
                 'my_test_project': {
                     'enabled': True,
@@ -698,18 +683,6 @@ class TestProject(BaseConfigTest):
         })
         self.assertEqual(project.on_run_start, ['{{ logging.log_run_start_event() }}'])
         self.assertEqual(project.on_run_end, ['{{ logging.log_run_end_event() }}'])
-        self.assertEqual(project.archive, [{
-            'source_schema': 'my_schema',
-            'target_schema': 'my_other_schema',
-            'tables': [
-                {
-                    'source_table': 'my_table',
-                    'target_table': 'my_table_archived',
-                    'updated_at': 'updated_at_field',
-                    'unique_key': 'table_id',
-                },
-            ],
-        }])
         self.assertEqual(project.seeds, {
             'my_test_project': {
                 'enabled': True,
@@ -824,7 +797,6 @@ class TestProject(BaseConfigTest):
         self.default_project_data.update({
             'models': None,
             'seeds': None,
-            'archive': None,
             'on-run-end': None,
             'on-run-start': None,
         })
@@ -834,7 +806,6 @@ class TestProject(BaseConfigTest):
         self.assertEqual(project.models, {})
         self.assertEqual(project.on_run_start, [])
         self.assertEqual(project.on_run_end, [])
-        self.assertEqual(project.archive, [])
         self.assertEqual(project.seeds, {})
 
     def test_nested_none_values(self):
@@ -1093,32 +1064,8 @@ class TestRuntimeConfig(BaseConfigTest):
                 },
             ],
         }]
-        project = self.get_project()
-        profile = self.get_profile()
-        with self.assertRaises(dbt.exceptions.DbtProjectError) as raised:
-            dbt.config.RuntimeConfig.from_parts(project, profile, self.args)
-        self.assertIn('The `archive` section in `dbt_project.yml` is no longer supported', str(raised.exception))
-
-    def test_archive_allowed(self):
-        archive_cfg = {
-            "source_schema": 'a',
-            "target_schema": 'b',
-            "tables": [
-                {
-                    "source_table": "seed",
-                    "target_table": "archive_actual",
-                    "updated_at": 'updated_at',
-                    "unique_key": '''id || '-' || first_name'''
-                },
-            ],
-        }
-        self.default_project_data['archive'] = [archive_cfg]
-        project = self.get_project()
-        profile = self.get_profile()
-
-        cfg = dbt.config.RuntimeConfig.from_parts(project, profile, self.args,
-                                                  allow_archive_configs=True)
-        self.assertEqual(cfg.archive, [archive_cfg])
+        with self.assertRaises(dbt.exceptions.DbtProjectError):
+            self.get_project()
 
 
 class TestRuntimeConfigFiles(BaseFileTest):
@@ -1151,44 +1098,9 @@ class TestRuntimeConfigFiles(BaseFileTest):
         self.assertEqual(config.models, {})
         self.assertEqual(config.on_run_start, [])
         self.assertEqual(config.on_run_end, [])
-        self.assertEqual(config.archive, [])
         self.assertEqual(config.seeds, {})
         self.assertEqual(config.packages, PackageConfig(packages=[]))
         self.assertEqual(config.project_name, 'my_test_project')
-
-
-class TestRuntimeConfigFilesWithArchive(BaseFileTest):
-    def setUp(self):
-        super().setUp()
-        self.default_project_data['archive'] = [
-            {
-                "source_schema": 'a',
-                "target_schema": 'b',
-                "tables": [
-                    {
-                        "source_table": "c",
-                        "target_table": "d",
-                        "updated_at": 'date_field',
-                        "unique_key": 'id',
-                    },
-                ],
-            }
-        ]
-        self.write_profile(self.default_profile_data)
-        self.write_project(self.default_project_data)
-        # and after the fact, add the project root
-        self.default_project_data['project-root'] = self.project_dir
-
-    def test_archive_ok_from_args(self):
-        with temp_cd(self.project_dir):
-            config = dbt.config.RuntimeConfig.from_args(self.args, allow_archive_configs=True)
-
-        self.assertEqual(config.archive, self.default_project_data['archive'])
-
-    def test_archive_error(self):
-        with temp_cd(self.project_dir), self.assertRaises(dbt.exceptions.DbtProjectError) as raised:
-            dbt.config.RuntimeConfig.from_args(self.args)
-        self.assertIn('The `archive` section in `dbt_project.yml` is no longer supported', str(raised.exception))
 
 
 class TestVariableRuntimeConfigFiles(BaseFileTest):
