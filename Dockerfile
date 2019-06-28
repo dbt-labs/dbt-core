@@ -49,3 +49,5 @@ RUN cd /usr/app && \
     pyenv rehash
 
 RUN pyenv local dbt36 dbt37 dbt27
+
+ENV PYTHONIOENCODING=utf-8
