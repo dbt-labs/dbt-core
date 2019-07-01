@@ -29,9 +29,11 @@
 
     where sch.nspname != 'information_schema'
       and sch.nspname not like 'pg_%' -- avoid postgres system schemas
+      and not pg_is_other_temp_schema(sch.oid) -- not a temporary schema belonging to another session
       and tbl.relpersistence = 'p' -- [p]ermanent table. Other values are [u]nlogged table, [t]emporary table
-      and tbl.relkind in ('r', 'v', 'm') -- o[r]dinary table, [v]iew, [m]aterialized view. Other values are [i]ndex, [S]equence, [c]omposite type, [t]OAST table, [f]oreign table
-      and col.attnum >= 1 -- negative numbers are used for system columns such as oid
+      and tbl.relkind in ('r', 'v', 'f', 'p') -- o[r]dinary table, [v]iew, [f]oreign table, [p]artitioned table. Other values are [i]ndex, [S]equence, [c]omposite type, [t]OAST table, [m]aterialized view
+      and col.attnum > 0 -- negative numbers are used for system columns such as oid
+      and not col.attisdropped -- column as not been dropped
 
     order by
         sch.nspname,
