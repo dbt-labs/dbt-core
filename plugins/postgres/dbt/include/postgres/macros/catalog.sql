@@ -13,8 +13,8 @@
         sch.nspname as table_schema,
         tbl.relname as table_name,
         case tbl.relkind
-            when 'r' then 'BASE TABLE'
-            else 'VIEW'
+            when 'v' then 'VIEW'
+            else 'BASE TABLE'
         end as table_type,
         null::text as table_comment,
         col.attname as column_name,
