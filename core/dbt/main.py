@@ -582,7 +582,7 @@ def _build_list_subparser(subparsers, base_subparser):
     sub = subparsers.add_parser(
         'list',
         parents=[base_subparser],
-        help='list models'
+        help='List the resources in your project'
     )
     sub.set_defaults(cls=ListTask, which='list')
     resource_values = list(ListTask.ALL_RESOURCE_VALUES) + ['default', 'all']
