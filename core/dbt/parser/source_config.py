@@ -139,7 +139,12 @@ class SourceConfig:
 
         for key in self.ExtendDictFields:
             dict_val = relevant_configs.get(key, {})
-            mutable_config[key].update(dict_val)
+            try:
+                mutable_config[key].update(dict_val)
+            except (ValueError, TypeError, AttributeError):
+                dbt.exceptions.raise_compiler_error(
+                    'Invalid config field: "{}" must be a dict'.format(key)
+                )
 
         for key in (self.ClobberFields | self.AdapterSpecificConfigs):
             if key in relevant_configs:

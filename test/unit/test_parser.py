@@ -143,6 +143,17 @@ class SourceConfigTest(BaseParserTest):
 
         self.assertEqual(used_keys, frozenset(SourceConfig.ConfigKeys))
 
+    def test__source_config_wrong_type(self):
+        # ExtendDict fields should handle non-dict inputs gracefully
+        self.root_project_config.models = {'persist_docs': False}
+        cfg = SourceConfig(self.root_project_config, self.root_project_config,
+                           ['root', 'x'], NodeType.Model)
+
+        with self.assertRaises(dbt.exceptions.CompilationException) as exc:
+            cfg.get_project_config(self.root_project_config)
+
+        self.assertIn('must be a dict', str(exc.exception))
+
 
 class SchemaParserTest(BaseParserTest):
     maxDiff = None
