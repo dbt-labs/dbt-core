@@ -106,7 +106,8 @@
         )
     {%- endset %}
 
-    {% set scd_id_expr = snapshot_hash_arguments(check_cols) %}
+    {% set scd_id_cols = [primary_key] + (check_cols | list) %}
+    {% set scd_id_expr = snapshot_hash_arguments(scd_id_cols) %}
 
     {% do return({
         "unique_key": primary_key,

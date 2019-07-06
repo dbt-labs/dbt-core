@@ -8,6 +8,15 @@ import dbt.utils
 
 
 def set_snapshot_attributes(node):
+    # Default the target database to the database specified in the target
+    # This line allows target_database to be optional in the snapshot config
+    if 'target_database' not in node.config:
+        node.config['target_database'] = node.database
+
+    # Set the standard node configs (database+schema) to be the specified
+    # values from target_database and target_schema. This ensures that the
+    # database and schema names are interopolated correctly when snapshots
+    # are ref'd from other models
     config_keys = {
         'target_database': 'database',
         'target_schema': 'schema'
