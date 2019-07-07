@@ -180,7 +180,7 @@ talk:
     target: default
 ```
 
-There's a sample you can look at in the `dbt` [docs](https://docs.getdbt.com/reference#profile) but it's got a lot of extra and as a developer, you really probably only want to test against your local postgres container. The basic idea is that there are multiple 'profiles' (`talk`, in this case) and within those each profile has one or more 'targets' (`default`, in this case), and each profile has a default target. You can specify what profile you want to use with the `--profile` flag, and which target with the `--target` flag. If you want to be really snazzy, dbt project files actually specify their target, and if you match up your dbt project `profile` key with your `profiles.yml` profile names you don't have to use `--profile` (and if you like your profile's default target, no need for `--target` either).
+There's a sample you can look at in the `dbt` [docs](https://docs.getdbt.com/docs/profile) but it's got a lot of extra and as a developer, you really probably only want to test against your local postgres container. The basic idea is that there are multiple 'profiles' (`talk`, in this case) and within those each profile has one or more 'targets' (`default`, in this case), and each profile has a default target. You can specify what profile you want to use with the `--profile` flag, and which target with the `--target` flag. If you want to be really snazzy, dbt project files actually specify their target, and if you match up your dbt project `profile` key with your `profiles.yml` profile names you don't have to use `--profile` (and if you like your profile's default target, no need for `--target` either).
 
 ## Example
 

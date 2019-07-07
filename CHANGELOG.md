@@ -50,7 +50,7 @@
 - Add searching by tag name ([#32](https://github.com/fishtown-analytics/dbt-docs/pull/32))
 - Add context menu link to export graph viz as a PNG ([#34](https://github.com/fishtown-analytics/dbt-docs/pull/34))
 - Fix for clicking models in left-nav while search results are open ([#31](https://github.com/fishtown-analytics/dbt-docs/pull/31))
- 
+
 ### Fixes
 - Fix for unduly long timeouts when anonymous event tracking is blocked ([#1445](https://github.com/fishtown-analytics/dbt/pull/1445), [#1063](https://github.com/fishtown-analytics/dbt/issues/1063))
 - Fix for error with mostly-duplicate git urls in packages, picking the one that came first. ([#1428](https://github.com/fishtown-analytics/dbt/pull/1428), [#1084](https://github.com/fishtown-analytics/dbt/issues/1084))
@@ -135,7 +135,7 @@ This release provides [a stable API for building new adapters](https://docs.getd
 
 ### Breaking Changes
 - version 1 schema.yml specs are no longer implemented. Please use the version 2 spec instead ([migration guide](https://docs.getdbt.com/docs/upgrading-from-0-10-to-0-11#section-schema-yml-v2-syntax))
-- `{{this}}` is no longer implemented for `on-run-start` and `on-run-end` hooks. Use `{{ target }}` or an [`on-run-end` context variable](https://docs.getdbt.com/reference#schemas) instead ([#1176](https://github.com/fishtown-analytics/dbt/pull/1176), implementing [#878](https://github.com/fishtown-analytics/dbt/issues/878))
+- `{{this}}` is no longer implemented for `on-run-start` and `on-run-end` hooks. Use `{{ target }}` or an [`on-run-end` context variable](https://docs.getdbt.com/docs/schemas) instead ([#1176](https://github.com/fishtown-analytics/dbt/pull/1176), implementing [#878](https://github.com/fishtown-analytics/dbt/issues/878))
 - A number of materialization-specific adapter methods have changed in breaking ways. If you use these adapter methods in your macros or materializations, you may need to update your code accordingly.
   - query_for_existing - **removed**, use [get_relation](https://docs.getdbt.com/v0.13/reference#adapter-get-relation) instead.
   - [get_missing_columns](https://docs.getdbt.com/v0.13/reference#adapter-get-missing-columns) - changed to take `Relation`s instead of schemas and identifiers
@@ -524,7 +524,7 @@ brew install dbt
 
 
 ### Breaking Changes
-- `adapter` functions must be namespaced to the `adapter` context variable. To fix this error, use `adapter.already_exists` instead of just `already_exists`, or similar for other [adapter functions](https://docs.getdbt.com/reference#adapter).
+- `adapter` functions must be namespaced to the `adapter` context variable. To fix this error, use `adapter.already_exists` instead of just `already_exists`, or similar for other [adapter functions](https://docs.getdbt.com/docs/adapter).
 
 
 ### Bugfixes
@@ -623,7 +623,7 @@ Compilation Error in model {your_model} (models/path/to/your_model.sql)
   'already_exists' is undefined
 ```
 
-To fix this error, use `adapter.already_exists` instead of just `already_exists`, or similar for other [adapter functions](https://docs.getdbt.com/reference#adapter).
+To fix this error, use `adapter.already_exists` instead of just `already_exists`, or similar for other [adapter functions](https://docs.getdbt.com/docs/adapter).
 
 ### Bugfixes
 - Handle lingering `__dbt_tmp` relations ([#511](https://github.com/fishtown-analytics/dbt/pull/511))
