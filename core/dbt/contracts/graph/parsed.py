@@ -487,7 +487,7 @@ SNAPSHOT_CONFIG_CONTRACT = {
         ]
     },
     'required': [
-        'target_database', 'target_schema', 'unique_key', 'strategy',
+        'target_schema', 'unique_key', 'strategy',
     ],
 }
 

@@ -353,7 +353,7 @@ class TestBadSnapshot(DBTIntegrationTest):
         with self.assertRaises(dbt.exceptions.CompilationException) as exc:
             self.run_dbt(['compile'], expect_pass=False)
 
-        self.assertIn('target_database', str(exc.exception))
+        self.assertIn('target_schema', str(exc.exception))
 
 
 class TestCheckCols(TestSimpleSnapshotFiles):
