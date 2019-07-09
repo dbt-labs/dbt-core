@@ -785,7 +785,7 @@ def _build_list_subparser(subparsers, base_subparser):
         help="""
         List the resources in your project
         """,
-        aliases=['ls'],
+        aliases=["ls"],
     )
     sub.set_defaults(cls=list_task.ListTask, which="list", rpc_method=None)
     resource_values: List[str] = [str(s) for s in list_task.ListTask.ALL_RESOURCE_VALUES] + [
