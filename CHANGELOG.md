@@ -1,4 +1,4 @@
-## dbt 0.14.0 - Wilt Chamberlain (Unreleased)
+## dbt 0.14.0 - Wilt Chamberlain (July 10, 2019)
 
 ### Overview
 - Replace Archives with Snapshots ([docs](https://docs.getdbt.com/v0.14/docs/snapshots), [migration guide](https://docs.getdbt.com/v0.14/docs/upgrading-to-014))
