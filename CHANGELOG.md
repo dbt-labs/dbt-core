@@ -3,9 +3,9 @@
 ### Overview
 - Replace Archives with Snapshots ([docs](https://docs.getdbt.com/v0.14/docs/snapshots), [migration guide](https://docs.getdbt.com/v0.14/docs/upgrading-to-014))
 - Add three new top-level commands:
-  - `dbt ls` ([docs](https://docs.getdbt.com/v0.14/reference#list))
-  - `dbt run-operation` ([docs](https://docs.getdbt.com/v0.14/reference#run-operation))
-  - `dbt rpc` ([docs](https://docs.getdbt.com/v0.14/reference#rpc))
+  - `dbt ls` ([docs](https://docs.getdbt.com/v0.14/docs/list))
+  - `dbt run-operation` ([docs](https://docs.getdbt.com/v0.14/docs/run-operation))
+  - `dbt rpc` ([docs](https://docs.getdbt.com/v0.14/docs/rpc))
 - Support the specification of severity levels for schema and data tests ([docs](https://docs.getdbt.com/v0.14/docs/testing#section-test-severity))
 - Many new quality of life improvements and bugfixes
 
@@ -18,14 +18,14 @@
   - Normalized meta-column names in Snapshot tables ([#1361](https://github.com/fishtown-analytics/dbt/pull/1361), [#251](https://github.com/fishtown-analytics/dbt/issues/251))
 
 ### Features
-- Add `run-operation` command which invokes macros directly from the CLI ([#1328](https://github.com/fishtown-analytics/dbt/pull/1328)) ([docs](https://docs.getdbt.com/v0.14/reference#run-operation))
-- Add a `dbt ls` command which lists resources in your project ([#1436](https://github.com/fishtown-analytics/dbt/pull/1436), [#467](https://github.com/fishtown-analytics/dbt/issues/467)) ([docs](https://docs.getdbt.com/v0.14/reference#list))
+- Add `run-operation` command which invokes macros directly from the CLI ([#1328](https://github.com/fishtown-analytics/dbt/pull/1328)) ([docs](https://docs.getdbt.com/v0.14/docs/run-operation))
+- Add a `dbt ls` command which lists resources in your project ([#1436](https://github.com/fishtown-analytics/dbt/pull/1436), [#467](https://github.com/fishtown-analytics/dbt/issues/467)) ([docs](https://docs.getdbt.com/v0.14/docs/list))
 - Add Snapshots, an improvement over Archives ([#1361](https://github.com/fishtown-analytics/dbt/pull/1361), [#1175](https://github.com/fishtown-analytics/dbt/issues/1175)) ([docs](https://docs.getdbt.com/v0.14/docs/snapshots))
   - Add the 'check' snapshot strategy ([#1361](https://github.com/fishtown-analytics/dbt/pull/1361), [#706](https://github.com/fishtown-analytics/dbt/issues/706))
   - Support Snapshots across logical databases ([#1455](https://github.com/fishtown-analytics/dbt/issues/1455))
   - Implement Snapshots using a merge statement where supported ([#1478](https://github.com/fishtown-analytics/dbt/pull/1478))
   - Support Snapshot selection using `--select` ([#1520](https://github.com/fishtown-analytics/dbt/pull/1520), [#1512](https://github.com/fishtown-analytics/dbt/issues/1512))
-- Add an RPC server via `dbt rpc` ([#1301](https://github.com/fishtown-analytics/dbt/pull/1301), [#1274](https://github.com/fishtown-analytics/dbt/issues/1274)) ([docs](https://docs.getdbt.com/v0.14/reference#rpc))
+- Add an RPC server via `dbt rpc` ([#1301](https://github.com/fishtown-analytics/dbt/pull/1301), [#1274](https://github.com/fishtown-analytics/dbt/issues/1274)) ([docs](https://docs.getdbt.com/v0.14/docs/rpc))
   - Add `ps` and `kill` commands to the rpc server ([#1380](https://github.com/fishtown-analytics/dbt/pull/1380/), [#1369](https://github.com/fishtown-analytics/dbt/issues/1369), [#1370](https://github.com/fishtown-analytics/dbt/issues/1370))
   - Add support for ephemeral nodes to the rpc server ([#1373](https://github.com/fishtown-analytics/dbt/pull/1373), [#1368](https://github.com/fishtown-analytics/dbt/issues/1368))
   - Add support for inline macros to the rpc server ([#1375](https://github.com/fishtown-analytics/dbt/pull/1375), [#1372](https://github.com/fishtown-analytics/dbt/issues/1372), [#1348](https://github.com/fishtown-analytics/dbt/pull/1348))
