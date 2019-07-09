@@ -1,4 +1,5 @@
 import dbt.flags
+import dbt.ui.colors
 import logging
 import logging.handlers
 import os

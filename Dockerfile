@@ -51,3 +51,4 @@ RUN cd /usr/app && \
 RUN pyenv local dbt36 dbt37 dbt27
 
 ENV PYTHONIOENCODING=utf-8
+ENV LANG C.UTF-8
