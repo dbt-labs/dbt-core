@@ -4,7 +4,7 @@ from distutils.core import setup
 import os
 
 package_name = "dbt-redshift"
-package_version = "0.14.0rc1"
+package_version = "0.14.0"
 description = """The redshift adapter plugin for dbt (data build tool)"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
