@@ -2,13 +2,13 @@
 
 ## About this document
 
-This document is as a guide for contributing to dbt. It is not intended as a guide for end users of dbt (though if it is helpful, that's great!) and it assumes a certain level of familiarity with Python concepts such as virtualenvs, `pip`, module/filesystem layouts, etc. It also assumes you are using macOS or Linux and are comfortable with the command line.
+This document is a guide intended for folks interested in contributing to dbt. It is not intended as a guide for end users of dbt (though if it is helpful, that's great!) and it assumes a certain level of familiarity with Python concepts such as virtualenvs, `pip`, python modules, filesystems, and so on. It also assumes you are using macOS or Linux and are comfortable with the command line. If you get stuck while reading this guide, drop us a line in the #development channel on [slack](slack.getdbt.com).
 
 ## Getting the code
 
 ### Installing git
 
-You will need `git` in order to get dbt and contribute code. On macOS, the best way to get that is to just install Xcode.
+You will need `git` in order to download and modify the dbt source code. On macOS, the best way to download git is to just install Xcode.
 
 ### External contributors
 
@@ -43,12 +43,12 @@ This will create and activate a new Python virtual environment.
 
 ### docker and docker-compose
 
-Docker and docker-compose are both used in testing. For macOS, the easiest thing to do is to [download docker for mac](https://store.docker.com/editions/community/docker-ce-desktop-mac). You'll need to make an account. On Linux, if you can use one of the packages [here](https://docs.docker.com/install/#server). We recommend installing from docker.com instead of from your package manager. On Linux you also have to install docker-compose separately, follow [these instructions](https://docs.docker.com/compose/install/#install-compose).
+Docker and docker-compose are both used in testing. For macOS, the easiest thing to do is to [download docker for mac](https://store.docker.com/editions/community/docker-ce-desktop-mac). You'll need to make an account. On Linux, you can use one of the packages [here](https://docs.docker.com/install/#server). We recommend installing from docker.com instead of from your package manager. On Linux you also have to install docker-compose separately, follow [these instructions](https://docs.docker.com/compose/install/#install-compose).
 
 
 ### Installing postgres locally (optional)
 
-For testing, and later in the examples in this document, you may want to have `psql` available so you can poke around in the database and see what happened. We recommend that you use [homebrew](https://brew.sh/) for that on macOS, and your package manager on Linux. You can install any version of the postgres client that you'd like. So on macOS, with homebrew setup:
+For testing, and later in the examples in this document, you may want to have `psql` available so you can poke around in the database and see what happened. We recommend that you use [homebrew](https://brew.sh/) for that on macOS, and your package manager on Linux. You can install any version of the postgres client that you'd like. On macOS, with homebrew setup, you can run:
 
 ```
 brew install postgresql
@@ -58,7 +58,7 @@ brew install postgresql
 
 ### Installation
 
-First make sure that you setup your `virtualenv` as described in section _Setting up an environment_. Next, install dbt (and it's dependencies) with:
+First make sure that you set up your `virtualenv` as described in section _Setting up an environment_. Next, install dbt (and it's dependencies) with:
 
 ```
 pip install -r requirements.txt
@@ -70,7 +70,7 @@ When dbt is installed from source in this way, any changes you make to the dbt s
 
 With your virtualenv activated, the `dbt` script should point back to the source code you've cloned on your machine. You can verify this by running `which dbt`. This command should show you a path to an executable in your virtualenv.
 
-Configure your [profile](https://docs.getdbt.com/docs/configure-your-profile) as necessary to connect to your target databases. It may be a good idea to add a new profile pointing to a local postgres instance, or a specific test sandbox within your database.
+Configure your [profile](https://docs.getdbt.com/docs/configure-your-profile) as necessary to connect to your target databases. It may be a good idea to add a new profile pointing to a local postgres instance, or a specific test sandbox within your data warehouse if appropriate.
 
 ## Testing
 
@@ -92,7 +92,7 @@ A deep understanding of these tools in not required to effectively contribute to
 
 ### Running tests via Docker
 
-dbt's unit and integration tests run in Docker. Because dbt works with a number of different databases, you will need to supply credentials for one or more of these databases in your test environment. Most organizations don't have access to each of a BigQuery, Redshift, Snowflake, and Postgres database, so it's likely that you will be unable to run every integration test locally. Fortunately, Fishtown Analytics provides a CI environment with access to sandboxed Redshift, Snowflake, BigQuery, and Postgres databases. See the section on Submitting a Pull Request below for more information on this CI setup.
+dbt's unit and integration tests run in Docker. Because dbt works with a number of different databases, you will need to supply credentials for one or more of these databases in your test environment. Most organizations don't have access to each of a BigQuery, Redshift, Snowflake, and Postgres database, so it's likely that you will be unable to run every integration test locally. Fortunately, Fishtown Analytics provides a CI environment with access to sandboxed Redshift, Snowflake, BigQuery, and Postgres databases. See the section on _Submitting a Pull Request_ below for more information on this CI setup.
 
 
 #### Specifying your test credentials
@@ -104,7 +104,7 @@ cp test.env.sample test.env
 atom test.env # supply your credentials
 ```
 
-We recommend starting with dbt's Postgres tests. These tests cover most of the functionality in dbt, are the fastest to run, and are the easiest to set up. dbt's test suite runs Postgres in a Docker container, so no setup should be required to run these tests. If you additionally want to test Snowflake, Bigquery, or Redshift locally you'll need to get credentials and add them to this file. 
+We recommend starting with dbt's Postgres tests. These tests cover most of the functionality in dbt, are the fastest to run, and are the easiest to set up. dbt's test suite runs Postgres in a Docker container, so no setup should be required to run these tests. If you additionally want to test Snowflake, Bigquery, or Redshift locally you'll need to get credentials and add them to the `test.env` file. 
 
 #### Running tests
 
@@ -114,7 +114,7 @@ dbt's unit tests and Python linter can be run with:
 make test-unit
 ```
 
-To run the Postgres+python 3.6 integration tests, you'll have to do one extra step of setting up the test database:
+To run the Postgres + Python 3.6 integration tests, you'll have to do one extra step of setting up the test database:
 
 ```
 docker-compose up -d database
@@ -152,4 +152,4 @@ When pull requests are submitted to the `fishtown-analytics/dbt` repo, GitHub wi
 
 **If the PR submitter is not a member of the `fishtown-analytics` organization, then these environment variables will not be automatically supplied in the CI environment**. Once a core maintainer has taken a look at the Pull Request, they will kick off the test suite with the required credentials.
 
-Once your tests are passing and your PR has been reviewed, a dbt maintainer will merge your changes into active development branch! And that's it! Happy developing :tada:
+Once your tests are passing and your PR has been reviewed, a dbt maintainer will merge your changes into the active development branch! And that's it! Happy developing :tada:
