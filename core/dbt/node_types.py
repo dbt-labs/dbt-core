@@ -62,5 +62,5 @@ class NodeType(StrEnum):
 
 
 class RunHookType(StrEnum):
-    Start = 'on-run-start'
-    End = 'on-run-end'
+    Start = "on-run-start"
+    End = "on-run-end"
