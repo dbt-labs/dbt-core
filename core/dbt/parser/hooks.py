@@ -1,10 +1,11 @@
-
 import collections
+from typing import Dict, Any
 
 import dbt.flags
 import dbt.contracts.project
 import dbt.utils
 
+from dbt.contracts.graph.parsed import ParsedHookNode
 from dbt.contracts.graph.unparsed import UnparsedRunHook
 from dbt.parser.base_sql import BaseSqlParser
 from dbt.node_types import NodeType, RunHookType
@@ -74,3 +75,7 @@ class HookParser(BaseSqlParser):
             hook_nodes.update(project_hooks)
 
         return hook_nodes
+
+    def parse_from_dict(self, parsed_dict: Dict[str, Any]) -> ParsedHookNode:
+        """Given a dictionary, return the parsed entity for this parser"""
+        return ParsedHookNode.from_dict(parsed_dict)

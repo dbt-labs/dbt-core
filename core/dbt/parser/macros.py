@@ -1,4 +1,5 @@
 import os
+from typing import Dict, Any
 
 import jinja2.runtime
 
@@ -70,6 +71,9 @@ class MacroParser(BaseParser):
             to_return[unique_id] = new_node
 
         return to_return
+
+    def parse_from_dict(self, parsed_dict: Dict[str, Any]) -> ParsedMacro:
+        return ParsedMacro.from_dict(parsed_dict)
 
     def load_and_parse(self, package_name, root_dir, relative_dirs,
                        resource_type, tags=None):

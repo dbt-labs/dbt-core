@@ -45,25 +45,41 @@ class UnparsedNodeType(StrEnum):
     RPCCall = str(NodeType.RPCCall)
 
 
+class RunHookType(StrEnum):
+    Start = 'on-run-start'
+    End = 'on-run-end'
+
+
+class AnalysisType(StrEnum):
+    Analysis = str(NodeType.Analysis)
+
+
 class DocumentationType(StrEnum):
     Documentation = str(NodeType.Documentation)
 
 
-class RunHookType(StrEnum):
-    Start = 'on-run-start'
-    End = 'on-run-end'
+class MacroType(StrEnum):
+    Macro = str(NodeType.Macro)
+
+
+class ModelType(StrEnum):
+    Model = str(NodeType.Model)
 
 
 class OperationType(StrEnum):
     Operation = str(NodeType.Operation)
 
 
+class RPCCallType(StrEnum):
+    RPCCall = str(NodeType.RPCCall)
+
+
+class SeedType(StrEnum):
+    Seed = str(NodeType.Seed)
+
+
 class SnapshotType(StrEnum):
     Snapshot = str(NodeType.Snapshot)
-
-
-class MacroType(StrEnum):
-    Macro = str(NodeType.Macro)
 
 
 class SourceType(StrEnum):

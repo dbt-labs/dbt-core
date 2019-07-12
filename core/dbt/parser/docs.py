@@ -1,12 +1,14 @@
+import os
+from typing import Dict, Any
+
+import jinja2.runtime
+
 import dbt.exceptions
 from dbt.parser.base import BaseParser
 from dbt.contracts.graph.unparsed import UnparsedDocumentationFile
 from dbt.contracts.graph.parsed import ParsedDocumentation
 from dbt.clients.jinja import extract_toplevel_blocks, get_template
 from dbt.clients import system
-
-import jinja2.runtime
-import os
 
 
 class DocumentationParser(BaseParser):
@@ -94,3 +96,9 @@ class DocumentationParser(BaseParser):
                     )
                 to_return[parsed.unique_id] = parsed
         return to_return
+
+    def parse_from_dict(
+        self, parsed_dict: Dict[str, Any]
+    ) -> ParsedDocumentation:
+        """Given a dictionary, return the parsed entity for this parser"""
+        return ParsedDocumentation.from_dict(parsed_dict)

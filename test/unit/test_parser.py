@@ -13,7 +13,7 @@ from dbt.parser.source_config import SourceConfig
 
 from dbt.node_types import NodeType
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.parsed import ParsedNode, ParsedMacro, \
+from dbt.contracts.graph.parsed import ParsedModelNode, ParsedMacro, \
     ParsedNodePatch, ParsedSourceDefinition, NodeConfig, DependsOn, \
     ColumnInfo, ParsedTestNode, TestConfig
 from dbt.contracts.graph.unparsed import FreshnessThreshold, Quoting, Time, \
@@ -950,7 +950,19 @@ class ParserTest(BaseParserTest):
             'column_types': {},
             'tags': [],
         })
-        self.test_config = self.model_config.replace(severity='ERROR')
+
+        self.test_config = TestConfig.from_dict({
+            'enabled': True,
+            'materialized': 'view',
+            'persist_docs': {},
+            'post-hook': [],
+            'pre-hook': [],
+            'vars': {},
+            'quoting': {},
+            'column_types': {},
+            'tags': [],
+            'severity': 'ERROR',
+        })
 
         self.disabled_config = NodeConfig.from_dict({
             'enabled': False,
@@ -983,7 +995,7 @@ class ParserTest(BaseParserTest):
         self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
             {
-                'model.root.model_one': ParsedNode(
+                'model.root.model_one': ParsedModelNode(
                     alias='model_one',
                     name='model_one',
                     database='test',
@@ -1041,7 +1053,7 @@ class ParserTest(BaseParserTest):
         self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
             {
-                'model.root.model_one': ParsedNode(
+                'model.root.model_one': ParsedModelNode(
                     alias='model_one',
                     name='model_one',
                     database='test',
@@ -1088,7 +1100,7 @@ class ParserTest(BaseParserTest):
         self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
             {
-                'model.root.model_one': ParsedNode(
+                'model.root.model_one': ParsedModelNode(
                     alias='model_one',
                     name='model_one',
                     database='test',
@@ -1142,7 +1154,7 @@ class ParserTest(BaseParserTest):
         self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
             {
-                'model.root.base': ParsedNode(
+                'model.root.base': ParsedModelNode(
                     alias='base',
                     name='base',
                     database='test',
@@ -1164,7 +1176,7 @@ class ParserTest(BaseParserTest):
                     columns={}
 
                 ),
-                'model.root.events_tx': ParsedNode(
+                'model.root.events_tx': ParsedModelNode(
                     alias='events_tx',
                     name='events_tx',
                     database='test',
@@ -1245,7 +1257,7 @@ class ParserTest(BaseParserTest):
         self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
             {
-                'model.root.events': ParsedNode(
+                'model.root.events': ParsedModelNode(
                     alias='events',
                     name='events',
                     database='test',
@@ -1267,7 +1279,7 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 ),
-                'model.root.sessions': ParsedNode(
+                'model.root.sessions': ParsedModelNode(
                     alias='sessions',
                     name='sessions',
                     database='test',
@@ -1289,7 +1301,7 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={},
                 ),
-                'model.root.events_tx': ParsedNode(
+                'model.root.events_tx': ParsedModelNode(
                     alias='events_tx',
                     name='events_tx',
                     database='test',
@@ -1311,7 +1323,7 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 ),
-                'model.root.sessions_tx': ParsedNode(
+                'model.root.sessions_tx': ParsedModelNode(
                     alias='sessions_tx',
                     name='sessions_tx',
                     database='test',
@@ -1333,7 +1345,7 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 ),
-                'model.root.multi': ParsedNode(
+                'model.root.multi': ParsedModelNode(
                     alias='multi',
                     name='multi',
                     database='test',
@@ -1417,7 +1429,7 @@ class ParserTest(BaseParserTest):
         self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
             {
-                'model.snowplow.events': ParsedNode(
+                'model.snowplow.events': ParsedModelNode(
                     alias='events',
                     name='events',
                     database='test',
@@ -1439,7 +1451,7 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 ),
-                'model.snowplow.sessions': ParsedNode(
+                'model.snowplow.sessions': ParsedModelNode(
                     alias='sessions',
                     name='sessions',
                     database='test',
@@ -1461,7 +1473,7 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 ),
-                'model.snowplow.events_tx': ParsedNode(
+                'model.snowplow.events_tx': ParsedModelNode(
                     alias='events_tx',
                     name='events_tx',
                     database='test',
@@ -1483,7 +1495,7 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 ),
-                'model.snowplow.sessions_tx': ParsedNode(
+                'model.snowplow.sessions_tx': ParsedModelNode(
                     alias='sessions_tx',
                     name='sessions_tx',
                     database='test',
@@ -1505,7 +1517,7 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 ),
-                'model.root.multi': ParsedNode(
+                'model.root.multi': ParsedModelNode(
                     alias='multi',
                     name='multi',
                     database='test',
@@ -1534,7 +1546,7 @@ class ParserTest(BaseParserTest):
 
     def test__process_refs__packages(self):
         nodes = {
-            'model.snowplow.events': ParsedNode(
+            'model.snowplow.events': ParsedModelNode(
                 name='events',
                 alias='events',
                 database='test',
@@ -1553,7 +1565,7 @@ class ParserTest(BaseParserTest):
                 root_path=get_os_path('/usr/src/app'),
                 raw_sql='does not matter',
             ),
-            'model.root.events': ParsedNode(
+            'model.root.events': ParsedModelNode(
                 name='events',
                 alias='events',
                 database='test',
@@ -1572,7 +1584,7 @@ class ParserTest(BaseParserTest):
                 root_path=get_os_path('/usr/src/app'),
                 raw_sql='does not matter',
             ),
-            'model.root.dep': ParsedNode(
+            'model.root.dep': ParsedModelNode(
                 name='dep',
                 alias='dep',
                 database='test',
@@ -1632,7 +1644,6 @@ class ParserTest(BaseParserTest):
                         'columns': {},
                         'description': '',
                         'build_path': None,
-                        'index': None,
                         'patch_path': None,
                     },
                     'model.root.events': {
@@ -1660,7 +1671,6 @@ class ParserTest(BaseParserTest):
                         'columns': {},
                         'description': '',
                         'build_path': None,
-                        'index': None,
                         'patch_path': None,
                     },
                     'model.root.dep': {
@@ -1688,7 +1698,6 @@ class ParserTest(BaseParserTest):
                         'columns': {},
                         'description': '',
                         'build_path': None,
-                        'index': None,
                         'patch_path': None,
                     }
                 }
@@ -1718,7 +1727,7 @@ class ParserTest(BaseParserTest):
         self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
             {
-                'model.root.model_one': ParsedNode(
+                'model.root.model_one': ParsedModelNode(
                     alias='model_one',
                     name='model_one',
                     database='test',
@@ -1794,7 +1803,7 @@ class ParserTest(BaseParserTest):
         self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
             {
-                'model.root.table': ParsedNode(
+                'model.root.table': ParsedModelNode(
                     alias='table',
                     name='table',
                     database='test',
@@ -1816,7 +1825,7 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 ),
-                'model.root.ephemeral': ParsedNode(
+                'model.root.ephemeral': ParsedModelNode(
                     alias='ephemeral',
                     name='ephemeral',
                     database='test',
@@ -1838,7 +1847,7 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 ),
-                'model.root.view': ParsedNode(
+                'model.root.view': ParsedModelNode(
                     alias='view',
                     name='view',
                     database='test',
@@ -1979,7 +1988,7 @@ class ParserTest(BaseParserTest):
         self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
             parsed={
-                'model.root.table': ParsedNode(
+                'model.root.table': ParsedModelNode(
                     alias='table',
                     name='table',
                     database='test',
@@ -2001,7 +2010,7 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 ),
-                'model.root.ephemeral': ParsedNode(
+                'model.root.ephemeral': ParsedModelNode(
                     alias='ephemeral',
                     name='ephemeral',
                     database='test',
@@ -2023,7 +2032,7 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 ),
-                'model.root.view': ParsedNode(
+                'model.root.view': ParsedModelNode(
                     alias='view',
                     name='view',
                     database='test',
@@ -2045,7 +2054,7 @@ class ParserTest(BaseParserTest):
                     description='',
                     columns={}
                 ),
-                'model.snowplow.multi_sort': ParsedNode(
+                'model.snowplow.multi_sort': ParsedModelNode(
                     alias='multi_sort',
                     name='multi_sort',
                     database='test',
@@ -2069,7 +2078,7 @@ class ParserTest(BaseParserTest):
                 ),
             },
             disabled=[
-                ParsedNode(
+                ParsedModelNode(
                     name='disabled',
                     resource_type=NodeType.Model,
                     package_name='snowplow',
@@ -2089,7 +2098,7 @@ class ParserTest(BaseParserTest):
                     fqn=['snowplow', 'disabled'],
                     columns={}
                 ),
-                ParsedNode(
+                ParsedModelNode(
                     name='package',
                     resource_type=NodeType.Model,
                     package_name='snowplow',
@@ -2132,7 +2141,7 @@ class ParserTest(BaseParserTest):
         self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(tests),
             {
-                'test.root.no_events': ParsedNode(
+                'test.root.no_events': ParsedTestNode(
                     alias='no_events',
                     name='no_events',
                     database='test',
@@ -2173,7 +2182,6 @@ class ParserTest(BaseParserTest):
             resource_type=NodeType.Macro)
 
         self.assertTrue(callable(result['macro.root.simple'].generator))
-
 
         self.assertEqual(
             result,
@@ -2250,7 +2258,7 @@ class ParserTest(BaseParserTest):
         self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
             {
-                'model.root.model_one': ParsedNode(
+                'model.root.model_one': ParsedModelNode(
                     alias='model_one',
                     name='model_one',
                     database='test',
@@ -2296,7 +2304,7 @@ class ParserTest(BaseParserTest):
         self._assert_parsed_sql_nodes(
             parser.parse_sql_nodes(models),
             {
-                'model.root.model_one': ParsedNode(
+                'model.root.model_one': ParsedModelNode(
                     alias='model_one',
                     name='model_one',
                     database='test',

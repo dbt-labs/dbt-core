@@ -12,7 +12,8 @@ from dbt.contracts.graph.unparsed import (
 from dbt.contracts.util import Replaceable
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt.node_types import (
-    NodeType, SourceType, SnapshotType, MacroType, TestType
+    NodeType, SourceType, SnapshotType, MacroType, TestType, OperationType,
+    SeedType, ModelType, AnalysisType, RPCCallType
 )
 
 
@@ -190,11 +191,35 @@ class ParsedNodeDefaults(ParsedNodeMandatory):
     build_path: Optional[str] = None
 
 
-# TODO(jeb): hooks should get their own parsed type instead of including
-# index everywhere!
 @dataclass
 class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins):
+    pass
+
+
+@dataclass
+class ParsedAnalysisNode(ParsedNode):
+    resource_type: AnalysisType
+
+
+@dataclass
+class ParsedHookNode(ParsedNode):
+    resource_type: OperationType
     index: Optional[int] = None
+
+
+@dataclass
+class ParsedModelNode(ParsedNode):
+    resource_type: ModelType
+
+
+@dataclass
+class ParsedRPCNode(ParsedNode):
+    resource_type: RPCCallType
+
+
+@dataclass
+class ParsedSeedNode(ParsedNode):
+    resource_type: SeedType
 
 
 @dataclass
@@ -203,7 +228,7 @@ class TestConfig(NodeConfig):
 
 
 @dataclass
-class ParsedTestNode(ParsedNodeDefaults, ParsedNodeMixins):
+class ParsedTestNode(ParsedNode):
     resource_type: TestType
     column_name: Optional[str] = None
     config: TestConfig = field(default_factory=TestConfig)
@@ -415,3 +440,17 @@ class ParsedSourceDefinition(
     @property
     def has_freshness(self):
         return bool(self.freshness) and self.loaded_at_field is not None
+
+
+PARSED_TYPES = {
+    NodeType.Analysis: ParsedAnalysisNode,
+    NodeType.Documentation: ParsedDocumentation,
+    NodeType.Macro: ParsedMacro,
+    NodeType.Model: ParsedModelNode,
+    NodeType.Operation: ParsedHookNode,
+    NodeType.RPCCall: ParsedRPCNode,
+    NodeType.Seed: ParsedSeedNode,
+    NodeType.Snapshot: ParsedSnapshotNode,
+    NodeType.Source: ParsedSourceDefinition,
+    NodeType.Test: ParsedTestNode,
+}

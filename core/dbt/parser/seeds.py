@@ -1,4 +1,5 @@
 import os
+from typing import Dict, Any
 
 import dbt.flags
 import dbt.clients.agate_helper
@@ -9,6 +10,7 @@ import dbt.exceptions
 
 from dbt.node_types import NodeType
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.contracts.graph.parsed import ParsedSeedNode
 from dbt.contracts.graph.unparsed import UnparsedNode
 from dbt.parser.base import MacrosKnownParser
 
@@ -57,3 +59,7 @@ class SeedParser(MacrosKnownParser):
             result[node_path] = parsed
 
         return result
+
+    def parse_from_dict(self, parsed_dict: Dict[str, Any]) -> ParsedSeedNode:
+        """Given a dictionary, return the parsed entity for this parser"""
+        return ParsedSeedNode.from_dict(parsed_dict)

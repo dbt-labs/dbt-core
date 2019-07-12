@@ -1,8 +1,27 @@
 from dbt.contracts.graph.parsed import (
-    ParsedNodeMixins, ParsedNode, ParsedSourceDefinition,
-    ParsedNodeDefaults, TestType, ParsedTestNode, TestConfig
+    ParsedNode,
+    ParsedAnalysisNode,
+    ParsedDocumentation,
+    ParsedMacro,
+    ParsedModelNode,
+    ParsedHookNode,
+    ParsedRPCNode,
+    ParsedSeedNode,
+    ParsedSnapshotNode,
+    ParsedSourceDefinition,
+    ParsedTestNode,
+    TestConfig,
 )
-
+from dbt.node_types import (
+    NodeType,
+    AnalysisType,
+    ModelType,
+    OperationType,
+    RPCCallType,
+    SeedType,
+    SnapshotType,
+    TestType,
+)
 from dbt.contracts.util import Replaceable
 
 from hologram import JsonSchemaMixin
@@ -23,7 +42,7 @@ class InjectedCTE(JsonSchemaMixin, Replaceable):
 
 
 @dataclass
-class CompiledNodeDefaults(ParsedNodeDefaults, ParsedNodeMixins):
+class CompiledNode(ParsedNode):
     compiled: bool = False
     compiled_sql: Optional[str] = None
     extra_ctes_injected: bool = False
@@ -53,18 +72,38 @@ class CompiledNodeDefaults(ParsedNodeDefaults, ParsedNodeMixins):
 
 
 @dataclass
-class CompiledNode(CompiledNodeDefaults):
-    index: Optional[int] = None
-
-    @classmethod
-    def from_parsed_node(cls, parsed, **kwargs):
-        dct = parsed.to_dict()
-        dct.update(kwargs)
-        return cls.from_dict(dct)
+class CompiledAnalysisNode(CompiledNode):
+    resource_type: AnalysisType
 
 
 @dataclass
-class CompiledTestNode(CompiledNodeDefaults):
+class CompiledHookNode(CompiledNode):
+    resource_type: OperationType
+    index: Optional[int] = None
+
+
+@dataclass
+class CompiledModelNode(CompiledNode):
+    resource_type: ModelType
+
+
+@dataclass
+class CompiledRPCNode(CompiledNode):
+    resource_type: RPCCallType
+
+
+@dataclass
+class CompiledSeedNode(CompiledNode):
+    resource_type: SeedType
+
+
+@dataclass
+class CompiledSnapshotNode(CompiledNode):
+    resource_type: SnapshotType
+
+
+@dataclass
+class CompiledTestNode(CompiledNode):
     resource_type: TestType
     column_name: Optional[str] = None
     config: TestConfig = field(default_factory=TestConfig)
@@ -130,11 +169,43 @@ def _inject_ctes_into_sql(sql: str, ctes: List[InjectedCTE]) -> str:
     return str(parsed)
 
 
+COMPILED_TYPES = {
+    NodeType.Analysis: CompiledAnalysisNode,
+    NodeType.Model: CompiledModelNode,
+    NodeType.Operation: CompiledHookNode,
+    NodeType.RPCCall: CompiledRPCNode,
+    NodeType.Seed: CompiledSeedNode,
+    NodeType.Snapshot: CompiledSnapshotNode,
+    NodeType.Test: CompiledTestNode,
+}
+
+
+def compiled_type_for(parsed: ParsedNode):
+    if parsed.resource_type in COMPILED_TYPES:
+        return COMPILED_TYPES[parsed.resource_type]
+    else:
+        return type(parsed)
+
+
 # We allow either parsed or compiled nodes, or parsed sources, as some
 # 'compile()' calls in the runner actually just return the original parsed
 # node they were given.
 CompileResultNode = Union[
-    CompiledNode, ParsedNode,
-    CompiledTestNode, ParsedTestNode,
+    CompiledAnalysisNode,
+    CompiledModelNode,
+    CompiledHookNode,
+    CompiledRPCNode,
+    CompiledSeedNode,
+    CompiledSnapshotNode,
+    CompiledTestNode,
+    ParsedAnalysisNode,
+    ParsedDocumentation,
+    ParsedMacro,
+    ParsedModelNode,
+    ParsedHookNode,
+    ParsedRPCNode,
+    ParsedSeedNode,
+    ParsedSnapshotNode,
     ParsedSourceDefinition,
+    ParsedTestNode,
 ]

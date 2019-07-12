@@ -15,19 +15,21 @@ import dbt.exceptions
 import dbt.flags
 import dbt.loader
 import dbt.config
-from dbt.contracts.graph.compiled import InjectedCTE, CompiledNode, \
-    CompiledTestNode
+from dbt.contracts.graph.compiled import InjectedCTE, COMPILED_TYPES
+from dbt.contracts.graph.parsed import ParsedNode
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
 graph_file_name = 'graph.gpickle'
 
 
-def _compiled_type_for(model):
-    if model.resource_type == NodeType.Test:
-        return CompiledTestNode
-    else:
-        return CompiledNode
+def _compiled_type_for(model: ParsedNode):
+    if model.resource_type not in COMPILED_TYPES:
+        raise dbt.exceptions.InternalException(
+            'Asked to compile {} node, but it has no compiled form'
+            .format(model.resource_type)
+        )
+    return COMPILED_TYPES[model.resource_type]
 
 
 def print_compile_stats(stats):
@@ -75,7 +77,8 @@ def recursively_prepend_ctes(model, manifest):
         return (model, model.extra_ctes, manifest)
 
     if dbt.flags.STRICT_MODE:
-        assert isinstance(model, (CompiledNode, CompiledTestNode))
+        assert isinstance(model, tuple(COMPILED_TYPES.values())), \
+            'Bad model type: {}'.format(type(model))
 
     prepended_ctes = []
 

@@ -7,8 +7,10 @@ from datetime import datetime
 import dbt.flags
 from dbt import tracking
 from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
-from dbt.contracts.graph.parsed import ParsedNode, DependsOn, NodeConfig
-from dbt.contracts.graph.compiled import CompiledNode
+from dbt.contracts.graph.parsed import (
+    ParsedModelNode, DependsOn, NodeConfig, ParsedSeedNode
+)
+from dbt.contracts.graph.compiled import CompiledModelNode
 from dbt.node_types import NodeType
 import freezegun
 
@@ -18,7 +20,6 @@ REQUIRED_PARSED_NODE_KEYS = frozenset({
     'depends_on', 'database', 'schema', 'name', 'resource_type',
     'package_name', 'root_path', 'path', 'original_file_path', 'raw_sql',
     'docrefs', 'description', 'columns', 'fqn', 'build_path', 'patch_path',
-    'index',
 })
 
 REQUIRED_COMPILED_NODE_KEYS = frozenset(REQUIRED_PARSED_NODE_KEYS | {
@@ -46,7 +47,7 @@ class ManifestTest(unittest.TestCase):
         })
 
         self.nested_nodes = {
-            'model.snowplow.events': ParsedNode(
+            'model.snowplow.events': ParsedModelNode(
                 name='events',
                 database='dbt',
                 schema='analytics',
@@ -65,7 +66,7 @@ class ManifestTest(unittest.TestCase):
                 root_path='',
                 raw_sql='does not matter'
             ),
-            'model.root.events': ParsedNode(
+            'model.root.events': ParsedModelNode(
                 name='events',
                 database='dbt',
                 schema='analytics',
@@ -84,7 +85,7 @@ class ManifestTest(unittest.TestCase):
                 root_path='',
                 raw_sql='does not matter'
             ),
-            'model.root.dep': ParsedNode(
+            'model.root.dep': ParsedModelNode(
                 name='dep',
                 database='dbt',
                 schema='analytics',
@@ -103,7 +104,7 @@ class ManifestTest(unittest.TestCase):
                 root_path='',
                 raw_sql='does not matter'
             ),
-            'model.root.nested': ParsedNode(
+            'model.root.nested': ParsedModelNode(
                 name='nested',
                 database='dbt',
                 schema='analytics',
@@ -122,7 +123,7 @@ class ManifestTest(unittest.TestCase):
                 root_path='',
                 raw_sql='does not matter'
             ),
-            'model.root.sibling': ParsedNode(
+            'model.root.sibling': ParsedModelNode(
                 name='sibling',
                 database='dbt',
                 schema='analytics',
@@ -141,7 +142,7 @@ class ManifestTest(unittest.TestCase):
                 root_path='',
                 raw_sql='does not matter'
             ),
-            'model.root.multi': ParsedNode(
+            'model.root.multi': ParsedModelNode(
                 name='multi',
                 database='dbt',
                 schema='analytics',
@@ -316,7 +317,7 @@ class ManifestTest(unittest.TestCase):
 
     def test_get_resource_fqns(self):
         nodes = copy.copy(self.nested_nodes)
-        nodes['seed.root.seed'] = ParsedNode(
+        nodes['seed.root.seed'] = ParsedSeedNode(
             name='seed',
             database='dbt',
             schema='analytics',
@@ -371,7 +372,7 @@ class MixedManifestTest(unittest.TestCase):
         })
 
         self.nested_nodes = {
-            'model.snowplow.events': CompiledNode(
+            'model.snowplow.events': CompiledModelNode(
                 name='events',
                 database='dbt',
                 schema='analytics',
@@ -395,7 +396,7 @@ class MixedManifestTest(unittest.TestCase):
                 injected_sql=None,
                 extra_ctes=[]
             ),
-            'model.root.events': CompiledNode(
+            'model.root.events': CompiledModelNode(
                 name='events',
                 database='dbt',
                 schema='analytics',
@@ -419,7 +420,7 @@ class MixedManifestTest(unittest.TestCase):
                 injected_sql='and this also does not matter',
                 extra_ctes=[]
             ),
-            'model.root.dep': ParsedNode(
+            'model.root.dep': ParsedModelNode(
                 name='dep',
                 database='dbt',
                 schema='analytics',
@@ -438,7 +439,7 @@ class MixedManifestTest(unittest.TestCase):
                 root_path='',
                 raw_sql='does not matter'
             ),
-            'model.root.nested': ParsedNode(
+            'model.root.nested': ParsedModelNode(
                 name='nested',
                 database='dbt',
                 schema='analytics',
@@ -457,7 +458,7 @@ class MixedManifestTest(unittest.TestCase):
                 root_path='',
                 raw_sql='does not matter'
             ),
-            'model.root.sibling': ParsedNode(
+            'model.root.sibling': ParsedModelNode(
                 name='sibling',
                 database='dbt',
                 schema='analytics',
@@ -476,7 +477,7 @@ class MixedManifestTest(unittest.TestCase):
                 root_path='',
                 raw_sql='does not matter'
             ),
-            'model.root.multi': ParsedNode(
+            'model.root.multi': ParsedModelNode(
                 name='multi',
                 database='dbt',
                 schema='analytics',

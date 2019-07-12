@@ -1,10 +1,10 @@
 from dbt.node_types import NodeType
 from dbt.contracts.graph.parsed import (
-    ParsedNode, DependsOn, NodeConfig, ColumnInfo, Hook, ParsedTestNode,
+    ParsedModelNode, DependsOn, NodeConfig, ColumnInfo, Hook, ParsedTestNode,
     TestConfig, ParsedSnapshotNode, TimestampSnapshotConfig, All, Docref,
     GenericSnapshotConfig, CheckSnapshotConfig, TimestampStrategy,
     CheckStrategy, IntermediateSnapshotNode, ParsedNodePatch, ParsedMacro,
-    MacroDependsOn, ParsedSourceDefinition, ParsedDocumentation,
+    MacroDependsOn, ParsedSourceDefinition, ParsedDocumentation, ParsedHookNode
 )
 from dbt.contracts.graph.unparsed import Quoting, FreshnessThreshold
 
@@ -53,8 +53,8 @@ class TestNodeConfig(ContractTestCase):
         self.assert_symmetric(cfg, cfg_dict)
 
 
-class TestParsedNode(ContractTestCase):
-    ContractType = ParsedNode
+class TestParsedModelNode(ContractTestCase):
+    ContractType = ParsedModelNode
 
     def test_ok(self):
         node_dict = {
@@ -404,7 +404,7 @@ class TestParsedNode(ContractTestCase):
 
 
 class TestParsedHookNode(ContractTestCase):
-    ContractType = ParsedNode
+    ContractType = ParsedHookNode
 
     def test_ok(self):
         node_dict = {
