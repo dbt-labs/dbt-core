@@ -996,9 +996,7 @@ def warn_invalid_patch(patch, resource_type):
 
 
 def raise_not_implemented(msg):
-    raise NotImplementedException(
-        "ERROR: {}"
-        .format(msg))
+    raise NotImplementedException("ERROR: {}".format(msg))
 
 
 def raise_duplicate_alias(
