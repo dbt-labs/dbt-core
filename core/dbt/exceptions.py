@@ -237,7 +237,7 @@ class VersionsNotCompatibleException(SemverException):
 
 class NotImplementedException(Exception):
     CODE = 10010
-    MESSAGE = "Error: this is not implemented"
+    MESSAGE = "ERROR: this is not implemented"
 
 
 class FailedToConnectException(DatabaseException):
@@ -647,7 +647,9 @@ def raise_unrecognized_credentials_type(typename, supported_types):
 
 
 def raise_not_implemented(msg):
-    raise NotImplementedException(msg)
+    raise NotImplementedException(
+        "ERROR: {}"
+        .format(msg))
 
 
 def warn_or_error(msg, node=None, log_fmt=None):
