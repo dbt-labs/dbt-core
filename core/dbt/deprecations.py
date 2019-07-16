@@ -44,7 +44,7 @@ _adapter_renamed_description = """\
 The adapter function `adapter.{old_name}` is deprecated and will be removed in
  a future release of dbt. Please use `adapter.{new_name}` instead.
  Documentation for {new_name} can be found here:
- https://docs.getdbt.com/reference#adapter"""
+ https://docs.getdbt.com/docs/adapter"""
 
 
 def renamed_method(old_name, new_name):
