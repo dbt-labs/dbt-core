@@ -7,45 +7,23 @@ from dbt.adapters.base import Credentials
 from dbt.adapters.sql import SQLConnectionManager
 from dbt.logger import GLOBAL_LOGGER as logger
 
-
-POSTGRES_CREDENTIALS_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'properties': {
-        'database': {
-            'type': 'string',
-        },
-        'host': {
-            'type': 'string',
-        },
-        'user': {
-            'type': 'string',
-        },
-        'password': {
-            'type': 'string',
-        },
-        'port': {
-            'type': 'integer',
-            'minimum': 0,
-            'maximum': 65535,
-        },
-        'schema': {
-            'type': 'string',
-        },
-        'search_path': {
-            'type': 'string',
-        },
-        'keepalives_idle': {
-            'type': 'integer',
-        },
-    },
-    'required': ['database', 'host', 'user', 'password', 'port', 'schema'],
-}
+from dbt.types import Port
+from dataclasses import dataclass
+from typing import Optional
 
 
+@dataclass
 class PostgresCredentials(Credentials):
-    SCHEMA = POSTGRES_CREDENTIALS_CONTRACT
-    ALIASES = {
+    database: str
+    host: str
+    user: str
+    password: str
+    port: Port
+    schema: str
+    search_path: Optional[str]
+    keepalives_idle: Optional[int] = 0  # 0 means to use the default value
+
+    _ALIASES = {
         'dbname': 'database',
         'pass': 'password'
     }
@@ -59,7 +37,6 @@ class PostgresCredentials(Credentials):
 
 
 class PostgresConnectionManager(SQLConnectionManager):
-    DEFAULT_TCP_KEEPALIVE = 0  # 0 means to use the default value
     TYPE = 'postgres'
 
     @contextmanager
@@ -97,18 +74,16 @@ class PostgresConnectionManager(SQLConnectionManager):
             logger.debug('Connection is already open, skipping open.')
             return connection
 
-        credentials = cls.get_credentials(connection.credentials.incorporate())
+        credentials = cls.get_credentials(connection.credentials)
         kwargs = {}
-        keepalives_idle = credentials.get('keepalives_idle',
-                                          cls.DEFAULT_TCP_KEEPALIVE)
         # we don't want to pass 0 along to connect() as postgres will try to
         # call an invalid setsockopt() call (contrary to the docs).
-        if keepalives_idle:
-            kwargs['keepalives_idle'] = keepalives_idle
+        if credentials.keepalives_idle:
+            kwargs['keepalives_idle'] = credentials.keepalives_idle
 
         # psycopg2 doesn't support search_path officially,
         # see https://github.com/psycopg/psycopg2/issues/465
-        search_path = credentials.get('search_path')
+        search_path = credentials.search_path
         if search_path is not None and search_path != '':
             # see https://postgresql.org/docs/9.5/libpq-connect.html
             kwargs['options'] = '-c search_path={}'.format(

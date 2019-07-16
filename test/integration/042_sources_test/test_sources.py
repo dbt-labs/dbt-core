@@ -179,7 +179,7 @@ class TestSourceFreshness(BaseSourcesTest):
     def _set_updated_at_to(self, delta):
         insert_time = datetime.utcnow() + delta
         timestr = insert_time.strftime("%Y-%m-%d %H:%M:%S")
-        #favorite_color,id,first_name,email,ip_address,updated_at
+        # favorite_color,id,first_name,email,ip_address,updated_at
         insert_id = self._id
         self._id += 1
         raw_sql = """INSERT INTO {schema}.{source}
@@ -211,8 +211,6 @@ class TestSourceFreshness(BaseSourcesTest):
                            self.freshness_start_time)
 
         last_inserted_time = self.last_inserted_time
-        if last_inserted_time is None:
-            last_inserted_time = "2016-09-19T14:45:51+00:00"
 
         self.assertEqual(data['sources'], {
             'source.test.test_source.test_table': {
@@ -222,7 +220,7 @@ class TestSourceFreshness(BaseSourcesTest):
                 'state': state,
                 'criteria': {
                     'warn_after': {'count': 10, 'period': 'hour'},
-                    'error_after': {'count': 1, 'period': 'day'},
+                    'error_after': {'count': 18, 'period': 'hour'},
                 },
             }
         })
@@ -235,7 +233,7 @@ class TestSourceFreshness(BaseSourcesTest):
         )
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].status, 'error')
-        self.assertTrue(results[0].failed)
+        self.assertTrue(results[0].fail)
         self.assertIsNone(results[0].error)
         self._assert_freshness_results('target/error_source.json', 'error')
 
@@ -246,7 +244,7 @@ class TestSourceFreshness(BaseSourcesTest):
         )
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].status, 'warn')
-        self.assertFalse(results[0].failed)
+        self.assertFalse(results[0].fail)
         self.assertIsNone(results[0].error)
         self._assert_freshness_results('target/warn_source.json', 'warn')
 
@@ -257,7 +255,7 @@ class TestSourceFreshness(BaseSourcesTest):
         )
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].status, 'pass')
-        self.assertFalse(results[0].failed)
+        self.assertFalse(results[0].fail)
         self.assertIsNone(results[0].error)
         self._assert_freshness_results('target/pass_source.json', 'pass')
 
@@ -291,7 +289,7 @@ class TestSourceFreshnessErrors(BaseSourcesTest):
         )
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].status, 'error')
-        self.assertFalse(results[0].failed)
+        self.assertFalse(results[0].fail)
         self.assertIsNotNone(results[0].error)
 
 

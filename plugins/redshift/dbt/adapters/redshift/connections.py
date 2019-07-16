@@ -8,69 +8,33 @@ import dbt.exceptions
 
 import boto3
 
+from dbt.types import NewRangedInteger
+from hologram.helpers import StrEnum
+
+from dataclasses import dataclass, field
+from typing import Optional
+
 drop_lock = multiprocessing.Lock()
 
-REDSHIFT_CREDENTIALS_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'properties': {
-        'method': {
-            'enum': ['database', 'iam'],
-            'description': (
-                'database: use user/pass creds; iam: use temporary creds'
-            ),
-        },
-        'database': {
-            'type': 'string',
-        },
-        'host': {
-            'type': 'string',
-        },
-        'user': {
-            'type': 'string',
-        },
-        'password': {
-            'type': 'string',
-        },
-        'port': {
-            'type': 'integer',
-            'minimum': 0,
-            'maximum': 65535,
-        },
-        'schema': {
-            'type': 'string',
-        },
-        'cluster_id': {
-            'type': 'string',
-            'description': (
-                'If using IAM auth, the name of the cluster'
-            )
-        },
-        'iam_duration_seconds': {
-            'type': 'integer',
-            'minimum': 900,
-            'maximum': 3600,
-            'description': (
-                'If using IAM auth, the ttl for the temporary credentials'
-            )
-        },
-        'search_path': {
-            'type': 'string',
-        },
-        'keepalives_idle': {
-            'type': 'integer',
-        },
-        'required': ['database', 'host', 'user', 'port', 'schema']
-    }
-}
+
+IAMDuration = NewRangedInteger('IAMDuration', minimum=900, maximum=3600)
 
 
+class RedshiftConnectionMethod(StrEnum):
+    DATABASE = 'database'
+    IAM = 'iam'
+
+
+@dataclass
 class RedshiftCredentials(PostgresCredentials):
-    SCHEMA = REDSHIFT_CREDENTIALS_CONTRACT
-
-    def __init__(self, *args, **kwargs):
-        kwargs.setdefault('method', 'database')
-        super().__init__(*args, **kwargs)
+    method: RedshiftConnectionMethod = RedshiftConnectionMethod.DATABASE
+    cluster_id: Optional[str] = field(
+        default=None,
+        metadata={'description': 'If using IAM auth, the name of the cluster'},
+    )
+    iam_duration_seconds: Optional[int] = None
+    search_path: Optional[str] = None
+    keepalives_idle: Optional[int] = 240
 
     @property
     def type(self):
@@ -83,7 +47,6 @@ class RedshiftCredentials(PostgresCredentials):
 
 
 class RedshiftConnectionManager(PostgresConnectionManager):
-    DEFAULT_TCP_KEEPALIVE = 240
     TYPE = 'redshift'
 
     @contextmanager
@@ -131,11 +94,11 @@ class RedshiftConnectionManager(PostgresConnectionManager):
 
     @classmethod
     def get_tmp_iam_cluster_credentials(cls, credentials):
-        cluster_id = credentials.get('cluster_id')
+        cluster_id = credentials.cluster_id
 
         # default via:
         # boto3.readthedocs.io/en/latest/reference/services/redshift.html
-        iam_duration_s = credentials.get('iam_duration_seconds', 900)
+        iam_duration_s = credentials.iam_duration_seconds
 
         if not cluster_id:
             raise dbt.exceptions.FailedToConnectException(
@@ -150,10 +113,8 @@ class RedshiftConnectionManager(PostgresConnectionManager):
         )
 
         # replace username and password with temporary redshift credentials
-        return credentials.incorporate(
-            user=cluster_creds.get('DbUser'),
-            password=cluster_creds.get('DbPassword')
-        )
+        return credentials.replace(user=cluster_creds.get('DbUser'),
+                                   password=cluster_creds.get('DbPassword'))
 
     @classmethod
     def get_credentials(cls, credentials):

@@ -4,6 +4,18 @@ import functools
 from dbt.logger import GLOBAL_LOGGER as logger
 import dbt.flags
 
+import hologram
+
+
+def validator_error_message(exc):
+    """Given a hologram.ValidationError (which is basically a
+    jsonschema.ValidationError), return the relevant parts as a string
+    """
+    if not isinstance(exc, hologram.ValidationError):
+        return str(exc)
+    path = "[%s]" % "][".join(map(repr, exc.relative_path))
+    return 'at path {}: {}'.format(path, exc.message)
+
 
 class Exception(builtins.Exception):
     CODE = -32000
@@ -46,11 +58,16 @@ class RuntimeException(RuntimeError, Exception):
     def node_to_string(self, node):
         if node is None:
             return "<Unknown>"
-
+        if not hasattr(node, 'name'):
+            # we probably failed to parse a block, so we can't know the name
+            return '{} ({})'.format(
+                node.resource_type,
+                node.original_file_path
+            )
         return "{} {} ({})".format(
-            node.get('resource_type'),
-            node.get('name', 'unknown'),
-            node.get('original_file_path'))
+            node.resource_type,
+            node.name,
+            node.original_file_path)
 
     def process_stack(self):
         lines = []
@@ -98,8 +115,9 @@ class RuntimeException(RuntimeError, Exception):
             return result
 
         result.update({
-            'raw_sql': self.node.get('raw_sql'),
-            'compiled_sql': self.node.get('injected_sql'),
+            'raw_sql': self.node.raw_sql,
+            # the node isn't always compiled, but if it is, include that!
+            'compiled_sql': getattr(self.node, 'injected_sql', None),
         })
         return result
 
@@ -149,9 +167,8 @@ class DatabaseException(RuntimeException):
     def process_stack(self):
         lines = []
 
-        if self.node is not None and self.node.get('build_path'):
-            lines.append(
-                "compiled SQL at {}".format(self.node.get('build_path')))
+        if hasattr(self.node, 'build_path') and self.node.build_path:
+            lines.append("compiled SQL at {}".format(self.node.build_path))
 
         return lines + RuntimeException.process_stack(self)
 
@@ -350,7 +367,7 @@ def doc_target_not_found(model, target_doc_name, target_doc_package):
     msg = (
         "Documentation for '{}' depends on doc '{}' {} which was not found"
     ).format(
-        model.get('unique_id'),
+        model.unique_id,
         target_doc_name,
         target_package_string
     )
@@ -365,11 +382,11 @@ def _get_target_failure_msg(model, target_model_name, target_model_package,
 
     source_path_string = ''
     if include_path:
-        source_path_string = ' ({})'.format(model.get('original_file_path'))
+        source_path_string = ' ({})'.format(model.original_file_path)
 
     return ("{} '{}'{} depends on model '{}' {}which {}"
-            .format(model.get('resource_type').title(),
-                    model.get('unique_id'),
+            .format(model.resource_type.title(),
+                    model.unique_id,
                     source_path_string,
                     target_model_name,
                     target_package_string,
@@ -403,9 +420,9 @@ def ref_target_not_found(model, target_model_name, target_model_package):
 
 def source_disabled_message(model, target_name, target_table_name):
     return ("{} '{}' ({}) depends on source '{}.{}' which was not found"
-            .format(model.get('resource_type').title(),
-                    model.get('unique_id'),
-                    model.get('original_file_path'),
+            .format(model.resource_type.title(),
+                    model.unique_id,
+                    model.original_file_path,
                     target_name,
                     target_table_name))
 
@@ -418,15 +435,15 @@ def source_target_not_found(model, target_name, target_table_name):
 def ref_disabled_dependency(model, target_model):
     raise_compiler_error(
         "Model '{}' depends on model '{}' which is disabled in "
-        "the project config".format(model.get('unique_id'),
-                                    target_model.get('unique_id')),
+        "the project config".format(model.unique_id,
+                                    target_model.unique_id),
         model)
 
 
 def dependency_not_found(model, target_model_name):
     raise_compiler_error(
         "'{}' depends on '{}' which is not in the graph!"
-        .format(model.get('unique_id'), target_model_name),
+        .format(model.unique_id, target_model_name),
         model)
 
 
@@ -434,7 +451,7 @@ def macro_not_found(model, target_macro_id):
     raise_compiler_error(
         model,
         "'{}' references macro '{}' which is not defined!"
-        .format(model.get('unique_id'), target_macro_id))
+        .format(model.unique_id, target_macro_id))
 
 
 def materialization_not_available(model, adapter_type):
@@ -475,7 +492,7 @@ def raise_cache_inconsistent(message):
 def missing_config(model, name):
     raise_compiler_error(
         "Model '{}' does not define a required config parameter '{}'."
-        .format(model.get('unique_id'), name),
+        .format(model.unique_id, name),
         model)
 
 
@@ -559,7 +576,7 @@ def approximate_relation_match(target, relation):
 
 
 def raise_duplicate_resource_name(node_1, node_2):
-    duped_name = node_1['name']
+    duped_name = node_1.name
 
     raise_compiler_error(
         'dbt found two resources with the name "{}". Since these resources '
@@ -568,12 +585,12 @@ def raise_duplicate_resource_name(node_1, node_2):
         'these resources:\n- {} ({})\n- {} ({})'.format(
             duped_name,
             duped_name,
-            node_1['unique_id'], node_1['original_file_path'],
-            node_2['unique_id'], node_2['original_file_path']))
+            node_1.unique_id, node_1.original_file_path,
+            node_2.unique_id, node_2.original_file_path))
 
 
 def raise_ambiguous_alias(node_1, node_2):
-    duped_name = "{}.{}".format(node_1['schema'], node_1['alias'])
+    duped_name = "{}.{}".format(node_1.schema, node_1.alias)
 
     raise_compiler_error(
         'dbt found two resources with the database representation "{}".\ndbt '
@@ -581,8 +598,8 @@ def raise_ambiguous_alias(node_1, node_2):
         'To fix this,\nchange the "schema" or "alias" configuration of one of '
         'these resources:\n- {} ({})\n- {} ({})'.format(
             duped_name,
-            node_1['unique_id'], node_1['original_file_path'],
-            node_2['unique_id'], node_2['original_file_path']))
+            node_1.unique_id, node_1.original_file_path,
+            node_2.unique_id, node_2.original_file_path))
 
 
 def raise_ambiguous_catalog_match(unique_id, match_1, match_2):

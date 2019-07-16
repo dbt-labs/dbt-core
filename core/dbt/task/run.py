@@ -9,8 +9,7 @@ from dbt.node_runners import ModelRunner, RPCExecuteRunner
 
 import dbt.exceptions
 import dbt.flags
-from dbt.contracts.graph.parsed import Hook
-from dbt.hooks import get_hook_dict
+from dbt.hooks import get_hook
 from dbt.ui.printer import \
     print_hook_start_line, \
     print_hook_end_line, \
@@ -66,11 +65,9 @@ class RunTask(CompileTask):
         compiled = compile_node(adapter, self.config, hook, self.manifest,
                                 extra_context)
         statement = compiled.wrapped_sql
-        hook_index = hook.get('index', num_hooks)
-        hook_dict = get_hook_dict(statement, index=hook_index)
-        if dbt.flags.STRICT_MODE:
-            Hook(**hook_dict)
-        return hook_dict.get('sql', '')
+        hook_index = hook.index or num_hooks
+        hook_obj = get_hook(statement, index=hook_index)
+        return hook_obj.sql or ''
 
     def _hook_keyfunc(self, hook):
         package_name = hook.package_name
@@ -156,7 +153,7 @@ class RunTask(CompileTask):
         # errored failed skipped
         schemas = list(set(
             r.node.schema for r in results
-            if not any((r.error is not None, r.failed, r.skipped))
+            if not any((r.error is not None, r.fail, r.skipped))
         ))
         with adapter.connection_named('master'):
             self.safe_run_hooks(adapter, RunHookType.End,

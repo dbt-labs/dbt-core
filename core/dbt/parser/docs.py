@@ -1,5 +1,4 @@
 import dbt.exceptions
-from dbt.node_types import NodeType
 from dbt.parser.base import BaseParser
 from dbt.contracts.graph.unparsed import UnparsedDocumentationFile
 from dbt.contracts.graph.parsed import ParsedDocumentation
@@ -35,7 +34,6 @@ class DocumentationParser(BaseParser):
 
             yield UnparsedDocumentationFile(
                 root_path=root_dir,
-                resource_type=NodeType.Documentation,
                 path=path,
                 original_file_path=original_file_path,
                 package_name=package_name,
@@ -77,14 +75,14 @@ class DocumentationParser(BaseParser):
             unique_id = '{}.{}'.format(docfile.package_name, name)
 
             merged = dbt.utils.deep_merge(
-                docfile.serialize(),
+                docfile.to_dict(),
                 {
                     'name': name,
                     'unique_id': unique_id,
                     'block_contents': item().strip(),
                 }
             )
-            yield ParsedDocumentation(**merged)
+            yield ParsedDocumentation.from_dict(merged)
 
     def load_and_parse(self, package_name, root_dir, relative_dirs):
         to_return = {}

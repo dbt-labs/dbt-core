@@ -1,3 +1,8 @@
+## dbt ? - Louisa May Alcott
+
+### Breaking changes
+ - the undocumented "graph" variable was removed from the parsing context ([#1589](https://github.com/fishtown-analytics/dbt/pull/1589))
+
 ## dbt 0.14.0 - Wilt Chamberlain (July 10, 2019)
 
 ### Overview

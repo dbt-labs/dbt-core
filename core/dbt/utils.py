@@ -60,8 +60,10 @@ def get_model_name_or_none(model):
         name = model
     elif isinstance(model, dict):
         name = model.get('alias', model.get('name'))
-    elif hasattr(model, 'nice_name'):
-        name = model.nice_name
+    elif hasattr(model, 'alias'):
+        name = model.alias
+    elif hasattr(model, 'name'):
+        name = model.name
     else:
         name = str(model)
     return name
@@ -82,7 +84,7 @@ def id_matches(unique_id, target_name, target_package, nodetypes, model):
     nodetypes should be a container of NodeTypes that implements the 'in'
     operator.
     """
-    node_type = model.get('resource_type', 'node')
+    node_type = model.resource_type
     node_parts = unique_id.split('.', 2)
     if len(node_parts) != 3:
         msg = "unique_id {} is malformed".format(unique_id)
@@ -127,7 +129,7 @@ def find_in_subgraph_by_name(subgraph, target_name, target_package, nodetype):
 def find_in_list_by_name(haystack, target_name, target_package, nodetype):
     """Find an entry in the given list by name."""
     for model in haystack:
-        name = model.get('unique_id')
+        name = model.unique_id
         if id_matches(name, target_name, target_package, nodetype, model):
             return model
 
@@ -139,10 +141,14 @@ DOCS_PREFIX = 'dbt_docs__'
 
 
 def get_dbt_macro_name(name):
+    if name is None:
+        raise dbt.exceptions.InternalException('Got None for a macro name!')
     return '{}{}'.format(MACRO_PREFIX, name)
 
 
 def get_dbt_docs_name(name):
+    if name is None:
+        raise dbt.exceptions.InternalException('Got None for a doc name!')
     return '{}{}'.format(DOCS_PREFIX, name)
 
 
@@ -301,17 +307,17 @@ def to_string(s):
 
 
 def get_materialization(node):
-    return node.get('config', {}).get('materialized')
+    return node.config.materialized
 
 
 def is_enabled(node):
-    return node.get('config', {}).get('enabled') is True
+    return node.config.enabled
 
 
 def is_type(node, _type):
     if hasattr(_type, 'value'):
         _type = _type.value
-    return node.get('resource_type') == _type
+    return node.resource_type == _type
 
 
 def get_pseudo_test_path(node_name, source_path, test_type):
@@ -331,7 +337,7 @@ def get_pseudo_hook_path(hook_name):
 def get_nodes_by_tags(nodes, match_tags, resource_type):
     matched_nodes = []
     for node in nodes:
-        node_tags = node.get('tags', [])
+        node_tags = node.tags
         if len(set(node_tags) & match_tags):
             matched_nodes.append(node)
     return matched_nodes
@@ -342,11 +348,11 @@ def md5(string):
 
 
 def get_hash(model):
-    return hashlib.md5(model.get('unique_id').encode('utf-8')).hexdigest()
+    return hashlib.md5(model.unique_id.encode('utf-8')).hexdigest()
 
 
 def get_hashed_contents(model):
-    return hashlib.md5(model.get('raw_sql').encode('utf-8')).hexdigest()
+    return hashlib.md5(model.raw_sql.encode('utf-8')).hexdigest()
 
 
 def flatten_nodes(dep_list):

@@ -90,11 +90,11 @@ def get_counts(flat_nodes):
     counts = {}
 
     for node in flat_nodes:
-        t = node.get('resource_type')
+        t = node.resource_type
 
-        if node.get('resource_type') == NodeType.Model:
+        if node.resource_type == NodeType.Model:
             t = '{} {}'.format(get_materialization(node), t)
-        elif node.get('resource_type') == NodeType.Operation:
+        elif node.resource_type == NodeType.Operation:
             t = 'hook'
 
         counts[t] = counts.get(t, 0) + 1
@@ -152,7 +152,7 @@ def print_test_result_line(result, schema_name, index, total):
         color = red
 
     elif result.status > 0:
-        severity = result.node.config['severity'].upper()
+        severity = result.node.config.severity.upper()
         if severity == 'ERROR' or dbt.flags.WARN_ERROR:
             info = 'FAIL {}'.format(result.status)
             color = red
@@ -168,7 +168,7 @@ def print_test_result_line(result, schema_name, index, total):
         raise RuntimeError("unexpected status: {}".format(result.status))
 
     print_fancy_output_line(
-        "{info} {name}".format(info=info, name=model.get('name')),
+        "{info} {name}".format(info=info, name=model.name),
         color(info),
         index,
         total,
@@ -190,7 +190,7 @@ def print_snapshot_result_line(result, index, total):
     model = result.node
 
     info, status = get_printable_result(result, 'snapshotted', 'snapshotting')
-    cfg = model.get('config', {})
+    cfg = model.config.to_dict()
 
     msg = "{info} {name}".format(
         info=info, name=model.name, **cfg)
@@ -211,7 +211,7 @@ def print_seed_result_line(result, schema_name, index, total):
         "{info} seed file {schema}.{relation}".format(
             info=info,
             schema=schema_name,
-            relation=model.get('alias')),
+            relation=model.alias),
         status,
         index,
         total,
@@ -255,7 +255,7 @@ def print_freshness_result_line(result, index, total):
 
 
 def interpret_run_result(result):
-    if result.error is not None or result.failed:
+    if result.error is not None or result.fail:
         return 'error'
     elif result.skipped:
         return 'skip'
@@ -284,17 +284,17 @@ def print_run_result_error(result, newline=True):
     if newline:
         logger.info("")
 
-    if result.failed:
+    if result.fail:
         logger.info(yellow("Failure in {} {} ({})").format(
-            result.node.get('resource_type'),
-            result.node.get('name'),
-            result.node.get('original_file_path')))
+            result.node.resource_type,
+            result.node.name,
+            result.node.original_file_path))
         logger.info("  Got {} results, expected 0.".format(result.status))
 
-        if result.node.get('build_path') is not None:
+        if result.node.build_path is not None:
             logger.info("")
             logger.info("  compiled SQL at {}".format(
-                result.node.get('build_path')))
+                result.node.build_path))
 
     else:
         first = True
@@ -327,7 +327,7 @@ def print_end_of_run_summary(num_errors, early_exit=False):
 
 
 def print_run_end_messages(results, early_exit=False):
-    errors = [r for r in results if r.error is not None or r.failed]
+    errors = [r for r in results if r.error is not None or r.fail]
     print_end_of_run_summary(len(errors), early_exit)
 
     for error in errors:

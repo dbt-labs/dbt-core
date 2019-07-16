@@ -44,11 +44,3 @@ class SnowflakeRelation(BaseRelation):
         'required': ['metadata', 'type', 'path', 'include_policy',
                      'quote_policy', 'quote_character', 'dbt_created']
     }
-
-    @classmethod
-    def _create_from_node(cls, config, node, **kwargs):
-        return cls.create(
-            database=node.get('database'),
-            schema=node.get('schema'),
-            identifier=node.get('alias'),
-            **kwargs)

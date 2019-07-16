@@ -12,14 +12,24 @@ from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 from dbt.utils import coalesce
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.contracts.graph.parsed import ParsedNode
+from dbt.contracts.project import ProjectList
 from dbt.parser.source_config import SourceConfig
 from dbt import deprecations
+from dbt import hooks
 
 
 class BaseParser:
-    def __init__(self, root_project_config, all_projects):
+    def __init__(self, root_project_config, all_projects: ProjectList):
         self.root_project_config = root_project_config
         self.all_projects = all_projects
+        if dbt.flags.STRICT_MODE:
+            dct = {
+                'projects': {
+                    name: project.to_project_config(with_packages=True)
+                    for name, project in all_projects.items()
+                }
+            }
+            ProjectList.from_dict(dct, validate=True)
 
     @property
     def default_schema(self):
@@ -137,6 +147,15 @@ class MacrosKnownParser(BaseParser):
         self._get_alias_func = get_alias
         return self._get_alias_func
 
+    def _mangle_hooks(self, config):
+        """Given a config dict that may have `pre-hook`/`post-hook` keys,
+        convert it from the yucky maybe-a-string, maybe-a-dict to a dict.
+        """
+        # Like most of parsing, this is a horrible hack :(
+        for key in hooks.ModelHookType:
+            if key in config:
+                config[key] = [hooks.get_hook_dict(h) for h in config[key]]
+
     def _build_intermediate_node_dict(self, config, node_dict, node_path,
                                       package_project_config, tags, fqn,
                                       snapshot_config, column_name):
@@ -149,10 +168,7 @@ class MacrosKnownParser(BaseParser):
         # TODO: Restructure this?
         config_dict = coalesce(snapshot_config, {})
         config_dict.update(config.config)
-
-        empty = (
-            'raw_sql' in node_dict and len(node_dict['raw_sql'].strip()) == 0
-        )
+        self._mangle_hooks(config_dict)
 
         node_dict.update({
             'refs': [],
@@ -162,7 +178,6 @@ class MacrosKnownParser(BaseParser):
                 'macros': [],
             },
             'unique_id': node_path,
-            'empty': empty,
             'fqn': fqn,
             'tags': tags,
             'config': config_dict,
@@ -192,7 +207,7 @@ class MacrosKnownParser(BaseParser):
             config)
 
         dbt.clients.jinja.get_rendered(
-            parsed_node.raw_sql, context, parsed_node.to_shallow_dict(),
+            parsed_node.raw_sql, context, parsed_node,
             capture_macros=True)
 
     def _update_parsed_node_info(self, parsed_node, config):
@@ -230,13 +245,14 @@ class MacrosKnownParser(BaseParser):
         parsed_node.tags.extend(model_tags)
 
         # Overwrite node config
-        config_dict = parsed_node.get('config', {})
+        config_dict = parsed_node.config.to_dict()
         config_dict.update(config.config)
-        parsed_node.config = config_dict
+        # re-mangle hooks, in case we got new ones
+        self._mangle_hooks(config_dict)
+        parsed_node.config = parsed_node.config.from_dict(config_dict)
 
-        for hook_type in dbt.hooks.ModelHookType:
-            parsed_node.config[hook_type] = dbt.hooks.get_hooks(parsed_node,
-                                                                hook_type)
+    def _parse_from_dict(self, parsed_dict):
+        return ParsedNode.from_dict(parsed_dict)
 
     def parse_node(self, node, node_path, package_project_config, tags=None,
                    fqn_extra=None, fqn=None, snapshot_config=None,
@@ -262,15 +278,15 @@ class MacrosKnownParser(BaseParser):
             node.resource_type)
 
         parsed_dict = self._build_intermediate_node_dict(
-            config, node.serialize(), node_path, config, tags, fqn,
+            config, node.to_dict(), node_path, config, tags, fqn,
             snapshot_config, column_name
         )
-        parsed_node = ParsedNode(**parsed_dict)
+        parsed_node = self._parse_from_dict(parsed_dict)
 
         self._render_with_context(parsed_node, config)
         self._update_parsed_node_info(parsed_node, config)
 
-        parsed_node.validate()
+        parsed_node.to_dict(validate=True)
 
         return parsed_node
 

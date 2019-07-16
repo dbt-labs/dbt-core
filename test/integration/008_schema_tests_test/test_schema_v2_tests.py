@@ -36,12 +36,12 @@ class TestSchemaTests(DBTIntegrationTest):
 
         for result in test_results:
             # assert that all deliberately failing tests actually fail
-            if 'failure' in result.node.get('name'):
+            if 'failure' in result.node.name:
                 self.assertIsNone(result.error)
                 self.assertFalse(result.skipped)
                 self.assertTrue(
                     result.status > 0,
-                    'test {} did not fail'.format(result.node.get('name'))
+                    'test {} did not fail'.format(result.node.name)
                 )
 
             # assert that actual tests pass
@@ -51,7 +51,7 @@ class TestSchemaTests(DBTIntegrationTest):
                 # status = # of failing rows
                 self.assertEqual(
                     result.status, 0,
-                    'test {} failed'.format(result.node.get('name'))
+                    'test {} failed'.format(result.node.name)
                 )
 
         self.assertEqual(sum(x.status for x in test_results), 6)
@@ -122,7 +122,7 @@ class TestHooksInTests(DBTIntegrationTest):
             # status = # of failing rows
             self.assertEqual(
                 result.status, 0,
-                'test {} failed'.format(result.node.get('name'))
+                'test {} failed'.format(result.node.name)
             )
 
 class TestCustomSchemaTests(DBTIntegrationTest):
@@ -217,12 +217,12 @@ class TestBQSchemaTests(DBTIntegrationTest):
 
         for result in test_results:
             # assert that all deliberately failing tests actually fail
-            if 'failure' in result.node.get('name'):
+            if 'failure' in result.node.name:
                 self.assertIsNone(result.error)
                 self.assertFalse(result.skipped)
                 self.assertTrue(
                     result.status > 0,
-                    'test {} did not fail'.format(result.node.get('name'))
+                    'test {} did not fail'.format(result.node.name)
                 )
 
             # assert that actual tests pass
@@ -232,7 +232,7 @@ class TestBQSchemaTests(DBTIntegrationTest):
                 # status = # of failing rows
                 self.assertEqual(
                     result.status, 0,
-                    'test {} failed'.format(result.node.get('name'))
+                    'test {} failed'.format(result.node.name)
                 )
 
         self.assertEqual(sum(x.status for x in test_results), 0)

@@ -4,12 +4,15 @@ import os
 
 import dbt.flags
 import dbt.compilation
-from collections import OrderedDict
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.compiled import CompiledNode
+from dbt.contracts.graph.parsed import NodeConfig, DependsOn
+from dbt.contracts.graph.compiled import CompiledNode, InjectedCTE
+from dbt.node_types import NodeType
+
+from datetime import datetime
+
 
 class CompilerTest(unittest.TestCase):
-
     def assertEqualIgnoreWhitespace(self, a, b):
         self.assertEqual(
             "".join(a.split()),
@@ -33,7 +36,7 @@ class CompilerTest(unittest.TestCase):
             'project-root': os.path.abspath('./dbt_modules/snowplow'),
         }
 
-        self.model_config = {
+        self.model_config = NodeConfig.from_dict({
             'enabled': True,
             'materialized': 'view',
             'persist_docs': {},
@@ -43,11 +46,10 @@ class CompilerTest(unittest.TestCase):
             'quoting': {},
             'column_types': {},
             'tags': [],
-        }
+        })
 
     def test__prepend_ctes__already_has_cte(self):
-        ephemeral_config = self.model_config.copy()
-        ephemeral_config['materialized'] = 'ephemeral'
+        ephemeral_config = self.model_config.replace(materialized='ephemeral')
 
         input_graph = Manifest(
             macros={},
@@ -57,20 +59,14 @@ class CompilerTest(unittest.TestCase):
                     database='dbt',
                     schema='analytics',
                     alias='view',
-                    resource_type='model',
+                    resource_type=NodeType.Model,
                     unique_id='model.root.view',
                     fqn=['root_project', 'view'],
-                    empty=False,
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
                     sources=[],
-                    depends_on={
-                        'nodes': [
-                            'model.root.ephemeral'
-                        ],
-                        'macros': []
-                    },
+                    depends_on=DependsOn(nodes=['model.root.ephemeral']),
                     config=self.model_config,
                     tags=[],
                     path='view.sql',
@@ -78,9 +74,7 @@ class CompilerTest(unittest.TestCase):
                     raw_sql='select * from {{ref("ephemeral")}}',
                     compiled=True,
                     extra_ctes_injected=False,
-                    extra_ctes=[
-                        {'id': 'model.root.ephemeral', 'sql': None}
-                    ],
+                    extra_ctes=[InjectedCTE(id='model.root.ephemeral')],
                     injected_sql='',
                     compiled_sql=(
                         'with cte as (select * from something_else) '
@@ -91,18 +85,14 @@ class CompilerTest(unittest.TestCase):
                     database='dbt',
                     schema='analytics',
                     alias='view',
-                    resource_type='model',
+                    resource_type=NodeType.Model,
                     unique_id='model.root.ephemeral',
                     fqn=['root_project', 'ephemeral'],
-                    empty=False,
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
                     sources=[],
-                    depends_on={
-                        'nodes': [],
-                        'macros': []
-                    },
+                    depends_on=DependsOn(),
                     config=ephemeral_config,
                     tags=[],
                     path='ephemeral.sql',
@@ -116,7 +106,8 @@ class CompilerTest(unittest.TestCase):
                 ),
             },
             docs={},
-            generated_at='2018-02-14T09:15:13Z',
+            # '2018-02-14T09:15:13Z'
+            generated_at=datetime(2018, 2, 14, 9, 15, 13),
             disabled=[]
         )
 
@@ -125,18 +116,16 @@ class CompilerTest(unittest.TestCase):
             input_graph)
 
         self.assertEqual(result, output_graph.nodes['model.root.view'])
-        self.assertEqual(result.get('extra_ctes_injected'), True)
+        self.assertEqual(result.extra_ctes_injected, True)
         self.assertEqualIgnoreWhitespace(
-            result.get('injected_sql'),
+            result.injected_sql,
             ('with __dbt__CTE__ephemeral as ('
              'select * from source_table'
              '), cte as (select * from something_else) '
              'select * from __dbt__CTE__ephemeral'))
 
         self.assertEqual(
-            (input_graph.nodes
-             .get('model.root.ephemeral', {})
-             .get('extra_ctes_injected')),
+            input_graph.nodes['model.root.ephemeral'].extra_ctes_injected,
             True)
 
     def test__prepend_ctes__no_ctes(self):
@@ -148,48 +137,40 @@ class CompilerTest(unittest.TestCase):
                     database='dbt',
                     schema='analytics',
                     alias='view',
-                    resource_type='model',
+                    resource_type=NodeType.Model,
                     unique_id='model.root.view',
                     fqn=['root_project', 'view'],
-                    empty=False,
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
                     sources=[],
-                    depends_on={
-                        'nodes': [],
-                        'macros': []
-                    },
+                    depends_on=DependsOn(),
                     config=self.model_config,
                     tags=[],
                     path='view.sql',
                     original_file_path='view.sql',
                     raw_sql=('with cte as (select * from something_else) '
-                                'select * from source_table'),
+                             'select * from source_table'),
                     compiled=True,
                     extra_ctes_injected=False,
                     extra_ctes=[],
                     injected_sql='',
                     compiled_sql=('with cte as (select * from something_else) '
-                                     'select * from source_table')
+                                  'select * from source_table')
                 ),
                 'model.root.view_no_cte': CompiledNode(
                     name='view_no_cte',
                     database='dbt',
                     schema='analytics',
                     alias='view_no_cte',
-                    resource_type='model',
+                    resource_type=NodeType.Model,
                     unique_id='model.root.view_no_cte',
                     fqn=['root_project', 'view_no_cte'],
-                    empty=False,
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
                     sources=[],
-                    depends_on={
-                        'nodes': [],
-                        'macros': []
-                    },
+                    depends_on=DependsOn(),
                     config=self.model_config,
                     tags=[],
                     path='view.sql',
@@ -214,12 +195,10 @@ class CompilerTest(unittest.TestCase):
         self.assertEqual(
             result,
             output_graph.nodes.get('model.root.view'))
-        self.assertEqual(result.get('extra_ctes_injected'), True)
+        self.assertTrue(result.extra_ctes_injected)
         self.assertEqualIgnoreWhitespace(
-            result.get('injected_sql'),
-            (output_graph.nodes
-                         .get('model.root.view')
-                         .get('compiled_sql')))
+            result.injected_sql,
+            output_graph.nodes.get('model.root.view').compiled_sql)
 
         result, output_graph = dbt.compilation.prepend_ctes(
             input_graph.nodes.get('model.root.view_no_cte'),
@@ -228,16 +207,13 @@ class CompilerTest(unittest.TestCase):
         self.assertEqual(
             result,
             output_graph.nodes.get('model.root.view_no_cte'))
-        self.assertEqual(result.get('extra_ctes_injected'), True)
+        self.assertTrue(result.extra_ctes_injected)
         self.assertEqualIgnoreWhitespace(
-            result.get('injected_sql'),
-            (output_graph.nodes
-                         .get('model.root.view_no_cte')
-                         .get('compiled_sql')))
+            result.injected_sql,
+            output_graph.nodes.get('model.root.view_no_cte').compiled_sql)
 
     def test__prepend_ctes(self):
-        ephemeral_config = self.model_config.copy()
-        ephemeral_config['materialized'] = 'ephemeral'
+        ephemeral_config = self.model_config.replace(materialized='ephemeral')
 
         input_graph = Manifest(
             macros={},
@@ -247,20 +223,14 @@ class CompilerTest(unittest.TestCase):
                     database='dbt',
                     schema='analytics',
                     alias='view',
-                    resource_type='model',
+                    resource_type=NodeType.Model,
                     unique_id='model.root.view',
                     fqn=['root_project', 'view'],
-                    empty=False,
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
                     sources=[],
-                    depends_on={
-                        'nodes': [
-                            'model.root.ephemeral'
-                        ],
-                        'macros': []
-                    },
+                    depends_on=DependsOn(nodes=['model.root.ephemeral']),
                     config=self.model_config,
                     tags=[],
                     path='view.sql',
@@ -268,9 +238,7 @@ class CompilerTest(unittest.TestCase):
                     raw_sql='select * from {{ref("ephemeral")}}',
                     compiled=True,
                     extra_ctes_injected=False,
-                    extra_ctes=[
-                        {'id': 'model.root.ephemeral', 'sql': None}
-                    ],
+                    extra_ctes=[InjectedCTE(id='model.root.ephemeral')],
                     injected_sql='',
                     compiled_sql='select * from __dbt__CTE__ephemeral'
                 ),
@@ -279,18 +247,14 @@ class CompilerTest(unittest.TestCase):
                     database='dbt',
                     schema='analytics',
                     alias='ephemeral',
-                    resource_type='model',
+                    resource_type=NodeType.Model,
                     unique_id='model.root.ephemeral',
                     fqn=['root_project', 'ephemeral'],
-                    empty=False,
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
                     sources=[],
-                    depends_on={
-                        'nodes': [],
-                        'macros': []
-                    },
+                    depends_on=DependsOn(),
                     config=ephemeral_config,
                     tags=[],
                     path='ephemeral.sql',
@@ -313,26 +277,20 @@ class CompilerTest(unittest.TestCase):
             input_graph)
 
         self.assertEqual(result,
-                         (output_graph.nodes
-                                      .get('model.root.view')))
+                         output_graph.nodes.get('model.root.view'))
 
-        self.assertEqual(result.get('extra_ctes_injected'), True)
+        self.assertTrue(result.extra_ctes_injected)
         self.assertEqualIgnoreWhitespace(
-            result.get('injected_sql'),
+            result.injected_sql,
             ('with __dbt__CTE__ephemeral as ('
              'select * from source_table'
              ') '
              'select * from __dbt__CTE__ephemeral'))
 
-        self.assertEqual(
-            (output_graph.nodes
-                         .get('model.root.ephemeral', {})
-                         .get('extra_ctes_injected')),
-            True)
+        self.assertTrue(output_graph.nodes['model.root.ephemeral'].extra_ctes_injected)
 
     def test__prepend_ctes__multiple_levels(self):
-        ephemeral_config = self.model_config.copy()
-        ephemeral_config['materialized'] = 'ephemeral'
+        ephemeral_config = self.model_config.replace(materialized='ephemeral')
 
         input_graph = Manifest(
             macros={},
@@ -342,20 +300,14 @@ class CompilerTest(unittest.TestCase):
                     database='dbt',
                     schema='analytics',
                     alias='view',
-                    resource_type='model',
+                    resource_type=NodeType.Model,
                     unique_id='model.root.view',
                     fqn=['root_project', 'view'],
-                    empty=False,
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
                     sources=[],
-                    depends_on={
-                        'nodes': [
-                            'model.root.ephemeral'
-                        ],
-                        'macros': []
-                    },
+                    depends_on=DependsOn(nodes=['model.root.ephemeral']),
                     config=self.model_config,
                     tags=[],
                     path='view.sql',
@@ -363,9 +315,7 @@ class CompilerTest(unittest.TestCase):
                     raw_sql='select * from {{ref("ephemeral")}}',
                     compiled=True,
                     extra_ctes_injected=False,
-                    extra_ctes=[
-                        {'id': 'model.root.ephemeral', 'sql': None}
-                    ],
+                    extra_ctes=[InjectedCTE(id='model.root.ephemeral')],
                     injected_sql='',
                     compiled_sql='select * from __dbt__CTE__ephemeral'
                 ),
@@ -374,18 +324,14 @@ class CompilerTest(unittest.TestCase):
                     database='dbt',
                     schema='analytics',
                     alias='ephemeral',
-                    resource_type='model',
+                    resource_type=NodeType.Model,
                     unique_id='model.root.ephemeral',
                     fqn=['root_project', 'ephemeral'],
-                    empty=False,
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
                     sources=[],
-                    depends_on={
-                        'nodes': [],
-                        'macros': []
-                    },
+                    depends_on=DependsOn(),
                     config=ephemeral_config,
                     tags=[],
                     path='ephemeral.sql',
@@ -393,9 +339,7 @@ class CompilerTest(unittest.TestCase):
                     raw_sql='select * from {{ref("ephemeral_level_two")}}',
                     compiled=True,
                     extra_ctes_injected=False,
-                    extra_ctes=[
-                        {'id': 'model.root.ephemeral_level_two', 'sql': None}
-                    ],
+                    extra_ctes=[InjectedCTE(id='model.root.ephemeral_level_two')],
                     injected_sql='',
                     compiled_sql='select * from __dbt__CTE__ephemeral_level_two' # noqa
                 ),
@@ -404,18 +348,14 @@ class CompilerTest(unittest.TestCase):
                     database='dbt',
                     schema='analytics',
                     alias='ephemeral_level_two',
-                    resource_type='model',
+                    resource_type=NodeType.Model,
                     unique_id='model.root.ephemeral_level_two',
                     fqn=['root_project', 'ephemeral_level_two'],
-                    empty=False,
                     package_name='root',
                     root_path='/usr/src/app',
                     refs=[],
                     sources=[],
-                    depends_on={
-                        'nodes': [],
-                        'macros': []
-                    },
+                    depends_on=DependsOn(),
                     config=ephemeral_config,
                     tags=[],
                     path='ephemeral_level_two.sql',
@@ -438,9 +378,9 @@ class CompilerTest(unittest.TestCase):
             input_graph)
 
         self.assertEqual(result, input_graph.nodes['model.root.view'])
-        self.assertEqual(result.get('extra_ctes_injected'), True)
+        self.assertTrue(result.extra_ctes_injected)
         self.assertEqualIgnoreWhitespace(
-            result.get('injected_sql'),
+            result.injected_sql,
             ('with __dbt__CTE__ephemeral_level_two as ('
              'select * from source_table'
              '), __dbt__CTE__ephemeral as ('
@@ -448,13 +388,5 @@ class CompilerTest(unittest.TestCase):
              ') '
              'select * from __dbt__CTE__ephemeral'))
 
-        self.assertEqual(
-            (output_graph.nodes
-                         .get('model.root.ephemeral')
-                         .get('extra_ctes_injected')),
-            True)
-        self.assertEqual(
-            (output_graph.nodes
-                         .get('model.root.ephemeral_level_two')
-                         .get('extra_ctes_injected')),
-            True)
+        self.assertTrue(output_graph.nodes['model.root.ephemeral'].extra_ctes_injected)
+        self.assertTrue(output_graph.nodes['model.root.ephemeral_level_two'].extra_ctes_injected)

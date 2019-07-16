@@ -63,7 +63,9 @@ class GraphTest(unittest.TestCase):
         }
 
         self.mock_load_projects = self.load_projects_patcher.start()
-        self.mock_load_projects.return_value = []
+        def _load_projects(config, paths):
+            yield config.project_name, config
+        self.mock_load_projects.side_effect = _load_projects
 
         self.mock_models = []
         self.mock_content = {}
@@ -187,12 +189,9 @@ class GraphTest(unittest.TestCase):
             "model_four": "table"
         }
 
-        nodes = linker.graph.node
-
         for model, expected in expected_materialization.items():
             key = 'model.test_models_compile.{}'.format(model)
-            actual = manifest.nodes[key].get('config', {}) \
-                                             .get('materialized')
+            actual = manifest.nodes[key].config.materialized
             self.assertEqual(actual, expected)
 
     def test__model_incremental(self):
@@ -221,10 +220,7 @@ class GraphTest(unittest.TestCase):
         self.assertEqual(list(linker.nodes()), [node])
         self.assertEqual(list(linker.edges()), [])
 
-        self.assertEqual(
-            manifest.nodes[node].get('config', {}).get('materialized'),
-            'incremental'
-        )
+        self.assertEqual(manifest.nodes[node].config.materialized, 'incremental')
 
     def test__dependency_list(self):
         self.use_models({

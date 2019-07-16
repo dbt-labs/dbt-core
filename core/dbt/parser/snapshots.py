@@ -1,30 +1,20 @@
 
-from dbt.contracts.graph.parsed import ParsedSnapshotNode
+from dbt.contracts.graph.parsed import ParsedSnapshotNode, \
+    IntermediateSnapshotNode
+from dbt.exceptions import CompilationException, validator_error_message
 from dbt.node_types import NodeType
 from dbt.parser.base_sql import BaseSqlParser, SQLParseResult
 import dbt.clients.jinja
-import dbt.exceptions
 import dbt.utils
+
+from hologram import ValidationError
 
 
 def set_snapshot_attributes(node):
-    # Default the target database to the database specified in the target
-    # This line allows target_database to be optional in the snapshot config
-    if 'target_database' not in node.config:
-        node.config['target_database'] = node.database
-
-    # Set the standard node configs (database+schema) to be the specified
-    # values from target_database and target_schema. This ensures that the
-    # database and schema names are interopolated correctly when snapshots
-    # are ref'd from other models
-    config_keys = {
-        'target_database': 'database',
-        'target_schema': 'schema'
-    }
-
-    for config_key, node_key in config_keys.items():
-        if config_key in node.config:
-            setattr(node, node_key, node.config[config_key])
+    if node.config.target_database:
+        node.database = node.config.target_database
+    if node.config.target_schema:
+        node.schema = node.config.target_schema
 
     return node
 
@@ -39,7 +29,7 @@ class SnapshotParser(BaseSqlParser):
                 allowed_blocks={'snapshot'},
                 collect_raw_data=False
             )
-        except dbt.exceptions.CompilationException as exc:
+        except CompilationException as exc:
             if exc.node is None:
                 exc.node = file_node
             raise
@@ -66,15 +56,18 @@ class SnapshotParser(BaseSqlParser):
 
         return fqn
 
+    def _parse_from_dict(self, parsed_dict):
+        return IntermediateSnapshotNode.from_dict(parsed_dict)
+
     @staticmethod
     def validate_snapshots(node):
         if node.resource_type == NodeType.Snapshot:
             try:
-                parsed_node = ParsedSnapshotNode(**node.to_shallow_dict())
+                parsed_node = ParsedSnapshotNode.from_dict(node.to_dict())
                 return set_snapshot_attributes(parsed_node)
 
-            except dbt.exceptions.JSONValidationException as exc:
-                raise dbt.exceptions.CompilationException(str(exc), node)
+            except ValidationError as exc:
+                raise CompilationException(validator_error_message(exc), node)
         else:
             return node
 
@@ -90,8 +83,8 @@ class SnapshotParser(BaseSqlParser):
                 self.parse_snapshots_from_file(file_node, tags=tags)
             )
             found = super().parse_sql_nodes(nodes=snapshot_nodes, tags=tags)
-            # make sure our blocks are going to work when we try to snapshot
-            # them!
+            # Our snapshots are all stored as IntermediateSnapshotNodes, so
+            # convert them to their final form
             found.parsed = {k: self.validate_snapshots(v) for
                             k, v in found.parsed.items()}
 

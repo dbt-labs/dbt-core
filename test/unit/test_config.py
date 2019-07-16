@@ -13,7 +13,7 @@ import dbt.config
 import dbt.exceptions
 from dbt.adapters.postgres import PostgresCredentials
 from dbt.adapters.redshift import RedshiftCredentials
-from dbt.contracts.project import PackageConfig
+from dbt.contracts.project import PackageConfig, LocalPackage, GitPackage
 from dbt.semver import VersionSpecifier
 from dbt.task.run_operation import RunOperationTask
 
@@ -692,15 +692,12 @@ class TestProject(BaseConfigTest):
         })
         self.assertEqual(project.dbt_version,
                          [VersionSpecifier.from_version_string('>=0.1.0')])
-        self.assertEqual(project.packages, PackageConfig(packages=[
-            {
-                'local': 'foo',
-            },
-            {
-                'git': 'git@example.com:fishtown-analytics/dbt-utils.git',
-                'revision': 'test-rev'
-            },
-        ]))
+        self.assertEqual(
+            project.packages,
+            PackageConfig(packages=[
+                LocalPackage(local='foo'),
+                GitPackage(git='git@example.com:fishtown-analytics/dbt-utils.git', revision='test-rev')
+            ]))
         str(project)
         json.dumps(project.to_project_config())
 
@@ -1010,7 +1007,7 @@ class TestRuntimeConfig(BaseConfigTest):
         project = self.get_project()
         profile = self.get_profile()
         # invalid - must be boolean
-        profile.config.use_colors = None
+        profile.config.use_colors = 100
         with self.assertRaises(dbt.exceptions.DbtProjectError):
             dbt.config.RuntimeConfig.from_parts(project, profile, {})
 

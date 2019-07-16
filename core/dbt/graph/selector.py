@@ -341,7 +341,7 @@ class NodeSelector(MultiSelector):
         node = self.manifest.nodes[node_name]
         if node.resource_type == NodeType.Source:
             return True
-        return not node.get('empty') and is_enabled(node)
+        return not node.empty and is_enabled(node)
 
     def _is_match(self, node_name, resource_types, tags, required):
         node = self.manifest.nodes[node_name]
@@ -376,9 +376,9 @@ class NodeSelector(MultiSelector):
         return filtered_nodes
 
     def is_ephemeral_model(self, node):
-        is_model = node.get('resource_type') == NodeType.Model
-        is_ephemeral = get_materialization(node) == 'ephemeral'
-        return is_model and is_ephemeral
+        # if it's not a model, `get_materialization` is probably an error!
+        return node.resource_type == NodeType.Model and \
+            get_materialization(node) == 'ephemeral'
 
     def get_ancestor_ephemeral_nodes(self, selected_nodes):
         node_names = {}

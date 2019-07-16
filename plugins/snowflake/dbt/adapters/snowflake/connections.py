@@ -12,52 +12,23 @@ from dbt.adapters.base import Credentials
 from dbt.adapters.sql import SQLConnectionManager
 from dbt.logger import GLOBAL_LOGGER as logger
 
-
-SNOWFLAKE_CREDENTIALS_CONTRACT = {
-    'type': 'object',
-    'additionalProperties': False,
-    'properties': {
-        'account': {
-            'type': 'string',
-        },
-        'user': {
-            'type': 'string',
-        },
-        'password': {
-            'type': 'string',
-        },
-        'authenticator': {
-            'type': 'string',
-            'description': "Either 'externalbrowser', or a valid Okta url"
-        },
-        'private_key_path': {
-            'type': 'string',
-        },
-        'private_key_passphrase': {
-            'type': 'string',
-        },
-        'database': {
-            'type': 'string',
-        },
-        'schema': {
-            'type': 'string',
-        },
-        'warehouse': {
-            'type': 'string',
-        },
-        'role': {
-            'type': 'string',
-        },
-        'client_session_keep_alive': {
-            'type': 'boolean',
-        }
-    },
-    'required': ['account', 'user', 'database', 'schema'],
-}
+from dataclasses import dataclass
+from typing import Optional
 
 
+@dataclass
 class SnowflakeCredentials(Credentials):
-    SCHEMA = SNOWFLAKE_CREDENTIALS_CONTRACT
+    account: str
+    user: str
+    database: str
+    schema: str
+    warehouse: Optional[str]
+    role: Optional[str]
+    password: Optional[str]
+    authenticator: Optional[str]
+    private_key_path: Optional[str]
+    private_key_passphrase: Optional[str]
+    client_session_keep_alive: bool = False
 
     @property
     def type(self):
@@ -65,6 +36,33 @@ class SnowflakeCredentials(Credentials):
 
     def _connection_keys(self):
         return ('account', 'user', 'database', 'schema', 'warehouse', 'role')
+
+    def auth_args(self):
+        # Pull all of the optional authentication args for the connector,
+        # let connector handle the actual arg validation
+        result = {}
+        if self.password:
+            result['password'] = self.password
+        if self.authenticator:
+            result['authenticator'] = self.authenticator
+        result['private_key'] = self._get_private_key()
+        return result
+
+    def _get_private_key(self):
+        """Get Snowflake private key by path or None."""
+        if not self.private_key_path or self.private_key_passphrase is None:
+            return None
+
+        with open(self.private_key_path, 'rb') as key:
+            p_key = serialization.load_pem_private_key(
+                key.read(),
+                password=self.private_key_passphrase.encode(),
+                backend=default_backend())
+
+        return p_key.private_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption())
 
 
 class SnowflakeConnectionManager(SQLConnectionManager):
@@ -110,27 +108,18 @@ class SnowflakeConnectionManager(SQLConnectionManager):
             return connection
 
         try:
-            credentials = connection.credentials
-            # Pull all of the optional authentication args for the connector,
-            # let connector handle the actual arg validation
-            auth_args = {auth_key: credentials[auth_key]
-                         for auth_key in ['user', 'password', 'authenticator']
-                         if auth_key in credentials}
-
-            auth_args['private_key'] = cls._get_private_key(
-                credentials.get('private_key_path'),
-                credentials.get('private_key_passphrase'))
+            creds = connection.credentials
 
             handle = snowflake.connector.connect(
-                account=credentials.account,
-                database=credentials.database,
-                schema=credentials.schema,
-                warehouse=credentials.warehouse,
-                role=credentials.get('role', None),
+                account=creds.account,
+                user=creds.user,
+                database=creds.database,
+                schema=creds.schema,
+                warehouse=creds.warehouse,
+                role=creds.role,
                 autocommit=False,
-                client_session_keep_alive=credentials.get(
-                    'client_session_keep_alive', False),
-                **auth_args
+                client_session_keep_alive=creds.client_session_keep_alive,
+                **creds.auth_args()
             )
 
             connection.handle = handle
@@ -177,23 +166,6 @@ class SnowflakeConnectionManager(SQLConnectionManager):
         sql_buf = StringIO(sql_s)
         split_query = snowflake.connector.util_text.split_statements(sql_buf)
         return [part[0] for part in split_query]
-
-    @classmethod
-    def _get_private_key(cls, private_key_path, private_key_passphrase):
-        """Get Snowflake private key by path or None."""
-        if private_key_path is None or private_key_passphrase is None:
-            return None
-
-        with open(private_key_path, 'rb') as key:
-            p_key = serialization.load_pem_private_key(
-                key.read(),
-                password=private_key_passphrase.encode(),
-                backend=default_backend())
-
-        return p_key.private_bytes(
-            encoding=serialization.Encoding.DER,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption())
 
     def add_query(self, sql, auto_begin=True,
                   bindings=None, abridge_sql_log=False):

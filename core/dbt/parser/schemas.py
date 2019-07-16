@@ -4,6 +4,8 @@ import os
 import re
 import hashlib
 
+from hologram import ValidationError
+
 import dbt.exceptions
 import dbt.flags
 import dbt.utils
@@ -12,6 +14,7 @@ import dbt.clients.yaml_helper
 import dbt.context.parser
 import dbt.contracts.project
 
+from dbt.contracts.graph.parsed import ColumnInfo, Docref
 from dbt.context.common import generate_config_context
 from dbt.clients.jinja import get_rendered
 from dbt.node_types import NodeType
@@ -19,9 +22,13 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import get_pseudo_test_path
 from dbt.contracts.graph.unparsed import UnparsedNode, UnparsedNodeUpdate, \
     UnparsedSourceDefinition
-from dbt.contracts.graph.parsed import ParsedNodePatch, ParsedSourceDefinition
+from dbt.contracts.graph.parsed import ParsedNodePatch, ParsedTestNode, \
+    ParsedSourceDefinition
 from dbt.parser.base import MacrosKnownParser
 from dbt.config.renderer import ConfigRenderer
+from dbt.exceptions import JSONValidationException, validator_error_message
+
+from typing import Dict, List
 
 
 def get_nice_schema_test_name(test_type, test_name, args):
@@ -179,11 +186,11 @@ class TestBuilder:
 
 class RefTestBuilder(TestBuilder):
     def build_model_str(self):
-        return "ref('{}')".format(self.target['name'])
+        return "ref('{}')".format(self.target.name)
 
     def get_test_name(self):
         return get_nice_schema_test_name(self.name,
-                                         self.target['name'],
+                                         self.target.name,
                                          self.args)
 
     def describe_test_target(self):
@@ -193,13 +200,13 @@ class RefTestBuilder(TestBuilder):
 class SourceTestBuilder(TestBuilder):
     def build_model_str(self):
         return "source('{}', '{}')".format(
-            self.target['source']['name'],
-            self.target['table']['name']
+            self.target['source'].name,
+            self.target['table'].name
         )
 
     def get_test_name(self):
-        target_name = '{}_{}'.format(self.target['source']['name'],
-                                     self.target['table']['name'])
+        target_name = '{}_{}'.format(self.target['source'].name,
+                                     self.target['table'].name)
         return get_nice_schema_test_name(
             'source_' + self.name,
             target_name,
@@ -228,10 +235,14 @@ def _filter_validate(filepath, location, values, validate):
             warn_invalid(filepath, location, value, '(expected a dict)')
             continue
         try:
-            yield validate(**value)
-        except dbt.exceptions.JSONValidationException as exc:
+            yield validate(value)
             # we don't want to fail the full run, but we do want to fail
             # parsing this file
+        except ValidationError as exc:
+            msg = validator_error_message(exc)
+            warn_invalid(filepath, location, value, '- ' + msg)
+            continue
+        except JSONValidationException as exc:
             warn_invalid(filepath, location, value, '- ' + exc.msg)
             continue
 
@@ -239,14 +250,12 @@ def _filter_validate(filepath, location, values, validate):
 class ParserRef:
     """A helper object to hold parse-time references."""
     def __init__(self):
-        self.column_info = {}
-        self.docrefs = []
+        self.column_info: Dict[str, ColumnInfo] = {}
+        self.docrefs: List[Docref] = []
 
     def add(self, column_name, description):
-        self.column_info[column_name] = {
-            'name': column_name,
-            'description': description,
-        }
+        self.column_info[column_name] = ColumnInfo(name=column_name,
+                                                   description=description)
 
 
 class SchemaBaseTestParser(MacrosKnownParser):
@@ -255,8 +264,8 @@ class SchemaBaseTestParser(MacrosKnownParser):
     def _parse_column(self, target, column, package_name, root_dir, path,
                       refs):
         # this should yield ParsedNodes where resource_type == NodeType.Test
-        column_name = column['name']
-        description = column.get('description', '')
+        column_name = column.name
+        description = column.description
 
         refs.add(column_name, description)
         context = {
@@ -264,7 +273,7 @@ class SchemaBaseTestParser(MacrosKnownParser):
         }
         get_rendered(description, context)
 
-        for test in column.get('tests', []):
+        for test in column.tests:
             try:
                 yield self.build_test_node(
                     target, package_name, test, root_dir,
@@ -276,6 +285,9 @@ class SchemaBaseTestParser(MacrosKnownParser):
                     '\n\t{}'.format(path, exc.msg), None
                 )
                 continue
+
+    def _parse_from_dict(self, parsed_dict):
+        return ParsedTestNode.from_dict(parsed_dict)
 
     def build_test_node(self, test_target, package_name, test, root_dir, path,
                         column_name=None):
@@ -320,7 +332,7 @@ class SchemaBaseTestParser(MacrosKnownParser):
 
         # supply our own fqn which overrides the hashed version from the path
         # TODO: is this necessary even a little bit for tests?
-        fqn_override = self.get_fqn(unparsed.incorporate(path=full_path),
+        fqn_override = self.get_fqn(unparsed.replace(path=full_path),
                                     source_package)
 
         node_path = self.get_path(NodeType.Test, unparsed.package_name,
@@ -348,18 +360,18 @@ class SchemaBaseTestParser(MacrosKnownParser):
 class SchemaModelParser(SchemaBaseTestParser):
     Builder = RefTestBuilder
 
-    def parse_models_entry(self, model_dict, path, package_name, root_dir):
-        model_name = model_dict['name']
+    def parse_models_entry(self, model, path, package_name, root_dir):
+        model_name = model.name
         refs = ParserRef()
-        for column in model_dict.get('columns', []):
-            column_tests = self._parse_column(model_dict, column, package_name,
+        for column in model.columns:
+            column_tests = self._parse_column(model, column, package_name,
                                               root_dir, path, refs)
             for node in column_tests:
                 yield 'test', node
 
-        for test in model_dict.get('tests', []):
+        for test in model.tests:
             try:
-                node = self.build_test_node(model_dict, package_name, test,
+                node = self.build_test_node(model, package_name, test,
                                             root_dir, path)
             except dbt.exceptions.CompilationException as exc:
                 dbt.exceptions.warn_or_error(
@@ -369,8 +381,8 @@ class SchemaModelParser(SchemaBaseTestParser):
                 continue
             yield 'test', node
 
-        context = {'doc': dbt.context.parser.docs(model_dict, refs.docrefs)}
-        description = model_dict.get('description', '')
+        context = {'doc': dbt.context.parser.docs(model, refs.docrefs)}
+        description = model.description
         get_rendered(description, context)
 
         patch = ParsedNodePatch(
@@ -391,7 +403,8 @@ class SchemaModelParser(SchemaBaseTestParser):
         :param str package_name: The name of the current package
         :param str root_dir: The root directory of the search
         """
-        filtered = _filter_validate(path, 'models', models, UnparsedNodeUpdate)
+        filtered = _filter_validate(path, 'models', models,
+                                    UnparsedNodeUpdate.from_dict)
         nodes = itertools.chain.from_iterable(
             self.parse_models_entry(model, path, package_name, root_dir)
             for model in filtered
@@ -436,28 +449,22 @@ class SchemaSourceParser(SchemaBaseTestParser):
                                   source.name, table.name)
 
         context = {'doc': dbt.context.parser.docs(source, refs.docrefs)}
-        description = table.get('description', '')
-        source_description = source.get('description', '')
+        description = table.description or ''
+        source_description = source.description or ''
         get_rendered(description, context)
         get_rendered(source_description, context)
 
-        freshness = dbt.utils.deep_merge(source.get('freshness', {}),
-                                         table.get('freshness', {}))
+        loaded_at_field = table.loaded_at_field or source.loaded_at_field
+        freshness = source.freshness.merged(table.freshness)
 
-        loaded_at_field = table.get('loaded_at_field',
-                                    source.get('loaded_at_field'))
-
-        # use 'or {}' to allow quoting: null
-        source_quoting = source.get('quoting') or {}
-        table_quoting = table.get('quoting') or {}
-        quoting = dbt.utils.deep_merge(source_quoting, table_quoting)
+        quoting = source.quoting.merged(table.quoting)
 
         default_database = self.root_project_config.credentials.database
         return ParsedSourceDefinition(
             package_name=package_name,
-            database=source.get('database', default_database),
-            schema=source.get('schema', source.name),
-            identifier=table.get('identifier', table.name),
+            database=(source.database or default_database),
+            schema=(source.schema or source.name),
+            identifier=(table.identifier or table.name),
             root_path=root_dir,
             path=path,
             original_file_path=path,
@@ -467,7 +474,7 @@ class SchemaSourceParser(SchemaBaseTestParser):
             description=description,
             source_name=source.name,
             source_description=source_description,
-            loader=source.get('loader', ''),
+            loader=source.loader,
             docrefs=refs.docrefs,
             loaded_at_field=loaded_at_field,
             freshness=freshness,
@@ -479,14 +486,14 @@ class SchemaSourceParser(SchemaBaseTestParser):
     def parse_source_table(self, source, table, path, package_name, root_dir):
         refs = ParserRef()
         test_target = {'source': source, 'table': table}
-        for column in table.get('columns', []):
+        for column in table.columns:
             column_tests = self._parse_column(test_target, column,
                                               package_name, root_dir, path,
                                               refs)
             for node in column_tests:
                 yield 'test', node
 
-        for test in table.get('tests', []):
+        for test in table.tests:
             try:
                 node = self.build_test_node(test_target, package_name, test,
                                             root_dir, path)
@@ -510,9 +517,9 @@ class SchemaSourceParser(SchemaBaseTestParser):
         for node_type, node in nodes:
             yield node_type, node
 
-    def _sources_validate(self, **kwargs):
+    def _sources_validate(self, kwargs):
         kwargs = self._renderer.render_schema_source(kwargs)
-        return UnparsedSourceDefinition(**kwargs)
+        return UnparsedSourceDefinition.from_dict(kwargs)
 
     def parse_all(self, sources, path, package_name, root_dir):
         """Parse all the model dictionaries in sources.
@@ -605,8 +612,6 @@ class SchemaParser:
         return version
 
     def load_and_parse(self, package_name, root_dir, relative_dirs):
-        if dbt.flags.STRICT_MODE:
-            dbt.contracts.project.ProjectList(**self.all_projects)
         new_tests = {}  # test unique ID -> ParsedNode
         node_patches = {}  # model name -> dict
         new_sources = {}  # source unique ID -> ParsedSourceDefinition

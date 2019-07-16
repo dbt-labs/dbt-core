@@ -119,7 +119,6 @@ class DocumentationParserTest(unittest.TestCase):
     def test_parse(self):
         docfile = UnparsedDocumentationFile(
             root_path=self.root_path,
-            resource_type=NodeType.Documentation,
             path='test_file.md',
             original_file_path=self.testfile_path,
             package_name='some_package',

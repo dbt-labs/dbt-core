@@ -79,7 +79,7 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
         adapter = self.get_adapter('oauth')
         try:
             connection = adapter.acquire_connection('dummy')
-            self.assertEqual(connection.get('type'), 'bigquery')
+            self.assertEqual(connection.type, 'bigquery')
 
         except dbt.exceptions.ValidationException as e:
             self.fail('got ValidationException: {}'.format(str(e)))
@@ -94,7 +94,7 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
         adapter = self.get_adapter('service_account')
         try:
             connection = adapter.acquire_connection('dummy')
-            self.assertEqual(connection.get('type'), 'bigquery')
+            self.assertEqual(connection.type, 'bigquery')
 
         except dbt.exceptions.ValidationException as e:
             self.fail('got ValidationException: {}'.format(str(e)))

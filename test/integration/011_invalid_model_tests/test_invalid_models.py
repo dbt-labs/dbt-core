@@ -1,7 +1,5 @@
 from test.integration.base import DBTIntegrationTest, use_profile
 
-from dbt.exceptions import ValidationException
-
 
 class TestInvalidDisabledModels(DBTIntegrationTest):
 
@@ -20,13 +18,10 @@ class TestInvalidDisabledModels(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_view_with_incremental_attributes(self):
-
-        try:
+        with self.assertRaises(RuntimeError) as exc:
             self.run_dbt()
-            # should throw
-            self.assertTrue(False)
-        except RuntimeError as e:
-            self.assertTrue("enabled" in str(e))
+
+        self.assertIn('enabled', str(exc.exception))
 
 
 class TestInvalidModelReference(DBTIntegrationTest):
@@ -46,10 +41,7 @@ class TestInvalidModelReference(DBTIntegrationTest):
 
     @use_profile('postgres')
     def test_view_with_incremental_attributes(self):
-
-        try:
+        with self.assertRaises(RuntimeError) as exc:
             self.run_dbt()
-            # should throw
-            self.assertTrue(False)
-        except RuntimeError as e:
-            self.assertTrue("which was not found" in str(e))
+
+        self.assertIn('which was not found', str(exc.exception))

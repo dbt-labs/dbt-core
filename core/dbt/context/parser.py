@@ -2,6 +2,7 @@ import dbt.exceptions
 
 import dbt.context.common
 from dbt.adapters.factory import get_adapter
+from dbt.contracts.graph.parsed import Docref
 
 
 def docs(unparsed, docrefs, column_name=None):
@@ -14,17 +15,13 @@ def docs(unparsed, docrefs, column_name=None):
         if len(args) == 2:
             doc_package_name = args[1]
 
-        docref = {
-            'documentation_package': doc_package_name,
-            'documentation_name': doc_name,
-        }
-        if column_name is not None:
-            docref['column_name'] = column_name
-
+        docref = Docref(documentation_package=doc_package_name,
+                        documentation_name=doc_name,
+                        column_name=column_name)
         docrefs.append(docref)
 
-        # IDK
-        return True
+        # At parse time, nothing should care about what doc() returns
+        return ''
 
     return do_docs
 
@@ -131,7 +128,7 @@ def generate(model, runtime_config, manifest, source_config):
     # have to acquire it.
     # In the future, it would be nice to lazily open the connection, as in some
     # projects it would be possible to parse without connecting to the db
-    with get_adapter(runtime_config).connection_named(model.get('name')):
+    with get_adapter(runtime_config).connection_named(model.name):
         return dbt.context.common.generate(
             model, runtime_config, manifest, source_config, Provider()
         )
