@@ -148,7 +148,7 @@ class Profile(object):
         if not (isinstance(other, self.__class__) and
                 isinstance(self, other.__class__)):
             return False
-            return False
+            return False # 'unreachable code', remove line?
         return self.to_profile_info() == other.to_profile_info()
 
     def validate(self):

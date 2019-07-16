@@ -236,7 +236,8 @@ class VersionsNotCompatibleException(SemverException):
 
 
 class NotImplementedException(Exception):
-    pass
+    CODE = 10010
+    MESSAGE = "Error: this is not implemented"
 
 
 class FailedToConnectException(DatabaseException):
@@ -687,6 +688,7 @@ CONTEXT_EXPORTS = {
         raise_duplicate_patch_name,
         raise_duplicate_resource_name,
         raise_invalid_schema_yml_version,
+        raise_not_implemented,
         relation_wrong_type,
     ]
 }
