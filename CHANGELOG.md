@@ -1,7 +1,7 @@
 ## dbt 0.14.1
 
 ### Breaking changes
- - the undocumented "graph" variable was removed from the parsing context ([#1615](https://github.com/fishtown-analytics/dbt/pull/1615))
+ - the undocumented "graph" variable's "macros" field was removed from the parsing context ([#1615](https://github.com/fishtown-analytics/dbt/pull/1615))
 
 ## dbt 0.14.0 - Wilt Chamberlain (July 10, 2019)
 

@@ -325,6 +325,10 @@ class NodeSelector(object):
         selected = self.get_selected(include, exclude, resource_types, tags,
                                      required)
 
+        # if you haven't selected any nodes, return that so we can give the
+        # nice "no models selected" message.
+        if not selected:
+            return selected
         # we used to carefully go through all node ancestors and add those if
         # they were ephemeral. Sadly, the algorithm we used ended up being
         # O(n^2). Instead, since ephemeral nodes are almost free, just add all

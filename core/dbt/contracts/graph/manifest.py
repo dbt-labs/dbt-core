@@ -185,6 +185,7 @@ class Manifest(APIObject):
         self.generated_at = generated_at
         self.metadata = metadata
         self.disabled = disabled
+        self._flat_graph = None
         super(Manifest, self).__init__()
 
     @staticmethod
@@ -222,6 +223,19 @@ class Manifest(APIObject):
             'metadata': self.metadata,
             'disabled': [v.serialize() for v in self.disabled],
         }
+
+    def to_flat_graph(self):
+        """This function gets called in context.common by each node, so we want
+        to cache it. Make sure you don't call this until you're done with
+        building your manifest!
+        """
+        if self._flat_graph is None:
+            self._flat_graph = {
+                'nodes': {
+                    k: v.serialize() for k, v in self.nodes.items()
+                },
+            }
+        return self._flat_graph
 
     def find_disabled_by_name(self, name, package=None):
         return dbt.utils.find_in_list_by_name(self.disabled, name, package,
