@@ -165,13 +165,7 @@ class ParsedNodeMixins(dbtClassMixin):
 
 
 @dataclass
-class ParsedNodeMandatory(
-    UnparsedNode,
-    HasUniqueID,
-    HasFqn,
-    HasRelationMetadata,
-    Replaceable
-):
+class ParsedNodeMandatory(UnparsedNode, HasUniqueID, HasFqn, HasRelationMetadata, Replaceable):
     alias: str
     checksum: FileHash
     config: NodeConfig = field(default_factory=NodeConfig)
