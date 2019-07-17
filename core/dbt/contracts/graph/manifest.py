@@ -379,22 +379,6 @@ class Manifest(APIObject):
                     'not found or is disabled').format(patch.name)
                 )
 
-    def to_flat_graph(self):
-        """Convert the parsed manifest to the 'flat graph' that the compiler
-        expects.
-
-        Kind of hacky note: everything in the code is happy to deal with
-        macros as ParsedMacro objects (in fact, it's been changed to require
-        that), so those can just be returned without any work. Nodes sadly
-        require a lot of work on the compiler side.
-
-        Ideally in the future we won't need to have this method.
-        """
-        return {
-            'nodes': {k: v.to_shallow_dict() for k, v in self.nodes.items()},
-            'macros': self.macros,
-        }
-
     def __getattr__(self, name):
         raise AttributeError("'{}' object has no attribute '{}'".format(
             type(self).__name__, name)
