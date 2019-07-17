@@ -62,7 +62,7 @@
 {#
     Core strategy definitions
 #}
-{% macro snapshot_timestamp_strategy(node, snapshotted_rel, current_rel, config) %}
+{% macro snapshot_timestamp_strategy(node, snapshotted_rel, current_rel, config, target_exists) %}
     {% set primary_key = config['unique_key'] %}
     {% set updated_at = config['updated_at'] %}
 
@@ -81,7 +81,7 @@
 {% endmacro %}
 
 
-{% macro snapshot_check_strategy(node, snapshotted_rel, current_rel, config) %}
+{% macro snapshot_check_strategy(node, snapshotted_rel, current_rel, config, target_exists) %}
     {% set check_cols_config = config['check_cols'] %}
     {% set primary_key = config['unique_key'] %}
     {% set updated_at = snapshot_get_time() %}
@@ -106,7 +106,15 @@
         )
     {%- endset %}
 
-    {% set scd_id_cols = [primary_key] + (check_cols | list) %}
+    {% if target_exists %}
+        {% set tbl_version -%}
+            cast((select count(*) from {{ snapshotted_rel }} where {{ snapshotted_rel }}.dbt_unique_key = {{ primary_key }}) as string)
+        {%- endset %}
+        {% set scd_id_cols = [primary_key, tbl_version] + (check_cols | list) %}
+    {% else %}
+        {% set scd_id_cols = [primary_key] + (check_cols | list) %}
+    {% endif %}
+
     {% set scd_id_expr = snapshot_hash_arguments(scd_id_cols) %}
 
     {% do return({
