@@ -182,8 +182,7 @@ def parsed_instance_for(compiled: CompiledNode) -> ParsedResource:
     cls = PARSED_TYPES.get(type(compiled))
     if cls is None:
         # how???
-        raise ValueError('invalid resource_type: {}'
-                         .format(compiled.resource_type))
+        raise ValueError("invalid resource_type: {}".format(compiled.resource_type))
 
     return cls.from_dict(compiled.to_dict(omit_none=True))
 

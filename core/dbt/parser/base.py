@@ -30,14 +30,14 @@ from dbt.parser.search import FileBlock
 # internally, the parser may store a less-restrictive type that will be
 # transformed into the final type. But it will have to be derived from
 # ParsedNode to be operable.
-FinalValue = TypeVar('FinalValue', bound=HasUniqueID)
-IntermediateValue = TypeVar('IntermediateValue', bound=HasUniqueID)
+FinalValue = TypeVar("FinalValue", bound=HasUniqueID)
+IntermediateValue = TypeVar("IntermediateValue", bound=HasUniqueID)
 
-IntermediateNode = TypeVar('IntermediateNode', bound=Any)
-FinalNode = TypeVar('FinalNode', bound=ManifestNodes)
+IntermediateNode = TypeVar("IntermediateNode", bound=Any)
+FinalNode = TypeVar("FinalNode", bound=ManifestNodes)
 
 
-ConfiguredBlockType = TypeVar('ConfiguredBlockType', bound=FileBlock)
+ConfiguredBlockType = TypeVar("ConfiguredBlockType", bound=FileBlock)
 
 
 class BaseParser(Generic[FinalValue]):
@@ -181,7 +181,11 @@ class ConfiguredParser(
                 config[key] = [hooks.get_hook_dict(h) for h in config[key]]
 
     def _create_error_node(
-        self, name: str, path: str, original_file_path: str, raw_sql: str,
+        self,
+        name: str,
+        path: str,
+        original_file_path: str,
+        raw_sql: str,
     ) -> UnparsedNode:
         """If we hit an error before we've actually parsed a node, provide some
         level of useful information by attaching this to the exception.
@@ -214,19 +218,19 @@ class ConfiguredParser(
         if name is None:
             name = block.name
         dct = {
-            'alias': name,
+            "alias": name,
             'schema': self.default_schema,
             'database': self.default_database,
             "fqn": fqn,
-            'name': name,
-            'root_path': self.project.project_root,
-            'resource_type': self.resource_type,
-            'path': path,
-            'original_file_path': block.path.original_file_path,
-            'package_name': self.project.project_name,
-            'raw_sql': block.contents,
-            'unique_id': self.generate_unique_id(name),
-            'config': self.config_dict(config),
+            "name": name,
+            "root_path": self.project.project_root,
+            "resource_type": self.resource_type,
+            "path": path,
+            "original_file_path": block.path.original_file_path,
+            "package_name": self.project.project_name,
+            "raw_sql": block.contents,
+            "unique_id": self.generate_unique_id(name),
+            "config": self.config_dict(config),
             "checksum": block.file.checksum.to_dict(omit_none=True),
         }
         dct.update(kwargs)
@@ -412,22 +416,19 @@ class ConfiguredParser(
 
 class SimpleParser(
     ConfiguredParser[ConfiguredBlockType, FinalNode, FinalNode],
-    Generic[ConfiguredBlockType, FinalNode]
+    Generic[ConfiguredBlockType, FinalNode],
 ):
     def transform(self, node):
         return node
 
 
 class SQLParser(
-    ConfiguredParser[FileBlock, IntermediateNode, FinalNode],
-    Generic[IntermediateNode, FinalNode]
+    ConfiguredParser[FileBlock, IntermediateNode, FinalNode], Generic[IntermediateNode, FinalNode]
 ):
     def parse_file(self, file_block: FileBlock) -> None:
         self.parse_node(file_block)
 
 
-class SimpleSQLParser(
-    SQLParser[FinalNode, FinalNode]
-):
+class SimpleSQLParser(SQLParser[FinalNode, FinalNode]):
     def transform(self, node):
         return node

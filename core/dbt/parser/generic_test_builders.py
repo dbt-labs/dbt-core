@@ -38,7 +38,7 @@ def get_nice_generic_test_name(
 
         flat_args.extend([str(part) for part in parts])
 
-    clean_flat_args = [re.sub('[^0-9a-zA-Z_]+', '_', arg) for arg in flat_args]
+    clean_flat_args = [re.sub("[^0-9a-zA-Z_]+", "_", arg) for arg in flat_args]
     unique = "__".join(clean_flat_args)
 
     # for the file path + alias, the name must be <64 characters
@@ -184,10 +184,11 @@ class TestBuilder(Generic[Testable]):
         - or it may not be namespaced (test)
 
     """
+
     # The 'test_name' is used to find the 'macro' that implements the test
     TEST_NAME_PATTERN = re.compile(
-        r'((?P<test_namespace>([a-zA-Z_][0-9a-zA-Z_]*))\.)?'
-        r'(?P<test_name>([a-zA-Z_][0-9a-zA-Z_]*))'
+        r"((?P<test_namespace>([a-zA-Z_][0-9a-zA-Z_]*))\.)?"
+        r"(?P<test_name>([a-zA-Z_][0-9a-zA-Z_]*))"
     )
     # args in the test entry representing test configs
     CONFIG_ARGS = (
@@ -228,13 +229,12 @@ class TestBuilder(Generic[Testable]):
         match = self.TEST_NAME_PATTERN.match(test_name)
         if match is None:
             raise_compiler_error(
-                'Test name string did not match expected pattern: {}'
-                .format(test_name)
+                "Test name string did not match expected pattern: {}".format(test_name)
             )
 
         groups = match.groupdict()
-        self.name: str = groups['test_name']
-        self.namespace: str = groups['test_namespace']
+        self.name: str = groups["test_name"]
+        self.namespace: str = groups["test_namespace"]
         self.config: Dict[str, Any] = {}
 
         # This code removes keys identified as config args from the test entry
@@ -278,34 +278,28 @@ class TestBuilder(Generic[Testable]):
     def extract_test_args(test, name=None) -> Tuple[str, Dict[str, Any]]:
         if not isinstance(test, dict):
             raise_parsing_error(
-                'test must be dict or str, got {} (value {})'.format(
-                    type(test), test
-                )
+                "test must be dict or str, got {} (value {})".format(type(test), test)
             )
 
         test = list(test.items())
         if len(test) != 1:
             raise_parsing_error(
-                'test definition dictionary must have exactly one key, got'
-                ' {} instead ({} keys)'.format(test, len(test))
+                "test definition dictionary must have exactly one key, got"
+                " {} instead ({} keys)".format(test, len(test))
             )
         test_name, test_args = test[0]
 
         if not isinstance(test_args, dict):
             raise_parsing_error(
-                'test arguments must be dict, got {} (value {})'.format(
-                    type(test_args), test_args
-                )
+                "test arguments must be dict, got {} (value {})".format(type(test_args), test_args)
             )
         if not isinstance(test_name, str):
             raise_parsing_error(
-                'test name must be a str, got {} (value {})'.format(
-                    type(test_name), test_name
-                )
+                "test name must be a str, got {} (value {})".format(type(test_name), test_name)
             )
         test_args = deepcopy(test_args)
         if name is not None:
-            test_args['column_name'] = name
+            test_args["column_name"] = name
         return test_name, test_args
 
     @property
@@ -405,7 +399,7 @@ class TestBuilder(Generic[Testable]):
         return tags[:]
 
     def macro_name(self) -> str:
-        macro_name = 'test_{}'.format(self.name)
+        macro_name = "test_{}".format(self.name)
         if self.namespace is not None:
             macro_name = "{}.{}".format(self.namespace, macro_name)
         return macro_name
@@ -414,11 +408,11 @@ class TestBuilder(Generic[Testable]):
         if isinstance(self.target, UnparsedNodeUpdate):
             name = self.name
         elif isinstance(self.target, UnpatchedSourceDefinition):
-            name = 'source_' + self.name
+            name = "source_" + self.name
         else:
             raise self._bad_type()
         if self.namespace is not None:
-            name = '{}_{}'.format(self.namespace, name)
+            name = "{}_{}".format(self.namespace, name)
         return get_nice_generic_test_name(name, self.target.name, self.args)
 
     def construct_config(self) -> str:

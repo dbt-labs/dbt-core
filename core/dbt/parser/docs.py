@@ -27,7 +27,7 @@ class DocumentationParser(Parser[ParsedDocumentation]):
     def generate_unique_id(self, resource_name: str, _: Optional[str] = None) -> str:
         # because docs are in their own graph namespace, node type doesn't
         # need to be part of the unique ID.
-        return '{}.{}'.format(self.project.project_name, resource_name)
+        return "{}.{}".format(self.project.project_name, resource_name)
 
     def parse_block(self, block: BlockContents) -> Iterable[ParsedDocumentation]:
         unique_id = self.generate_unique_id(block.name)
@@ -48,7 +48,7 @@ class DocumentationParser(Parser[ParsedDocumentation]):
         assert isinstance(file_block.file, SourceFile)
         searcher: Iterable[BlockContents] = BlockSearcher(
             source=[file_block],
-            allowed_blocks={'docs'},
+            allowed_blocks={"docs"},
             source_tag_factory=BlockContents,
         )
         for block in searcher:

@@ -35,7 +35,7 @@ class Port(int, SerializableType):
 class PortEncoder(FieldEncoder):
     @property
     def json_schema(self):
-        return {'type': 'integer', 'minimum': 0, 'maximum': 65535}
+        return {"type": "integer", "minimum": 0, "maximum": 65535}
 
 
 class TimeDeltaFieldEncoder(FieldEncoder[timedelta]):

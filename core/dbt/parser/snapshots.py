@@ -3,7 +3,7 @@ from typing import List
 
 from dbt.dataclass_schema import ValidationError
 
-from dbt.contracts.graph.parsed import (
+from dbt.contracts.graph.parsed import IntermediateSnapshotNode, ParsedSnapshotNode
     IntermediateSnapshotNode, ParsedSnapshotNode
 )
 from dbt.exceptions import (
@@ -17,9 +17,7 @@ from dbt.parser.search import (
 from dbt.utils import split_path
 
 
-class SnapshotParser(
-    SQLParser[IntermediateSnapshotNode, ParsedSnapshotNode]
-):
+class SnapshotParser(SQLParser[IntermediateSnapshotNode, ParsedSnapshotNode]):
     def parse_from_dict(self, dct, validate=True) -> IntermediateSnapshotNode:
         if validate:
             IntermediateSnapshotNode.validate(dct)
@@ -73,7 +71,7 @@ class SnapshotParser(
     def parse_file(self, file_block: FileBlock) -> None:
         blocks = BlockSearcher(
             source=[file_block],
-            allowed_blocks={'snapshot'},
+            allowed_blocks={"snapshot"},
             source_tag_factory=BlockContents,
         )
         for block in blocks:

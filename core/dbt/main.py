@@ -937,10 +937,10 @@ def parse_args(args, cls=DBTArgumentParser):
     )
 
     p.add_argument(
-        '--no-write-json',
-        action='store_false',
+        "--no-write-json",
+        action="store_false",
         default=None,
-        dest='write_json',
+        dest="write_json",
         help='''
         If set, skip writing the manifest and run_results.json files to disk
         '''

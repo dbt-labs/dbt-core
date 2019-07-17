@@ -524,8 +524,7 @@ class ManifestLoader:
                     macro.depends_on.add_macro(dep_macro_id)  # will check for dupes
 
     def write_manifest_for_partial_parse(self):
-        path = os.path.join(self.root_project.target_path,
-                            PARTIAL_PARSE_FILE_NAME)
+        path = os.path.join(self.root_project.target_path, PARTIAL_PARSE_FILE_NAME)
         try:
             # This shouldn't be necessary, but we have gotten bug reports (#3757) of the
             # saved manifest not matching the code version.
@@ -617,14 +616,13 @@ class ManifestLoader:
         if not flags.PARTIAL_PARSE:
             fire_event(PartialParsingNotEnabled())
             return None
-        path = os.path.join(self.root_project.target_path,
-                            PARTIAL_PARSE_FILE_NAME)
+        path = os.path.join(self.root_project.target_path, PARTIAL_PARSE_FILE_NAME)
 
         reparse_reason = None
 
         if os.path.exists(path):
             try:
-                with open(path, 'rb') as fp:
+                with open(path, "rb") as fp:
                     manifest_mp = fp.read()
                 manifest: Manifest = Manifest.from_msgpack(manifest_mp)  # type: ignore
                 # keep this check inside the try/except in case something about

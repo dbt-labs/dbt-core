@@ -1,8 +1,6 @@
 import os
 from dataclasses import dataclass
-from typing import (
-    List, Callable, Iterable, Set, Union, Iterator, TypeVar, Generic
-)
+from typing import List, Callable, Iterable, Set, Union, Iterator, TypeVar, Generic
 
 from dbt.clients.jinja import extract_toplevel_blocks, BlockTag
 from dbt.clients.system import find_matching
@@ -85,7 +83,7 @@ def filesystem_search(project: Project, relative_dirs: List[str], extension: str
 
 Block = Union[BlockContents, FullBlock]
 
-BlockSearchResult = TypeVar('BlockSearchResult', BlockContents, FullBlock)
+BlockSearchResult = TypeVar("BlockSearchResult", BlockContents, FullBlock)
 
 BlockSearchResultFactory = Callable[[AnySourceFile, BlockTag], BlockSearchResult]
 
@@ -95,7 +93,7 @@ class BlockSearcher(Generic[BlockSearchResult], Iterable[BlockSearchResult]):
         self,
         source: List[FileBlock],
         allowed_blocks: Set[str],
-        source_tag_factory: BlockSearchResultFactory
+        source_tag_factory: BlockSearchResultFactory,
     ) -> None:
         self.source = source
         self.allowed_blocks = allowed_blocks
@@ -104,9 +102,7 @@ class BlockSearcher(Generic[BlockSearchResult], Iterable[BlockSearchResult]):
     def extract_blocks(self, source_file: FileBlock) -> Iterable[BlockTag]:
         try:
             blocks = extract_toplevel_blocks(
-                source_file.contents,
-                allowed_blocks=self.allowed_blocks,
-                collect_raw_data=False
+                source_file.contents, allowed_blocks=self.allowed_blocks, collect_raw_data=False
             )
             # this makes mypy happy, and this is an invariant we really need
             for block in blocks:

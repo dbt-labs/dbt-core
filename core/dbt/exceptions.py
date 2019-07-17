@@ -542,8 +542,8 @@ To fix this, add the following hint to the top of the model "{model_name}":
     # to 'users', in their respective schemas, then you would want to see
     # 'bar_users' in your error messge instead of just 'users'.
     if isinstance(model, dict):  # TODO: remove this path
-        model_name = model['name']
-        model_path = model['path']
+        model_name = model["name"]
+        model_path = model["path"]
     else:
         model_name = model.name
         model_path = model.path

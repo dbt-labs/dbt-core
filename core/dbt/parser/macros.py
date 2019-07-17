@@ -22,7 +22,7 @@ class MacroParser(BaseParser[ParsedMacro]):
         return filesystem_search(
             project=self.project,
             relative_dirs=self.project.macro_paths,
-            extension='.sql',
+            extension=".sql",
         )
 
     @property
@@ -49,9 +49,7 @@ class MacroParser(BaseParser[ParsedMacro]):
             unique_id=unique_id,
         )
 
-    def parse_unparsed_macros(
-        self, base_node: UnparsedMacro
-    ) -> Iterable[ParsedMacro]:
+    def parse_unparsed_macros(self, base_node: UnparsedMacro) -> Iterable[ParsedMacro]:
         try:
             blocks: List[jinja.BlockTag] = [
                 t
