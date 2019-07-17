@@ -919,7 +919,8 @@ class TestRunOperationTask(BaseFileTest):
         self.assertEqual(os.getcwd(), INITIAL_ROOT)
         self.assertNotEqual(INITIAL_ROOT, self.project_dir)
         new_task = RunOperationTask.from_args(self.args)
-        self.assertEqual(os.getcwd(), self.project_dir)
+        self.assertEqual(os.path.realpath(os.getcwd()),
+                         os.path.realpath(self.project_dir))
 
     def test_run_operation_task_with_bad_path(self):
         self.args.project_dir = 'bad_path'

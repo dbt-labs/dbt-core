@@ -6,6 +6,7 @@ import dbt.flags as flags
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.exceptions import ValidationException
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
+from dbt.parser.results import ParseResult
 from psycopg2 import extensions as psycopg2_extensions
 from psycopg2 import DatabaseError, Error
 import agate
@@ -232,10 +233,15 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         self.adapter.acquire_connection()
         inject_adapter(self.adapter)
 
+        self.load_patch = mock.patch('dbt.loader._make_parse_result')
+        self.mock_parse_result = self.load_patch.start()
+        self.mock_parse_result.return_value = ParseResult.rpc()
+
     def tearDown(self):
         # we want a unique self.handle every time.
         self.adapter.cleanup_connections()
         self.patcher.stop()
+        self.load_patch.stop()
 
     def test_quoting_on_drop_schema(self):
         self.adapter.drop_schema(database='postgres', schema='test_schema')

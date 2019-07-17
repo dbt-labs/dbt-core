@@ -1,81 +1,116 @@
-import collections
-from typing import Dict, Any
+import os
+from dataclasses import dataclass
+from typing import Iterable, Iterator, Union, List, Tuple
 
-import dbt.flags
-import dbt.contracts.project
-import dbt.utils
-
+from dbt.contracts.graph.manifest import FilePath
 from dbt.contracts.graph.parsed import ParsedHookNode
-from dbt.contracts.graph.unparsed import UnparsedRunHook
-from dbt.parser.base_sql import BaseSqlParser
+from dbt.exceptions import InternalException
 from dbt.node_types import NodeType, RunHookType
+from dbt.source_config import SourceConfig
+from dbt.parser.base import SimpleParser
+from dbt.parser.search import FileBlock
+from dbt.utils import get_pseudo_hook_path
 
 
-class HookParser(BaseSqlParser):
-    UnparsedNodeType = UnparsedRunHook
+@dataclass
+class HookBlock(FileBlock):
+    project: str
+    value: str
+    index: int
+    hook_type: RunHookType
 
-    @classmethod
-    def get_hooks_from_project(cls, config, hook_type):
-        if hook_type == RunHookType.Start:
-            hooks = config.on_run_start
-        elif hook_type == RunHookType.End:
-            hooks = config.on_run_end
-        else:
-            dbt.exceptions.InternalException(
-                'hook_type must be one of "{}" or "{}"'
-                .format(RunHookType.Start, RunHookType.End))
+    @property
+    def contents(self):
+        return self.value
 
-        if type(hooks) not in (list, tuple):
+    @property
+    def name(self):
+        return '{}-{!s}-{!s}'.format(self.project, self.hook_type, self.index)
+
+
+class HookSearcher(Iterable[HookBlock]):
+    def __init__(self, project, source_file, hook_type) -> None:
+        self.project = project
+        self.source_file = source_file
+        self.hook_type = hook_type
+
+    def _hook_list(
+        self, hooks: Union[str, List[str], Tuple[str, ...]]
+    ) -> List[str]:
+        if isinstance(hooks, tuple):
+            hooks = list(hooks)
+        elif not isinstance(hooks, list):
             hooks = [hooks]
-
         return hooks
 
-    def get_hooks(self, hook_type):
-        project_hooks = collections.defaultdict(list)
-
-        for project_name, project in self.all_projects.items():
-            hooks = self.get_hooks_from_project(project, hook_type)
-            project_hooks[project_name].extend(hooks)
-
-        return project_hooks
-
-    def load_and_parse_run_hook_type(self, hook_type):
-        project_hooks = self.get_hooks(hook_type)
-
-        result = []
-        for project_name, hooks in project_hooks.items():
-            for i, hook in enumerate(hooks):
-                hook_name = '{}-{}-{}'.format(project_name, hook_type, i)
-                hook_path = dbt.utils.get_pseudo_hook_path(hook_name)
-
-                result.append({
-                    'name': hook_name,
-                    'root_path': "{}/dbt_project.yml".format(project_name),
-                    'resource_type': NodeType.Operation,
-                    'path': hook_path,
-                    'original_file_path': hook_path,
-                    'package_name': project_name,
-                    'raw_sql': hook,
-                    'index': i
-                })
-
-        # hook_type is a RunHookType member, which "is a string", but it's also
-        # an enum, so hologram gets mad about that before even looking at if
-        # it's a string - bypass it by explicitly calling str().
-        tags = [str(hook_type)]
-        results = self.parse_sql_nodes(result, tags=tags)
-        return results.parsed
-
-    def load_and_parse(self):
-        hook_nodes = {}
-        for hook_type in RunHookType:
-            project_hooks = self.load_and_parse_run_hook_type(
-                hook_type,
+    def get_hook_defs(self) -> List[str]:
+        if self.hook_type == RunHookType.Start:
+            hooks = self.project.on_run_start
+        elif self.hook_type == RunHookType.End:
+            hooks = self.project.on_run_end
+        else:
+            raise InternalException(
+                'hook_type must be one of "{}" or "{}" (got {})'
+                .format(RunHookType.Start, RunHookType.End, self.hook_type)
             )
-            hook_nodes.update(project_hooks)
+        return self._hook_list(hooks)
 
-        return hook_nodes
+    def __iter__(self) -> Iterator[HookBlock]:
+        hooks = self.get_hook_defs()
+        for index, hook in enumerate(hooks):
+            yield HookBlock(
+                file=self.source_file,
+                project=self.project.project_name,
+                value=hook,
+                index=index,
+                hook_type=self.hook_type,
+            )
 
-    def parse_from_dict(self, parsed_dict: Dict[str, Any]) -> ParsedHookNode:
-        """Given a dictionary, return the parsed entity for this parser"""
-        return ParsedHookNode.from_dict(parsed_dict)
+
+class HookParser(SimpleParser[HookBlock, ParsedHookNode]):
+    def transform(self, node):
+        return node
+
+    def get_paths(self):
+        searched_path = '.'
+        relative_path = 'dbt_project.yml'
+        absolute_path = os.path.abspath(os.path.join(
+            self.project.project_root, searched_path, relative_path
+        ))
+        path = FilePath(
+            searched_path='.',
+            relative_path='relative_path',
+            absolute_path=absolute_path,
+        )
+        return [path]
+
+    def parse_from_dict(self, dct, validate=True) -> ParsedHookNode:
+        return ParsedHookNode.from_dict(dct, validate=validate)
+
+    @classmethod
+    def get_compiled_path(cls, block: HookBlock):
+        return get_pseudo_hook_path(block.name)
+
+    def _create_parsetime_node(
+        self,
+        block: HookBlock,
+        path: str,
+        config: SourceConfig,
+        name=None,
+        **kwargs,
+    ) -> ParsedHookNode:
+
+        return super()._create_parsetime_node(
+            block=block, path=path, config=config,
+            index=block.index, name=name,
+            tags=[str(block.hook_type)]
+        )
+
+    @property
+    def resource_type(self) -> NodeType:
+        return NodeType.Operation
+
+    def parse_file(self, block: FileBlock) -> None:
+        for hook_type in RunHookType:
+            for hook in HookSearcher(self.project, block.file, hook_type):
+                self.parse_node(hook)

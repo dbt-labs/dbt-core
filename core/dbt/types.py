@@ -1,17 +1,14 @@
 from hologram import FieldEncoder, JsonSchemaMixin
-from typing import Type, NewType
+from typing import NewType
 
 
-def NewRangedInteger(name: str, minimum: int, maximum: int) -> Type:
-    ranged = NewType(name, int)
-
-    class RangeEncoder(FieldEncoder):
-        @property
-        def json_schema(self):
-            return {'type': 'integer', 'minimum': minimum, 'maximum': maximum}
-
-    JsonSchemaMixin.register_field_encoders({ranged: RangeEncoder()})
-    return ranged
+Port = NewType('Port', int)
 
 
-Port = NewRangedInteger('Port', minimum=0, maximum=65535)
+class PortEncoder(FieldEncoder):
+    @property
+    def json_schema(self):
+        return {'type': 'integer', 'minimum': 0, 'maximum': 65535}
+
+
+JsonSchemaMixin.register_field_encoders({Port: PortEncoder()})

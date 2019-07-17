@@ -92,8 +92,8 @@ def main(args=None):
         exit_code = e.code
 
     except BaseException as e:
-        logger.warn("Encountered an error:")
-        logger.warn(str(e))
+        logger.warning("Encountered an error:")
+        logger.warning(str(e))
 
         if logger_initialized():
             logger.debug(traceback.format_exc())
@@ -359,6 +359,7 @@ def _build_compile_subparser(subparsers, base_subparser):
         "analysis files. \nCompiled SQL files are written to the target/"
         "directory.")
     sub.set_defaults(cls=compile_task.CompileTask, which='compile')
+    sub.add_argument('--parse-only', action='store_true')
     return sub
 
 
@@ -654,6 +655,14 @@ def parse_args(args):
         action='store_true',
         help='''Display debug logging during dbt execution. Useful for
         debugging and making bug reports.''')
+
+    p.add_argument(
+        '--no-write-json',
+        action='store_false',
+        dest='write_json',
+        help='''If set, skip writing the manifest and run_results.json files to
+        disk'''
+    )
 
     p.add_argument(
         '-S',

@@ -7,9 +7,13 @@ import dbt.compilation
 import dbt.exceptions
 import dbt.flags
 import dbt.linker
+import dbt.parser
 import dbt.config
 import dbt.utils
 import dbt.loader
+from dbt.contracts.graph.manifest import FilePath, SourceFile, FileHash
+from dbt.parser.results import ParseResult
+from dbt.parser.search import FileBlock
 
 try:
     from queue import Empty
@@ -26,9 +30,12 @@ class GraphTest(unittest.TestCase):
     def tearDown(self):
         self.write_gpickle_patcher.stop()
         self.load_projects_patcher.stop()
-        self.find_matching_patcher.stop()
-        self.load_file_contents_patcher.stop()
+        self.file_system_patcher.stop()
         self.get_adapter_patcher.stop()
+        self.mock_filesystem_constructor.stop()
+        self.mock_hook_constructor.stop()
+        self.load_patch.stop()
+        self.load_source_file_ptcher.stop()
 
     def setUp(self):
         dbt.flags.STRICT_MODE = True
@@ -36,8 +43,12 @@ class GraphTest(unittest.TestCase):
 
         self.write_gpickle_patcher = patch('networkx.write_gpickle')
         self.load_projects_patcher = patch('dbt.loader._load_projects')
-        self.find_matching_patcher = patch('dbt.clients.system.find_matching')
-        self.load_file_contents_patcher = patch('dbt.clients.system.load_file_contents')
+        self.file_system_patcher = patch.object(
+            dbt.parser.search.FilesystemSearcher, '__new__'
+        )
+        self.hook_patcher = patch.object(
+            dbt.parser.hooks.HookParser, '__new__'
+        )
         self.get_adapter_patcher = patch('dbt.context.parser.get_adapter')
         self.factory = self.get_adapter_patcher.start()
 
@@ -68,27 +79,36 @@ class GraphTest(unittest.TestCase):
         self.mock_load_projects.side_effect = _load_projects
 
         self.mock_models = []
-        self.mock_content = {}
 
-        def mock_find_matching(root_path, relative_paths_to_search, file_pattern):
-            if 'sql' not in file_pattern:
+        self.load_patch = patch('dbt.loader._make_parse_result')
+        self.mock_parse_result = self.load_patch.start()
+        self.mock_parse_result.return_value = ParseResult.rpc()
+
+        self.load_source_file_ptcher = patch.object(SourceFile, 'from_file')
+        self.mock_source_file = self.load_source_file_ptcher.start()
+        self.mock_source_file.side_effect = lambda path: [n for n in self.mock_models if n.path == path][0]
+
+        def filesystem_iter(iter_self):
+            if 'sql' not in iter_self.extension:
                 return []
+            if 'models' not in iter_self.relative_dirs:
+                return []
+            return [model.path for model in self.mock_models]
 
-            to_return = []
+        def create_filesystem_searcher(cls, project, relative_dirs, extension):
+            result = MagicMock(project=project, relative_dirs=relative_dirs, extension=extension)
+            result.__iter__.side_effect = lambda: iter(filesystem_iter(result))
+            return result
 
-            if 'models' in relative_paths_to_search:
-                to_return = to_return + self.mock_models
+        def create_hook_patcher(cls, results, project, relative_dirs, extension):
+            result = MagicMock(results=results, project=project, relative_dirs=relative_dirs, extension=extension)
+            result.__iter__.side_effect = lambda: iter([])
+            return result
 
-            return to_return
-
-        self.mock_find_matching = self.find_matching_patcher.start()
-        self.mock_find_matching.side_effect = mock_find_matching
-
-        def mock_load_file_contents(path):
-            return self.mock_content[path]
-
-        self.mock_load_file_contents = self.load_file_contents_patcher.start()
-        self.mock_load_file_contents.side_effect = mock_load_file_contents
+        self.mock_filesystem_constructor = self.file_system_patcher.start()
+        self.mock_filesystem_constructor.side_effect = create_filesystem_searcher
+        self.mock_hook_constructor = self.hook_patcher.start()
+        self.mock_hook_constructor.side_effect = create_hook_patcher
 
     def get_config(self, extra_cfg=None):
         if extra_cfg is None:
@@ -109,12 +129,20 @@ class GraphTest(unittest.TestCase):
 
     def use_models(self, models):
         for k, v in models.items():
-            path = os.path.abspath('models/{}.sql'.format(k))
-            self.mock_models.append({
-                'searched_path': 'models',
-                'absolute_path': path,
-                'relative_path': '{}.sql'.format(k)})
-            self.mock_content[path] = v
+            path = FilePath(
+                searched_path='models',
+                absolute_path=os.path.abspath('models/{}.sql'.format(k)),
+                relative_path='{}.sql'.format(k),
+            )
+            source_file = SourceFile(path=path, checksum=FileHash.empty())
+            source_file.contents = v
+            self.mock_models.append(source_file)
+
+    def load_manifest(self, config):
+        loader = dbt.loader.GraphLoader(config, {config.project_name: config})
+        loader.load()
+        return loader.create_manifest()
+
 
     def test__single_model(self):
         self.use_models({
@@ -122,7 +150,8 @@ class GraphTest(unittest.TestCase):
         })
 
         config = self.get_config()
-        manifest = dbt.loader.GraphLoader.load_all(config)
+        manifest = self.load_manifest(config)
+
         compiler = self.get_compiler(config)
         linker = compiler.compile(manifest)
 
@@ -141,7 +170,7 @@ class GraphTest(unittest.TestCase):
         })
 
         config = self.get_config()
-        manifest = dbt.loader.GraphLoader.load_all(config)
+        manifest = self.load_manifest(config)
         compiler = self.get_compiler(config)
         linker = compiler.compile(manifest)
 
@@ -178,7 +207,7 @@ class GraphTest(unittest.TestCase):
         }
 
         config = self.get_config(cfg)
-        manifest = dbt.loader.GraphLoader.load_all(config)
+        manifest = self.load_manifest(config)
         compiler = self.get_compiler(config)
         linker = compiler.compile(manifest)
 
@@ -211,7 +240,7 @@ class GraphTest(unittest.TestCase):
         }
 
         config = self.get_config(cfg)
-        manifest = dbt.loader.GraphLoader.load_all(config)
+        manifest = self.load_manifest(config)
         compiler = self.get_compiler(config)
         linker = compiler.compile(manifest)
 
@@ -235,9 +264,9 @@ class GraphTest(unittest.TestCase):
         })
 
         config = self.get_config()
-        graph = dbt.loader.GraphLoader.load_all(config)
+        manifest = self.load_manifest(config)
         compiler = self.get_compiler(config)
-        linker = compiler.compile(graph)
+        linker = compiler.compile(manifest)
 
         models = ('model_1', 'model_2', 'model_3', 'model_4')
         model_ids = ['model.test_models_compile.{}'.format(m) for m in models]

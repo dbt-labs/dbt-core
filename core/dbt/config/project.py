@@ -18,7 +18,7 @@ from dbt.version import get_installed_version
 from dbt.ui import printer
 from dbt.utils import deep_map
 from dbt.utils import parse_cli_vars
-from dbt.parser.source_config import SourceConfig
+from dbt.source_config import SourceConfig
 
 from dbt.contracts.project import Project as ProjectContract
 from dbt.contracts.project import PackageConfig

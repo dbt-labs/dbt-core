@@ -19,6 +19,7 @@ def fetch_cluster_credentials(*args, **kwargs):
         'DbPassword': 'tmp_password'
     }
 
+
 class TestRedshiftAdapter(unittest.TestCase):
 
     def setUp(self):

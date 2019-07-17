@@ -59,7 +59,7 @@ class TestStrictUndefined(DBTIntegrationTest):
     def expect_snapshot_output(self):
         expectations = {
             'name': 'my_snapshot',
-            'selector': 'test.my_snapshot',
+            'selector': 'test.snapshot.my_snapshot',
             'json': {
                 'name': 'my_snapshot',
                 'package_name': 'test',
@@ -331,8 +331,8 @@ class TestStrictUndefined(DBTIntegrationTest):
         # but models don't! they just have (package.name)
         # sources are like models - (package.source_name.table_name)
         expected_default = {
-            'test.my_snapshot',
             'test.ephemeral',
+            'test.snapshot.my_snapshot',
             'test.sub.inner',
             'test.outer',
             'test.seed',

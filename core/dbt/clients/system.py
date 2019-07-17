@@ -24,13 +24,13 @@ def find_matching(root_path,
     absolute root path (`relative_paths_to_search`), and a `file_pattern`
     like '*.sql', returns information about the files. For example:
 
-    > find_matching('/root/path', 'models', '*.sql')
+    > find_matching('/root/path', ['models'], '*.sql')
 
       [ { 'absolute_path': '/root/path/models/model_one.sql',
-          'relative_path': 'models/model_one.sql',
+          'relative_path': 'model_one.sql',
           'searched_path': 'models' },
         { 'absolute_path': '/root/path/models/subdirectory/model_two.sql',
-          'relative_path': 'models/subdirectory/model_two.sql',
+          'relative_path': 'subdirectory/model_two.sql',
           'searched_path': 'models' } ]
     """
     matching = []

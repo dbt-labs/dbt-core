@@ -15,6 +15,7 @@ from dbt.contracts.results import ExecutionResult
 from dbt.loader import GraphLoader
 
 import dbt.exceptions
+import dbt.flags
 import dbt.ui.printer
 import dbt.utils
 
@@ -30,8 +31,8 @@ def load_manifest(config):
     internal_manifest = get_adapter(config).check_internal_manifest()
     manifest = GraphLoader.load_all(config,
                                     internal_manifest=internal_manifest)
-
-    manifest.write(os.path.join(config.target_path, MANIFEST_FILE_NAME))
+    if dbt.flags.WRITE_JSON:
+        manifest.write(os.path.join(config.target_path, MANIFEST_FILE_NAME))
     return manifest
 
 
@@ -182,15 +183,14 @@ class GraphRunnableTask(ManifestTask):
             self.node_results.append(result)
 
         node = result.node
-        node_id = node.unique_id
-        self.manifest.nodes[node_id] = node
+        self.manifest.update_node(node)
 
         if result.error is not None:
             if is_ephemeral:
                 cause = result
             else:
                 cause = None
-            self._mark_dependent_errors(node_id, result, cause)
+            self._mark_dependent_errors(node.unique_id, result, cause)
 
     def execute_nodes(self):
         num_threads = self.config.threads
@@ -288,7 +288,8 @@ class GraphRunnableTask(ManifestTask):
         selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
         result = self.execute_with_hooks(selected_uids)
 
-        result.write(self.result_path())
+        if dbt.flags.WRITE_JSON:
+            result.write(self.result_path())
 
         self.task_end_messages(result.results)
         return result.results

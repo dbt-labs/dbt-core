@@ -1,5 +1,6 @@
 import builtins
 import functools
+from typing import NoReturn
 
 from dbt.logger import GLOBAL_LOGGER as logger
 import dbt.flags
@@ -298,15 +299,15 @@ class CommandResultError(CommandError):
         return '{} running: {}'.format(self.msg, self.cmd)
 
 
-def raise_compiler_error(msg, node=None):
+def raise_compiler_error(msg, node=None) -> NoReturn:
     raise CompilationException(msg, node)
 
 
-def raise_database_error(msg, node=None):
+def raise_database_error(msg, node=None) -> NoReturn:
     raise DatabaseException(msg, node)
 
 
-def raise_dependency_error(msg):
+def raise_dependency_error(msg) -> NoReturn:
     raise DependencyException(msg)
 
 
@@ -344,9 +345,15 @@ To fix this, add the following hint to the top of the model "{model_name}":
     # better error messages. Ex. If models foo_users and bar_users are aliased
     # to 'users', in their respective schemas, then you would want to see
     # 'bar_users' in your error messge instead of just 'users'.
+    if isinstance(model, dict):  # TODO: remove this path
+        model_name = model['name']
+        model_path = model['path']
+    else:
+        model_name = model.name
+        model_path = model.path
     error_msg = base_error_msg.format(
-        model_name=model['name'],
-        model_path=model['path'],
+        model_name=model_name,
+        model_path=model_path,
         ref_string=ref_string
     )
     raise_compiler_error(error_msg, model)

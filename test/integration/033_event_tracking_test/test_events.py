@@ -271,7 +271,7 @@ class TestEventTrackingSuccess(TestEventTracking):
                     'model_materialization': 'seed',
 
                     'execution_time': ANY,
-                    'hashed_contents': '4f67ae18b42bc9468cc95ca0dab30531',
+                    'hashed_contents': 'd41d8cd98f00b204e9800998ecf8427e',
                     'model_id': '39bc2cd707d99bd3e600d2faaafad7ae',
 
                     'index': 1,

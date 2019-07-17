@@ -88,7 +88,6 @@ class SourceFreshnessResult(JsonSchemaMixin, Writable):
     age: Real
     status: FreshnessStatus
     error: Optional[str] = None
-    status: Union[None, str, int, bool] = None
     execution_time: Union[str, int] = 0
     thread_id: Optional[int] = 0
     timing: List[TimingInfo] = field(default_factory=list)

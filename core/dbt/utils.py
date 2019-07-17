@@ -91,6 +91,9 @@ def id_matches(unique_id, target_name, target_package, nodetypes, model):
         dbt.exceptions.raise_compiler_error(msg, model)
 
     resource_type, package_name, node_name = node_parts
+    if resource_type not in nodetypes:
+        return False
+
     if node_type == NodeType.Source.value:
         if node_name.count('.') != 1:
             msg = "{} names must contain exactly 1 '.' character"\
@@ -100,9 +103,6 @@ def id_matches(unique_id, target_name, target_package, nodetypes, model):
         if '.' in node_name:
             msg = "{} names cannot contain '.' characters".format(node_type)
             dbt.exceptions.raise_compiler_error(msg, model)
-
-    if resource_type not in nodetypes:
-        return False
 
     if target_name != node_name:
         return False

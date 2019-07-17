@@ -33,6 +33,7 @@ def config_from_parts_or_dicts(project, profile, packages=None, cli_vars='{}'):
                                                 cli_vars)
     args = Obj()
     args.vars = repr(cli_vars)
+    args.profile_dir = '/dev/null'
     return RuntimeConfig.from_parts(
         project=project,
         profile=profile,

@@ -5,6 +5,7 @@ import dbt.flags as flags
 
 from dbt.adapters.snowflake import SnowflakeAdapter
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
+from dbt.parser.results import ParseResult
 from snowflake import connector as snowflake_connector
 
 from .utils import config_from_parts_or_dicts, inject_adapter, mock_connection
@@ -48,15 +49,21 @@ class TestSnowflakeAdapter(unittest.TestCase):
             'dbt.adapters.snowflake.connections.snowflake.connector.connect')
         self.snowflake = self.patcher.start()
 
+        self.load_patch = mock.patch('dbt.loader._make_parse_result')
+        self.mock_parse_result = self.load_patch.start()
+        self.mock_parse_result.return_value = ParseResult.rpc()
+
         self.snowflake.return_value = self.handle
         self.adapter = SnowflakeAdapter(self.config)
         self.adapter.acquire_connection()
         inject_adapter(self.adapter)
 
+
     def tearDown(self):
         # we want a unique self.handle every time.
         self.adapter.cleanup_connections()
         self.patcher.stop()
+        self.load_patch.stop()
 
     def test_quoting_on_drop_schema(self):
         self.adapter.drop_schema(
