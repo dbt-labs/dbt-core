@@ -536,9 +536,7 @@ To fix this, add the following hint to the top of the model "{model_name}":
         model_name = model.name
         model_path = model.path
     error_msg = base_error_msg.format(
-        model_name=model_name,
-        model_path=model_path,
-        ref_string=ref_string
+        model_name=model_name, model_path=model_path, ref_string=ref_string
     )
     raise_compiler_error(error_msg, model)
 
