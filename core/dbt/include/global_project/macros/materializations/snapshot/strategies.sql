@@ -35,16 +35,17 @@
 {#
     Create SCD Hash SQL fields cross-db
 #}
-{% macro snapshot_hash_arguments(args) %}
+{% macro snapshot_hash_arguments(args) -%}
   {{ adapter_macro('snapshot_hash_arguments', args) }}
-{% endmacro %}
+{%- endmacro %}
 
 
-{% macro default__snapshot_hash_arguments(args) %}
+{% macro default__snapshot_hash_arguments(args) -%}
     md5({% for arg in args %}
-        coalesce(cast({{ arg }} as varchar ), '') {% if not loop.last %} || '|' || {% endif %}
+        coalesce(cast({{ arg }} as varchar ), '')
+        {% if not loop.last %} || '|' || {% endif %}
     {% endfor %})
-{% endmacro %}
+{%- endmacro %}
 
 
 {#
@@ -107,10 +108,13 @@
     {%- endset %}
 
     {% if target_exists %}
-        {% set tbl_version -%}
-            cast((select count(*) from {{ snapshotted_rel }} where {{ snapshotted_rel }}.dbt_unique_key = {{ primary_key }}) as string)
+        {% set row_version -%}
+            (
+             select count(*) from {{ snapshotted_rel }}
+             where {{ snapshotted_rel }}.dbt_unique_key = {{ primary_key }}
+            )
         {%- endset %}
-        {% set scd_id_cols = [primary_key, tbl_version] + (check_cols | list) %}
+        {% set scd_id_cols = [primary_key, row_version] + (check_cols | list) %}
     {% else %}
         {% set scd_id_cols = [primary_key] + (check_cols | list) %}
     {% endif %}
