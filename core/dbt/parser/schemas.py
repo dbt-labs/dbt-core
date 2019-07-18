@@ -286,7 +286,7 @@ class SchemaBaseTestParser(MacrosKnownParser):
                 )
                 continue
 
-    def parse_from_dict(self, parsed_dict):
+    def parse_from_dict(self, parsed_dict) -> ParsedTestNode:
         return ParsedTestNode.from_dict(parsed_dict)
 
     def build_test_node(self, test_target, package_name, test, root_dir, path,

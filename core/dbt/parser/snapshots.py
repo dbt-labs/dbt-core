@@ -56,7 +56,7 @@ class SnapshotParser(BaseSqlParser):
 
         return fqn
 
-    def parse_from_dict(self, parsed_dict):
+    def parse_from_dict(self, parsed_dict) -> IntermediateSnapshotNode:
         return IntermediateSnapshotNode.from_dict(parsed_dict)
 
     @staticmethod

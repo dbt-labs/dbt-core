@@ -49,6 +49,9 @@ class RunHookType(StrEnum):
     Start = 'on-run-start'
     End = 'on-run-end'
 
+# It would be nice to use hologram.StrLiteral for these, but it results in
+# un-pickleable types :(
+
 
 class AnalysisType(StrEnum):
     Analysis = str(NodeType.Analysis)
