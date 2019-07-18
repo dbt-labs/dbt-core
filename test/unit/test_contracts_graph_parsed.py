@@ -1,10 +1,12 @@
+import pickle
+
 from dbt.node_types import NodeType
 from dbt.contracts.graph.parsed import (
-    ParsedNode, DependsOn, NodeConfig, ColumnInfo, Hook, ParsedTestNode,
+    ParsedModelNode, DependsOn, NodeConfig, ColumnInfo, Hook, ParsedTestNode,
     TestConfig, ParsedSnapshotNode, TimestampSnapshotConfig, All, Docref,
     GenericSnapshotConfig, CheckSnapshotConfig, TimestampStrategy,
     CheckStrategy, IntermediateSnapshotNode, ParsedNodePatch, ParsedMacro,
-    MacroDependsOn, ParsedSourceDefinition, ParsedDocumentation,
+    MacroDependsOn, ParsedSourceDefinition, ParsedDocumentation, ParsedHookNode
 )
 from dbt.contracts.graph.unparsed import Quoting, FreshnessThreshold
 
@@ -51,10 +53,11 @@ class TestNodeConfig(ContractTestCase):
         cfg._extra['extra'] = 'even more'
 
         self.assert_symmetric(cfg, cfg_dict)
+        pickle.loads(pickle.dumps(cfg))
 
 
-class TestParsedNode(ContractTestCase):
-    ContractType = ParsedNode
+class TestParsedModelNode(ContractTestCase):
+    ContractType = ParsedModelNode
 
     def test_ok(self):
         node_dict = {
@@ -130,6 +133,7 @@ class TestParsedNode(ContractTestCase):
             'alias': 'bar',
         }
         self.assert_from_dict(node, minimum)
+        pickle.loads(pickle.dumps(node))
 
     def test_complex(self):
         node_dict = {
@@ -404,7 +408,7 @@ class TestParsedNode(ContractTestCase):
 
 
 class TestParsedHookNode(ContractTestCase):
-    ContractType = ParsedNode
+    ContractType = ParsedHookNode
 
     def test_ok(self):
         node_dict = {
@@ -479,6 +483,7 @@ class TestParsedHookNode(ContractTestCase):
             'alias': 'bar',
         }
         self.assert_from_dict(node, minimum)
+        pickle.loads(pickle.dumps(node))
 
     def test_complex(self):
         node_dict = {
@@ -662,6 +667,7 @@ class TestParsedTestNode(ContractTestCase):
             'alias': 'bar',
         }
         self.assert_from_dict(node, minimum)
+        pickle.loads(pickle.dumps(node))
 
     def test_complex(self):
         node_dict = {
@@ -872,6 +878,7 @@ class TestTimestampSnapshotConfig(ContractTestCase):
             target_schema='some_snapshot_schema',
         )
         self.assert_symmetric(cfg, cfg_dict)
+        pickle.loads(pickle.dumps(cfg))
 
     def test_populated(self):
         cfg_dict = {
@@ -972,6 +979,7 @@ class TestCheckSnapshotConfig(ContractTestCase):
             target_schema='some_snapshot_schema',
         )
         self.assert_symmetric(cfg, cfg_dict)
+        pickle.loads(pickle.dumps(cfg))
 
     def test_populated(self):
         cfg_dict = {
@@ -1091,6 +1099,7 @@ class TestGenericSnapshotConfig(ContractTestCase):
         )
         cfg._extra.update({'magic_key': 'magic'})
         self.assert_symmetric(cfg, cfg_dict)
+        pickle.loads(pickle.dumps(cfg))
 
 
 class TestParsedSnapshotNode(ContractTestCase):
@@ -1199,6 +1208,7 @@ class TestParsedSnapshotNode(ContractTestCase):
         )
         self.assertTrue(node.is_refable)
         self.assertFalse(node.is_ephemeral)
+        pickle.loads(pickle.dumps(node))
 
     def test_check_ok(self):
         node_dict = {
@@ -1455,6 +1465,7 @@ class TestParsedNodePatch(ContractTestCase):
             ],
         )
         self.assert_symmetric(patch, dct)
+        pickle.loads(pickle.dumps(patch))
 
 
 class TestParsedMacro(ContractTestCase):
@@ -1487,6 +1498,7 @@ class TestParsedMacro(ContractTestCase):
         )
         self.assert_symmetric(macro, macro_dict)
         self.assertEqual(macro.local_vars(), {})
+        pickle.loads(pickle.dumps(macro))
 
     def test_invalid_missing_unique_id(self):
         bad_missing_uid = {
@@ -1544,6 +1556,7 @@ class TestParsedDocumentation(ContractTestCase):
             block_contents='some doc contents'
         )
         self.assert_symmetric(doc, doc_dict)
+        pickle.loads(pickle.dumps(doc))
 
     def test_invalid_missing(self):
         bad_missing_contents = {
@@ -1638,6 +1651,7 @@ class TestParsedSourceDefinition(ContractTestCase):
             'unique_id': 'test.source.my_source.my_source_table',
         }
         self.assert_from_dict(source_def, minimum)
+        pickle.loads(pickle.dumps(source_def))
 
     def test_invalid_missing(self):
         bad_missing_name = {

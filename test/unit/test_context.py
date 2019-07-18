@@ -1,20 +1,21 @@
 import unittest
 from unittest import mock
 
-from dbt.contracts.graph.parsed import ParsedNode, NodeConfig, DependsOn
+from dbt.contracts.graph.parsed import ParsedModelNode, NodeConfig, DependsOn
 from dbt.context import parser, runtime
+from dbt.node_types import NodeType
 import dbt.exceptions
 from .mock_adapter import adapter_factory
 
 
 class TestVar(unittest.TestCase):
     def setUp(self):
-        self.model = ParsedNode(
+        self.model = ParsedModelNode(
             alias='model_one',
             name='model_one',
             database='dbt',
             schema='analytics',
-            resource_type='model',
+            resource_type=NodeType.Model,
             unique_id='model.root.model_one',
             fqn=['root', 'model_one'],
             package_name='root',

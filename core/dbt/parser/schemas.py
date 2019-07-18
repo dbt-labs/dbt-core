@@ -23,7 +23,7 @@ from dbt.utils import get_pseudo_test_path
 from dbt.contracts.graph.unparsed import UnparsedNode, UnparsedNodeUpdate, \
     UnparsedSourceDefinition
 from dbt.contracts.graph.parsed import ParsedNodePatch, ParsedTestNode, \
-    ParsedSourceDefinition
+    ParsedSourceDefinition, ParsedNode
 from dbt.parser.base import MacrosKnownParser
 from dbt.config.renderer import ConfigRenderer
 from dbt.exceptions import JSONValidationException, validator_error_message
@@ -286,7 +286,7 @@ class SchemaBaseTestParser(MacrosKnownParser):
                 )
                 continue
 
-    def _parse_from_dict(self, parsed_dict):
+    def parse_from_dict(self, parsed_dict) -> ParsedTestNode:
         return ParsedTestNode.from_dict(parsed_dict)
 
     def build_test_node(self, test_target, package_name, test, root_dir, path,
@@ -612,9 +612,9 @@ class SchemaParser:
         return version
 
     def load_and_parse(self, package_name, root_dir, relative_dirs):
-        new_tests = {}  # test unique ID -> ParsedNode
-        node_patches = {}  # model name -> dict
-        new_sources = {}  # source unique ID -> ParsedSourceDefinition
+        new_tests: Dict[str, ParsedNode] = {}
+        node_patches: Dict[str, dict] = {}
+        new_sources: Dict[str, ParsedSourceDefinition] = {}
 
         iterator = self.find_schema_yml(package_name, root_dir, relative_dirs)
 

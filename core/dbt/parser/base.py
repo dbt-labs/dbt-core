@@ -1,4 +1,6 @@
+import abc
 import os
+from typing import Dict, Any
 
 import dbt.exceptions
 import dbt.flags
@@ -11,14 +13,13 @@ import dbt.context.parser
 from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 from dbt.utils import coalesce
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.contracts.graph.parsed import ParsedNode
 from dbt.contracts.project import ProjectList
 from dbt.parser.source_config import SourceConfig
 from dbt import deprecations
 from dbt import hooks
 
 
-class BaseParser:
+class BaseParser(metaclass=abc.ABCMeta):
     def __init__(self, root_project_config, all_projects: ProjectList):
         self.root_project_config = root_project_config
         self.all_projects = all_projects
@@ -251,8 +252,9 @@ class MacrosKnownParser(BaseParser):
         self._mangle_hooks(config_dict)
         parsed_node.config = parsed_node.config.from_dict(config_dict)
 
-    def _parse_from_dict(self, parsed_dict):
-        return ParsedNode.from_dict(parsed_dict)
+    @abc.abstractmethod
+    def parse_from_dict(self, parsed_dict: Dict[str, Any]) -> Any:
+        """Given a dictionary, return the parsed entity for this parser"""
 
     def parse_node(self, node, node_path, package_project_config, tags=None,
                    fqn_extra=None, fqn=None, snapshot_config=None,
@@ -281,7 +283,7 @@ class MacrosKnownParser(BaseParser):
             config, node.to_dict(), node_path, config, tags, fqn,
             snapshot_config, column_name
         )
-        parsed_node = self._parse_from_dict(parsed_dict)
+        parsed_node = self.parse_from_dict(parsed_dict)
 
         self._render_with_context(parsed_node, config)
         self._update_parsed_node_info(parsed_node, config)

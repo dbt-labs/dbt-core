@@ -1,3 +1,4 @@
+import pickle
 from datetime import timedelta
 
 from dbt.contracts.graph.unparsed import (
@@ -31,6 +32,7 @@ class TestUnparsedMacro(ContractTestCase):
             resource_type=NodeType.Macro,
         )
         self.assert_symmetric(macro, macro_dict)
+        pickle.loads(pickle.dumps(macro))
 
     def test_invalid_missing_field(self):
         macro_dict = {
@@ -83,6 +85,7 @@ class TestUnparsedNode(ContractTestCase):
 
         self.assert_fails_validation(node_dict, cls=UnparsedRunHook)
         self.assert_fails_validation(node_dict, cls=UnparsedMacro)
+        pickle.loads(pickle.dumps(node))
 
     def test_empty(self):
         node_dict = {
@@ -148,6 +151,7 @@ class TestUnparsedRunHook(ContractTestCase):
         )
         self.assert_symmetric(node, node_dict)
         self.assert_fails_validation(node_dict, cls=UnparsedNode)
+        pickle.loads(pickle.dumps(node))
 
     def test_bad_type(self):
         node_dict = {
@@ -189,6 +193,7 @@ class TestFreshnessThreshold(ContractTestCase):
         self.assertEqual(threshold.status(error_seconds), FreshnessStatus.Error)
         self.assertEqual(threshold.status(warn_seconds), FreshnessStatus.Warn)
         self.assertEqual(threshold.status(pass_seconds), FreshnessStatus.Pass)
+        pickle.loads(pickle.dumps(threshold))
 
     def test_merged(self):
         t1 = self.ContractType(
@@ -230,6 +235,7 @@ class TestQuoting(ContractTestCase):
         self.assert_symmetric(
             c, {'database': True, 'schema': False, 'identifier': False}
         )
+        pickle.loads(pickle.dumps(c))
 
 
 class TestUnparsedSourceDefinition(ContractTestCase):
@@ -308,6 +314,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
         }
         self.assert_from_dict(source, from_dict)
         self.assert_symmetric(source, to_dict)
+        pickle.loads(pickle.dumps(source))
 
 
 class TestUnparsedDocumentationFile(ContractTestCase):
@@ -331,6 +338,7 @@ class TestUnparsedDocumentationFile(ContractTestCase):
         self.assert_symmetric(doc, doc_dict)
         self.assertEqual(doc.resource_type, NodeType.Documentation)
         self.assert_fails_validation(doc_dict, UnparsedNode)
+        pickle.loads(pickle.dumps(doc))
 
     def test_extra_field(self):
         self.assert_fails_validation({})
@@ -389,6 +397,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
             ],
         }
         self.assert_symmetric(update, dct)
+        pickle.loads(pickle.dumps(update))
 
     def test_bad_test_type(self):
         dct = {

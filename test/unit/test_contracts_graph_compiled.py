@@ -1,5 +1,7 @@
+import pickle
+
 from dbt.contracts.graph.compiled import (
-    CompiledNode, InjectedCTE, CompiledTestNode
+    CompiledModelNode, InjectedCTE, CompiledTestNode
 )
 from dbt.contracts.graph.parsed import (
     DependsOn, NodeConfig, TestConfig
@@ -9,8 +11,8 @@ from dbt.node_types import NodeType
 from .utils import ContractTestCase
 
 
-class TestCompiledNode(ContractTestCase):
-    ContractType = CompiledNode
+class TestCompiledModelNode(ContractTestCase):
+    ContractType = CompiledModelNode
 
     def test_basic_uncompiled(self):
         node_dict = {
@@ -92,6 +94,7 @@ class TestCompiledNode(ContractTestCase):
             'alias': 'bar',
         }
         self.assert_from_dict(node, minimum)
+        pickle.loads(pickle.dumps(node))
 
     def test_basic_compiled(self):
         node_dict = {
@@ -284,6 +287,7 @@ class TestCompiledTestNode(ContractTestCase):
             'alias': 'bar',
         }
         self.assert_from_dict(node, minimum)
+        pickle.loads(pickle.dumps(node))
 
     def test_basic_compiled(self):
         node_dict = {
