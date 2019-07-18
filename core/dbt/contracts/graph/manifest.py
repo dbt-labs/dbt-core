@@ -79,6 +79,8 @@ class Manifest:
         self.docs = docs
         self.generated_at = generated_at
         self.disabled = disabled
+        self._flat_graph = None
+        super(Manifest, self).__init__()
 
     @staticmethod
     def get_metadata(config: Optional[Project]) -> ManifestMetadata:
@@ -115,6 +117,20 @@ class Manifest:
             'metadata': self.metadata,
             'disabled': [v.to_dict() for v in self.disabled],
         }
+
+    def to_flat_graph(self):
+        """This function gets called in context.common by each node, so we want
+        to cache it. Make sure you don't call this until you're done with
+        building your manifest!
+        """
+        if self._flat_graph is None:
+            self._flat_graph = {
+                'nodes': {
+                    k: v.to_dict(omit_none=False)
+                    for k, v in self.nodes.items()
+                },
+            }
+        return self._flat_graph
 
     def find_disabled_by_name(self, name, package=None):
         return dbt.utils.find_in_list_by_name(self.disabled, name, package,
@@ -271,25 +287,6 @@ class Manifest:
                     'WARNING: Found documentation for model "{}" which was '
                     'not found or is disabled').format(patch.name)
                 )
-
-    def to_flat_graph(self):
-        """Convert the parsed manifest to the 'flat graph' that the compiler
-        expects.
-
-        Kind of hacky note: everything in the code is happy to deal with
-        macros as ParsedMacro objects (in fact, it's been changed to require
-        that), so those can just be returned without any work. Nodes sadly
-        require a lot of work on the compiler side.
-
-        Ideally in the future we won't need to have this method.
-        """
-        return {
-            'nodes': {
-                k: v.to_dict(omit_none=False)
-                for k, v in self.nodes.items()
-            },
-            'macros': self.macros,
-        }
 
     def __getattr__(self, name):
         raise AttributeError("'{}' object has no attribute '{}'".format(

@@ -254,8 +254,7 @@ class ManifestTest(unittest.TestCase):
                             generated_at=datetime.utcnow(), disabled=[])
         flat_graph = manifest.to_flat_graph()
         flat_nodes = flat_graph['nodes']
-        self.assertEqual(set(flat_graph), set(['nodes', 'macros']))
-        self.assertEqual(flat_graph['macros'], {})
+        self.assertEqual(set(flat_graph), set(['nodes']))
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
         for node in flat_nodes.values():
             self.assertEqual(frozenset(node), REQUIRED_PARSED_NODE_KEYS)
@@ -586,8 +585,7 @@ class MixedManifestTest(unittest.TestCase):
                             generated_at=datetime.utcnow(), disabled=[])
         flat_graph = manifest.to_flat_graph()
         flat_nodes = flat_graph['nodes']
-        self.assertEqual(set(flat_graph), set(['nodes', 'macros']))
-        self.assertEqual(flat_graph['macros'], {})
+        self.assertEqual(set(flat_graph), set(['nodes']))
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
         compiled_count = 0
         for node in flat_nodes.values():
