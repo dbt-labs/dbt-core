@@ -22,6 +22,8 @@ class Credentials(
     Replaceable,
     metaclass=abc.ABCMeta
 ):
+    database: str
+    schema: str
     _ALIASES: ClassVar[Dict[str, str]] = field(default={}, init=False)
 
     @abc.abstractproperty
