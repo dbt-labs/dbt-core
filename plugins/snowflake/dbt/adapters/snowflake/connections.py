@@ -131,6 +131,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
                 autocommit=False,
                 client_session_keep_alive=credentials.get(
                     'client_session_keep_alive', False),
+                application='dbt',
                 **auth_args
             )
 
