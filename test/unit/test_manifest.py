@@ -258,19 +258,6 @@ class ManifestTest(unittest.TestCase):
             []
         )
 
-    def test__to_flat_graph(self):
-        nodes = copy.copy(self.nested_nodes)
-        manifest = Manifest(nodes=nodes, macros={}, docs={},
-                            generated_at=timestring(), disabled=[])
-        flat_graph = manifest.to_flat_graph()
-        flat_nodes = flat_graph['nodes']
-        self.assertEqual(set(flat_graph), set(['nodes', 'macros']))
-        self.assertEqual(flat_graph['macros'], {})
-        self.assertEqual(set(flat_nodes), set(self.nested_nodes))
-        expected_keys = set(ParsedNode.SCHEMA['required']) | {'agate_table'}
-        for node in flat_nodes.values():
-            self.assertEqual(set(node), expected_keys)
-
     @mock.patch.object(tracking, 'active_user')
     def test_get_metadata(self, mock_user):
         mock_user.id = 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf'
@@ -622,23 +609,3 @@ class MixedManifestTest(unittest.TestCase):
             child_map['model.snowplow.events'],
             []
         )
-
-    def test__to_flat_graph(self):
-        nodes = copy.copy(self.nested_nodes)
-        manifest = Manifest(nodes=nodes, macros={}, docs={},
-                            generated_at=timestring(), disabled=[])
-        flat_graph = manifest.to_flat_graph()
-        flat_nodes = flat_graph['nodes']
-        self.assertEqual(set(flat_graph), set(['nodes', 'macros']))
-        self.assertEqual(flat_graph['macros'], {})
-        self.assertEqual(set(flat_nodes), set(self.nested_nodes))
-        parsed_keys = set(ParsedNode.SCHEMA['required']) | {'agate_table'}
-        compiled_keys = set(CompiledNode.SCHEMA['required']) | {'agate_table'}
-        compiled_count = 0
-        for node in flat_nodes.values():
-            if node.get('compiled'):
-                self.assertEqual(set(node), compiled_keys)
-                compiled_count += 1
-            else:
-                self.assertEqual(set(node), parsed_keys)
-        self.assertEqual(compiled_count, 2)

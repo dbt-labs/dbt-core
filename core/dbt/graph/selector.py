@@ -1,7 +1,7 @@
 import networkx as nx
 from dbt.logger import GLOBAL_LOGGER as logger
 
-from dbt.utils import is_enabled, get_materialization, coalesce
+from dbt.utils import is_enabled, coalesce
 from dbt.node_types import NodeType
 import dbt.exceptions
 
@@ -315,40 +315,6 @@ class NodeSelector(object):
 
         return filtered_nodes
 
-    def is_ephemeral_model(self, node):
-        is_model = node.get('resource_type') == NodeType.Model
-        is_ephemeral = get_materialization(node) == 'ephemeral'
-        return is_model and is_ephemeral
-
-    def get_ancestor_ephemeral_nodes(self, selected_nodes):
-        node_names = {}
-        for node_id in selected_nodes:
-            if node_id not in self.manifest.nodes:
-                continue
-            node = self.manifest.nodes[node_id]
-            # sources don't have ancestors and this results in a silly select()
-            if node.resource_type == NodeType.Source:
-                continue
-            node_names[node_id] = node.name
-
-        include_spec = [
-            '+{}'.format(node_names[node])
-            for node in selected_nodes if node in node_names
-        ]
-        if not include_spec:
-            return set()
-
-        all_ancestors = self.select_nodes(self.linker.graph, include_spec, [])
-
-        res = []
-        for ancestor in all_ancestors:
-            ancestor_node = self.manifest.nodes.get(ancestor, None)
-
-            if ancestor_node and self.is_ephemeral_model(ancestor_node):
-                res.append(ancestor)
-
-        return set(res)
-
     def select(self, query):
         include = query.get('include')
         exclude = query.get('exclude')
@@ -359,6 +325,19 @@ class NodeSelector(object):
         selected = self.get_selected(include, exclude, resource_types, tags,
                                      required)
 
-        addins = self.get_ancestor_ephemeral_nodes(selected)
+        # if you haven't selected any nodes, return that so we can give the
+        # nice "no models selected" message.
+        if not selected:
+            return selected
+        # we used to carefully go through all node ancestors and add those if
+        # they were ephemeral. Sadly, the algorithm we used ended up being
+        # O(n^2). Instead, since ephemeral nodes are almost free, just add all
+        # ephemeral nodes in the graph.
+        # someday at large enough scale we might want to prune it to only be
+        # ancestors of the selected nodes so we can skip the compile.
+        addins = {
+            uid for uid, node in self.manifest.nodes.items()
+            if node.is_ephemeral_model
+        }
 
         return selected | addins
