@@ -219,7 +219,10 @@ class BigQueryConnectionManager(BaseConnectionManager):
             status = 'CREATE TABLE ({})'.format(table.num_rows)
 
         elif query_job.statement_type in ['INSERT', 'DELETE', 'MERGE']:
-            status = '{} ({})'.format(query_job.statement_type, query_job.num_dml_affected_rows)
+            status = '{} ({})'.format(
+                query_job.statement_type,
+                query_job.num_dml_affected_rows
+            )
 
         else:
             status = 'OK'
