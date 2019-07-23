@@ -44,11 +44,11 @@ def _linecache_inject(source, write):
         # this is the only reliable way to accomplish this. Obviously, it's
         # really darn noisy and will fill your temporary directory
         tmp_file = tempfile.NamedTemporaryFile(
-            prefix='dbt-macro-compiled-',
-            suffix='.py',
+            prefix="dbt-macro-compiled-",
+            suffix=".py",
             delete=False,
-            mode='w+',
-            encoding='utf-8',
+            mode="w+",
+            encoding="utf-8",
         )
         tmp_file.write(source)
         filename = tmp_file.name
