@@ -4,7 +4,7 @@ from distutils.core import setup
 import os
 
 package_name = "dbt-snowflake"
-package_version = "0.14.0"
+package_version = "0.15.0a1"
 description = """The snowflake adapter plugin for dbt (data build tool)"""
 
 this_directory = os.path.abspath(os.path.dirname(__file__))
