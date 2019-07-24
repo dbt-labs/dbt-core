@@ -31,6 +31,15 @@
 
     ),
 
+    snapshotted_data as (
+
+        select *,
+            {{ strategy.unique_key }} as dbt_unique_key
+
+        from {{ target_relation }}
+
+    ),
+
     source_data as (
 
         select *,
@@ -41,15 +50,6 @@
             nullif({{ strategy.updated_at }}, {{ strategy.updated_at }}) as dbt_valid_to
 
         from snapshot_query
-    ),
-
-    snapshotted_data as (
-
-        select *,
-            {{ strategy.unique_key }} as dbt_unique_key
-
-        from {{ target_relation }}
-
     ),
 
     insertions as (
@@ -84,6 +84,15 @@
 
     ),
 
+    snapshotted_data as (
+
+        select *,
+            {{ strategy.unique_key }} as dbt_unique_key
+
+        from {{ target_relation }}
+
+    ),
+
     source_data as (
 
         select
@@ -94,15 +103,6 @@
             {{ strategy.updated_at }} as dbt_valid_from
 
         from snapshot_query
-    ),
-
-    snapshotted_data as (
-
-        select *,
-            {{ strategy.unique_key }} as dbt_unique_key
-
-        from {{ target_relation }}
-
     ),
 
     updates as (
@@ -202,7 +202,7 @@
   {%- endif -%}
 
   {% set strategy_macro = strategy_dispatch(strategy_name) %}
-  {% set strategy = strategy_macro(model, "snapshotted_data", "source_data", config) %}
+  {% set strategy = strategy_macro(model, "snapshotted_data", "source_data", config, target_relation_exists) %}
 
   {% if not target_relation_exists %}
 

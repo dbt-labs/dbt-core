@@ -35,16 +35,17 @@
 {#
     Create SCD Hash SQL fields cross-db
 #}
-{% macro snapshot_hash_arguments(args) %}
+{% macro snapshot_hash_arguments(args) -%}
   {{ adapter_macro('snapshot_hash_arguments', args) }}
-{% endmacro %}
+{%- endmacro %}
 
 
-{% macro default__snapshot_hash_arguments(args) %}
-    md5({% for arg in args %}
-        coalesce(cast({{ arg }} as varchar ), '') {% if not loop.last %} || '|' || {% endif %}
-    {% endfor %})
-{% endmacro %}
+{% macro default__snapshot_hash_arguments(args) -%}
+    md5({%- for arg in args -%}
+        coalesce(cast({{ arg }} as varchar ), '')
+        {% if not loop.last %} || '|' || {% endif %}
+    {%- endfor -%})
+{%- endmacro %}
 
 
 {#
@@ -62,7 +63,7 @@
 {#
     Core strategy definitions
 #}
-{% macro snapshot_timestamp_strategy(node, snapshotted_rel, current_rel, config) %}
+{% macro snapshot_timestamp_strategy(node, snapshotted_rel, current_rel, config, target_exists) %}
     {% set primary_key = config['unique_key'] %}
     {% set updated_at = config['updated_at'] %}
 
@@ -81,7 +82,7 @@
 {% endmacro %}
 
 
-{% macro snapshot_check_strategy(node, snapshotted_rel, current_rel, config) %}
+{% macro snapshot_check_strategy(node, snapshotted_rel, current_rel, config, target_exists) %}
     {% set check_cols_config = config['check_cols'] %}
     {% set primary_key = config['unique_key'] %}
     {% set updated_at = snapshot_get_time() %}
@@ -106,7 +107,18 @@
         )
     {%- endset %}
 
-    {% set scd_id_cols = [primary_key] + (check_cols | list) %}
+    {% if target_exists %}
+        {% set row_version -%}
+            (
+             select count(*) from {{ snapshotted_rel }}
+             where {{ snapshotted_rel }}.dbt_unique_key = {{ primary_key }}
+            )
+        {%- endset %}
+        {% set scd_id_cols = [primary_key, row_version] + (check_cols | list) %}
+    {% else %}
+        {% set scd_id_cols = [primary_key] + (check_cols | list) %}
+    {% endif %}
+
     {% set scd_id_expr = snapshot_hash_arguments(scd_id_cols) %}
 
     {% do return({
