@@ -23,6 +23,7 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
+*.mypy_cache/
 logs/
 
 # PyInstaller

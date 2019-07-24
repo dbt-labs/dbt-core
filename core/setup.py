@@ -31,6 +31,7 @@ setup(
             'include/global_project/macros/*.sql',
             'include/global_project/macros/**/*.sql',
             'include/global_project/macros/**/**/*.sql',
+            'py.typed',
         ]
     },
     test_suite='test',
