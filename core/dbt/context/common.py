@@ -195,6 +195,13 @@ def _load_result(sql_results):
     return call
 
 
+def _debug_here():
+    import sys
+    import ipdb
+    frame = sys._getframe(3)
+    ipdb.set_trace(frame)
+
+
 def _add_sql_handlers(context):
     sql_results = {}
     return dbt.utils.merge(context, {
@@ -415,6 +422,8 @@ def generate_base(model, model_dict, config, manifest, source_config,
         "target": target,
         "try_or_compiler_error": try_or_compiler_error(model)
     })
+    if os.environ.get('DBT_MACRO_DEBUGGING'):
+        context['debug'] = _debug_here
 
     return context
 
