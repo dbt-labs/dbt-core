@@ -21,3 +21,7 @@ My source
 {% docs table_info %}
 My table
 {% enddocs %}
+
+{% docs column_info %}
+An ID field
+{% enddocs %}
