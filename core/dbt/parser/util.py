@@ -161,6 +161,12 @@ class ParserUtils(object):
         source.set('description', table_description)
         source.set('source_description', source_description)
 
+        for column_name, column_def in source.columns.items():
+            column_description = column_def.get('description', '')
+            column_description = dbt.clients.jinja.get_rendered(
+                    column_description, context)
+            column_def['description'] = column_description
+
     @classmethod
     def process_docs(cls, manifest, current_project):
         for node in manifest.nodes.values():

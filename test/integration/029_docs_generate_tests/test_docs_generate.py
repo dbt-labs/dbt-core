@@ -1267,6 +1267,11 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'description': 'My table',
                     'docrefs': [
                          {
+                             "documentation_package": "",
+                             "documentation_name": "column_info",
+                             "column_name": "id",
+                         },
+                         {
                              'documentation_name': 'table_info',
                              'documentation_package': ''
                          },
@@ -1294,6 +1299,17 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
             'docs': {
                 'dbt.__overview__': ANY,
+                "test.column_info": {
+                    "block_contents": "An ID field",
+                    "file_contents": docs_file,
+                    "name": "column_info",
+                    "original_file_path": docs_path,
+                    "package_name": "test",
+                    "path": "docs.md",
+                    "resource_type": "docs",
+                    "root_path": OneOf(self.test_root_dir, self.initial_dir),
+                    "unique_id": "test.column_info",
+                },
                 'test.ephemeral_summary': {
                     'block_contents': (
                         'A summmary table of the ephemeral copy of the seed data'
