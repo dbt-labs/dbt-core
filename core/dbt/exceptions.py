@@ -236,7 +236,6 @@ class VersionsNotCompatibleException(SemverException):
 
 
 class NotImplementedException(Exception):
-    CODE = 10010
     MESSAGE = "ERROR: this is not implemented"
 
 
