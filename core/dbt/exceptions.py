@@ -236,7 +236,7 @@ class VersionsNotCompatibleException(SemverException):
 
 
 class NotImplementedException(Exception):
-    MESSAGE = "ERROR: this is not implemented"
+    pass
 
 
 class FailedToConnectException(DatabaseException):
