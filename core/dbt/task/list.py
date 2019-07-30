@@ -135,6 +135,7 @@ class ListTask(GraphRunnableTask):
             "exclude": self.args.exclude,
             "resource_types": self.resource_types,
             "tags": [],
+            "addin_ephemeral_nodes": False
         }
 
     def interpret_results(self, results):

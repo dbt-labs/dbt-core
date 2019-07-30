@@ -321,6 +321,7 @@ class NodeSelector(object):
         resource_types = query.get('resource_types')
         tags = query.get('tags')
         required = query.get('required', ())
+        addin_ephemeral_nodes = query.get('addin_ephemeral_nodes', True)
 
         selected = self.get_selected(include, exclude, resource_types, tags,
                                      required)
@@ -329,15 +330,19 @@ class NodeSelector(object):
         # nice "no models selected" message.
         if not selected:
             return selected
+
         # we used to carefully go through all node ancestors and add those if
         # they were ephemeral. Sadly, the algorithm we used ended up being
         # O(n^2). Instead, since ephemeral nodes are almost free, just add all
         # ephemeral nodes in the graph.
         # someday at large enough scale we might want to prune it to only be
         # ancestors of the selected nodes so we can skip the compile.
-        addins = {
-            uid for uid, node in self.manifest.nodes.items()
-            if node.is_ephemeral_model
-        }
+        if addin_ephemeral_nodes:
+            addins = {
+                uid for uid, node in self.manifest.nodes.items()
+                if node.is_ephemeral_model
+            }
+        else:
+            addins = set()
 
         return selected | addins
