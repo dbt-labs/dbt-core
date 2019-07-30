@@ -49,4 +49,6 @@ def from_csv(abspath):
     with dbt.compat.open_file(abspath) as fp:
         if fp.read(1) != BOM:
             fp.seek(0)
-        return agate.Table.from_csv(fp, column_types=DEFAULT_TYPE_TESTER)
+
+        file_buf = dbt.compat.read_into_buffer(fp)
+        return agate.Table.from_csv(file_buf, column_types=DEFAULT_TYPE_TESTER)
