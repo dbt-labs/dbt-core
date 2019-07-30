@@ -33,6 +33,13 @@ def table_from_data(data, column_names):
         return table.select(column_names)
 
 
+def table_from_data_explicit(data, column_names):
+    "Convert list of dictionaries into an Agate table"
+
+    rows = [list(r.values()) for r in data]
+    return agate.Table(rows, column_names)
+
+
 def empty_table():
     "Returns an empty Agate table. To be used in place of None"
 

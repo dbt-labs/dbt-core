@@ -181,8 +181,8 @@ class BigQueryConnectionManager(BaseConnectionManager):
     @classmethod
     def get_table_from_response(cls, resp):
         column_names = [field.name for field in resp.schema]
-        rows = [dict(row.items()) for row in resp]
-        return dbt.clients.agate_helper.table_from_data(rows, column_names)
+        return dbt.clients.agate_helper.table_from_data_explicit(resp,
+                                                                 column_names)
 
     def raw_execute(self, sql, fetch=False):
         conn = self.get_thread_connection()
