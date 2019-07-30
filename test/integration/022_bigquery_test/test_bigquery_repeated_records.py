@@ -1,4 +1,5 @@
 from test.integration.base import DBTIntegrationTest, use_profile
+import json
 
 class TestBaseBigQueryRun(DBTIntegrationTest):
 
@@ -49,15 +50,18 @@ class TestBaseBigQueryRun(DBTIntegrationTest):
 
         expected = {
             "user": [
-                "{'fname': 'Michael', 'lname': 'Stonebreaker'}",
-                "{'fname': 'Johnny', 'lname': 'Brickmaker'}"
+                '{"fname": "Michael", "lname": "Stonebreaker"}',
+                '{"fname": "Johnny", "lname": "Brickmaker"}'
             ],
             "val": [
-                "[{'val_1': 1, 'val_2': 2}, {'val_1': 3, 'val_2': 4}]",
-                "[{'val_1': 7, 'val_2': 8}, {'val_1': 9, 'val_2': 0}]"
+                '[{"val_1": 1, "val_2": 2}, {"val_1": 3, "val_2": 4}]',
+                '[{"val_1": 7, "val_2": 8}, {"val_1": 9, "val_2": 0}]'
             ]
         }
 
         for i, key in enumerate(expected):
-            line = "row {} for key {}".format(i, key)
-            self.assertEqual(expected[key][i], res[i][key], line)
+            line = "row {} for key {} ({} vs {})".format(i, key, expected[key][i], res[i][key])
+            # py2 serializes these in an unordered way - deserialize to compare
+            v1 = expected[key][i]
+            v2 = res[i][key]
+            self.assertEqual(json.loads(v1), json.loads(v2), line)
