@@ -47,12 +47,19 @@ _parser_types = [
 # parsing, so changing one var doesn't invalidate everything. also there should
 # be something like that for env_var - currently changing env_vars in way that
 # impact graph selection or configs will result in weird test failures.
+# finally, we should hash the actual profile used, not just root project +
+# profiles.yml + relevant args. While sufficient, it is definitely overkill.
 def _make_parse_result(
     config: RuntimeConfig, all_projects: Dict[str, Project]
 ) -> ParseResult:
     """Make a ParseResult from the project configuration and the profile."""
+    # if any of these change, we need to reject the parser
     vars_hash = FileHash.from_contents(
-        getattr(config.args, 'vars', '{}')
+        '\0'.join([
+            getattr(config.args, 'vars', '{}') or '{}',
+            getattr(config.args, 'profile', '') or '',
+            getattr(config.args, 'target', '') or '',
+        ])
     )
     profile_path = os.path.join(config.args.profiles_dir, 'profiles.yml')
     with open(profile_path) as fp:
