@@ -251,7 +251,10 @@ class BaseConnectionManager(object):
         try:
             connection.handle.rollback()
         except Exception:
-            logger.debug('Failed to rollback {}'.format(connection.name), exc_info=True)
+            logger.debug(
+                'Failed to rollback {}'.format(connection.name),
+                exc_info=True
+            )
 
     @classmethod
     def _close_handle(cls, connection):
