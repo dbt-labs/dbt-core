@@ -1002,7 +1002,7 @@ def parse_args(args, cls=DBTArgumentParser):
     )
 
     p.add_optional_argument_inverse(
-        '--partial-parse',
+        "--partial-parse",
         enable_help="""
         Allow for partial parsing by looking for and writing to a pickle file
         in the target directory. This overrides the user configuration file.
