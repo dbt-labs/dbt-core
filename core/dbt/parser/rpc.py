@@ -5,6 +5,7 @@ from typing import Iterable
 from dbt.contracts.graph.manifest import SourceFile
 from dbt.contracts.graph.parsed import ParsedRPCNode, ParsedMacro
 from dbt.contracts.graph.unparsed import UnparsedMacro
+from dbt.exceptions import InternalException
 from dbt.node_types import NodeType, MacroType
 from dbt.parser.base import SimpleSQLParser
 from dbt.parser.macros import MacroParser
@@ -31,7 +32,14 @@ class RPCCallParser(SimpleSQLParser[ParsedRPCNode]):
     def resource_type(self) -> NodeType:
         return NodeType.RPCCall
 
-    def get_compiled_path(cls, block: RPCBlock):
+    def get_compiled_path(cls, block: FileBlock):
+        # we do it this way to make mypy happy
+        if not isinstance(block, RPCBlock):
+            raise InternalException(
+                'While parsing RPC calls, got an actual file block instead of '
+                'an RPC block: {}'.format(block)
+            )
+
         return os.path.join('rpc', block.name)
 
     def parse_remote(self, sql: str, name: str) -> ParsedRPCNode:

@@ -1,3 +1,4 @@
+from typing import Dict, Optional, Tuple
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import get_materialization
@@ -30,34 +31,36 @@ def get_timestamp():
     return time.strftime("%H:%M:%S")
 
 
-def color(text, color_code):
+def color(text: str, color_code: str):
     if USE_COLORS:
         return "{}{}{}".format(color_code, text, COLOR_RESET_ALL)
     else:
         return text
 
 
-def green(text):
+def green(text: str):
     return color(text, COLOR_FG_GREEN)
 
 
-def yellow(text):
+def yellow(text: str):
     return color(text, COLOR_FG_YELLOW)
 
 
-def red(text):
+def red(text: str):
     return color(text, COLOR_FG_RED)
 
 
-def print_timestamped_line(msg, use_color=None):
+def print_timestamped_line(msg: str, use_color: Optional[str] = None):
     if use_color is not None:
         msg = color(msg, use_color)
 
     logger.info("{} | {}".format(get_timestamp(), msg))
 
 
-def print_fancy_output_line(msg, status, index, total, execution_time=None,
-                            truncate=False):
+def print_fancy_output_line(
+        msg: str, status: str, index: Optional[int], total: Optional[int],
+        execution_time: Optional[float] = None, truncate: bool = False
+) -> None:
     if index is None or total is None:
         progress = ''
     else:
@@ -78,16 +81,14 @@ def print_fancy_output_line(msg, status, index, total, execution_time=None,
         status_time = " in {execution_time:0.2f}s".format(
             execution_time=execution_time)
 
-    status_txt = status
-
     output = "{justified} [{status}{status_time}]".format(
-        justified=justified, status=status_txt, status_time=status_time)
+        justified=justified, status=status, status_time=status_time)
 
     logger.info(output)
 
 
-def get_counts(flat_nodes):
-    counts = {}
+def get_counts(flat_nodes) -> str:
+    counts: Dict[str, int] = {}
 
     for node in flat_nodes:
         t = node.resource_type
@@ -105,34 +106,38 @@ def get_counts(flat_nodes):
     return stat_line
 
 
-def print_start_line(description, index, total):
+def print_start_line(description: str, index: int, total: int) -> None:
     msg = "START {}".format(description)
     print_fancy_output_line(msg, 'RUN', index, total)
 
 
-def print_hook_start_line(statement, index, total):
+def print_hook_start_line(statement: str, index: int, total: int) -> None:
     msg = 'START hook: {}'.format(statement)
     print_fancy_output_line(msg, 'RUN', index, total, truncate=True)
 
 
-def print_hook_end_line(statement, status, index, total, execution_time):
+def print_hook_end_line(
+    statement: str, status: str, index: int, total: int, execution_time: float
+) -> None:
     msg = 'OK hook: {}'.format(statement)
     # hooks don't fail into this path, so always green
     print_fancy_output_line(msg, green(status), index, total,
                             execution_time=execution_time, truncate=True)
 
 
-def print_skip_line(model, schema, relation, index, num_models):
+def print_skip_line(
+    model, schema: str, relation: str, index: int, num_models: int
+) -> None:
     msg = 'SKIP relation {}.{}'.format(schema, relation)
     print_fancy_output_line(msg, yellow('SKIP'), index, num_models)
 
 
-def print_cancel_line(model):
+def print_cancel_line(model) -> None:
     msg = 'CANCEL query {}'.format(model)
     print_fancy_output_line(msg, red('CANCEL'), index=None, total=None)
 
 
-def get_printable_result(result, success, error):
+def get_printable_result(result, success: str, error: str) -> Tuple[str, str]:
     if result.error is not None:
         info = 'ERROR {}'.format(error)
         status = red(result.status)
@@ -143,7 +148,9 @@ def get_printable_result(result, success, error):
     return info, status
 
 
-def print_test_result_line(result, schema_name, index, total):
+def print_test_result_line(
+        result, schema_name, index: int, total: int
+) -> None:
     model = result.node
 
     if result.error is not None:
@@ -172,7 +179,9 @@ def print_test_result_line(result, schema_name, index, total):
         result.execution_time)
 
 
-def print_model_result_line(result, description, index, total):
+def print_model_result_line(
+    result, description: str, index: int, total: int
+) -> None:
     info, status = get_printable_result(result, 'created', 'creating')
 
     print_fancy_output_line(
@@ -183,7 +192,7 @@ def print_model_result_line(result, description, index, total):
         result.execution_time)
 
 
-def print_snapshot_result_line(result, index, total):
+def print_snapshot_result_line(result, index: int, total: int):
     model = result.node
 
     info, status = get_printable_result(result, 'snapshotted', 'snapshotting')
@@ -199,7 +208,7 @@ def print_snapshot_result_line(result, index, total):
         result.execution_time)
 
 
-def print_seed_result_line(result, schema_name, index, total):
+def print_seed_result_line(result, schema_name: str, index: int, total: int):
     model = result.node
 
     info, status = get_printable_result(result, 'loaded', 'loading')
@@ -215,7 +224,7 @@ def print_seed_result_line(result, schema_name, index, total):
         result.execution_time)
 
 
-def print_freshness_result_line(result, index, total):
+def print_freshness_result_line(result, index: int, total: int) -> None:
     if result.error:
         info = 'ERROR'
         color = red
@@ -251,7 +260,7 @@ def print_freshness_result_line(result, index, total):
     )
 
 
-def interpret_run_result(result):
+def interpret_run_result(result) -> str:
     if result.error is not None or result.fail:
         return 'error'
     elif result.skipped:
@@ -262,7 +271,7 @@ def interpret_run_result(result):
         return 'pass'
 
 
-def print_run_status_line(results):
+def print_run_status_line(results) -> None:
     stats = {
         'error': 0,
         'skip': 0,
@@ -280,7 +289,9 @@ def print_run_status_line(results):
     logger.info(stats_line.format(**stats))
 
 
-def print_run_result_error(result, newline=True, is_warning=False):
+def print_run_result_error(
+    result, newline: bool = True, is_warning: bool = False
+) -> None:
     if newline:
         logger.info("")
 
@@ -314,15 +325,18 @@ def print_run_result_error(result, newline=True, is_warning=False):
                 logger.info(line)
 
 
-def print_skip_caused_by_error(model, schema, relation, index, num_models,
-                               result):
+def print_skip_caused_by_error(
+    model, schema: str, relation: str, index: int, num_models: int, result
+) -> None:
     msg = ('SKIP relation {}.{} due to ephemeral model error'
            .format(schema, relation))
     print_fancy_output_line(msg, red('ERROR SKIP'), index, num_models)
     print_run_result_error(result, newline=False)
 
 
-def print_end_of_run_summary(num_errors, num_warnings, early_exit=False):
+def print_end_of_run_summary(
+    num_errors: int, num_warnings: int, early_exit: bool = False
+) -> None:
     error_plural = dbt.utils.pluralize(num_errors, 'error')
     warn_plural = dbt.utils.pluralize(num_warnings, 'warning')
     if early_exit:
@@ -339,7 +353,7 @@ def print_end_of_run_summary(num_errors, num_warnings, early_exit=False):
     logger.info('{}'.format(message))
 
 
-def print_run_end_messages(results, early_exit=False):
+def print_run_end_messages(results, early_exit: bool = False) -> None:
     errors = [r for r in results if r.error is not None or r.fail]
     warnings = [r for r in results if r.warn]
     print_end_of_run_summary(len(errors), len(warnings), early_exit)

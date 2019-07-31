@@ -1,5 +1,6 @@
-from abc import ABCMeta, abstractmethod
 import os
+from abc import ABCMeta, abstractmethod
+from typing import Type, Union
 
 from dbt.config import RuntimeConfig, Project
 from dbt.config.profile import read_profile, PROFILES_DIR
@@ -37,7 +38,7 @@ https://docs.getdbt.com/docs/configure-your-profile
 
 
 class BaseTask(metaclass=ABCMeta):
-    ConfigType = NoneConfig
+    ConfigType: Union[Type[NoneConfig], Type[Project]] = NoneConfig
 
     def __init__(self, args, config):
         self.args = args

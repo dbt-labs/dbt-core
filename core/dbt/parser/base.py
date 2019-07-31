@@ -12,7 +12,9 @@ from dbt import deprecations
 from dbt import hooks
 from dbt.clients.jinja import get_rendered
 from dbt.config import Project, RuntimeConfig
-from dbt.contracts.graph.manifest import Manifest, SourceFile, FilePath
+from dbt.contracts.graph.manifest import (
+    Manifest, SourceFile, FilePath, FileHash
+)
 from dbt.contracts.graph.parsed import HasUniqueID
 from dbt.contracts.graph.unparsed import UnparsedNode
 from dbt.exceptions import (
@@ -23,6 +25,7 @@ from dbt.node_types import NodeType, UnparsedNodeType
 from dbt.source_config import SourceConfig
 from dbt.parser.results import ParseResult, ManifestNodes
 from dbt.parser.search import FileBlock
+from dbt.clients.system import load_file_contents
 
 # internally, the parser may store a less-restrictive type that will be
 # transformed into the final type. But it will have to be derived from
@@ -69,7 +72,11 @@ class BaseParser(Generic[FinalValue]):
                                  resource_name)
 
     def load_file(self, path: FilePath) -> SourceFile:
-        return SourceFile.from_file(path)
+        file_contents = load_file_contents(path.absolute_path, strip=False)
+        checksum = FileHash.from_contents(file_contents)
+        source_file = SourceFile(path=path, checksum=checksum)
+        source_file.contents = file_contents.strip()
+        return source_file
 
     def parse_file_from_path(self, path: FilePath):
         block = FileBlock(file=self.load_file(path))
@@ -313,7 +320,7 @@ class ConfiguredParser(
             if too_many_args not in str(exc):
                 raise
             deprecations.warn('generate-schema-name-single-arg')
-            schema = get_schema(schema_override)
+            schema = get_schema(schema_override)  # type: ignore
         parsed_node.schema = schema.strip()
 
     def update_parsed_node_alias(

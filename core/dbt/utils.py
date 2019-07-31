@@ -8,6 +8,7 @@ import itertools
 import json
 import os
 from enum import Enum
+from typing import Tuple, Type, Any
 
 import dbt.exceptions
 
@@ -15,8 +16,9 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt.clients import yaml_helper
 
+DECIMALS: Tuple[Type[Any], ...]
 try:
-    import cdecimal
+    import cdecimal  # typing: ignore
 except ImportError:
     DECIMALS = (decimal.Decimal,)
 else:
@@ -288,22 +290,6 @@ class AttrDict(dict):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.__dict__ = self
-
-
-def to_unicode(s, encoding):
-    try:
-        unicode
-        return unicode(s, encoding)
-    except NameError:
-        return s
-
-
-def to_string(s):
-    try:
-        unicode
-        return s.encode('utf-8')
-    except NameError:
-        return s
 
 
 def get_materialization(node):

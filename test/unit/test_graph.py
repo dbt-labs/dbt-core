@@ -13,6 +13,7 @@ import dbt.utils
 import dbt.loader
 from dbt.contracts.graph.manifest import FilePath, SourceFile, FileHash
 from dbt.parser.results import ParseResult
+from dbt.parser.base import BaseParser
 from dbt.parser.search import FileBlock
 
 try:
@@ -84,7 +85,7 @@ class GraphTest(unittest.TestCase):
         self.mock_parse_result = self.load_patch.start()
         self.mock_parse_result.return_value = ParseResult.rpc()
 
-        self.load_source_file_ptcher = patch.object(SourceFile, 'from_file')
+        self.load_source_file_ptcher = patch.object(BaseParser, 'load_file')
         self.mock_source_file = self.load_source_file_ptcher.start()
         self.mock_source_file.side_effect = lambda path: [n for n in self.mock_models if n.path == path][0]
 

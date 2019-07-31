@@ -26,6 +26,7 @@ from dbt.parser import SeedParser
 from dbt.parser import SnapshotParser
 from dbt.parser import ParserUtils
 from dbt.parser.search import FileBlock
+from dbt.version import __version__
 
 
 PARTIAL_PARSE_FILE_NAME = 'partial_parse.pickle'
@@ -59,6 +60,7 @@ def _make_parse_result(
             getattr(config.args, 'vars', '{}') or '{}',
             getattr(config.args, 'profile', '') or '',
             getattr(config.args, 'target', '') or '',
+            __version__
         ])
     )
     profile_path = os.path.join(config.args.profiles_dir, 'profiles.yml')
@@ -185,12 +187,15 @@ class GraphLoader:
         path = os.path.join(self.root_project.target_path,
                             PARTIAL_PARSE_FILE_NAME)
 
-        result: Optional[ParseResult] = None
-
         if os.path.exists(path):
             try:
                 with open(path, 'rb') as fp:
-                    result = pickle.load(fp)
+                    result: ParseResult = pickle.load(fp)
+                # keep this check inside the try/except in case something about
+                # the file has changed in weird ways, perhaps due to being a
+                # different version of dbt
+                if self._matching_parse_results(result):
+                    return result
             except Exception as exc:
                 logger.debug(
                     'Failed to load parsed file from disk at {}: {}'
@@ -198,8 +203,6 @@ class GraphLoader:
                     exc_info=True
                 )
 
-        if result and self._matching_parse_results(result):
-            return result
         return None
 
     def create_manifest(self):

@@ -1,4 +1,3 @@
-from __future__ import unicode_literals
 import hashlib
 import json
 import os
@@ -1051,7 +1050,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
             'disabled': [],
             'files': {
-                'macros/dummy_test.sql': {
+                _normalize('macros/dummy_test.sql'): {
                     'path': self._path_to('macros', 'dummy_test.sql'),
                     'checksum': self._checksum_file('macros/dummy_test.sql'),
                     'docs': [],
@@ -1060,7 +1059,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'sources': [],
                     'patches': [],
                 },
-                'models/model.sql': {
+                _normalize('models/model.sql'): {
                     'path': self._path_to('models', 'model.sql'),
                     'checksum': self._checksum_file('models/model.sql'),
                     'docs': [],
@@ -1069,7 +1068,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'sources': [],
                     'patches': [],
                 },
-                'seed/seed.csv': {
+                _normalize('seed/seed.csv'): {
                     'path': self._path_to('seed', 'seed.csv'),
                     'checksum': {
                         'name': 'path',
@@ -1081,7 +1080,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'patches': [],
                     'sources': [],
                 },
-                'models/readme.md': {
+                _normalize('models/readme.md'): {
                     'path': self._path_to('models', 'readme.md'),
                     'checksum': self._checksum_file('models/readme.md'),
                     'docs': [],
@@ -1090,7 +1089,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'patches': [],
                     'sources': [],
                 },
-                'models/schema.yml': {
+                _normalize('models/schema.yml'): {
                     'path': self._path_to('models', 'schema.yml'),
                     'checksum': self._checksum_file('models/schema.yml'),
                     'docs': [],
@@ -1479,7 +1478,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
             'disabled': [],
             'files': {
-                'macros/dummy_test.sql': {
+                _normalize('macros/dummy_test.sql'): {
                     'checksum': self._checksum_file('macros/dummy_test.sql'),
                     'docs': [],
                     'nodes': [],
@@ -1488,7 +1487,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': self._path_to('macros', 'dummy_test.sql'),
                     'sources': [],
                 },
-                'ref_models/view_summary.sql': {
+                _normalize('ref_models/view_summary.sql'): {
                     'checksum': self._checksum_file('ref_models/view_summary.sql'),
                     'docs': [],
                     'macros': [],
@@ -1497,7 +1496,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': self._path_to('ref_models', 'view_summary.sql'),
                     'sources': [],
                 },
-                'ref_models/ephemeral_summary.sql': {
+                _normalize('ref_models/ephemeral_summary.sql'): {
                     'checksum': self._checksum_file('ref_models/ephemeral_summary.sql'),
                     'docs': [],
                     'macros': [],
@@ -1506,7 +1505,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': self._path_to('ref_models', 'ephemeral_summary.sql'),
                     'sources': [],
                 },
-                'ref_models/ephemeral_copy.sql': {
+                _normalize('ref_models/ephemeral_copy.sql'): {
                     'checksum': self._checksum_file('ref_models/ephemeral_copy.sql'),
                     'nodes': ['model.test.ephemeral_copy'],
                     'docs': [],
@@ -1515,7 +1514,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': self._path_to('ref_models', 'ephemeral_copy.sql'),
                     'sources': [],
                 },
-                'seed/seed.csv': {
+                _normalize('seed/seed.csv'): {
                     'checksum': {
                         'name': 'path',
                         'checksum': self._path_to('seed', 'seed.csv')['absolute_path'],
@@ -1527,7 +1526,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': self._path_to('seed', 'seed.csv'),
                     'sources': [],
                 },
-                'ref_models/docs.md': {
+                _normalize('ref_models/docs.md'): {
                     'checksum': self._checksum_file('ref_models/docs.md'),
                     'docs': [
                         'test.ephemeral_summary',
@@ -1543,7 +1542,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'path': self._path_to('ref_models', 'docs.md'),
                     'sources': [],
                 },
-                'ref_models/schema.yml': {
+                _normalize('ref_models/schema.yml'): {
                     'checksum': self._checksum_file('ref_models/schema.yml'),
                     'docs': [],
                     'macros': [],
@@ -1836,7 +1835,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
             'disabled': [],
             'files': {
-                'macros/dummy_test.sql': {
+                _normalize('macros/dummy_test.sql'): {
                     'checksum': self._checksum_file('macros/dummy_test.sql'),
                     'path': self._path_to('macros', 'dummy_test.sql'),
                     'macros': ['macro.test.test_nothing'],
@@ -1845,7 +1844,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'nodes': [],
                     'sources': [],
                 },
-                'bq_models/clustered.sql': {
+                _normalize('bq_models/clustered.sql'): {
                     'checksum': self._checksum_file('bq_models/clustered.sql'),
                     'path': self._path_to('bq_models', 'clustered.sql'),
                     'nodes': ['model.test.clustered'],
@@ -1854,7 +1853,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'macros': [],
                     'sources': [],
                 },
-                'bq_models/multi_clustered.sql': {
+                _normalize('bq_models/multi_clustered.sql'): {
                     'checksum': self._checksum_file('bq_models/multi_clustered.sql'),
                     'path': self._path_to('bq_models', 'multi_clustered.sql'),
                     'nodes': ['model.test.multi_clustered'],
@@ -1863,7 +1862,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'macros': [],
                     'sources': [],
                 },
-                'bq_models/nested_table.sql': {
+                _normalize('bq_models/nested_table.sql'): {
                     'checksum': self._checksum_file('bq_models/nested_table.sql'),
                     'path': self._path_to('bq_models', 'nested_table.sql'),
                     'nodes': ['model.test.nested_table'],
@@ -1872,7 +1871,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'macros': [],
                     'sources': [],
                 },
-                'bq_models/nested_view.sql': {
+                _normalize('bq_models/nested_view.sql'): {
                     'checksum': self._checksum_file('bq_models/nested_view.sql'),
                     'path': self._path_to('bq_models', 'nested_view.sql'),
                     'nodes': ['model.test.nested_view'],
@@ -1881,7 +1880,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'macros': [],
                     'sources': [],
                 },
-                'seed/seed.csv': {
+                _normalize('seed/seed.csv'): {
                     'checksum': {
                         'name': 'path',
                         'checksum': self._path_to('seed', 'seed.csv')['absolute_path'],
@@ -1893,7 +1892,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'macros': [],
                     'sources': [],
                 },
-                'bq_models/schema.yml': {
+                _normalize('bq_models/schema.yml'): {
                     'checksum': self._checksum_file('bq_models/schema.yml'),
                     'path': self._path_to('bq_models', 'schema.yml'),
                     'nodes': [],
@@ -1920,9 +1919,9 @@ class TestDocsGenerate(DBTIntegrationTest):
             absolute_path = os.path.join(self.test_root_dir, searched_path, relative_path)
 
         return {
-            'searched_path': searched_path,
-            'relative_path': relative_path,
-            'absolute_path': absolute_path,
+            'searched_path': _normalize(searched_path),
+            'relative_path': _normalize(relative_path),
+            'absolute_path': _normalize(absolute_path),
         }
 
     def expected_redshift_incremental_view_manifest(self):
@@ -2047,7 +2046,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
             'disabled': [],
             'files': {
-                'macros/dummy_test.sql': {
+                _normalize('macros/dummy_test.sql'): {
                     'checksum': self._checksum_file('macros/dummy_test.sql'),
                     'path': self._path_to('macros', 'dummy_test.sql'),
                     'docs': [],
@@ -2056,7 +2055,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'patches': [],
                     'sources': [],
                 },
-                'rs_models/model.sql': {
+                _normalize('rs_models/model.sql'): {
                     'checksum': self._checksum_file('rs_models/model.sql'),
                     'path': self._path_to('rs_models', 'model.sql'),
                     'docs': [],
@@ -2065,7 +2064,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'patches': [],
                     'sources': [],
                 },
-                'seed/seed.csv': {
+                _normalize('seed/seed.csv'): {
                     'checksum': {
                         'name': 'path',
                         'checksum': self._path_to('seed', 'seed.csv')['absolute_path'],
@@ -2077,7 +2076,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'patches': [],
                     'sources': [],
                 },
-                'rs_models/schema.yml': {
+                _normalize('rs_models/schema.yml'): {
                     'checksum': self._checksum_file('rs_models/schema.yml'),
                     'path': self._path_to('rs_models', 'schema.yml'),
                     'docs': [],

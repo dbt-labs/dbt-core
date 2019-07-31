@@ -80,3 +80,6 @@ target/
 
 # Vim
 *.sw*
+
+# pycharm
+.idea/

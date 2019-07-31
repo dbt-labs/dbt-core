@@ -1,3 +1,4 @@
+# never name this package "types", or mypy will crash in ugly ways
 from hologram import FieldEncoder, JsonSchemaMixin
 from typing import NewType
 

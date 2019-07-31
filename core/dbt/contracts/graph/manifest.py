@@ -7,13 +7,12 @@ from uuid import UUID
 
 from hologram import JsonSchemaMixin
 
-from dbt.clients.system import load_file_contents
 from dbt.contracts.graph.parsed import ParsedNode, ParsedMacro, \
     ParsedDocumentation
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.util import Writable, Replaceable
 from dbt.config import Project
-from dbt.exceptions import raise_duplicate_resource_name
+from dbt.exceptions import raise_duplicate_resource_name, InternalException
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt import tracking
@@ -120,31 +119,10 @@ class SourceFile(JsonSchemaMixin):
             return None
         return self.path.search_key
 
-    @classmethod
-    def from_file(cls, path: FilePath) -> 'SourceFile':
-        file_contents = load_file_contents(path.absolute_path, strip=False)
-        checksum = FileHash.from_contents(file_contents)
-        self = cls(path=path, checksum=checksum)
-        self._contents = file_contents.strip()
-        return self
-
-    @classmethod
-    def from_relative_path(
-        cls, root: str, relative_path: str, searched_path: str
-    ) -> 'SourceFile':
-        match = FilePath(
-            searched_path=searched_path,
-            relative_path=relative_path,
-            absolute_path=os.path.abspath(
-                os.path.join(root, searched_path, relative_path)
-            )
-        )
-        return cls.from_file(match)
-
     @property
     def contents(self) -> str:
         if self._contents is None:
-            self._contents = load_file_contents(self.path.absolute_path)
+            raise InternalException('SourceFile has no contents!')
         return self._contents
 
     @contents.setter

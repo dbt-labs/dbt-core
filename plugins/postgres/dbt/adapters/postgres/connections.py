@@ -7,7 +7,7 @@ from dbt.adapters.base import Credentials
 from dbt.adapters.sql import SQLConnectionManager
 from dbt.logger import GLOBAL_LOGGER as logger
 
-from dbt.types import Port
+from dbt.helper_types import Port
 from dataclasses import dataclass
 from typing import Optional
 
