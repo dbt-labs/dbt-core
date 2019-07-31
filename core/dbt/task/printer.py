@@ -75,9 +75,7 @@ def print_run_status_line(results) -> None:
     fire_event(StatsLine(stats=stats))
 
 
-def print_run_result_error(
-    result, newline: bool = True, is_warning: bool = False
-) -> None:
+def print_run_result_error(result, newline: bool = True, is_warning: bool = False) -> None:
     if newline:
         with TextOnly():
             fire_event(EmptyLine())

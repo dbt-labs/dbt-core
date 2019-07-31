@@ -8,5 +8,9 @@ class Fore:
 class Style:
     RESET_ALL: str = ...
 
-
-def init(autoreset: bool = ..., convert: Optional[Any] = ..., strip: Optional[Any] = ..., wrap: bool = ...) -> None: ...
+def init(
+    autoreset: bool = ...,
+    convert: Optional[Any] = ...,
+    strip: Optional[Any] = ...,
+    wrap: bool = ...,
+) -> None: ...
