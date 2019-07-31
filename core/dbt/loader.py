@@ -173,6 +173,8 @@ class GraphLoader:
         return valid
 
     def read_parse_results(self) -> Optional[ParseResult]:
+        if not dbt.flags.PARTIAL_PARSE:
+            return None
         path = os.path.join(self.root_project.target_path,
                             PARTIAL_PARSE_FILE_NAME)
 

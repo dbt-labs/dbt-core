@@ -679,6 +679,15 @@ def parse_args(args):
         configurations with no associated models, invalid test configurations,
         and missing sources/refs in tests''')
 
+    p.add_argument(
+        '--partial-parse',
+        action='store_true',
+        help='''Allow for partial parsing by looking for and writing to a
+        pickle file in the target directory.
+        WARNING: This can result in unexpected behavior if you use env_var()!
+        '''
+    )
+
     # if set, run dbt in single-threaded mode: thread count is ignored, and
     # calls go through `map` instead of the thread pool. This is useful for
     # getting performance information about aspects of dbt that normally run in
