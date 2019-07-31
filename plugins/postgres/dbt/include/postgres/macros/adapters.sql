@@ -1,3 +1,15 @@
+{% macro postgres__create_table_as(temporary, relation, sql) -%}
+  {%- set unlogged = config.get('unlogged', default=false) -%}
+
+  create {% if temporary -%}
+    temporary
+  {%- elif unlogged -%}
+    unlogged
+  {%- endif %} table {{ relation }}
+  as (
+    {{ sql }}
+  );
+{%- endmacro %}
 
 {% macro postgres__create_schema(database_name, schema_name) -%}
   {% if database_name -%}
