@@ -36,13 +36,11 @@ if WHICH_PYTHON == 2:
     from SocketServer import TCPServer
     from Queue import PriorityQueue, Empty as QueueEmpty
     from thread import get_ident
-    from StringIO import StringIO
 else:
     from http.server import SimpleHTTPRequestHandler
     from socketserver import TCPServer
     from queue import PriorityQueue, Empty as QueueEmpty
     from threading import get_ident
-    from io import StringIO
 
 
 def to_unicode(s):
@@ -100,16 +98,18 @@ def open_file(path):
     return open(path, encoding='utf-8')
 
 
-def read_into_buffer(fp):
-    buf = StringIO()
+if WHICH_PYTHON == 2:
+    BOM_UTF8 = codecs.BOM_UTF8
+else:
+    BOM_UTF8 = codecs.BOM_UTF8.decode('utf-8')
 
+
+def open_seed_file(path):
     if WHICH_PYTHON == 2:
-        buf.write(fp.read().encode('utf-8'))
+        fp = open(path, 'Urb')
     else:
-        buf.write(fp.read())
-
-    buf.seek(0)
-    return buf
+        fp = open(path, encoding='utf-8')
+    return fp
 
 
 if WHICH_PYTHON == 2:
