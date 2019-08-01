@@ -1892,8 +1892,11 @@ class TestDocsGenerate(DBTIntegrationTest):
         }
 
     def _checksum_file(self, path):
-        with open(self.dir(path), 'r') as fp:
-            hashed = hashlib.sha256(fp.read().encode('utf-8')).hexdigest()
+        """windows has silly git behavior that adds newlines, and python does
+        silly things if we just open(..., 'r').encode('utf-8').
+        """
+        with open(self.dir(path), 'rb') as fp:
+            hashed = hashlib.sha256(fp.read()).hexdigest()
         return {
             'name': 'sha256',
             'checksum': hashed,
