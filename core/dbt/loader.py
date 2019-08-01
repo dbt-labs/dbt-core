@@ -50,7 +50,7 @@ _parser_types = [
 # impact graph selection or configs will result in weird test failures.
 # finally, we should hash the actual profile used, not just root project +
 # profiles.yml + relevant args. While sufficient, it is definitely overkill.
-def _make_parse_result(
+def make_parse_result(
     config: RuntimeConfig, all_projects: Dict[str, Project]
 ) -> ParseResult:
     """Make a ParseResult from the project configuration and the profile."""
@@ -87,7 +87,7 @@ class GraphLoader:
         self.root_project = root_project
         self.all_projects = all_projects
 
-        self.results = _make_parse_result(root_project, all_projects)
+        self.results = make_parse_result(root_project, all_projects)
         self._loaded_file_cache: Dict[str, FileBlock] = {}
 
     def _load_macros(
@@ -97,9 +97,9 @@ class GraphLoader:
         for project in self.all_projects.values():
             parser = MacroParser(self.results, project)
             for path in parser.search():
-                self._parse_with_cache(path, parser, old_results)
+                self.parse_with_cache(path, parser, old_results)
 
-    def _parse_with_cache(
+    def parse_with_cache(
         self,
         path: FilePath,
         parser: BaseParser,
@@ -146,7 +146,7 @@ class GraphLoader:
 
         for parser in parsers:
             for path in parser.search():
-                self._parse_with_cache(path, parser, old_results)
+                self.parse_with_cache(path, parser, old_results)
 
     def load(self, internal_manifest=None):
         old_results = self.read_parse_results()

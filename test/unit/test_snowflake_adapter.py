@@ -49,7 +49,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
             'dbt.adapters.snowflake.connections.snowflake.connector.connect')
         self.snowflake = self.patcher.start()
 
-        self.load_patch = mock.patch('dbt.loader._make_parse_result')
+        self.load_patch = mock.patch('dbt.loader.make_parse_result')
         self.mock_parse_result = self.load_patch.start()
         self.mock_parse_result.return_value = ParseResult.rpc()
 

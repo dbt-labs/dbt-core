@@ -81,7 +81,7 @@ class GraphTest(unittest.TestCase):
 
         self.mock_models = []
 
-        self.load_patch = patch('dbt.loader._make_parse_result')
+        self.load_patch = patch('dbt.loader.make_parse_result')
         self.mock_parse_result = self.load_patch.start()
         self.mock_parse_result.return_value = ParseResult.rpc()
 
