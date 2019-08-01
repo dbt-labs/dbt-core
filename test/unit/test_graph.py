@@ -132,7 +132,7 @@ class GraphTest(unittest.TestCase):
         for k, v in models.items():
             path = FilePath(
                 searched_path='models',
-                absolute_path=os.path.abspath('models/{}.sql'.format(k)),
+                absolute_path=os.path.normcase(os.path.abspath('models/{}.sql'.format(k))),
                 relative_path='{}.sql'.format(k),
             )
             source_file = SourceFile(path=path, checksum=FileHash.empty())

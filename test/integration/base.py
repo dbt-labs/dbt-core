@@ -29,6 +29,19 @@ from dbt.logger import GLOBAL_LOGGER as logger
 INITIAL_ROOT = os.getcwd()
 
 
+def normalize(path):
+    """On windows, neither is enough on its own:
+
+    >>> normcase('C:\\documents/ALL CAPS/subdir\\..')
+    'c:\\documents\\all caps\\subdir\\..'
+    >>> normpath('C:\\documents/ALL CAPS/subdir\\..')
+    'C:\\documents\\ALL CAPS'
+    >>> normpath(normcase('C:\\documents/ALL CAPS/subdir\\..'))
+    'c:\\documents\\all caps'
+    """
+    return os.path.normcase(os.path.normpath(path))
+
+
 class FakeArgs:
     def __init__(self):
         self.threads = 1

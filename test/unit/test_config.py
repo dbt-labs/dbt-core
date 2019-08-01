@@ -17,6 +17,8 @@ from dbt.contracts.project import PackageConfig, LocalPackage, GitPackage
 from dbt.semver import VersionSpecifier
 from dbt.task.run_operation import RunOperationTask
 
+from .utils import normalize
+
 
 INITIAL_ROOT = os.getcwd()
 
@@ -168,8 +170,8 @@ class BaseConfigTest(unittest.TestCase):
 
 class BaseFileTest(BaseConfigTest):
     def setUp(self):
-        self.project_dir = os.path.normpath(tempfile.mkdtemp())
-        self.profiles_dir = os.path.normpath(tempfile.mkdtemp())
+        self.project_dir = normalize(tempfile.mkdtemp())
+        self.profiles_dir = normalize(tempfile.mkdtemp())
         super().setUp()
 
     def tearDown(self):

@@ -27,15 +27,11 @@ from dbt.contracts.graph.parsed import (
     ParsedAnalysisNode
 )
 
-from .utils import config_from_parts_or_dicts
-
-
-def get_os_path(unix_path):
-    return os.path.normpath(unix_path)
+from .utils import config_from_parts_or_dicts, normalize
 
 
 def get_abs_os_path(unix_path):
-    return os.path.abspath(get_os_path(unix_path))
+    return os.path.abspath(normalize(unix_path))
 
 
 class BaseParserTest(unittest.TestCase):
@@ -67,7 +63,7 @@ class BaseParserTest(unittest.TestCase):
             'name': 'root',
             'version': '0.1',
             'profile': 'test',
-            'project-root': get_os_path('/usr/src/app'),
+            'project-root': normalize('/usr/src/app'),
         }
 
         self.root_project_config = config_from_parts_or_dicts(
@@ -101,11 +97,13 @@ class BaseParserTest(unittest.TestCase):
 
     def file_block_for(self, data: str, filename: str, searched: str):
         root_dir = get_abs_os_path('./dbt_modules/snowplow')
-        filename = get_os_path(filename)
+        filename = normalize(filename)
         path = FilePath(
             searched_path=searched,
             relative_path=filename,
-            absolute_path=os.path.abspath(os.path.join(root_dir, searched, filename)),
+            absolute_path=os.path.normpath(os.path.abspath(
+                os.path.join(root_dir, searched, filename)
+            )),
         )
         source_file = SourceFile(
             path=path,
@@ -219,8 +217,8 @@ class SchemaParserSourceTest(SchemaParserTest):
             database='test',
             unique_id='source.snowplow.my_source.my_table',
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
-            path=get_os_path('models/test_one.yml'),
-            original_file_path=get_os_path('models/test_one.yml'),
+            path=normalize('models/test_one.yml'),
+            original_file_path=normalize('models/test_one.yml'),
             resource_type=SourceType.Source,
         )
         self.assertEqual(src, expected)
@@ -296,7 +294,7 @@ class SchemaParserModelsTest(SchemaParserTest):
             description='A description of my model',
             columns={'color': ColumnInfo(name='color', description='The color value')},
             docrefs=[],
-            original_file_path=get_os_path('models/test_one.yml'),
+            original_file_path=normalize('models/test_one.yml'),
         )
         self.assertEqual(patch, expected_patch)
 
@@ -367,10 +365,10 @@ class ModelParserTest(BaseParserTest):
             unique_id='model.snowplow.model_1',
             fqn=['snowplow', 'nested', 'model_1'],
             package_name='snowplow',
-            original_file_path=get_os_path('models/nested/model_1.sql'),
+            original_file_path=normalize('models/nested/model_1.sql'),
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
             config=NodeConfig(materialized='table'),
-            path=get_os_path('nested/model_1.sql'),
+            path=normalize('nested/model_1.sql'),
             raw_sql=raw_sql,
         )
         self.assertEqual(node, expected)
@@ -427,7 +425,7 @@ class SnapshotParserTest(BaseParserTest):
             unique_id='snapshot.snowplow.foo',
             fqn=['snowplow', 'nested', 'snap_1', 'foo'],
             package_name='snowplow',
-            original_file_path=get_os_path('snapshots/nested/snap_1.sql'),
+            original_file_path=normalize('snapshots/nested/snap_1.sql'),
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
             config=TimestampSnapshotConfig(
                 strategy=TimestampStrategy.Timestamp,
@@ -437,7 +435,7 @@ class SnapshotParserTest(BaseParserTest):
                 unique_key='id',
                 materialized='snapshot',
             ),
-            path=get_os_path('nested/snap_1.sql'),
+            path=normalize('nested/snap_1.sql'),
             raw_sql=raw_sql,
         )
         self.assertEqual(node, expected)
@@ -479,7 +477,7 @@ class SnapshotParserTest(BaseParserTest):
             unique_id='snapshot.snowplow.foo',
             fqn=['snowplow', 'nested', 'snap_1', 'foo'],
             package_name='snowplow',
-            original_file_path=get_os_path('snapshots/nested/snap_1.sql'),
+            original_file_path=normalize('snapshots/nested/snap_1.sql'),
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
             config=TimestampSnapshotConfig(
                 strategy=TimestampStrategy.Timestamp,
@@ -489,7 +487,7 @@ class SnapshotParserTest(BaseParserTest):
                 unique_key='id',
                 materialized='snapshot',
             ),
-            path=get_os_path('nested/snap_1.sql'),
+            path=normalize('nested/snap_1.sql'),
             raw_sql=raw_1,
         )
         expect_bar = ParsedSnapshotNode(
@@ -501,7 +499,7 @@ class SnapshotParserTest(BaseParserTest):
             unique_id='snapshot.snowplow.bar',
             fqn=['snowplow', 'nested', 'snap_1', 'bar'],
             package_name='snowplow',
-            original_file_path=get_os_path('snapshots/nested/snap_1.sql'),
+            original_file_path=normalize('snapshots/nested/snap_1.sql'),
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
             config=TimestampSnapshotConfig(
                 strategy=TimestampStrategy.Timestamp,
@@ -511,7 +509,7 @@ class SnapshotParserTest(BaseParserTest):
                 unique_key='id',
                 materialized='snapshot',
             ),
-            path=get_os_path('nested/snap_1.sql'),
+            path=normalize('nested/snap_1.sql'),
             raw_sql=raw_2,
         )
         self.assertEqual(nodes[0], expect_bar)
@@ -544,9 +542,9 @@ class MacroParserTest(BaseParserTest):
             resource_type=MacroType.Macro,
             unique_id='macro.snowplow.foo',
             package_name='snowplow',
-            original_file_path=get_os_path('macros/macro.sql'),
+            original_file_path=normalize('macros/macro.sql'),
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
-            path=get_os_path('macros/macro.sql'),
+            path=normalize('macros/macro.sql'),
             raw_sql=raw_sql
         )
         self.assertEqual(macro, expected)
@@ -583,12 +581,12 @@ class DataTestParserTest(BaseParserTest):
             unique_id='test.snowplow.test_1',
             fqn=['snowplow', 'data_test', 'test_1'],
             package_name='snowplow',
-            original_file_path=get_os_path('tests/test_1.sql'),
+            original_file_path=normalize('tests/test_1.sql'),
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
             refs=[['blah']],
             config=TestConfig(severity='ERROR'),
             tags=['data'],
-            path=get_os_path('data_test/test_1.sql'),
+            path=normalize('data_test/test_1.sql'),
             raw_sql=raw_sql,
         )
         self.assertEqual(node, expected)
@@ -625,11 +623,11 @@ class AnalysisParserTest(BaseParserTest):
             unique_id='analysis.snowplow.analysis_1',
             fqn=['snowplow', 'analysis', 'nested', 'analysis_1'],
             package_name='snowplow',
-            original_file_path=get_os_path('analyses/nested/analysis_1.sql'),
+            original_file_path=normalize('analyses/nested/analysis_1.sql'),
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
             depends_on=DependsOn(),
             config=NodeConfig(),
-            path=get_os_path('analysis/nested/analysis_1.sql'),
+            path=normalize('analysis/nested/analysis_1.sql'),
             raw_sql=raw_sql,
         )
         self.assertEqual(node, expected)
