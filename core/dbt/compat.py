@@ -99,6 +99,20 @@ def open_file(path):
 
 
 if WHICH_PYTHON == 2:
+    BOM_UTF8 = codecs.BOM_UTF8
+else:
+    BOM_UTF8 = codecs.BOM_UTF8.decode('utf-8')
+
+
+def open_seed_file(path):
+    if WHICH_PYTHON == 2:
+        fp = open(path, 'Urb')
+    else:
+        fp = open(path, encoding='utf-8')
+    return fp
+
+
+if WHICH_PYTHON == 2:
     # In python 2, classmethod and staticmethod do not allow setters, so you
     # can't treat classmethods as first-class objects like you can regular
     # functions. This rarely matters, but for metaclass shenanigans on the
