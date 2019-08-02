@@ -401,9 +401,12 @@ class TestRPCServer(BaseSourcesTest):
             port=port
         )
         self._server.start()
+        self.background_queries = []
 
     def tearDown(self):
         self._server.terminate()
+        for query in self.background_queries:
+            query.terminate()
         super().tearDown()
 
     @property
@@ -459,6 +462,7 @@ class TestRPCServer(BaseSourcesTest):
         if 'name' in kwargs:
             name += ' ' + kwargs['name']
         bg_query = BackgroundQueryProcess(built, url, name=name)
+        self.background_queries.append(bg_query)
         bg_query.start()
         return bg_query
 
@@ -913,3 +917,60 @@ class TestRPCServer(BaseSourcesTest):
         # on windows, process start is so slow that frequently we won't have collected any logs
         if os.name != 'nt':
             self.assertTrue(len(error_data['logs']) > 0)
+
+    @use_profile('postgres')
+    def test_seed_project_postgres(self):
+        # testing "dbt seed" is tricky so we'll just jam some sql in there
+        self.run_sql_file("seed.sql")
+        result = self.query('seed_project', show=True).json()
+        dct = self.assertIsResult(result)
+        self.assertTablesEqual('source', 'seed_expected')
+        self.assertIn('results', dct)
+        results = dct['results']
+        self.assertEqual(len(results), 4)
+        self.assertEqual(
+            set(r['node']['name'] for r in results),
+            {'expected_multi_source', 'other_source_table', 'other_table', 'source'}
+        )
+
+    @use_profile('postgres')
+    def test_compile_project_postgres(self):
+        self.run_dbt_with_vars(['seed'])
+        result = self.query('compile_project').json()
+        dct = self.assertIsResult(result)
+        self.assertIn('results', dct)
+        results = dct['results']
+        self.assertEqual(len(results), 11)
+        compiled = set(r['node']['name'] for r in results)
+        self.assertTrue(compiled.issuperset(
+            {'descendant_model', 'multi_source_model', 'nonsource_descendant'}
+        ))
+        self.assertNotIn('ephemeral_model', compiled)
+
+    @use_profile('postgres')
+    def test_run_project_postgres(self):
+        self.run_dbt_with_vars(['seed'])
+        result = self.query('run_project').json()
+        dct = self.assertIsResult(result)
+        self.assertIn('results', dct)
+        results = dct['results']
+        self.assertEqual(len(results), 3)
+        self.assertEqual(
+            set(r['node']['name'] for r in results),
+            {'descendant_model', 'multi_source_model', 'nonsource_descendant'}
+        )
+        self.assertTablesEqual('multi_source_model', 'expected_multi_source')
+
+    @use_profile('postgres')
+    def test_test_project_postgres(self):
+        self.run_dbt_with_vars(['seed'])
+        result = self.query('run_project').json()
+        dct = self.assertIsResult(result)
+        result = self.query('test_project').json()
+        dct = self.assertIsResult(result)
+        self.assertIn('results', dct)
+        results = dct['results']
+        self.assertEqual(len(results), 4)
+        for result in results:
+            self.assertEqual(result['status'], 0.0)
+            self.assertNotIn('fail', result)

@@ -47,6 +47,9 @@ coverage.xml
 .hypothesis/
 test.env
 
+# Mypy
+.mypy_cache/
+
 # Translations
 *.mo
 *.pot

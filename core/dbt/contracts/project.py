@@ -142,7 +142,7 @@ class ProfileConfig(HyphenatedJsonSchemaMixin, Replaceable):
     config: UserConfig
     threads: int
     # TODO: make this a dynamic union of some kind?
-    credentials: Optional[Any]
+    credentials: Optional[Dict[str, Any]]
 
 
 @dataclass

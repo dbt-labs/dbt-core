@@ -1,7 +1,6 @@
-from __future__ import print_function
-
 import functools
 import time
+from typing import Union, List, Dict, Any
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType, RunHookType
@@ -19,6 +18,7 @@ from dbt.ui.printer import \
 
 from dbt.compilation import compile_node
 from dbt.task.compile import CompileTask, RemoteCompileTask
+from dbt.task.runnable import RemoteCallable
 from dbt.utils import get_nodes_by_tags
 
 
@@ -183,3 +183,26 @@ class RemoteRunTask(RemoteCompileTask, RunTask):
 
     def get_runner_type(self):
         return RPCExecuteRunner
+
+
+class RemoteRunProjectTask(RunTask, RemoteCallable):
+    METHOD_NAME = 'run_project'
+
+    def __init__(self, args, config, manifest):
+        super().__init__(args, config)
+        self.manifest = manifest.deepcopy(config=config)
+
+    def load_manifest(self):
+        # we started out with a manifest!
+        pass
+
+    def handle_request(
+        self,
+        models: Union[None, str, List[str]] = None,
+        exclude: Union[None, str, List[str]] = None,
+    ) -> Dict[str, List[Any]]:
+        self.args.models = self._listify(models)
+        self.args.exclude = self._listify(exclude)
+
+        results = self.run()
+        return {'results': [r.to_dict() for r in results]}

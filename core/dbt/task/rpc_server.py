@@ -7,8 +7,12 @@ from werkzeug.exceptions import NotFound
 
 from dbt.logger import RPC_LOGGER as logger
 from dbt.task.base import ConfiguredTask
-from dbt.task.compile import CompileTask, RemoteCompileTask
-from dbt.task.run import RemoteRunTask
+from dbt.task.compile import (
+    CompileTask, RemoteCompileTask, RemoteCompileProjectTask
+)
+from dbt.task.run import RemoteRunTask, RemoteRunProjectTask
+from dbt.task.seed import RemoteSeedProjectTask
+from dbt.task.test import RemoteTestProjectTask
 from dbt.utils import JSONEncoder
 from dbt import rpc
 
@@ -19,7 +23,11 @@ class RPCServerTask(ConfiguredTask):
         # compile locally
         self.manifest = self._compile_manifest()
         self.task_manager = rpc.TaskManager()
-        tasks = tasks or [RemoteCompileTask, RemoteRunTask]
+        tasks = tasks or [
+            RemoteCompileTask, RemoteCompileProjectTask,
+            RemoteRunTask, RemoteRunProjectTask,
+            RemoteSeedProjectTask, RemoteTestProjectTask
+        ]
         for cls in tasks:
             task = cls(args, config, self.manifest)
             self.task_manager.add_task_handler(task)

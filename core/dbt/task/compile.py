@@ -1,6 +1,7 @@
 import os
 import signal
 import threading
+from typing import Union, List, Dict, Any
 
 from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import extract_toplevel_blocks
@@ -162,3 +163,26 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
 
         self._raise_set_error()
         return self.node_results[0].to_dict()
+
+
+class RemoteCompileProjectTask(CompileTask, RemoteCallable):
+    METHOD_NAME = 'compile_project'
+
+    def __init__(self, args, config, manifest):
+        super().__init__(args, config)
+        self.manifest = manifest.deepcopy(config=config)
+
+    def load_manifest(self):
+        # we started out with a manifest!
+        pass
+
+    def handle_request(
+        self,
+        models: Union[None, str, List[str]] = None,
+        exclude: Union[None, str, List[str]] = None,
+    ) -> Dict[str, List[Any]]:
+        self.args.models = self._listify(models)
+        self.args.exclude = self._listify(exclude)
+
+        results = self.run()
+        return {'results': [r.to_dict() for r in results]}
