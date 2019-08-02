@@ -4,6 +4,7 @@ import time
 from abc import abstractmethod
 from datetime import datetime
 from multiprocessing.dummy import Pool as ThreadPool
+from typing import Union, List, Optional
 
 from dbt import rpc
 from dbt.task.base import ConfiguredTask
@@ -40,9 +41,15 @@ class ManifestTask(ConfiguredTask):
         self.manifest = None
         self.linker = None
 
-    def _runtime_initialize(self):
+    def load_manifest(self):
         self.manifest = load_manifest(self.config)
+
+    def compile_manifest(self):
         self.linker = compile_manifest(self.config, self.manifest)
+
+    def _runtime_initialize(self):
+        self.load_manifest()
+        self.compile_manifest()
 
 
 class GraphRunnableTask(ManifestTask):
@@ -343,6 +350,17 @@ class RemoteCallable:
         raise dbt.exceptions.NotImplementedException(
             'from_kwargs not implemented'
         )
+
+    @staticmethod
+    def _listify(
+        value: Optional[Union[str, List[str]]]
+    ) -> Optional[List[str]]:
+        if value is None:
+            return None
+        elif isinstance(value, str):
+            return [value]
+        else:
+            return value
 
     def decode_sql(self, sql):
         """Base64 decode a string. This should only be used for sql in calls.

@@ -1,6 +1,9 @@
+from typing import Union, List, Dict, Any
+
 from dbt.node_runners import TestRunner
 from dbt.node_types import NodeType
 from dbt.task.run import RunTask
+from dbt.task.runnable import RemoteCallable
 
 
 class TestTask(RunTask):
@@ -12,11 +15,8 @@ class TestTask(RunTask):
     def raise_on_first_error(self):
         return False
 
-    def before_run(self, adapter, selected_uids):
+    def safe_run_hooks(self, adapter, hook_type, extra_context):
         # Don't execute on-run-* hooks for tests
-        self.populate_adapter_cache(adapter)
-
-    def after_run(self, adapter, results):
         pass
 
     def build_query(self):
@@ -41,3 +41,30 @@ class TestTask(RunTask):
 
     def get_runner_type(self):
         return TestRunner
+
+
+class RemoteTestProjectTask(TestTask, RemoteCallable):
+    METHOD_NAME = 'test_project'
+
+    def __init__(self, args, config, manifest):
+        super().__init__(args, config)
+        self.manifest = manifest.deepcopy(config=config)
+
+    def load_manifest(self):
+        # we started out with a manifest!
+        pass
+
+    def handle_request(
+        self,
+        models: Union[None, str, List[str]] = None,
+        exclude: Union[None, str, List[str]] = None,
+        data: bool = False,
+        schema: bool = False,
+    ) -> Dict[str, List[Any]]:
+        self.args.models = self._listify(models)
+        self.args.exclude = self._listify(exclude)
+        self.args.data = data
+        self.args.schema = schema
+
+        results = self.run()
+        return {'results': [r.to_dict() for r in results]}
