@@ -44,7 +44,7 @@ def interpret_run_result(result) -> str:
     elif result.status == NodeStatus.Skipped:
         return 'skip'
     elif result.status == NodeStatus.Warn:
-        return 'warn'
+        return "warn"
     elif result.status in (NodeStatus.Pass, NodeStatus.Success):
         return 'pass'
     else:
@@ -56,7 +56,7 @@ def print_run_status_line(results) -> None:
         'error': 0,
         'skip': 0,
         'pass': 0,
-        'warn': 0,
+        "warn": 0,
         'total': 0,
     }
 

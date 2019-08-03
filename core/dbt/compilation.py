@@ -46,14 +46,14 @@ def _compiled_type_for(model: ParsedNode):
 
 def print_compile_stats(stats):
     names = {
-        NodeType.Model: 'model',
-        NodeType.Test: 'test',
-        NodeType.Snapshot: 'snapshot',
+        NodeType.Model: "model",
+        NodeType.Test: "test",
+        NodeType.Snapshot: "snapshot",
         NodeType.Analysis: 'analysis',
-        NodeType.Macro: 'macro',
-        NodeType.Operation: 'operation',
-        NodeType.Seed: 'seed file',
-        NodeType.Source: 'source',
+        NodeType.Macro: "macro",
+        NodeType.Operation: "operation",
+        NodeType.Seed: "seed file",
+        NodeType.Source: "source",
         NodeType.Exposure: 'exposure',
         NodeType.Metric: 'metric'
     }
