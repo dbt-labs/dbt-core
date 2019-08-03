@@ -152,7 +152,7 @@ class User:
         user = {"id": str(uuid.uuid4())}
 
         cookie_path = os.path.abspath(self.cookie_dir)
-        profiles_file = os.path.join(cookie_path, 'profiles.yml')
+        profiles_file = os.path.join(cookie_path, "profiles.yml")
         if os.path.exists(cookie_path) and os.path.exists(profiles_file):
             with open(self.cookie_path, "w") as fh:
                 yaml.dump(user, fh)
