@@ -28,8 +28,10 @@ class TestSeverity(DBTIntegrationTest):
         results = self.run_dbt_with_vars(['test', '--schema'], 'false', strict=False)
         self.assertEqual(len(results), 2)
         self.assertFalse(results[0].fail)
+        self.assertTrue(results[0].warn)
         self.assertEqual(results[0].status, 2)
         self.assertFalse(results[1].fail)
+        self.assertTrue(results[1].warn)
         self.assertEqual(results[1].status, 2)
 
     @use_profile('postgres')
@@ -39,8 +41,10 @@ class TestSeverity(DBTIntegrationTest):
         results = self.run_dbt_with_vars(['test', '--schema'], 'true', strict=False, expect_pass=False)
         self.assertEqual(len(results), 2)
         self.assertTrue(results[0].fail)
+        self.assertFalse(results[0].warn)
         self.assertEqual(results[0].status, 2)
         self.assertTrue(results[1].fail)
+        self.assertFalse(results[1].warn)
         self.assertEqual(results[1].status, 2)
 
     @use_profile('postgres')
@@ -50,8 +54,10 @@ class TestSeverity(DBTIntegrationTest):
         results = self.run_dbt_with_vars(['test', '--schema'], 'false', expect_pass=False)
         self.assertEqual(len(results), 2)
         self.assertTrue(results[0].fail)
+        self.assertFalse(results[0].warn)
         self.assertEqual(results[0].status, 2)
         self.assertTrue(results[1].fail)
+        self.assertFalse(results[1].warn)
         self.assertEqual(results[1].status, 2)
 
     @use_profile('postgres')
@@ -61,6 +67,7 @@ class TestSeverity(DBTIntegrationTest):
         results = self.run_dbt_with_vars(['test', '--data'], 'false', strict=False)
         self.assertEqual(len(results), 1)
         self.assertFalse(results[0].fail)
+        self.assertTrue(results[0].warn)
         self.assertEqual(results[0].status, 2)
 
     @use_profile('postgres')
@@ -70,6 +77,7 @@ class TestSeverity(DBTIntegrationTest):
         results = self.run_dbt_with_vars(['test', '--data'], 'true', strict=False, expect_pass=False)
         self.assertEqual(len(results), 1)
         self.assertTrue(results[0].fail)
+        self.assertFalse(results[0].warn)
         self.assertEqual(results[0].status, 2)
 
     @use_profile('postgres')
@@ -79,4 +87,5 @@ class TestSeverity(DBTIntegrationTest):
         results = self.run_dbt_with_vars(['test', '--data'], 'false', expect_pass=False)
         self.assertEqual(len(results), 1)
         self.assertTrue(results[0].fail)
+        self.assertFalse(results[0].warn)
         self.assertEqual(results[0].status, 2)
