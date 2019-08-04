@@ -130,14 +130,16 @@ RUN_MODEL_RESULT_CONTRACT = deep_merge(PARTIAL_RESULT_CONTRACT, {
             'type': 'boolean',
             'description': 'True if this node was skipped',
         },
-        # This is assigned by dbt.ui.printer.print_test_result_line, if a test
-        # has no error and a non-zero status
+        'warn': {
+            'type': ['boolean', 'null'],
+            'description': 'True if this node succeeded with a warning',
+        },
         'fail': {
             'type': ['boolean', 'null'],
             'description': 'On tests, true if the test failed',
         },
     },
-    'required': ['skip', 'fail']
+    'required': ['skip', 'fail', 'warn']
 })
 
 
@@ -145,7 +147,7 @@ class RunModelResult(NodeSerializable):
     SCHEMA = RUN_MODEL_RESULT_CONTRACT
 
     def __init__(self, node, error=None, skip=False, status=None, failed=None,
-                 thread_id=None, timing=None, execution_time=0):
+                 warned=None, thread_id=None, timing=None, execution_time=0):
         if timing is None:
             timing = []
         super(RunModelResult, self).__init__(
@@ -154,6 +156,7 @@ class RunModelResult(NodeSerializable):
             skip=skip,
             status=status,
             fail=failed,
+            warn=warned,
             execution_time=execution_time,
             thread_id=thread_id,
             timing=timing,
@@ -163,6 +166,7 @@ class RunModelResult(NodeSerializable):
     error = named_property('error',
                            'If there was an error, the text of that error')
     skip = named_property('skip', 'True if the model was skipped')
+    warn = named_property('warn', 'True if this was a test and it warned')
     fail = named_property('fail', 'True if this was a test and it failed')
     status = named_property('status', 'The status of the model execution')
     execution_time = named_property('execution_time',
@@ -179,6 +183,10 @@ class RunModelResult(NodeSerializable):
     @property
     def failed(self):
         return self.fail
+
+    @property
+    def warned(self):
+        return self.warn
 
     @property
     def skipped(self):
