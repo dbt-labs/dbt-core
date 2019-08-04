@@ -646,7 +646,9 @@ def raise_unrecognized_credentials_type(typename, supported_types):
 
 
 def raise_not_implemented(msg):
-    raise NotImplementedException(msg)
+    raise NotImplementedException(
+        "ERROR: {}"
+        .format(msg))
 
 
 def warn_or_error(msg, node=None, log_fmt=None):
@@ -687,6 +689,7 @@ CONTEXT_EXPORTS = {
         raise_duplicate_patch_name,
         raise_duplicate_resource_name,
         raise_invalid_schema_yml_version,
+        raise_not_implemented,
         relation_wrong_type,
     ]
 }
