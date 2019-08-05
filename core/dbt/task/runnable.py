@@ -347,11 +347,11 @@ class GraphRunnableTask(ManifestTask):
 
 
 class RemoteCallable:
-    METHOD_NAME = None
+    METHOD_NAME: Optional[str] = None
     is_async = False
 
     @abstractmethod
-    def handle_request(self, **kwargs):
+    def handle_request(self):
         raise dbt.exceptions.NotImplementedException(
             'from_kwargs not implemented'
         )
