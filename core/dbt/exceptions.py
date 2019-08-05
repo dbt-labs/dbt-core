@@ -846,7 +846,7 @@ def raise_duplicate_resource_name(node_1, node_2):
         get_func = node_1.get_source_representation()
     elif node_1.resource_type == NodeType.Documentation:
         get_func = 'doc("{}")'.format(duped_name)
-    elif node_1.resource_type == NodeType.Test and 'schema' in node_1.tags:
+    elif node_1.resource_type == NodeType.Test and "schema" in node_1.tags:
         return
     else:
         get_func = '"{}"'.format(duped_name)
@@ -854,7 +854,7 @@ def raise_duplicate_resource_name(node_1, node_2):
     raise_compiler_error(
         'dbt found two resources with the name "{}". Since these resources '
         'have the same name,\ndbt will be unable to find the correct resource '
-        'when {} is used. To fix this,\nchange the name of one of '
+        "when {} is used. To fix this,\nchange the name of one of "
         'these resources:\n- {} ({})\n- {} ({})'.format(
             duped_name,
             get_func,
