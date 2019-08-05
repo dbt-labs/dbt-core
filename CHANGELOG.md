@@ -2,10 +2,10 @@
 
 ### Overview
 
-This is primarily a bugfix release which contains a few minor improvements too. Note: this release includes an important change in how the `check_cols` strategy works. See [#1614](https://github.com/fishtown-analytics/dbt/pull/1614) for more information. If you are using snapshots with the `check` strategy on dbt v0.14.0, it is strongly recommended that you upgrade to 0.14.1 at your soonest convenience.
+This is primarily a bugfix release which contains a few minor improvements too. Note: this release includes an important change in how the `check` snapshot strategy works. See [#1614](https://github.com/fishtown-analytics/dbt/pull/1614) for more information. If you are using snapshots with the `check` strategy on dbt v0.14.0, it is strongly recommended that you upgrade to 0.14.1 at your soonest convenience.
 
 ### Breaking changes
- - The undocumented "graph" variable's `macros` field was removed from the parsing context ([#1615](https://github.com/fishtown-analytics/dbt/pull/1615))
+ - The undocumented `macros` attribute was removed from the `graph` context variable ([#1615](https://github.com/fishtown-analytics/dbt/pull/1615))
  
 ### Features:
  - Summarize warnings at the end of dbt runs ([#1597](https://github.com/fishtown-analytics/dbt/issues/1597), [#1654](https://github.com/fishtown-analytics/dbt/pull/1654))
@@ -27,7 +27,6 @@ This is primarily a bugfix release which contains a few minor improvements too. 
  - Fix for creation of user cookies in incorrect directories when `--profile-dir` or `$DBT_PROFILES_DIR` is provided ([#1645](https://github.com/fishtown-analytics/dbt/issues/1645), [#1656](https://github.com/fishtown-analytics/dbt/pull/1656))
  - Fix for error handling when transactions are being rolled back ([#1647](https://github.com/fishtown-analytics/dbt/pull/1647))
  - Fix for incorrect references to `dbt.exceptions` in jinja code ([#1569](https://github.com/fishtown-analytics/dbt/issues/1569), [#1609](https://github.com/fishtown-analytics/dbt/pull/1609))
- - 
  
  ### Contributors:
 Thanks for your contributions to dbt!
