@@ -8,6 +8,7 @@ import dbt.exceptions
 import dbt.flags
 import dbt.clients.agate_helper
 
+from dbt.contracts.graph.manifest import Manifest
 from dbt.node_types import NodeType
 from dbt.loader import GraphLoader
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -252,14 +253,19 @@ class BaseAdapter(metaclass=AdapterMeta):
     @property
     def _internal_manifest(self):
         if self._internal_manifest_lazy is None:
-            manifest = GraphLoader.load_internal(self.config)
-            self._internal_manifest_lazy = manifest
+            self.load_internal_manifest()
         return self._internal_manifest_lazy
 
     def check_internal_manifest(self):
         """Return the internal manifest (used for executing macros) if it's
         been initialized, otherwise return None.
         """
+        return self._internal_manifest_lazy
+
+    def load_internal_manifest(self) -> Manifest:
+        if self._internal_manifest_lazy is None:
+            manifest = GraphLoader.load_internal(self.config)
+            self._internal_manifest_lazy = manifest
         return self._internal_manifest_lazy
 
     ###

@@ -2,7 +2,7 @@ import hashlib
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Mapping
 from uuid import UUID
 
 from hologram import JsonSchemaMixin
@@ -186,22 +186,22 @@ def _deepcopy(value):
 class Manifest:
     """The manifest for the full graph, after parsing and during compilation.
     """
-    nodes: Dict[str, CompileResultNode]
-    macros: Dict[str, ParsedMacro]
-    docs: Dict[str, ParsedDocumentation]
+    nodes: Mapping[str, CompileResultNode]
+    macros: Mapping[str, ParsedMacro]
+    docs: Mapping[str, ParsedDocumentation]
     generated_at: datetime
     disabled: List[ParsedNode]
-    files: Dict[str, SourceFile]
+    files: Mapping[str, SourceFile]
     metadata: ManifestMetadata = field(init=False)
 
     def __init__(
         self,
-        nodes: Dict[str, CompileResultNode],
-        macros: Dict[str, ParsedMacro],
-        docs: Dict[str, ParsedDocumentation],
+        nodes: Mapping[str, CompileResultNode],
+        macros: Mapping[str, ParsedMacro],
+        docs: Mapping[str, ParsedDocumentation],
         generated_at: datetime,
         disabled: List[ParsedNode],
-        files: Dict[str, SourceFile],
+        files: Mapping[str, SourceFile],
         config: Optional[Project] = None,
     ) -> None:
         self.metadata = self.get_metadata(config)
@@ -215,16 +215,18 @@ class Manifest:
         super(Manifest, self).__init__()
 
     @classmethod
-    def from_macros(cls, macros=None) -> 'Manifest':
+    def from_macros(cls, macros=None, files=None) -> 'Manifest':
         if macros is None:
             macros = {}
+        if files is None:
+            files = {}
         return cls(
             nodes={},
             macros=macros,
             docs={},
             generated_at=datetime.utcnow(),
             disabled=[],
-            files={},
+            files=files,
             config=None,
         )
 
@@ -503,13 +505,13 @@ class Manifest:
 
 @dataclass
 class WritableManifest(JsonSchemaMixin, Writable):
-    nodes: Dict[str, CompileResultNode]
-    macros: Dict[str, ParsedMacro]
-    docs: Dict[str, ParsedDocumentation]
+    nodes: Mapping[str, CompileResultNode]
+    macros: Mapping[str, ParsedMacro]
+    docs: Mapping[str, ParsedDocumentation]
     disabled: Optional[List[ParsedNode]]
     generated_at: datetime
     parent_map: Optional[NodeEdgeMap]
     child_map: Optional[NodeEdgeMap]
     metadata: ManifestMetadata
     # map of original_file_path to all unique IDs provided by that file
-    files: Dict[str, SourceFile]
+    files: Mapping[str, SourceFile]

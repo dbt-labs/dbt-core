@@ -3,6 +3,7 @@ import functools
 from typing import NoReturn
 
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.node_types import NodeType
 import dbt.flags
 
 import hologram
@@ -585,13 +586,21 @@ def approximate_relation_match(target, relation):
 def raise_duplicate_resource_name(node_1, node_2):
     duped_name = node_1.name
 
+    if node_1.resource_type in NodeType.refable():
+        getter = 'ref("{}")'
+    elif node_1.resource_type == NodeType.Source:
+        getter = 'source("{}")'
+    elif node_1.resource_type == NodeType.Test and 'schema' in node_1.tags:
+        return
+    get_func = getter.format(duped_name)
+
     raise_compiler_error(
         'dbt found two resources with the name "{}". Since these resources '
         'have the same name,\ndbt will be unable to find the correct resource '
-        'when ref("{}") is used. To fix this,\nchange the name of one of '
+        'when {} is used. To fix this,\nchange the name of one of '
         'these resources:\n- {} ({})\n- {} ({})'.format(
             duped_name,
-            duped_name,
+            get_func,
             node_1.unique_id, node_1.original_file_path,
             node_2.unique_id, node_2.original_file_path))
 

@@ -2,7 +2,7 @@ import itertools
 import os
 import pickle
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, Optional, Mapping
 
 from dbt.include.global_project import PACKAGES
 import dbt.exceptions
@@ -12,6 +12,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
 from dbt.clients.system import make_directory
 from dbt.config import Project, RuntimeConfig
+from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest, FilePath, FileHash
 from dbt.parser.base import BaseParser
 from dbt.parser import AnalysisParser
@@ -51,7 +52,7 @@ _parser_types = [
 # finally, we should hash the actual profile used, not just root project +
 # profiles.yml + relevant args. While sufficient, it is definitely overkill.
 def make_parse_result(
-    config: RuntimeConfig, all_projects: Dict[str, Project]
+    config: RuntimeConfig, all_projects: Mapping[str, Project]
 ) -> ParseResult:
     """Make a ParseResult from the project configuration and the profile."""
     # if any of these change, we need to reject the parser
@@ -82,7 +83,7 @@ def make_parse_result(
 
 class GraphLoader:
     def __init__(
-        self, root_project: RuntimeConfig, all_projects: Dict[str, Project]
+        self, root_project: RuntimeConfig, all_projects: Mapping[str, Project]
     ) -> None:
         self.root_project = root_project
         self.all_projects = all_projects
@@ -91,10 +92,20 @@ class GraphLoader:
         self._loaded_file_cache: Dict[str, FileBlock] = {}
 
     def _load_macros(
-        self, old_results: Optional[ParseResult], internal_manifest=None
+        self,
+        old_results: Optional[ParseResult],
+        internal_manifest: Optional[Manifest] = None,
     ) -> None:
+        projects = self.all_projects
+        if internal_manifest is not None:
+            projects = {
+                k: v for k, v in self.all_projects.items() if k not in PACKAGES
+            }
+            self.results.macros.update(internal_manifest.macros)
+            self.results.files.update(internal_manifest.files)
+
         # TODO: go back to skipping the internal manifest during macro parsing
-        for project in self.all_projects.values():
+        for project in projects.values():
             parser = MacroParser(self.results, project)
             for path in parser.search():
                 self.parse_with_cache(path, parser, old_results)
@@ -110,7 +121,9 @@ class GraphLoader:
             parser.parse_file(block)
 
     def _get_cached(
-        self, block: FileBlock, old_results: Optional[ParseResult]
+        self,
+        block: FileBlock,
+        old_results: Optional[ParseResult],
     ) -> bool:
         # TODO: handle multiple parsers w/ same files, by
         # tracking parser type vs node type? Or tracking actual
@@ -148,11 +161,24 @@ class GraphLoader:
             for path in parser.search():
                 self.parse_with_cache(path, parser, old_results)
 
-    def load(self, internal_manifest=None):
+    def load_only_macros(self) -> Manifest:
+        old_results = self.read_parse_results()
+        self._load_macros(old_results, internal_manifest=None)
+        # make a manifest with just the macros to get the context
+        macro_manifest = Manifest.from_macros(
+            macros=self.results.macros,
+            files=self.results.files
+        )
+        return macro_manifest
+
+    def load(self, internal_manifest: Optional[Manifest] = None):
         old_results = self.read_parse_results()
         self._load_macros(old_results, internal_manifest=internal_manifest)
         # make a manifest with just the macros to get the context
-        macro_manifest = Manifest.from_macros(macros=self.results.macros)
+        macro_manifest = Manifest.from_macros(
+            macros=self.results.macros,
+            files=self.results.files
+        )
 
         for project in self.all_projects.values():
             # parse a single project
@@ -171,14 +197,33 @@ class GraphLoader:
         """
         valid = True
         if self.results.vars_hash != result.vars_hash:
-            logger.debug('vars hash collision, cache invalidated')
+            logger.debug('vars hash mismatch, cache invalidated')
             valid = False
         if self.results.profile_hash != result.profile_hash:
-            logger.debug('profile hash collision, cache invalidated')
+            logger.debug('profile hash mismatch, cache invalidated')
             valid = False
-        if self.results.project_hashes != result.project_hashes:
-            logger.debug('profile hash collision, cache invalidated')
+
+        missing_keys = {
+            k for k in self.results.project_hashes
+            if k not in result.project_hashes
+        }
+        if missing_keys:
+            logger.debug(
+                'project hash mismatch: values missing, cache invalidated: {}'
+                .format(missing_keys)
+            )
             valid = False
+
+        for key, new_value in self.results.project_hashes.items():
+            if key in result.project_hashes:
+                old_value = result.project_hashes[key]
+                if new_value != old_value:
+                    logger.debug(
+                        'For key {}, hash mismatch ({} -> {}), cache '
+                        'invalidated'
+                        .format(key, old_value, new_value)
+                    )
+                    valid = False
         return valid
 
     def read_parse_results(self) -> Optional[ParseResult]:
@@ -205,8 +250,8 @@ class GraphLoader:
 
         return None
 
-    def create_manifest(self):
-        nodes = {}
+    def create_manifest(self) -> Manifest:
+        nodes: Dict[str, CompileResultNode] = {}
         nodes.update(self.results.nodes)
         nodes.update(self.results.sources)
         disabled = []
@@ -234,24 +279,24 @@ class GraphLoader:
         return manifest
 
     @classmethod
-    def _load_from_projects(cls, root_config, projects, internal_manifest):
+    def load_all(
+        cls,
+        root_config: RuntimeConfig,
+        internal_manifest: Optional[Manifest] = None
+    ) -> Manifest:
+        projects = load_all_projects(root_config)
         loader = cls(root_config, projects)
         loader.load(internal_manifest=internal_manifest)
         loader.write_parse_results()
-        return loader.create_manifest()
-
-    @classmethod
-    def load_all(cls, root_config, internal_manifest=None):
-        projects = load_all_projects(root_config)
-        manifest = cls._load_from_projects(root_config, projects,
-                                           internal_manifest)
+        manifest = loader.create_manifest()
         _check_manifest(manifest, root_config)
         return manifest
 
     @classmethod
-    def load_internal(cls, root_config):
+    def load_internal(cls, root_config: RuntimeConfig) -> Manifest:
         projects = load_internal_projects(root_config)
-        return cls._load_from_projects(root_config, projects, None)
+        loader = cls(root_config, projects)
+        return loader.load_only_macros()
 
 
 def _check_resource_uniqueness(manifest):
@@ -328,7 +373,7 @@ def _project_directories(config):
         yield full_obj
 
 
-def load_all_projects(config) -> Dict[str, Project]:
+def load_all_projects(config) -> Mapping[str, Project]:
     all_projects = {config.project_name: config}
     project_paths = itertools.chain(
         internal_project_names(),

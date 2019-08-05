@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import TypeVar, Dict, Mapping, Union, List
+from typing import TypeVar, MutableMapping, Mapping, Union, List
 
 from hologram import JsonSchemaMixin
 
@@ -20,7 +20,9 @@ from dbt.exceptions import (
 ParsedValueType = TypeVar('ParsedValueType', bound=HasUniqueID)
 
 
-def _check_duplicates(value: HasUniqueID, src: Mapping[str, HasUniqueID]):
+def _check_duplicates(
+    value: HasUniqueID, src: Mapping[str, HasUniqueID]
+):
     if value.unique_id in src:
         raise_duplicate_resource_name(value, src[value.unique_id])
 
@@ -36,18 +38,22 @@ ManifestNodes = Union[
 ]
 
 
+def dict_field():
+    return field(default_factory=dict)
+
+
 @dataclass
 class ParseResult(JsonSchemaMixin, Writable):
     vars_hash: FileHash
     profile_hash: FileHash
-    project_hashes: Dict[str, FileHash]
-    nodes: Dict[str, ManifestNodes] = field(default_factory=dict)
-    sources: Dict[str, ParsedSourceDefinition] = field(default_factory=dict)
-    docs: Dict[str, ParsedDocumentation] = field(default_factory=dict)
-    macros: Dict[str, ParsedMacro] = field(default_factory=dict)
-    patches: Dict[str, ParsedNodePatch] = field(default_factory=dict)
-    files: Dict[str, SourceFile] = field(default_factory=dict)
-    disabled: Dict[str, List[ParsedNode]] = field(default_factory=dict)
+    project_hashes: MutableMapping[str, FileHash]
+    nodes: MutableMapping[str, ManifestNodes] = dict_field()
+    sources: MutableMapping[str, ParsedSourceDefinition] = dict_field()
+    docs: MutableMapping[str, ParsedDocumentation] = dict_field()
+    macros: MutableMapping[str, ParsedMacro] = dict_field()
+    patches: MutableMapping[str, ParsedNodePatch] = dict_field()
+    files: MutableMapping[str, SourceFile] = dict_field()
+    disabled: MutableMapping[str, List[ParsedNode]] = dict_field()
 
     def get_file(self, source_file: SourceFile) -> SourceFile:
         key = source_file.search_key
@@ -180,7 +186,7 @@ T = TypeVar('T')
 
 
 def _expect_value(
-    key: str, src: Dict[str, T], old_file: SourceFile, name: str
+    key: str, src: Mapping[str, T], old_file: SourceFile, name: str
 ) -> T:
     if key not in src:
         raise CompilationException(

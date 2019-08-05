@@ -27,10 +27,14 @@ MANIFEST_FILE_NAME = 'manifest.json'
 
 def load_manifest(config):
     # performance trick: if the adapter has a manifest loaded, use that to
-    # avoid parsing internal macros twice.
-    internal_manifest = get_adapter(config).check_internal_manifest()
-    manifest = GraphLoader.load_all(config,
-                                    internal_manifest=internal_manifest)
+    # avoid parsing internal macros twice. Also, when loading the adapter's
+    # manifest, load the internal manifest to avoid running the graph laoder
+    # twice.
+    adapter = get_adapter(config)
+
+    internal = adapter.load_internal_manifest()
+    manifest = GraphLoader.load_all(config, internal_manifest=internal)
+
     if dbt.flags.WRITE_JSON:
         manifest.write(os.path.join(config.target_path, MANIFEST_FILE_NAME))
     return manifest
