@@ -587,12 +587,11 @@ def raise_duplicate_resource_name(node_1, node_2):
     duped_name = node_1.name
 
     if node_1.resource_type in NodeType.refable():
-        getter = 'ref("{}")'
+        get_func = 'ref("{}")'.format(duped_name)
     elif node_1.resource_type == NodeType.Source:
-        getter = 'source("{}")'
+        get_func = 'source("{}", "{}")'.format(node_1.source_name, duped_name)
     elif node_1.resource_type == NodeType.Test and 'schema' in node_1.tags:
         return
-    get_func = getter.format(duped_name)
 
     raise_compiler_error(
         'dbt found two resources with the name "{}". Since these resources '
@@ -651,12 +650,14 @@ def raise_patch_targets_not_found(patches):
 
 def raise_duplicate_patch_name(name, patch_1, patch_2):
     raise_compiler_error(
-        'dbt found two schema.yml entries for the same model named {}. The '
-        'first patch was specified in {} and the second in {}. Models and '
-        'their associated columns may only be described a single time.'.format(
+        'dbt found two schema.yml entries for the same model named {0}. '
+        'Models and their associated columns may only be described a single '
+        'time. To fix this, remove the model entry for for {0} in one of '
+        'these files:\n  - {1}\n  - {2}'
+        .format(
             name,
-            patch_1,
-            patch_2,
+            patch_1.original_file_path,
+            patch_2.original_file_path,
         )
     )
 

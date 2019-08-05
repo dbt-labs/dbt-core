@@ -97,6 +97,11 @@ class CompiledRPCNode(CompiledNode):
 class CompiledSeedNode(CompiledNode):
     resource_type: SeedType
 
+    @property
+    def empty(self):
+        """ Seeds are never empty"""
+        return False
+
 
 @dataclass
 class CompiledSnapshotNode(CompiledNode):

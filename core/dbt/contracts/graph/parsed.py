@@ -241,13 +241,13 @@ class ParsedTestNode(ParsedNode):
 class _SnapshotConfig(NodeConfig):
     unique_key: str
     target_schema: str
-    target_database: str
+    target_database: Optional[str] = None
 
     def __init__(
         self,
         unique_key: str,
-        target_database: str,
         target_schema: str,
+        target_database: Optional[str] = None,
         **kwargs
     ) -> None:
         self.target_database = target_database

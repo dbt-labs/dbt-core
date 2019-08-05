@@ -400,7 +400,7 @@ class ConfiguredParser(
         self.render_update(node, config)
         result = self.transform(node)
         self.add_result_node(block, result)
-        return node
+        return result
 
     @abc.abstractmethod
     def parse_file(self, file_block: FileBlock) -> None:

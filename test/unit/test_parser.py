@@ -419,7 +419,8 @@ class SnapshotParserTest(BaseParserTest):
         expected = ParsedSnapshotNode(
             alias='foo',
             name='foo',
-            database='test',
+            # the `database` entry is overrridden by the target_database config
+            database='dbt',
             schema='analytics',
             resource_type=SnapshotType.Snapshot,
             unique_id='snapshot.snowplow.foo',
@@ -471,7 +472,7 @@ class SnapshotParserTest(BaseParserTest):
         expect_foo = ParsedSnapshotNode(
             alias='foo',
             name='foo',
-            database='test',
+            database='dbt',
             schema='analytics',
             resource_type=SnapshotType.Snapshot,
             unique_id='snapshot.snowplow.foo',
@@ -493,7 +494,7 @@ class SnapshotParserTest(BaseParserTest):
         expect_bar = ParsedSnapshotNode(
             alias='bar',
             name='bar',
-            database='test',
+            database='dbt',
             schema='analytics',
             resource_type=SnapshotType.Snapshot,
             unique_id='snapshot.snowplow.bar',

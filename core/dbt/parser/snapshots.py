@@ -37,10 +37,18 @@ class SnapshotParser(
         return block.path.relative_path
 
     def set_snapshot_attributes(self, node):
+        # use the target_database setting if we got it, otherwise the
+        # `database` value of the node (ultimately sourced from the `database`
+        # config value), and if that is not set, use the database defined in
+        # the adapter's credentials.
         if node.config.target_database:
             node.database = node.config.target_database
-        if node.config.target_schema:
-            node.schema = node.config.target_schema
+        elif not node.database:
+            node.database = self.root_project.credentials.database
+
+        # the target schema must be set if we got here, so overwrite the node's
+        # schema
+        node.schema = node.config.target_schema
 
         return node
 
@@ -59,12 +67,7 @@ class SnapshotParser(
     def transform(self, node: IntermediateSnapshotNode) -> ParsedSnapshotNode:
         try:
             parsed_node = ParsedSnapshotNode.from_dict(node.to_dict())
-
-            if parsed_node.config.target_database:
-                node.database = parsed_node.config.target_database
-            if parsed_node.config.target_schema:
-                parsed_node.schema = parsed_node.config.target_schema
-
+            self.set_snapshot_attributes(parsed_node)
             return parsed_node
 
         except ValidationError as exc:

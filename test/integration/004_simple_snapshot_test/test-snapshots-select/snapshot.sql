@@ -30,10 +30,9 @@
 
 
 {% snapshot snapshot_kelly %}
-
+    {# This has no target_database set, which is allowed! #}
     {{
         config(
-            target_database=var('target_database', database),
             target_schema=schema,
             unique_key='id || ' ~ "'-'" ~ ' || first_name',
             strategy='timestamp',
