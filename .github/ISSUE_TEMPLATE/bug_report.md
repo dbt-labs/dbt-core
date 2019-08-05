@@ -7,32 +7,20 @@ assignees: ''
 
 ---
 
-### Issue description
-
-
-### Results
-What happened? What did you expect to happen?
-
-### 
-
-
-### 
-
-
-**Describe the bug**
+### Describe the bug
 A clear and concise description of what the bug is. What command did you run? What happened?
 
-**To Reproduce**
+### Steps To Reproduce
 In as much detail as possible, please provide steps to reproduce the issue. Sample data that triggers the issue, example model code, etc is all very helpful here.
 
-**Expected behavior**
+### Expected behavior
 A clear and concise description of what you expected to happen.
 
-**Screenshots and log output**
+### Screenshots and log output
 If applicable, add screenshots or log output to help explain your problem.
 
-**System information**
-Which database are you using dbt with?
+### System information
+**Which database are you using dbt with?**
 - [ ] postgres
 - [ ] redshift
 - [ ] bigquery
@@ -40,14 +28,14 @@ Which database are you using dbt with?
 - [ ] other (specify: ____________)
 
 
-The output of `dbt --version`:
+**The output of `dbt --version`:**
 ```
 <output goes here>
 ```
 
-The operating system you're using: <version>:
+**The operating system you're using:**
 
-The output of `python --version`:
+**The output of `python --version`:**
 
-**Additional context**
+### Additional context
 Add any other context about the problem here.
