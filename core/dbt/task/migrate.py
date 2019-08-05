@@ -211,7 +211,7 @@ class MigrationTask(BaseTask):
     def __init__(self, args, config):
         if not args.from_archive:
             raise RuntimeException(
-                'The --from-archive paramteter is required!'
+                'The --from-archive parameter is required!'
             )
         if args.apply:
             args.write_files = True
