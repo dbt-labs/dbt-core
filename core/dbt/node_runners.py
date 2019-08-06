@@ -13,6 +13,7 @@ import dbt.exceptions
 import dbt.utils
 import dbt.tracking
 import dbt.ui.printer
+import dbt.flags
 from dbt import rpc
 
 import threading
@@ -78,7 +79,7 @@ class BaseRunner:
         return result
 
     def _build_run_result(self, node, start_time, error, status, timing_info,
-                          skip=False, fail=None, agate_table=None):
+                          skip=False, fail=None, warn=None, agate_table=None):
         execution_time = time.time() - start_time
         thread_id = threading.current_thread().name
         return RunModelResult(
@@ -87,6 +88,7 @@ class BaseRunner:
             skip=skip,
             status=status,
             fail=fail,
+            warn=warn,
             execution_time=execution_time,
             thread_id=thread_id,
             timing=timing_info,
@@ -119,6 +121,7 @@ class BaseRunner:
             skip=result.skip,
             status=result.status,
             fail=result.fail,
+            warn=result.warn,
             timing_info=timing_info,
             agate_table=result.agate_table,
         )
@@ -457,8 +460,15 @@ class TestRunner(CompileRunner):
         self.print_start_line()
 
     def execute(self, test, manifest):
-        status = self.execute_test(test)
-        return RunModelResult(test, status=status)
+        failed_rows = self.execute_test(test)
+        severity = test.config.severity.upper()
+
+        if failed_rows == 0:
+            return RunModelResult(test, status=failed_rows)
+        elif severity == 'ERROR' or dbt.flags.WARN_ERROR:
+            return RunModelResult(test, status=failed_rows, fail=True)
+        else:
+            return RunModelResult(test, status=failed_rows, warn=True)
 
     def after_execute(self, result):
         self.print_result_line(result)

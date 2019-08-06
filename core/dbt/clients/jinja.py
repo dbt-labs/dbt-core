@@ -1,6 +1,7 @@
 import codecs
 import linecache
 import os
+import tempfile
 
 import jinja2
 import jinja2._compat
@@ -15,6 +16,34 @@ import dbt.utils
 from dbt.clients._jinja_blocks import BlockIterator
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
+
+
+def _linecache_inject(source, write):
+    if write:
+        # this is the only reliable way to accomplish this. Obviously, it's
+        # really darn noisy and will fill your temporary directory
+        tmp_file = tempfile.NamedTemporaryFile(
+            prefix='dbt-macro-compiled-',
+            suffix='.py',
+            delete=False,
+            mode='w+',
+            encoding='utf-8',
+        )
+        tmp_file.write(source)
+        filename = tmp_file.name
+    else:
+        filename = codecs.encode(os.urandom(12), 'hex').decode('ascii')
+
+    # encode, though I don't think this matters
+    filename = jinja2._compat.encode_filename(filename)
+    # put ourselves in the cache
+    linecache.cache[filename] = (
+        len(source),
+        None,
+        [line + '\n' for line in source.splitlines()],
+        filename
+    )
+    return filename
 
 
 class MacroFuzzParser(jinja2.parser.Parser):
@@ -42,22 +71,16 @@ class MacroFuzzEnvironment(jinja2.sandbox.SandboxedEnvironment):
 
     def _compile(self, source, filename):
         """Override jinja's compilation to stash the rendered source inside
-        the python linecache for debugging.
+        the python linecache for debugging when the appropriate environment
+        variable is set.
+
+        If the value is 'write', also write the files to disk.
+        WARNING: This can write a ton of data if you aren't careful.
         """
-        if filename == '<template>':
-            # make a better filename
-            filename = 'dbt-{}'.format(
-                codecs.encode(os.urandom(12), 'hex').decode('ascii')
-            )
-            # encode, though I don't think this matters
-            filename = jinja2._compat.encode_filename(filename)
-            # put ourselves in the cache
-            linecache.cache[filename] = (
-                len(source),
-                None,
-                [line + '\n' for line in source.splitlines()],
-                filename
-            )
+        macro_compile = os.environ.get('DBT_MACRO_DEBUGGING')
+        if filename == '<template>' and macro_compile:
+            write = macro_compile == 'write'
+            filename = _linecache_inject(source, write)
 
         return super()._compile(source, filename)
 

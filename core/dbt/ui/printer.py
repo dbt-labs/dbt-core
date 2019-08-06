@@ -100,7 +100,7 @@ def get_counts(flat_nodes):
         counts[t] = counts.get(t, 0) + 1
 
     stat_line = ", ".join(
-        ["{} {}s".format(v, k) for k, v in counts.items()])
+        [dbt.utils.pluralize(v, k) for k, v in counts.items()])
 
     return stat_line
 
@@ -145,24 +145,21 @@ def get_printable_result(result, success, error):
 
 def print_test_result_line(result, schema_name, index, total):
     model = result.node
-    info = 'PASS'
 
     if result.error is not None:
         info = "ERROR"
         color = red
-
-    elif result.status > 0:
-        severity = result.node.config.severity.upper()
-        if severity == 'ERROR' or dbt.flags.WARN_ERROR:
-            info = 'FAIL {}'.format(result.status)
-            color = red
-            result.fail = True
-        else:
-            info = 'WARN {}'.format(result.status)
-            color = yellow
     elif result.status == 0:
         info = 'PASS'
         color = green
+
+    elif result.warn:
+        info = 'WARN {}'.format(result.status)
+        color = yellow
+
+    elif result.fail:
+        info = 'FAIL {}'.format(result.status)
+        color = red
 
     else:
         raise RuntimeError("unexpected status: {}".format(result.status))
@@ -259,6 +256,8 @@ def interpret_run_result(result):
         return 'error'
     elif result.skipped:
         return 'skip'
+    elif result.warn:
+        return 'warn'
     else:
         return 'pass'
 
@@ -268,6 +267,7 @@ def print_run_status_line(results):
         'error': 0,
         'skip': 0,
         'pass': 0,
+        'warn': 0,
         'total': 0,
     }
 
@@ -276,20 +276,28 @@ def print_run_status_line(results):
         stats[result_type] += 1
         stats['total'] += 1
 
-    stats_line = "\nDone. PASS={pass} ERROR={error} SKIP={skip} TOTAL={total}"
+    stats_line = "\nDone. PASS={pass} WARN={warn} ERROR={error} SKIP={skip} TOTAL={total}"  # noqa
     logger.info(stats_line.format(**stats))
 
 
-def print_run_result_error(result, newline=True):
+def print_run_result_error(result, newline=True, is_warning=False):
     if newline:
         logger.info("")
 
-    if result.fail:
-        logger.info(yellow("Failure in {} {} ({})").format(
+    if result.fail or (is_warning and result.warn):
+        if is_warning:
+            color = yellow
+            info = 'Warning'
+        else:
+            color = red
+            info = 'Failure'
+        logger.info(color("{} in {} {} ({})").format(
+            info,
             result.node.resource_type,
             result.node.name,
             result.node.original_file_path))
-        logger.info("  Got {} results, expected 0.".format(result.status))
+        status = dbt.utils.pluralize(result.status, 'result')
+        logger.info("  Got {}, expected 0.".format(status))
 
         if result.node.build_path is not None:
             logger.info("")
@@ -314,11 +322,16 @@ def print_skip_caused_by_error(model, schema, relation, index, num_models,
     print_run_result_error(result, newline=False)
 
 
-def print_end_of_run_summary(num_errors, early_exit=False):
+def print_end_of_run_summary(num_errors, num_warnings, early_exit=False):
+    error_plural = dbt.utils.pluralize(num_errors, 'error')
+    warn_plural = dbt.utils.pluralize(num_warnings, 'warning')
     if early_exit:
         message = yellow('Exited because of keyboard interrupt.')
     elif num_errors > 0:
-        message = red('Completed with {} errors:'.format(num_errors))
+        message = red("Completed with {} and {}:".format(
+            error_plural, warn_plural))
+    elif num_warnings > 0:
+        message = yellow('Completed with {}:'.format(warn_plural))
     else:
         message = green('Completed successfully')
 
@@ -328,9 +341,13 @@ def print_end_of_run_summary(num_errors, early_exit=False):
 
 def print_run_end_messages(results, early_exit=False):
     errors = [r for r in results if r.error is not None or r.fail]
-    print_end_of_run_summary(len(errors), early_exit)
+    warnings = [r for r in results if r.warn]
+    print_end_of_run_summary(len(errors), len(warnings), early_exit)
 
     for error in errors:
-        print_run_result_error(error)
+        print_run_result_error(error, is_warning=False)
+
+    for warning in warnings:
+        print_run_result_error(warning, is_warning=True)
 
     print_run_status_line(results)

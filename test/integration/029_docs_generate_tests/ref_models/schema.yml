@@ -28,4 +28,4 @@ sources:
           identifier: True
         columns:
           - name: id
-            description: "An ID field"
+            description: "{{ doc('column_info') }}"

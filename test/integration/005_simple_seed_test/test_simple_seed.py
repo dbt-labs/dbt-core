@@ -193,3 +193,25 @@ class TestSimpleSeedWithBOM(DBTIntegrationTest):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         self.assertTablesEqual("seed_bom", "seed_expected")
+
+
+class TestSimpleSeedWithUnicode(DBTIntegrationTest):
+
+    @property
+    def schema(self):
+        return "simple_seed_005"
+
+    @property
+    def models(self):
+        return "models"
+
+    @property
+    def project_config(self):
+        return {
+            "data-paths": ['data-unicode']
+        }
+
+    @use_profile('postgres')
+    def test_simple_seed(self):
+        results = self.run_dbt(["seed"])
+        self.assertEqual(len(results),  1)

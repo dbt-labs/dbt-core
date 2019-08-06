@@ -1,6 +1,8 @@
 from codecs import BOM_UTF8
 
 import agate
+import json
+
 
 BOM = BOM_UTF8.decode('utf-8')  # '\ufeff'
 
@@ -29,6 +31,22 @@ def table_from_data(data, column_names):
     else:
         table = agate.Table.from_object(data, column_types=DEFAULT_TYPE_TESTER)
         return table.select(column_names)
+
+
+def table_from_data_flat(data, column_names):
+    "Convert list of dictionaries into an Agate table"
+
+    rows = []
+    for _row in data:
+        row = []
+        for value in list(_row.values()):
+            if isinstance(value, (dict, list, tuple)):
+                row.append(json.dumps(value))
+            else:
+                row.append(value)
+        rows.append(row)
+
+    return agate.Table(rows, column_names)
 
 
 def empty_table():

@@ -114,6 +114,9 @@ class FreshnessThreshold(JsonSchemaMixin, Mergeable):
         else:
             return FreshnessStatus.Pass
 
+    def __bool__(self):
+        return self.warn_after is not None or self.error_after is not None
+
 
 @dataclass
 class Quoting(JsonSchemaMixin, Mergeable):
@@ -127,7 +130,9 @@ class UnparsedSourceTableDefinition(ColumnDescription, NodeDescription):
     loaded_at_field: Optional[str] = None
     identifier: Optional[str] = None
     quoting: Quoting = field(default_factory=Quoting)
-    freshness: FreshnessThreshold = field(default_factory=FreshnessThreshold)
+    freshness: Optional[FreshnessThreshold] = field(
+        default_factory=FreshnessThreshold
+    )
 
     def __post_init__(self):
         NodeDescription.__post_init__(self)
@@ -142,7 +147,9 @@ class UnparsedSourceDefinition(JsonSchemaMixin, Replaceable):
     schema: Optional[str] = None
     loader: str = ''
     quoting: Quoting = field(default_factory=Quoting)
-    freshness: FreshnessThreshold = field(default_factory=FreshnessThreshold)
+    freshness: Optional[FreshnessThreshold] = field(
+        default_factory=FreshnessThreshold
+    )
     loaded_at_field: Optional[str] = None
     tables: List[UnparsedSourceTableDefinition] = field(default_factory=list)
 

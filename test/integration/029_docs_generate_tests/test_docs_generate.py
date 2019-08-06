@@ -1281,16 +1281,21 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'database': self.default_database,
                     'description': 'My table',
                     'docrefs': [
-                         {
+                        {
+                            'documentation_package': '',
+                            'documentation_name': 'column_info',
+                            'column_name': 'id',
+                        },
+                        {
                             'column_name': None,
                             'documentation_name': 'table_info',
                             'documentation_package': '',
-                         },
-                         {
+                        },
+                        {
                             'column_name': None,
                             'documentation_name': 'source_info',
                             'documentation_package': '',
-                         }
+                        },
                      ],
                     'freshness': {'error_after': None, 'warn_after': None},
                     'identifier': 'seed',
@@ -1311,6 +1316,16 @@ class TestDocsGenerate(DBTIntegrationTest):
             },
             'docs': {
                 'dbt.__overview__': ANY,
+                'test.column_info': {
+                    'block_contents': 'An ID field',
+                    'file_contents': docs_file,
+                    'name': 'column_info',
+                    'original_file_path': docs_path,
+                    'package_name': 'test',
+                    'path': 'docs.md',
+                    'root_path': OneOf(self.test_root_dir, self.initial_dir),
+                    'unique_id': 'test.column_info',
+                },
                 'test.ephemeral_summary': {
                     'block_contents': (
                         'A summmary table of the ephemeral copy of the seed data'
@@ -1321,7 +1336,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'path': 'docs.md',
                     'root_path': OneOf(self.test_root_dir, self.initial_dir),
-                    'unique_id': 'test.ephemeral_summary'
+                    'unique_id': 'test.ephemeral_summary',
                 },
                 'test.source_info': {
                     'block_contents': 'My source',
@@ -1341,7 +1356,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'path': 'docs.md',
                     'root_path': OneOf(self.test_root_dir, self.initial_dir),
-                    'unique_id': 'test.summary_count'
+                    'unique_id': 'test.summary_count',
                 },
                 'test.summary_first_name': {
                     'block_contents': 'The first name being summarized',
@@ -1351,7 +1366,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'path': 'docs.md',
                     'root_path': OneOf(self.test_root_dir, self.initial_dir),
-                    'unique_id': 'test.summary_first_name'
+                    'unique_id': 'test.summary_first_name',
                 },
                 'test.table_info': {
                     'block_contents': 'My table',
@@ -1361,7 +1376,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'path': 'docs.md',
                     'root_path': OneOf(self.test_root_dir, self.initial_dir),
-                    'unique_id': 'test.table_info'
+                    'unique_id': 'test.table_info',
                 },
                 'test.view_summary': {
                     'block_contents': (
@@ -1374,7 +1389,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'package_name': 'test',
                     'path': 'docs.md',
                     'root_path': OneOf(self.test_root_dir, self.initial_dir),
-                    'unique_id': 'test.view_summary'
+                    'unique_id': 'test.view_summary',
                 },
             },
             'child_map': {
@@ -1878,6 +1893,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'error': None,
                 'execution_time': AnyFloat(),
                 'fail': None,
+                'warn': None,
                 'node': {
                     'alias': 'model',
                     'build_path': _normalize(
@@ -1929,6 +1945,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'error': None,
                 'execution_time': AnyFloat(),
                 'fail': None,
+                'warn': None,
                 'node': {
                     'alias': 'seed',
                     'build_path': _normalize(
@@ -1980,6 +1997,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'error': None,
                 'execution_time': AnyFloat(),
                 'fail': None,
+                'warn': None,
                 'node': {
                     'alias': 'not_null_model_id',
                     'build_path': _normalize('target/compiled/test/schema_test/not_null_model_id.sql'),
@@ -2031,6 +2049,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'error': None,
                 'execution_time': AnyFloat(),
                 'fail': None,
+                'warn': None,
                 'node': {
                     'alias': 'nothing_model_',
                     'build_path': _normalize('target/compiled/test/schema_test/nothing_model_.sql'),
@@ -2082,6 +2101,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'error': None,
                 'execution_time': AnyFloat(),
                 'fail': None,
+                'warn': None,
                 'node': {
                     'alias': 'unique_model_id',
                     'build_path': _normalize('target/compiled/test/schema_test/unique_model_id.sql'),
@@ -2160,6 +2180,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'error': None,
                 'execution_time': AnyFloat(),
                 'fail': None,
+                'warn': None,
                 'node': {
                     'alias': 'ephemeral_summary',
                     'build_path': _normalize(
@@ -2248,6 +2269,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'error': None,
                 'execution_time': AnyFloat(),
                 'fail': None,
+                'warn': None,
                 'node': {
                     'alias': 'view_summary',
                     'build_path': _normalize(
@@ -2335,6 +2357,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'error': None,
                 'execution_time': AnyFloat(),
                 'fail': None,
+                'warn': None,
                 'node': {
                     'alias': 'seed',
                     'build_path': _normalize(
