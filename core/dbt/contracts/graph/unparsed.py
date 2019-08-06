@@ -245,9 +245,7 @@ class UnparsedSourceTableDefinition(HasColumnTests, HasTests):
     loaded_at_field: Optional[str] = None
     identifier: Optional[str] = None
     quoting: Quoting = field(default_factory=Quoting)
-    freshness: Optional[FreshnessThreshold] = field(
-        default_factory=FreshnessThreshold
-    )
+    freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
     external: Optional[ExternalTable] = None
     tags: List[str] = field(default_factory=list)
 
@@ -267,9 +265,7 @@ class UnparsedSourceDefinition(dbtClassMixin, Replaceable):
     schema: Optional[str] = None
     loader: str = ""
     quoting: Quoting = field(default_factory=Quoting)
-    freshness: Optional[FreshnessThreshold] = field(
-        default_factory=FreshnessThreshold
-    )
+    freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
     loaded_at_field: Optional[str] = None
     tables: List[UnparsedSourceTableDefinition] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
