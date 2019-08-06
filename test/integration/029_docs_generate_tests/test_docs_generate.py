@@ -1109,6 +1109,9 @@ class TestDocsGenerate(DBTIntegrationTest):
         view_summary = LineIndifferent(
             '{% docs view_summary %}\nA view of the summary of the ephemeral copy of the seed data\n{% enddocs %}'
         )
+        column_info = LineIndifferent(
+            '{% docs column_info %}\nAn ID field\n{% enddocs %}'
+        )
 
         return {
             'nodes': {
@@ -1370,7 +1373,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                 'dbt.__overview__': ANY,
                 'test.column_info': {
                     'block_contents': 'An ID field',
-                    'file_contents': docs_file,
+                    'file_contents': column_info,
                     'name': 'column_info',
                     'original_file_path': docs_path,
                     'package_name': 'test',
@@ -1521,7 +1524,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'test.summary_count',
                         'test.view_summary',
                         'test.source_info',
-                        'test.table_info'
+                        'test.table_info',
+                        'test.column_info',
                     ],
                     'macros': [],
                     'nodes': [],

@@ -267,6 +267,22 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
         if isinstance(test, str):
             test = {test: {}}
 
+        block = SchemaTestBlock.from_target_block(
+            src=target_block,
+            test=test,
+            column_name=column_name
+        )
+        try:
+            self.parse_node(block)
+        except CompilationException as exc:
+            context = _trimmed(str(block.target))
+            msg = (
+                'Compilation warning: Invalid test config given in {}:'
+                '\n\t{}\n\t@: {}'
+                .format(block.path.original_file_path, exc.msg, context)
+            )
+            warn_or_error(msg, None)
+
     def _calculate_freshness(
         self,
         source: UnparsedSourceDefinition,
