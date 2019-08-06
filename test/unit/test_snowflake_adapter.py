@@ -160,7 +160,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
                 account='test_account', autocommit=False,
                 client_session_keep_alive=False, database='test_database',
                 role=None, schema='public', user='test_user',
-                warehouse='test_warehouse', private_key=None)
+                warehouse='test_warehouse', private_key=None, application='dbt')
         ])
 
     def test_client_session_keep_alive_true(self):
@@ -174,7 +174,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
                 account='test_account', autocommit=False,
                 client_session_keep_alive=True, database='test_database',
                 role=None, schema='public', user='test_user',
-                warehouse='test_warehouse', private_key=None)
+                warehouse='test_warehouse', private_key=None, application='dbt')
         ])
 
     def test_user_pass_authentication(self):
@@ -189,7 +189,8 @@ class TestSnowflakeAdapter(unittest.TestCase):
                 account='test_account', autocommit=False,
                 client_session_keep_alive=False, database='test_database',
                 password='test_password', role=None, schema='public',
-                user='test_user', warehouse='test_warehouse', private_key=None)
+                user='test_user', warehouse='test_warehouse', private_key=None,
+                application='dbt')
         ])
 
     def test_authenticator_user_pass_authentication(self):
@@ -206,7 +207,8 @@ class TestSnowflakeAdapter(unittest.TestCase):
                 client_session_keep_alive=False, database='test_database',
                 password='test_password', role=None, schema='public',
                 user='test_user', warehouse='test_warehouse',
-                authenticator='test_sso_url', private_key=None)
+                authenticator='test_sso_url', private_key=None,
+                application='dbt')
         ])
 
     def test_authenticator_externalbrowser_authentication(self):
@@ -222,7 +224,7 @@ class TestSnowflakeAdapter(unittest.TestCase):
                 client_session_keep_alive=False, database='test_database',
                 role=None, schema='public', user='test_user',
                 warehouse='test_warehouse', authenticator='externalbrowser',
-                private_key=None)
+                private_key=None, application='dbt')
         ])
 
     @mock.patch('dbt.adapters.snowflake.SnowflakeCredentials._get_private_key', return_value='test_key')
@@ -240,5 +242,6 @@ class TestSnowflakeAdapter(unittest.TestCase):
                 account='test_account', autocommit=False,
                 client_session_keep_alive=False, database='test_database',
                 role=None, schema='public', user='test_user',
-                warehouse='test_warehouse', private_key='test_key')
+                warehouse='test_warehouse', private_key='test_key',
+                application='dbt')
         ])

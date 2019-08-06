@@ -15,8 +15,8 @@ class Mergeable(Replaceable):
         """
         replacements = {}
         cls = type(self)
-        for field in dataclasses.fields(cls):
-            for arg in args:
+        for arg in args:
+            for field in dataclasses.fields(cls):
                 value = getattr(arg, field.name)
                 if value is not None:
                     replacements[field.name] = value

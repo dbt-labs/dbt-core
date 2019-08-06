@@ -412,7 +412,7 @@ class ParsedSourceDefinition(
     resource_type: SourceType
     quoting: Quoting = field(default_factory=Quoting)
     loaded_at_field: Optional[str] = None
-    freshness: FreshnessThreshold = field(default_factory=FreshnessThreshold)
+    freshness: Optional[FreshnessThreshold] = None
     docrefs: List[Docref] = field(default_factory=list)
     description: str = ''
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)

@@ -212,6 +212,8 @@ class TestSourceFreshness(BaseSourcesTest):
 
         last_inserted_time = self.last_inserted_time
 
+        self.assertEqual(len(data['sources']), 1)
+
         self.assertEqual(data['sources'], {
             'source.test.test_source.test_table': {
                 'max_loaded_at': last_inserted_time,

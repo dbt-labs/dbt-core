@@ -47,6 +47,9 @@ sources:
               field: favorite_color
       - name: other_test_table
         identifier: other_table
+      - name: disabled_test_table
+        freshness: null
+        loaded_at_field: updated_at
   - name: other_source
     schema: "{{ var('test_run_schema') }}"
     quoting:

@@ -115,7 +115,7 @@
 {% endmacro %}
 
 {% macro default__get_columns_in_relation(relation) -%}
-  {{ dbt.exceptions.raise_not_implemented(
+  {{ exceptions.raise_not_implemented(
     'get_columns_in_relation macro not implemented for adapter '+adapter.type()) }}
 {% endmacro %}
 
@@ -224,7 +224,7 @@
 
 
 {% macro default__list_relations_without_caching(information_schema, schema) %}
-  {{ dbt.exceptions.raise_not_implemented(
+  {{ exceptions.raise_not_implemented(
     'list_relations_without_caching macro not implemented for adapter '+adapter.type()) }}
 {% endmacro %}
 
@@ -235,7 +235,7 @@
 
 
 {% macro default__current_timestamp() -%}
-  {{ dbt.exceptions.raise_not_implemented(
+  {{ exceptions.raise_not_implemented(
     'current_timestamp macro not implemented for adapter '+adapter.type()) }}
 {%- endmacro %}
 

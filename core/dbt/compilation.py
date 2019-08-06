@@ -34,21 +34,21 @@ def _compiled_type_for(model: ParsedNode):
 
 def print_compile_stats(stats):
     names = {
-        NodeType.Model: 'models',
-        NodeType.Test: 'tests',
-        NodeType.Snapshot: 'snapshots',
-        NodeType.Analysis: 'analyses',
-        NodeType.Macro: 'macros',
-        NodeType.Operation: 'operations',
-        NodeType.Seed: 'seed files',
-        NodeType.Source: 'sources',
+        NodeType.Model: 'model',
+        NodeType.Test: 'test',
+        NodeType.Snapshot: 'snapshot',
+        NodeType.Analysis: 'analyse',
+        NodeType.Macro: 'macro',
+        NodeType.Operation: 'operation',
+        NodeType.Seed: 'seed file',
+        NodeType.Source: 'source',
     }
 
     results = {k: 0 for k in names.keys()}
     results.update(stats)
 
     stat_line = ", ".join(
-        ["{} {}".format(ct, names.get(t)) for t, ct in results.items()])
+        [dbt.utils.pluralize(ct, names.get(t)) for t, ct in results.items()])
 
     logger.notice("Found {}".format(stat_line))
 

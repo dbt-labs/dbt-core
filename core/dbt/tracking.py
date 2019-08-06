@@ -13,8 +13,6 @@ import requests
 import yaml
 import os
 
-import dbt.clients.system
-
 sp_logger.setLevel(100)
 
 COLLECTOR_URL = "fishtownanalytics.sinter-collect.com"
@@ -89,12 +87,22 @@ class User:
         tracker.set_subject(subject)
 
     def set_cookie(self):
+        # If the user points dbt to a profile directory which exists AND
+        # contains a profiles.yml file, then we can set a cookie. If the
+        # specified folder does not exist, or if there is not a profiles.yml
+        # file in this folder, then an inconsistent cookie can be used. This
+        # will change in every dbt invocation until the user points to a
+        # profile dir file which contains a valid profiles.yml file.
+        #
+        # See: https://github.com/fishtown-analytics/dbt/issues/1645
+
         user = {"id": str(uuid.uuid4())}
 
-        dbt.clients.system.make_directory(self.cookie_dir)
-
-        with open(self.cookie_path, "w") as fh:
-            yaml.dump(user, fh)
+        cookie_path = os.path.abspath(self.cookie_dir)
+        profiles_file = os.path.join(cookie_path, 'profiles.yml')
+        if os.path.exists(cookie_path) and os.path.exists(profiles_file):
+            with open(self.cookie_path, "w") as fh:
+                yaml.dump(user, fh)
 
         return user
 

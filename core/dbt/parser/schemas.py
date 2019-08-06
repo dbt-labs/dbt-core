@@ -3,6 +3,7 @@ import itertools
 import os
 import re
 import hashlib
+from typing import Optional
 
 from hologram import ValidationError
 
@@ -14,16 +15,15 @@ import dbt.clients.yaml_helper
 import dbt.context.parser
 import dbt.contracts.project
 
-from dbt.contracts.graph.parsed import ColumnInfo, Docref
 from dbt.context.common import generate_config_context
 from dbt.clients.jinja import get_rendered
 from dbt.node_types import NodeType
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import get_pseudo_test_path
 from dbt.contracts.graph.unparsed import UnparsedNode, UnparsedNodeUpdate, \
-    UnparsedSourceDefinition
+    UnparsedSourceDefinition, UnparsedSourceTableDefinition, FreshnessThreshold
 from dbt.contracts.graph.parsed import ParsedNodePatch, ParsedTestNode, \
-    ParsedSourceDefinition, ParsedNode
+    ParsedSourceDefinition, ParsedNode, ColumnInfo, Docref
 from dbt.parser.base import MacrosKnownParser
 from dbt.config.renderer import ConfigRenderer
 from dbt.exceptions import JSONValidationException, validator_error_message
@@ -443,6 +443,22 @@ class SchemaSourceParser(SchemaBaseTestParser):
     def get_path(self, *parts):
         return '.'.join(str(s) for s in parts)
 
+    def _calculate_freshness(
+        self,
+        source: UnparsedSourceDefinition,
+        table: UnparsedSourceTableDefinition,
+    ) -> Optional[FreshnessThreshold]:
+        # if both are non-none, merge them. If both are None, the freshness is
+        # None. If just table.freshness is None, the user disabled freshness
+        # for the table.
+        # the result should be None as the user explicitly disabled freshness.
+        if source.freshness is not None and table.freshness is not None:
+            return source.freshness.merged(table.freshness)
+        elif source.freshness is None and table.freshness is not None:
+            return table.freshness
+        else:
+            return None
+
     def generate_source_node(self, source, table, path, package_name, root_dir,
                              refs):
         unique_id = self.get_path(NodeType.Source, package_name,
@@ -455,8 +471,8 @@ class SchemaSourceParser(SchemaBaseTestParser):
         get_rendered(source_description, context)
 
         loaded_at_field = table.loaded_at_field or source.loaded_at_field
-        freshness = source.freshness.merged(table.freshness)
 
+        freshness = self._calculate_freshness(source, table)
         quoting = source.quoting.merged(table.quoting)
 
         default_database = self.root_project_config.credentials.database

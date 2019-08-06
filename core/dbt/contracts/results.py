@@ -47,6 +47,7 @@ class PartialResult(JsonSchemaMixin, Writable):
     thread_id: Optional[int] = 0
     timing: List[TimingInfo] = field(default_factory=list)
     fail: Optional[bool] = None
+    warn: Optional[bool] = None
 
     # if the result got to the point where it could be skipped/failed, we would
     # be returning a real result, not a partial.

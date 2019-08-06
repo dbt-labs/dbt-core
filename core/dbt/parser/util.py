@@ -113,9 +113,6 @@ class ParserUtils:
         reference to the dict that refers to the given column, creating it if
         it doesn't yet exist.
         """
-        # if not hasattr(node, 'columns'):
-        #     node.set('columns', {})
-
         if column_name in node.columns:
             column = node.columns[column_name]
         else:
@@ -156,6 +153,11 @@ class ParserUtils:
                                                             context)
         source.description = table_description
         source.source_description = source_description
+
+        for column_name, column_def in source.columns.items():
+            column_desc = column_def.description or ''
+            column_desc = dbt.clients.jinja.get_rendered(column_desc, context)
+            column_def.description = column_desc
 
     @classmethod
     def process_docs(cls, manifest, current_project):

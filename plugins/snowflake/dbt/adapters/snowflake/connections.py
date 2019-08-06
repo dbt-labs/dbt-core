@@ -119,6 +119,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
                 role=creds.role,
                 autocommit=False,
                 client_session_keep_alive=creds.client_session_keep_alive,
+                application='dbt',
                 **creds.auth_args()
             )
 

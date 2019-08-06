@@ -244,7 +244,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
     def test_defaults(self):
         minimum = self.ContractType(name='foo')
         self.assert_from_dict(minimum, {'name': 'foo'})
-        self.assert_to_dict(minimum, {'name': 'foo', 'description': '', 'quoting': {}, 'freshness': {}, 'tables': [], 'loader': ''})
+        self.assert_to_dict(minimum, {'name': 'foo', 'description': '', 'freshness': {}, 'quoting': {}, 'tables': [], 'loader': ''})
 
     def test_contents(self):
         empty = self.ContractType(
@@ -291,8 +291,8 @@ class TestUnparsedSourceDefinition(ContractTestCase):
             'name': 'foo',
             'description': '',
             'loader': '',
-            'quoting': {},
             'freshness': {},
+            'quoting': {},
             'tables': [
                 {
                     'name': 'table1',

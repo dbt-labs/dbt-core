@@ -501,3 +501,10 @@ def translate_aliases(kwargs, aliases):
         result[canonical_key] = value
 
     return result
+
+
+def pluralize(count, string):
+    if count == 1:
+        return "{} {}".format(count, string)
+    else:
+        return "{} {}s".format(count, string)
