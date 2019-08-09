@@ -195,9 +195,14 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         job_config = google.cloud.bigquery.QueryJobConfig()
         job_config.use_legacy_sql = False
+
         priority = conn.credentials.get('priority', 'interactive')
-        job_config.priority = google.cloud.bigquery.QueryPriority.BATCH if priority == 'batch' \
-                              else google.cloud.bigquery.QueryPriority.INTERACTIVE
+        if priority == "batch":
+            job_config.priority = google.cloud.bigquery.QueryPriority.BATCH
+        else:
+            job_config.priority = \
+                google.cloud.bigquery.QueryPriority.INTERACTIVE
+
         query_job = client.query(sql, job_config)
 
         # this blocks until the query has completed
