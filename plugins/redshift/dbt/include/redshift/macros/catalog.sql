@@ -60,7 +60,7 @@
 
     ),
 
-    columns as (
+    table_columns as (
 
         select
             '{{ database }}'::varchar as table_database,
@@ -74,7 +74,7 @@
             null::varchar as column_comment
 
 
-        from information_schema.columns
+        from information_schema."columns"
 
     ),
 
@@ -82,7 +82,7 @@
 
         select *
         from tables
-        join columns using (table_database, table_schema, table_name)
+        join table_columns using (table_database, table_schema, table_name)
 
         union all
 
