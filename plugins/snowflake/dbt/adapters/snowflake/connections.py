@@ -1,6 +1,8 @@
 import re
 from io import StringIO
 from contextlib import contextmanager
+import datetime
+import pytz
 
 import snowflake.connector
 import snowflake.connector.errors
@@ -196,6 +198,27 @@ class SnowflakeConnectionManager(SQLConnectionManager):
             encoding=serialization.Encoding.DER,
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption())
+
+    @classmethod
+    def process_results(cls, column_names, rows):
+        # Override for Snowflake. The datetime objects returned by
+        # snowflake-connector-python are not pickleable, so we need
+        # to replace them with sane timezones
+        fixed = []
+        for row in rows:
+            fixed_row = []
+            for col in row:
+                if isinstance(col, datetime.datetime) and col.tzinfo:
+                    offset = col.utcoffset()
+                    offset_seconds = offset.total_seconds()
+                    new_timezone = pytz.FixedOffset(offset_seconds // 60)
+                    col = col.astimezone(tz=new_timezone)
+                fixed_row.append(col)
+
+            fixed.append(fixed_row)
+
+        return super(SnowflakeConnectionManager, cls).process_results(
+            column_names, fixed)
 
     def add_query(self, sql, auto_begin=True,
                   bindings=None, abridge_sql_log=False):
