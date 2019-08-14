@@ -48,8 +48,18 @@
     {{ make_hook_config(sql, inside_transaction=False) }}
 {% endmacro %}
 
+
 {% macro drop_relation_if_exists(relation) %}
   {% if relation is not none %}
     {{ adapter.drop_relation(relation) }}
   {% endif %}
+{% endmacro %}
+
+
+{% macro load_relation(relation) %}
+  {% do return(adapter.get_relation(
+    database=relation.database,
+    schema=relation.schema,
+    identifier=relation.identifier
+  )) -%}
 {% endmacro %}
