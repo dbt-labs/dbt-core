@@ -217,6 +217,7 @@
 
       {% set staging_table = build_snapshot_staging_table(strategy, sql, target_relation) %}
 
+      -- this may no-op if the database does not require column expansion
       {% do adapter.expand_target_column_types(from_relation=staging_table,
                                                to_relation=target_relation) %}
 

@@ -40,3 +40,7 @@ class SnowflakeAdapter(SQLAdapter):
         return filter_null_values({'identifier': identifier,
                                    'schema': schema,
                                    'database': database})
+
+    def expand_target_column_types(self, from_relation, to_relation):
+        # This is a no-op on Snowflake
+        pass

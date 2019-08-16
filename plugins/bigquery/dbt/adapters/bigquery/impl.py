@@ -118,6 +118,10 @@ class BigQueryAdapter(BaseAdapter):
         # This is a no-op on BigQuery
         pass
 
+    def expand_target_column_types(self, from_relation, to_relation):
+        # This is a no-op on BigQuery
+        pass
+
     def list_relations_without_caching(self, information_schema, schema):
         connection = self.connections.get_thread_connection()
         client = connection.handle
