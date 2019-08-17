@@ -4,8 +4,8 @@
   {%- set enable_automatic_clustering = config.get('automatic_clustering', default=false) -%}
   {%- if cluster_by_keys is not none and cluster_by_keys is string -%}
     {%-  set cluster_by_keys = [cluster_by_keys] -%}
-    {%- set cluster_by_string = cluster_by_keys|join(", ")-%}
   {%- endif -%}
+  {%- set cluster_by_string = cluster_by_keys|join(", ")-%}
 
       create or replace {% if temporary -%}
         temporary
