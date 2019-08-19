@@ -3,9 +3,13 @@
   {%- set cluster_by_keys = config.get('cluster_by', default=none) -%}
   {%- set enable_automatic_clustering = config.get('automatic_clustering', default=false) -%}
   {%- if cluster_by_keys is not none and cluster_by_keys is string -%}
-    {%-  set cluster_by_keys = [cluster_by_keys] -%}
+    {%- set cluster_by_keys = [cluster_by_keys] -%}
   {%- endif -%}
-  {%- set cluster_by_string = cluster_by_keys|join(", ")-%}
+  {%- if cluster_by_keys is not none -%}
+    {%- set cluster_by_string = cluster_by_keys|join(", ")-%}
+  {% else %}
+    {%- set cluster_by_string = none -%}
+  {%- endif -%}
 
       create or replace {% if temporary -%}
         temporary
@@ -13,7 +17,7 @@
         transient
       {%- endif %} table {{ relation }}
       as (
-        {%- if cluster_by_keys is not none -%}
+        {%- if cluster_by_string is not none -%}
           select * from(
             {{ sql }}
             ) order by ({{ cluster_by_string }})
@@ -21,7 +25,7 @@
           {{ sql }}
         {%- endif %}
       );
-    {% if cluster_by_keys is not none -%}
+    {% if cluster_by_string is not none -%}
       alter table {{relation}} cluster by ({{cluster_by_string}});
     {%- endif -%}
     {% if enable_automatic_clustering  -%}
