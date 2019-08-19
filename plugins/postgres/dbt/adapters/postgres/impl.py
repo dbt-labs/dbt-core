@@ -14,6 +14,8 @@ class PostgresAdapter(SQLAdapter):
     ConnectionManager = PostgresConnectionManager
     Column = PostgresColumn
 
+    AdapterSpecificConfigs = frozenset({'unlogged'})
+
     @classmethod
     def date_function(cls):
         return 'now()'
