@@ -90,3 +90,10 @@
     alter table {{ from_relation }} rename to {{ to_relation }}
   {%- endcall %}
 {% endmacro %}
+
+
+{% macro snowflake__alter_column_type(relation, column_name, new_column_type) -%}
+  {% call statement('alter_column_type') %}
+    alter table {{ relation }} alter {{ column_name }} set data type {{ new_column_type }};
+  {% endcall %}
+{% endmacro %}
