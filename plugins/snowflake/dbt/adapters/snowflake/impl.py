@@ -40,4 +40,3 @@ class SnowflakeAdapter(SQLAdapter):
         return filter_null_values({'identifier': identifier,
                                    'schema': schema,
                                    'database': database})
-
