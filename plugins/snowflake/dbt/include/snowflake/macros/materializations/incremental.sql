@@ -50,6 +50,8 @@
        {{ create_table_as(true, tmp_relation, sql) }}
     {%- endcall -%}
 
+    {{ adapter.expand_target_column_types(from_relation=tmp_relation,
+                                          to_relation=target_relation) }}
     {% set dest_columns = adapter.get_columns_in_relation(target_relation) %}
     {%- call statement('main') -%}
       {% if strategy == 'merge' %}

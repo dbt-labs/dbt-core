@@ -41,6 +41,3 @@ class SnowflakeAdapter(SQLAdapter):
                                    'schema': schema,
                                    'database': database})
 
-    def expand_target_column_types(self, from_relation, to_relation):
-        # This is a no-op on Snowflake
-        pass
