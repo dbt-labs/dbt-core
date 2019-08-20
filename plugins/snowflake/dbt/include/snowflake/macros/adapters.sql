@@ -25,10 +25,10 @@
           {{ sql }}
         {%- endif %}
       );
-    {% if cluster_by_string is not none -%}
+    {% if cluster_by_string is not none and not temporary -%}
       alter table {{relation}} cluster by ({{cluster_by_string}});
     {%- endif -%}
-    {% if enable_automatic_clustering and cluster_by_string is not none  -%}
+    {% if enable_automatic_clustering and cluster_by_string is not none and not temporary  -%}
       alter table {{relation}} resume recluster;
     {%- endif -%}
 
