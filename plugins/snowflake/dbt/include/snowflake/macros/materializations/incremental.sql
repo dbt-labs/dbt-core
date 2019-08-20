@@ -42,6 +42,7 @@
 
     {%- call statement('main') -%}
       {{ create_table_as(false, target_relation, sql) }}
+
     {%- endcall -%}
 
   {%- else -%}
