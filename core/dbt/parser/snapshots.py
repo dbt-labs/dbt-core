@@ -1,92 +1,87 @@
-
-from dbt.contracts.graph.parsed import ParsedSnapshotNode, \
-    IntermediateSnapshotNode
-from dbt.exceptions import CompilationException, validator_error_message
-from dbt.node_types import NodeType
-from dbt.parser.base_sql import BaseSqlParser, SQLParseResult
-import dbt.clients.jinja
-import dbt.utils
+import os
+from typing import List
 
 from hologram import ValidationError
 
+from dbt.contracts.graph.parsed import (
+    IntermediateSnapshotNode, ParsedSnapshotNode
+)
+from dbt.exceptions import (
+    CompilationException, validator_error_message
+)
+from dbt.node_types import NodeType
+from dbt.parser.base import SQLParser
+from dbt.parser.search import (
+    FilesystemSearcher, BlockContents, BlockSearcher, FileBlock
+)
+from dbt.utils import split_path
 
-def set_snapshot_attributes(node):
-    if node.config.target_database:
-        node.database = node.config.target_database
-    if node.config.target_schema:
+
+class SnapshotParser(
+    SQLParser[IntermediateSnapshotNode, ParsedSnapshotNode]
+):
+    def get_paths(self):
+        return FilesystemSearcher(
+            self.project, self.project.snapshot_paths, '.sql'
+        )
+
+    def parse_from_dict(self, dct, validate=True) -> IntermediateSnapshotNode:
+        return IntermediateSnapshotNode.from_dict(dct, validate=validate)
+
+    @property
+    def resource_type(self) -> NodeType:
+        return NodeType.Snapshot
+
+    @classmethod
+    def get_compiled_path(cls, block: FileBlock):
+        return block.path.relative_path
+
+    def set_snapshot_attributes(self, node):
+        # use the target_database setting if we got it, otherwise the
+        # `database` value of the node (ultimately sourced from the `database`
+        # config value), and if that is not set, use the database defined in
+        # the adapter's credentials.
+        if node.config.target_database:
+            node.database = node.config.target_database
+        elif not node.database:
+            node.database = self.root_project.credentials.database
+
+        # the target schema must be set if we got here, so overwrite the node's
+        # schema
         node.schema = node.config.target_schema
 
-    return node
+        return node
 
+    def get_fqn(self, path: str, name: str) -> List[str]:
+        """Get the FQN for the node. This impacts node selection and config
+        application.
 
-class SnapshotParser(BaseSqlParser):
-    def parse_snapshots_from_file(self, file_node, tags=None):
-        # the file node has a 'raw_sql' field that contains the jinja data with
-        # (we hope!) `snapshot` blocks
-        try:
-            blocks = dbt.clients.jinja.extract_toplevel_blocks(
-                file_node['raw_sql'],
-                allowed_blocks={'snapshot'},
-                collect_raw_data=False
-            )
-        except CompilationException as exc:
-            if exc.node is None:
-                exc.node = file_node
-            raise
-        for block in blocks:
-            name = block.block_name
-            raw_sql = block.contents
-            updates = {
-                'raw_sql': raw_sql,
-                'name': name,
-            }
-            yield dbt.utils.deep_merge(file_node, updates)
-
-    @classmethod
-    def get_compiled_path(cls, name, relative_path):
-        return relative_path
-
-    @classmethod
-    def get_fqn(cls, node, package_project_config, extra=[]):
-        parts = dbt.utils.split_path(node.path)
-        fqn = [package_project_config.project_name]
-        fqn.extend(parts[:-1])
-        fqn.extend(extra)
-        fqn.append(node.name)
-
+        On snapshots, the fqn includes the filename.
+        """
+        no_ext = os.path.splitext(path)[0]
+        fqn = [self.project.project_name]
+        fqn.extend(split_path(no_ext))
+        fqn.append(name)
         return fqn
 
-    def parse_from_dict(self, parsed_dict) -> IntermediateSnapshotNode:
-        return IntermediateSnapshotNode.from_dict(parsed_dict)
+    def transform(self, node: IntermediateSnapshotNode) -> ParsedSnapshotNode:
+        try:
+            parsed_node = ParsedSnapshotNode.from_dict(node.to_dict())
+            self.set_snapshot_attributes(parsed_node)
+            return parsed_node
 
-    @staticmethod
-    def validate_snapshots(node):
-        if node.resource_type == NodeType.Snapshot:
-            try:
-                parsed_node = ParsedSnapshotNode.from_dict(node.to_dict())
-                return set_snapshot_attributes(parsed_node)
+        except ValidationError as exc:
+            raise CompilationException(validator_error_message(exc), node)
 
-            except ValidationError as exc:
-                raise CompilationException(validator_error_message(exc), node)
-        else:
-            return node
-
-    def parse_sql_nodes(self, nodes, tags=None):
-        if tags is None:
-            tags = []
-
-        results = SQLParseResult()
-
-        # in snapshots, we have stuff in blocks.
-        for file_node in nodes:
-            snapshot_nodes = list(
-                self.parse_snapshots_from_file(file_node, tags=tags)
-            )
-            found = super().parse_sql_nodes(nodes=snapshot_nodes, tags=tags)
-            # Our snapshots are all stored as IntermediateSnapshotNodes, so
-            # convert them to their final form
-            found.parsed = {k: self.validate_snapshots(v) for
-                            k, v in found.parsed.items()}
-
-            results.update(found)
-        return results
+    def parse_file(self, file_block: FileBlock) -> None:
+        blocks = BlockSearcher(
+            source=[file_block],
+            allowed_blocks={'snapshot'},
+            source_tag_factory=BlockContents,
+        )
+        for block in blocks:
+            self.parse_node(block)
+        # in case there are no snapshots declared, we still want to mark this
+        # file as seen. But after we've finished, because we don't want to add
+        # files with syntax errors
+        self.results.get_file(file_block.file)

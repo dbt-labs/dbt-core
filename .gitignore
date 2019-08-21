@@ -23,6 +23,7 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
+*.mypy_cache/
 logs/
 
 # PyInstaller
@@ -79,3 +80,6 @@ target/
 
 # Vim
 *.sw*
+
+# pycharm
+.idea/

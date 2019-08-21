@@ -20,8 +20,6 @@ from typing import Optional
 class SnowflakeCredentials(Credentials):
     account: str
     user: str
-    database: str
-    schema: str
     warehouse: Optional[str]
     role: Optional[str]
     password: Optional[str]

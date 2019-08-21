@@ -1,177 +1,302 @@
-import os
 import itertools
+import os
+import pickle
+from datetime import datetime
+from typing import Dict, Optional, Mapping
 
 from dbt.include.global_project import PACKAGES
 import dbt.exceptions
 import dbt.flags
 
+from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType
-from dbt.contracts.graph.manifest import Manifest
+from dbt.clients.system import make_directory
+from dbt.config import Project, RuntimeConfig
+from dbt.contracts.graph.compiled import CompileResultNode
+from dbt.contracts.graph.manifest import Manifest, FilePath, FileHash
+from dbt.parser.base import BaseParser
+from dbt.parser import AnalysisParser
+from dbt.parser import DataTestParser
+from dbt.parser import DocumentationParser
+from dbt.parser import HookParser
+from dbt.parser import MacroParser
+from dbt.parser import ModelParser
+from dbt.parser import ParseResult
+from dbt.parser import SchemaParser
+from dbt.parser import SeedParser
+from dbt.parser import SnapshotParser
+from dbt.parser import ParserUtils
+from dbt.parser.search import FileBlock
+from dbt.version import __version__
 
-from dbt.parser import MacroParser, ModelParser, SeedParser, AnalysisParser, \
-    DocumentationParser, DataTestParser, HookParser, SchemaParser, \
-    ParserUtils, SnapshotParser
 
-from datetime import datetime
+PARTIAL_PARSE_FILE_NAME = 'partial_parse.pickle'
+
+
+_parser_types = [
+    ModelParser,
+    SnapshotParser,
+    AnalysisParser,
+    DataTestParser,
+    HookParser,
+    SeedParser,
+    DocumentationParser,
+    SchemaParser,
+]
+
+
+# TODO: this should be calculated per-file based on the vars() calls made in
+# parsing, so changing one var doesn't invalidate everything. also there should
+# be something like that for env_var - currently changing env_vars in way that
+# impact graph selection or configs will result in weird test failures.
+# finally, we should hash the actual profile used, not just root project +
+# profiles.yml + relevant args. While sufficient, it is definitely overkill.
+def make_parse_result(
+    config: RuntimeConfig, all_projects: Mapping[str, Project]
+) -> ParseResult:
+    """Make a ParseResult from the project configuration and the profile."""
+    # if any of these change, we need to reject the parser
+    vars_hash = FileHash.from_contents(
+        '\0'.join([
+            getattr(config.args, 'vars', '{}') or '{}',
+            getattr(config.args, 'profile', '') or '',
+            getattr(config.args, 'target', '') or '',
+            __version__
+        ])
+    )
+    profile_path = os.path.join(config.args.profiles_dir, 'profiles.yml')
+    with open(profile_path) as fp:
+        profile_hash = FileHash.from_contents(fp.read())
+
+    project_hashes = {}
+    for name, project in all_projects.items():
+        path = os.path.join(project.project_root, 'dbt_project.yml')
+        with open(path) as fp:
+            project_hashes[name] = FileHash.from_contents(fp.read())
+
+    return ParseResult(
+        vars_hash=vars_hash,
+        profile_hash=profile_hash,
+        project_hashes=project_hashes,
+    )
 
 
 class GraphLoader:
-    def __init__(self, root_project, all_projects):
+    def __init__(
+        self, root_project: RuntimeConfig, all_projects: Mapping[str, Project]
+    ) -> None:
         self.root_project = root_project
         self.all_projects = all_projects
-        self.nodes = {}
-        self.docs = {}
-        self.macros = {}
-        self.tests = {}
-        self.patches = {}
-        self.disabled = []
-        self.macro_manifest = None
 
-    def _load_sql_nodes(self, parser_type, resource_type, relative_dirs_attr,
-                        **kwargs):
-        parser = parser_type(self.root_project, self.all_projects,
-                             self.macro_manifest)
+        self.results = make_parse_result(root_project, all_projects)
+        self._loaded_file_cache: Dict[str, FileBlock] = {}
 
-        for project_name, project in self.all_projects.items():
-            parse_results = parser.load_and_parse(
-                package_name=project_name,
-                root_dir=project.project_root,
-                relative_dirs=getattr(project, relative_dirs_attr),
-                resource_type=resource_type,
-                **kwargs
-            )
-            self.nodes.update(parse_results.parsed)
-            self.disabled.extend(parse_results.disabled)
-
-    def _load_macros(self, internal_manifest=None):
-        # skip any projects in the internal manifest
-        all_projects = self.all_projects.copy()
+    def _load_macros(
+        self,
+        old_results: Optional[ParseResult],
+        internal_manifest: Optional[Manifest] = None,
+    ) -> None:
+        projects = self.all_projects
         if internal_manifest is not None:
-            for name in internal_project_names():
-                all_projects.pop(name, None)
-            self.macros.update(internal_manifest.macros)
+            projects = {
+                k: v for k, v in self.all_projects.items() if k not in PACKAGES
+            }
+            self.results.macros.update(internal_manifest.macros)
+            self.results.files.update(internal_manifest.files)
 
-        # give the macroparser all projects but then only load what we haven't
-        # loaded already
-        parser = MacroParser(self.root_project, self.all_projects)
-        for project_name, project in all_projects.items():
-            self.macros.update(parser.load_and_parse(
-                package_name=project_name,
-                root_dir=project.project_root,
-                relative_dirs=project.macro_paths,
-                resource_type=NodeType.Macro,
-            ))
+        # TODO: go back to skipping the internal manifest during macro parsing
+        for project in projects.values():
+            parser = MacroParser(self.results, project)
+            for path in parser.search():
+                self.parse_with_cache(path, parser, old_results)
 
-    def _load_seeds(self):
-        parser = SeedParser(self.root_project, self.all_projects,
-                            self.macro_manifest)
-        for project_name, project in self.all_projects.items():
-            self.nodes.update(parser.load_and_parse(
-                package_name=project_name,
-                root_dir=project.project_root,
-                relative_dirs=project.data_paths,
-            ))
+    def parse_with_cache(
+        self,
+        path: FilePath,
+        parser: BaseParser,
+        old_results: Optional[ParseResult],
+    ) -> None:
+        block = self._get_file(path, parser)
+        if not self._get_cached(block, old_results):
+            parser.parse_file(block)
 
-    def _load_nodes(self):
-        self._load_sql_nodes(ModelParser, NodeType.Model, 'source_paths')
-        self._load_sql_nodes(SnapshotParser, NodeType.Snapshot,
-                             'snapshot_paths')
-        self._load_sql_nodes(AnalysisParser, NodeType.Analysis,
-                             'analysis_paths')
-        self._load_sql_nodes(DataTestParser, NodeType.Test, 'test_paths',
-                             tags=['data'])
+    def _get_cached(
+        self,
+        block: FileBlock,
+        old_results: Optional[ParseResult],
+    ) -> bool:
+        # TODO: handle multiple parsers w/ same files, by
+        # tracking parser type vs node type? Or tracking actual
+        # parser type during parsing?
+        if old_results is None:
+            return False
+        if old_results.has_file(block.file):
+            return self.results.sanitized_update(block.file, old_results)
+        return False
 
-        hook_parser = HookParser(self.root_project, self.all_projects,
-                                 self.macro_manifest)
-        self.nodes.update(hook_parser.load_and_parse())
+    def _get_file(self, path: FilePath, parser: BaseParser) -> FileBlock:
+        if path.search_key in self._loaded_file_cache:
+            block = self._loaded_file_cache[path.search_key]
+        else:
+            block = FileBlock(file=parser.load_file(path))
+            self._loaded_file_cache[path.search_key] = block
+        return block
 
-        self._load_seeds()
+    def parse_project(
+        self,
+        project: Project,
+        macro_manifest: Manifest,
+        old_results: Optional[ParseResult],
+    ) -> None:
+        parsers = []
+        for cls in _parser_types:
+            parser = cls(self.results, project, self.root_project,
+                         macro_manifest)
+            parsers.append(parser)
 
-    def _load_docs(self):
-        parser = DocumentationParser(self.root_project, self.all_projects)
-        for project_name, project in self.all_projects.items():
-            self.docs.update(parser.load_and_parse(
-                package_name=project_name,
-                root_dir=project.project_root,
-                relative_dirs=project.docs_paths
-            ))
+        # per-project cache.
+        self._loaded_file_cache.clear()
 
-    def _load_schema_tests(self):
-        parser = SchemaParser(self.root_project, self.all_projects,
-                              self.macro_manifest)
-        for project_name, project in self.all_projects.items():
-            tests, patches, sources = parser.load_and_parse(
-                package_name=project_name,
-                root_dir=project.project_root,
-                relative_dirs=project.source_paths
-            )
+        for parser in parsers:
+            for path in parser.search():
+                self.parse_with_cache(path, parser, old_results)
 
-            for unique_id, test in tests.items():
-                if unique_id in self.tests:
-                    dbt.exceptions.raise_duplicate_resource_name(
-                        test, self.tests[unique_id],
-                    )
-                self.tests[unique_id] = test
-
-            for unique_id, source in sources.items():
-                if unique_id in self.nodes:
-                    dbt.exceptions.raise_duplicate_resource_name(
-                        source, self.nodes[unique_id],
-                    )
-                self.nodes[unique_id] = source
-
-            for name, patch in patches.items():
-                if name in self.patches:
-                    dbt.exceptions.raise_duplicate_patch_name(
-                        name, patch, self.patches[name]
-                    )
-                self.patches[name] = patch
-
-    def load(self, internal_manifest=None):
-        self._load_macros(internal_manifest=internal_manifest)
+    def load_only_macros(self) -> Manifest:
+        old_results = self.read_parse_results()
+        self._load_macros(old_results, internal_manifest=None)
         # make a manifest with just the macros to get the context
-        self.macro_manifest = Manifest(macros=self.macros, nodes={}, docs={},
-                                       generated_at=datetime.utcnow(),
-                                       disabled=[])
-        self._load_nodes()
-        self._load_docs()
-        self._load_schema_tests()
+        macro_manifest = Manifest.from_macros(
+            macros=self.results.macros,
+            files=self.results.files
+        )
+        return macro_manifest
 
-    def create_manifest(self):
+    def load(self, internal_manifest: Optional[Manifest] = None):
+        old_results = self.read_parse_results()
+        self._load_macros(old_results, internal_manifest=internal_manifest)
+        # make a manifest with just the macros to get the context
+        macro_manifest = Manifest.from_macros(
+            macros=self.results.macros,
+            files=self.results.files
+        )
+
+        for project in self.all_projects.values():
+            # parse a single project
+            self.parse_project(project, macro_manifest, old_results)
+
+    def write_parse_results(self):
+        path = os.path.join(self.root_project.target_path,
+                            PARTIAL_PARSE_FILE_NAME)
+        make_directory(self.root_project.target_path)
+        with open(path, 'wb') as fp:
+            pickle.dump(self.results, fp)
+
+    def _matching_parse_results(self, result: ParseResult) -> bool:
+        """Compare the global hashes of the read-in parse results' values to
+        the known ones, and return if it is ok to re-use the results.
+        """
+        valid = True
+        if self.results.vars_hash != result.vars_hash:
+            logger.debug('vars hash mismatch, cache invalidated')
+            valid = False
+        if self.results.profile_hash != result.profile_hash:
+            logger.debug('profile hash mismatch, cache invalidated')
+            valid = False
+
+        missing_keys = {
+            k for k in self.results.project_hashes
+            if k not in result.project_hashes
+        }
+        if missing_keys:
+            logger.debug(
+                'project hash mismatch: values missing, cache invalidated: {}'
+                .format(missing_keys)
+            )
+            valid = False
+
+        for key, new_value in self.results.project_hashes.items():
+            if key in result.project_hashes:
+                old_value = result.project_hashes[key]
+                if new_value != old_value:
+                    logger.debug(
+                        'For key {}, hash mismatch ({} -> {}), cache '
+                        'invalidated'
+                        .format(key, old_value, new_value)
+                    )
+                    valid = False
+        return valid
+
+    def read_parse_results(self) -> Optional[ParseResult]:
+        if not dbt.flags.PARTIAL_PARSE:
+            return None
+        path = os.path.join(self.root_project.target_path,
+                            PARTIAL_PARSE_FILE_NAME)
+
+        if os.path.exists(path):
+            try:
+                with open(path, 'rb') as fp:
+                    result: ParseResult = pickle.load(fp)
+                # keep this check inside the try/except in case something about
+                # the file has changed in weird ways, perhaps due to being a
+                # different version of dbt
+                if self._matching_parse_results(result):
+                    return result
+            except Exception as exc:
+                logger.debug(
+                    'Failed to load parsed file from disk at {}: {}'
+                    .format(path, exc),
+                    exc_info=True
+                )
+
+        return None
+
+    def create_manifest(self) -> Manifest:
+        nodes: Dict[str, CompileResultNode] = {}
+        nodes.update(self.results.nodes)
+        nodes.update(self.results.sources)
+        disabled = []
+        for value in self.results.disabled.values():
+            disabled.extend(value)
         manifest = Manifest(
-            nodes=self.nodes,
-            macros=self.macros,
-            docs=self.docs,
+            nodes=nodes,
+            macros=self.results.macros,
+            docs=self.results.docs,
             generated_at=datetime.utcnow(),
             config=self.root_project,
-            disabled=self.disabled
+            disabled=disabled,
+            files=self.results.files,
         )
-        manifest.add_nodes(self.tests)
-        manifest.patch_nodes(self.patches)
-        manifest = ParserUtils.process_sources(manifest, self.root_project)
-        manifest = ParserUtils.process_refs(manifest,
-                                            self.root_project.project_name)
-        manifest = ParserUtils.process_docs(manifest, self.root_project)
+        manifest.patch_nodes(self.results.patches)
+        manifest = ParserUtils.process_sources(
+            manifest, self.root_project.project_name
+        )
+        manifest = ParserUtils.process_refs(
+            manifest, self.root_project.project_name
+        )
+        manifest = ParserUtils.process_docs(
+            manifest, self.root_project.project_name
+        )
         return manifest
 
     @classmethod
-    def _load_from_projects(cls, root_config, projects, internal_manifest):
+    def load_all(
+        cls,
+        root_config: RuntimeConfig,
+        internal_manifest: Optional[Manifest] = None
+    ) -> Manifest:
+        projects = load_all_projects(root_config)
         loader = cls(root_config, projects)
         loader.load(internal_manifest=internal_manifest)
-        return loader.create_manifest()
-
-    @classmethod
-    def load_all(cls, root_config, internal_manifest=None):
-        projects = load_all_projects(root_config)
-        manifest = cls._load_from_projects(root_config, projects,
-                                           internal_manifest)
+        loader.write_parse_results()
+        manifest = loader.create_manifest()
         _check_manifest(manifest, root_config)
         return manifest
 
     @classmethod
-    def load_internal(cls, root_config):
+    def load_internal(cls, root_config: RuntimeConfig) -> Manifest:
         projects = load_internal_projects(root_config)
-        return cls._load_from_projects(root_config, projects, None)
+        loader = cls(root_config, projects)
+        return loader.load_only_macros()
 
 
 def _check_resource_uniqueness(manifest):
@@ -248,7 +373,7 @@ def _project_directories(config):
         yield full_obj
 
 
-def load_all_projects(config):
+def load_all_projects(config) -> Mapping[str, Project]:
     all_projects = {config.project_name: config}
     project_paths = itertools.chain(
         internal_project_names(),

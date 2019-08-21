@@ -11,6 +11,7 @@ from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition,
     ParsedTestNode,
     TestConfig,
+    PARSED_TYPES,
 )
 from dbt.node_types import (
     NodeType,
@@ -95,6 +96,11 @@ class CompiledRPCNode(CompiledNode):
 @dataclass
 class CompiledSeedNode(CompiledNode):
     resource_type: SeedType
+
+    @property
+    def empty(self):
+        """ Seeds are never empty"""
+        return False
 
 
 @dataclass
@@ -185,6 +191,17 @@ def compiled_type_for(parsed: ParsedNode):
         return COMPILED_TYPES[parsed.resource_type]
     else:
         return type(parsed)
+
+
+def parsed_instance_for(compiled: CompiledNode) -> ParsedNode:
+    cls = PARSED_TYPES.get(compiled.resource_type)
+    if cls is None:
+        # how???
+        raise ValueError('invalid resource_type: {}'
+                         .format(compiled.resource_type))
+
+    # validate=False to allow extra keys from copmiling
+    return cls.from_dict(compiled.to_dict(), validate=False)
 
 
 # We allow either parsed or compiled nodes, or parsed sources, as some

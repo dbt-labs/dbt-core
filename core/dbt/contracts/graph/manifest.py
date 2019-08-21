@@ -1,23 +1,152 @@
+import hashlib
+import os
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Dict, List, Optional, Union, Mapping
+from uuid import UUID
+
+from hologram import JsonSchemaMixin
+
 from dbt.contracts.graph.parsed import ParsedNode, ParsedMacro, \
     ParsedDocumentation
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.util import Writable, Replaceable
 from dbt.config import Project
-from dbt.exceptions import raise_duplicate_resource_name
-from dbt.node_types import NodeType
+from dbt.exceptions import raise_duplicate_resource_name, InternalException
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.node_types import NodeType
 from dbt import tracking
 import dbt.utils
 
-from hologram import JsonSchemaMixin
-
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, List, Optional
-from uuid import UUID
-
-
 NodeEdgeMap = Dict[str, List[str]]
+
+
+@dataclass
+class FilePath(JsonSchemaMixin):
+    searched_path: str
+    relative_path: str
+    absolute_path: str
+
+    @property
+    def search_key(self):
+        # TODO: should this be project root + original_file_path?
+        return self.absolute_path
+
+    @property
+    def original_file_path(self):
+        return os.path.join(self.searched_path, self.relative_path)
+
+
+@dataclass
+class FileHash(JsonSchemaMixin):
+    name: str  # the hash type name
+    checksum: str  # the hashlib.hash_type().hexdigest() of the file contents
+
+    @classmethod
+    def empty(cls):
+        return FileHash(name='none', checksum='')
+
+    @classmethod
+    def path(cls, path: str):
+        return FileHash(name='path', checksum=path)
+
+    def __eq__(self, other):
+        if not isinstance(other, type(self)):
+            return False
+
+        if self.name == 'none' or self.name != other.name:
+            return False
+
+        return self.checksum == other.checksum
+
+    def compare(self, contents: str) -> bool:
+        """Compare the file contents with the given hash"""
+        if self.name == 'none':
+            return False
+
+        return self.from_contents(contents, name=self.name) == self.checksum
+
+    @classmethod
+    def from_contents(cls, contents: str, name='sha256'):
+        """Create a file hash from the given file contents. The hash is always
+        the utf-8 encoding of the contents given, because dbt only reads files
+        as utf-8.
+        """
+        data = contents.encode('utf-8')
+        checksum = hashlib.new(name, data).hexdigest()
+        return cls(name=name, checksum=checksum)
+
+
+@dataclass
+class RemoteFile(JsonSchemaMixin):
+    @property
+    def searched_path(self) -> str:
+        return 'from remote system'
+
+    @property
+    def relative_path(self) -> str:
+        return 'from remote system'
+
+    @property
+    def absolute_path(self) -> str:
+        return 'from remote system'
+
+    @property
+    def original_file_path(self):
+        return 'from remote system'
+
+
+@dataclass
+class SourceFile(JsonSchemaMixin):
+    """Define a source file in dbt"""
+    path: Union[FilePath, RemoteFile]  # the path information
+    checksum: FileHash
+    # we don't want to serialize this
+    _contents: Optional[str] = None
+    # the unique IDs contained in this file
+    nodes: List[str] = field(default_factory=list)
+    docs: List[str] = field(default_factory=list)
+    macros: List[str] = field(default_factory=list)
+    sources: List[str] = field(default_factory=list)
+    # any node patches in this file. The entries are names, not unique ids!
+    patches: List[str] = field(default_factory=list)
+
+    @property
+    def search_key(self) -> Optional[str]:
+        if isinstance(self.path, RemoteFile):
+            return None
+        if self.checksum.name == 'none':
+            return None
+        return self.path.search_key
+
+    @property
+    def contents(self) -> str:
+        if self._contents is None:
+            raise InternalException('SourceFile has no contents!')
+        return self._contents
+
+    @contents.setter
+    def contents(self, value):
+        self._contents = value
+
+    @classmethod
+    def empty(cls, path: FilePath) -> 'SourceFile':
+        self = cls(path=path, checksum=FileHash.empty())
+        self.contents = ''
+        return self
+
+    @classmethod
+    def seed(cls, path: FilePath) -> 'SourceFile':
+        """Seeds always parse the same regardless of their content."""
+        self = cls(path=path, checksum=FileHash.path(path.absolute_path))
+        self.contents = ''
+        return self
+
+    @classmethod
+    def remote(cls, contents: str) -> 'SourceFile':
+        self = cls(path=RemoteFile(), checksum=FileHash.empty())
+        self.contents = contents
+        return self
 
 
 @dataclass
@@ -57,21 +186,23 @@ def _deepcopy(value):
 class Manifest:
     """The manifest for the full graph, after parsing and during compilation.
     """
-    nodes: Dict[str, CompileResultNode]
-    macros: Dict[str, ParsedMacro]
-    docs: Dict[str, ParsedDocumentation]
+    nodes: Mapping[str, CompileResultNode]
+    macros: Mapping[str, ParsedMacro]
+    docs: Mapping[str, ParsedDocumentation]
     generated_at: datetime
     disabled: List[ParsedNode]
+    files: Mapping[str, SourceFile]
     metadata: ManifestMetadata = field(init=False)
 
     def __init__(
         self,
-        nodes: Dict[str, CompileResultNode],
-        macros: Dict[str, ParsedMacro],
-        docs: Dict[str, ParsedDocumentation],
+        nodes: Mapping[str, CompileResultNode],
+        macros: Mapping[str, ParsedMacro],
+        docs: Mapping[str, ParsedDocumentation],
         generated_at: datetime,
         disabled: List[ParsedNode],
-        config: Optional[Project] = None
+        files: Mapping[str, SourceFile],
+        config: Optional[Project] = None,
     ) -> None:
         self.metadata = self.get_metadata(config)
         self.nodes = nodes
@@ -79,8 +210,39 @@ class Manifest:
         self.docs = docs
         self.generated_at = generated_at
         self.disabled = disabled
+        self.files = files
         self._flat_graph = None
         super(Manifest, self).__init__()
+
+    @classmethod
+    def from_macros(cls, macros=None, files=None) -> 'Manifest':
+        if macros is None:
+            macros = {}
+        if files is None:
+            files = {}
+        return cls(
+            nodes={},
+            macros=macros,
+            docs={},
+            generated_at=datetime.utcnow(),
+            disabled=[],
+            files=files,
+            config=None,
+        )
+
+    def update_node(self, new_node):
+        unique_id = new_node.unique_id
+        if unique_id not in self.nodes:
+            raise dbt.exceptions.RuntimeException(
+                'got an update_node call with an unrecognized node: {}'
+                .format(unique_id)
+            )
+        existing = self.nodes[unique_id]
+        if new_node.original_file_path != existing.original_file_path:
+            raise dbt.exceptions.RuntimeException(
+                'cannot update a node to have a new file path!'
+            )
+        self.nodes[unique_id] = new_node
 
     @staticmethod
     def get_metadata(config: Optional[Project]) -> ManifestMetadata:
@@ -100,23 +262,6 @@ class Manifest:
             user_id=user_id,
             send_anonymous_usage_stats=send_anonymous_usage_stats,
         )
-
-    def serialize(self):
-        """Convert the parsed manifest to a nested dict structure that we can
-        safely serialize to JSON.
-        """
-        forward_edges, backward_edges = build_edges(self.nodes.values())
-
-        return {
-            'nodes': {k: v.to_dict() for k, v in self.nodes.items()},
-            'macros': {k: v.to_dict() for k, v in self.macros.items()},
-            'docs': {k: v.to_dict() for k, v in self.docs.items()},
-            'parent_map': backward_edges,
-            'child_map': forward_edges,
-            'generated_at': self.generated_at,
-            'metadata': self.metadata,
-            'disabled': [v.to_dict() for v in self.disabled],
-        }
 
     def to_flat_graph(self):
         """This function gets called in context.common by each node, so we want
@@ -138,7 +283,6 @@ class Manifest:
 
     def _find_by_name(self, name, package, subgraph, nodetype):
         """
-
         Find a node by its given name in the appropriate sugraph. If package is
         None, all pacakges will be searched.
         nodetype should be a list of NodeTypes to accept.
@@ -265,6 +409,8 @@ class Manifest:
     def patch_nodes(self, patches):
         """Patch nodes with the given dict of patches. Note that this consumes
         the input!
+        This relies on the fact that all nodes have unique _name_ fields, not
+        just unique unique_id fields.
         """
         # because we don't have any mapping from node _names_ to nodes, and we
         # only have the node name in the patch, we have to iterate over all the
@@ -310,11 +456,13 @@ class Manifest:
             docs={k: _deepcopy(v) for k, v in self.docs.items()},
             generated_at=self.generated_at,
             disabled=[_deepcopy(n) for n in self.disabled],
-            config=config
+            config=config,
+            files={k: _deepcopy(v) for k, v in self.files.items()},
         )
 
     def writable_manifest(self):
         forward_edges, backward_edges = build_edges(self.nodes.values())
+
         return WritableManifest(
             nodes=self.nodes,
             macros=self.macros,
@@ -323,7 +471,8 @@ class Manifest:
             metadata=self.metadata,
             disabled=self.disabled,
             child_map=forward_edges,
-            parent_map=backward_edges
+            parent_map=backward_edges,
+            files=self.files,
         )
 
     @classmethod
@@ -335,6 +484,7 @@ class Manifest:
             generated_at=writable.generated_at,
             metadata=writable.metadata,
             disabled=writable.disabled,
+            files=writable.files,
         )
         self.metadata = writable.metadata
         return self
@@ -355,11 +505,13 @@ class Manifest:
 
 @dataclass
 class WritableManifest(JsonSchemaMixin, Writable):
-    nodes: Dict[str, CompileResultNode]
-    macros: Dict[str, ParsedMacro]
-    docs: Dict[str, ParsedDocumentation]
+    nodes: Mapping[str, CompileResultNode]
+    macros: Mapping[str, ParsedMacro]
+    docs: Mapping[str, ParsedDocumentation]
     disabled: Optional[List[ParsedNode]]
     generated_at: datetime
     parent_map: Optional[NodeEdgeMap]
     child_map: Optional[NodeEdgeMap]
     metadata: ManifestMetadata
+    # map of original_file_path to all unique IDs provided by that file
+    files: Mapping[str, SourceFile]

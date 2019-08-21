@@ -108,7 +108,8 @@ class CompilerTest(unittest.TestCase):
             docs={},
             # '2018-02-14T09:15:13Z'
             generated_at=datetime(2018, 2, 14, 9, 15, 13),
-            disabled=[]
+            disabled=[],
+            files={},
         )
 
         result, output_graph = dbt.compilation.prepend_ctes(
@@ -185,7 +186,8 @@ class CompilerTest(unittest.TestCase):
             },
             docs={},
             generated_at='2018-02-14T09:15:13Z',
-            disabled=[]
+            disabled=[],
+            files={},
         )
 
         result, output_graph = dbt.compilation.prepend_ctes(
@@ -269,7 +271,8 @@ class CompilerTest(unittest.TestCase):
             },
             docs={},
             generated_at='2018-02-14T09:15:13Z',
-            disabled=[]
+            disabled=[],
+            files={},
         )
 
         result, output_graph = dbt.compilation.prepend_ctes(
@@ -370,7 +373,8 @@ class CompilerTest(unittest.TestCase):
             },
             docs={},
             generated_at='2018-02-14T09:15:13Z',
-            disabled=[]
+            disabled=[],
+            files={},
         )
 
         result, output_graph = dbt.compilation.prepend_ctes(

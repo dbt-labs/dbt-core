@@ -1,32 +1,42 @@
 import unittest
 from unittest import mock
-from datetime import datetime
 
 import os
 import yaml
 
 import dbt.flags
 import dbt.parser
-from dbt.parser import ModelParser, MacroParser, DataTestParser, \
-    SchemaParser, ParserUtils
-from dbt.parser.source_config import SourceConfig
+from dbt.exceptions import CompilationException
+from dbt.parser import (
+    ModelParser, MacroParser, DataTestParser, SchemaParser, ParserUtils,
+    ParseResult, SnapshotParser, AnalysisParser
+)
+from dbt.parser.search import FileBlock
+from dbt.parser.schema_test_builders import YamlBlock
 
-from dbt.node_types import NodeType
-from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.parsed import ParsedModelNode, ParsedMacro, \
-    ParsedNodePatch, ParsedSourceDefinition, NodeConfig, DependsOn, \
-    ColumnInfo, ParsedTestNode, TestConfig
-from dbt.contracts.graph.unparsed import FreshnessThreshold, Quoting, Time, \
-    TimePeriod
+from dbt.node_types import (
+    NodeType, SnapshotType, MacroType, SourceType, TestType, AnalysisType
+)
+from dbt.contracts.graph.manifest import (
+    Manifest, FilePath, SourceFile, FileHash
+)
+from dbt.contracts.graph.parsed import (
+    ParsedModelNode, ParsedMacro, ParsedNodePatch, ParsedSourceDefinition,
+    NodeConfig, DependsOn, ColumnInfo, ParsedTestNode, TestConfig,
+    ParsedSnapshotNode, TimestampSnapshotConfig, TimestampStrategy,
+    ParsedAnalysisNode
+)
+from dbt.contracts.graph.unparsed import FreshnessThreshold
 
-from .utils import config_from_parts_or_dicts
+from .utils import config_from_parts_or_dicts, normalize
 
 
-def get_os_path(unix_path):
-    return os.path.normpath(unix_path)
+def get_abs_os_path(unix_path):
+    return os.path.abspath(normalize(unix_path))
 
 
 class BaseParserTest(unittest.TestCase):
+    maxDiff = None
 
     def setUp(self):
         dbt.flags.STRICT_MODE = True
@@ -54,7 +64,7 @@ class BaseParserTest(unittest.TestCase):
             'name': 'root',
             'version': '0.1',
             'profile': 'test',
-            'project-root': os.path.abspath('.'),
+            'project-root': normalize('/usr/src/app'),
         }
 
         self.root_project_config = config_from_parts_or_dicts(
@@ -67,7 +77,7 @@ class BaseParserTest(unittest.TestCase):
             'name': 'snowplow',
             'version': '0.1',
             'profile': 'test',
-            'project-root': os.path.abspath('./dbt_modules/snowplow'),
+            'project-root': get_abs_os_path('./dbt_modules/snowplow'),
         }
 
         self.snowplow_project_config = config_from_parts_or_dicts(
@@ -81,2248 +91,601 @@ class BaseParserTest(unittest.TestCase):
         self.patcher = mock.patch('dbt.context.parser.get_adapter')
         self.factory = self.patcher.start()
 
+        self.macro_manifest = Manifest.from_macros()
+
     def tearDown(self):
         self.patcher.stop()
 
+    def file_block_for(self, data: str, filename: str, searched: str):
+        root_dir = get_abs_os_path('./dbt_modules/snowplow')
+        filename = normalize(filename)
+        path = FilePath(
+            searched_path=searched,
+            relative_path=filename,
+            absolute_path=os.path.normpath(os.path.abspath(
+                os.path.join(root_dir, searched, filename)
+            )),
+        )
+        source_file = SourceFile(
+            path=path,
+            checksum=FileHash.from_contents(data),
+        )
+        source_file.contents = data
+        return FileBlock(file=source_file)
 
-class SourceConfigTest(BaseParserTest):
-    def test__source_config_single_call(self):
-        cfg = SourceConfig(self.root_project_config, self.root_project_config,
-                           ['root', 'x'], NodeType.Model)
-        cfg.update_in_model_config({
-            'materialized': 'something',
-            'sort': 'my sort key',
-            'pre-hook': 'my pre run hook',
-            'vars': {'a': 1, 'b': 2},
-        })
-        expect = {
-            'column_types': {},
-            'enabled': True,
-            'materialized': 'something',
-            'post-hook': [],
-            'pre-hook': ['my pre run hook'],
-            'persist_docs': {},
-            'quoting': {},
-            'sort': 'my sort key',
-            'tags': [],
-            'vars': {'a': 1, 'b': 2},
-        }
-        self.assertEqual(cfg.config, expect)
+    def assert_has_results_length(self, results, files=1, macros=0, nodes=0,
+                                  sources=0, docs=0, patches=0, disabled=0):
+        self.assertEqual(len(results.files), files)
+        self.assertEqual(len(results.macros), macros)
+        self.assertEqual(len(results.nodes), nodes)
+        self.assertEqual(len(results.sources), sources)
+        self.assertEqual(len(results.docs), docs)
+        self.assertEqual(len(results.patches), patches)
+        self.assertEqual(sum(len(v) for v in results.disabled.values()), disabled)
 
-    def test__source_config_multiple_calls(self):
-        cfg = SourceConfig(self.root_project_config, self.root_project_config,
-                           ['root', 'x'], NodeType.Model)
-        cfg.update_in_model_config({
-            'materialized': 'something',
-            'sort': 'my sort key',
-            'pre-hook': 'my pre run hook',
-            'vars': {'a': 1, 'b': 2},
-        })
-        cfg.update_in_model_config({
-            'materialized': 'something else',
-            'pre-hook': ['my other pre run hook', 'another pre run hook'],
-            'vars': {'a': 4, 'c': 3},
-        })
-        expect = {
-            'column_types': {},
-            'enabled': True,
-            'materialized': 'something else',
-            'persist_docs': {},
-            'post-hook': [],
-            'pre-hook': [
-                'my pre run hook',
-                'my other pre run hook',
-                'another pre run hook',
-            ],
-            'quoting': {},
-            'sort': 'my sort key',
-            'tags': [],
-            'vars': {'a': 4, 'b': 2, 'c': 3},
-        }
-        self.assertEqual(cfg.config, expect)
 
-    def test_source_config_all_keys_accounted_for(self):
-        used_keys = frozenset(SourceConfig.AppendListFields) | \
-                    frozenset(SourceConfig.ExtendDictFields) | \
-                    frozenset(SourceConfig.ClobberFields)
+SINGLE_TABLE_SOURCE = '''
+version: 2
+sources:
+    - name: my_source
+      tables:
+        - name: my_table
+'''
 
-        self.assertEqual(used_keys, frozenset(SourceConfig.ConfigKeys))
+SINGLE_TABLE_SOURCE_TESTS = '''
+version: 2
+sources:
+    - name: my_source
+      tables:
+        - name: my_table
+          description: A description of my table
+          columns:
+            - name: color
+              tests:
+                - not_null:
+                    severity: WARN
+                - accepted_values:
+                    values: ['red', 'blue', 'green']
+'''
 
-    def test__source_config_wrong_type(self):
-        # ExtendDict fields should handle non-dict inputs gracefully
-        self.root_project_config.models = {'persist_docs': False}
-        cfg = SourceConfig(self.root_project_config, self.root_project_config,
-                           ['root', 'x'], NodeType.Model)
 
-        with self.assertRaises(dbt.exceptions.CompilationException) as exc:
-            cfg.get_project_config(self.root_project_config)
-
-        self.assertIn('must be a dict', str(exc.exception))
+SINGLE_TABLE_MODEL_TESTS = '''
+version: 2
+models:
+    - name: my_model
+      description: A description of my model
+      columns:
+        - name: color
+          description: The color value
+          tests:
+            - not_null:
+                severity: WARN
+            - accepted_values:
+                values: ['red', 'blue', 'green']
+            - foreign_package.test_case:
+                arg: 100
+'''
 
 
 class SchemaParserTest(BaseParserTest):
-    maxDiff = None
-
     def setUp(self):
         super().setUp()
-        self.maxDiff = None
+        self.parser = SchemaParser(
+            results=ParseResult.rpc(),
+            project=self.snowplow_project_config,
+            root_project=self.root_project_config,
+            macro_manifest=self.macro_manifest,
+        )
 
-        self.macro_manifest = Manifest(macros={}, nodes={}, docs={},
-                                       generated_at=datetime.utcnow(),
-                                       disabled=[])
+    def file_block_for(self, data, filename):
+        return super().file_block_for(data, filename, 'models')
 
-        self.model_config = NodeConfig.from_dict({
-            'enabled': True,
-            'materialized': 'view',
-            'persist_docs': {},
-            'post-hook': [],
-            'pre-hook': [],
-            'vars': {},
-            'quoting': {},
-            'column_types': {},
-            'tags': [],
-        })
+    def yaml_block_for(self, test_yml: str, filename: str):
+        file_block = self.file_block_for(data=test_yml, filename=filename)
+        return YamlBlock.from_file_block(
+            src=file_block,
+            data=yaml.safe_load(test_yml),
+        )
 
-        self.test_config = TestConfig.from_dict({
-            'enabled': True,
-            'materialized': 'view',
-            'persist_docs': {},
-            'post-hook': [],
-            'pre-hook': [],
-            'vars': {},
-            'quoting': {},
-            'column_types': {},
-            'tags': [],
-            'severity': 'ERROR',
-        })
-        self.warn_test_config = self.test_config.replace(severity='WARN')
 
-        self.disabled_config = {
-            'enabled': False,
-            'materialized': 'view',
-            'post-hook': [],
-            'pre-hook': [],
-            'vars': {},
-            'quoting': {},
-            'column_types': {},
-            'tags': [],
-        }
+class SchemaParserSourceTest(SchemaParserTest):
+    def test__read_basic_source(self):
+        block = self.yaml_block_for(SINGLE_TABLE_SOURCE, 'test_one.yml')
+        self.assertEqual(len(list(self.parser.read_yaml_models(yaml=block))), 0)
+        results = list(self.parser.read_yaml_sources(yaml=block))
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].source.name, 'my_source')
+        self.assertEqual(results[0].table.name, 'my_table')
+        self.assertEqual(results[0].table.description, '')
+        self.assertEqual(len(results[0].tests), 0)
+        self.assertEqual(len(results[0].columns), 0)
 
-        self._expected_source = ParsedSourceDefinition(
-            unique_id='source.root.my_source.my_table',
-            name='my_table',
-            description='my table description',
+    def test__parse_basic_source(self):
+        block = self.file_block_for(SINGLE_TABLE_SOURCE, 'test_one.yml')
+        self.parser.parse_file(block)
+        # self.parser.parse_yaml_sources(yaml_block=block)
+        self.assert_has_results_length(self.parser.results, sources=1)
+        src = list(self.parser.results.sources.values())[0]
+        expected = ParsedSourceDefinition(
+            package_name='snowplow',
             source_name='my_source',
-            source_description='my source description',
-            loader='some_loader',
-            package_name='root',
-            root_path=get_os_path('/usr/src/app'),
-            path='test_one.yml',
-            original_file_path='test_one.yml',
-            columns={
-                'id': ColumnInfo(name='id', description='user ID'),
-            },
-            docrefs=[],
-            freshness=FreshnessThreshold(
-                warn_after=Time(count=7, period=TimePeriod.hour),
-                error_after=Time(count=20, period=TimePeriod.hour)
-            ),
-            loaded_at_field='something',
+            schema='my_source',
+            name='my_table',
+            loader='',
+            freshness=FreshnessThreshold(),
+            source_description='',
+            identifier='my_table',
+            fqn=['snowplow', 'my_source', 'my_table'],
             database='test',
-            schema='foo',
-            identifier='bar',
-            resource_type=NodeType.Source,
-            quoting=Quoting(schema=True, identifier=False),
-            fqn=['root', 'my_source', 'my_table']
+            unique_id='source.snowplow.my_source.my_table',
+            root_path=get_abs_os_path('./dbt_modules/snowplow'),
+            path=normalize('models/test_one.yml'),
+            original_file_path=normalize('models/test_one.yml'),
+            resource_type=SourceType.Source,
         )
+        self.assertEqual(src, expected)
 
-        self._expected_source_tests = [
-            ParsedTestNode(
-                alias='source_accepted_values_my_source_my_table_id__a__b',
-                name='source_accepted_values_my_source_my_table_id__a__b',
-                database='test',
-                schema='analytics',
-                resource_type=NodeType.Test,
-                unique_id='test.root.source_accepted_values_my_source_my_table_id__a__b',
-                fqn=['root', 'schema_test',
-                        'source_accepted_values_my_source_my_table_id__a__b'],
-                package_name='root',
-                original_file_path='test_one.yml',
-                root_path=get_os_path('/usr/src/app'),
-                refs=[],
-                sources=[['my_source', 'my_table']],
-                depends_on=DependsOn(),
-                config=self.test_config,
-                path=get_os_path(
-                    'schema_test/source_accepted_values_my_source_my_table_id__a__b.sql'),
-                tags=['schema'],
-                raw_sql="{{ config(severity='ERROR') }}{{ test_accepted_values(model=source('my_source', 'my_table'), column_name='id', values=['a', 'b']) }}",
-                description='',
-                columns={},
-                column_name='id',
-            ),
-            ParsedTestNode(
-                alias='source_not_null_my_source_my_table_id',
-                name='source_not_null_my_source_my_table_id',
-                database='test',
-                schema='analytics',
-                resource_type=NodeType.Test,
-                unique_id='test.root.source_not_null_my_source_my_table_id',
-                fqn=['root', 'schema_test', 'source_not_null_my_source_my_table_id'],
-                package_name='root',
-                root_path=get_os_path('/usr/src/app'),
-                refs=[],
-                sources=[['my_source', 'my_table']],
-                depends_on=DependsOn(),
-                config=self.test_config,
-                original_file_path='test_one.yml',
-                path=get_os_path('schema_test/source_not_null_my_source_my_table_id.sql'),
-                tags=['schema'],
-                raw_sql="{{ config(severity='ERROR') }}{{ test_not_null(model=source('my_source', 'my_table'), column_name='id') }}",
-                description='',
-                columns={},
-                column_name='id',
-            ),
-            ParsedTestNode(
-                alias='source_relationships_my_source_my_table_id__id__ref_model_two_',
-                name='source_relationships_my_source_my_table_id__id__ref_model_two_',
-                database='test',
-                schema='analytics',
-                resource_type=NodeType.Test,
-                unique_id='test.root.source_relationships_my_source_my_table_id__id__ref_model_two_', # noqa
-                fqn=['root', 'schema_test',
-                        'source_relationships_my_source_my_table_id__id__ref_model_two_'],
-                package_name='root',
-                original_file_path='test_one.yml',
-                root_path=get_os_path('/usr/src/app'),
-                refs=[['model_two']],
-                sources=[['my_source', 'my_table']],
-                depends_on=DependsOn(),
-                config=self.test_config,
-                path=get_os_path('schema_test/source_relationships_my_source_my_table_id__id__ref_model_two_.sql'), # noqa
-                tags=['schema'],
-                raw_sql="{{ config(severity='ERROR') }}{{ test_relationships(model=source('my_source', 'my_table'), column_name='id', from='id', to=ref('model_two')) }}",
-                description='',
-                columns={},
-                column_name='id',
-            ),
-            ParsedTestNode(
-                alias='source_some_test_my_source_my_table_value',
-                name='source_some_test_my_source_my_table_value',
-                database='test',
-                schema='analytics',
-                resource_type=NodeType.Test,
-                unique_id='test.snowplow.source_some_test_my_source_my_table_value',
-                fqn=['snowplow', 'schema_test', 'source_some_test_my_source_my_table_value'],
-                package_name='snowplow',
-                original_file_path='test_one.yml',
-                root_path=get_os_path('/usr/src/app'),
-                refs=[],
-                sources=[['my_source', 'my_table']],
-                depends_on=DependsOn(),
-                config=self.warn_test_config,
-                path=get_os_path('schema_test/source_some_test_my_source_my_table_value.sql'),
-                tags=['schema'],
-                raw_sql="{{ config(severity='WARN') }}{{ snowplow.test_some_test(model=source('my_source', 'my_table'), key='value') }}",
-                description='',
-                columns={},
-            ),
-            ParsedTestNode(
-                alias='source_unique_my_source_my_table_id',
-                name='source_unique_my_source_my_table_id',
-                database='test',
-                schema='analytics',
-                resource_type=NodeType.Test,
-                unique_id='test.root.source_unique_my_source_my_table_id',
-                fqn=['root', 'schema_test', 'source_unique_my_source_my_table_id'],
-                package_name='root',
-                root_path=get_os_path('/usr/src/app'),
-                refs=[],
-                sources=[['my_source', 'my_table']],
-                depends_on=DependsOn(),
-                config=self.warn_test_config,
-                original_file_path='test_one.yml',
-                path=get_os_path('schema_test/source_unique_my_source_my_table_id.sql'),
-                tags=['schema'],
-                raw_sql="{{ config(severity='WARN') }}{{ test_unique(model=source('my_source', 'my_table'), column_name='id') }}",
-                description='',
-                columns={},
-                column_name='id',
-            ),
-        ]
+    def test__read_basic_source_tests(self):
+        block = self.yaml_block_for(SINGLE_TABLE_SOURCE_TESTS, 'test_one.yml')
+        self.assertEqual(len(list(self.parser.read_yaml_models(yaml=block))), 0)
+        results = list(self.parser.read_yaml_sources(yaml=block))
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].source.name, 'my_source')
+        self.assertEqual(results[0].table.name, 'my_table')
+        self.assertEqual(results[0].table.description, 'A description of my table')
+        self.assertEqual(len(results[0].columns), 1)
+        self.assertEqual(len(results[0].columns[0].tests), 2)
+        self.assertEqual(len(results[0].tests), 0)
 
-        self._expected_model_tests = [
-            ParsedTestNode(
-                alias='accepted_values_model_one_id__a__b',
-                name='accepted_values_model_one_id__a__b',
-                database='test',
-                schema='analytics',
-                resource_type=NodeType.Test,
-                unique_id='test.root.accepted_values_model_one_id__a__b',
-                fqn=['root', 'schema_test',
-                        'accepted_values_model_one_id__a__b'],
-                package_name='root',
-                original_file_path='test_one.yml',
-                root_path=get_os_path('/usr/src/app'),
-                refs=[['model_one']],
-                sources=[],
-                depends_on=DependsOn(),
-                config=self.test_config,
-                path=get_os_path(
-                    'schema_test/accepted_values_model_one_id__a__b.sql'),
-                tags=['schema'],
-                raw_sql="{{ config(severity='ERROR') }}{{ test_accepted_values(model=ref('model_one'), column_name='id', values=['a', 'b']) }}",
-                description='',
-                columns={},
-                column_name='id',
-            ),
-            ParsedTestNode(
-                alias='not_null_model_one_id',
-                name='not_null_model_one_id',
-                database='test',
-                schema='analytics',
-                resource_type=NodeType.Test,
-                unique_id='test.root.not_null_model_one_id',
-                fqn=['root', 'schema_test', 'not_null_model_one_id'],
-                package_name='root',
-                root_path=get_os_path('/usr/src/app'),
-                refs=[['model_one']],
-                sources=[],
-                depends_on=DependsOn(),
-                config=self.test_config,
-                original_file_path='test_one.yml',
-                path=get_os_path('schema_test/not_null_model_one_id.sql'),
-                tags=['schema'],
-                raw_sql="{{ config(severity='ERROR') }}{{ test_not_null(model=ref('model_one'), column_name='id') }}",
-                description='',
-                columns={},
-                column_name='id',
-            ),
-            ParsedTestNode(
-                alias='relationships_model_one_id__id__ref_model_two_',
-                name='relationships_model_one_id__id__ref_model_two_',
-                database='test',
-                schema='analytics',
-                resource_type=NodeType.Test,
-                unique_id='test.root.relationships_model_one_id__id__ref_model_two_', # noqa
-                fqn=['root', 'schema_test',
-                        'relationships_model_one_id__id__ref_model_two_'],
-                package_name='root',
-                original_file_path='test_one.yml',
-                root_path=get_os_path('/usr/src/app'),
-                refs=[['model_one'], ['model_two']],
-                sources=[],
-                depends_on=DependsOn(),
-                config=self.test_config,
-                path=get_os_path('schema_test/relationships_model_one_id__id__ref_model_two_.sql'), # noqa
-                tags=['schema'],
-                raw_sql="{{ config(severity='ERROR') }}{{ test_relationships(model=ref('model_one'), column_name='id', from='id', to=ref('model_two')) }}",
-                description='',
-                columns={},
-                column_name='id',
-            ),
-            ParsedTestNode(
-                alias='some_test_model_one_value',
-                name='some_test_model_one_value',
-                database='test',
-                schema='analytics',
-                resource_type=NodeType.Test,
-                unique_id='test.snowplow.some_test_model_one_value',
-                fqn=['snowplow', 'schema_test', 'some_test_model_one_value'],
-                package_name='snowplow',
-                original_file_path='test_one.yml',
-                root_path=get_os_path('/usr/src/app'),
-                refs=[['model_one']],
-                sources=[],
-                depends_on=DependsOn(),
-                config=self.warn_test_config,
-                path=get_os_path('schema_test/some_test_model_one_value.sql'),
-                tags=['schema'],
-                raw_sql="{{ config(severity='WARN') }}{{ snowplow.test_some_test(model=ref('model_one'), key='value') }}",
-                description='',
-                columns={},
-            ),
-            ParsedTestNode(
-                alias='unique_model_one_id',
-                name='unique_model_one_id',
-                database='test',
-                schema='analytics',
-                resource_type=NodeType.Test,
-                unique_id='test.root.unique_model_one_id',
-                fqn=['root', 'schema_test', 'unique_model_one_id'],
-                package_name='root',
-                root_path=get_os_path('/usr/src/app'),
-                refs=[['model_one']],
-                sources=[],
-                depends_on=DependsOn(),
-                config=self.warn_test_config,
-                original_file_path='test_one.yml',
-                path=get_os_path('schema_test/unique_model_one_id.sql'),
-                tags=['schema'],
-                raw_sql="{{ config(severity='WARN') }}{{ test_unique(model=ref('model_one'), column_name='id') }}",
-                description='',
-                columns={},
-                column_name='id',
-            ),
-        ]
+    def test__parse_basic_source_tests(self):
+        block = self.file_block_for(SINGLE_TABLE_SOURCE_TESTS, 'test_one.yml')
+        self.parser.parse_file(block)
+        self.assertEqual(len(self.parser.results.nodes), 2)
+        self.assertEqual(len(self.parser.results.sources), 1)
+        self.assertEqual(len(self.parser.results.patches), 0)
+        src = list(self.parser.results.sources.values())[0]
+        self.assertEqual(src.source_name, 'my_source')
+        self.assertEqual(src.schema, 'my_source')
+        self.assertEqual(src.name, 'my_table')
+        self.assertEqual(src.description, 'A description of my table')
 
-        self._expected_patch = ParsedNodePatch(
-            name='model_one',
-            description='blah blah',
-            original_file_path='test_one.yml',
-            columns={
-                'id': ColumnInfo(name='id', description='user ID'),
-            },
+        tests = sorted(self.parser.results.nodes.values(), key=lambda n: n.unique_id)
+
+        self.assertEqual(tests[0].config.severity, 'ERROR')
+        self.assertEqual(tests[0].tags, ['schema'])
+        self.assertEqual(tests[0].sources, [['my_source', 'my_table']])
+        self.assertEqual(tests[0].column_name, 'color')
+        self.assertEqual(tests[0].fqn, ['snowplow', 'schema_test', tests[0].name])
+        self.assertEqual(tests[1].config.severity, 'WARN')
+        self.assertEqual(tests[1].tags, ['schema'])
+        self.assertEqual(tests[1].sources, [['my_source', 'my_table']])
+        self.assertEqual(tests[1].column_name, 'color')
+        self.assertEqual(tests[1].fqn, ['snowplow', 'schema_test', tests[1].name])
+
+        path = os.path.abspath('./dbt_modules/snowplow/models/test_one.yml')
+        self.assertIn(path, self.parser.results.files)
+        self.assertEqual(sorted(self.parser.results.files[path].nodes),
+                         [t.unique_id for t in tests])
+        self.assertIn(path, self.parser.results.files)
+        self.assertEqual(self.parser.results.files[path].sources,
+                         ['source.snowplow.my_source.my_table'])
+
+
+class SchemaParserModelsTest(SchemaParserTest):
+    def test__read_basic_model_tests(self):
+        block = self.yaml_block_for(SINGLE_TABLE_MODEL_TESTS, 'test_one.yml')
+        self.assertEqual(len(list(self.parser.read_yaml_sources(yaml=block))), 0)
+        results = list(self.parser.read_yaml_models(yaml=block))
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].name, 'my_model')
+        self.assertEqual(len(results[0].columns), 1)
+        self.assertEqual(len(results[0].columns[0].tests), 3)
+        self.assertEqual(len(results[0].tests), 0)
+
+    def test__parse_basic_model_tests(self):
+        block = self.file_block_for(SINGLE_TABLE_MODEL_TESTS, 'test_one.yml')
+        self.parser.parse_file(block)
+        self.assert_has_results_length(self.parser.results, patches=1, nodes=3)
+
+        patch = list(self.parser.results.patches.values())[0]
+        self.assertEqual(len(patch.columns), 1)
+        self.assertEqual(patch.name, 'my_model')
+        self.assertEqual(patch.description, 'A description of my model')
+        expected_patch = ParsedNodePatch(
+            name='my_model',
+            description='A description of my model',
+            columns={'color': ColumnInfo(name='color', description='The color value')},
             docrefs=[],
+            original_file_path=normalize('models/test_one.yml'),
         )
+        self.assertEqual(patch, expected_patch)
 
-    def test__source_schema(self):
-        test_yml = yaml.safe_load('''
-            version: 2
-            sources:
-                - name: my_source
-                  loader: some_loader
-                  description: my source description
-                  quoting:
-                    schema: True
-                    identifier: True
-                  freshness:
-                    warn_after:
-                        count: 10
-                        period: hour
-                    error_after:
-                        count: 20
-                        period: hour
-                  loaded_at_field: something
-                  schema: '{{ var("test_schema_name") }}'
-                  tables:
-                    - name: my_table
-                      description: "my table description"
-                      identifier: bar
-                      freshness:
-                        warn_after:
-                            count: 7
-                            period: hour
-                      quoting:
-                        identifier: False
-                      columns:
-                        - name: id
-                          description: user ID
-                          tests:
-                            - unique:
-                                severity: WARN
-                            - not_null
-                            - accepted_values:
-                                values:
-                                  - a
-                                  - b
-                            - relationships:
-                                from: id
-                                to: ref('model_two')
-                      tests:
-                        - snowplow.some_test:
-                            key: value
-                            severity: WARN
-        ''')
-        parser = SchemaParser(
-            self.root_project_config,
-            self.all_projects,
-            self.macro_manifest
-        )
-        root_dir = get_os_path('/usr/src/app')
-        results = list(parser.parse_schema(
-            path='test_one.yml',
-            test_yml=test_yml,
-            package_name='root',
-            root_dir=root_dir
-        ))
+        tests = sorted(self.parser.results.nodes.values(), key=lambda n: n.unique_id)
+        self.assertEqual(tests[0].config.severity, 'ERROR')
+        self.assertEqual(tests[0].tags, ['schema'])
+        self.assertEqual(tests[0].refs, [['my_model']])
+        self.assertEqual(tests[0].column_name, 'color')
+        self.assertEqual(tests[0].package_name, 'snowplow')
+        self.assertTrue(tests[0].name.startswith('accepted_values_'))
+        self.assertEqual(tests[0].fqn, ['snowplow', 'schema_test', tests[0].name])
+        self.assertEqual(tests[0].unique_id.split('.'), ['test', 'snowplow', tests[0].name])
 
-        tests = sorted((node for t, node in results if t == 'test'),
-                       key=lambda n: n.name)
-        patches = sorted((node for t, node in results if t == 'patch'),
-                         key=lambda n: n.name)
-        sources = sorted((node for t, node in results if t == 'source'),
-                         key=lambda n: n.name)
-        self.assertEqual(len(tests), 5)
-        self.assertEqual(len(patches), 0)
-        self.assertEqual(len(sources), 1)
-        self.assertEqual(len(results), 6)
+        # foreign packages are a bit weird, they include the macro package
+        # name in the test name
+        self.assertEqual(tests[1].config.severity, 'ERROR')
+        self.assertEqual(tests[1].tags, ['schema'])
+        self.assertEqual(tests[1].refs, [['my_model']])
+        self.assertEqual(tests[1].column_name, 'color')
+        self.assertEqual(tests[1].column_name, 'color')
+        self.assertEqual(tests[1].fqn, ['snowplow', 'schema_test', tests[1].name])
+        self.assertTrue(tests[1].name.startswith('foreign_package_test_case_'))
+        self.assertEqual(tests[1].package_name, 'snowplow')
+        self.assertEqual(tests[1].unique_id.split('.'), ['test', 'snowplow', tests[1].name])
 
-        for test, expected in zip(tests, self._expected_source_tests):
-            self.assertEqual(test, expected)
+        self.assertEqual(tests[2].config.severity, 'WARN')
+        self.assertEqual(tests[2].tags, ['schema'])
+        self.assertEqual(tests[2].refs, [['my_model']])
+        self.assertEqual(tests[2].column_name, 'color')
+        self.assertEqual(tests[2].package_name, 'snowplow')
+        self.assertTrue(tests[2].name.startswith('not_null_'))
+        self.assertEqual(tests[2].fqn, ['snowplow', 'schema_test', tests[2].name])
+        self.assertEqual(tests[2].unique_id.split('.'), ['test', 'snowplow', tests[2].name])
 
-        self.assertEqual(sources[0], self._expected_source)
-
-    def test__model_schema(self):
-        test_yml = yaml.safe_load('''
-            version: 2
-            models:
-                - name: model_one
-                  description: blah blah
-                  columns:
-                    - name: id
-                      description: user ID
-                      tests:
-                        - unique:
-                            severity: WARN
-                        - not_null
-                        - accepted_values:
-                            values:
-                              - a
-                              - b
-                        - relationships:
-                            from: id
-                            to: ref('model_two')
-                  tests:
-                    - snowplow.some_test:
-                        severity: WARN
-                        key: value
-        ''')
-        parser = SchemaParser(
-            self.root_project_config,
-            self.all_projects,
-            self.macro_manifest
-        )
-        results = list(parser.parse_schema(
-            path='test_one.yml',
-            test_yml=test_yml,
-            package_name='root',
-            root_dir=get_os_path('/usr/src/app')
-        ))
-
-        tests = sorted((node for t, node in results if t == 'test'),
-                       key=lambda n: n.name)
-        patches = sorted((node for t, node in results if t == 'patch'),
-                         key=lambda n: n.name)
-        sources = sorted((node for t, node in results if t == 'source'),
-                         key=lambda n: n.name)
-        self.assertEqual(len(tests), 5)
-        self.assertEqual(len(patches), 1)
-        self.assertEqual(len(sources), 0)
-        self.assertEqual(len(results), 6)
-
-        for test, expected in zip(tests, self._expected_model_tests):
-            self.assertEqual(test, expected)
+        path = os.path.abspath('./dbt_modules/snowplow/models/test_one.yml')
+        self.assertIn(path, self.parser.results.files)
+        self.assertEqual(sorted(self.parser.results.files[path].nodes),
+                         [t.unique_id for t in tests])
+        self.assertIn(path, self.parser.results.files)
+        self.assertEqual(self.parser.results.files[path].patches, ['my_model'])
 
 
-        self.assertEqual(patches[0], self._expected_patch)
-
-    def test__mixed_schema(self):
-        test_yml = yaml.safe_load('''
-            version: 2
-            quoting:
-              database: True
-            models:
-                - name: model_one
-                  description: blah blah
-                  columns:
-                    - name: id
-                      description: user ID
-                      tests:
-                        - unique:
-                            severity: WARN
-                        - not_null
-                        - accepted_values:
-                            values:
-                              - a
-                              - b
-                        - relationships:
-                            from: id
-                            to: ref('model_two')
-                  tests:
-                    - snowplow.some_test:
-                        severity: WARN
-                        key: value
-            sources:
-                - name: my_source
-                  loader: some_loader
-                  description: my source description
-                  quoting:
-                    schema: True
-                    identifier: True
-                  freshness:
-                    warn_after:
-                        count: 10
-                        period: hour
-                    error_after:
-                        count: 20
-                        period: hour
-                  loaded_at_field: something
-                  schema: '{{ var("test_schema_name") }}'
-                  tables:
-                    - name: my_table
-                      description: "my table description"
-                      identifier: bar
-                      freshness:
-                        warn_after:
-                            count: 7
-                            period: hour
-                      quoting:
-                        identifier: False
-                      columns:
-                        - name: id
-                          description: user ID
-                          tests:
-                            - unique:
-                                severity: WARN
-                            - not_null
-                            - accepted_values:
-                                values:
-                                  - a
-                                  - b
-                            - relationships:
-                                from: id
-                                to: ref('model_two')
-                      tests:
-                        - snowplow.some_test:
-                            severity: WARN
-                            key: value
-        ''')
-        parser = SchemaParser(
-            self.root_project_config,
-            self.all_projects,
-            self.macro_manifest
-        )
-        results = list(parser.parse_schema(
-            path='test_one.yml',
-            test_yml=test_yml,
-            package_name='root',
-            root_dir=get_os_path('/usr/src/app')
-        ))
-
-        tests = sorted((node for t, node in results if t == 'test'),
-                       key=lambda n: n.name)
-        patches = sorted((node for t, node in results if t == 'patch'),
-                         key=lambda n: n.name)
-        sources = sorted((node for t, node in results if t == 'source'),
-                         key=lambda n: n.name)
-        self.assertEqual(len(tests), 10)
-        self.assertEqual(len(patches), 1)
-        self.assertEqual(len(sources), 1)
-        self.assertEqual(len(results), 12)
-
-        expected_tests = self._expected_model_tests + self._expected_source_tests
-        expected_tests.sort(key=lambda n: n.name)
-        for test, expected in zip(tests, expected_tests):
-            self.assertEqual(test, expected)
-
-        self.assertEqual(patches[0], self._expected_patch)
-        self.assertEqual(sources[0], self._expected_source)
-
-    def test__source_schema_invalid_test_strict(self):
-        test_yml = yaml.safe_load('''
-            version: 2
-            sources:
-                - name: my_source
-                  loader: some_loader
-                  description: my source description
-                  quoting:
-                    schema: True
-                    identifier: True
-                  freshness:
-                    warn_after:
-                        count: 10
-                        period: hour
-                    error_after:
-                        count: 20
-                        period: hour
-                  loaded_at_field: something
-                  schema: foo
-                  tables:
-                    - name: my_table
-                      description: "my table description"
-                      identifier: bar
-                      freshness:
-                        warn_after:
-                            count: 7
-                            period: hour
-                      quoting:
-                        identifier: False
-                      columns:
-                        - name: id
-                          description: user ID
-                          tests:
-                            - unique:
-                                severity: WARN
-                            - not_null
-                            - accepted_values: # this test is invalid
-                                - values:
-                                    - a
-                                    - b
-                            - relationships:
-                                from: id
-                                to: ref('model_two')
-                      tests:
-                        - snowplow.some_test:
-                            severity: WARN
-                            key: value
-        ''')
-        parser = SchemaParser(
-            self.root_project_config,
-            self.all_projects,
-            self.macro_manifest
-        )
-        root_dir = get_os_path('/usr/src/app')
-        with self.assertRaises(dbt.exceptions.CompilationException):
-            list(parser.parse_schema(
-                path='test_one.yml',
-                test_yml=test_yml,
-                package_name='root',
-                root_dir=root_dir
-            ))
-
-    def test__source_schema_invalid_test_not_strict(self):
-        dbt.flags.WARN_ERROR = False
-        dbt.flags.STRICT_MODE = False
-        test_yml = yaml.safe_load('''
-            version: 2
-            sources:
-                - name: my_source
-                  loader: some_loader
-                  description: my source description
-                  quoting:
-                    schema: True
-                    identifier: True
-                  freshness:
-                    warn_after:
-                        count: 10
-                        period: hour
-                    error_after:
-                        count: 20
-                        period: hour
-                  loaded_at_field: something
-                  schema: foo
-                  tables:
-                    - name: my_table
-                      description: "my table description"
-                      identifier: bar
-                      freshness:
-                        warn_after:
-                            count: 7
-                            period: hour
-                      quoting:
-                        identifier: False
-                      columns:
-                        - name: id
-                          description: user ID
-                          tests:
-                            - unique:
-                                severity: WARN
-                            - not_null
-                            - accepted_values: # this test is invalid
-                                - values:
-                                    - a
-                                    - b
-                            - relationships:
-                                from: id
-                                to: ref('model_two')
-                      tests:
-                        - snowplow.some_test:
-                            severity: WARN
-                            key: value
-        ''')
-        parser = SchemaParser(
-            self.root_project_config,
-            self.all_projects,
-            self.macro_manifest
-        )
-        root_dir = get_os_path('/usr/src/app')
-        results = list(parser.parse_schema(
-            path='test_one.yml',
-            test_yml=test_yml,
-            package_name='root',
-            root_dir=root_dir
-        ))
-
-        tests = sorted((node for t, node in results if t == 'test'),
-                       key=lambda n: n.name)
-        patches = sorted((node for t, node in results if t == 'patch'),
-                         key=lambda n: n.name)
-        sources = sorted((node for t, node in results if t == 'source'),
-                         key=lambda n: n.name)
-        self.assertEqual(len(tests), 4)
-        self.assertEqual(len(patches), 0)
-        self.assertEqual(len(sources), 1)
-        self.assertEqual(len(results), 5)
-
-        expected_tests = [x for x in self._expected_source_tests
-                          if 'accepted_values' not in x.unique_id]
-        for test, expected in zip(tests, expected_tests):
-            self.assertEqual(test, expected)
-
-        self.assertEqual(sources[0], self._expected_source)
-
-    @mock.patch.object(SchemaParser, 'find_schema_yml')
-    @mock.patch.object(dbt.parser.schemas, 'logger')
-    def test__schema_v2_as_v1(self, mock_logger, find_schema_yml):
-        test_yml = yaml.safe_load(
-            '{models: [{name: model_one, description: "blah blah", columns: ['
-            '{name: id, description: "user ID", tests: [unique, not_null, '
-            '{accepted_values: {values: ["a", "b"]}},'
-            '{relationships: {from: id, to: ref(\'model_two\')}}]'
-            '}], tests: [some_test: { key: value }]}]}'
-        )
-        find_schema_yml.return_value = [('/some/path/schema.yml', test_yml)]
-        root_project = {}
-        all_projects = {}
-        root_dir = '/some/path'
-        relative_dirs = ['a', 'b']
-        parser = dbt.parser.schemas.SchemaParser(root_project, all_projects, None)
-        with self.assertRaises(dbt.exceptions.CompilationException) as cm:
-            parser.load_and_parse(
-                'test', root_dir, relative_dirs
-            )
-        self.assertIn('https://docs.getdbt.com/docs/schemayml-files',
-                      str(cm.exception))
-
-    @mock.patch.object(SchemaParser, 'find_schema_yml')
-    @mock.patch.object(dbt.parser.schemas, 'logger')
-    def test__schema_v1_version_model(self, mock_logger, find_schema_yml):
-        test_yml = yaml.safe_load(
-            '{model_one: {constraints: {not_null: [id],'
-            'unique: [id],'
-            'accepted_values: [{field: id, values: ["a","b"]}],'
-            'relationships: [{from: id, to: ref(\'model_two\'), field: id}]' # noqa
-            '}}, version: {constraints: {not_null: [id]}}}'
-        )
-        find_schema_yml.return_value = [('/some/path/schema.yml', test_yml)]
-        root_project = {}
-        all_projects = {}
-        root_dir = '/some/path'
-        relative_dirs = ['a', 'b']
-        parser = dbt.parser.schemas.SchemaParser(root_project, all_projects, None)
-        with self.assertRaises(dbt.exceptions.CompilationException) as cm:
-            parser.load_and_parse(
-                'test', root_dir, relative_dirs
-            )
-        self.assertIn('https://docs.getdbt.com/docs/schemayml-files',
-                      str(cm.exception))
-
-    @mock.patch.object(SchemaParser, 'find_schema_yml')
-    @mock.patch.object(dbt.parser.schemas, 'logger')
-    def test__schema_v1_version_1(self, mock_logger, find_schema_yml):
-        test_yml = yaml.safe_load(
-            '{model_one: {constraints: {not_null: [id],'
-            'unique: [id],'
-            'accepted_values: [{field: id, values: ["a","b"]}],'
-            'relationships: [{from: id, to: ref(\'model_two\'), field: id}]' # noqa
-            '}}, version: 1}'
-        )
-        find_schema_yml.return_value = [('/some/path/schema.yml', test_yml)]
-        root_project = {}
-        all_projects = {}
-        root_dir = '/some/path'
-        relative_dirs = ['a', 'b']
-        parser = dbt.parser.schemas.SchemaParser(root_project, all_projects, None)
-        with self.assertRaises(dbt.exceptions.CompilationException) as cm:
-            parser.load_and_parse(
-                'test', root_dir, relative_dirs
-            )
-        self.assertIn('https://docs.getdbt.com/docs/schemayml-files',
-                      str(cm.exception))
-
-
-class ParserTest(BaseParserTest):
-    def _assert_parsed_sql_nodes(self, parse_result, parsed, disabled):
-        self.assertEqual(parse_result.parsed, parsed)
-        self.assertEqual(parse_result.disabled, disabled)
-
-
-    def find_input_by_name(self, models, name):
-        return next(
-            (model for model in models if model.get('name') == name),
-            {})
-
+class ModelParserTest(BaseParserTest):
     def setUp(self):
         super().setUp()
-
-        self.macro_manifest = Manifest(macros={}, nodes={}, docs={},
-                                       generated_at=datetime.utcnow(), disabled=[])
-
-        self.model_config = NodeConfig.from_dict({
-            'enabled': True,
-            'materialized': 'view',
-            'persist_docs': {},
-            'post-hook': [],
-            'pre-hook': [],
-            'vars': {},
-            'quoting': {},
-            'column_types': {},
-            'tags': [],
-        })
-
-        self.test_config = TestConfig.from_dict({
-            'enabled': True,
-            'materialized': 'view',
-            'persist_docs': {},
-            'post-hook': [],
-            'pre-hook': [],
-            'vars': {},
-            'quoting': {},
-            'column_types': {},
-            'tags': [],
-            'severity': 'ERROR',
-        })
-
-        self.disabled_config = NodeConfig.from_dict({
-            'enabled': False,
-            'materialized': 'view',
-            'persist_docs': {},
-            'post-hook': [],
-            'pre-hook': [],
-            'vars': {},
-            'quoting': {},
-            'column_types': {},
-            'tags': [],
-        })
-
-    def test__single_model(self):
-        models = [{
-            'name': 'model_one',
-            'resource_type': 'model',
-            'package_name': 'root',
-            'original_file_path': 'model_one.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'path': 'model_one.sql',
-            'raw_sql': ("select * from events"),
-        }]
-        parser = ModelParser(
-            self.root_project_config,
-            self.all_projects,
-            self.macro_manifest
+        self.parser = ModelParser(
+            results=ParseResult.rpc(),
+            project=self.snowplow_project_config,
+            root_project=self.root_project_config,
+            macro_manifest=self.macro_manifest,
         )
 
-        self._assert_parsed_sql_nodes(
-            parser.parse_sql_nodes(models),
-            {
-                'model.root.model_one': ParsedModelNode(
-                    alias='model_one',
-                    name='model_one',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.root.model_one',
-                    fqn=['root', 'model_one'],
-                    package_name='root',
-                    original_file_path='model_one.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    refs=[],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    config=self.model_config,
-                    tags=[],
-                    path='model_one.sql',
-                    raw_sql=self.find_input_by_name(
-                        models, 'model_one').get('raw_sql'),
-                    description='',
-                    columns={}
-                )
-            },
-            []
+    def file_block_for(self, data, filename):
+        return super().file_block_for(data, filename, 'models')
+
+    def test_basic(self):
+        raw_sql = '{{ config(materialized="table") }}select 1 as id'
+        block = self.file_block_for(raw_sql, 'nested/model_1.sql')
+        self.parser.parse_file(block)
+        self.assert_has_results_length(self.parser.results, nodes=1)
+        node = list(self.parser.results.nodes.values())[0]
+        expected = ParsedModelNode(
+            alias='model_1',
+            name='model_1',
+            database='test',
+            schema='analytics',
+            resource_type=NodeType.Model,
+            unique_id='model.snowplow.model_1',
+            fqn=['snowplow', 'nested', 'model_1'],
+            package_name='snowplow',
+            original_file_path=normalize('models/nested/model_1.sql'),
+            root_path=get_abs_os_path('./dbt_modules/snowplow'),
+            config=NodeConfig(materialized='table'),
+            path=normalize('nested/model_1.sql'),
+            raw_sql=raw_sql,
+        )
+        self.assertEqual(node, expected)
+        path = os.path.abspath('./dbt_modules/snowplow/models/nested/model_1.sql')
+        self.assertIn(path, self.parser.results.files)
+        self.assertEqual(self.parser.results.files[path].nodes, ['model.snowplow.model_1'])
+
+    def test_parse_error(self):
+        block = self.file_block_for('{{ SYNTAX ERROR }}', 'nested/model_1.sql')
+        with self.assertRaises(CompilationException):
+            self.parser.parse_file(block)
+        self.assert_has_results_length(self.parser.results, files=0)
+
+
+class SnapshotParserTest(BaseParserTest):
+    def setUp(self):
+        super().setUp()
+        self.parser = SnapshotParser(
+            results=ParseResult.rpc(),
+            project=self.snowplow_project_config,
+            root_project=self.root_project_config,
+            macro_manifest=self.macro_manifest,
         )
 
-    def test__single_model__nested_configuration(self):
-        models = [{
-            'name': 'model_one',
-            'resource_type': 'model',
-            'package_name': 'root',
-            'original_file_path': 'nested/path/model_one.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'path': get_os_path('nested/path/model_one.sql'),
-            'raw_sql': ("select * from events"),
-        }]
+    def file_block_for(self, data, filename):
+        return super().file_block_for(data, filename, 'snapshots')
 
-        self.root_project_config.models = {
-            'materialized': 'ephemeral',
-            'root': {
-                'nested': {
-                    'path': {
-                        'materialized': 'ephemeral'
-                    }
-                }
-            }
-        }
+    def test_parse_error(self):
+        block = self.file_block_for('{% snapshot foo %}select 1 as id{%snapshot bar %}{% endsnapshot %}', 'nested/snap_1.sql')
+        with self.assertRaises(CompilationException):
+            self.parser.parse_file(block)
+        self.assert_has_results_length(self.parser.results, files=0)
 
-        ephemeral_config = self.model_config.replace(materialized='ephemeral')
-
-        parser = ModelParser(
-            self.root_project_config,
-            self.all_projects,
-            self.macro_manifest
+    def test_single_block(self):
+        raw_sql = '''{{
+                config(unique_key="id", target_schema="analytics",
+                       target_database="dbt", strategy="timestamp",
+                       updated_at="last_update")
+            }}
+            select 1 as id, now() as last_update'''
+        full_file = '''
+        {{% snapshot foo %}}{}{{% endsnapshot %}}
+        '''.format(raw_sql)
+        block = self.file_block_for(full_file, 'nested/snap_1.sql')
+        self.parser.parse_file(block)
+        self.assert_has_results_length(self.parser.results, nodes=1)
+        node = list(self.parser.results.nodes.values())[0]
+        expected = ParsedSnapshotNode(
+            alias='foo',
+            name='foo',
+            # the `database` entry is overrridden by the target_database config
+            database='dbt',
+            schema='analytics',
+            resource_type=SnapshotType.Snapshot,
+            unique_id='snapshot.snowplow.foo',
+            fqn=['snowplow', 'nested', 'snap_1', 'foo'],
+            package_name='snowplow',
+            original_file_path=normalize('snapshots/nested/snap_1.sql'),
+            root_path=get_abs_os_path('./dbt_modules/snowplow'),
+            config=TimestampSnapshotConfig(
+                strategy=TimestampStrategy.Timestamp,
+                updated_at='last_update',
+                target_database='dbt',
+                target_schema='analytics',
+                unique_key='id',
+                materialized='snapshot',
+            ),
+            path=normalize('nested/snap_1.sql'),
+            raw_sql=raw_sql,
         )
-        self._assert_parsed_sql_nodes(
-            parser.parse_sql_nodes(models),
-            {
-                'model.root.model_one': ParsedModelNode(
-                    alias='model_one',
-                    name='model_one',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.root.model_one',
-                    fqn=['root', 'nested', 'path', 'model_one'],
-                    package_name='root',
-                    original_file_path='nested/path/model_one.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    refs=[],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    config=ephemeral_config,
-                    tags=[],
-                    path=get_os_path('nested/path/model_one.sql'),
-                    raw_sql=self.find_input_by_name(
-                        models, 'model_one').get('raw_sql'),
-                    description='',
-                    columns={}
-                )
-            },
-            []
+        self.assertEqual(node, expected)
+        path = os.path.abspath('./dbt_modules/snowplow/snapshots/nested/snap_1.sql')
+        self.assertIn(path, self.parser.results.files)
+        self.assertEqual(self.parser.results.files[path].nodes, ['snapshot.snowplow.foo'])
+
+    def test_multi_block(self):
+        raw_1 = '''
+            {{
+                config(unique_key="id", target_schema="analytics",
+                       target_database="dbt", strategy="timestamp",
+                       updated_at="last_update")
+            }}
+            select 1 as id, now() as last_update
+        '''
+        raw_2 = '''
+            {{
+                config(unique_key="id", target_schema="analytics",
+                       target_database="dbt", strategy="timestamp",
+                       updated_at="last_update")
+            }}
+            select 2 as id, now() as last_update
+        '''
+        full_file = '''
+        {{% snapshot foo %}}{}{{% endsnapshot %}}
+        {{% snapshot bar %}}{}{{% endsnapshot %}}
+        '''.format(raw_1, raw_2)
+        block = self.file_block_for(full_file, 'nested/snap_1.sql')
+        self.parser.parse_file(block)
+        self.assert_has_results_length(self.parser.results, nodes=2)
+        nodes = sorted(self.parser.results.nodes.values(), key=lambda n: n.name)
+        expect_foo = ParsedSnapshotNode(
+            alias='foo',
+            name='foo',
+            database='dbt',
+            schema='analytics',
+            resource_type=SnapshotType.Snapshot,
+            unique_id='snapshot.snowplow.foo',
+            fqn=['snowplow', 'nested', 'snap_1', 'foo'],
+            package_name='snowplow',
+            original_file_path=normalize('snapshots/nested/snap_1.sql'),
+            root_path=get_abs_os_path('./dbt_modules/snowplow'),
+            config=TimestampSnapshotConfig(
+                strategy=TimestampStrategy.Timestamp,
+                updated_at='last_update',
+                target_database='dbt',
+                target_schema='analytics',
+                unique_key='id',
+                materialized='snapshot',
+            ),
+            path=normalize('nested/snap_1.sql'),
+            raw_sql=raw_1,
         )
-
-    def test__empty_model(self):
-        models = [{
-            'name': 'model_one',
-            'resource_type': 'model',
-            'package_name': 'root',
-            'path': 'model_one.sql',
-            'original_file_path': 'model_one.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': (" "),
-        }]
-
-        del self.all_projects['snowplow']
-        parser = ModelParser(
-            self.root_project_config,
-            self.all_projects,
-            self.macro_manifest
+        expect_bar = ParsedSnapshotNode(
+            alias='bar',
+            name='bar',
+            database='dbt',
+            schema='analytics',
+            resource_type=SnapshotType.Snapshot,
+            unique_id='snapshot.snowplow.bar',
+            fqn=['snowplow', 'nested', 'snap_1', 'bar'],
+            package_name='snowplow',
+            original_file_path=normalize('snapshots/nested/snap_1.sql'),
+            root_path=get_abs_os_path('./dbt_modules/snowplow'),
+            config=TimestampSnapshotConfig(
+                strategy=TimestampStrategy.Timestamp,
+                updated_at='last_update',
+                target_database='dbt',
+                target_schema='analytics',
+                unique_key='id',
+                materialized='snapshot',
+            ),
+            path=normalize('nested/snap_1.sql'),
+            raw_sql=raw_2,
         )
+        self.assertEqual(nodes[0], expect_bar)
+        self.assertEqual(nodes[1], expect_foo)
+        path = os.path.abspath('./dbt_modules/snowplow/snapshots/nested/snap_1.sql')
+        self.assertIn(path, self.parser.results.files)
+        self.assertEqual(sorted(self.parser.results.files[path].nodes),
+                         ['snapshot.snowplow.bar', 'snapshot.snowplow.foo'])
 
-        self._assert_parsed_sql_nodes(
-            parser.parse_sql_nodes(models),
-            {
-                'model.root.model_one': ParsedModelNode(
-                    alias='model_one',
-                    name='model_one',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.root.model_one',
-                    fqn=['root', 'model_one'],
-                    package_name='root',
-                    refs=[],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    config=self.model_config,
-                    tags=[],
-                    path='model_one.sql',
-                    original_file_path='model_one.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    raw_sql=self.find_input_by_name(
-                        models, 'model_one').get('raw_sql'),
-                    description='',
-                    columns={}
-                )
-            },
-            []
-        )
 
-    def test__simple_dependency(self):
-        models = [{
-            'name': 'base',
-            'resource_type': 'model',
-            'package_name': 'root',
-            'path': 'base.sql',
-            'original_file_path': 'base.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': 'select * from events'
-        }, {
-            'name': 'events_tx',
-            'resource_type': 'model',
-            'package_name': 'root',
-            'path': 'events_tx.sql',
-            'original_file_path': 'events_tx.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': "select * from {{ref('base')}}"
-        }]
-
-        parser = ModelParser(
-            self.root_project_config,
-            self.all_projects,
-            self.macro_manifest
-        )
-
-        self._assert_parsed_sql_nodes(
-            parser.parse_sql_nodes(models),
-            {
-                'model.root.base': ParsedModelNode(
-                    alias='base',
-                    name='base',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.root.base',
-                    fqn=['root', 'base'],
-                    package_name='root',
-                    refs=[],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    config=self.model_config,
-                    tags=[],
-                    path='base.sql',
-                    original_file_path='base.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    raw_sql=self.find_input_by_name(models, 'base').get('raw_sql'),
-                    description='',
-                    columns={}
-
-                ),
-                'model.root.events_tx': ParsedModelNode(
-                    alias='events_tx',
-                    name='events_tx',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.root.events_tx',
-                    fqn=['root', 'events_tx'],
-                    package_name='root',
-                    refs=[['base']],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    config=self.model_config,
-                    tags=[],
-                    path='events_tx.sql',
-                    original_file_path='events_tx.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    raw_sql=self.find_input_by_name(models, 'events_tx').get('raw_sql'),
-                    description='',
-                    columns={}
-                )
-            },
-            []
+class MacroParserTest(BaseParserTest):
+    def setUp(self):
+        super().setUp()
+        self.parser = MacroParser(
+            results=ParseResult.rpc(),
+            project=self.snowplow_project_config,
         )
 
-    def test__multiple_dependencies(self):
-        models = [{
-            'name': 'events',
-            'resource_type': 'model',
-            'package_name': 'root',
-            'path': 'events.sql',
-            'original_file_path': 'events.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': 'select * from base.events',
-        }, {
-            'name': 'sessions',
-            'resource_type': 'model',
-            'package_name': 'root',
-            'path': 'sessions.sql',
-            'original_file_path': 'sessions.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': 'select * from base.sessions',
-        }, {
-            'name': 'events_tx',
-            'resource_type': 'model',
-            'package_name': 'root',
-            'path': 'events_tx.sql',
-            'original_file_path': 'events_tx.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': ("with events as (select * from {{ref('events')}}) "
-                        "select * from events"),
-        }, {
-            'name': 'sessions_tx',
-            'resource_type': 'model',
-            'package_name': 'root',
-            'path': 'sessions_tx.sql',
-            'original_file_path': 'sessions_tx.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': ("with sessions as (select * from {{ref('sessions')}}) "
-                        "select * from sessions"),
-        }, {
-            'name': 'multi',
-            'resource_type': 'model',
-            'package_name': 'root',
-            'path': 'multi.sql',
-            'original_file_path': 'multi.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': ("with s as (select * from {{ref('sessions_tx')}}), "
-                        "e as (select * from {{ref('events_tx')}}) "
-                        "select * from e left join s on s.id = e.sid"),
-        }]
+    def file_block_for(self, data, filename):
+        return super().file_block_for(data, filename, 'macros')
 
-        parser = ModelParser(
-            self.root_project_config,
-            self.all_projects,
-            self.macro_manifest
+    def test_single_block(self):
+        raw_sql = '{% macro foo(a, b) %}a ~ b{% endmacro %}'
+        block = self.file_block_for(raw_sql, 'macro.sql')
+        self.parser.parse_file(block)
+        self.assert_has_results_length(self.parser.results, macros=1)
+        macro = list(self.parser.results.macros.values())[0]
+        expected = ParsedMacro(
+            name='foo',
+            resource_type=MacroType.Macro,
+            unique_id='macro.snowplow.foo',
+            package_name='snowplow',
+            original_file_path=normalize('macros/macro.sql'),
+            root_path=get_abs_os_path('./dbt_modules/snowplow'),
+            path=normalize('macros/macro.sql'),
+            raw_sql=raw_sql
+        )
+        self.assertEqual(macro, expected)
+        path = os.path.abspath('./dbt_modules/snowplow/macros/macro.sql')
+        self.assertIn(path, self.parser.results.files)
+        self.assertEqual(self.parser.results.files[path].macros, ['macro.snowplow.foo'])
+
+
+class DataTestParserTest(BaseParserTest):
+    def setUp(self):
+        super().setUp()
+        self.parser = DataTestParser(
+            results=ParseResult.rpc(),
+            project=self.snowplow_project_config,
+            root_project=self.root_project_config,
+            macro_manifest=self.macro_manifest,
         )
 
-        self._assert_parsed_sql_nodes(
-            parser.parse_sql_nodes(models),
-            {
-                'model.root.events': ParsedModelNode(
-                    alias='events',
-                    name='events',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.root.events',
-                    fqn=['root', 'events'],
-                    package_name='root',
-                    refs=[],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    config=self.model_config,
-                    tags=[],
-                    path='events.sql',
-                    original_file_path='events.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    raw_sql=self.find_input_by_name(
-                        models, 'events').get('raw_sql'),
-                    description='',
-                    columns={}
-                ),
-                'model.root.sessions': ParsedModelNode(
-                    alias='sessions',
-                    name='sessions',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.root.sessions',
-                    fqn=['root', 'sessions'],
-                    package_name='root',
-                    refs=[],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    config=self.model_config,
-                    tags=[],
-                    path='sessions.sql',
-                    original_file_path='sessions.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    raw_sql=self.find_input_by_name(
-                        models, 'sessions').get('raw_sql'),
-                    description='',
-                    columns={},
-                ),
-                'model.root.events_tx': ParsedModelNode(
-                    alias='events_tx',
-                    name='events_tx',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.root.events_tx',
-                    fqn=['root', 'events_tx'],
-                    package_name='root',
-                    refs=[['events']],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    config=self.model_config,
-                    tags=[],
-                    path='events_tx.sql',
-                    original_file_path='events_tx.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    raw_sql=self.find_input_by_name(
-                        models, 'events_tx').get('raw_sql'),
-                    description='',
-                    columns={}
-                ),
-                'model.root.sessions_tx': ParsedModelNode(
-                    alias='sessions_tx',
-                    name='sessions_tx',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.root.sessions_tx',
-                    fqn=['root', 'sessions_tx'],
-                    package_name='root',
-                    refs=[['sessions']],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    config=self.model_config,
-                    tags=[],
-                    path='sessions_tx.sql',
-                    original_file_path='sessions_tx.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    raw_sql=self.find_input_by_name(
-                        models, 'sessions_tx').get('raw_sql'),
-                    description='',
-                    columns={}
-                ),
-                'model.root.multi': ParsedModelNode(
-                    alias='multi',
-                    name='multi',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.root.multi',
-                    fqn=['root', 'multi'],
-                    package_name='root',
-                    refs=[['sessions_tx'], ['events_tx']],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    config=self.model_config,
-                    tags=[],
-                    path='multi.sql',
-                    original_file_path='multi.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    raw_sql=self.find_input_by_name(
-                        models, 'multi').get('raw_sql'),
-                    description='',
-                    columns={}
-                ),
-            },
-            []
+    def file_block_for(self, data, filename):
+        return super().file_block_for(data, filename, 'tests')
+
+    def test_basic(self):
+        raw_sql = 'select * from {{ ref("blah") }} limit 0'
+        block = self.file_block_for(raw_sql, 'test_1.sql')
+        self.parser.parse_file(block)
+        self.assert_has_results_length(self.parser.results, nodes=1)
+        node = list(self.parser.results.nodes.values())[0]
+        expected = ParsedTestNode(
+            alias='test_1',
+            name='test_1',
+            database='test',
+            schema='analytics',
+            resource_type=TestType.Test,
+            unique_id='test.snowplow.test_1',
+            fqn=['snowplow', 'data_test', 'test_1'],
+            package_name='snowplow',
+            original_file_path=normalize('tests/test_1.sql'),
+            root_path=get_abs_os_path('./dbt_modules/snowplow'),
+            refs=[['blah']],
+            config=TestConfig(severity='ERROR'),
+            tags=['data'],
+            path=normalize('data_test/test_1.sql'),
+            raw_sql=raw_sql,
+        )
+        self.assertEqual(node, expected)
+        path = os.path.abspath('./dbt_modules/snowplow/tests/test_1.sql')
+        self.assertIn(path, self.parser.results.files)
+        self.assertEqual(self.parser.results.files[path].nodes, ['test.snowplow.test_1'])
+
+
+class AnalysisParserTest(BaseParserTest):
+    def setUp(self):
+        super().setUp()
+        self.parser = AnalysisParser(
+            results=ParseResult.rpc(),
+            project=self.snowplow_project_config,
+            root_project=self.root_project_config,
+            macro_manifest=self.macro_manifest,
         )
 
-    def test__multiple_dependencies__packages(self):
-        models = [{
-            'name': 'events',
-            'resource_type': 'model',
-            'package_name': 'snowplow',
-            'path': 'events.sql',
-            'original_file_path': 'events.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': 'select * from base.events',
-        }, {
-            'name': 'sessions',
-            'resource_type': 'model',
-            'package_name': 'snowplow',
-            'path': 'sessions.sql',
-            'original_file_path': 'sessions.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': 'select * from base.sessions',
-        }, {
-            'name': 'events_tx',
-            'resource_type': 'model',
-            'package_name': 'snowplow',
-            'path': 'events_tx.sql',
-            'original_file_path': 'events_tx.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': ("with events as (select * from {{ref('events')}}) "
-                        "select * from events"),
-        }, {
-            'name': 'sessions_tx',
-            'resource_type': 'model',
-            'package_name': 'snowplow',
-            'path': 'sessions_tx.sql',
-            'original_file_path': 'sessions_tx.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': ("with sessions as (select * from {{ref('sessions')}}) "
-                        "select * from sessions"),
-        }, {
-            'name': 'multi',
-            'resource_type': 'model',
-            'package_name': 'root',
-            'path': 'multi.sql',
-            'original_file_path': 'multi.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': ("with s as "
-                        "(select * from {{ref('snowplow', 'sessions_tx')}}), "
-                        "e as "
-                        "(select * from {{ref('snowplow', 'events_tx')}}) "
-                        "select * from e left join s on s.id = e.sid"),
-        }]
+    def file_block_for(self, data, filename):
+        return super().file_block_for(data, filename, 'analyses')
 
-        parser = ModelParser(
-            self.root_project_config,
-            self.all_projects,
-            self.macro_manifest
+    def test_basic(self):
+        raw_sql = 'select 1 as id'
+        block = self.file_block_for(raw_sql, 'nested/analysis_1.sql')
+        self.parser.parse_file(block)
+        self.assert_has_results_length(self.parser.results, nodes=1)
+        node = list(self.parser.results.nodes.values())[0]
+        expected = ParsedAnalysisNode(
+            alias='analysis_1',
+            name='analysis_1',
+            database='test',
+            schema='analytics',
+            resource_type=AnalysisType.Analysis,
+            unique_id='analysis.snowplow.analysis_1',
+            fqn=['snowplow', 'analysis', 'nested', 'analysis_1'],
+            package_name='snowplow',
+            original_file_path=normalize('analyses/nested/analysis_1.sql'),
+            root_path=get_abs_os_path('./dbt_modules/snowplow'),
+            depends_on=DependsOn(),
+            config=NodeConfig(),
+            path=normalize('analysis/nested/analysis_1.sql'),
+            raw_sql=raw_sql,
         )
+        self.assertEqual(node, expected)
+        path = os.path.abspath('./dbt_modules/snowplow/analyses/nested/analysis_1.sql')
+        self.assertIn(path, self.parser.results.files)
+        self.assertEqual(self.parser.results.files[path].nodes, ['analysis.snowplow.analysis_1'])
 
-        self._assert_parsed_sql_nodes(
-            parser.parse_sql_nodes(models),
-            {
-                'model.snowplow.events': ParsedModelNode(
-                    alias='events',
-                    name='events',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.snowplow.events',
-                    fqn=['snowplow', 'events'],
-                    package_name='snowplow',
-                    refs=[],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    config=self.model_config,
-                    tags=[],
-                    path='events.sql',
-                    original_file_path='events.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    raw_sql=self.find_input_by_name(
-                        models, 'events').get('raw_sql'),
-                    description='',
-                    columns={}
-                ),
-                'model.snowplow.sessions': ParsedModelNode(
-                    alias='sessions',
-                    name='sessions',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.snowplow.sessions',
-                    fqn=['snowplow', 'sessions'],
-                    package_name='snowplow',
-                    refs=[],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    config=self.model_config,
-                    tags=[],
-                    path='sessions.sql',
-                    original_file_path='sessions.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    raw_sql=self.find_input_by_name(
-                        models, 'sessions').get('raw_sql'),
-                    description='',
-                    columns={}
-                ),
-                'model.snowplow.events_tx': ParsedModelNode(
-                    alias='events_tx',
-                    name='events_tx',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.snowplow.events_tx',
-                    fqn=['snowplow', 'events_tx'],
-                    package_name='snowplow',
-                    refs=[['events']],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    config=self.model_config,
-                    tags=[],
-                    path='events_tx.sql',
-                    original_file_path='events_tx.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    raw_sql=self.find_input_by_name(
-                        models, 'events_tx').get('raw_sql'),
-                    description='',
-                    columns={}
-                ),
-                'model.snowplow.sessions_tx': ParsedModelNode(
-                    alias='sessions_tx',
-                    name='sessions_tx',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.snowplow.sessions_tx',
-                    fqn=['snowplow', 'sessions_tx'],
-                    package_name='snowplow',
-                    refs=[['sessions']],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    config=self.model_config,
-                    tags=[],
-                    path='sessions_tx.sql',
-                    original_file_path='sessions_tx.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    raw_sql=self.find_input_by_name(
-                        models, 'sessions_tx').get('raw_sql'),
-                    description='',
-                    columns={}
-                ),
-                'model.root.multi': ParsedModelNode(
-                    alias='multi',
-                    name='multi',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.root.multi',
-                    fqn=['root', 'multi'],
-                    package_name='root',
-                    refs=[['snowplow', 'sessions_tx'],
-                          ['snowplow', 'events_tx']],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    config=self.model_config,
-                    tags=[],
-                    path='multi.sql',
-                    original_file_path='multi.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    raw_sql=self.find_input_by_name(
-                        models, 'multi').get('raw_sql'),
-                    description='',
-                    columns={}
-                ),
-            },
-            []
+
+class ParserUtilsTest(unittest.TestCase):
+    def setUp(self):
+        x_depends_on = mock.MagicMock()
+        y_depends_on = mock.MagicMock()
+        x_uid = 'model.project.x'
+        y_uid = 'model.otherproject.y'
+        src_uid = 'source.thirdproject.src.tbl'
+        remote_docref = mock.MagicMock(documentation_package='otherproject', documentation_name='my_doc', column_name=None)
+        docref = mock.MagicMock(documentation_package='', documentation_name='my_doc', column_name=None)
+        self.x_node = mock.MagicMock(
+            refs=[], sources=[['src', 'tbl']], docrefs=[remote_docref], unique_id=x_uid,
+            resource_type=NodeType.Model, depends_on=x_depends_on,
+            description='other_project: {{ doc("otherproject", "my_doc") }}',
         )
-
-    def test__process_refs__packages(self):
+        self.y_node = mock.MagicMock(
+            refs=[['x']], sources=[], docrefs=[docref], unique_id=y_uid,
+            resource_type=NodeType.Model, depends_on=y_depends_on,
+            description='{{ doc("my_doc") }}',
+        )
+        self.src_node = mock.MagicMock(
+            resource_type=NodeType.Source, unique_id=src_uid,
+        )
         nodes = {
-            'model.snowplow.events': ParsedModelNode(
-                name='events',
-                alias='events',
-                database='test',
-                schema='analytics',
-                resource_type=NodeType.Model,
-                unique_id='model.snowplow.events',
-                fqn=['snowplow', 'events'],
-                package_name='snowplow',
-                refs=[],
-                sources=[],
-                depends_on=DependsOn(),
-                config=self.disabled_config,
-                tags=[],
-                path='events.sql',
-                original_file_path='events.sql',
-                root_path=get_os_path('/usr/src/app'),
-                raw_sql='does not matter',
-            ),
-            'model.root.events': ParsedModelNode(
-                name='events',
-                alias='events',
-                database='test',
-                schema='analytics',
-                resource_type=NodeType.Model,
-                unique_id='model.root.events',
-                fqn=['root', 'events'],
-                package_name='root',
-                refs=[],
-                sources=[],
-                depends_on=DependsOn(),
-                config=self.model_config,
-                tags=[],
-                path='events.sql',
-                original_file_path='events.sql',
-                root_path=get_os_path('/usr/src/app'),
-                raw_sql='does not matter',
-            ),
-            'model.root.dep': ParsedModelNode(
-                name='dep',
-                alias='dep',
-                database='test',
-                schema='analytics',
-                resource_type=NodeType.Model,
-                unique_id='model.root.dep',
-                fqn=['root', 'dep'],
-                package_name='root',
-                refs=[['events']],
-                sources=[],
-                depends_on=DependsOn(),
-                config=self.model_config,
-                tags=[],
-                path='multi.sql',
-                original_file_path='multi.sql',
-                root_path=get_os_path('/usr/src/app'),
-                raw_sql='does not matter',
-            ),
+            x_uid: self.x_node,
+            y_uid: self.y_node,
+            src_uid: self.src_node,
         }
-
-        manifest = Manifest(
-            nodes=nodes,
-            macros={},
-            docs={},
-            generated_at=datetime.utcnow(),
-            disabled=[]
-        )
-
-        processed_manifest = ParserUtils.process_refs(manifest, 'root')
-        self.assertEqual(
-            processed_manifest.to_flat_graph()['nodes'],
-            {
-                'model.snowplow.events': {
-                    'name': 'events',
-                    'alias': 'events',
-                    'database': 'test',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.snowplow.events',
-                    'fqn': ['snowplow', 'events'],
-                    'docrefs': [],
-                    'package_name': 'snowplow',
-                    'refs': [],
-                    'sources': [],
-                    'depends_on': {
-                        'nodes': [],
-                        'macros': []
-                    },
-                    'config': self.disabled_config.to_dict(),
-                    'tags': [],
-                    'path': 'events.sql',
-                    'original_file_path': 'events.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'raw_sql': 'does not matter',
-                    'columns': {},
-                    'description': '',
-                    'build_path': None,
-                    'patch_path': None,
-                },
-                'model.root.events': {
-                    'name': 'events',
-                    'alias': 'events',
-                    'database': 'test',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.events',
-                    'fqn': ['root', 'events'],
-                    'docrefs': [],
-                    'package_name': 'root',
-                    'refs': [],
-                    'sources': [],
-                    'depends_on': {
-                        'nodes': [],
-                        'macros': []
-                    },
-                    'config': self.model_config.to_dict(),
-                    'tags': [],
-                    'path': 'events.sql',
-                    'original_file_path': 'events.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'raw_sql': 'does not matter',
-                    'columns': {},
-                    'description': '',
-                    'build_path': None,
-                    'patch_path': None,
-                },
-                'model.root.dep': {
-                    'name': 'dep',
-                    'alias': 'dep',
-                    'database': 'test',
-                    'schema': 'analytics',
-                    'resource_type': 'model',
-                    'unique_id': 'model.root.dep',
-                    'fqn': ['root', 'dep'],
-                    'docrefs': [],
-                    'package_name': 'root',
-                    'refs': [['events']],
-                    'sources': [],
-                    'depends_on': {
-                        'nodes': ['model.root.events'],
-                        'macros': []
-                    },
-                    'config': self.model_config.to_dict(),
-                    'tags': [],
-                    'path': 'multi.sql',
-                    'original_file_path': 'multi.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'raw_sql': 'does not matter',
-                    'columns': {},
-                    'description': '',
-                    'build_path': None,
-                    'patch_path': None,
-                }
-            }
-        )
-
-    def test__in_model_config(self):
-        models = [{
-            'name': 'model_one',
-            'resource_type': 'model',
-            'package_name': 'root',
-            'path': 'model_one.sql',
-            'original_file_path': 'model_one.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': ("{{config({'materialized':'table'})}}"
-                        "select * from events"),
-        }]
-
-        self.model_config = self.model_config.replace(materialized='table')
-
-        parser = ModelParser(
-            self.root_project_config,
-            self.all_projects,
-            self.macro_manifest
-        )
-
-        self._assert_parsed_sql_nodes(
-            parser.parse_sql_nodes(models),
-            {
-                'model.root.model_one': ParsedModelNode(
-                    alias='model_one',
-                    name='model_one',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.root.model_one',
-                    fqn=['root', 'model_one'],
-                    package_name='root',
-                    refs=[],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    config=self.model_config,
-                    tags=[],
-                    root_path=get_os_path('/usr/src/app'),
-                    path='model_one.sql',
-                    original_file_path='model_one.sql',
-                    raw_sql=self.find_input_by_name(
-                        models, 'model_one').get('raw_sql'),
-                    description='',
-                    columns={}
-                )
-            },
-            []
-        )
-
-    def test__root_project_config(self):
-        self.root_project_config.models = {
-            'materialized': 'ephemeral',
-            'root': {
-                'view': {
-                    'materialized': 'view'
-                }
-            }
+        docs = {
+            'otherproject.my_doc': mock.MagicMock(block_contents='some docs')
         }
-
-        models = [{
-            'name': 'table',
-            'resource_type': 'model',
-            'package_name': 'root',
-            'path': 'table.sql',
-            'original_file_path': 'table.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': ("{{config({'materialized':'table'})}}"
-                        "select * from events"),
-        }, {
-            'name': 'ephemeral',
-            'resource_type': 'model',
-            'package_name': 'root',
-            'path': 'ephemeral.sql',
-            'original_file_path': 'ephemeral.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': ("select * from events"),
-        }, {
-            'name': 'view',
-            'resource_type': 'model',
-            'package_name': 'root',
-            'path': 'view.sql',
-            'original_file_path': 'view.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': ("select * from events"),
-        }]
-
-        self.model_config = self.model_config.replace(materialized='table')
-        ephemeral_config = self.model_config.replace(materialized='ephemeral')
-        view_config = self.model_config.replace(materialized='view')
-
-        parser = ModelParser(
-            self.root_project_config,
-            self.all_projects,
-            self.macro_manifest
+        self.manifest = Manifest(
+            nodes=nodes, macros={}, docs=docs, disabled=[], files={}, generated_at=mock.MagicMock()
         )
 
-        self._assert_parsed_sql_nodes(
-            parser.parse_sql_nodes(models),
-            {
-                'model.root.table': ParsedModelNode(
-                    alias='table',
-                    name='table',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.root.table',
-                    fqn=['root', 'table'],
-                    package_name='root',
-                    refs=[],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    path='table.sql',
-                    original_file_path='table.sql',
-                    config=self.model_config,
-                    tags=[],
-                    root_path=get_os_path('/usr/src/app'),
-                    raw_sql=self.find_input_by_name(
-                        models, 'table').get('raw_sql'),
-                    description='',
-                    columns={}
-                ),
-                'model.root.ephemeral': ParsedModelNode(
-                    alias='ephemeral',
-                    name='ephemeral',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.root.ephemeral',
-                    fqn=['root', 'ephemeral'],
-                    package_name='root',
-                    refs=[],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    path='ephemeral.sql',
-                    original_file_path='ephemeral.sql',
-                    config=ephemeral_config,
-                    tags=[],
-                    root_path=get_os_path('/usr/src/app'),
-                    raw_sql=self.find_input_by_name(
-                        models, 'ephemeral').get('raw_sql'),
-                    description='',
-                    columns={}
-                ),
-                'model.root.view': ParsedModelNode(
-                    alias='view',
-                    name='view',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.root.view',
-                    fqn=['root', 'view'],
-                    package_name='root',
-                    refs=[],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    path='view.sql',
-                    original_file_path='view.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    config=view_config,
-                    tags=[],
-                    raw_sql=self.find_input_by_name(
-                        models, 'ephemeral').get('raw_sql'),
-                    description='',
-                    columns={}
-                ),
-            },
-            []
-        )
+    def test_resolve_docs(self):
+        # no error. TODO: real test
+        result = ParserUtils.process_docs(self.manifest, 'project')
+        self.assertIs(result, self.manifest)
+        self.assertEqual(self.x_node.description, 'other_project: some docs')
+        self.assertEqual(self.y_node.description, 'some docs')
 
-    def test__other_project_config(self):
-        self.root_project_config.models = {
-            'materialized': 'ephemeral',
-            'root': {
-                'view': {
-                    'materialized': 'view'
-                }
-            },
-            'snowplow': {
-                'enabled': False,
-                'views': {
-                    'materialized': 'view',
-                    'multi_sort': {
-                        'enabled': True,
-                        'materialized': 'table'
-                    }
-                }
-            }
-        }
+    def test_resolve_sources(self):
+        result = ParserUtils.process_sources(self.manifest, 'project')
+        self.assertIs(result, self.manifest)
+        self.x_node.depends_on.nodes.append.assert_called_once_with('source.thirdproject.src.tbl')
 
-        self.snowplow_project_config.models = {
-            'snowplow': {
-                'enabled': False,
-                'views': {
-                    'materialized': 'table',
-                    'sort': 'timestamp',
-                    'multi_sort': {
-                        'sort': ['timestamp', 'id'],
-                    }
-                }
-            }
-        }
-
-        models = [{
-            'name': 'table',
-            'resource_type': 'model',
-            'package_name': 'root',
-            'path': 'table.sql',
-            'original_file_path': 'table.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': ("{{config({'materialized':'table'})}}"
-                        "select * from events"),
-        }, {
-            'name': 'ephemeral',
-            'resource_type': 'model',
-            'package_name': 'root',
-            'path': 'ephemeral.sql',
-            'original_file_path': 'ephemeral.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': ("select * from events"),
-        }, {
-            'name': 'view',
-            'resource_type': 'model',
-            'package_name': 'root',
-            'path': 'view.sql',
-            'original_file_path': 'view.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': ("select * from events"),
-        }, {
-            'name': 'disabled',
-            'resource_type': 'model',
-            'package_name': 'snowplow',
-            'path': 'disabled.sql',
-            'original_file_path': 'disabled.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': ("select * from events"),
-        }, {
-            'name': 'package',
-            'resource_type': 'model',
-            'package_name': 'snowplow',
-            'path': get_os_path('views/package.sql'),
-            'original_file_path': get_os_path('views/package.sql'),
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': ("select * from events"),
-        }, {
-            'name': 'multi_sort',
-            'resource_type': 'model',
-            'package_name': 'snowplow',
-            'path': get_os_path('views/multi_sort.sql'),
-            'original_file_path': get_os_path('views/multi_sort.sql'),
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': ("select * from events"),
-        }]
-
-        self.model_config = self.model_config.replace(materialized='table')
-
-        ephemeral_config = self.model_config.replace(
-            materialized='ephemeral'
-        )
-        view_config = self.model_config.replace(
-            materialized='view'
-        )
-        disabled_config = self.model_config.replace(
-            materialized='ephemeral',
-            enabled=False,
-        )
-        sort_config = self.model_config.replace(
-            materialized='view',
-            enabled=False,
-            sort='timestamp',
-        )
-        multi_sort_config = self.model_config.replace(
-            materialized='table',
-            sort=['timestamp', 'id'],
-        )
-
-        parser = ModelParser(
-            self.root_project_config,
-            self.all_projects,
-            self.macro_manifest
-        )
-
-        self._assert_parsed_sql_nodes(
-            parser.parse_sql_nodes(models),
-            parsed={
-                'model.root.table': ParsedModelNode(
-                    alias='table',
-                    name='table',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.root.table',
-                    fqn=['root', 'table'],
-                    package_name='root',
-                    refs=[],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    path='table.sql',
-                    original_file_path='table.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    config=self.model_config,
-                    tags=[],
-                    raw_sql=self.find_input_by_name(
-                        models, 'table').get('raw_sql'),
-                    description='',
-                    columns={}
-                ),
-                'model.root.ephemeral': ParsedModelNode(
-                    alias='ephemeral',
-                    name='ephemeral',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.root.ephemeral',
-                    fqn=['root', 'ephemeral'],
-                    package_name='root',
-                    refs=[],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    path='ephemeral.sql',
-                    original_file_path='ephemeral.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    config=ephemeral_config,
-                    tags=[],
-                    raw_sql=self.find_input_by_name(
-                        models, 'ephemeral').get('raw_sql'),
-                    description='',
-                    columns={}
-                ),
-                'model.root.view': ParsedModelNode(
-                    alias='view',
-                    name='view',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.root.view',
-                    fqn=['root', 'view'],
-                    package_name='root',
-                    refs=[],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    path='view.sql',
-                    original_file_path='view.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    config=view_config,
-                    tags=[],
-                    raw_sql=self.find_input_by_name(
-                        models, 'view').get('raw_sql'),
-                    description='',
-                    columns={}
-                ),
-                'model.snowplow.multi_sort': ParsedModelNode(
-                    alias='multi_sort',
-                    name='multi_sort',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.snowplow.multi_sort',
-                    fqn=['snowplow', 'views', 'multi_sort'],
-                    package_name='snowplow',
-                    refs=[],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    path=get_os_path('views/multi_sort.sql'),
-                    original_file_path=get_os_path('views/multi_sort.sql'),
-                    root_path=get_os_path('/usr/src/app'),
-                    config=multi_sort_config,
-                    tags=[],
-                    raw_sql=self.find_input_by_name(
-                        models, 'multi_sort').get('raw_sql'),
-                    description='',
-                    columns={}
-                ),
-            },
-            disabled=[
-                ParsedModelNode(
-                    name='disabled',
-                    resource_type=NodeType.Model,
-                    package_name='snowplow',
-                    path='disabled.sql',
-                    original_file_path='disabled.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    raw_sql=("select * from events"),
-                    database='test',
-                    schema='analytics',
-                    refs=[],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    config=disabled_config,
-                    tags=[],
-                    alias='disabled',
-                    unique_id='model.snowplow.disabled',
-                    fqn=['snowplow', 'disabled'],
-                    columns={}
-                ),
-                ParsedModelNode(
-                    name='package',
-                    resource_type=NodeType.Model,
-                    package_name='snowplow',
-                    path=get_os_path('views/package.sql'),
-                    original_file_path=get_os_path('views/package.sql'),
-                    root_path=get_os_path('/usr/src/app'),
-                    raw_sql=("select * from events"),
-                    database='test',
-                    schema='analytics',
-                    refs=[],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    config=sort_config,
-                    tags=[],
-                    alias='package',
-                    unique_id='model.snowplow.package',
-                    fqn=['snowplow', 'views', 'package'],
-                    columns={}
-                )
-            ]
-        )
-
-    def test__simple_data_test(self):
-        tests = [{
-            'name': 'no_events',
-            'resource_type': 'test',
-            'package_name': 'root',
-            'path': 'no_events.sql',
-            'original_file_path': 'no_events.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'raw_sql': "select * from {{ref('base')}}"
-        }]
-
-        parser = DataTestParser(
-            self.root_project_config,
-            self.all_projects,
-            self.macro_manifest
-        )
-
-        self._assert_parsed_sql_nodes(
-            parser.parse_sql_nodes(tests),
-            {
-                'test.root.no_events': ParsedTestNode(
-                    alias='no_events',
-                    name='no_events',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Test,
-                    unique_id='test.root.no_events',
-                    fqn=['root', 'no_events'],
-                    package_name='root',
-                    refs=[['base']],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    config=self.test_config,
-                    path='no_events.sql',
-                    original_file_path='no_events.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    tags=[],
-                    raw_sql=self.find_input_by_name(
-                        tests, 'no_events').get('raw_sql'),
-                    description='',
-                    columns={}
-                )
-            },
-            []
-        )
-
-    def test__simple_macro(self):
-        macro_file_contents = """
-{% macro simple(a, b) %}
-  {{a}} + {{b}}
-{% endmacro %}
-"""
-        parser = MacroParser(None, {})
-        result = parser.parse_macro_file(
-            macro_file_path='simple_macro.sql',
-            macro_file_contents=macro_file_contents,
-            root_path=get_os_path('/usr/src/app'),
-            package_name='root',
-            resource_type=NodeType.Macro)
-
-        self.assertTrue(callable(result['macro.root.simple'].generator))
-
-        self.assertEqual(
-            result,
-            {
-                'macro.root.simple': ParsedMacro.from_dict({
-                    'name': 'simple',
-                    'resource_type': 'macro',
-                    'unique_id': 'macro.root.simple',
-                    'package_name': 'root',
-                    'depends_on': {
-                        'macros': []
-                    },
-                    'original_file_path': 'simple_macro.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'tags': [],
-                    'path': 'simple_macro.sql',
-                    'raw_sql': macro_file_contents,
-                })
-            }
-        )
-
-    def test__simple_macro_used_in_model(self):
-        macro_file_contents = """
-{% macro simple(a, b) %}
-  {{a}} + {{b}}
-{% endmacro %}
-"""
-        parser = MacroParser(None, {})
-        result = parser.parse_macro_file(
-            macro_file_path='simple_macro.sql',
-            macro_file_contents=macro_file_contents,
-            root_path=get_os_path('/usr/src/app'),
-            package_name='root',
-            resource_type=NodeType.Macro)
-
-        self.assertTrue(callable(result['macro.root.simple'].generator))
-
-        self.assertEqual(
-            result,
-            {
-                'macro.root.simple': ParsedMacro.from_dict({
-                    'name': 'simple',
-                    'resource_type': 'macro',
-                    'unique_id': 'macro.root.simple',
-                    'package_name': 'root',
-                    'depends_on': {
-                        'macros': []
-                    },
-                    'original_file_path': 'simple_macro.sql',
-                    'root_path': get_os_path('/usr/src/app'),
-                    'tags': [],
-                    'path': 'simple_macro.sql',
-                    'raw_sql': macro_file_contents,
-                }),
-            }
-        )
-
-        models = [{
-            'name': 'model_one',
-            'resource_type': 'model',
-            'package_name': 'root',
-            'original_file_path': 'model_one.sql',
-            'root_path': get_os_path('/usr/src/app'),
-            'path': 'model_one.sql',
-            'raw_sql': ("select *, {{package.simple(1, 2)}} from events"),
-        }]
-
-        parser = ModelParser(
-            self.root_project_config,
-            self.all_projects,
-            self.macro_manifest
-        )
-
-        self._assert_parsed_sql_nodes(
-            parser.parse_sql_nodes(models),
-            {
-                'model.root.model_one': ParsedModelNode(
-                    alias='model_one',
-                    name='model_one',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.root.model_one',
-                    fqn=['root', 'model_one'],
-                    package_name='root',
-                    original_file_path='model_one.sql',
-                    root_path=get_os_path('/usr/src/app'),
-                    refs=[],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    config=self.model_config,
-                    tags=[],
-                    path='model_one.sql',
-                    raw_sql=self.find_input_by_name(
-                        models, 'model_one').get('raw_sql'),
-                    description='',
-                    columns={}
-                )
-            },
-            []
-        )
-
-    def test__macro_no_explicit_project_used_in_model(self):
-        models = [{
-            'name': 'model_one',
-            'resource_type': 'model',
-            'package_name': 'root',
-            'root_path': get_os_path('/usr/src/app'),
-            'path': 'model_one.sql',
-            'original_file_path': 'model_one.sql',
-            'raw_sql': ("select *, {{ simple(1, 2) }} from events"),
-        }]
-
-        parser = ModelParser(
-            self.root_project_config,
-            self.all_projects,
-            self.macro_manifest
-        )
-
-        self._assert_parsed_sql_nodes(
-            parser.parse_sql_nodes(models),
-            {
-                'model.root.model_one': ParsedModelNode(
-                    alias='model_one',
-                    name='model_one',
-                    database='test',
-                    schema='analytics',
-                    resource_type=NodeType.Model,
-                    unique_id='model.root.model_one',
-                    fqn=['root', 'model_one'],
-                    package_name='root',
-                    root_path=get_os_path('/usr/src/app'),
-                    refs=[],
-                    sources=[],
-                    depends_on=DependsOn(),
-                    config=self.model_config,
-                    tags=[],
-                    path='model_one.sql',
-                    original_file_path='model_one.sql',
-                    raw_sql=self.find_input_by_name(
-                        models, 'model_one').get('raw_sql'),
-                    description='',
-                    columns={}
-                )
-            },
-            []
-        )
+    def test_resolve_refs(self):
+        result = ParserUtils.process_refs(self.manifest, 'project')
+        self.assertIs(result, self.manifest)
+        self.y_node.depends_on.nodes.append.assert_called_once_with('model.project.x')

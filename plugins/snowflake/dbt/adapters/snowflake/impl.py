@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 from dbt.adapters.sql import SQLAdapter
 from dbt.adapters.snowflake import SnowflakeConnectionManager
 from dbt.adapters.snowflake import SnowflakeRelation

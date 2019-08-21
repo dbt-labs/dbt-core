@@ -1,14 +1,22 @@
-from typing import Dict, Any
-
 from dbt.contracts.graph.parsed import ParsedModelNode
-from dbt.parser.base_sql import BaseSqlParser
+from dbt.node_types import NodeType
+from dbt.parser.base import SimpleSQLParser
+from dbt.parser.search import FilesystemSearcher, FileBlock
 
 
-class ModelParser(BaseSqlParser):
+class ModelParser(SimpleSQLParser[ParsedModelNode]):
+    def get_paths(self):
+        return FilesystemSearcher(
+            self.project, self.project.source_paths, '.sql'
+        )
+
+    def parse_from_dict(self, dct, validate=True) -> ParsedModelNode:
+        return ParsedModelNode.from_dict(dct, validate=validate)
+
+    @property
+    def resource_type(self) -> NodeType:
+        return NodeType.Model
+
     @classmethod
-    def get_compiled_path(cls, name, relative_path):
-        return relative_path
-
-    def parse_from_dict(self, parsed_dict: Dict[str, Any]) -> ParsedModelNode:
-        """Given a dictionary, return the parsed entity for this parser"""
-        return ParsedModelNode.from_dict(parsed_dict)
+    def get_compiled_path(cls, block: FileBlock):
+        return block.path.relative_path

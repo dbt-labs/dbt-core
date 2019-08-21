@@ -168,7 +168,8 @@ class ManifestTest(unittest.TestCase):
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
     def test__no_nodes(self):
         manifest = Manifest(nodes={}, macros={}, docs={},
-                            generated_at=datetime.utcnow(), disabled=[])
+                            generated_at=datetime.utcnow(), disabled=[],
+                            files={})
         self.assertEqual(
             manifest.writable_manifest().to_dict(),
             {
@@ -180,6 +181,7 @@ class ManifestTest(unittest.TestCase):
                 'docs': {},
                 'metadata': {},
                 'disabled': [],
+                'files': {},
             }
         )
 
@@ -187,11 +189,13 @@ class ManifestTest(unittest.TestCase):
     def test__nested_nodes(self):
         nodes = copy.copy(self.nested_nodes)
         manifest = Manifest(nodes=nodes, macros={}, docs={},
-                            generated_at=datetime.utcnow(), disabled=[])
+                            generated_at=datetime.utcnow(), disabled=[],
+                            files={})
         serialized = manifest.writable_manifest().to_dict()
         self.assertEqual(serialized['generated_at'], '2018-02-14T09:15:13Z')
         self.assertEqual(serialized['docs'], {})
         self.assertEqual(serialized['disabled'], [])
+        self.assertEqual(serialized['files'], {})
         parent_map = serialized['parent_map']
         child_map = serialized['child_map']
         # make sure there aren't any extra/missing keys.
@@ -251,7 +255,8 @@ class ManifestTest(unittest.TestCase):
     def test__to_flat_graph(self):
         nodes = copy.copy(self.nested_nodes)
         manifest = Manifest(nodes=nodes, macros={}, docs={},
-                            generated_at=datetime.utcnow(), disabled=[])
+                            generated_at=datetime.utcnow(), disabled=[],
+                            files={})
         flat_graph = manifest.to_flat_graph()
         flat_nodes = flat_graph['nodes']
         self.assertEqual(set(flat_graph), set(['nodes']))
@@ -285,7 +290,7 @@ class ManifestTest(unittest.TestCase):
         config.hashed_name.return_value = '098f6bcd4621d373cade4e832627b4f6'
         manifest = Manifest(nodes={}, macros={}, docs={},
                             generated_at=datetime.utcnow(), disabled=[],
-                            config=config)
+                            config=config, files={})
         metadata = {
             'project_id': '098f6bcd4621d373cade4e832627b4f6',
             'user_id': 'cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf',
@@ -306,12 +311,14 @@ class ManifestTest(unittest.TestCase):
                     'send_anonymous_usage_stats': False,
                 },
                 'disabled': [],
+                'files': {},
             }
         )
 
     def test_get_resource_fqns_empty(self):
         manifest = Manifest(nodes={}, macros={}, docs={},
-                            generated_at=datetime.utcnow(), disabled=[])
+                            generated_at=datetime.utcnow(), disabled=[],
+                            files={})
         self.assertEqual(manifest.get_resource_fqns(), {})
 
     def test_get_resource_fqns(self):
@@ -336,7 +343,8 @@ class ManifestTest(unittest.TestCase):
             raw_sql='-- csv --'
         )
         manifest = Manifest(nodes=nodes, macros={}, docs={},
-                            generated_at=datetime.utcnow(), disabled=[])
+                            generated_at=datetime.utcnow(), disabled=[],
+                            files={})
         expect = {
             'models': frozenset([
                 ('snowplow', 'events'),
@@ -500,7 +508,8 @@ class MixedManifestTest(unittest.TestCase):
     @freezegun.freeze_time('2018-02-14T09:15:13Z')
     def test__no_nodes(self):
         manifest = Manifest(nodes={}, macros={}, docs={},
-                            generated_at=datetime.utcnow(), disabled=[])
+                            generated_at=datetime.utcnow(), disabled=[],
+                            files={})
         self.assertEqual(
             manifest.writable_manifest().to_dict(),
             {
@@ -512,6 +521,7 @@ class MixedManifestTest(unittest.TestCase):
                 'docs': {},
                 'metadata': {},
                 'disabled': [],
+                'files': {},
             }
         )
 
@@ -519,7 +529,8 @@ class MixedManifestTest(unittest.TestCase):
     def test__nested_nodes(self):
         nodes = copy.copy(self.nested_nodes)
         manifest = Manifest(nodes=nodes, macros={}, docs={},
-                            generated_at=datetime.utcnow(), disabled=[])
+                            generated_at=datetime.utcnow(), disabled=[],
+                            files={})
         serialized = manifest.writable_manifest().to_dict()
         self.assertEqual(serialized['generated_at'], '2018-02-14T09:15:13Z')
         self.assertEqual(serialized['disabled'], [])
@@ -582,7 +593,8 @@ class MixedManifestTest(unittest.TestCase):
     def test__to_flat_graph(self):
         nodes = copy.copy(self.nested_nodes)
         manifest = Manifest(nodes=nodes, macros={}, docs={},
-                            generated_at=datetime.utcnow(), disabled=[])
+                            generated_at=datetime.utcnow(), disabled=[],
+                            files={})
         flat_graph = manifest.to_flat_graph()
         flat_nodes = flat_graph['nodes']
         self.assertEqual(set(flat_graph), set(['nodes']))

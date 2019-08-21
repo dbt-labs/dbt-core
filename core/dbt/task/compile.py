@@ -1,4 +1,3 @@
-import os
 import signal
 import threading
 from typing import Union, List, Dict, Any
@@ -6,11 +5,10 @@ from typing import Union, List, Dict, Any
 from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import extract_toplevel_blocks
 from dbt.compilation import compile_manifest
-from dbt.loader import load_all_projects
 from dbt.node_runners import CompileRunner, RPCCompileRunner
 from dbt.node_types import NodeType
-from dbt.parser.analysis import RPCCallParser
-from dbt.parser.macros import MacroParser
+from dbt.parser.results import ParseResult
+from dbt.parser.rpc import RPCCallParser, RPCMacroParser
 from dbt.parser.util import ParserUtils
 import dbt.ui.printer
 from dbt.logger import RPC_LOGGER as rpc_logger
@@ -19,7 +17,6 @@ from dbt.task.runnable import GraphRunnableTask, RemoteCallable
 
 
 class CompileTask(GraphRunnableTask):
-
     def raise_on_first_error(self):
         return True
 
@@ -72,39 +69,23 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
         return sql, macros
 
     def _get_exec_node(self, name, sql, macros):
-        request_path = os.path.join(self.config.target_path, 'rpc', name)
-        all_projects = load_all_projects(self.config)
+        results = ParseResult.rpc()
         macro_overrides = {}
         sql, macros = self._extract_request_data(sql)
 
         if macros:
-            macro_parser = MacroParser(self.config, all_projects)
-            macro_overrides.update(macro_parser.parse_macro_file(
-                macro_file_path='from remote system',
-                macro_file_contents=macros,
-                root_path=request_path,
-                package_name=self.config.project_name,
-                resource_type=NodeType.Macro
-            ))
+            macro_parser = RPCMacroParser(results, self.config)
+            for node in macro_parser.parse_remote(macros):
+                macro_overrides[node.unique_id] = node
 
         self._base_manifest.macros.update(macro_overrides)
         rpc_parser = RPCCallParser(
-            self.config,
-            all_projects=all_projects,
-            macro_manifest=self._base_manifest
+            results=results,
+            project=self.config,
+            root_project=self.config,
+            macro_manifest=self._base_manifest,
         )
-
-        node_dict = {
-            'name': name,
-            'root_path': request_path,
-            'resource_type': NodeType.RPCCall,
-            'path': name + '.sql',
-            'original_file_path': 'from remote system',
-            'package_name': self.config.project_name,
-            'raw_sql': sql,
-        }
-
-        unique_id, node = rpc_parser.parse_sql_node(node_dict)
+        node = rpc_parser.parse_remote(sql, name)
         self.manifest = ParserUtils.add_new_refs(
             manifest=self._base_manifest,
             current_project=self.config,

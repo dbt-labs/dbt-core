@@ -1,5 +1,6 @@
-from contextlib import contextmanager
 import multiprocessing
+from contextlib import contextmanager
+from typing import NewType
 
 from dbt.adapters.postgres import PostgresConnectionManager
 from dbt.adapters.postgres import PostgresCredentials
@@ -8,7 +9,7 @@ import dbt.exceptions
 
 import boto3
 
-from dbt.types import NewRangedInteger
+from hologram import FieldEncoder, JsonSchemaMixin
 from hologram.helpers import StrEnum
 
 from dataclasses import dataclass, field
@@ -17,7 +18,16 @@ from typing import Optional
 drop_lock = multiprocessing.Lock()
 
 
-IAMDuration = NewRangedInteger('IAMDuration', minimum=900, maximum=3600)
+IAMDuration = NewType('IAMDuration', int)
+
+
+class IAMDurationEncoder(FieldEncoder):
+    @property
+    def json_schema(self):
+        return {'type': 'integer', 'minimum': 0, 'maximum': 65535}
+
+
+JsonSchemaMixin.register_field_encoders({IAMDuration: IAMDurationEncoder()})
 
 
 class RedshiftConnectionMethod(StrEnum):

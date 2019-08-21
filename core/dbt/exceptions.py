@@ -1,7 +1,9 @@
 import builtins
 import functools
+from typing import NoReturn
 
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.node_types import NodeType
 import dbt.flags
 
 import hologram
@@ -298,15 +300,15 @@ class CommandResultError(CommandError):
         return '{} running: {}'.format(self.msg, self.cmd)
 
 
-def raise_compiler_error(msg, node=None):
+def raise_compiler_error(msg, node=None) -> NoReturn:
     raise CompilationException(msg, node)
 
 
-def raise_database_error(msg, node=None):
+def raise_database_error(msg, node=None) -> NoReturn:
     raise DatabaseException(msg, node)
 
 
-def raise_dependency_error(msg):
+def raise_dependency_error(msg) -> NoReturn:
     raise DependencyException(msg)
 
 
@@ -344,9 +346,15 @@ To fix this, add the following hint to the top of the model "{model_name}":
     # better error messages. Ex. If models foo_users and bar_users are aliased
     # to 'users', in their respective schemas, then you would want to see
     # 'bar_users' in your error messge instead of just 'users'.
+    if isinstance(model, dict):  # TODO: remove this path
+        model_name = model['name']
+        model_path = model['path']
+    else:
+        model_name = model.name
+        model_path = model.path
     error_msg = base_error_msg.format(
-        model_name=model['name'],
-        model_path=model['path'],
+        model_name=model_name,
+        model_path=model_path,
         ref_string=ref_string
     )
     raise_compiler_error(error_msg, model)
@@ -578,13 +586,20 @@ def approximate_relation_match(target, relation):
 def raise_duplicate_resource_name(node_1, node_2):
     duped_name = node_1.name
 
+    if node_1.resource_type in NodeType.refable():
+        get_func = 'ref("{}")'.format(duped_name)
+    elif node_1.resource_type == NodeType.Source:
+        get_func = 'source("{}", "{}")'.format(node_1.source_name, duped_name)
+    elif node_1.resource_type == NodeType.Test and 'schema' in node_1.tags:
+        return
+
     raise_compiler_error(
         'dbt found two resources with the name "{}". Since these resources '
         'have the same name,\ndbt will be unable to find the correct resource '
-        'when ref("{}") is used. To fix this,\nchange the name of one of '
+        'when {} is used. To fix this,\nchange the name of one of '
         'these resources:\n- {} ({})\n- {} ({})'.format(
             duped_name,
-            duped_name,
+            get_func,
             node_1.unique_id, node_1.original_file_path,
             node_2.unique_id, node_2.original_file_path))
 
@@ -635,12 +650,14 @@ def raise_patch_targets_not_found(patches):
 
 def raise_duplicate_patch_name(name, patch_1, patch_2):
     raise_compiler_error(
-        'dbt found two schema.yml entries for the same model named {}. The '
-        'first patch was specified in {} and the second in {}. Models and '
-        'their associated columns may only be described a single time.'.format(
+        'dbt found two schema.yml entries for the same model named {0}. '
+        'Models and their associated columns may only be described a single '
+        'time. To fix this, remove the model entry for for {0} in one of '
+        'these files:\n  - {1}\n  - {2}'
+        .format(
             name,
-            patch_1,
-            patch_2,
+            patch_1.original_file_path,
+            patch_2.original_file_path,
         )
     )
 

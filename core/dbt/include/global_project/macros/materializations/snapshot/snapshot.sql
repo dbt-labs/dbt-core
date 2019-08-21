@@ -180,20 +180,18 @@
 {% materialization snapshot, default %}
   {%- set config = model['config'] -%}
 
-  {%- set target_database = config.get('target_database') -%}
-  {%- set target_schema = config.get('target_schema') -%}
   {%- set target_table = model.get('alias', model.get('name')) -%}
 
   {%- set strategy_name = config.get('strategy') -%}
   {%- set unique_key = config.get('unique_key') %}
 
-  {% if not adapter.check_schema_exists(target_database, target_schema) %}
-    {% do create_schema(target_database, target_schema) %}
+  {% if not adapter.check_schema_exists(model.database, model.schema) %}
+    {% do create_schema(model.database, model.schema) %}
   {% endif %}
 
   {% set target_relation_exists, target_relation = get_or_create_relation(
-          database=target_database,
-          schema=target_schema,
+          database=model.database,
+          schema=model.schema,
           identifier=target_table,
           type='table') -%}
 

@@ -94,7 +94,7 @@ def recursively_prepend_ctes(model, manifest):
 
     model.prepend_ctes(prepended_ctes)
 
-    manifest.nodes[model.unique_id] = model
+    manifest.update_node(model)
 
     return (model, prepended_ctes, manifest)
 
@@ -167,7 +167,8 @@ class Compiler:
     def write_graph_file(self, linker, manifest):
         filename = graph_file_name
         graph_path = os.path.join(self.config.target_path, filename)
-        linker.write_graph(graph_path, manifest)
+        if dbt.flags.WRITE_JSON:
+            linker.write_graph(graph_path, manifest)
 
     def link_node(self, linker, node, manifest):
         linker.add_node(node.unique_id)

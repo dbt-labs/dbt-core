@@ -17,6 +17,8 @@ from dbt.contracts.project import PackageConfig, LocalPackage, GitPackage
 from dbt.semver import VersionSpecifier
 from dbt.task.run_operation import RunOperationTask
 
+from .utils import normalize
+
 
 INITIAL_ROOT = os.getcwd()
 
@@ -168,8 +170,8 @@ class BaseConfigTest(unittest.TestCase):
 
 class BaseFileTest(BaseConfigTest):
     def setUp(self):
-        self.project_dir = os.path.normpath(tempfile.mkdtemp())
-        self.profiles_dir = os.path.normpath(tempfile.mkdtemp())
+        self.project_dir = normalize(tempfile.mkdtemp())
+        self.profiles_dir = normalize(tempfile.mkdtemp())
         super().setUp()
 
     def tearDown(self):
@@ -919,7 +921,8 @@ class TestRunOperationTask(BaseFileTest):
         self.assertEqual(os.getcwd(), INITIAL_ROOT)
         self.assertNotEqual(INITIAL_ROOT, self.project_dir)
         new_task = RunOperationTask.from_args(self.args)
-        self.assertEqual(os.getcwd(), self.project_dir)
+        self.assertEqual(os.path.realpath(os.getcwd()),
+                         os.path.realpath(self.project_dir))
 
     def test_run_operation_task_with_bad_path(self):
         self.args.project_dir = 'bad_path'

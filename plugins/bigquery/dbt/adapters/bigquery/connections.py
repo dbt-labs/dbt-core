@@ -26,8 +26,6 @@ class BigQueryConnectionMethod(StrEnum):
 @dataclass
 class BigQueryCredentials(Credentials):
     method: BigQueryConnectionMethod
-    database: str
-    schema: str
     keyfile: Optional[str] = None
     keyfile_json: Optional[Dict[str, Any]] = None
     timeout_seconds: Optional[int] = 300

@@ -3,7 +3,7 @@ from dbt.utils import get_materialization, add_ephemeral_model_prefix
 import dbt.clients.jinja
 import dbt.context.common
 import dbt.flags
-from dbt.parser import ParserUtils
+from dbt.parser.util import ParserUtils
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 

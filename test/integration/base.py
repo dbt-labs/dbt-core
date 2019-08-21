@@ -29,6 +29,19 @@ from dbt.logger import GLOBAL_LOGGER as logger
 INITIAL_ROOT = os.getcwd()
 
 
+def normalize(path):
+    """On windows, neither is enough on its own:
+
+    >>> normcase('C:\\documents/ALL CAPS/subdir\\..')
+    'c:\\documents\\all caps\\subdir\\..'
+    >>> normpath('C:\\documents/ALL CAPS/subdir\\..')
+    'C:\\documents\\ALL CAPS'
+    >>> normpath(normcase('C:\\documents/ALL CAPS/subdir\\..'))
+    'c:\\documents\\all caps'
+    """
+    return os.path.normcase(os.path.normpath(path))
+
+
 class FakeArgs:
     def __init__(self):
         self.threads = 1
@@ -300,7 +313,7 @@ class DBTIntegrationTest(unittest.TestCase):
         _really_makedirs(self._logs_dir)
         self.test_original_source_path = _pytest_get_test_root()
         print('test_original_source_path={}'.format(self.test_original_source_path))
-        self.test_root_dir = tempfile.mkdtemp(prefix='dbt-int-test-')
+        self.test_root_dir = normalize(tempfile.mkdtemp(prefix='dbt-int-test-'))
         print('test_root_dir={}'.format(self.test_root_dir))
         os.chdir(self.test_root_dir)
         try:

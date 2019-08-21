@@ -92,8 +92,8 @@ def main(args=None):
         exit_code = e.code
 
     except BaseException as e:
-        logger.warn("Encountered an error:")
-        logger.warn(str(e))
+        logger.warning("Encountered an error:")
+        logger.warning(str(e))
 
         if logger_initialized():
             logger.debug(traceback.format_exc())
@@ -359,6 +359,7 @@ def _build_compile_subparser(subparsers, base_subparser):
         "analysis files. \nCompiled SQL files are written to the target/"
         "directory.")
     sub.set_defaults(cls=compile_task.CompileTask, which='compile')
+    sub.add_argument('--parse-only', action='store_true')
     return sub
 
 
@@ -656,6 +657,14 @@ def parse_args(args):
         debugging and making bug reports.''')
 
     p.add_argument(
+        '--no-write-json',
+        action='store_false',
+        dest='write_json',
+        help='''If set, skip writing the manifest and run_results.json files to
+        disk'''
+    )
+
+    p.add_argument(
         '-S',
         '--strict',
         action='store_true',
@@ -669,6 +678,15 @@ def parse_args(args):
         Examples include --models that selects nothing, deprecations,
         configurations with no associated models, invalid test configurations,
         and missing sources/refs in tests''')
+
+    p.add_argument(
+        '--partial-parse',
+        action='store_true',
+        help='''Allow for partial parsing by looking for and writing to a
+        pickle file in the target directory.
+        WARNING: This can result in unexpected behavior if you use env_var()!
+        '''
+    )
 
     # if set, run dbt in single-threaded mode: thread count is ignored, and
     # calls go through `map` instead of the thread pool. This is useful for
