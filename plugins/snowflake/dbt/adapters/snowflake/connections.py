@@ -252,12 +252,18 @@ class SnowflakeConnectionManager(SQLConnectionManager):
             )
 
         if cursor is None:
+            conn = self.get_thread_connection()
+            if conn is None or conn.name is None:
+                conn_name = '<None>'
+            else:
+                conn_name = conn.name
+
             raise dbt.exceptions.RuntimeException(
                 "Tried to run an empty query on model '{}'. If you are "
                 "conditionally running\nsql, eg. in a model hook, make "
                 "sure your `else` clause contains valid sql!\n\n"
                 "Provided SQL:\n{}"
-                .format(self.nice_connection_name(), sql)
+                .format(conn_name, sql)
             )
 
         return connection, cursor
