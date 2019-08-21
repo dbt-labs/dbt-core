@@ -47,6 +47,7 @@ class BaseTestBigQueryAdapter(unittest.TestCase):
                     'schema': 'dummy_schema',
                     'threads': 1,
                     'location': 'Luna Station',
+                    'priority': 'batch',
                 },
             },
             'target': 'oauth',
@@ -95,6 +96,22 @@ class TestBigQueryAdapterAcquire(BaseTestBigQueryAdapter):
         try:
             connection = adapter.acquire_connection('dummy')
             self.assertEqual(connection.type, 'bigquery')
+
+        except dbt.exceptions.ValidationException as e:
+            self.fail('got ValidationException: {}'.format(str(e)))
+
+        except BaseException as e:
+            raise
+
+        mock_open_connection.assert_called_once()
+
+    @patch('dbt.adapters.bigquery.BigQueryConnectionManager.open', return_value=_bq_conn())
+    def test_acquire_connection_priority(self, mock_open_connection):
+        adapter = self.get_adapter('loc')
+        try:
+            connection = adapter.acquire_connection('dummy')
+            self.assertEqual(connection.type, 'bigquery')
+            self.assertEqual(connection.credentials.priority, 'batch')
 
         except dbt.exceptions.ValidationException as e:
             self.fail('got ValidationException: {}'.format(str(e)))

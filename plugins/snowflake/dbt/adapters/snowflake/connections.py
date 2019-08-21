@@ -1,6 +1,8 @@
 import re
 from io import StringIO
 from contextlib import contextmanager
+import datetime
+import pytz
 
 import snowflake.connector
 import snowflake.connector.errors
@@ -166,6 +168,26 @@ class SnowflakeConnectionManager(SQLConnectionManager):
         split_query = snowflake.connector.util_text.split_statements(sql_buf)
         return [part[0] for part in split_query]
 
+    @classmethod
+    def process_results(cls, column_names, rows):
+        # Override for Snowflake. The datetime objects returned by
+        # snowflake-connector-python are not pickleable, so we need
+        # to replace them with sane timezones
+        fixed = []
+        for row in rows:
+            fixed_row = []
+            for col in row:
+                if isinstance(col, datetime.datetime) and col.tzinfo:
+                    offset = col.utcoffset()
+                    offset_seconds = offset.total_seconds()
+                    new_timezone = pytz.FixedOffset(offset_seconds // 60)
+                    col = col.astimezone(tz=new_timezone)
+                fixed_row.append(col)
+
+            fixed.append(fixed_row)
+
+        return super().process_results(column_names, fixed)
+
     def add_query(self, sql, auto_begin=True,
                   bindings=None, abridge_sql_log=False):
 
@@ -197,12 +219,18 @@ class SnowflakeConnectionManager(SQLConnectionManager):
             )
 
         if cursor is None:
+            conn = self.get_thread_connection()
+            if conn is None or conn.name is None:
+                conn_name = '<None>'
+            else:
+                conn_name = conn.name
+
             raise dbt.exceptions.RuntimeException(
                 "Tried to run an empty query on model '{}'. If you are "
                 "conditionally running\nsql, eg. in a model hook, make "
                 "sure your `else` clause contains valid sql!\n\n"
                 "Provided SQL:\n{}"
-                .format(self.nice_connection_name(), sql)
+                .format(conn_name, sql)
             )
 
         return connection, cursor

@@ -1,4 +1,6 @@
 from contextlib import contextmanager
+from dataclasses import dataclass
+from typing import Optional, Any, Dict
 
 import google.auth
 import google.api_core
@@ -13,8 +15,10 @@ from dbt.logger import GLOBAL_LOGGER as logger
 
 from hologram.helpers import StrEnum
 
-from dataclasses import dataclass
-from typing import Optional, Any, Dict
+
+class Priority(StrEnum):
+    Interactive = 'interactive'
+    Batch = 'batch'
 
 
 class BigQueryConnectionMethod(StrEnum):
@@ -30,6 +34,7 @@ class BigQueryCredentials(Credentials):
     keyfile_json: Optional[Dict[str, Any]] = None
     timeout_seconds: Optional[int] = 300
     location: Optional[str] = None
+    priority: Optional[Priority] = None
     _ALIASES = {
         'project': 'database',
         'dataset': 'schema',
@@ -178,6 +183,14 @@ class BigQueryConnectionManager(BaseConnectionManager):
 
         job_config = google.cloud.bigquery.QueryJobConfig()
         job_config.use_legacy_sql = False
+
+        priority = conn.credentials.priority
+        if priority == Priority.Batch:
+            job_config.priority = google.cloud.bigquery.QueryPriority.BATCH
+        else:
+            job_config.priority = \
+                google.cloud.bigquery.QueryPriority.INTERACTIVE
+
         query_job = client.query(sql, job_config)
 
         # this blocks until the query has completed

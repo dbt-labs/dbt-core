@@ -317,23 +317,16 @@ class GraphRunnableTask(ManifestTask):
 
     def create_schemas(self, adapter, selected_uids):
         required_schemas = self.get_model_schemas(selected_uids)
-
-        # Snowflake needs to issue a "use {schema}" query, where schema
-        # is the one defined in the profile. Create this schema if it
-        # does not exist, otherwise subsequent queries will fail. Generally,
-        # dbt expects that this schema will exist anyway.
-        required_schemas.add(
-            (self.config.credentials.database, self.config.credentials.schema)
-        )
-
         required_databases = set(db for db, _ in required_schemas)
 
-        existing_schemas = set()
+        existing_schemas_lowered = set()
         for db in required_databases:
-            existing_schemas.update((db, s) for s in adapter.list_schemas(db))
+            existing_schemas_lowered.update(
+                (db.lower(), s.lower()) for s in adapter.list_schemas(db))
 
-        for database, schema in (required_schemas - existing_schemas):
-            adapter.create_schema(database, schema)
+        for db, schema in required_schemas:
+            if (db.lower(), schema.lower()) not in existing_schemas_lowered:
+                adapter.create_schema(db, schema)
 
     def get_result(self, results, elapsed_time, generated_at):
         return ExecutionResult(
