@@ -5,24 +5,26 @@ from dbt.ui import printer
 # from dbt.utils import JSONEncoder
 
 from hologram import JsonSchemaMixin
-from hologram.helpers import HyphenatedJsonSchemaMixin, NewPatternType, \
+from hologram.helpers import HyphenatedJsonSchemaMixin, register_pattern, \
     ExtensibleJsonSchemaMixin
 
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Union, Any
+from typing import Optional, List, Dict, Union, Any, NewType
 
 PIN_PACKAGE_URL = 'https://docs.getdbt.com/docs/package-management#section-specifying-package-versions' # noqa
 DEFAULT_SEND_ANONYMOUS_USAGE_STATS = True
 DEFAULT_USE_COLORS = True
 
 
-Name = NewPatternType('Name', r'^[^\d\W]\w*\Z')
+Name = NewType('Name', str)
+register_pattern(Name, r'^[^\d\W]\w*\Z')
 
 # this does not support the full semver (does not allow a trailing -fooXYZ) and
 # is not restrictive enough for full semver, (allows '1.0'). But it's like
 # 'semver lite'.
-SemverString = NewPatternType(
-    'SemverString',
+SemverString = NewType('SemverString', str)
+register_pattern(
+    SemverString,
     r'^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(\.(?:0|[1-9]\d*))?$',
 )
 

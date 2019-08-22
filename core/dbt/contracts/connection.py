@@ -1,12 +1,12 @@
-from hologram.helpers import StrEnum, NewPatternType, ExtensibleJsonSchemaMixin
+from hologram.helpers import StrEnum, register_pattern, ExtensibleJsonSchemaMixin
 from hologram import JsonSchemaMixin
 from dbt.contracts.util import Replaceable
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, NewType
 
-
-Identifier = NewPatternType('Identifier', r'^[A-Za-z_][A-Za-z0-9_]+$')
+Identifier = NewType('Identifier', str)
+register_pattern(Identifier, r'^[A-Za-z_][A-Za-z0-9_]+$')
 
 
 class ConnectionState(StrEnum):

@@ -1,12 +1,31 @@
+from typing import Optional, Set, List, Dict, ClassVar
+
 import dbt.links
+import dbt.exceptions
 import dbt.flags
 
 
 class DBTDeprecation:
-    name = None
-    description = None
+    _name: ClassVar[Optional[str]] = None
+    _description: ClassVar[Optional[str]] = None
 
-    def show(self, *args, **kwargs):
+    @property
+    def name(self) -> str:
+        if self._name is not None:
+            return self._name
+        raise NotImplementedError(
+            'name not implemented for {}'.format(self)
+        )
+
+    @property
+    def description(self) -> str:
+        if self._description is not None:
+            return self._description
+        raise NotImplementedError(
+            'description not implemented for {}'.format(self)
+        )
+
+    def show(self, *args, **kwargs) -> None:
         if self.name not in active_deprecations:
             desc = self.description.format(**kwargs)
             dbt.exceptions.warn_or_error(
@@ -16,8 +35,10 @@ class DBTDeprecation:
 
 
 class DBTRepositoriesDeprecation(DBTDeprecation):
-    name = "repositories"
-    description = """The dbt_project.yml configuration option 'repositories' is
+    _name = "repositories"
+
+    _description = """
+    The dbt_project.yml configuration option 'repositories' is
   deprecated. Please place dependencies in the `packages.yml` file instead.
   The 'repositories' option will be removed in a future version of dbt.
 
@@ -26,12 +47,13 @@ class DBTRepositoriesDeprecation(DBTDeprecation):
   # Example packages.yml contents:
 
 {recommendation}
-  """
+  """.lstrip()
 
 
 class GenerateSchemaNameSingleArgDeprecated(DBTDeprecation):
-    name = 'generate-schema-name-single-arg'
-    description = '''As of dbt v0.14.0, the `generate_schema_name` macro
+    _name = 'generate-schema-name-single-arg'
+
+    _description = '''As of dbt v0.14.0, the `generate_schema_name` macro
   accepts a second "node" argument. The one-argument form of `generate_schema_name`
   is deprecated, and will become unsupported in a future release.
 
@@ -47,11 +69,12 @@ The adapter function `adapter.{old_name}` is deprecated and will be removed in
  https://docs.getdbt.com/docs/adapter"""
 
 
-def renamed_method(old_name, new_name):
+def renamed_method(old_name: str, new_name: str):
+
     class AdapterDeprecationWarning(DBTDeprecation):
-        name = 'adapter:{}'.format(old_name)
-        description = _adapter_renamed_description.format(old_name=old_name,
-                                                          new_name=new_name)
+        _name = 'adapter:{}'.format(old_name)
+        _description = _adapter_renamed_description.format(old_name=old_name,
+                                                           new_name=new_name)
 
     dep = AdapterDeprecationWarning()
     deprecations_list.append(dep)
@@ -71,14 +94,16 @@ def warn(name, *args, **kwargs):
 # these are globally available
 # since modules are only imported once, active_deprecations is a singleton
 
-active_deprecations = set()
+active_deprecations: Set[str] = set()
 
-deprecations_list = [
+deprecations_list: List[DBTDeprecation] = [
     DBTRepositoriesDeprecation(),
     GenerateSchemaNameSingleArgDeprecated(),
 ]
 
-deprecations = {d.name: d for d in deprecations_list}
+deprecations: Dict[str, DBTDeprecation] = {
+  d.name: d for d in deprecations_list
+}
 
 
 def reset_deprecations():
