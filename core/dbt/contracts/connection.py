@@ -33,7 +33,7 @@ class Identifier(ValidatedStringMixin):
 
 
 # we need register_pattern for jsonschema validation
-register_pattern(Identifier, r'^[A-Za-z_][A-Za-z0-9_]+$')
+register_pattern(Identifier, r"^[A-Za-z_][A-Za-z0-9_]+$")
 
 
 @dataclass

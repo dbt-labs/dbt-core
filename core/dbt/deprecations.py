@@ -14,9 +14,7 @@ class DBTDeprecation:
     def name(self) -> str:
         if self._name is not None:
             return self._name
-        raise NotImplementedError(
-            'name not implemented for {}'.format(self)
-        )
+        raise NotImplementedError("name not implemented for {}".format(self))
 
     def track_deprecation_warn(self) -> None:
         if dbt.tracking.active_user is not None:
@@ -28,9 +26,7 @@ class DBTDeprecation:
     def description(self) -> str:
         if self._description is not None:
             return self._description
-        raise NotImplementedError(
-            'description not implemented for {}'.format(self)
-        )
+        raise NotImplementedError("description not implemented for {}".format(self))
 
     def show(self, *args, **kwargs) -> None:
         if self.name not in active_deprecations:
@@ -86,11 +82,9 @@ Documentation for {new_name} can be found here:
 
 
 def renamed_method(old_name: str, new_name: str):
-
     class AdapterDeprecationWarning(DBTDeprecation):
-        _name = 'adapter:{}'.format(old_name)
-        _description = _adapter_renamed_description.format(old_name=old_name,
-                                                           new_name=new_name)
+        _name = "adapter:{}".format(old_name)
+        _description = _adapter_renamed_description.format(old_name=old_name, new_name=new_name)
 
     dep = AdapterDeprecationWarning()
     deprecations_list.append(dep)
