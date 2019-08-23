@@ -350,26 +350,24 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins, SerializableType):
 
 @dataclass
 class ParsedAnalysisNode(ParsedNode):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Analysis]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Analysis]})
 
 
 @dataclass
 class ParsedHookNode(ParsedNode):
-    resource_type: NodeType = field(
-        metadata={'restrict': [NodeType.Operation]}
-    )
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Operation]})
     index: Optional[int] = None
 
 
 @dataclass
 class ParsedModelNode(ParsedNode):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Model]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Model]})
 
 
 # TODO: rm?
 @dataclass
 class ParsedRPCNode(ParsedNode):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.RPCCall]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.RPCCall]})
 
 
 @dataclass
@@ -460,7 +458,7 @@ class ParsedSingularTestNode(ParsedNode):
 @dataclass
 class ParsedGenericTestNode(ParsedNode, HasTestMetadata):
     # keep this in sync with CompiledGenericTestNode!
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Test]})
     column_name: Optional[str] = None
     file_key_name: Optional[str] = None
     # Was not able to make mypy happy and keep the code working. We need to
@@ -486,13 +484,13 @@ class IntermediateSnapshotNode(ParsedNode):
     # defined in config blocks. To fix that, we have an intermediate type that
     # uses a regular node config, which the snapshot parser will then convert
     # into a full ParsedSnapshotNode after rendering.
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Snapshot]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Snapshot]})
     config: EmptySnapshotConfig = field(default_factory=EmptySnapshotConfig)
 
 
 @dataclass
 class ParsedSnapshotNode(ParsedNode):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Snapshot]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Snapshot]})
     config: SnapshotConfig
 
 
@@ -522,7 +520,7 @@ class ParsedMacroPatch(ParsedPatch):
 class ParsedMacro(UnparsedBaseNode, HasUniqueID):
     name: str
     macro_sql: str
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Macro]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Macro]})
     # TODO: can macros even have tags?
     tags: List[str] = field(default_factory=list)
     # TODO: is this ever populated?
@@ -638,7 +636,7 @@ class ParsedSourceMandatory(
     source_description: str
     loader: str
     identifier: str
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Source]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Source]})
 
 
 @dataclass

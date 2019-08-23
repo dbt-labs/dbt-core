@@ -39,7 +39,7 @@ class HasSQL:
 
 @dataclass
 class UnparsedMacro(UnparsedBaseNode, HasSQL):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Macro]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Macro]})
 
 
 @dataclass
@@ -50,16 +50,20 @@ class UnparsedGenericTest(UnparsedBaseNode, HasSQL):
 @dataclass
 class UnparsedNode(UnparsedBaseNode, HasSQL):
     name: str
-    resource_type: NodeType = field(metadata={'restrict': [
-        NodeType.Model,
-        NodeType.Analysis,
-        NodeType.Test,
-        NodeType.Snapshot,
-        NodeType.Operation,
-        NodeType.Seed,
-        NodeType.RPCCall,
+    resource_type: NodeType = field(
+        metadata={
+            "restrict": [
+                NodeType.Model,
+                NodeType.Analysis,
+                NodeType.Test,
+                NodeType.Snapshot,
+                NodeType.Operation,
         NodeType.SqlOperation,
-    ]})
+                NodeType.RPCCall,
+                NodeType.SqlOperation,
+            ]
+        }
+    )
 
     @property
     def search_name(self):
@@ -68,9 +72,7 @@ class UnparsedNode(UnparsedBaseNode, HasSQL):
 
 @dataclass
 class UnparsedRunHook(UnparsedNode):
-    resource_type: NodeType = field(
-        metadata={'restrict': [NodeType.Operation]}
-    )
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Operation]})
     index: Optional[int] = None
 
 

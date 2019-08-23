@@ -67,26 +67,24 @@ class CompiledNode(ParsedNode, CompiledNodeMixin):
 
 @dataclass
 class CompiledAnalysisNode(CompiledNode):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Analysis]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Analysis]})
 
 
 @dataclass
 class CompiledHookNode(CompiledNode):
-    resource_type: NodeType = field(
-        metadata={'restrict': [NodeType.Operation]}
-    )
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Operation]})
     index: Optional[int] = None
 
 
 @dataclass
 class CompiledModelNode(CompiledNode):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Model]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Model]})
 
 
 # TODO: rm?
 @dataclass
 class CompiledRPCNode(CompiledNode):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.RPCCall]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.RPCCall]})
 
 
 @dataclass
@@ -111,7 +109,7 @@ class CompiledSeedNode(CompiledNode):
 
 @dataclass
 class CompiledSnapshotNode(CompiledNode):
-    resource_type: NodeType = field(metadata={'restrict': [NodeType.Snapshot]})
+    resource_type: NodeType = field(metadata={"restrict": [NodeType.Snapshot]})
 
 
 @dataclass
