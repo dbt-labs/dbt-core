@@ -107,9 +107,7 @@ deprecations_list: List[DBTDeprecation] = [
     PackageRedirectDeprecation(),
 ]
 
-deprecations: Dict[str, DBTDeprecation] = {
-    d.name: d for d in deprecations_list
-}
+deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}
 
 
 def reset_deprecations():
