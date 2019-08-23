@@ -11,16 +11,7 @@ from dbt.contracts.graph.parsed import (
     TestConfig,
     PARSED_TYPES,
 )
-from dbt.node_types import (
-    NodeType,
-    AnalysisType,
-    ModelType,
-    OperationType,
-    RPCCallType,
-    SeedType,
-    SnapshotType,
-    TestType,
-)
+from dbt.node_types import NodeType
 from dbt.contracts.util import Replaceable
 
 from hologram import JsonSchemaMixin
@@ -72,28 +63,30 @@ class CompiledNode(ParsedNode):
 
 @dataclass
 class CompiledAnalysisNode(CompiledNode):
-    resource_type: AnalysisType
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Analysis]})
 
 
 @dataclass
 class CompiledHookNode(CompiledNode):
-    resource_type: OperationType
+    resource_type: NodeType = field(
+        metadata={'restrict': [NodeType.Operation]}
+    )
     index: Optional[int] = None
 
 
 @dataclass
 class CompiledModelNode(CompiledNode):
-    resource_type: ModelType
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Model]})
 
 
 @dataclass
 class CompiledRPCNode(CompiledNode):
-    resource_type: RPCCallType
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.RPCCall]})
 
 
 @dataclass
 class CompiledSeedNode(CompiledNode):
-    resource_type: SeedType
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Seed]})
 
     @property
     def empty(self):
@@ -103,12 +96,12 @@ class CompiledSeedNode(CompiledNode):
 
 @dataclass
 class CompiledSnapshotNode(CompiledNode):
-    resource_type: SnapshotType
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Snapshot]})
 
 
 @dataclass
 class CompiledTestNode(CompiledNode):
-    resource_type: TestType
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
     column_name: Optional[str] = None
     config: TestConfig = field(default_factory=TestConfig)
 

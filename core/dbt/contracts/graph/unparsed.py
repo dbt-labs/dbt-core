@@ -1,4 +1,4 @@
-from dbt.node_types import UnparsedNodeType, NodeType, OperationType, MacroType
+from dbt.node_types import NodeType
 from dbt.contracts.util import Replaceable, Mergeable
 
 from hologram import JsonSchemaMixin
@@ -28,18 +28,28 @@ class HasSQL:
 
 @dataclass
 class UnparsedMacro(UnparsedBaseNode, HasSQL):
-    resource_type: MacroType
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Macro]})
 
 
 @dataclass
 class UnparsedNode(UnparsedBaseNode, HasSQL):
     name: str
-    resource_type: UnparsedNodeType
+    resource_type: NodeType = field(metadata={'restrict': [
+        NodeType.Model,
+        NodeType.Analysis,
+        NodeType.Test,
+        NodeType.Snapshot,
+        NodeType.Operation,
+        NodeType.Seed,
+        NodeType.RPCCall,
+    ]})
 
 
 @dataclass
 class UnparsedRunHook(UnparsedNode):
-    resource_type: OperationType
+    resource_type: NodeType = field(
+        metadata={'restrict': [NodeType.Operation]}
+    )
     index: Optional[int] = None
 
 

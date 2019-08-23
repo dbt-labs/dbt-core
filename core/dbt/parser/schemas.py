@@ -21,7 +21,7 @@ from dbt.exceptions import (
     validator_error_message, JSONValidationException,
     raise_invalid_schema_yml_version, ValidationException, CompilationException
 )
-from dbt.node_types import NodeType, SourceType
+from dbt.node_types import NodeType
 from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock, FilesystemSearcher
 from dbt.parser.schema_test_builders import (
@@ -355,7 +355,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             loaded_at_field=loaded_at_field,
             freshness=freshness,
             quoting=quoting,
-            resource_type=SourceType(NodeType.Source),
+            resource_type=NodeType.Source,
             fqn=[self.project.project_name, source.name, table.name],
         )
 
