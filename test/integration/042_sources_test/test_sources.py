@@ -2,8 +2,8 @@ import json
 import multiprocessing
 import os
 import random
+import signal
 import socket
-import sys
 import time
 from base64 import standard_b64encode as b64
 from datetime import datetime, timedelta
@@ -419,8 +419,9 @@ class TestRPCServer(BaseSourcesTest):
             'macro-paths': ['macros'],
         }
 
-    def build_query(self, method, kwargs, sql=None, test_request_id=1,
-                    macros=None):
+    def build_query(
+        self, method, kwargs, sql=None, test_request_id=1, macros=None
+    ):
         body_data = ''
         if sql is not None:
             body_data += sql
@@ -454,8 +455,9 @@ class TestRPCServer(BaseSourcesTest):
         else:
             return result
 
-    def background_query(self, _method, _sql=None, _test_request_id=1,
-                         _block=False, macros=None, **kwargs):
+    def background_query(
+        self, _method, _sql=None, _test_request_id=1, _block=False, macros=None, **kwargs
+    ):
         built = self.build_query(_method, kwargs, _sql, _test_request_id,
                                  macros)
 
@@ -480,8 +482,8 @@ class TestRPCServer(BaseSourcesTest):
             datetime.strptime(timing['started_at'], '%Y-%m-%dT%H:%M:%S.%fZ')
             datetime.strptime(timing['completed_at'], '%Y-%m-%dT%H:%M:%S.%fZ')
 
-    def assertIsResult(self, data):
-        self.assertEqual(data['id'], 1)
+    def assertIsResult(self, data, id_=1):
+        self.assertEqual(data['id'], id_)
         self.assertEqual(data['jsonrpc'], '2.0')
         self.assertIn('result', data)
         self.assertNotIn('error', data)
@@ -807,11 +809,10 @@ class TestRPCServer(BaseSourcesTest):
         self.assertIn('logs', error_data)
         return error_data
 
-    def _get_sleep_query(self):
-        request_id = 90890
+    def _get_sleep_query(self, request_id=90890, duration=15):
         pg_sleeper = self.background_query(
             'run',
-            'select pg_sleep(15)',
+            'select pg_sleep({})'.format(duration),
             _test_request_id=request_id,
             name='sleeper',
         )
@@ -976,3 +977,86 @@ class TestRPCServer(BaseSourcesTest):
         for result in results:
             self.assertEqual(result['status'], 0.0)
             self.assertNotIn('fail', result)
+
+    def _wait_for_running(self, timeout=15, raise_on_timeout=True):
+        started = time.time()
+        time.sleep(0.5)
+        elapsed = time.time() - started
+
+        while elapsed < timeout:
+            status = self.assertIsResult(self.query('status').json())
+            if status['status'] == 'running':
+                return status
+            time.sleep(0.5)
+            elapsed = time.time() - started
+
+        status = self.assertIsResult(self.query('status').json())
+        if raise_on_timeout:
+            self.assertEqual(
+                status['status'],
+                'ready',
+                f'exceeded max time of {timeout}: {elapsed} seconds elapsed'
+            )
+        return status
+
+    def assertRunning(self, sleepers):
+        sleeper_ps_result = self.query('ps', completed=False, active=True).json()
+        result = self.assertIsResult(sleeper_ps_result)
+        self.assertEqual(len(result['rows']), len(sleepers))
+        result_map = {rd['request_id']: rd for rd in result['rows']}
+        for _, _, request_id in sleepers:
+            found = result_map[request_id]
+            self.assertEqual(found['request_id'], request_id)
+            self.assertEqual(found['method'], 'run')
+            self.assertEqual(found['state'], 'running')
+            self.assertEqual(found['timeout'], None)
+
+    def _add_command(self, cmd, id_):
+        self.assertIsResult(self.query(cmd, _test_request_id=id_).json(), id_=id_)
+
+    @mark.skipif(os.name == 'nt', reason='"sighup" not supported on windows')
+    @mark.flaky(rerun_filter=lambda *a, **kw: True)
+    @use_profile('postgres')
+    def test_sighup_postgres(self):
+        status = self.assertIsResult(self.query('status').json())
+        self.assertEqual(status['status'], 'ready')
+        started_at = status['timestamp']
+
+        done_query = self.query('compile', 'select 1 as id', name='done').json()
+        self.assertIsResult(done_query)
+        sleepers = []
+        command_ids = []
+
+        sleepers.append(self._get_sleep_query(1000, duration=60))
+        self.assertRunning(sleepers)
+
+        self._add_command('seed_project', 20)
+        command_ids.append(20)
+        self._add_command('run_project', 21)
+        command_ids.append(21)
+
+        # sighup a few times
+        for _ in range(10):
+            os.kill(status['pid'], signal.SIGHUP)
+
+        status = self._wait_for_running()
+
+        # we should still still see our service:
+        self.assertRunning(sleepers)
+
+        self._add_command('seed_project', 30)
+        command_ids.append(30)
+        self._add_command('run_project', 31)
+        command_ids.append(31)
+
+        # start a new one too
+        sleepers.append(self._get_sleep_query(1001, duration=60))
+
+        # now we should see both
+        self.assertRunning(sleepers)
+
+        # now pluck out the oldest one and kill it
+        dead, alive = sleepers
+        self.kill_and_assert(*dead)
+        self.assertRunning([alive])
+        self.kill_and_assert(*alive)

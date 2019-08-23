@@ -1,4 +1,6 @@
-from hologram.helpers import StrEnum, register_pattern, ExtensibleJsonSchemaMixin
+from hologram.helpers import (
+    StrEnum, register_pattern, ExtensibleJsonSchemaMixin
+)
 from hologram import JsonSchemaMixin
 from dbt.contracts.util import Replaceable
 

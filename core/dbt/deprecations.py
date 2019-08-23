@@ -102,7 +102,7 @@ deprecations_list: List[DBTDeprecation] = [
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {
-  d.name: d for d in deprecations_list
+    d.name: d for d in deprecations_list
 }
 
 

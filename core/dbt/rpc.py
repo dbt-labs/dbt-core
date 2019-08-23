@@ -1,3 +1,5 @@
+from hologram import JsonSchemaMixin
+from hologram.helpers import StrEnum
 from jsonrpc.exceptions import \
     JSONRPCDispatchException, \
     JSONRPCInvalidParams, \
@@ -8,7 +10,10 @@ from jsonrpc import JSONRPCResponseManager
 from jsonrpc.jsonrpc import JSONRPCRequest
 from jsonrpc.jsonrpc2 import JSONRPC20Response
 
+from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
+from typing import Any, Dict, Optional
 import json
 import multiprocessing
 import os
@@ -139,6 +144,8 @@ class RequestDispatcher:
             return func
 
         task = self.manager.rpc_task(key)
+        if task is None:
+            raise KeyError(key)
         return self.rpc_factory(task)
 
 
@@ -319,22 +326,76 @@ TaskRow = namedtuple(
 )
 
 
+class ManifestStatus(StrEnum):
+    Init = 'init'
+    Compiling = 'compiling'
+    Ready = 'ready'
+    Error = 'error'
+
+
+@dataclass
+class LastCompile(JsonSchemaMixin):
+    status: ManifestStatus
+    error: Optional[Dict[str, Any]] = None
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+
+
 class TaskManager:
-    def __init__(self):
+    def __init__(self, args, config):
+        self.args = args
+        self.config = config
         self.tasks = {}
         self.completed = {}
         self._rpc_task_map = {}
-        self._rpc_function_map = {}
+        self._last_compile = LastCompile(status=ManifestStatus.Compiling)
         self._lock = multiprocessing.Lock()
 
     def add_request(self, request_handler):
         self.tasks[request_handler.task_id] = request_handler
 
-    def add_task_handler(self, task):
-        self._rpc_task_map[task.METHOD_NAME] = task
+    def add_task_handler(self, task, manifest):
+        self._rpc_task_map[task.METHOD_NAME] = task(
+            self.args, self.config, manifest
+        )
 
     def rpc_task(self, method_name):
-        return self._rpc_task_map[method_name]
+        with self._lock:
+            if self._last_compile.status == ManifestStatus.Ready:
+                return self._rpc_task_map[method_name]
+            else:
+                return None
+
+    def ready(self):
+        with self._lock:
+            return self._last_compile.status == ManifestStatus.Ready
+
+    def set_compiling(self):
+        assert self._last_compile.status != ManifestStatus.Compiling, \
+            f'invalid state {self._last_compile.status}'
+        with self._lock:
+            self._last_compile = LastCompile(status=ManifestStatus.Compiling)
+        self._rpc_task_map.clear()
+
+    def set_compile_exception(self, exc):
+        assert self._last_compile.status == ManifestStatus.Compiling, \
+            f'invalid state {self._last_compile.status}'
+        self._last_compile = LastCompile(
+            error={'message': str(exc)},
+            status=ManifestStatus.Error
+        )
+
+    def set_ready(self):
+        assert self._last_compile.status == ManifestStatus.Compiling, \
+            f'invalid state {self._last_compile.status}'
+        self._last_compile = LastCompile(status=ManifestStatus.Ready)
+
+    def process_status(self):
+        with self._lock:
+            last_compile = self._last_compile
+
+        status = last_compile.to_dict()
+        status['pid'] = os.getpid()
+        return status
 
     def process_listing(self, active=True, completed=False):
         included_tasks = {}
@@ -400,6 +461,8 @@ class TaskManager:
             return self.process_listing
         if method_name == 'kill' and os.name != 'nt':
             return self.process_kill
+        if method_name == 'status':
+            return self.process_status
         return None
 
     def mark_done(self, request_handler):
@@ -411,10 +474,17 @@ class TaskManager:
             self.completed[task_id] = self.tasks.pop(task_id)
 
     def methods(self):
-        rpc_builtin_methods = ['ps']
+        rpc_builtin_methods = ['ps', 'status']
         if os.name != 'nt':
             rpc_builtin_methods.append('kill')
-        return list(self._rpc_task_map) + rpc_builtin_methods
+
+        with self._lock:
+            if not self._last_compile == ManifestStatus.Ready:
+                task_map = []
+            else:
+                task_map = list(self._rpc_task_map)
+
+        return task_map + rpc_builtin_methods
 
 
 class ResponseManager(JSONRPCResponseManager):
@@ -440,6 +510,7 @@ class ResponseManager(JSONRPCResponseManager):
             return JSONRPC20Response(error=JSONRPCInvalidRequest()._data)
 
         track_rpc_request(request.method)
+
         dispatcher = RequestDispatcher(
             http_request,
             request,
