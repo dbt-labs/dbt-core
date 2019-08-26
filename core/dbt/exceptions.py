@@ -172,10 +172,7 @@ class RPCKilledException(RuntimeException):
 
 class RPCCompiling(RuntimeException):
     CODE = 10010
-    MESSAGE = (
-        'RPC server is compiling the project, call the "status" method for'
-        ' compile status'
-    )
+    MESSAGE = 'RPC server is compiling the project, call the "status" method for' " compile status"
 
     def __init__(self, msg=None, node=None):
         if msg is None:
@@ -186,20 +183,16 @@ class RPCCompiling(RuntimeException):
 class RPCLoadException(RuntimeException):
     CODE = 10011
     MESSAGE = (
-        'RPC server failed to compile project, call the "status" method for'
-        ' compile status'
+        'RPC server failed to compile project, call the "status" method for' " compile status"
     )
 
     def __init__(self, cause):
         self.cause = cause
-        self.message = '{}: {}'.format(self.MESSAGE, self.cause['message'])
+        self.message = "{}: {}".format(self.MESSAGE, self.cause["message"])
         super().__init__(self.message)
 
     def data(self):
-        return {
-            'cause': self.cause,
-            'message': self.message
-        }
+        return {"cause": self.cause, "message": self.message}
 
 
 class DatabaseException(RuntimeException):
