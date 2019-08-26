@@ -347,11 +347,14 @@ class TaskManager:
         self.tasks = {}
         self.completed = {}
         self._rpc_task_map = {}
-        self._last_compile = LastCompile(status=ManifestStatus.Compiling)
+        self._last_compile = LastCompile(status=ManifestStatus.Init)
         self._lock = multiprocessing.Lock()
 
     def add_request(self, request_handler):
         self.tasks[request_handler.task_id] = request_handler
+
+    def reserve_handler(self, task):
+        self._rpc_task_map[task.METHOD_NAME] = None
 
     def add_task_handler(self, task, manifest):
         self._rpc_task_map[task.METHOD_NAME] = task(
@@ -360,10 +363,7 @@ class TaskManager:
 
     def rpc_task(self, method_name):
         with self._lock:
-            if self._last_compile.status == ManifestStatus.Ready:
-                return self._rpc_task_map[method_name]
-            else:
-                return None
+            return self._rpc_task_map[method_name]
 
     def ready(self):
         with self._lock:
@@ -374,7 +374,6 @@ class TaskManager:
             f'invalid state {self._last_compile.status}'
         with self._lock:
             self._last_compile = LastCompile(status=ManifestStatus.Compiling)
-        self._rpc_task_map.clear()
 
     def set_compile_exception(self, exc):
         assert self._last_compile.status == ManifestStatus.Compiling, \
@@ -456,6 +455,14 @@ class TaskManager:
         result['finished'] = True
         return result
 
+    def process_currently_compiling(self, *args, **kwargs):
+        raise dbt_error(dbt.exceptions.RPCCompiling('compile in progress'))
+
+    def process_compilation_error(self, *args, **kwargs):
+        raise dbt_error(
+            dbt.exceptions.RPCLoadException(self._last_compile.error)
+        )
+
     def rpc_builtin(self, method_name):
         if method_name == 'ps':
             return self.process_listing
@@ -463,6 +470,11 @@ class TaskManager:
             return self.process_kill
         if method_name == 'status':
             return self.process_status
+        if method_name in self._rpc_task_map:
+            if self._last_compile.status == ManifestStatus.Compiling:
+                return self.process_currently_compiling
+            if self._last_compile.status == ManifestStatus.Error:
+                return self.process_compilation_error
         return None
 
     def mark_done(self, request_handler):
@@ -479,10 +491,7 @@ class TaskManager:
             rpc_builtin_methods.append('kill')
 
         with self._lock:
-            if not self._last_compile == ManifestStatus.Ready:
-                task_map = []
-            else:
-                task_map = list(self._rpc_task_map)
+            task_map = list(self._rpc_task_map)
 
         return task_map + rpc_builtin_methods
 

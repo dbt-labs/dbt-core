@@ -42,7 +42,7 @@ def reload_manager(task_manager, tasks):
 
 @contextmanager
 def signhup_replace():
-    """Å context manager. Replace the current sighup handler with SIG_IGN on
+    """A context manager. Replace the current sighup handler with SIG_IGN on
     entering, and (if the current handler was not SIG_IGN) replace it on
     leaving. This is meant to be used inside a sighup handler itself to
     provide. a sort of locking model.
@@ -85,7 +85,7 @@ class RPCServerTask(ConfiguredTask):
         self._tasks = tasks or self._default_tasks()
         self.task_manager = rpc.TaskManager(self.args, self.config)
         self._reloader = None
-        reload_manager(self.task_manager, self._tasks)
+        self._reload_task_manager()
 
         # windows doesn't have SIGHUP so don't do sighup things
         if os.name != 'nt':
@@ -97,6 +97,8 @@ class RPCServerTask(ConfiguredTask):
         """
         # mark the task manager invalid for task running
         self.task_manager.set_compiling()
+        for task in self._tasks:
+            self.task_manager.reserve_handler(task)
         # compile in a thread that will fix up the tag manager when it's done
         reloader = threading.Thread(
             target=reload_manager,
