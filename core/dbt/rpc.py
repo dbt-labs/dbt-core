@@ -23,7 +23,7 @@ import uuid
 from collections import namedtuple
 from queue import Empty as QueueEmpty
 
-from dbt.adapters.factory import load_plugin
+from dbt.adapters.factory import load_plugin, cleanup_connections
 from dbt import flags
 from dbt.logger import RPC_LOGGER as logger
 from dbt.logger import add_queue_handler
@@ -300,6 +300,17 @@ class RequestTaskHandler:
 
             return result
         else:
+            # this is pretty unfortunate, but we have to reset the adapter
+            # cache _before_ we fork on posix. libpq, but also any other
+            # adapters that rely on file descriptors, get really messed up if
+            # you fork(), because the fds get inherited but the state isn't
+            # shared. The child process and the parent might end up trying to
+            # do things on the same fd at the same time.
+            # Also for some reason, if you do this after forking, even without
+            # calling close(), the connection in the parent ends up throwing
+            # 'connection already closed' exceptions
+            if os.name != 'nt':
+                cleanup_connections()
             self.process = multiprocessing.Process(
                 target=_task_bootstrap,
                 args=(self.task, self.queue, kwargs)

@@ -84,3 +84,12 @@ def reset_adapters():
         for adapter in _ADAPTERS.values():
             adapter.cleanup_connections()
         _ADAPTERS.clear()
+
+
+def cleanup_connections():
+    """Only clean up the adapter connections list without resetting the actual
+    adapters.
+    """
+    with _ADAPTER_LOCK:
+        for adapter in _ADAPTERS.values():
+            adapter.cleanup_connections()

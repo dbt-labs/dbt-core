@@ -35,7 +35,10 @@ class SQLConnectionManager(BaseConnectionManager):
                 if connection is this_connection:
                     continue
 
-                self.cancel(connection)
+                # if the connection failed, the handle will be None so we have
+                # nothing to cancel.
+                if connection.handle is not None:
+                    self.cancel(connection)
                 names.append(connection.name)
         return names
 
