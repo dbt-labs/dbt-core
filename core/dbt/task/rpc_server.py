@@ -9,7 +9,7 @@ from werkzeug.wrappers import Request, Response
 from werkzeug.serving import run_simple
 from werkzeug.exceptions import NotFound
 
-from dbt.logger import RPC_LOGGER as logger
+from dbt.logger import RPC_LOGGER as logger, temp_list_handler
 from dbt.task.base import ConfiguredTask
 from dbt.task.compile import (
     CompileTask, RemoteCompileTask, RemoteCompileProjectTask
@@ -27,17 +27,19 @@ SIG_IGN = signal.SIG_IGN
 
 
 def reload_manager(task_manager, tasks):
+    logs = []
     try:
         compile_task = CompileTask(task_manager.args, task_manager.config)
-        compile_task.run()
+        with temp_list_handler(logs):
+            compile_task.run()
         manifest = compile_task.manifest
 
         for cls in tasks:
             task_manager.add_task_handler(cls, manifest)
     except Exception as exc:
-        task_manager.set_compile_exception(exc)
+        task_manager.set_compile_exception(exc, logs=logs)
     else:
-        task_manager.set_ready()
+        task_manager.set_ready(logs=logs)
 
 
 @contextmanager

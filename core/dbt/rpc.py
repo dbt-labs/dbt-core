@@ -13,7 +13,7 @@ from jsonrpc.jsonrpc2 import JSONRPC20Response
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 import json
 import multiprocessing
 import os
@@ -348,6 +348,7 @@ class ManifestStatus(StrEnum):
 class LastCompile(JsonSchemaMixin):
     status: ManifestStatus
     error: Optional[Dict[str, Any]] = None
+    logs: Optional[List[Dict[str, Any]]] = None
     timestamp: datetime = field(default_factory=datetime.utcnow)
 
 
@@ -386,18 +387,22 @@ class TaskManager:
         with self._lock:
             self._last_compile = LastCompile(status=ManifestStatus.Compiling)
 
-    def set_compile_exception(self, exc):
+    def set_compile_exception(self, exc, logs=List[Dict[str, Any]]):
         assert self._last_compile.status == ManifestStatus.Compiling, \
             f'invalid state {self._last_compile.status}'
         self._last_compile = LastCompile(
             error={'message': str(exc)},
-            status=ManifestStatus.Error
+            status=ManifestStatus.Error,
+            logs=logs
         )
 
-    def set_ready(self):
+    def set_ready(self, logs=List[Dict[str, Any]]):
         assert self._last_compile.status == ManifestStatus.Compiling, \
             f'invalid state {self._last_compile.status}'
-        self._last_compile = LastCompile(status=ManifestStatus.Ready)
+        self._last_compile = LastCompile(
+            status=ManifestStatus.Ready,
+            logs=logs
+        )
 
     def process_status(self):
         with self._lock:

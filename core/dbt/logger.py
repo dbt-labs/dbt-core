@@ -1,10 +1,13 @@
 import dbt.flags
 import dbt.ui.colors
+
 import logging
 import logging.handlers
 import os
 import sys
 import warnings
+from contextlib import contextmanager
+from typing import Optional, List, Any, Dict, ContextManager
 
 import colorama
 
@@ -178,10 +181,16 @@ def log_cache_events(flag):
 GLOBAL_LOGGER = logger
 
 
-class QueueFormatter(logging.Formatter):
-    def format(self, record):
+class DictFormatter(logging.Formatter):
+    # mypy expects a string, but we control the emitter, too.
+    def format(  # type: ignore
+        self,
+        record: logging.LogRecord,
+    ) -> Dict[str, Any]:
         record.message = record.getMessage()
-        record.asctime = self.formatTime(record, self.datefmt)
+        # typeshed (and therefore mypy) doesn't think datefmt is allowed to be
+        # None, but it is (and I think always has been)
+        record.asctime = self.formatTime(record, self.datefmt)  # type: ignore
         formatted = self.formatMessage(record)
 
         output = {
@@ -207,9 +216,42 @@ class QueueLogHandler(logging.Handler):
         self.queue.put_nowait(['log', msg])
 
 
+class ListLogHandler(logging.Handler):
+    def __init__(self, lst: Optional[List[Dict[str, Any]]] = None):
+        super().__init__()
+        if lst is None:
+            lst = []
+        self.records: List[Any] = lst
+
+    def emit(self, record: logging.LogRecord):
+        msg = self.format(record)
+        self.records.append(msg)
+
+
 def add_queue_handler(queue):
     """Add a queue log handler to the global logger."""
     handler = QueueLogHandler(queue)
-    handler.setFormatter(QueueFormatter())
+    handler.setFormatter(DictFormatter())
     handler.setLevel(DEBUG)
     GLOBAL_LOGGER.addHandler(handler)
+
+
+@contextmanager
+def temp_handler(hdlr, logger=GLOBAL_LOGGER):
+    logger.addHandler(hdlr)
+    try:
+        yield
+    finally:
+        logger.removeHandler(hdlr)
+
+
+def temp_list_handler(
+    lst: Optional[List[Dict[str, Any]]],
+    logger=GLOBAL_LOGGER
+) -> ContextManager:
+    """Return a context manager that temporarly attaches a queue to the logger.
+    """
+    handler = ListLogHandler(lst)
+    handler.setFormatter(DictFormatter())
+    handler.setLevel(DEBUG)
+    return temp_handler(handler, logger)
