@@ -610,10 +610,11 @@ class DBTIntegrationTest(unittest.TestCase):
                 else:
                     return
             except BaseException as e:
-                conn.handle.rollback()
+                if conn.handle and conn.handle.closed != 0:
+                    conn.handle.rollback()
                 print(sql)
                 print(e)
-                raise e
+                raise
             finally:
                 conn.transaction_open = False
 
@@ -753,7 +754,7 @@ class DBTIntegrationTest(unittest.TestCase):
         schema = self.unique_schema() if schema is None else schema
         database = self.default_database if database is None else database
         relation = self.adapter.Relation.create(
-            database = database,
+            database=database,
             schema=schema,
             identifier=table,
             type='table',
