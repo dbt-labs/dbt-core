@@ -171,3 +171,31 @@ class TestCustomSchemaWithCustomMacro(DBTIntegrationTest):
         self.assertTablesEqual("seed", "view_1", schema, v1_schema)
         self.assertTablesEqual("seed", "view_2", schema, v2_schema)
         self.assertTablesEqual("agg", "view_3", schema, xf_schema)
+
+
+class TestCustomSchemaWithCustomMacroConfigs(TestCustomSchemaWithCustomMacro):
+
+    @property
+    def project_config(self):
+        return {
+            'macro-paths': ['custom-macros-configs'],
+            'models': {
+                'schema': 'dbt_test'
+            }
+        }
+
+    @use_profile('postgres')
+    def test__postgres__custom_schema_from_macro(self):
+        self.run_sql_file("seed.sql")
+
+        results = self.run_dbt()
+        self.assertEqual(len(results), 3)
+
+        schema = self.unique_schema()
+        v1_schema = "dbt_test_{}_macro".format(schema)
+        v2_schema = "custom_{}_macro".format(schema)
+        xf_schema = "test_{}_macro".format(schema)
+
+        self.assertTablesEqual("seed", "view_1", schema, v1_schema)
+        self.assertTablesEqual("seed", "view_2", schema, v2_schema)
+        self.assertTablesEqual("agg", "view_3", schema, xf_schema)
