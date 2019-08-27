@@ -1,6 +1,4 @@
-
 import json
-import logging
 import os
 import random
 import shutil
@@ -23,7 +21,7 @@ from dbt.adapters.factory import get_adapter, reset_adapters
 from dbt.clients.jinja import template_cache
 from dbt.config import RuntimeConfig
 from dbt.context import common
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.logger import GLOBAL_LOGGER as logger, log_manager
 
 
 INITIAL_ROOT = os.getcwd()
@@ -305,6 +303,7 @@ class DBTIntegrationTest(unittest.TestCase):
         os.symlink(self._logs_dir, os.path.join(self.test_root_dir, 'logs'))
 
     def setUp(self):
+        log_manager.reset_handlers()
         self.initial_dir = INITIAL_ROOT
         os.chdir(self.initial_dir)
         # before we go anywhere, collect the initial path info
@@ -336,8 +335,6 @@ class DBTIntegrationTest(unittest.TestCase):
         self._created_schemas = set()
         flags.reset()
         template_cache.clear()
-        # disable capturing warnings
-        logging.captureWarnings(False)
 
         self.use_profile(self._pick_profile())
         self.use_default_project()
@@ -513,6 +510,7 @@ class DBTIntegrationTest(unittest.TestCase):
         return res
 
     def run_dbt_and_check(self, args=None, strict=True, parser=False, profiles_dir=True):
+        log_manager.reset_handlers()
         if args is None:
             args = ["run"]
 

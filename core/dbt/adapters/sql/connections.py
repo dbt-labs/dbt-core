@@ -53,16 +53,25 @@ class SQLConnectionManager(BaseConnectionManager):
 
         with self.exception_handler(sql):
             if abridge_sql_log:
-                logger.debug('On %s: %s....', connection.name, sql[0:512])
+                log_sql = sql[:512]
             else:
-                logger.debug('On %s: %s', connection.name, sql)
+                log_sql = sql
+
+            logger.debug(
+                'On {connection_name}: {sql}....',
+                connection_name=connection.name,
+                sql=log_sql,
+            )
             pre = time.time()
 
             cursor = connection.handle.cursor()
             cursor.execute(sql, bindings)
 
-            logger.debug("SQL status: %s in %0.2f seconds",
-                         self.get_status(cursor), (time.time() - pre))
+            logger.debug(
+                "SQL status: {status} in {elapsed:0.2f} seconds",
+                status=self.get_status(cursor),
+                elapsed=(time.time() - pre)
+            )
 
             return connection, cursor
 

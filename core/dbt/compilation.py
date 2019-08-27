@@ -50,7 +50,7 @@ def print_compile_stats(stats):
     stat_line = ", ".join(
         [dbt.utils.pluralize(ct, names.get(t)) for t, ct in results.items()])
 
-    logger.notice("Found {}".format(stat_line))
+    logger.info("Found {}".format(stat_line))
 
 
 def _add_prepended_cte(prepended_ctes, new_cte):

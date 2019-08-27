@@ -1,15 +1,18 @@
 import dbt.flags
 import dbt.ui.colors
 
+import json
 import logging
-import logging.handlers
 import os
 import sys
 import warnings
-from contextlib import contextmanager
-from typing import Optional, List, Any, Dict, ContextManager
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional, List, ContextManager, Callable, Dict, Any
 
 import colorama
+import logbook
+from hologram import JsonSchemaMixin
 
 # Colorama needs some help on windows because we're using logger.info
 # intead of print(). If the Windows env doesn't have a TERM var set,
@@ -21,24 +24,6 @@ colorama_wrap = True
 
 colorama.init(wrap=colorama_wrap)
 
-DEBUG = logging.DEBUG
-NOTICE = 15
-INFO = logging.INFO
-WARNING = logging.WARNING
-ERROR = logging.ERROR
-CRITICAL = logging.CRITICAL
-
-logging.addLevelName(NOTICE, 'NOTICE')
-
-
-class Logger(logging.Logger):
-    def notice(self, msg, *args, **kwargs):
-        if self.isEnabledFor(NOTICE):
-            self._log(NOTICE, msg, args, **kwargs)
-
-
-logging.setLoggerClass(Logger)
-
 
 if sys.platform == 'win32' and not os.environ.get('TERM'):
     colorama_wrap = False
@@ -49,63 +34,157 @@ elif sys.platform == 'win32':
 
 colorama.init(wrap=colorama_wrap)
 
-# create a global console logger for dbt
-stdout_handler = logging.StreamHandler(colorama_stdout)
-stdout_handler.setFormatter(logging.Formatter('%(message)s'))
-stdout_handler.setLevel(NOTICE)
 
-stderr_handler = logging.StreamHandler(sys.stderr)
-stderr_handler.setFormatter(logging.Formatter('%(message)s'))
-stderr_handler.setLevel(WARNING)
-
-
-logger = logging.getLogger('dbt')
-logger.addHandler(stdout_handler)
-logger.setLevel(DEBUG)
-logging.getLogger().setLevel(CRITICAL)
-
-# Quiet these down in the logs
-logging.getLogger('botocore').setLevel(INFO)
-logging.getLogger('requests').setLevel(INFO)
-logging.getLogger('urllib3').setLevel(INFO)
-logging.getLogger('google').setLevel(INFO)
-logging.getLogger('snowflake.connector').setLevel(INFO)
-logging.getLogger('parsedatetime').setLevel(INFO)
-# we never want to seek werkzeug logs
-logging.getLogger('werkzeug').setLevel(CRITICAL)
-
-# provide this for the cache.
-CACHE_LOGGER = logging.getLogger('dbt.cache')
-# add a dummy handler to avoid `No handlers could be found for logger`
-nothing_handler = logging.StreamHandler()
-nothing_handler.setLevel(CRITICAL)
-CACHE_LOGGER.addHandler(nothing_handler)
-# provide this for RPC connection logging
-RPC_LOGGER = logging.getLogger('dbt.rpc')
+STDOUT_LOG_FORMAT = '{record.message}'
+# TODO: can we change the time to just "{record.time:%Y-%m-%d %H:%M:%S.%f%z}"?
+DEBUG_LOG_FORMAT = (
+    '{record.time:%Y-%m-%d %H:%M:%S%z},{record.time.microsecond:03} '
+    '({record.thread_name}): '
+    '{record.message}'
+)
 
 
-# Redirect warnings through our logging setup
-# They will be logged to a file below
-logging.captureWarnings(True)
+ExceptionInformation = str
+Extras = Dict[str, Any]
+
+
+@dataclass
+class LogMessage(JsonSchemaMixin):
+    timestamp: datetime
+    message: str
+    channel: str
+    level: int
+    levelname: str
+    thread_name: str
+    process: int
+    extra: Optional[Extras] = None
+    exc_info: Optional[ExceptionInformation] = None
+
+    @classmethod
+    def from_record_formatted(cls, record: logbook.LogRecord, message: str):
+        extra = dict(record.extra)
+        log_message = LogMessage(
+            timestamp=record.time,
+            message=message,
+            channel=record.channel,
+            level=record.level,
+            levelname=logbook.get_level_name(record.level),
+            extra=extra,
+            thread_name=record.thread_name,
+            process=record.process,
+            exc_info=record.formatted_exception,
+        )
+        return log_message
+
+
+class LogMessageFormatter(logbook.StringFormatter):
+    def __call__(self, record, handler):
+        data = self.format_record(record, handler)
+        exc = self.format_exception(record)
+        if exc:
+            data.exc_info = exc
+        return data
+
+    def format_record(self, record, handler):
+        message = super().format_record(record, handler)
+        return LogMessage.from_record_formatted(record, message)
+
+
+class JsonFormatter(LogMessageFormatter):
+    def __call__(self, record, handler):
+        """Return a the record converted to LogMessage's JSON form"""
+        log_message = super().__call__(record, handler)
+        return json.dumps(log_message.to_dict())
+
+
+class FormatterMixin:
+    def __init__(self, format_string):
+        self._text_format_string = format_string
+        self.formatter_class = logbook.StringFormatter
+        # triggers a formatter update via logbook.StreamHandler
+        self.format_string = self._text_format_string
+
+    def format_json(self):
+        # set our formatter to the json formatter
+        self.formatter_class = JsonFormatter
+        self.format_string = STDOUT_LOG_FORMAT
+
+    def format_text(self):
+        # set our formatter to the regular stdout/stderr handler
+        self.formatter_class = logbook.StringFormatter
+        self.format_string = self._text_format_string
+
+
+class OutputHandler(logbook.StreamHandler, FormatterMixin):
+    """Output handler.
+
+    - The `format_string` parameter only changes the default text output, not
+      debug mode or json.
+    - defaults to writing to stdout, call set_stderr_output() switches to
+      stderr
+    -
+    """
+    def __init__(
+        self,
+        level=logbook.INFO,
+        format_string=STDOUT_LOG_FORMAT,
+        bubble=False,
+    ) -> None:
+        self.stdout_stream = colorama_stdout
+        self.stderr_stream = sys.stderr
+        self._debug = False
+        self._stdout_format = format_string
+        logbook.StreamHandler.__init__(
+            self,
+            stream=self.stdout_stream,
+            level=level,
+            format_string=format_string,
+            bubble=bubble,
+        )
+        FormatterMixin.__init__(self, format_string)
+
+    def set_stderr_output(self):
+        self.stream = self.stderr_stream
+
+    def set_stdout_output(self):
+        self.stream = self.stdout_stream
+
+    def _set_text_format(self, format_string: str):
+        """Set the text format to format_string. In JSON output mode, this is
+        a noop.
+        """
+        if self.formatter_class is logbook.StringFormatter:
+            # reset text format
+            self._text_format_string = format_string
+            self.format_text()
+
+    def enable_debug_output(self):
+        self._set_text_format(DEBUG_LOG_FORMAT)
+        self.level = logbook.DEBUG
+
+    def enable_default_output(self):
+        self._set_text_format(self._stdout_format)
+        self.level = logbook.INFO
+
+    def reset(self):
+        self.set_stdout_output()
+        self.enable_default_output()
+        self.format_text()
+
+
+def _redirect_std_logging():
+    logbook.compat.redirect_logging()
+
+
+logger = logbook.Logger('dbt')
+# provide this for the cache, disabled by default
+CACHE_LOGGER = logbook.Logger('dbt.cache')
+CACHE_LOGGER.disable()
+
 warnings.filterwarnings("ignore", category=ResourceWarning,
                         message="unclosed.*<socket.socket.*>")
 
 initialized = False
-
-
-def _swap_handler(logger, old, new):
-    if old in logger.handlers:
-        logger.handlers.remove(old)
-    if new not in logger.handlers:
-        logger.addHandler(new)
-
-
-def log_to_stderr(logger):
-    _swap_handler(logger, stdout_handler, stderr_handler)
-
-
-def log_to_stdout(logger):
-    _swap_handler(logger, stderr_handler, stdout_handler)
 
 
 def make_log_dir_if_missing(log_dir):
@@ -113,145 +192,223 @@ def make_log_dir_if_missing(log_dir):
     dbt.clients.system.make_directory(log_dir)
 
 
-class ColorFilter(logging.Filter):
-    def filter(self, record):
-        subbed = str(record.msg)
+class DebugWarnings(logbook.compat.redirected_warnings):
+    """Log warnings, except send them to 'debug' instead of 'warning' level.
+    """
+    def make_record(self, message, exception, filename, lineno):
+        rv = super().make_record(message, exception, filename, lineno)
+        rv.level = logbook.DEBUG
+        rv.extra['from_warnings'] = True
+        return rv
+
+
+# push Python warnings to debug level logs. This will suppress all import-time
+# warnings.
+DebugWarnings().__enter__()
+# redirect stdlib logging to logbook
+_redirect_std_logging()
+
+
+class DelayedFileHandler(logbook.TimedRotatingFileHandler, FormatterMixin):
+    def __init__(
+        self,
+        log_dir: Optional[str] = None,
+        level=logbook.DEBUG,
+        filter=None,
+        bubble=True
+    ) -> None:
+        self.disabled = False
+        self._msg_buffer: Optional[List[logbook.LogRecord]] = []
+        # if we get 1k messages without a logfile being set, something is wrong
+        self._bufmax = 1000
+        self._log_path = None
+        # we need the base handler class' __init__ to run so handling works
+        logbook.Handler.__init__(self, level, filter, bubble)
+        if log_dir is not None:
+            self.set_path(log_dir)
+
+    def reset(self):
+        if self.initialized:
+            self.close()
+        self._log_path = None
+        self._msg_buffer = []
+        self.disabled = False
+
+    @property
+    def initialized(self):
+        return self._log_path is not None
+
+    def set_path(self, log_dir):
+        """log_dir can be the path to a log directory, or `None` to avoid
+        writing to a file (for `dbt debug`)
+        """
+        assert not (self.initialized or self.disabled), 'set_path called twice'
+
+        if log_dir is None:
+            self.disabled = True
+            return
+
+        make_log_dir_if_missing(log_dir)
+        log_path = os.path.join(log_dir, 'dbt.log')
+        self._super_init(log_path)
+        self._replay_buffered()
+        self._log_path = log_path
+
+    def _super_init(self, log_path):
+        logbook.TimedRotatingFileHandler.__init__(
+            self,
+            filename=log_path,
+            level=self.level,
+            filter=self.filter,
+            bubble=self.bubble,
+            format_string=DEBUG_LOG_FORMAT,
+            date_format='%Y-%m-%d',
+            backup_count=7,
+            timed_filename_for_current=False,
+        )
+        FormatterMixin.__init__(self, DEBUG_LOG_FORMAT)
+
+    def _replay_buffered(self):
+        for record in self._msg_buffer:
+            super().emit(record)
+        self._msg_buffer = None
+
+    def format(self, record: logbook.LogRecord) -> str:
+        msg = super().format(record)
+        subbed = str(msg)
         for escape_sequence in dbt.ui.colors.COLORS.values():
             subbed = subbed.replace(escape_sequence, '')
-        record.msg = subbed
+        return subbed
 
-        return True
-
-
-def default_formatter():
-    return logging.Formatter('%(asctime)-18s (%(threadName)s): %(message)s')
-
-
-def initialize_logger(debug_mode=False, path=None):
-    global initialized, logger, stdout_handler, stderr_handler
-
-    if initialized:
-        return
-
-    if debug_mode:
-        # we'll only use one of these, but just set both up
-        stdout_handler.setFormatter(default_formatter())
-        stdout_handler.setLevel(DEBUG)
-        stderr_handler.setFormatter(default_formatter())
-        stderr_handler.setLevel(DEBUG)
-
-    if path is not None:
-        make_log_dir_if_missing(path)
-        log_path = os.path.join(path, 'dbt.log')
-
-        # log to directory as well
-        logdir_handler = logging.handlers.TimedRotatingFileHandler(
-            filename=log_path,
-            when='d',
-            interval=1,
-            backupCount=7,
-        )
-
-        color_filter = ColorFilter()
-        logdir_handler.addFilter(color_filter)
-
-        logdir_handler.setFormatter(default_formatter())
-        logdir_handler.setLevel(DEBUG)
-
-        logger.addHandler(logdir_handler)
-
-        # Log Python warnings to file
-        warning_logger = logging.getLogger('py.warnings')
-        warning_logger.addHandler(logdir_handler)
-        warning_logger.setLevel(DEBUG)
-
-    initialized = True
+    def emit(self, record: logbook.LogRecord):
+        """emit is not thread-safe with set_path, but it is thread-safe with
+        itself
+        """
+        if self.disabled:
+            return
+        elif self.initialized:
+            super().emit(record)
+        else:
+            assert self._msg_buffer is not None, \
+                '_msg_buffer should never be None if _log_path is set'
+            self._msg_buffer.append(record)
+            assert len(self._msg_buffer) < self._bufmax, \
+                'too many messages received before initilization!'
 
 
-def logger_initialized():
-    return initialized
+class DefaultLogHandlers(logbook.NestedSetup):
+    def __init__(self, output_handler, file_handler):
+        self._output_handler = output_handler
+        self._file_handler = file_handler
+        super().__init__([output_handler, file_handler])
+
+    # this is used by `dbt ls` to allow piping stdout to jq, etc
+    def stderr_console(self):
+        """Output to stderr at WARNING level instead of stdout"""
+        self._output_handler.set_stderr_output()
+        self._output_handler.level = logbook.WARNING
+
+    def stdout_console(self):
+        """enable stdout and disable stderr"""
+        self._output_handler.set_stdout_output()
+        self._output_handler.level = logbook.INFO
+
+    def set_debug(self):
+        self._output_handler.enable_debug_output()
+
+    def set_path(self, path):
+        self._file_handler.set_path(path)
+
+    def initialized(self):
+        return self._file_handler.initialized
+
+    def format_json(self):
+        self._output_handler.format_json()
+        self._file_handler.format_json()
+
+    def format_text(self):
+        self._output_handler.format_text()
+        self._file_handler.format_text()
+
+    def reset_handlers(self):
+        """Reset the handlers to their defaults. This is nice in testing!"""
+        self._output_handler.reset()
+        self._file_handler.reset()
+
+
+log_manager = DefaultLogHandlers(OutputHandler(), DelayedFileHandler())
 
 
 def log_cache_events(flag):
     """Set the cache logger to propagate its messages based on the given flag.
     """
-    CACHE_LOGGER.propagate = flag
+    CACHE_LOGGER.disabled = True
 
 
 GLOBAL_LOGGER = logger
 
 
-class DictFormatter(logging.Formatter):
-    # mypy expects a string, but we control the emitter, too.
-    def format(  # type: ignore
+class LogMessageHandler(logbook.Handler):
+    formatter_class = LogMessageFormatter
+
+    def format_logmessage(self, record):
+        """Format a LogRecord into a LogMessage"""
+        message = self.format(record)
+        return LogMessage.from_record_formatted(record, message)
+
+
+class ListLogHandler(LogMessageHandler):
+    def __init__(
         self,
-        record: logging.LogRecord,
-    ) -> Dict[str, Any]:
-        record.message = record.getMessage()
-        # typeshed (and therefore mypy) doesn't think datefmt is allowed to be
-        # None, but it is (and I think always has been)
-        record.asctime = self.formatTime(record, self.datefmt)  # type: ignore
-        formatted = self.formatMessage(record)
-
-        output = {
-            'message': formatted,
-            'timestamp': record.asctime,
-            'levelname': record.levelname,
-            'level': record.levelno,
-        }
-        if record.exc_info:
-            if not record.exc_text:
-                record.exc_text = self.formatException(record.exc_info)
-            output['exc_info'] = record.exc_text
-        return output
-
-
-class QueueLogHandler(logging.Handler):
-    def __init__(self, queue):
-        super().__init__()
-        self.queue = queue
-
-    def emit(self, record):
-        msg = self.format(record)
-        self.queue.put_nowait(['log', msg])
-
-
-class ListLogHandler(logging.Handler):
-    def __init__(self, lst: Optional[List[Dict[str, Any]]] = None):
-        super().__init__()
+        level: int = logbook.NOTSET,
+        filter: Callable = None,
+        bubble: bool = False,
+        lst: Optional[List[LogMessage]] = None
+    ) -> None:
+        super().__init__(level, filter, bubble)
         if lst is None:
             lst = []
-        self.records: List[Any] = lst
+        self.records: List[LogMessage] = lst
 
-    def emit(self, record: logging.LogRecord):
-        msg = self.format(record)
-        self.records.append(msg)
-
-
-def add_queue_handler(queue):
-    """Add a queue log handler to the global logger."""
-    handler = QueueLogHandler(queue)
-    handler.setFormatter(DictFormatter())
-    handler.setLevel(DEBUG)
-    GLOBAL_LOGGER.addHandler(handler)
+    def emit(self, record: logbook.LogRecord):
+        as_dict = self.format_logmessage(record)
+        self.records.append(as_dict)
 
 
-@contextmanager
-def temp_handler(hdlr, logger=GLOBAL_LOGGER):
-    logger.addHandler(hdlr)
-    try:
-        yield
-    finally:
-        logger.removeHandler(hdlr)
+class SuppressBelow(logbook.Handler):
+    def __init__(
+        self, channels, level=logbook.INFO, filter=None, bubble=False
+    ) -> None:
+        self.channels = set(channels)
+        super().__init__(level, filter, bubble)
+
+    def should_handle(self, record):
+        channel = record.channel.split('.')[0]
+        if channel not in self.channels:
+            return False
+        # if we were set to 'info' and record.level is warn/error, we don't
+        # want to 'handle' it (so a real logger will)
+        return self.level >= record.level
+
+    def handle(self, record):
+        return True
 
 
-def temp_list_handler(
-    lst: Optional[List[Dict[str, Any]]],
-    logger=GLOBAL_LOGGER
+# we still need to use logging to suppress these or pytest captures them
+logging.getLogger('botocore').setLevel(logging.INFO)
+logging.getLogger('requests').setLevel(logging.INFO)
+logging.getLogger('urllib3').setLevel(logging.INFO)
+logging.getLogger('google').setLevel(logging.INFO)
+logging.getLogger('snowflake.connector').setLevel(logging.INFO)
+logging.getLogger('parsedatetime').setLevel(logging.INFO)
+# we never want to see werkzeug logs
+logging.getLogger('werkzeug').setLevel(logging.CRITICAL)
+
+
+def list_handler(
+    lst: Optional[List[LogMessage]],
+    level=logbook.NOTSET,
 ) -> ContextManager:
-    """Return a context manager that temporarly attaches a queue to the logger.
+    """Return a context manager that temporarly attaches a list to the logger.
     """
-    handler = ListLogHandler(lst)
-    handler.setFormatter(DictFormatter())
-    handler.setLevel(DEBUG)
-    return temp_handler(handler, logger)
+    return ListLogHandler(lst=lst, level=level, bubble=True)

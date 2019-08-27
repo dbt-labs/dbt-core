@@ -179,7 +179,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
         conn = self.get_thread_connection()
         client = conn.handle
 
-        logger.debug('On %s: %s', conn.name, sql)
+        logger.debug('On {}: {}', conn.name, sql)
 
         job_config = google.cloud.bigquery.QueryJobConfig()
         job_config.use_legacy_sql = False

@@ -99,7 +99,7 @@ class SQLAdapter(BaseAdapter):
                target_column.can_expand_to(reference_column):
                 col_string_size = reference_column.string_size()
                 new_type = self.Column.string_type(col_string_size)
-                logger.debug("Changing col type from %s to %s in table %s",
+                logger.debug("Changing col type from {} to {} in table {}",
                              target_column.data_type, new_type, current)
 
                 self.alter_column_type(current, column_name, new_type)
@@ -157,7 +157,7 @@ class SQLAdapter(BaseAdapter):
         )
 
     def create_schema(self, database, schema):
-        logger.debug('Creating schema "%s"."%s".', database, schema)
+        logger.debug('Creating schema "{}"."{}".', database, schema)
         kwargs = {
             'database_name': self.quote_as_configured(database, 'database'),
             'schema_name': self.quote_as_configured(schema, 'schema'),
@@ -166,7 +166,7 @@ class SQLAdapter(BaseAdapter):
         self.commit_if_has_connection()
 
     def drop_schema(self, database, schema):
-        logger.debug('Dropping schema "%s"."%s".', database, schema)
+        logger.debug('Dropping schema "{}"."{}".', database, schema)
         kwargs = {
             'database_name': self.quote_as_configured(database, 'database'),
             'schema_name': self.quote_as_configured(schema, 'schema'),

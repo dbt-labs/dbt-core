@@ -12,6 +12,7 @@ import requests
 from pytest import mark
 
 from test.integration.base import DBTIntegrationTest, use_profile
+from dbt.logger import log_manager
 from dbt.main import handle_and_check
 
 
@@ -30,6 +31,11 @@ class ServerProcess(multiprocessing.Process):
             args=(handle_and_check_args,),
             name='ServerProcess')
 
+    def run(self):
+        log_manager.reset_handlers()
+        log_manager.stderr_console()
+        return super().run()
+
     def can_connect(self):
         sock = socket.socket()
         try:
@@ -39,12 +45,15 @@ class ServerProcess(multiprocessing.Process):
         sock.close()
         return True
 
+    def _compare_result(self, result):
+        return result['result']['status'] == 'ready'
+
     def status_ok(self):
         result = query_url(
             'http://localhost:{}/jsonrpc'.format(self.port),
             {'method': 'status', 'id': 1, 'jsonrpc': 2.0}
         ).json()
-        return result['result']['status'] == 'ready'
+        return self._compare_result(result)
 
     def is_up(self):
         if not self.can_connect():
@@ -53,13 +62,18 @@ class ServerProcess(multiprocessing.Process):
 
     def start(self):
         super().start()
-        for _ in range(10):
+        for _ in range(20):
             if self.is_up():
                 break
             time.sleep(0.5)
-        if not self.is_up():
-            self.terminate()
+        if not self.can_connect():
             raise Exception('server never appeared!')
+        status_result = query_url(
+            'http://localhost:{}/jsonrpc'.format(self.port),
+            {'method': 'status', 'id': 1, 'jsonrpc': 2.0}
+        ).json()
+        if not self._compare_result(status_result):
+            raise Exception('Got invalid status result: {}'.format(status_result))
 
 
 def query_url(url, query):
@@ -808,11 +822,7 @@ class TestRPCServer(HasRPCServer):
 
 
 class FailedServerProcess(ServerProcess):
-    def status_ok(self):
-        result = query_url(
-            'http://localhost:{}/jsonrpc'.format(self.port),
-            {'method': 'status', 'id': 1, 'jsonrpc': 2.0}
-        ).json()
+    def _compare_result(self, result):
         return result['result']['status'] == 'error'
 
 

@@ -41,8 +41,8 @@ class TimeoutEmitter(Emitter):
         do_not_track()
 
     def http_get(self, payload):
-        sp_logger.info("Sending GET request to %s..." % self.endpoint)
-        sp_logger.debug("Payload: %s" % payload)
+        sp_logger.info("Sending GET request to {}...".format(self.endpoint))
+        sp_logger.debug("Payload: {}".format(payload))
         r = requests.get(self.endpoint, params=payload, timeout=5.0)
 
         msg = "GET request finished with status code: " + str(r.status_code)

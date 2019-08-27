@@ -162,11 +162,11 @@ class BigQueryAdapter(BaseAdapter):
         return self._bq_table_to_relation(table)
 
     def create_schema(self, database, schema):
-        logger.debug('Creating schema "%s.%s".', database, schema)
+        logger.debug('Creating schema "{}.{}".', database, schema)
         self.connections.create_dataset(database, schema)
 
     def drop_schema(self, database, schema):
-        logger.debug('Dropping schema "%s.%s".', database, schema)
+        logger.debug('Dropping schema "{}.{}".', database, schema)
 
         if not self.check_schema_exists(database, schema):
             return

@@ -9,7 +9,11 @@ from werkzeug.wrappers import Request, Response
 from werkzeug.serving import run_simple
 from werkzeug.exceptions import NotFound
 
-from dbt.logger import RPC_LOGGER as logger, temp_list_handler
+from dbt.logger import (
+    GLOBAL_LOGGER as logger,
+    list_handler,
+    log_manager,
+)
 from dbt.task.base import ConfiguredTask
 from dbt.task.compile import (
     CompileTask, RemoteCompileTask, RemoteCompileProjectTask
@@ -19,6 +23,7 @@ from dbt.task.seed import RemoteSeedProjectTask
 from dbt.task.test import RemoteTestProjectTask
 from dbt.utils import JSONEncoder
 from dbt import rpc
+from dbt.rpc.logger import ServerContext, HTTPRequest, RPCResponse
 
 
 # SIG_DFL ends up killing the process if multiple build up, but SIG_IGN just
@@ -30,15 +35,17 @@ def reload_manager(task_manager, tasks):
     logs = []
     try:
         compile_task = CompileTask(task_manager.args, task_manager.config)
-        with temp_list_handler(logs):
+        with list_handler(logs):
             compile_task.run()
         manifest = compile_task.manifest
 
         for cls in tasks:
             task_manager.add_task_handler(cls, manifest)
     except Exception as exc:
+        logs = [r.to_dict() for r in logs]
         task_manager.set_compile_exception(exc, logs=logs)
     else:
+        logs = [r.to_dict() for r in logs]
         task_manager.set_ready(logs=logs)
 
 
@@ -129,6 +136,7 @@ class RPCServerTask(ConfiguredTask):
         ]
 
     def run(self):
+        log_manager.format_json()
         host = self.args.host
         port = self.args.port
         addr = (host, port)
@@ -137,8 +145,11 @@ class RPCServerTask(ConfiguredTask):
         if host == '0.0.0.0':
             display_host = 'localhost'
 
+        ServerContext().push_application()
         logger.info(
-            'Serving RPC server at {}:{}, pid={}'.format(*addr, os.getpid())
+            'Serving RPC server at {}:{}, pid={}'.format(
+                *addr, os.getpid()
+            )
         )
 
         logger.info(
@@ -155,28 +166,30 @@ class RPCServerTask(ConfiguredTask):
         })
 
         # we have to run in threaded mode if we want to share subprocess
-        # handles, which is the easiest way to implement `kill` (it makes `ps`
-        # easier as well). The alternative involves tracking metadata+state in
-        # a multiprocessing.Manager, adds polling the manager to the request
-        # task handler and in general gets messy fast.
+        # handles, which is the easiest way to implement `kill` (it makes
+        # `ps` easier as well). The alternative involves tracking
+        # metadata+state in a multiprocessing.Manager, adds polling the
+        # manager to the request  task handler and in general gets messy
+        # fast.
         run_simple(host, port, app, threaded=not self.args.single_threaded)
 
     @Request.application
     def handle_jsonrpc_request(self, request):
-        msg = 'Received request ({0}) from {0.remote_addr}, data={0.data}'
-        logger.info(msg.format(request))
-        response = rpc.ResponseManager.handle(request, self.task_manager)
-        json_data = json.dumps(response.data, cls=JSONEncoder)
-        response = Response(json_data, mimetype='application/json')
-        # this looks and feels dumb, but our json encoder converts decimals and
-        # datetimes, and if we use the json_data itself the output looks silly
-        # because of escapes, so re-serialize it into valid JSON types for
-        # logging.
-        logger.info('sending response ({}) to {}, data={}'.format(
-            response, request.remote_addr, json.loads(json_data))
-        )
-        logger.info('thread name: {}'.format(threading.current_thread().name))
-        return response
+        with HTTPRequest(request):
+            jsonrpc_response = rpc.ResponseManager.handle(
+                request, self.task_manager
+            )
+            json_data = json.dumps(jsonrpc_response.data, cls=JSONEncoder)
+            response = Response(json_data, mimetype='application/json')
+            # this looks and feels dumb, but our json encoder converts decimals
+            # and datetimes, and if we use the json_data itself the output
+            # looks silly because of escapes, so re-serialize it into valid
+            # JSON types for logging.
+            with RPCResponse(jsonrpc_response):
+                logger.info('sending response ({}) to {}'.format(
+                    response, request.remote_addr)
+                )
+            return response
 
     @Request.application
     def handle_request(self, request):

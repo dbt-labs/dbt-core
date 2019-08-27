@@ -3,8 +3,7 @@ import json
 from dbt.task.runnable import GraphRunnableTask, ManifestTask
 from dbt.node_types import NodeType
 import dbt.exceptions
-from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.logger import log_to_stderr
+from dbt.logger import log_manager, GLOBAL_LOGGER as logger
 
 
 class ListTask(GraphRunnableTask):
@@ -46,7 +45,7 @@ class ListTask(GraphRunnableTask):
     @classmethod
     def pre_init_hook(cls):
         """A hook called before the task is initialized."""
-        log_to_stderr(logger)
+        log_manager.stderr_console()
 
     def _iterate_selected_nodes(self):
         nodes = sorted(self.select_nodes())
