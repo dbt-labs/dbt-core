@@ -1,4 +1,8 @@
 import json
+import os
+import signal
+import threading
+from contextlib import contextmanager
 
 from werkzeug.wsgi import DispatcherMiddleware
 from werkzeug.wrappers import Request, Response
@@ -17,25 +21,110 @@ from dbt.utils import JSONEncoder
 from dbt import rpc
 
 
+# SIG_DFL ends up killing the process if multiple build up, but SIG_IGN just
+# peacefully carries on
+SIG_IGN = signal.SIG_IGN
+
+
+def reload_manager(task_manager, tasks):
+    try:
+        compile_task = CompileTask(task_manager.args, task_manager.config)
+        compile_task.run()
+        manifest = compile_task.manifest
+
+        for cls in tasks:
+            task_manager.add_task_handler(cls, manifest)
+    except Exception as exc:
+        task_manager.set_compile_exception(exc)
+    else:
+        task_manager.set_ready()
+
+
+@contextmanager
+def signhup_replace():
+    """A context manager. Replace the current sighup handler with SIG_IGN on
+    entering, and (if the current handler was not SIG_IGN) replace it on
+    leaving. This is meant to be used inside a sighup handler itself to
+    provide. a sort of locking model.
+
+    This relies on the fact that 1) signals are only handled by the main thread
+    (the default in Python) and 2) signal.signal() is "atomic" (only C
+    instructions). I'm pretty sure that's reliable on posix.
+
+    This shouldn't replace if the handler wasn't already SIG_IGN, and should
+    yield whether it has the lock as its value. Callers shouldn't do
+    singal-handling things inside this context manager if it does not have the
+    lock (they should just exit the context).
+    """
+    # Don't use locks here! This is called from inside a signal handler
+
+    # set our handler to ignore signals, capturing the existing one
+    current_handler = signal.signal(signal.SIGHUP, SIG_IGN)
+
+    # current_handler should be the handler unless we're already loading a
+    # new manifest. So if the current handler is the ignore, there was a
+    # double-hup! We should exit and not touch the signal handler, to make
+    # sure we let the other signal handler fix it
+    is_current_handler = current_handler is not SIG_IGN
+
+    # if we got here, we're the ones in charge of configuring! Yield.
+    try:
+        yield is_current_handler
+    finally:
+        if is_current_handler:
+            # the signal handler that successfully changed the handler is
+            # responsible for resetting, and can't be re-called until it's
+            # fixed, so no locking needed
+
+            signal.signal(signal.SIGHUP, current_handler)
+
+
 class RPCServerTask(ConfiguredTask):
     def __init__(self, args, config, tasks=None):
         super().__init__(args, config)
-        # compile locally
-        self.manifest = self._compile_manifest()
-        self.task_manager = rpc.TaskManager()
-        tasks = tasks or [
+        self._tasks = tasks or self._default_tasks()
+        self.task_manager = rpc.TaskManager(self.args, self.config)
+        self._reloader = None
+        self._reload_task_manager()
+
+        # windows doesn't have SIGHUP so don't do sighup things
+        if os.name != 'nt':
+            signal.signal(signal.SIGHUP, self._sighup_handler)
+
+    def _reload_task_manager(self):
+        """This function can only be running once at a time, as it runs in the
+        signal handler we replace
+        """
+        # mark the task manager invalid for task running
+        self.task_manager.set_compiling()
+        for task in self._tasks:
+            self.task_manager.reserve_handler(task)
+        # compile in a thread that will fix up the tag manager when it's done
+        reloader = threading.Thread(
+            target=reload_manager,
+            args=(self.task_manager, self._tasks),
+        )
+        reloader.start()
+        # only assign to _reloader here, to avoid calling join() before start()
+        self._reloader = reloader
+
+    def _sighup_handler(self, signum, frame):
+        with signhup_replace() as run_task_manger:
+            if not run_task_manger:
+                # a sighup handler is already active.
+                return
+            if self._reloader is not None and self._reloader.is_alive():
+                # a reloader is already active.
+                return
+            self._reload_task_manager()
+
+    @staticmethod
+    def _default_tasks():
+        return [
             RemoteCompileTask, RemoteCompileProjectTask,
             RemoteRunTask, RemoteRunProjectTask,
             RemoteSeedProjectTask, RemoteTestProjectTask
         ]
-        for cls in tasks:
-            task = cls(args, config, self.manifest)
-            self.task_manager.add_task_handler(task)
-
-    def _compile_manifest(self):
-        compile_task = CompileTask(self.args, self.config)
-        compile_task.run()
-        return compile_task.manifest
 
     def run(self):
         host = self.args.host
@@ -47,7 +136,7 @@ class RPCServerTask(ConfiguredTask):
             display_host = 'localhost'
 
         logger.info(
-            'Serving RPC server at {}:{}'.format(*addr)
+            'Serving RPC server at {}:{}, pid={}'.format(*addr, os.getpid())
         )
 
         logger.info(
@@ -84,6 +173,7 @@ class RPCServerTask(ConfiguredTask):
         logger.info('sending response ({}) to {}, data={}'.format(
             response, request.remote_addr, json.loads(json_data))
         )
+        logger.info('thread name: {}'.format(threading.current_thread().name))
         return response
 
     @Request.application

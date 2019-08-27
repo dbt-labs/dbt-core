@@ -1,8 +1,10 @@
 from dataclasses import dataclass, field
-from typing import Optional, Union, List, Dict, Any, Type, Tuple
+from typing import Optional, Union, List, Dict, Any, Type, Tuple, NewType
 
 from hologram import JsonSchemaMixin
-from hologram.helpers import StrEnum, NewPatternType, ExtensibleJsonSchemaMixin
+from hologram.helpers import (
+    StrEnum, register_pattern, ExtensibleJsonSchemaMixin
+)
 
 import dbt.clients.jinja
 import dbt.flags
@@ -46,7 +48,8 @@ def insensitive_patterns(*patterns: str):
     return '^({})$'.format('|'.join(lowercased))
 
 
-Severity = NewPatternType('Severity', insensitive_patterns('warn', 'error'))
+Severity = NewType('Severity', str)
+register_pattern(Severity, insensitive_patterns('warn', 'error'))
 
 
 @dataclass

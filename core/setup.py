@@ -56,6 +56,6 @@ setup(
         'json-rpc>=1.12,<2',
         'werkzeug>=0.14.1,<0.15',
         'dataclasses;python_version<"3.7"',
-        'hologram==0.0.1',
+        'hologram==0.0.2',
     ]
 )
