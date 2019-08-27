@@ -206,6 +206,15 @@ class MacrosKnownParser(BaseParser):
         generate and set the true values to use, overriding the temporary parse
         values set in _build_intermediate_parsed_node.
         """
+        # Set tags on node provided in config blocks
+        model_tags = config.config.get('tags', [])
+        parsed_node.tags.extend(model_tags)
+
+        # Overwrite node config
+        config_dict = parsed_node.get('config', {})
+        config_dict.update(config.config)
+        parsed_node.config = config_dict
+
         # Special macro defined in the global project. Use the root project's
         # definition, not the current package
         schema_override = config.config.get('schema')
@@ -230,15 +239,6 @@ class MacrosKnownParser(BaseParser):
         parsed_node.database = config.config.get(
             'database', self.default_database
         ).strip()
-
-        # Set tags on node provided in config blocks
-        model_tags = config.config.get('tags', [])
-        parsed_node.tags.extend(model_tags)
-
-        # Overwrite node config
-        config_dict = parsed_node.get('config', {})
-        config_dict.update(config.config)
-        parsed_node.config = config_dict
 
         for hook_type in dbt.hooks.ModelHookType.Both:
             parsed_node.config[hook_type] = dbt.hooks.get_hooks(parsed_node,
