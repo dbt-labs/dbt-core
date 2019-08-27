@@ -36,7 +36,7 @@ elif sys.platform == "win32":
 colorama.init(wrap=colorama_wrap)
 
 
-STDOUT_LOG_FORMAT = '{record.message}'
+STDOUT_LOG_FORMAT = "{record.message}"
 DEBUG_LOG_FORMAT = (
     '{record.time:%Y-%m-%d %H:%M:%S.%f%z} '
     '({record.thread_name}): '
@@ -341,13 +341,12 @@ class ScrubSecrets(logbook.Processor):
             record.message = str(record.message).replace(secret, "*****")
 
 
-logger = logbook.Logger('dbt')
+logger = logbook.Logger("dbt")
 # provide this for the cache, disabled by default
-CACHE_LOGGER = logbook.Logger('dbt.cache')
+CACHE_LOGGER = logbook.Logger("dbt.cache")
 CACHE_LOGGER.disable()
 
-warnings.filterwarnings("ignore", category=ResourceWarning,
-                        message="unclosed.*<socket.socket.*>")
+warnings.filterwarnings("ignore", category=ResourceWarning, message="unclosed.*<socket.socket.*>")
 
 initialized = False
 
@@ -358,13 +357,12 @@ def make_log_dir_if_missing(log_dir):
 
 
 class DebugWarnings(logbook.compat.redirected_warnings):
-    """Log warnings, except send them to 'debug' instead of 'warning' level.
-    """
+    """Log warnings, except send them to 'debug' instead of 'warning' level."""
 
     def make_record(self, message, exception, filename, lineno):
         rv = super().make_record(message, exception, filename, lineno)
         rv.level = logbook.DEBUG
-        rv.extra['from_warnings'] = True
+        rv.extra["from_warnings"] = True
         return rv
 
 
@@ -450,7 +448,7 @@ class DelayedFileHandler(logbook.RotatingFileHandler, FormatterMixin):
         msg = super().format(record)
         subbed = str(msg)
         for escape_sequence in dbt.ui.COLORS.values():
-            subbed = subbed.replace(escape_sequence, '')
+            subbed = subbed.replace(escape_sequence, "")
         return subbed
 
     def emit(self, record: logbook.LogRecord):
@@ -462,11 +460,13 @@ class DelayedFileHandler(logbook.RotatingFileHandler, FormatterMixin):
         elif self.initialized:
             super().emit(record)
         else:
-            assert self._msg_buffer is not None, \
-                '_msg_buffer should never be None if _log_path is set'
+            assert (
+                self._msg_buffer is not None
+            ), "_msg_buffer should never be None if _log_path is set"
             self._msg_buffer.append(record)
-            assert len(self._msg_buffer) < self._bufmax, \
-                'too many messages received before initilization!'
+            assert (
+                len(self._msg_buffer) < self._bufmax
+            ), "too many messages received before initilization!"
 
 
 class LogManager(logbook.NestedSetup):
@@ -592,7 +592,7 @@ class ListLogHandler(LogMessageHandler):
         level: int = logbook.NOTSET,
         filter: Callable = None,
         bubble: bool = False,
-        lst: Optional[List[LogMessage]] = None
+        lst: Optional[List[LogMessage]] = None,
     ) -> None:
         super().__init__(level, filter, bubble)
         if lst is None:
