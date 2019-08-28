@@ -21,7 +21,7 @@ This is primarily a bugfix release which contains a few minor improvements too. 
  - Add support for job priority on BigQuery ([#1456](https://github.com/fishtown-analytics/dbt/issues/1456), [#1673](https://github.com/fishtown-analytics/dbt/pull/1673))
 
 ### Fixes:
- - Fix for reused `check_cols` values in snapshots ([#1614](https://github.com/fishtown-analytics/dbt/pull/1614))
+ - Fix for reused `check_cols` values in snapshots ([#1614](https://github.com/fishtown-analytics/dbt/pull/1614), [#1709](https://github.com/fishtown-analytics/dbt/pull/1709))
  - Fix for rendering column descriptions in sources ([#1619](https://github.com/fishtown-analytics/dbt/issues/1619), [#1633](https://github.com/fishtown-analytics/dbt/pull/1633))
  - Fix for `is_incremental()` returning True for models that are not materialized as incremental models ([#1249](https://github.com/fishtown-analytics/dbt/issues/1249), [#1608](https://github.com/fishtown-analytics/dbt/pull/1608))
  - Fix for serialization of BigQuery results which contain nested or repeated records ([#1626](https://github.com/fishtown-analytics/dbt/issues/1626), [#1638](https://github.com/fishtown-analytics/dbt/pull/1638))
@@ -50,7 +50,7 @@ Thanks for your contributions to dbt!
 - [@edmundyan](https://github.com/edmundyan) ([#1663](https://github.com/fishtown-analytics/dbt/pull/1663))
 - [@vitorbaptista](https://github.com/vitorbaptista) ([#1664](https://github.com/fishtown-analytics/dbt/pull/1664))
 - [@sjwhitworth](https://github.com/sjwhitworth) ([#1672](https://github.com/fishtown-analytics/dbt/pull/1672), [#1673](https://github.com/fishtown-analytics/dbt/pull/1673))
-- [@mikaelene](https://github.com/mikaelene) ([#1688](https://github.com/fishtown-analytics/dbt/pull/1688))
+- [@mikaelene](https://github.com/mikaelene) ([#1688](https://github.com/fishtown-analytics/dbt/pull/1688), [#1709](https://github.com/fishtown-analytics/dbt/pull/1709))
 - [@bastienboutonnet](https://github.com/bastienboutonnet) ([#1591](https://github.com/fishtown-analytics/dbt/pull/1591), [#1689](https://github.com/fishtown-analytics/dbt/pull/1689))
 
 
