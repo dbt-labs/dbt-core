@@ -107,19 +107,7 @@
         )
     {%- endset %}
 
-    {% if target_exists %}
-        {% set row_version -%}
-            (
-             select count(*) from {{ snapshotted_rel }}
-             where {{ snapshotted_rel }}.dbt_unique_key = {{ primary_key }}
-            )
-        {%- endset %}
-        {% set scd_id_cols = [primary_key, row_version] + (check_cols | list) %}
-    {% else %}
-        {% set scd_id_cols = [primary_key] + (check_cols | list) %}
-    {% endif %}
-
-    {% set scd_id_expr = snapshot_hash_arguments(scd_id_cols) %}
+    {% set scd_id_expr = snapshot_hash_arguments([primary_key, updated_at]) %}
 
     {% do return({
         "unique_key": primary_key,
