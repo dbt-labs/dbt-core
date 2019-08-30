@@ -221,9 +221,12 @@ class DelayedFileHandler(logbook.TimedRotatingFileHandler, FormatterMixin):
 
     def set_path(self, log_dir):
         """log_dir can be the path to a log directory, or `None` to avoid
-        writing to a file (for `dbt debug`)
+        writing to a file (for `dbt debug`).
         """
-        assert not (self.initialized or self.disabled), 'set_path called twice'
+        if self.disabled:
+            return
+
+        assert not self.initialized, 'set_path called after being set'
 
         if log_dir is None:
             self.disabled = True
