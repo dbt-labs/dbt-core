@@ -11,7 +11,7 @@ from dbt.parser.results import ParseResult
 from dbt.parser.rpc import RPCCallParser, RPCMacroParser
 from dbt.parser.util import ParserUtils
 import dbt.ui.printer
-from dbt.logger import RPC_LOGGER as rpc_logger
+from dbt.logger import GLOBAL_LOGGER as logger
 
 from dbt.task.runnable import GraphRunnableTask, RemoteCallable
 
@@ -106,7 +106,7 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
         try:
             self.node_results.append(runner.safe_run(self.manifest))
         except Exception as exc:
-            rpc_logger.debug('Got exception {}'.format(exc), exc_info=True)
+            logger.debug('Got exception {}'.format(exc), exc_info=True)
             self._raise_next_tick = exc
         finally:
             thread_done.set()
@@ -130,7 +130,7 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
             if adapter.is_cancelable():
 
                 for conn_name in adapter.cancel_open_connections():
-                    rpc_logger.debug('canceled query {}'.format(conn_name))
+                    logger.debug('canceled query {}'.format(conn_name))
                 if thread:
                     thread.join()
             else:
@@ -138,7 +138,7 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
                        "cancellation. Some queries may still be "
                        "running!".format(adapter.type()))
 
-                rpc_logger.debug(msg)
+                logger.debug(msg)
 
             raise dbt.exceptions.RPCKilledException(signal.SIGINT)
 

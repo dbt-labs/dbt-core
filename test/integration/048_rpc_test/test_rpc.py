@@ -12,6 +12,7 @@ import requests
 from pytest import mark
 
 from test.integration.base import DBTIntegrationTest, use_profile
+from dbt.logger import log_manager
 from dbt.main import handle_and_check
 
 
@@ -30,28 +31,50 @@ class ServerProcess(multiprocessing.Process):
             args=(handle_and_check_args,),
             name='ServerProcess')
 
-    def is_up(self):
+    def run(self):
+        log_manager.reset_handlers()
+        # run server tests in stderr mode
+        log_manager.stderr_console()
+        return super().run()
+
+    def can_connect(self):
         sock = socket.socket()
         try:
             sock.connect(('localhost', self.port))
         except socket.error:
             return False
         sock.close()
+        return True
+
+    def _compare_result(self, result):
+        return result['result']['status'] == 'ready'
+
+    def status_ok(self):
         result = query_url(
             'http://localhost:{}/jsonrpc'.format(self.port),
             {'method': 'status', 'id': 1, 'jsonrpc': 2.0}
         ).json()
-        return result['result']['status'] == 'ready'
+        return self._compare_result(result)
+
+    def is_up(self):
+        if not self.can_connect():
+            return False
+        return self.status_ok()
 
     def start(self):
         super().start()
-        for _ in range(10):
+        for _ in range(20):
             if self.is_up():
                 break
             time.sleep(0.5)
-        if not self.is_up():
-            self.terminate()
+        if not self.can_connect():
             raise Exception('server never appeared!')
+        status_result = query_url(
+            'http://localhost:{}/jsonrpc'.format(self.port),
+            {'method': 'status', 'id': 1, 'jsonrpc': 2.0}
+        ).json()
+        if not self._compare_result(status_result):
+            raise Exception('Got invalid status result: {}'.format(status_result))
 
 
 def query_url(url, query):
@@ -101,14 +124,17 @@ def addr_in_use(err, *args):
     return False
 
 
-@mark.flaky(rerun_filter=addr_in_use)
-class TestRPCServer(DBTIntegrationTest):
+class HasRPCServer(DBTIntegrationTest):
+    ServerProcess = ServerProcess
+    should_seed = True
+
     def setUp(self):
         super().setUp()
         os.environ['DBT_TEST_SCHEMA_NAME_VARIABLE'] = 'test_run_schema'
-        self.run_dbt_with_vars(['seed'], strict=False)
+        if self.should_seed:
+            self.run_dbt_with_vars(['seed'], strict=False)
         port = random.randint(20000, 65535)
-        self._server = ServerProcess(
+        self._server = self.ServerProcess(
             cli_vars='{{test_run_schema: {}}}'.format(self.unique_schema()),
             profiles_dir=self.test_root_dir,
             port=port
@@ -264,6 +290,9 @@ class TestRPCServer(DBTIntegrationTest):
             self.assertEqual(result['table'], table)
         self.assertResultHasTimings(result, 'compile', 'execute')
 
+
+@mark.flaky(rerun_filter=addr_in_use)
+class TestRPCServer(HasRPCServer):
     @use_profile('postgres')
     def test_compile_postgres(self):
         trivial = self.query(
@@ -745,7 +774,13 @@ class TestRPCServer(DBTIntegrationTest):
     def test_sighup_postgres(self):
         status = self.assertIsResult(self.query('status').json())
         self.assertEqual(status['status'], 'ready')
-        started_at = status['timestamp']
+        self.assertIn('logs', status)
+        logs = status['logs']
+        self.assertTrue(len(logs) > 0)
+        for key in ('message', 'timestamp', 'levelname', 'level'):
+            self.assertIn(key, logs[0])
+
+        self.assertIn('timestamp', status)
 
         done_query = self.query('compile', 'select 1 as id', name='done').json()
         self.assertIsResult(done_query)
@@ -785,3 +820,47 @@ class TestRPCServer(DBTIntegrationTest):
         self.kill_and_assert(*dead)
         self.assertRunning([alive])
         self.kill_and_assert(*alive)
+
+
+class FailedServerProcess(ServerProcess):
+    def _compare_result(self, result):
+        return result['result']['status'] == 'error'
+
+
+@mark.flaky(rerun_filter=addr_in_use)
+class TestRPCServerFailed(HasRPCServer):
+    ServerProcess = FailedServerProcess
+    should_seed = False
+
+    @property
+    def models(self):
+        return "malformed_models"
+
+    @use_profile('postgres')
+    def test_postgres_status_error(self):
+        status = self.assertIsResult(self.query('status').json())
+        self.assertEqual(status['status'], 'error')
+        self.assertIn('logs', status)
+        logs = status['logs']
+        self.assertTrue(len(logs) > 0)
+        for key in ('message', 'timestamp', 'levelname', 'level'):
+            self.assertIn(key, logs[0])
+        self.assertIn('pid', status)
+        self.assertEqual(self._server.pid, status['pid'])
+        self.assertIn('error', status)
+        self.assertIn('message', status['error'])
+
+        compile_result = self.query('compile', 'select 1 as id').json()
+        data = self.assertIsErrorWith(
+            compile_result,
+            10011,
+            'RPC server failed to compile project, call the "status" method for compile status',
+            None)
+        self.assertIn('message', data)
+        self.assertIn('Compilation warning: Invalid test config', str(data['message']))
+
+    def tearDown(self):
+        # prevent an OperationalError where the server closes on us in the
+        # background
+        self.adapter.cleanup_connections()
+        super().tearDown()

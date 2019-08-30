@@ -1,5 +1,4 @@
-from dbt.logger import initialize_logger, GLOBAL_LOGGER as logger, \
-    logger_initialized, log_cache_events
+from dbt.logger import GLOBAL_LOGGER as logger, log_cache_events, log_manager
 
 import argparse
 import os.path
@@ -95,7 +94,7 @@ def main(args=None):
         logger.warning("Encountered an error:")
         logger.warning(str(e))
 
-        if logger_initialized():
+        if log_manager.initialized:
             logger.debug(traceback.format_exc())
         elif not isinstance(e, RuntimeException):
             # if it did not come from dbt proper and the logger is not
@@ -125,25 +124,31 @@ def initialize_config_values(parsed):
 
 
 def handle_and_check(args):
-    parsed = parse_args(args)
-    profiler_enabled = False
+    with log_manager.applicationbound():
+        parsed = parse_args(args)
 
-    if parsed.record_timing_info:
-        profiler_enabled = True
+        # we've parsed the args - we can now decide if we're debug or not
+        if parsed.debug:
+            log_manager.set_debug()
 
-    with dbt.profiler.profiler(
-        enable=profiler_enabled,
-        outfile=parsed.record_timing_info
-    ):
+        profiler_enabled = False
 
-        initialize_config_values(parsed)
+        if parsed.record_timing_info:
+            profiler_enabled = True
 
-        reset_adapters()
+        with dbt.profiler.profiler(
+            enable=profiler_enabled,
+            outfile=parsed.record_timing_info
+        ):
 
-        task, res = run_from_args(parsed)
-        success = task.interpret_results(res)
+            initialize_config_values(parsed)
 
-        return res, success
+            reset_adapters()
+
+            task, res = run_from_args(parsed)
+            success = task.interpret_results(res)
+
+            return res, success
 
 
 @contextmanager
@@ -174,16 +179,19 @@ def run_from_args(parsed):
     flags.set_from_args(parsed)
 
     parsed.cls.pre_init_hook()
+    # we can now use the logger for stdout
+
     logger.info("Running with dbt{}".format(dbt.version.installed))
 
     # this will convert DbtConfigErrors into RuntimeExceptions
     task = parsed.cls.from_args(args=parsed)
-    logger.debug("running dbt with arguments %s", parsed)
+    logger.debug("running dbt with arguments {parsed}", parsed=str(parsed))
 
     log_path = None
     if task.config is not None:
         log_path = getattr(task.config, 'log_path', None)
-    initialize_logger(parsed.debug, log_path)
+    # we can finally set the file logger up
+    log_manager.set_path(log_path)
     logger.debug("Tracking: {}".format(dbt.tracking.active_user.state()))
 
     results = None

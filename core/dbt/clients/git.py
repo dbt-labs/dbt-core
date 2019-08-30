@@ -81,21 +81,21 @@ def clone_and_checkout(repo, cwd, dirname=None, remove_git_dir=False,
     start_sha = None
     if exists:
         directory = exists.group(1)
-        logger.debug('Updating existing dependency %s.', directory)
+        logger.debug('Updating existing dependency {}.', directory)
     else:
         matches = re.match("Cloning into '(.+)'", err.decode('utf-8'))
         directory = matches.group(1)
-        logger.debug('Pulling new dependency %s.', directory)
+        logger.debug('Pulling new dependency {}.', directory)
     full_path = os.path.join(cwd, directory)
     start_sha = get_current_sha(full_path)
     checkout(full_path, repo, branch)
     end_sha = get_current_sha(full_path)
     if exists:
         if start_sha == end_sha:
-            logger.debug('  Already at %s, nothing to do.', start_sha[:7])
+            logger.debug('  Already at {}, nothing to do.', start_sha[:7])
         else:
-            logger.debug('  Updated checkout from %s to %s.',
+            logger.debug('  Updated checkout from {} to {}.',
                          start_sha[:7], end_sha[:7])
     else:
-        logger.debug('  Checked out at %s.', end_sha[:7])
+        logger.debug('  Checked out at {}.', end_sha[:7])
     return directory

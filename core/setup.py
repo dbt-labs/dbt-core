@@ -57,5 +57,7 @@ setup(
         'werkzeug>=0.14.1,<0.15',
         'dataclasses;python_version<"3.7"',
         'hologram==0.0.2',
+        'logbook>=1.5,<1.6',
+        'pytest-logbook>=1.2.0,<1.3',
     ]
 )

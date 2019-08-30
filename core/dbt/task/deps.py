@@ -582,9 +582,9 @@ class DepsTask(ProjectOnlyTask):
         self._check_for_duplicate_project_names(final_deps)
 
         for package in final_deps:
-            logger.info('Installing %s', package)
+            logger.info('Installing {}', package)
             package.install(self.config)
-            logger.info('  Installed from %s\n', package.nice_version_name())
+            logger.info('  Installed from {}\n', package.nice_version_name())
 
             self.track_package_install(
                 package_name=package.name,

@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 import re
-import logging
 
 from dbt.exceptions import VersionsNotCompatibleException
 import dbt.utils
@@ -27,8 +26,6 @@ class VersionSpecification(JsonSchemaMixin):
     build: Optional[str]
     matcher: Matchers = Matchers.EXACT
 
-
-logger = logging.getLogger(__name__)
 
 _MATCHERS = r"(?P<matcher>\>=|\>|\<|\<=|=)?"
 _NUM_NO_LEADING_ZEROS = r"(0|[1-9][0-9]*)"

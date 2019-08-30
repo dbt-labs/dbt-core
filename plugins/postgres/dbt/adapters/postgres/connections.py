@@ -55,7 +55,7 @@ class PostgresConnectionManager(SQLConnectionManager):
             raise dbt.exceptions.DatabaseException(str(e).strip())
 
         except Exception as e:
-            logger.debug("Error running SQL: %s", sql)
+            logger.debug("Error running SQL: {}", sql)
             logger.debug("Rolling back transaction.")
             self.release()
             if isinstance(e, dbt.exceptions.RuntimeException):
