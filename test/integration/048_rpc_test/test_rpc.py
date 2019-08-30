@@ -33,6 +33,7 @@ class ServerProcess(multiprocessing.Process):
 
     def run(self):
         log_manager.reset_handlers()
+        # run server tests in stderr mode
         log_manager.stderr_console()
         return super().run()
 

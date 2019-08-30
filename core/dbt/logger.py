@@ -118,38 +118,27 @@ class FormatterMixin:
 class OutputHandler(logbook.StreamHandler, FormatterMixin):
     """Output handler.
 
-    - The `format_string` parameter only changes the default text output, not
+    The `format_string` parameter only changes the default text output, not
       debug mode or json.
-    - defaults to writing to stdout, call set_stderr_output() switches to
-      stderr
-    -
     """
     def __init__(
         self,
+        stream,
         level=logbook.INFO,
         format_string=STDOUT_LOG_FORMAT,
-        bubble=False,
+        bubble=True,
     ) -> None:
-        self.stdout_stream = colorama_stdout
-        self.stderr_stream = sys.stderr
-        self._debug = False
-        self._stdout_format = format_string
+        self._default_format = format_string
         logbook.StreamHandler.__init__(
             self,
-            stream=self.stdout_stream,
+            stream=stream,
             level=level,
             format_string=format_string,
             bubble=bubble,
         )
         FormatterMixin.__init__(self, format_string)
 
-    def set_stderr_output(self):
-        self.stream = self.stderr_stream
-
-    def set_stdout_output(self):
-        self.stream = self.stdout_stream
-
-    def _set_text_format(self, format_string: str):
+    def set_text_format(self, format_string: str):
         """Set the text format to format_string. In JSON output mode, this is
         a noop.
         """
@@ -158,17 +147,9 @@ class OutputHandler(logbook.StreamHandler, FormatterMixin):
             self._text_format_string = format_string
             self.format_text()
 
-    def enable_debug_output(self):
-        self._set_text_format(DEBUG_LOG_FORMAT)
-        self.level = logbook.DEBUG
-
-    def enable_default_output(self):
-        self._set_text_format(self._stdout_format)
-        self.level = logbook.INFO
-
     def reset(self):
-        self.set_stdout_output()
-        self.enable_default_output()
+        self.level = logbook.INFO
+        self._text_format_string = self._default_format
         self.format_text()
 
 
@@ -215,7 +196,7 @@ class DelayedFileHandler(logbook.TimedRotatingFileHandler, FormatterMixin):
         log_dir: Optional[str] = None,
         level=logbook.DEBUG,
         filter=None,
-        bubble=True
+        bubble=True,
     ) -> None:
         self.disabled = False
         self._msg_buffer: Optional[List[logbook.LogRecord]] = []
@@ -296,25 +277,41 @@ class DelayedFileHandler(logbook.TimedRotatingFileHandler, FormatterMixin):
                 'too many messages received before initilization!'
 
 
-class DefaultLogHandlers(logbook.NestedSetup):
-    def __init__(self, output_handler, file_handler):
-        self._output_handler = output_handler
-        self._file_handler = file_handler
-        super().__init__([output_handler, file_handler])
+class LogManager(logbook.NestedSetup):
+    def __init__(self, stdout=colorama_stdout, stderr=sys.stderr):
+        self.stdout = stdout
+        self.stderr = stderr
+        self._null_handler = logbook.NullHandler()
+        self._output_handler = OutputHandler(self.stdout)
+        self._file_handler = DelayedFileHandler()
+        super().__init__([
+            self._null_handler,
+            self._output_handler,
+            self._file_handler,
+        ])
+
+    def disable(self):
+        self.add_handler(logbook.NullHandler())
+
+    def add_handler(self, handler):
+        """add an handler to the log manager that runs before the file handler.
+        """
+        self.objects.append(handler)
 
     # this is used by `dbt ls` to allow piping stdout to jq, etc
     def stderr_console(self):
         """Output to stderr at WARNING level instead of stdout"""
-        self._output_handler.set_stderr_output()
+        self._output_handler.stream = self.stderr
         self._output_handler.level = logbook.WARNING
 
     def stdout_console(self):
         """enable stdout and disable stderr"""
-        self._output_handler.set_stdout_output()
+        self._output_handler.stream = self.stdout
         self._output_handler.level = logbook.INFO
 
     def set_debug(self):
-        self._output_handler.enable_debug_output()
+        self._output_handler.set_text_format(DEBUG_LOG_FORMAT)
+        self._output_handler.level = logbook.DEBUG
 
     def set_path(self, path):
         self._file_handler.set_path(path)
@@ -323,20 +320,36 @@ class DefaultLogHandlers(logbook.NestedSetup):
         return self._file_handler.initialized
 
     def format_json(self):
-        self._output_handler.format_json()
-        self._file_handler.format_json()
+        for handler in self.objects:
+            if isinstance(handler, FormatterMixin):
+                handler.format_json()
 
     def format_text(self):
-        self._output_handler.format_text()
-        self._file_handler.format_text()
+        for handler in self.objects:
+            if isinstance(handler, FormatterMixin):
+                handler.format_text()
 
     def reset_handlers(self):
         """Reset the handlers to their defaults. This is nice in testing!"""
-        self._output_handler.reset()
-        self._file_handler.reset()
+        self.stdout_console()
+        for handler in self.objects:
+            if isinstance(handler, FormatterMixin):
+                handler.reset()
+
+    def set_output_stream(self, stream, error=None):
+        if error is None:
+            error = stream
+
+        if self._output_handler.stream is self.stdout_stream:
+            self._output_handler.stream = stream
+        elif self._output_handler.stream is self.stderr_stream:
+            self._output_handler.stream = error
+
+        self.stdout_stream = stream
+        self.stderr_stream = error
 
 
-log_manager = DefaultLogHandlers(OutputHandler(), DelayedFileHandler())
+log_manager = LogManager()
 
 
 def log_cache_events(flag):
