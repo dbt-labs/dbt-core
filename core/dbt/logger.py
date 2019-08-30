@@ -406,7 +406,7 @@ class DelayedFileHandler(logbook.RotatingFileHandler, FormatterMixin):
         if self.disabled:
             return
 
-        assert not self.initialized, 'set_path called after being set'
+        assert not self.initialized, "set_path called after being set"
 
         if log_dir is None:
             self.disabled = True
