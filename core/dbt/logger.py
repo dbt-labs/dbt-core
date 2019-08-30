@@ -477,14 +477,16 @@ class LogManager(logbook.NestedSetup):
         # be actually pushing. This allows us to log in main() and also
         # support entering dbt execution via handle_and_check.
         self._stack_depth = 0
-        super().__init__([
-            self._null_handler,
-            self._output_handler,
-            self._file_handler,
+        super().__init__(
+            [
+                self._null_handler,
+                self._output_handler,
                 self._file_handler,
                 self._relevel_processor,
                 self._state_processor,
-        ])
+                self._scrub_processor,
+            ]
+        )
 
     def push_application(self):
         self._stack_depth += 1
@@ -500,8 +502,7 @@ class LogManager(logbook.NestedSetup):
         self.add_handler(logbook.NullHandler())
 
     def add_handler(self, handler):
-        """add an handler to the log manager that runs before the file handler.
-        """
+        """add an handler to the log manager that runs before the file handler."""
         self.objects.append(handler)
 
     # this is used by `dbt ls` to allow piping stdout to jq, etc
