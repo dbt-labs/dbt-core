@@ -59,7 +59,7 @@ class SQLConnectionManager(BaseConnectionManager):
 
         with self.exception_handler(sql):
             if abridge_sql_log:
-                log_sql = '{}...'.format(sql[:512])
+                log_sql = "{}...".format(sql[:512])
             else:
                 log_sql = sql
 
