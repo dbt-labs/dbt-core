@@ -127,7 +127,7 @@ def handle_and_check(args):
     with log_manager.applicationbound():
         parsed = parse_args(args)
 
-        # we've parsed the logs - we can now decide if we're debug or not
+        # we've parsed the args - we can now decide if we're debug or not
         if parsed.debug:
             log_manager.set_debug()
 
