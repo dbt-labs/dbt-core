@@ -15,12 +15,13 @@ from dbt.logger import (
     log_manager,
 )
 from dbt.task.base import ConfiguredTask
-from dbt.task.compile import (
-    CompileTask, RemoteCompileTask, RemoteCompileProjectTask
+from dbt.task.compile import CompileTask
+from dbt.task.remote import (
+    RemoteCompileTask, RemoteCompileProjectTask,
+    RemoteRunTask, RemoteRunProjectTask,
+    RemoteSeedProjectTask,
+    RemoteTestProjectTask,
 )
-from dbt.task.run import RemoteRunTask, RemoteRunProjectTask
-from dbt.task.seed import RemoteSeedProjectTask
-from dbt.task.test import RemoteTestProjectTask
 from dbt.utils import JSONEncoder
 from dbt import rpc
 from dbt.rpc.logger import ServerContext, HTTPRequest, RPCResponse
@@ -153,7 +154,7 @@ class RPCServerTask(ConfiguredTask):
         )
 
         logger.info(
-            'Supported methods: {}'.format(self.task_manager.methods())
+            'Supported methods: {}'.format(sorted(self.task_manager.methods()))
         )
 
         logger.info(

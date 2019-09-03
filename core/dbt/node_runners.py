@@ -1,10 +1,11 @@
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.exceptions import NotImplementedException, CompilationException, \
-    RuntimeException, InternalException, missing_materialization
+from dbt.exceptions import (
+    NotImplementedException, CompilationException, RuntimeException,
+    InternalException, missing_materialization
+)
 from dbt.node_types import NodeType
 from dbt.contracts.results import (
     RunModelResult, collect_timing_info, SourceFreshnessResult, PartialResult,
-    RemoteCompileResult, RemoteRunResult, ResultTable,
 )
 from dbt.compilation import compile_node
 
@@ -14,7 +15,6 @@ import dbt.utils
 import dbt.tracking
 import dbt.ui.printer
 import dbt.flags
-from dbt import rpc
 
 import threading
 import time
@@ -36,9 +36,13 @@ def track_model_run(index, num_nodes, run_model_result):
         "run_status": run_model_result.status,
         "run_skipped": run_model_result.skip,
         "run_error": None,
-        "model_materialization": dbt.utils.get_materialization(run_model_result.node),  # noqa
+        "model_materialization": dbt.utils.get_materialization(
+            run_model_result.node
+        ),
         "model_id": dbt.utils.get_hash(run_model_result.node),
-        "hashed_contents": dbt.utils.get_hashed_contents(run_model_result.node),  # noqa
+        "hashed_contents": dbt.utils.get_hashed_contents(
+            run_model_result.node
+        ),
         "timing": run_model_result.timing,
     })
 
@@ -362,7 +366,7 @@ class ModelRunner(CompileRunner):
 
 class FreshnessRunner(BaseRunner):
     def on_skip(self):
-        raise dbt.exceptions.RuntimeException(
+        raise RuntimeException(
             'Freshness: nodes cannot be skipped!'
         )
 
@@ -507,81 +511,3 @@ class SeedRunner(ModelRunner):
                                               schema_name,
                                               self.node_index,
                                               self.num_nodes)
-
-
-class RPCCompileRunner(CompileRunner):
-    def __init__(self, config, adapter, node, node_index, num_nodes):
-        super().__init__(config, adapter, node, node_index, num_nodes)
-
-    def handle_exception(self, e, ctx):
-        logger.debug('Got an exception: {}'.format(e), exc_info=True)
-        if isinstance(e, dbt.exceptions.Exception):
-            if isinstance(e, dbt.exceptions.RuntimeException):
-                e.node = ctx.node
-            return rpc.dbt_error(e)
-        elif isinstance(e, rpc.RPCException):
-            return e
-        else:
-            return rpc.server_error(e)
-
-    def before_execute(self):
-        pass
-
-    def after_execute(self, result):
-        pass
-
-    def compile(self, manifest):
-        return compile_node(self.adapter, self.config, self.node, manifest, {},
-                            write=False)
-
-    def execute(self, compiled_node, manifest):
-        return RemoteCompileResult(
-            raw_sql=compiled_node.raw_sql,
-            compiled_sql=compiled_node.injected_sql,
-            node=compiled_node,
-            timing=[],  # this will get added later
-        )
-
-    def error_result(self, node, error, start_time, timing_info):
-        raise error
-
-    def ephemeral_result(self, node, start_time, timing_info):
-        raise NotImplementedException(
-            'cannot execute ephemeral nodes remotely!'
-        )
-
-    def from_run_result(self, result, start_time, timing_info):
-        return RemoteCompileResult(
-            raw_sql=result.raw_sql,
-            compiled_sql=result.compiled_sql,
-            node=result.node,
-            timing=timing_info,
-        )
-
-
-class RPCExecuteRunner(RPCCompileRunner):
-    def from_run_result(self, result, start_time, timing_info):
-        return RemoteRunResult(
-            raw_sql=result.raw_sql,
-            compiled_sql=result.compiled_sql,
-            node=result.node,
-            table=result.table,
-            timing=timing_info,
-        )
-
-    def execute(self, compiled_node, manifest):
-        status, table = self.adapter.execute(compiled_node.injected_sql,
-                                             fetch=True)
-
-        table = ResultTable(
-            column_names=list(table.column_names),
-            rows=[list(row) for row in table],
-        )
-
-        return RemoteRunResult(
-            raw_sql=compiled_node.raw_sql,
-            compiled_sql=compiled_node.injected_sql,
-            node=compiled_node,
-            table=table,
-            timing=[],
-        )

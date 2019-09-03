@@ -3,22 +3,46 @@ import os
 import signal
 import time
 import uuid
-from collections import namedtuple
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Union, Set, Callable
 
 from hologram import JsonSchemaMixin
 from hologram.helpers import StrEnum
 
-from dbt.rpc.error import dbt_error
 import dbt.exceptions
+from dbt.rpc.error import dbt_error
+from dbt.rpc.task_handler import TaskHandlerState, RequestTaskHandler
+from dbt.rpc.task import RemoteCallable, RemoteCallableResult
 
 
-TaskRow = namedtuple(
-    'TaskRow',
-    'task_id request_id request_source method state start elapsed timeout'
-)
+@dataclass
+class TaskRow(JsonSchemaMixin):
+    task_id: uuid.UUID
+    request_id: Union[str, int]
+    request_source: str
+    method: str
+    state: TaskHandlerState
+    start: float
+    elapsed: float
+    timeout: Optional[float]
+
+
+class KillResultStatus(StrEnum):
+    Missing = 'missing'
+    NotStarted = 'not_started'
+    Killed = 'killed'
+    Finished = 'finished'
+
+
+@dataclass
+class KillResult(JsonSchemaMixin):
+    state: KillResultStatus
+
+
+@dataclass
+class PSResult(JsonSchemaMixin):
+    rows: List[TaskRow]
 
 
 class ManifestStatus(StrEnum):
@@ -34,16 +58,21 @@ class LastCompile(JsonSchemaMixin):
     error: Optional[Dict[str, Any]] = None
     logs: Optional[List[Dict[str, Any]]] = None
     timestamp: datetime = field(default_factory=datetime.utcnow)
+    pid: int = field(default_factory=os.getpid)
+
+
+UnmanagedHandler = Callable[..., RemoteCallableResult]
 
 
 class TaskManager:
     def __init__(self, args, config):
         self.args = args
         self.config = config
-        self.tasks = {}
-        self.completed = {}
+        self.tasks: Dict[uuid.UUID, RequestTaskHandler] = {}
+        self.completed: Dict[uuid.UUID, RequestTaskHandler] = {}
         self._rpc_task_map = {}
-        self._last_compile = LastCompile(status=ManifestStatus.Init)
+        self._builtins: Dict[str, UnmanagedHandler] = {}
+        self.last_compile = LastCompile(status=ManifestStatus.Init)
         self._lock = multiprocessing.Lock()
 
     def add_request(self, request_handler):
@@ -63,40 +92,37 @@ class TaskManager:
 
     def ready(self):
         with self._lock:
-            return self._last_compile.status == ManifestStatus.Ready
+            return self.last_compile.status == ManifestStatus.Ready
 
     def set_compiling(self):
-        assert self._last_compile.status != ManifestStatus.Compiling, \
-            f'invalid state {self._last_compile.status}'
+        assert self.last_compile.status != ManifestStatus.Compiling, \
+            f'invalid state {self.last_compile.status}'
         with self._lock:
-            self._last_compile = LastCompile(status=ManifestStatus.Compiling)
+            self.last_compile = LastCompile(status=ManifestStatus.Compiling)
 
     def set_compile_exception(self, exc, logs=List[Dict[str, Any]]):
-        assert self._last_compile.status == ManifestStatus.Compiling, \
-            f'invalid state {self._last_compile.status}'
-        self._last_compile = LastCompile(
+        assert self.last_compile.status == ManifestStatus.Compiling, \
+            f'invalid state {self.last_compile.status}'
+        self.last_compile = LastCompile(
             error={'message': str(exc)},
             status=ManifestStatus.Error,
             logs=logs
         )
 
-    def set_ready(self, logs=List[Dict[str, Any]]):
-        assert self._last_compile.status == ManifestStatus.Compiling, \
-            f'invalid state {self._last_compile.status}'
-        self._last_compile = LastCompile(
+    def set_ready(self, logs=List[Dict[str, Any]]) -> None:
+        assert self.last_compile.status == ManifestStatus.Compiling, \
+            f'invalid state {self.last_compile.status}'
+        self.last_compile = LastCompile(
             status=ManifestStatus.Ready,
             logs=logs
         )
 
-    def process_status(self):
+    def process_status(self) -> Dict[str, Any]:
         with self._lock:
-            last_compile = self._last_compile
+            last_compile = self.last_compile
+        return last_compile.to_dict()
 
-        status = last_compile.to_dict()
-        status['pid'] = os.getpid()
-        return status
-
-    def process_listing(self, active=True, completed=False):
+    def process_listing(self, active=True, completed=False) -> Dict[str, Any]:
         included_tasks = {}
         with self._lock:
             if completed:
@@ -104,78 +130,83 @@ class TaskManager:
             if active:
                 included_tasks.update(self.tasks)
 
-        table = []
+        rows = []
         now = time.time()
         for task_handler in included_tasks.values():
             start = task_handler.started
             if start is not None:
                 elapsed = now - start
 
-            table.append(TaskRow(
-                str(task_handler.task_id), task_handler.request_id,
+            rows.append(TaskRow(
+                task_handler.task_id, task_handler.request_id,
                 task_handler.request_source, task_handler.method,
                 task_handler.state, start, elapsed, task_handler.timeout
             ))
-        table.sort(key=lambda r: (r.state, r.start))
-        result = {
-            'rows': [dict(r._asdict()) for r in table],
-        }
-        return result
+        rows.sort(key=lambda r: (r.state, r.start))
+        result = PSResult(rows=rows)
+        return result.to_dict(omit_none=False)
 
-    def process_kill(self, task_id):
-        # TODO: this result design is terrible
-        result = {
-            'found': False,
-            'started': False,
-            'finished': False,
-            'killed': False
-        }
+    def process_kill(self, task_id) -> Dict[str, Any]:
+
         task_id = uuid.UUID(task_id)
+
+        status = KillResultStatus.Missing
         try:
             task = self.tasks[task_id]
         except KeyError:
             # nothing to do!
-            return result
+            return KillResult(status).to_dict()
 
-        result['found'] = True
+        status = KillResultStatus.NotStarted
 
         if task.process is None:
-            return result
+            return KillResult(status).to_dict()
         pid = task.process.pid
         if pid is None:
-            return result
-
-        result['started'] = True
+            return KillResult(status).to_dict()
 
         if task.process.is_alive():
             os.kill(pid, signal.SIGINT)
-            result['killed'] = True
-            return result
+            status = KillResultStatus.Killed
+        else:
+            status = KillResultStatus.Finished
 
-        result['finished'] = True
-        return result
+        return KillResult(status).to_dict()
 
-    def process_currently_compiling(self, *args, **kwargs):
-        raise dbt_error(dbt.exceptions.RPCCompiling('compile in progress'))
+    def process_poll(self, task_id):
+        pass
 
-    def process_compilation_error(self, *args, **kwargs):
-        raise dbt_error(
-            dbt.exceptions.RPCLoadException(self._last_compile.error)
-        )
+    def _rpc_builtins(self):
+        if self._builtins:
+            return self._builtins
 
-    def rpc_builtin(self, method_name):
-        if method_name == 'ps':
-            return self.process_listing
-        if method_name == 'kill' and os.name != 'nt':
-            return self.process_kill
-        if method_name == 'status':
-            return self.process_status
-        if method_name in self._rpc_task_map:
-            if self._last_compile.status == ManifestStatus.Compiling:
-                return self.process_currently_compiling
-            if self._last_compile.status == ManifestStatus.Error:
-                return self.process_compilation_error
-        return None
+        with self._lock:
+            if self._builtins:  # handle a race
+                return self._builtins
+
+            methods = {
+                'ps': self.process_listing,
+                'status': self.process_status,
+                'poll': self.process_poll,
+            }
+            if os.name != 'nt':
+                methods['kill'] = self.process_kill
+
+            self._builtins.update(methods)
+            return self._builtins
+
+    def compile_status(self):
+        return self.last_compile.status
+
+    def compile_status_handler(self, method_name):
+        if method_name not in self._rpc_task_map:
+            return None
+        elif self.compile_status == ManifestStatus.Compiling:
+            return self.process_currently_compiling
+        elif self.compile_status == ManifestStatus.Error:
+            return self.process_compilation_error
+        else:
+            return None
 
     def mark_done(self, request_handler):
         task_id = request_handler.task_id
@@ -185,12 +216,40 @@ class TaskManager:
                 return
             self.completed[task_id] = self.tasks.pop(task_id)
 
-    def methods(self):
-        rpc_builtin_methods = ['ps', 'status']
-        if os.name != 'nt':
-            rpc_builtin_methods.append('kill')
+    def methods(self, builtin=True) -> Set[str]:
+        all_methods: Set[str] = set()
+        if builtin:
+            all_methods.update(self._rpc_builtins())
 
         with self._lock:
-            task_map = list(self._rpc_task_map)
+            all_methods.update(self._rpc_task_map)
 
-        return task_map + rpc_builtin_methods
+        return all_methods
+
+    def currently_compiling(self, *args, **kwargs):
+        """Raise an RPC exception to trigger the error handler."""
+        raise dbt_error(dbt.exceptions.RPCCompiling('compile in progress'))
+
+    def compilation_error(self, *args, **kwargs):
+        """Raise an RPC exception to trigger the error handler."""
+        raise dbt_error(
+            dbt.exceptions.RPCLoadException(self.last_compile.error)
+        )
+
+    def get_handler(
+        self, method, http_request, json_rpc_request
+    ) -> Optional[Union[UnmanagedHandler, RemoteCallable]]:
+        # the dispatcher's keys are method names and its values are functions
+        # that implement the RPC calls
+        _builtins = self._rpc_builtins()
+        if method in _builtins:
+            return _builtins[method]
+        elif method not in self._rpc_task_map:
+            return None
+        # if we have no manifest we want to return an error about why
+        elif self.last_compile.status == ManifestStatus.Compiling:
+            return self.currently_compiling
+        elif self.last_compile.status == ManifestStatus.Error:
+            return self.compilation_error
+        else:
+            return self.rpc_task(method)
