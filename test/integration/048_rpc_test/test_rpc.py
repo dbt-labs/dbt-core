@@ -548,12 +548,10 @@ class TestRPCServer(HasRPCServer):
 
     def kill_and_assert(self, pg_sleeper, task_id, request_id):
         kill_result = self.query('kill', task_id=task_id).json()
-        kill_time = time.time()
         result = self.assertIsResult(kill_result)
-        self.assertTrue(result['killed'])
+        self.assertEqual(result['state'], 'killed')
 
         sleeper_result = pg_sleeper.wait_result()
-        result_time = time.time()
         error = self.assertIsErrorWithCode(sleeper_result, 10009, request_id)
         self.assertEqual(error['message'], 'RPC process killed')
         self.assertIn('data', error)
@@ -732,7 +730,7 @@ class TestRPCServer(HasRPCServer):
             self.assertEqual(result['status'], 0.0)
             self.assertNotIn('fail', result)
 
-    def _wait_for_running(self, timeout=15, raise_on_timeout=True):
+    def _wait_for_running(self, timeout=25, raise_on_timeout=True):
         started = time.time()
         time.sleep(0.5)
         elapsed = time.time() - started
