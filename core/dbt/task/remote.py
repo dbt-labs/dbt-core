@@ -127,7 +127,7 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
             raise dbt.exceptions.RPCKilledException(signal.SIGINT)
 
         self._raise_set_error()
-        return self.node_results[0].to_dict()
+        return self.node_results[0]
 
 
 class RemoteRunTask(RemoteCompileTask, RunTask):
@@ -157,7 +157,7 @@ class RemoteCompileProjectTask(CompileTask, RemoteCallable):
         self.args.exclude = self._listify(exclude)
 
         results = self.run()
-        return {'results': [r.to_dict() for r in results]}
+        return results
 
 
 class RemoteRunProjectTask(RunTask, RemoteCallable):
@@ -180,7 +180,7 @@ class RemoteRunProjectTask(RunTask, RemoteCallable):
         self.args.exclude = self._listify(exclude)
 
         results = self.run()
-        return {'results': [r.to_dict() for r in results]}
+        return results
 
 
 class RemoteSeedProjectTask(SeedTask, RemoteCallable):
@@ -198,7 +198,7 @@ class RemoteSeedProjectTask(SeedTask, RemoteCallable):
         self.args.show = show
 
         results = self.run()
-        return {'results': [r.to_dict() for r in results]}
+        return results
 
 
 class RemoteTestProjectTask(TestTask, RemoteCallable):
@@ -225,4 +225,4 @@ class RemoteTestProjectTask(TestTask, RemoteCallable):
         self.args.schema = schema
 
         results = self.run()
-        return {'results': [r.to_dict() for r in results]}
+        return results

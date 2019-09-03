@@ -3,7 +3,7 @@ import os
 import signal
 import time
 import uuid
-from typing import Any, Dict
+from typing import Any, Dict, Union
 
 from hologram.helpers import StrEnum
 
@@ -65,7 +65,7 @@ def _task_bootstrap(task, queue, kwargs):
     error = None
     result = None
     try:
-        result = task.handle_request(**kwargs)
+        result = task.handle_request(**kwargs).to_dict()
     except RPCException as exc:
         error = exc
     except dbt.exceptions.RPCKilledException as exc:
@@ -104,15 +104,15 @@ class RequestTaskHandler:
         self.task_id: uuid.UUID = uuid.uuid4()
 
     @property
-    def request_source(self):
+    def request_source(self) -> str:
         return self.http_request.remote_addr
 
     @property
-    def request_id(self):
+    def request_id(self) -> Union[str, int]:
         return self.json_rpc_request._id
 
     @property
-    def method(self):
+    def method(self) -> str:
         return self.task.METHOD_NAME
 
     def _wait_for_results(self) -> Dict[str, Any]:
@@ -197,7 +197,7 @@ class RequestTaskHandler:
         else:
             return TaskHandlerState.Finished
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwargs) -> Dict[str, Any]:
         # __call__ happens deep inside jsonrpc's framework
         try:
             self.manager.add_request(self)

@@ -1,13 +1,13 @@
 import base64
 from abc import abstractmethod
-from typing import Union, List, Dict, Any, Optional
+from typing import Union, List, Optional, Dict, Any
 
 from dbt.exceptions import NotImplementedException
 from dbt.rpc.error import invalid_params
 
-# TODO: change this to `hologram.JsonSchemaMixin` and have callers do the
-# `to_dict`
-RemoteCallableResult = Dict[str, List[Any]]
+# for irritating jsonrpc reasons, this can't really be a JsonSchemaMixin and
+# it has to be a dict
+RemoteCallableResult = Dict[str, Any]
 
 
 class RemoteCallable:

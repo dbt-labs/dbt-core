@@ -5,6 +5,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
+from functools import wraps
 from typing import Any, Dict, Optional, List, Union, Set, Callable
 
 from hologram import JsonSchemaMixin
@@ -13,7 +14,7 @@ from hologram.helpers import StrEnum
 import dbt.exceptions
 from dbt.rpc.error import dbt_error
 from dbt.rpc.task_handler import TaskHandlerState, RequestTaskHandler
-from dbt.rpc.task import RemoteCallable, RemoteCallableResult
+from dbt.rpc.task import RemoteCallable
 
 
 @dataclass
@@ -61,7 +62,15 @@ class LastCompile(JsonSchemaMixin):
     pid: int = field(default_factory=os.getpid)
 
 
-UnmanagedHandler = Callable[..., RemoteCallableResult]
+UnmanagedHandler = Callable[..., JsonSchemaMixin]
+WrappedHandler = Callable[..., Dict[str, Any]]
+
+
+def _wrap_builtin(func: UnmanagedHandler) -> WrappedHandler:
+    @wraps(func)
+    def inner(*args, **kwargs):
+        return func(*args, **kwargs).to_dict(omit_none=False)
+    return inner
 
 
 class TaskManager:
@@ -117,12 +126,16 @@ class TaskManager:
             logs=logs
         )
 
-    def process_status(self) -> Dict[str, Any]:
+    def process_status(self) -> JsonSchemaMixin:
         with self._lock:
             last_compile = self.last_compile
-        return last_compile.to_dict()
+        return last_compile
 
-    def process_listing(self, active=True, completed=False) -> Dict[str, Any]:
+    def process_ps(
+        self,
+        active: bool = True,
+        completed: bool = False,
+    ) -> JsonSchemaMixin:
         included_tasks = {}
         with self._lock:
             if completed:
@@ -144,26 +157,25 @@ class TaskManager:
             ))
         rows.sort(key=lambda r: (r.state, r.start))
         result = PSResult(rows=rows)
-        return result.to_dict(omit_none=False)
+        return result
 
-    def process_kill(self, task_id) -> Dict[str, Any]:
-
-        task_id = uuid.UUID(task_id)
+    def process_kill(self, task_id: str) -> JsonSchemaMixin:
+        task_id_uuid = uuid.UUID(task_id)
 
         status = KillResultStatus.Missing
         try:
-            task = self.tasks[task_id]
+            task = self.tasks[task_id_uuid]
         except KeyError:
             # nothing to do!
-            return KillResult(status).to_dict()
+            return KillResult(status)
 
         status = KillResultStatus.NotStarted
 
         if task.process is None:
-            return KillResult(status).to_dict()
+            return KillResult(status)
         pid = task.process.pid
         if pid is None:
-            return KillResult(status).to_dict()
+            return KillResult(status)
 
         if task.process.is_alive():
             os.kill(pid, signal.SIGINT)
@@ -171,12 +183,12 @@ class TaskManager:
         else:
             status = KillResultStatus.Finished
 
-        return KillResult(status).to_dict()
+        return KillResult(status)
 
-    def process_poll(self, task_id):
-        pass
+    def process_poll(self, task_id) -> JsonSchemaMixin:
+        raise NotImplementedError('todo')
 
-    def _rpc_builtins(self):
+    def _rpc_builtins(self) -> Dict[str, UnmanagedHandler]:
         if self._builtins:
             return self._builtins
 
@@ -184,8 +196,8 @@ class TaskManager:
             if self._builtins:  # handle a race
                 return self._builtins
 
-            methods = {
-                'ps': self.process_listing,
+            methods: Dict[str, UnmanagedHandler] = {
+                'ps': self.process_ps,
                 'status': self.process_status,
                 'poll': self.process_poll,
             }
@@ -225,12 +237,12 @@ class TaskManager:
 
     def get_handler(
         self, method, http_request, json_rpc_request
-    ) -> Optional[Union[UnmanagedHandler, RemoteCallable]]:
+    ) -> Optional[Union[WrappedHandler, RemoteCallable]]:
         # the dispatcher's keys are method names and its values are functions
         # that implement the RPC calls
         _builtins = self._rpc_builtins()
         if method in _builtins:
-            return _builtins[method]
+            return _wrap_builtin(_builtins[method])
         elif method not in self._rpc_task_map:
             return None
         # if we have no manifest we want to return an error about why

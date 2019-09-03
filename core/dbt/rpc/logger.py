@@ -132,7 +132,10 @@ class RPCResponse(logbook.Processor):
 
     def process(self, record):
         record.extra['response_code'] = 200
-        record.extra['request_id'] = self.response.request._id
+        # the request_id could be None if the request was bad
+        record.extra['request_id'] = getattr(
+            self.response.request, '_id', None
+        )
 
 
 class RequestContext(RPCRequest):

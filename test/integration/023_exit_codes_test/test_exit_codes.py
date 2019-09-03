@@ -1,4 +1,4 @@
-from test.integration.base import DBTIntegrationTest, FakeArgs, use_profile
+from test.integration.base import DBTIntegrationTest, use_profile
 
 import dbt.exceptions
 
@@ -23,46 +23,46 @@ class TestExitCodes(DBTIntegrationTest):
     @use_profile('postgres')
     def test_postgres_exit_code_run_succeed(self):
         results, success = self.run_dbt_and_check(['run', '--model', 'good'])
-        self.assertEqual(len(results), 1)
+        self.assertEqual(len(results.results), 1)
         self.assertTrue(success)
         self.assertTableDoesExist('good')
 
     @use_profile('postgres')
     def test__postgres_exit_code_run_fail(self):
         results, success = self.run_dbt_and_check(['run', '--model', 'bad'])
-        self.assertEqual(len(results), 1)
+        self.assertEqual(len(results.results), 1)
         self.assertFalse(success)
         self.assertTableDoesNotExist('bad')
 
     @use_profile('postgres')
     def test__postgres_schema_test_pass(self):
         results, success = self.run_dbt_and_check(['run', '--model', 'good'])
-        self.assertEqual(len(results), 1)
+        self.assertEqual(len(results.results), 1)
         self.assertTrue(success)
         results, success = self.run_dbt_and_check(['test', '--model', 'good'])
-        self.assertEqual(len(results), 1)
+        self.assertEqual(len(results.results), 1)
         self.assertTrue(success)
 
     @use_profile('postgres')
     def test__postgres_schema_test_fail(self):
         results, success = self.run_dbt_and_check(['run', '--model', 'dupe'])
-        self.assertEqual(len(results), 1)
+        self.assertEqual(len(results.results), 1)
         self.assertTrue(success)
         results, success = self.run_dbt_and_check(['test', '--model', 'dupe'])
-        self.assertEqual(len(results), 1)
+        self.assertEqual(len(results.results), 1)
         self.assertFalse(success)
 
     @use_profile('postgres')
     def test__postgres_compile(self):
         results, success = self.run_dbt_and_check(['compile'])
-        self.assertEqual(len(results), 7)
+        self.assertEqual(len(results.results), 7)
         self.assertTrue(success)
 
     @use_profile('postgres')
     def test__postgres_snapshot_pass(self):
         self.run_dbt_and_check(['run', '--model', 'good'])
         results, success = self.run_dbt_and_check(['snapshot'])
-        self.assertEqual(len(results), 1)
+        self.assertEqual(len(results.results), 1)
         self.assertTableDoesExist('good_snapshot')
         self.assertTrue(success)
 
@@ -86,10 +86,10 @@ class TestExitCodesSnapshotFail(DBTIntegrationTest):
     def test___snapshot_fail(self):
         results, success = self.run_dbt_and_check(['run', '--model', 'good'])
         self.assertTrue(success)
-        self.assertEqual(len(results), 1)
+        self.assertEqual(len(results.results), 1)
 
         results, success = self.run_dbt_and_check(['snapshot'])
-        self.assertEqual(len(results), 1)
+        self.assertEqual(len(results.results), 1)
         self.assertTableDoesNotExist('good_snapshot')
         self.assertFalse(success)
 
@@ -162,7 +162,7 @@ class TestExitCodesSeed(DBTIntegrationTest):
     @use_profile('postgres')
     def test_seed(self):
         results, success = self.run_dbt_and_check(['seed'])
-        self.assertEqual(len(results), 1)
+        self.assertEqual(len(results.results), 1)
         self.assertTrue(success)
 
 

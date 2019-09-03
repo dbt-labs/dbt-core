@@ -77,6 +77,15 @@ class ExecutionResult(JsonSchemaMixin, Writable):
     generated_at: datetime
     elapsed_time: Real
 
+    def __len__(self):
+        return len(self.results)
+
+    def __iter__(self):
+        return iter(self.results)
+
+    def __getitem__(self, idx):
+        return self.results[idx]
+
 
 # due to issues with typing.Union collapsing subclasses, this can't subclass
 # PartialResult
@@ -136,6 +145,15 @@ class FreshnessExecutionResult(FreshnessMetadata):
             sources[unique_id] = result_value
         output = FreshnessRunOutput(meta=meta, sources=sources)
         output.write(path, omit_none=omit_none)
+
+    def __len__(self):
+        return len(self.results)
+
+    def __iter__(self):
+        return iter(self.results)
+
+    def __getitem__(self, idx):
+        return self.results[idx]
 
 
 def _copykeys(src, keys, **updates):
