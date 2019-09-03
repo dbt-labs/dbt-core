@@ -195,19 +195,6 @@ class TaskManager:
             self._builtins.update(methods)
             return self._builtins
 
-    def compile_status(self):
-        return self.last_compile.status
-
-    def compile_status_handler(self, method_name):
-        if method_name not in self._rpc_task_map:
-            return None
-        elif self.compile_status == ManifestStatus.Compiling:
-            return self.process_currently_compiling
-        elif self.compile_status == ManifestStatus.Error:
-            return self.process_compilation_error
-        else:
-            return None
-
     def mark_done(self, request_handler):
         task_id = request_handler.task_id
         with self._lock:
