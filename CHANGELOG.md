@@ -1,4 +1,4 @@
-## dbt 0.14.1 (Currently unreleased)
+## dbt 0.14.1 (September 3, 2019)
 
 ### Overview
 
@@ -6,7 +6,7 @@ This is primarily a bugfix release which contains a few minor improvements too. 
 
 ### Breaking changes
  - The undocumented `macros` attribute was removed from the `graph` context variable ([#1615](https://github.com/fishtown-analytics/dbt/pull/1615))
- 
+
 ### Features:
  - Summarize warnings at the end of dbt runs ([#1597](https://github.com/fishtown-analytics/dbt/issues/1597), [#1654](https://github.com/fishtown-analytics/dbt/pull/1654))
  - Speed up catalog generation on postgres by using avoiding use of the `information_schema` ([#1540](https://github.com/fishtown-analytics/dbt/pull/1540))
