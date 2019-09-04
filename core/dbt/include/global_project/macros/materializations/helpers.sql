@@ -5,9 +5,12 @@
         commit;
       {% endcall %}
     {% endif %}
-    {% call statement(auto_begin=inside_transaction) %}
-      {{ hook.get('sql') }}
-    {% endcall %}
+    {% set rendered = render(hook.get('sql')) | trim %}
+    {% if (rendered | length) > 0 %}
+      {% call statement(auto_begin=inside_transaction) %}
+        {{ rendered }}
+      {% endcall %}
+    {% endif %}
   {% endfor %}
 {% endmacro %}
 
