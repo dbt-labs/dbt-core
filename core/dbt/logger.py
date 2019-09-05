@@ -358,7 +358,7 @@ log_manager = LogManager()
 def log_cache_events(flag):
     """Set the cache logger to propagate its messages based on the given flag.
     """
-    CACHE_LOGGER.disabled = True
+    CACHE_LOGGER.disabled = False
 
 
 GLOBAL_LOGGER = logger

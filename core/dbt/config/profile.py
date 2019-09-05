@@ -1,5 +1,4 @@
 import os
-import pprint
 
 from hologram import ValidationError
 
@@ -102,7 +101,7 @@ class Profile:
         return result
 
     def __str__(self):
-        return pprint.pformat(self.to_profile_info())
+        return str(self.to_profile_info())
 
     def __eq__(self, other):
         if not (isinstance(other, self.__class__) and
