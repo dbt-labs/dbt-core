@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
-from typing import Optional, Union, List, Dict, Any, Type, Tuple, NewType
+from typing import (
+    Optional, Union, List, Dict, Any, Type, Tuple, NewType, MutableMapping
+)
 
 from hologram import JsonSchemaMixin
 from hologram.helpers import (
@@ -53,7 +55,9 @@ register_pattern(Severity, insensitive_patterns('warn', 'error'))
 
 
 @dataclass
-class NodeConfig(ExtensibleJsonSchemaMixin, Replaceable):
+class NodeConfig(
+    ExtensibleJsonSchemaMixin, Replaceable, MutableMapping[str, Any]
+):
     enabled: bool = True
     materialized: str = 'view'
     persist_docs: Dict[str, Any] = field(default_factory=dict)
@@ -91,6 +95,44 @@ class NodeConfig(ExtensibleJsonSchemaMixin, Replaceable):
     @classmethod
     def field_mapping(cls):
         return {'post_hook': 'post-hook', 'pre_hook': 'pre-hook'}
+
+    # Implement MutableMapping so this config will behave as some macros expect
+    # during parsing (notably, syntax like `{{ node.config['schema'] }}`)
+
+    def __getitem__(self, key):
+        """Handle parse-time use of `config` as a dictionary, making the extra
+        values available during parsing.
+        """
+        if hasattr(self, key):
+            return getattr(self, key)
+        else:
+            return self._extra[key]
+
+    def __setitem__(self, key, value):
+        if hasattr(self, key):
+            setattr(self, key, value)
+        else:
+            self._extra[key] = value
+
+    def __delitem__(self, key):
+        if hasattr(self, key):
+            msg = (
+                'Error, tried to delete config key "{}": Cannot delete '
+                'built-in keys'
+            ).format(key)
+            raise dbt.exceptions.CompilationException(msg)
+        else:
+            del self._extra[key]
+
+    def __iter__(self):
+        for fld in self._get_fields():
+            yield fld.name
+
+        for key in self._extra:
+            yield key
+
+    def __len__(self):
+        return len(self._get_fields()) + len(self._extra)
 
 
 @dataclass
