@@ -276,7 +276,7 @@ class ConfiguredParser(
 
         # Set tags on node provided in config blocks. Tags are additive, so even if
         # config has been built before, we don't have to reset tags in the parsed_node.
-        model_tags = config_dict.get('tags', [])
+        model_tags = config_dict.get("tags", [])
         for tag in model_tags:
             if tag not in parsed_node.tags:
                 parsed_node.tags.append(tag)
