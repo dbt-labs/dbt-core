@@ -258,7 +258,6 @@ class ConfiguredParser(
         """
         if name is None:
             name = block.name
-
         dct = {
             'alias': name,
             'schema': self.default_schema,
@@ -275,7 +274,6 @@ class ConfiguredParser(
             'config': self.config_dict(config),
         }
         dct.update(kwargs)
-
         try:
             return self.parse_from_dict(dct)
         except ValidationError as exc:
@@ -364,8 +362,6 @@ class ConfiguredParser(
         parsed_node.database = config_dict.get(
             'database', self.default_database
         ).strip()
-
-        self.update_parsed_node_config(parsed_node, config_dict)
 
     def initial_config(self, fqn: List[str]) -> SourceConfig:
         return SourceConfig(self.root_project, self.project, fqn,
