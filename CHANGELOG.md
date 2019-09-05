@@ -1,4 +1,4 @@
-## dbt 0.14.1 (Currently unreleased)
+## dbt 0.14.1 (September 3, 2019)
 
 ### Overview
 
@@ -6,7 +6,7 @@ This is primarily a bugfix release which contains a few minor improvements too. 
 
 ### Breaking changes
  - The undocumented `macros` attribute was removed from the `graph` context variable ([#1615](https://github.com/fishtown-analytics/dbt/pull/1615))
- 
+
 ### Features:
  - Summarize warnings at the end of dbt runs ([#1597](https://github.com/fishtown-analytics/dbt/issues/1597), [#1654](https://github.com/fishtown-analytics/dbt/pull/1654))
  - Speed up catalog generation on postgres by using avoiding use of the `information_schema` ([#1540](https://github.com/fishtown-analytics/dbt/pull/1540))
@@ -17,11 +17,12 @@ This is primarily a bugfix release which contains a few minor improvements too. 
  - Add environment variables for macro debugging flags ([#1628](https://github.com/fishtown-analytics/dbt/issues/1628), [#1629](https://github.com/fishtown-analytics/dbt/pull/1629))
  - Speed up node selection by making it linear, rather than quadratic, in complexity ([#1611](https://github.com/fishtown-analytics/dbt/issues/1611), [#1615](https://github.com/fishtown-analytics/dbt/pull/1615))
  - Specify the `application` field in Snowflake connections ([#1622](https://github.com/fishtown-analytics/dbt/issues/1622), [#1623](https://github.com/fishtown-analytics/dbt/pull/1623))
- - Add support for clustering on Snowflake ([#634](https://github.com/fishtown-analytics/dbt/issues/634), [#1591](https://github.com/fishtown-analytics/dbt/pull/1591), [#1689](https://github.com/fishtown-analytics/dbt/pull/1689))
- - Add support for job priority on BigQuery ([#1456](https://github.com/fishtown-analytics/dbt/issues/1456), [#1673](https://github.com/fishtown-analytics/dbt/pull/1673))
+ - Add support for clustering on Snowflake ([#634](https://github.com/fishtown-analytics/dbt/issues/634), [#1591](https://github.com/fishtown-analytics/dbt/pull/1591), [#1689](https://github.com/fishtown-analytics/dbt/pull/1689)) ([docs](https://docs.getdbt.com/docs/snowflake-configs#section-configuring-table-clustering))
+ - Add support for job priority on BigQuery ([#1456](https://github.com/fishtown-analytics/dbt/issues/1456), [#1673](https://github.com/fishtown-analytics/dbt/pull/1673)) ([docs](https://docs.getdbt.com/docs/profile-bigquery#section-priority))
+ - Add `node.config` and `node.tags` to the `generate_schema_name` and `generate_alias_name` macro context ([#1700](https://github.com/fishtown-analytics/dbt/issues/1700), [#1701](https://github.com/fishtown-analytics/dbt/pull/1701))
 
 ### Fixes:
- - Fix for reused `check_cols` values in snapshots ([#1614](https://github.com/fishtown-analytics/dbt/pull/1614))
+ - Fix for reused `check_cols` values in snapshots ([#1614](https://github.com/fishtown-analytics/dbt/pull/1614), [#1709](https://github.com/fishtown-analytics/dbt/pull/1709))
  - Fix for rendering column descriptions in sources ([#1619](https://github.com/fishtown-analytics/dbt/issues/1619), [#1633](https://github.com/fishtown-analytics/dbt/pull/1633))
  - Fix for `is_incremental()` returning True for models that are not materialized as incremental models ([#1249](https://github.com/fishtown-analytics/dbt/issues/1249), [#1608](https://github.com/fishtown-analytics/dbt/pull/1608))
  - Fix for serialization of BigQuery results which contain nested or repeated records ([#1626](https://github.com/fishtown-analytics/dbt/issues/1626), [#1638](https://github.com/fishtown-analytics/dbt/pull/1638))
@@ -50,7 +51,8 @@ Thanks for your contributions to dbt!
 - [@edmundyan](https://github.com/edmundyan) ([#1663](https://github.com/fishtown-analytics/dbt/pull/1663))
 - [@vitorbaptista](https://github.com/vitorbaptista) ([#1664](https://github.com/fishtown-analytics/dbt/pull/1664))
 - [@sjwhitworth](https://github.com/sjwhitworth) ([#1672](https://github.com/fishtown-analytics/dbt/pull/1672), [#1673](https://github.com/fishtown-analytics/dbt/pull/1673))
-- [@mikaelene](https://github.com/mikaelene) ([#1688](https://github.com/fishtown-analytics/dbt/pull/1688))
+- [@mikaelene](https://github.com/mikaelene) ([#1688](https://github.com/fishtown-analytics/dbt/pull/1688), [#1709](https://github.com/fishtown-analytics/dbt/pull/1709))
+- [@bastienboutonnet](https://github.com/bastienboutonnet) ([#1591](https://github.com/fishtown-analytics/dbt/pull/1591), [#1689](https://github.com/fishtown-analytics/dbt/pull/1689))
 
 
 
