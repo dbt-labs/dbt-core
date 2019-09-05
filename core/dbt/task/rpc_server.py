@@ -22,9 +22,12 @@ from dbt.task.remote import (
     RemoteSeedProjectTask,
     RemoteTestProjectTask,
 )
-from dbt.utils import JSONEncoder
+from dbt.utils import JSONEncoder, env_set_truthy
 from dbt import rpc
 from dbt.rpc.logger import ServerContext, HTTPRequest, RPCResponse
+
+
+SINGLE_THREADED_WEBSERVER = env_set_truthy('DBT_SINGLE_THREADED_WEBSERVER')
 
 
 # SIG_DFL ends up killing the process if multiple build up, but SIG_IGN just
@@ -136,6 +139,9 @@ class RPCServerTask(ConfiguredTask):
             RemoteSeedProjectTask, RemoteTestProjectTask
         ]
 
+    def single_threaded(self):
+        return SINGLE_THREADED_WEBSERVER or self.args.single_threaded
+
     def run(self):
         log_manager.format_json()
         host = self.args.host
@@ -172,7 +178,7 @@ class RPCServerTask(ConfiguredTask):
         # metadata+state in a multiprocessing.Manager, adds polling the
         # manager to the request  task handler and in general gets messy
         # fast.
-        run_simple(host, port, app, threaded=not self.args.single_threaded)
+        run_simple(host, port, app, threaded=not self.single_threaded)
 
     @Request.application
     def handle_jsonrpc_request(self, request):

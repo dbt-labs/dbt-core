@@ -2,6 +2,7 @@ from dbt.contracts.graph.manifest import CompileResultNode
 from dbt.contracts.graph.unparsed import Time, FreshnessStatus
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
 from dbt.contracts.util import Writable
+from dbt.logger import LogMessage
 from hologram.helpers import StrEnum
 from hologram import JsonSchemaMixin
 
@@ -201,10 +202,16 @@ class RemoteCompileResult(JsonSchemaMixin):
     compiled_sql: str
     node: CompileResultNode
     timing: List[TimingInfo]
+    logs: List[LogMessage]
 
     @property
     def error(self):
         return None
+
+
+@dataclass
+class RemoteExecutionResult(ExecutionResult):
+    logs: List[LogMessage]
 
 
 @dataclass

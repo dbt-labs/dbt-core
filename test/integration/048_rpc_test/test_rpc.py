@@ -194,6 +194,25 @@ class HasRPCServer(DBTIntegrationTest):
     def url(self):
         return 'http://localhost:{}/jsonrpc'.format(self._server.port)
 
+    def poll_for_result(self, request_token, request_id=1, timeout=60):
+        start = time.time()
+        while timeout is None or ((time.time() - start) < timeout):
+            time.sleep(0.5)
+            response = self.query('poll', request_token=request_token, _test_request_id=request_id)
+            response_json = response.json()
+            if 'error' in response_json:
+                return response
+            result = self.assertIsResult(response_json, request_id)
+            self.assertIn('status', result)
+            if result['status'] == 'success':
+                return response
+
+    def async_query(self, _method, _sql=None, _test_request_id=1, macros=None, **kwargs):
+        response = self.query(_method, _sql, _test_request_id, macros, **kwargs).json()
+        result = self.assertIsResult(response, _test_request_id)
+        self.assertIn('request_token', result)
+        return self.poll_for_result(result['request_token'], _test_request_id)
+
     def query(self, _method, _sql=None, _test_request_id=1, macros=None, **kwargs):
         built = self.build_query(_method, kwargs, _sql, _test_request_id, macros)
         return query_url(self.url, built)
@@ -270,6 +289,9 @@ class HasRPCServer(DBTIntegrationTest):
         result = self.assertIsResult(data)
         self.assertIn('logs', result)
         self.assertTrue(len(result['logs']) > 0)
+        self.assertIn('results', result)
+        self.assertEqual(len(result['results']), 1)
+        result = result['results'][0]
         self.assertIn('raw_sql', result)
         self.assertIn('compiled_sql', result)
         self.assertEqual(result['raw_sql'], raw_sql)
@@ -295,7 +317,7 @@ class HasRPCServer(DBTIntegrationTest):
 class TestRPCServer(HasRPCServer):
     @use_profile('postgres')
     def test_compile_postgres(self):
-        trivial = self.query(
+        trivial = self.async_query(
             'compile',
             'select 1 as id',
             name='foo'
@@ -304,7 +326,7 @@ class TestRPCServer(HasRPCServer):
             trivial, 'select 1 as id'
         )
 
-        ref = self.query(
+        ref = self.async_query(
             'compile',
             'select * from {{ ref("descendant_model") }}',
             name='foo'
@@ -317,7 +339,7 @@ class TestRPCServer(HasRPCServer):
                 self.unique_schema())
         )
 
-        source = self.query(
+        source = self.async_query(
             'compile',
             'select * from {{ source("test_source", "test_table") }}',
             name='foo'
@@ -330,7 +352,7 @@ class TestRPCServer(HasRPCServer):
                 self.unique_schema())
             )
 
-        macro = self.query(
+        macro = self.async_query(
             'compile',
             'select {{ my_macro() }}',
             name='foo',
@@ -342,7 +364,7 @@ class TestRPCServer(HasRPCServer):
             compiled_sql='select 1 as id'
         )
 
-        macro_override = self.query(
+        macro_override = self.async_query(
             'compile',
             'select {{ happy_little_macro() }}',
             name='foo',
@@ -354,7 +376,7 @@ class TestRPCServer(HasRPCServer):
             compiled_sql='select 2 as id'
         )
 
-        macro_override_with_if_statement = self.query(
+        macro_override_with_if_statement = self.async_query(
             'compile',
             '{% if True %}select {{ happy_little_macro() }}{% endif %}',
             name='foo',
@@ -366,7 +388,7 @@ class TestRPCServer(HasRPCServer):
             compiled_sql='select 2 as id'
         )
 
-        ephemeral = self.query(
+        ephemeral = self.async_query(
             'compile',
             'select * from {{ ref("ephemeral_model") }}',
             name='foo'
@@ -382,7 +404,7 @@ class TestRPCServer(HasRPCServer):
         # seed + run dbt to make models before using them!
         self.run_dbt_with_vars(['seed'])
         self.run_dbt_with_vars(['run'])
-        data = self.query(
+        data = self.async_query(
             'run',
             'select 1 as id',
             name='foo'
@@ -391,7 +413,7 @@ class TestRPCServer(HasRPCServer):
             data, 'select 1 as id', table={'column_names': ['id'], 'rows': [[1.0]]}
         )
 
-        ref = self.query(
+        ref = self.async_query(
             'run',
             'select * from {{ ref("descendant_model") }} order by updated_at limit 1',
             name='foo'
@@ -408,7 +430,7 @@ class TestRPCServer(HasRPCServer):
             }
         )
 
-        source = self.query(
+        source = self.async_query(
             'run',
             'select * from {{ source("test_source", "test_table") }} order by updated_at limit 1',
             name='foo'
@@ -425,7 +447,7 @@ class TestRPCServer(HasRPCServer):
             }
         )
 
-        macro = self.query(
+        macro = self.async_query(
             'run',
             'select {{ my_macro() }}',
             name='foo',
@@ -438,7 +460,7 @@ class TestRPCServer(HasRPCServer):
             table={'column_names': ['id'], 'rows': [[1.0]]}
         )
 
-        macro_override = self.query(
+        macro_override = self.async_query(
             'run',
             'select {{ happy_little_macro() }}',
             name='foo',
@@ -451,7 +473,7 @@ class TestRPCServer(HasRPCServer):
             table={'column_names': ['id'], 'rows': [[2.0]]}
         )
 
-        macro_override_with_if_statement = self.query(
+        macro_override_with_if_statement = self.async_query(
             'run',
             '{% if True %}select {{ happy_little_macro() }}{% endif %}',
             name='foo',
@@ -464,7 +486,7 @@ class TestRPCServer(HasRPCServer):
             table={'column_names': ['id'], 'rows': [[2.0]]}
         )
 
-        macro_with_raw_statement = self.query(
+        macro_with_raw_statement = self.async_query(
             'run',
             '{% raw %}select 1 as{% endraw %}{{ test_macros() }}{% macro test_macros() %} id{% endmacro %}',
             name='foo'
@@ -476,7 +498,7 @@ class TestRPCServer(HasRPCServer):
             table={'column_names': ['id'], 'rows': [[1.0]]}
         )
 
-        macro_with_comment = self.query(
+        macro_with_comment = self.async_query(
             'run',
             '{% raw %}select 1 {% endraw %}{{ test_macros() }} {# my comment #}{% macro test_macros() -%} as{% endmacro %} id{# another comment #}',
             name='foo'
@@ -488,7 +510,7 @@ class TestRPCServer(HasRPCServer):
             table={'column_names': ['id'], 'rows': [[1.0]]}
         )
 
-        ephemeral = self.query(
+        ephemeral = self.async_query(
             'run',
             'select * from {{ ref("ephemeral_model") }}',
             name='foo'
@@ -500,13 +522,26 @@ class TestRPCServer(HasRPCServer):
             table={'column_names': ['id'], 'rows': [[1.0]]}
         )
 
+    def _get_sleep_query(self, duration=15, request_id=90890):
+        sleep_query = self.query(
+            'run',
+            'select * from pg_sleep({})'.format(duration),
+            name='sleeper',
+            _test_request_id=request_id
+        ).json()
+        result = self.assertIsResult(sleep_query, id_=request_id)
+        self.assertIn('request_token', result)
+        request_token = result['request_token']
+        return request_token, request_id
+
     @mark.skipif(os.name == 'nt', reason='"kill" not supported on windows')
     @mark.flaky(rerun_filter=None)
     @use_profile('postgres')
     def test_ps_kill_postgres(self):
-        done_query = self.query('compile', 'select 1 as id', name='done').json()
+        done_query = self.async_query('compile', 'select 1 as id', name='done').json()
         self.assertIsResult(done_query)
-        pg_sleeper, sleep_task_id, request_id = self._get_sleep_query()
+
+        request_token, request_id = self._get_sleep_query()
 
         empty_ps_result = self.query('ps', completed=False, active=False).json()
         result = self.assertIsResult(empty_ps_result)
@@ -520,6 +555,7 @@ class TestRPCServer(HasRPCServer):
         self.assertEqual(rowdict[0]['method'], 'run')
         self.assertEqual(rowdict[0]['state'], 'running')
         self.assertEqual(rowdict[0]['timeout'], None)
+        self.assertEqual(rowdict[0]['task_id'], request_token)
 
         complete_ps_result = self.query('ps', completed=True, active=False).json()
         result = self.assertIsResult(complete_ps_result)
@@ -527,7 +563,7 @@ class TestRPCServer(HasRPCServer):
         rowdict = result['rows']
         self.assertEqual(rowdict[0]['request_id'], 1)
         self.assertEqual(rowdict[0]['method'], 'compile')
-        self.assertEqual(rowdict[0]['state'], 'finished')
+        self.assertEqual(rowdict[0]['state'], 'success')
         self.assertEqual(rowdict[0]['timeout'], None)
 
         all_ps_result = self.query('ps', completed=True, active=True).json()
@@ -537,22 +573,24 @@ class TestRPCServer(HasRPCServer):
         rowdict.sort(key=lambda r: r['start'])
         self.assertEqual(rowdict[0]['request_id'], 1)
         self.assertEqual(rowdict[0]['method'], 'compile')
-        self.assertEqual(rowdict[0]['state'], 'finished')
+        self.assertEqual(rowdict[0]['state'], 'success')
         self.assertEqual(rowdict[0]['timeout'], None)
         self.assertEqual(rowdict[1]['request_id'], request_id)
         self.assertEqual(rowdict[1]['method'], 'run')
         self.assertEqual(rowdict[1]['state'], 'running')
         self.assertEqual(rowdict[1]['timeout'], None)
 
-        self.kill_and_assert(pg_sleeper, sleep_task_id, request_id)
+        self.kill_and_assert(request_token, request_id)
 
-    def kill_and_assert(self, pg_sleeper, task_id, request_id):
-        kill_result = self.query('kill', task_id=task_id).json()
-        result = self.assertIsResult(kill_result)
-        self.assertEqual(result['state'], 'killed')
+    def kill_and_assert(self, request_token, request_id):
+        kill_response = self.query('kill', task_id=request_token).json()
+        result = self.assertIsResult(kill_response)
+        self.assertEqual(result['status'], 'killed')
 
-        sleeper_result = pg_sleeper.wait_result()
-        error = self.assertIsErrorWithCode(sleeper_result, 10009, request_id)
+        poll_id = 90891
+
+        poll_response = self.poll_for_result(request_token, poll_id).json()
+        error = self.assertIsErrorWithCode(poll_response, 10009, poll_id)
         self.assertEqual(error['message'], 'RPC process killed')
         self.assertIn('data', error)
         error_data = error['data']
@@ -561,49 +599,30 @@ class TestRPCServer(HasRPCServer):
         self.assertIn('logs', error_data)
         return error_data
 
-    def _get_sleep_query(self, request_id=90890, duration=15):
-        pg_sleeper = self.background_query(
-            'run',
-            'select pg_sleep({})'.format(duration),
-            _test_request_id=request_id,
-            name='sleeper',
-        )
-
-        for _ in range(20):
-            time.sleep(0.2)
-            sleeper_ps_result = self.query('ps', completed=False, active=True).json()
-            result = self.assertIsResult(sleeper_ps_result)
-            rows = result['rows']
-            for row in rows:
-                if row['request_id'] == request_id and row['state'] == 'running':
-                    return pg_sleeper, row['task_id'], request_id
-
-        self.assertTrue(False, 'request ID never found running!')
-
     @mark.skipif(os.name == 'nt', reason='"kill" not supported on windows')
     @mark.flaky(rerun_filter=lambda *a, **kw: True)
     @use_profile('postgres')
     def test_ps_kill_longwait_postgres(self):
-        pg_sleeper, sleep_task_id, request_id = self._get_sleep_query()
+        request_token, request_id = self._get_sleep_query()
 
         # the test above frequently kills the process during parsing of the
         # requested node. That's also a useful test, but we should test that
         # we cancel the in-progress sleep query.
         time.sleep(3)
 
-        error_data = self.kill_and_assert(pg_sleeper, sleep_task_id, request_id)
-        # we should have logs if we did anything
+        error_data = self.kill_and_assert(request_token, request_id)
         self.assertTrue(len(error_data['logs']) > 0)
 
     @use_profile('postgres')
     def test_invalid_requests_postgres(self):
+        # invalid method -> error on the initial query
         data = self.query(
             'xxxxxnotamethodxxxxx',
             'hi this is not sql'
         ).json()
         self.assertIsErrorWith(data, -32601, 'Method not found', None)
 
-        data = self.query(
+        data = self.async_query(
             'compile',
             'select * from {{ reff("nonsource_descendant") }}',
             name='mymodel'
@@ -617,7 +636,7 @@ class TestRPCServer(HasRPCServer):
         self.assertIn('logs', error_data)
         self.assertTrue(len(error_data['logs']) > 0)
 
-        data = self.query(
+        data = self.async_query(
             'run',
             'hi this is not sql',
             name='foo'
@@ -631,7 +650,7 @@ class TestRPCServer(HasRPCServer):
         self.assertIn('logs', error_data)
         self.assertTrue(len(error_data['logs']) > 0)
 
-        macro_no_override = self.query(
+        macro_no_override = self.async_query(
             'run',
             'select {{ happy_little_macro() }}',
             name='foo',
@@ -654,7 +673,7 @@ class TestRPCServer(HasRPCServer):
 
     @use_profile('postgres')
     def test_timeout_postgres(self):
-        data = self.query(
+        data = self.async_query(
             'run',
             'select from pg_sleep(5)',
             name='foo',
@@ -677,7 +696,7 @@ class TestRPCServer(HasRPCServer):
     def test_seed_project_postgres(self):
         # testing "dbt seed" is tricky so we'll just jam some sql in there
         self.run_sql_file("seed.sql")
-        result = self.query('seed_project', show=True).json()
+        result = self.async_query('seed_project', show=True).json()
         dct = self.assertIsResult(result)
         self.assertTablesEqual('source', 'seed_expected')
         self.assertIn('results', dct)
@@ -691,7 +710,7 @@ class TestRPCServer(HasRPCServer):
     @use_profile('postgres')
     def test_compile_project_postgres(self):
         self.run_dbt_with_vars(['seed'])
-        result = self.query('compile_project').json()
+        result = self.async_query('compile_project').json()
         dct = self.assertIsResult(result)
         self.assertIn('results', dct)
         results = dct['results']
@@ -705,7 +724,7 @@ class TestRPCServer(HasRPCServer):
     @use_profile('postgres')
     def test_run_project_postgres(self):
         self.run_dbt_with_vars(['seed'])
-        result = self.query('run_project').json()
+        result = self.async_query('run_project').json()
         dct = self.assertIsResult(result)
         self.assertIn('results', dct)
         results = dct['results']
@@ -719,16 +738,19 @@ class TestRPCServer(HasRPCServer):
     @use_profile('postgres')
     def test_test_project_postgres(self):
         self.run_dbt_with_vars(['seed'])
-        result = self.query('run_project').json()
+        result = self.async_query('run_project').json()
         dct = self.assertIsResult(result)
-        result = self.query('test_project').json()
+        result = self.async_query('test_project').json()
         dct = self.assertIsResult(result)
         self.assertIn('results', dct)
         results = dct['results']
         self.assertEqual(len(results), 4)
         for result in results:
             self.assertEqual(result['status'], 0.0)
-            self.assertNotIn('fail', result)
+            # TODO: should this be included even when it's 'none'? Should
+            # results have all these crazy keys? (no)
+            self.assertIn('fail', result)
+            self.assertIsNone(result['fail'])
 
     def _wait_for_running(self, timeout=25, raise_on_timeout=True):
         started = time.time()
@@ -756,7 +778,7 @@ class TestRPCServer(HasRPCServer):
         result = self.assertIsResult(sleeper_ps_result)
         self.assertEqual(len(result['rows']), len(sleepers))
         result_map = {rd['request_id']: rd for rd in result['rows']}
-        for _, _, request_id in sleepers:
+        for _, request_id in sleepers:
             found = result_map[request_id]
             self.assertEqual(found['request_id'], request_id)
             self.assertEqual(found['method'], 'run')
@@ -764,7 +786,7 @@ class TestRPCServer(HasRPCServer):
             self.assertEqual(found['timeout'], None)
 
     def _add_command(self, cmd, id_):
-        self.assertIsResult(self.query(cmd, _test_request_id=id_).json(), id_=id_)
+        self.assertIsResult(self.async_query(cmd, _test_request_id=id_).json(), id_)
 
     @mark.skipif(os.name == 'nt', reason='"sighup" not supported on windows')
     @mark.flaky(rerun_filter=lambda *a, **kw: True)
@@ -780,12 +802,12 @@ class TestRPCServer(HasRPCServer):
 
         self.assertIn('timestamp', status)
 
-        done_query = self.query('compile', 'select 1 as id', name='done').json()
+        done_query = self.async_query('compile', 'select 1 as id', name='done').json()
         self.assertIsResult(done_query)
         sleepers = []
         command_ids = []
 
-        sleepers.append(self._get_sleep_query(1000, duration=60))
+        sleepers.append(self._get_sleep_query(duration=60, request_id=1000))
         self.assertRunning(sleepers)
 
         self._add_command('seed_project', 20)
@@ -808,7 +830,7 @@ class TestRPCServer(HasRPCServer):
         command_ids.append(31)
 
         # start a new one too
-        sleepers.append(self._get_sleep_query(1001, duration=60))
+        sleepers.append(self._get_sleep_query(duration=60, request_id=1001))
 
         # now we should see both
         self.assertRunning(sleepers)

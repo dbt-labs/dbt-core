@@ -39,6 +39,7 @@ class RPCCompileRunner(CompileRunner):
             compiled_sql=compiled_node.injected_sql,
             node=compiled_node,
             timing=[],  # this will get added later
+            logs=[],
         )
 
     def error_result(self, node, error, start_time, timing_info):
@@ -55,6 +56,7 @@ class RPCCompileRunner(CompileRunner):
             compiled_sql=result.compiled_sql,
             node=result.node,
             timing=timing_info,
+            logs=[],
         )
 
 
@@ -66,6 +68,7 @@ class RPCExecuteRunner(RPCCompileRunner):
             node=result.node,
             table=result.table,
             timing=timing_info,
+            logs=[],
         )
 
     def execute(self, compiled_node, manifest):
@@ -83,4 +86,5 @@ class RPCExecuteRunner(RPCCompileRunner):
             node=compiled_node,
             table=table,
             timing=[],
+            logs=[],
         )

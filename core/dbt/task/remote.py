@@ -1,5 +1,6 @@
 import signal
 import threading
+from datetime import datetime
 from typing import Union, List
 
 from dbt.adapters.factory import get_adapter
@@ -11,23 +12,18 @@ from dbt.parser.util import ParserUtils
 import dbt.ui.printer
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.rpc.node_runners import RPCCompileRunner, RPCExecuteRunner
-from dbt.rpc.task import RemoteCallableResult, RemoteCallable
+from dbt.rpc.task import RemoteCallableResult, RPCTask
 
-from dbt.task.compile import CompileTask
 from dbt.task.run import RunTask
 from dbt.task.seed import SeedTask
 from dbt.task.test import TestTask
 
 
-class RemoteCompileTask(CompileTask, RemoteCallable):
-    METHOD_NAME = 'compile'
+class _RPCExecTask(RPCTask):
 
     def __init__(self, args, config, manifest):
         super().__init__(args, config)
         self._base_manifest = manifest.deepcopy(config=config)
-
-    def get_runner_type(self):
-        return RPCCompileRunner
 
     def runtime_cleanup(self, selected_uids):
         """Do some pre-run cleanup that is usually performed in Task __init__.
@@ -98,6 +94,7 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
     def handle_request(self, name, sql, macros=None) -> RemoteCallableResult:
         # we could get a ctrl+c at any time, including during parsing.
         thread = None
+        started = datetime.utcnow()
         try:
             node = self._get_exec_node(name, sql, macros)
 
@@ -127,17 +124,31 @@ class RemoteCompileTask(CompileTask, RemoteCallable):
             raise dbt.exceptions.RPCKilledException(signal.SIGINT)
 
         self._raise_set_error()
-        return self.node_results[0]
+
+        ended = datetime.utcnow()
+        elapsed = (ended - started).total_seconds()
+        return self.get_result(
+            results=self.node_results,
+            elapsed_time=elapsed,
+            generated_at=ended,
+        )
 
 
-class RemoteRunTask(RemoteCompileTask, RunTask):
+class RemoteCompileTask(_RPCExecTask):
+    METHOD_NAME = 'compile'
+
+    def get_runner_type(self):
+        return RPCCompileRunner
+
+
+class RemoteRunTask(_RPCExecTask, RunTask):
     METHOD_NAME = 'run'
 
     def get_runner_type(self):
         return RPCExecuteRunner
 
 
-class RemoteCompileProjectTask(CompileTask, RemoteCallable):
+class RemoteCompileProjectTask(RPCTask):
     METHOD_NAME = 'compile_project'
 
     def __init__(self, args, config, manifest):
@@ -160,7 +171,7 @@ class RemoteCompileProjectTask(CompileTask, RemoteCallable):
         return results
 
 
-class RemoteRunProjectTask(RunTask, RemoteCallable):
+class RemoteRunProjectTask(RPCTask, RunTask):
     METHOD_NAME = 'run_project'
 
     def __init__(self, args, config, manifest):
@@ -183,7 +194,7 @@ class RemoteRunProjectTask(RunTask, RemoteCallable):
         return results
 
 
-class RemoteSeedProjectTask(SeedTask, RemoteCallable):
+class RemoteSeedProjectTask(RPCTask, SeedTask):
     METHOD_NAME = 'seed_project'
 
     def __init__(self, args, config, manifest):
@@ -201,7 +212,7 @@ class RemoteSeedProjectTask(SeedTask, RemoteCallable):
         return results
 
 
-class RemoteTestProjectTask(TestTask, RemoteCallable):
+class RemoteTestProjectTask(RPCTask, TestTask):
     METHOD_NAME = 'test_project'
 
     def __init__(self, args, config, manifest):

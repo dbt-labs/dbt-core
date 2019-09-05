@@ -1,10 +1,18 @@
+from typing import List, Dict, Any, Optional
+
 from jsonrpc.exceptions import JSONRPCDispatchException, JSONRPCInvalidParams
 
 import dbt.exceptions
 
 
 class RPCException(JSONRPCDispatchException):
-    def __init__(self, code=None, message=None, data=None, logs=None):
+    def __init__(
+        self,
+        code: Optional[int] = None,
+        message: Optional[str] = None,
+        data: Optional[Dict[str, Any]] = None,
+        logs: Optional[List[Dict[str, Any]]] = None,
+    ) -> None:
         if code is None:
             code = -32000
         if message is None:
@@ -13,7 +21,8 @@ class RPCException(JSONRPCDispatchException):
             data = {}
 
         super().__init__(code=code, message=message, data=data)
-        self.logs = logs
+        if logs is not None:
+            self.logs = logs
 
     def __str__(self):
         return (
@@ -22,7 +31,7 @@ class RPCException(JSONRPCDispatchException):
         )
 
     @property
-    def logs(self):
+    def logs(self) -> List[Dict[str, Any]]:
         return self.error.data.get('logs')
 
     @logs.setter

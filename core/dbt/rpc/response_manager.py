@@ -1,7 +1,7 @@
 import json
-from typing import Callable, Dict
+from typing import Callable, Dict, Any
 
-from hologram.helpers import StrEnum
+from hologram import JsonSchemaMixin
 from jsonrpc.exceptions import (
     JSONRPCParseError,
     JSONRPCInvalidRequestException,
@@ -17,15 +17,8 @@ import dbt.tracking
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.rpc.logger import RequestContext
 from dbt.rpc.task_handler import RequestTaskHandler
-from dbt.rpc.task import RemoteCallable, RemoteCallableResult
+from dbt.rpc.task import RemoteCallable
 from dbt.rpc.task_manager import TaskManager
-
-
-class TaskHandlerState(StrEnum):
-    NotStarted = 'not started'
-    Initializing = 'initializing'
-    Running = 'running'
-    Finished = 'finished'
 
 
 def track_rpc_request(task):
@@ -37,7 +30,7 @@ def track_rpc_request(task):
 SYNCHRONOUS_REQUESTS = False
 
 
-class RequestDispatcher(Dict[str, Callable[..., RemoteCallableResult]]):
+class RequestDispatcher(Dict[str, Callable[..., Dict[str, Any]]]):
     """A special dispatcher that knows about requests."""
     def __init__(
         self,
@@ -49,7 +42,7 @@ class RequestDispatcher(Dict[str, Callable[..., RemoteCallableResult]]):
         self.json_rpc_request = json_rpc_request
         self.manager = manager
 
-    def __getitem__(self, key) -> Callable[..., RemoteCallableResult]:
+    def __getitem__(self, key) -> Callable[..., Dict[str, Any]]:
         handler = self.manager.get_handler(
             key,
             self.http_request,
@@ -89,6 +82,16 @@ class ResponseManager(JSONRPCResponseManager):
             return cls.handle_request(request, dispatcher)
 
     @classmethod
+    def _get_responses(cls, requests, dispatcher):
+        for output in super()._get_responses(requests, dispatcher):
+            # if it's a result, check if it's a JsonSchemaMixin and if so call
+            # to_dict
+            if hasattr(output, 'result'):
+                if isinstance(output.result, JsonSchemaMixin):
+                    output.result = output.result.to_dict(omit_empty=False)
+            yield output
+
+    @classmethod
     def handle(
         cls,
         http_request: HTTPRequest,
@@ -125,4 +128,5 @@ class ResponseManager(JSONRPCResponseManager):
         result = cls.handle_valid_request(
             http_request, request, task_manager
         )
+
         return result

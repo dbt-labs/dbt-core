@@ -281,7 +281,7 @@ class GraphRunnableTask(ManifestTask):
         if len(self._flattened_nodes) == 0:
             logger.warning("WARNING: Nothing to do. Try checking your model "
                            "configs and model specification args")
-            return ExecutionResult(
+            return self.get_result(
                 results=[],
                 generated_at=datetime.utcnow(),
                 elapsed_time=0.0,

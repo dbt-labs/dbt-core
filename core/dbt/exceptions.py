@@ -239,6 +239,17 @@ class JSONValidationException(ValidationException):
         return (JSONValidationException, (self.typename, self.errors))
 
 
+class UnknownAsyncIDException(Exception):
+    CODE = 10012
+    MESSAGE = 'RPC server got an unknown async ID'
+
+    def __init__(self, task_id):
+        self.task_id = task_id
+
+    def __str__(self):
+        return '{}: {}'.format(self.MESSAGE, self.task_id)
+
+
 class AliasException(ValidationException):
     pass
 

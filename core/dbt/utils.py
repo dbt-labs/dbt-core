@@ -8,7 +8,7 @@ import itertools
 import json
 import os
 from enum import Enum
-from typing import Tuple, Type, Any
+from typing import Tuple, Type, Any, Optional
 
 import dbt.exceptions
 
@@ -494,3 +494,18 @@ def pluralize(count, string):
         return "{} {}".format(count, string)
     else:
         return "{} {}s".format(count, string)
+
+
+def env_set_truthy(key: str) -> Optional[str]:
+    """Return the value if it was set to a "truthy" string value, or None
+    otherwise.
+    """
+    value = os.getenv(key)
+    if not value or value.lower() in ('0', 'false', 'f'):
+        return None
+    return value
+
+
+def restrict_to(*restrictions):
+    """Create the metadata for a restricted dataclass field"""
+    return {'restrict': list(restrictions)}

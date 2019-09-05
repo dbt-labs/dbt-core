@@ -1,13 +1,12 @@
 import base64
 from abc import abstractmethod
-from typing import Union, List, Optional, Dict, Any
+from typing import Union, List, Optional
+
 
 from dbt.exceptions import NotImplementedException
+from dbt.rpc.logger import RemoteCallableResult, RemoteExecutionResult
 from dbt.rpc.error import invalid_params
-
-# for irritating jsonrpc reasons, this can't really be a JsonSchemaMixin and
-# it has to be a dict
-RemoteCallableResult = Dict[str, Any]
+from dbt.task.compile import CompileTask
 
 
 class RemoteCallable:
@@ -55,4 +54,14 @@ class RemoteCallable:
                 'message': 'invalid base64-encoded sql input',
                 'sql': str(sql),
             }
+        )
+
+
+class RPCTask(CompileTask, RemoteCallable):
+    def get_result(self, results, elapsed_time, generated_at):
+        return RemoteExecutionResult(
+            results=results,
+            elapsed_time=elapsed_time,
+            generated_at=generated_at,
+            logs=[],
         )
