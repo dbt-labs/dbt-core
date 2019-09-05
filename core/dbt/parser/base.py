@@ -357,11 +357,11 @@ class ConfiguredParser(
         # parsed_node.config is what it would be if they did nothing
         self.update_parsed_node_config(parsed_node, config_dict)
 
-        self.update_parsed_node_schema(parsed_node, config_dict)
-        self.update_parsed_node_alias(parsed_node, config_dict)
         parsed_node.database = config_dict.get(
             'database', self.default_database
         ).strip()
+        self.update_parsed_node_schema(parsed_node, config_dict)
+        self.update_parsed_node_alias(parsed_node, config_dict)
 
     def initial_config(self, fqn: List[str]) -> SourceConfig:
         return SourceConfig(self.root_project, self.project, fqn,
