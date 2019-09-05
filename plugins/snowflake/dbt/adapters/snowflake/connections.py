@@ -1,6 +1,8 @@
 import re
 from io import StringIO
 from contextlib import contextmanager
+import datetime
+import pytz
 
 import snowflake.connector
 import snowflake.connector.errors
@@ -72,7 +74,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
     TYPE = 'snowflake'
 
     @contextmanager
-    def exception_handler(self, sql, connection_name='master'):
+    def exception_handler(self, sql):
         try:
             yield
         except snowflake.connector.errors.ProgrammingError as e:
@@ -83,7 +85,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
             if 'Empty SQL statement' in msg:
                 logger.debug("got empty sql statement, moving on")
             elif 'This session does not have a current database' in msg:
-                self.release(connection_name)
+                self.release()
                 raise dbt.exceptions.FailedToConnectException(
                     ('{}\n\nThis error sometimes occurs when invalid '
                      'credentials are provided, or when your default role '
@@ -91,12 +93,17 @@ class SnowflakeConnectionManager(SQLConnectionManager):
                      'Please double check your profile and try again.')
                     .format(msg))
             else:
-                self.release(connection_name)
+                self.release()
                 raise dbt.exceptions.DatabaseException(msg)
         except Exception as e:
             logger.debug("Error running SQL: %s", sql)
             logger.debug("Rolling back transaction.")
-            self.release(connection_name)
+            self.release()
+            if isinstance(e, dbt.exceptions.RuntimeException):
+                # during a sql query, an internal to dbt exception was raised.
+                # this sounds a lot like a signal handler and probably has
+                # useful information, so raise it without modification.
+                raise
             raise dbt.exceptions.RuntimeException(e.msg)
 
     @classmethod
@@ -126,6 +133,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
                 autocommit=False,
                 client_session_keep_alive=credentials.get(
                     'client_session_keep_alive', False),
+                application='dbt',
                 **auth_args
             )
 
@@ -141,8 +149,6 @@ class SnowflakeConnectionManager(SQLConnectionManager):
 
             raise dbt.exceptions.FailedToConnectException(str(e))
 
-        return connection
-
     def cancel(self, connection):
         handle = connection.handle
         sid = handle.session_id
@@ -153,7 +159,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
 
         logger.debug("Cancelling query '{}' ({})".format(connection_name, sid))
 
-        _, cursor = self.add_query(sql, 'master')
+        _, cursor = self.add_query(sql)
         res = cursor.fetchone()
 
         logger.debug("Cancel query '{}': {}".format(connection_name, res))
@@ -193,7 +199,28 @@ class SnowflakeConnectionManager(SQLConnectionManager):
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption())
 
-    def add_query(self, sql, model_name=None, auto_begin=True,
+    @classmethod
+    def process_results(cls, column_names, rows):
+        # Override for Snowflake. The datetime objects returned by
+        # snowflake-connector-python are not pickleable, so we need
+        # to replace them with sane timezones
+        fixed = []
+        for row in rows:
+            fixed_row = []
+            for col in row:
+                if isinstance(col, datetime.datetime) and col.tzinfo:
+                    offset = col.utcoffset()
+                    offset_seconds = offset.total_seconds()
+                    new_timezone = pytz.FixedOffset(offset_seconds // 60)
+                    col = col.astimezone(tz=new_timezone)
+                fixed_row.append(col)
+
+            fixed.append(fixed_row)
+
+        return super(SnowflakeConnectionManager, cls).process_results(
+            column_names, fixed)
+
+    def add_query(self, sql, auto_begin=True,
                   bindings=None, abridge_sql_log=False):
 
         connection = None
@@ -219,21 +246,30 @@ class SnowflakeConnectionManager(SQLConnectionManager):
 
             parent = super(SnowflakeConnectionManager, self)
             connection, cursor = parent.add_query(
-                individual_query, model_name, auto_begin,
+                individual_query, auto_begin,
                 bindings=bindings,
                 abridge_sql_log=abridge_sql_log
             )
 
         if cursor is None:
+            conn = self.get_thread_connection()
+            if conn is None or conn.name is None:
+                conn_name = '<None>'
+            else:
+                conn_name = conn.name
+
             raise dbt.exceptions.RuntimeException(
-                    "Tried to run an empty query on model '{}'. If you are "
-                    "conditionally running\nsql, eg. in a model hook, make "
-                    "sure your `else` clause contains valid sql!\n\n"
-                    "Provided SQL:\n{}".format(model_name, sql))
+                "Tried to run an empty query on model '{}'. If you are "
+                "conditionally running\nsql, eg. in a model hook, make "
+                "sure your `else` clause contains valid sql!\n\n"
+                "Provided SQL:\n{}"
+                .format(conn_name, sql)
+            )
 
         return connection, cursor
 
-    def _rollback_handle(self, connection):
+    @classmethod
+    def _rollback_handle(cls, connection):
         """On snowflake, rolling back the handle of an aborted session raises
         an exception.
         """

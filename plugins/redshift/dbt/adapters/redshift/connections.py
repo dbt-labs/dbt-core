@@ -10,7 +10,6 @@ import boto3
 
 drop_lock = multiprocessing.Lock()
 
-
 REDSHIFT_CREDENTIALS_CONTRACT = {
     'type': 'object',
     'additionalProperties': False,
@@ -55,6 +54,9 @@ REDSHIFT_CREDENTIALS_CONTRACT = {
                 'If using IAM auth, the ttl for the temporary credentials'
             )
         },
+        'search_path': {
+            'type': 'string',
+        },
         'keepalives_idle': {
             'type': 'integer',
         },
@@ -75,7 +77,9 @@ class RedshiftCredentials(PostgresCredentials):
         return 'redshift'
 
     def _connection_keys(self):
-        return ('host', 'port', 'user', 'database', 'schema', 'method')
+        return (
+            'host', 'port', 'user', 'database', 'schema', 'method',
+            'search_path')
 
 
 class RedshiftConnectionManager(PostgresConnectionManager):
@@ -94,17 +98,16 @@ class RedshiftConnectionManager(PostgresConnectionManager):
             to use the default.
         """
         with drop_lock:
-
-            connection = self.get(name)
+            connection = self.get_thread_connection()
 
             if connection.transaction_open:
-                self.commit(connection)
+                self.commit()
 
-            self.begin(connection.name)
+            self.begin()
             yield
 
-            self.commit(connection)
-            self.begin(connection.name)
+            self.commit()
+            self.begin()
 
     @classmethod
     def fetch_cluster_credentials(cls, db_user, db_name, cluster_id,
@@ -123,8 +126,8 @@ class RedshiftConnectionManager(PostgresConnectionManager):
 
         except boto_client.exceptions.ClientError as e:
             raise dbt.exceptions.FailedToConnectException(
-                    "Unable to get temporary Redshift cluster credentials: "
-                    "{}".format(e))
+                "Unable to get temporary Redshift cluster credentials: {}"
+                .format(e))
 
     @classmethod
     def get_tmp_iam_cluster_credentials(cls, credentials):
@@ -136,8 +139,8 @@ class RedshiftConnectionManager(PostgresConnectionManager):
 
         if not cluster_id:
             raise dbt.exceptions.FailedToConnectException(
-                    "'cluster_id' must be provided in profile if IAM "
-                    "authentication method selected")
+                "'cluster_id' must be provided in profile if IAM "
+                "authentication method selected")
 
         cluster_creds = cls.fetch_cluster_credentials(
             credentials.user,
@@ -167,4 +170,4 @@ class RedshiftConnectionManager(PostgresConnectionManager):
 
         else:
             raise dbt.exceptions.FailedToConnectException(
-                    "Invalid 'method' in profile: '{}'".format(method))
+                "Invalid 'method' in profile: '{}'".format(method))

@@ -1,7 +1,6 @@
 # coding=utf-8
 import os
 import platform
-import pprint
 import sys
 
 from dbt.logger import GLOBAL_LOGGER as logger
@@ -16,7 +15,7 @@ from dbt.config import Project, Profile
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.ui.printer import green, red
 
-from dbt.task.base_task import BaseTask
+from dbt.task.base import BaseTask
 
 PROFILE_DIR_MESSAGE = """To view your profiles.yml file, run:
 
@@ -59,7 +58,7 @@ FILE_NOT_FOUND = 'file not found'
 
 
 class DebugTask(BaseTask):
-    def __init__(self, args, config=None):
+    def __init__(self, args, config):
         super(DebugTask, self).__init__(args, config)
         self.profiles_dir = getattr(self.args, 'profiles_dir',
                                     dbt.config.PROFILES_DIR)
@@ -210,8 +209,7 @@ class DebugTask(BaseTask):
         self.profile_name = self._choose_profile_name()
         self.target_name = self._choose_target_name()
         try:
-            self.profile = Profile.from_args(self.args, self.profile_name,
-                                             self.cli_vars)
+            self.profile = Profile.from_args(self.args, self.profile_name)
         except dbt.exceptions.DbtConfigError as exc:
             self.profile_fail_details = str(exc)
             return red('ERROR invalid')
@@ -270,7 +268,8 @@ class DebugTask(BaseTask):
     def _connection_result(self):
         adapter = get_adapter(self.profile)
         try:
-            adapter.execute('select 1 as id')
+            with adapter.connection_named('debug'):
+                adapter.execute('select 1 as id')
         except Exception as exc:
             self.messages.append(COULD_NOT_CONNECT_MESSAGE.format(
                 err=str(exc),

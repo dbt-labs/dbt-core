@@ -2,67 +2,75 @@
 
 ## About this document
 
-This is intended as a developer's guide to modifying and using dbt. It is not intended as a guide for end users of dbt (though if it is helpful, that's great!) and assumes a certain level of familiarity with Python concepts such as virtualenvs, `pip`, module/filesystem layouts, etc. It also assumes you are using macOS or Linux and are comfortable with the command line.
+This document is a guide intended for folks interested in contributing to dbt. It is not intended as a guide for end users of dbt (though if it is helpful, that's great!) and it assumes a certain level of familiarity with Python concepts such as virtualenvs, `pip`, python modules, filesystems, and so on. It also assumes you are using macOS or Linux and are comfortable with the command line. If you get stuck while reading this guide, drop us a line in the #development channel on [slack](slack.getdbt.com).
+
+## Getting the code
+
+### Installing git
+
+You will need `git` in order to download and modify the dbt source code. On macOS, the best way to download git is to just install Xcode.
+
+### External contributors
+
+If you are not a member of the `fishtown-analytics` GitHub organization, you can contribute to dbt by forking the dbt repository. For a detailed overview on forking, check out the [GitHub docs on forking](https://help.github.com/en/articles/fork-a-repo). In short, you will need to:
+
+1. fork the dbt repository
+2. clone your fork
+3. check out a new branch for your proposed changes
+4. push changes to your fork
+5. open a pull request against `fishtown-analytics/dbt` from your forked repository
+
+### Core contributors
+
+If you are a member of the `fishtown-analytics` GitHub organization, you will have push access to the dbt repo. Rather than 
+forking dbt to make your changes, just clone the repository and push directly to a branch.
+
 
 ## Setting up an environment
 
-Before you can develop dbt effectively, you should set up the following:
+To begin developing code in dbt, you should set up the following:
 
-### pyenv
+### virtualenv
 
-We strongly recommend setting up [pyenv](https://github.com/pyenv/pyenv) and its [pyenv-virtualenv](https://github.com/pyenv/pyenv-virtualenv) plugin. This setup will make it much easier for you to manage multiple Python projects in the medium to long term.
+We strongly recommend using virtual environments when developing code in dbt. We recommend creating this virtualenv
+in the root of the dbt repository. To create a new virtualenv, run:
+```
+python3 -m venv env
+source env/bin/activate
+```
 
-### python
-
-By default, `pyenv` has only one python version installed and it's the `system` python - the one that comes with your OS. You don't want that. Instead, use `pyenv install 3.6.5` to install a more recent version. dbt supports up to Python 3.6 at the time of writing (and will soon support Python 3.7)
-
-To get a full (very long!) list of versions available, you can do `pyenv install -l` and look for the versions defined by numbers alone - the others are variants of Python and outside the scope of this document.
+This will create and activate a new Python virtual environment.
 
 ### docker and docker-compose
 
-Docker and docker-compose are both used in testing. For macOS, the easiest thing to do is to go [here](https://store.docker.com/editions/community/docker-ce-desktop-mac) and download it. You'll need to make an account. On Linux, if you can use one of the packages [here](https://docs.docker.com/install/#server). We recommend installing from docker.com instead of from your package manager. On Linux you also have to install docker-compose separately, follow [these instructions](https://docs.docker.com/compose/install/#install-compose).
-
-### git
-
-You will also need `git` in order to get dbt and contribute code. On macOS, the best way to get that is to just install Xcode.
-
-### GitHub
-
-You will need a GitHub account fully configured with SSH to contribute to dbt. GitHub has [an excellent guide on how to set up SSH](https://help.github.com/articles/connecting-to-github-with-ssh/) -- we strongly recommend you follow their guide if you are unfamiliar with SSH.
-
-### Getting dbt
-
-Now clone dbt to wherever you'd like. For example:
-
-```
-mkdir -p ~/git/
-cd ~/git
-git clone git@github.com:fishtown-analytics/dbt.git
-```
-
-But it really does not matter where you put it as long as you remember it.
-
-### Setting up your virtualenv
-
-Set up a fresh virtualenv with pyenv-virtualenv for dbt:
-
-```
-pyenv virtualenv 3.6.5 dbt36
-cd ~/git/dbt
-pyenv local dbt36
-pyenv activate
-```
-
-This makes a new virtualenv based on python 3.6.5 named `dbt36`, and tells pyenv that when you're in the `dbt` directory it should automatically use that virtualenv.
+Docker and docker-compose are both used in testing. For macOS, the easiest thing to do is to [download docker for mac](https://store.docker.com/editions/community/docker-ce-desktop-mac). You'll need to make an account. On Linux, you can use one of the packages [here](https://docs.docker.com/install/#server). We recommend installing from docker.com instead of from your package manager. On Linux you also have to install docker-compose separately, follow [these instructions](https://docs.docker.com/compose/install/#install-compose).
 
 
-### Installing postgres locally
+### Installing postgres locally (optional)
 
-For testing, and later in the examples in this document, you may want to have `psql` available so you can poke around in the database and see what happened. We recommend that you use [homebrew](https://brew.sh/) for that on macOS, and your package manager on Linux. You can install any version of the postgres client that you'd like. So on macOS, with homebrew setup:
+For testing, and later in the examples in this document, you may want to have `psql` available so you can poke around in the database and see what happened. We recommend that you use [homebrew](https://brew.sh/) for that on macOS, and your package manager on Linux. You can install any version of the postgres client that you'd like. On macOS, with homebrew setup, you can run:
 
 ```
 brew install postgresql
 ```
+
+## Running dbt in development
+
+### Installation
+
+First make sure that you set up your `virtualenv` as described in section _Setting up an environment_. Next, install dbt (and it's dependencies) with:
+
+```
+pip install -r requirements.txt
+```
+
+When dbt is installed from source in this way, any changes you make to the dbt source code will be reflected immediately in your next `dbt` run.
+
+### Running dbt
+
+With your virtualenv activated, the `dbt` script should point back to the source code you've cloned on your machine. You can verify this by running `which dbt`. This command should show you a path to an executable in your virtualenv.
+
+Configure your [profile](https://docs.getdbt.com/docs/configure-your-profile) as necessary to connect to your target databases. It may be a good idea to add a new profile pointing to a local postgres instance, or a specific test sandbox within your data warehouse if appropriate.
 
 ## Testing
 
@@ -72,254 +80,76 @@ Getting the dbt integration tests set up in your local environment will be very 
 
 A short list of tools used in dbt testing that will be helpful to your understanding:
 
-- [virtualenv](https://virtualenv.pypa.io/en/stable/) to manage dependencies and stuff
+- [virtualenv](https://virtualenv.pypa.io/en/stable/) to manage dependencies
 - [tox](https://tox.readthedocs.io/en/latest/) to manage virtualenvs across python versions
-- [nosetests](http://nose.readthedocs.io/en/latest) to discover/run tests
+- [pytest](https://docs.pytest.org/en/latest/) to discover/run tests
 - [make](https://users.cs.duke.edu/~ola/courses/programming/Makefiles/Makefiles.html) - but don't worry too much, nobody _really_ understands how make works and our Makefile is super simple
-- [pep8](https://pep8.readthedocs.io/en/release-1.7.x/) for code linting
-- [CircleCI](https://circleci.com/product/) and [Appveyor](https://www.appveyor.com/docs/)
+- [flake8](https://gitlab.com/pycqa/flake8) for code linting
+- [CircleCI](https://circleci.com/product/) and [Azure Pipelines](https://azure.microsoft.com/en-us/services/devops/pipelines/)
 
-If you're unfamiliar with any or all of these, that's fine! You really do not have to have a deep understanding of any of these to get by.
+A deep understanding of these tools in not required to effectively contribute to dbt, but we recommend checking out the attached documentation if you're interested in learning more about them.
 
-Our test environment goes like this:
-
-    - CircleCI and Appveyor run `tox`
-    - `make test` runs `docker-compose`
-    - `docker-compose` runs `tox`
-    - `tox` sets up virtualenvs for each distinct set of tests and runs `nosetests`
-    - `nosetests` finds all the appropriate tests and runs them
 
 ### Running tests via Docker
 
-The basics should work with basically no further setup. In the terminal, `cd` to the directory where you cloned dbt. So, for example, if you cloned dbt to `~/git/dbt`:
+dbt's unit and integration tests run in Docker. Because dbt works with a number of different databases, you will need to supply credentials for one or more of these databases in your test environment. Most organizations don't have access to each of a BigQuery, Redshift, Snowflake, and Postgres database, so it's likely that you will be unable to run every integration test locally. Fortunately, Fishtown Analytics provides a CI environment with access to sandboxed Redshift, Snowflake, BigQuery, and Postgres databases. See the section on _Submitting a Pull Request_ below for more information on this CI setup.
 
-```
-cd ~/git/dbt
-```
 
-Then you'll want to make a test.env file. Fortunately, there's a sample which is fine for our purposes:
+#### Specifying your test credentials
+
+dbt uses test credentials specified in a `test.env` file in the root of the repository. This `test.env` file is git-ignored, but please be _extra_ careful to never check in credentials or other sensitive information when developing against dbt. To create your `test.env` file, copy the provided sample file, then supply your relevant credentials:
 
 ```
 cp test.env.sample test.env
+atom test.env # supply your credentials
 ```
 
-If you want to test snowflake/bigquery/redshift locally you'll need to get credentials and add them to this file. But, to start, you can just focus on postgres tests. They have the best coverage, are the fastest, and are the easiest to set up.
+We recommend starting with dbt's Postgres tests. These tests cover most of the functionality in dbt, are the fastest to run, and are the easiest to set up. dbt's test suite runs Postgres in a Docker container, so no setup should be required to run these tests. If you additionally want to test Snowflake, Bigquery, or Redshift locally you'll need to get credentials and add them to the `test.env` file. 
 
-To run the unit tests, use `make test-unit` - it will run the unit tests on python 2.7 and 3.6, and a pep8 linter.
+#### Running tests
 
-To run the postgres+python 3.6 integration tests, you'll have to do one extra step of setting up the database:
+dbt's unit tests and Python linter can be run with:
+
+```
+make test-unit
+```
+
+To run the Postgres + Python 3.6 integration tests, you'll have to do one extra step of setting up the test database:
 
 ```
 docker-compose up -d database
 PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres bash test/setup_db.sh
 ```
 
-And then to actually run them, you can do `make test-quick`.
-
-If you want to see what exactly is getting run on these commands, look at the `Makefile`. Note that the commands start with an `@` which you can ignore, just makefile magic. If you want to see what the involved `tox` commands are using, look at the corresponding `tox.ini` section - hopefully it's pretty self-explanatory.
-
-### Running tests in CI
-
-When a contributor to dbt pushes code, GitHub will trigger a series of CI builds on CircleCI and Appveyor (Windows) to test all of dbt's code. The CI builds trigger all the integration tests, not just postgres+python3.6.
-
-The Snowflake tests take a very long time to run (about an hour), so don't just sit around waiting, it'll be a while!
-
-If you open a PR as a non-contributor, these tests won't run automatically. Someone from the dbt team will reach out to you and get them running after reviewing your code.
-
-## Running dbt locally
-
-Sometimes, you're going to have to pretend to be an end user to reproduce bugs and stuff. So that means manually setting up some stuff that the test harness takes care of for you.
-
-### installation
-
-First make sure that you setup your `virtualenv` as described in section _Setting up your environment_.
-
-Install dbt (and it's dependencies) with `pip install -r requirements.txt`
-
-What's cool about this mode is any changes you make to the current dbt directory will be reflected immediately in your next `dbt` run.
-
-### Profile
-
-Now you'll also need a 'dbt profile' so dbt can tell how to connect to your database. By default, this file belongs at `~/.dbt/profiles.yml`, so `mkdir ~/.dbt` and then open your favorite text editor and write out something like this to `~/.dbt/profiles.yml`:
+To run a quick test for Python3 integration tests on Postgres, you can run:
 
 ```
-config:
-    send_anonymous_usage_stats: False
-    use_colors: True
-
-talk:
-    outputs:
-        default:
-            type: postgres
-            threads: 4
-            host: localhost
-            port: 5432
-            user: root
-            pass: password
-            dbname: postgres
-            schema: dbt_postgres
-    target: default
+make test-quick
 ```
 
-There's a sample you can look at in the `dbt` folder (`sample.profiles.yml`) but it's got a lot of extra and as a developer, you really probably only want to test against your local postgres container. The basic idea is that there are multiple 'profiles' (`talk`, in this case) and within those each profile has one or more 'targets' (`default`, in this case), and each profile has a default target. You can specify what profile you want to use with the `--profile` flag, and which target with the `--target` flag. If you want to be really snazzy, dbt project files actually specify their target, and if you match up your dbt project `profile` key with your `profiles.yml` profile names you don't have to use `--profile` (and if you like your profile's default target, no need for `--target` either).
-
-## Example
-
-There is a very simple project that is a very nice example of dbt's capabilities, you can get it from github:
-
+To run tests for a specific database, invoke `tox` directly with the required flags:
 ```
-cd ~/src/fishtown
-git clone git@github.com:fishtown-analytics/talk.git
-git checkout use-postgres
-```
+# Run Postgres py36 tests
+docker-compose run test tox -e integration-postgres-py36 -- -x
 
-The `use-postgres` branch configures the project to use your local postgres (instead of the default, Snowflake). You should poke around in this project a bit, particularly the `models` directory.
+# Run Snowflake py36 tests
+docker-compose run test tox -e integration-snowflake-py36 -- -x
 
-Before doing anything, let's check the database out:
+# Run BigQuery py36 tests
+docker-compose run test tox -e integration-bigquery-py36 -- -x
 
-```
-> PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres psql
-psql (10.4)
-Type "help" for help.
-
-postgres=# \dn
-  List of schemas
-  Name  |  Owner
---------+----------
- public | postgres
-(1 row)
-
-postgres=# \q
+# Run Redshift py36 tests
+docker-compose run test tox -e integration-redshift-py36 -- -x
 ```
 
-`\dn` lists schemas in postgres. You can see that we just have the default "public" schema, so we haven't done anything yet.
+See the `Makefile` contents for more some other examples of ways to run `tox`.
 
+### Submitting a Pull Request
 
-If you compile your model with `dbt compile` you should see something like this:
+Fishtown Analytics provides a sandboxed Redshift, Snowflake, and BigQuery database for use in a CI environment.
 
-```
-> dbt compile
-Found 2 models, 0 tests, 0 archives, 0 analyses, 59 macros, 1 operations, 1 seed files
+When pull requests are submitted to the `fishtown-analytics/dbt` repo, GitHub will trigger automated tests in CircleCI and Azure Pipelines. If the PR submitter is a member of the `fishtown-analytics` GitHub organization, then the credentials for these databases will be automatically supplied as environment variables in the CI test suite.
 
-09:49:57 | Concurrency: 2 threads (target='default')
-09:49:57 |
-09:49:57 | Done.
-```
+**If the PR submitter is not a member of the `fishtown-analytics` organization, then these environment variables will not be automatically supplied in the CI environment**. Once a core maintainer has taken a look at the Pull Request, they will kick off the test suite with the required credentials.
 
-So what does that mean? Well:
-
-- `2 models` refers to the contents of the `models` directory
-- `59 macros` are the builtin global macros defined by dbt itself
-- `1 operations` is the catalog generation operation that runs by default
-- `1 seed files` refers to the seed data in `data/moby_dick.csv`
-
-It will create two new folders: One named `dbt_modules`, which is empty for this case, and one named `target`, which has a few things in it:
-
-- A folder named `compiled`, created by dbt looking at your models and your database schema and filling in references (so `models/moby_dick_base.sql` becomes `target/compiled/talk/moby_dick_base.sql` by replacing the `from {{ ref('moby_dick') }}` with `from "dbt_postgres".moby_dick`)
-- A file named `graph.gpickle`, which is your project's dependency/reference graph as understood by the `networkx` library.
-- A file named `catalog.json`, which is the data dbt has collected about your project (macros used, models/seeds used, and parent/child reference maps)
-
-
-Next, load the seed file into the database with `dbt seed`, it'll look like this:
-
-```
-> dbt seed
-Found 2 models, 0 tests, 0 archives, 0 analyses, 59 macros, 1 operations, 1 seed files
-
-10:40:46 | Concurrency: 2 threads (target='default')
-10:40:46 |
-10:40:46 | 1 of 1 START seed file dbt_postgres.moby_dick........................ [RUN]
-10:40:47 | 1 of 1 OK loaded seed file dbt_postgres.moby_dick.................... [INSERT 17774 in 0.44s]
-10:40:47 |
-10:40:47 | Finished running 1 seeds in 0.65s.
-
-Completed successfully
-```
-
-If you go into postgres now, you can see that you have a new schema ('dbt_postgres'), a new table in that schema ('moby_dick'), and a bunch of stuff in that table:
-
-```
-> PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres psql
-psql (10.4)
-Type "help" for help.
-
-postgres=# \dn
-     List of schemas
-     Name     |  Owner
---------------+----------
- dbt_postgres | root
- public       | postgres
-(2 rows)
-
-postgres=# \dt dbt_postgres.*
-            List of relations
-    Schema    |   Name    | Type  | Owner
---------------+-----------+-------+-------
- dbt_postgres | moby_dick | table | root
-(1 row)
-
-postgres=# select count(*) from dbt_postgres.moby_dick;
- count
--------
- 17774
-(1 row)
-
-postgres=# \q
-```
-
-If you run `dbt run` now, you'll see something like this:
-
-```
-> dbt run
-Found 2 models, 0 tests, 0 archives, 0 analyses, 59 macros, 1 operations, 1 seed files
-
-10:19:41 | Concurrency: 2 threads (target='default')
-10:19:41 |
-10:19:41 | 1 of 2 START view model dbt_postgres.moby_dick_base.................. [RUN]
-10:19:41 | 1 of 2 OK created view model dbt_postgres.moby_dick_base............. [CREATE VIEW in 0.05s]
-10:19:41 | 2 of 2 START table model dbt_postgres.word_count..................... [RUN]
-10:19:42 | 2 of 2 OK created table model dbt_postgres.word_count................ [SELECT 27390 in 0.19s]
-10:19:42 |
-10:19:42 | Finished running 1 view models, 1 table models in 0.53s.
-
-Completed successfully
-
-Done. PASS=2 ERROR=0 SKIP=0 TOTAL=2
-```
-
-So, some of the same information and then you can see that dbt created a view (`moby_dick_base`) and a table (`word_count`). If you go into postgres, you'll be able to see that!
-
-If you want to inspect the result, you can do so via psql:
-
-```
-> PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres psql
-psql (10.4)
-Type "help" for help.
-
-postgres=# \dt dbt_postgres.*
-             List of relations
-    Schema    |    Name    | Type  | Owner
---------------+------------+-------+-------
- dbt_postgres | moby_dick  | table | root
- dbt_postgres | word_count | table | root
-(2 rows)
-
-postgres=# select * from dbt_postgres.word_count order by ct desc limit 10;
- word |  ct
-------+-------
- the  | 13394
-      | 12077
- of   |  6368
- and  |  5846
- to   |  4382
- a    |  4377
- in   |  3767
- that |  2753
- his  |  2406
- I    |  1826
-(10 rows)
-```
-
-It's pretty much what you'd expect - the most common words are "the", "of", "and", etc. (The empty string probably should not be there, but this is just a toy example!)
-
-So what happened here? First, `dbt seed` loaded the data in the csv file into postgres. Then `dbt compile` built out a sort of plan for how everything is linked together by looking up references and macros and the current state of the database. And finally, `dbt run` ran the compiled SQL to generate the word_count table.
+Once your tests are passing and your PR has been reviewed, a dbt maintainer will merge your changes into the active development branch! And that's it! Happy developing :tada:

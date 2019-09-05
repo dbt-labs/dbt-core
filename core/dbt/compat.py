@@ -1,6 +1,7 @@
+# flake8: noqa
+
 import abc
 import codecs
-import json
 import warnings
 import decimal
 
@@ -33,11 +34,13 @@ else:
 if WHICH_PYTHON == 2:
     from SimpleHTTPServer import SimpleHTTPRequestHandler
     from SocketServer import TCPServer
-    from Queue import PriorityQueue
+    from Queue import PriorityQueue, Empty as QueueEmpty
+    from thread import get_ident
 else:
     from http.server import SimpleHTTPRequestHandler
     from socketserver import TCPServer
-    from queue import PriorityQueue
+    from queue import PriorityQueue, Empty as QueueEmpty
+    from threading import get_ident
 
 
 def to_unicode(s):
@@ -79,11 +82,34 @@ def to_native_string(s):
 
 def write_file(path, s):
     if WHICH_PYTHON == 2:
-        with codecs.open(path, 'w', encoding='utf-8') as f:
-            return f.write(to_string(s))
+        open = codecs.open
     else:
-        with open(path, 'w') as f:
-            return f.write(to_string(s))
+        open = builtins.open
+    with open(path, 'w', encoding='utf-8') as f:
+        return f.write(to_string(s))
+
+
+def open_file(path):
+    """Open the path for reading. It must be utf-8 encoded."""
+    if WHICH_PYTHON == 2:
+        open = codecs.open
+    else:
+        open = builtins.open
+    return open(path, encoding='utf-8')
+
+
+if WHICH_PYTHON == 2:
+    BOM_UTF8 = codecs.BOM_UTF8
+else:
+    BOM_UTF8 = codecs.BOM_UTF8.decode('utf-8')
+
+
+def open_seed_file(path):
+    if WHICH_PYTHON == 2:
+        fp = open(path, 'Urb')
+    else:
+        fp = open(path, encoding='utf-8')
+    return fp
 
 
 if WHICH_PYTHON == 2:

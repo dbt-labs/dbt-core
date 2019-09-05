@@ -19,7 +19,7 @@ jobs:
             PGUSER: root
             PGPASSWORD: password
             PGDATABASE: postgres
-      - run: tox -e pep8,unit-py27,unit-py36
+      - run: tox -e flake8,unit-py27,unit-py36
   integration-postgres-py36:
     docker: *test_and_postgres
     steps:
@@ -29,8 +29,7 @@ jobs:
           name: Run tests
           command: tox -e integration-postgres-py36
       - store_artifacts:
-          path: ./logs/dbt.log
-          destination: postgres-py36
+          path: ./logs
   integration-snowflake-py36:
     docker: &test_only
       - image: fishtownjacob/test-container
@@ -41,8 +40,7 @@ jobs:
           command: tox -e integration-snowflake-py36
           no_output_timeout: 1h
       - store_artifacts:
-          path: ./logs/dbt.log
-          destination: snowflake-py36
+          path: ./logs
   integration-redshift-py36:
     docker: *test_only
     steps:
@@ -51,8 +49,7 @@ jobs:
           name: Run tests
           command: tox -e integration-redshift-py36
       - store_artifacts:
-          path: ./logs/dbt.log
-          destination: redshift-py36
+          path: ./logs
   integration-bigquery-py36:
     docker: *test_only
     steps:
@@ -61,8 +58,7 @@ jobs:
           name: Run tests
           command: tox -e integration-bigquery-py36
       - store_artifacts:
-          path: ./logs/dbt.log
-          destination: bigquery-py36
+          path: ./logs
   integration-postgres-py27:
     docker: *test_and_postgres
     steps:
@@ -72,8 +68,7 @@ jobs:
           name: Run tests
           command: tox -e integration-postgres-py27
       - store_artifacts:
-          path: ./logs/dbt.log
-          destination: postgres-py27
+          path: ./logs
   integration-snowflake-py27:
     docker: *test_only
     steps:
@@ -83,8 +78,7 @@ jobs:
           command: tox -e integration-snowflake-py27
           no_output_timeout: 1h
       - store_artifacts:
-          path: ./logs/dbt.log
-          destination: snowflake-py27
+          path: ./logs
   integration-redshift-py27:
     docker: *test_only
     steps:
@@ -93,8 +87,7 @@ jobs:
           name: Run tests
           command: tox -e integration-redshift-py27
       - store_artifacts:
-          path: ./logs/dbt.log
-          destination: redshift-py27
+          path: ./logs
   integration-bigquery-py27:
     docker: *test_only
     steps:
@@ -103,8 +96,7 @@ jobs:
           name: Run tests
           command: tox -e integration-bigquery-py27
       - store_artifacts:
-          path: ./logs/dbt.log
-          destination: bigquery-py27
+          path: ./logs
 
 workflows:
   version: 2

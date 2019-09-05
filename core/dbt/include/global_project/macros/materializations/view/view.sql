@@ -1,9 +1,8 @@
 {%- materialization view, default -%}
 
   {%- set identifier = model['alias'] -%}
-  {%- set tmp_identifier = identifier + '__dbt_tmp' -%}
-  {%- set backup_identifier = identifier + '__dbt_backup' -%}
-  {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
+  {%- set tmp_identifier = model['name'] + '__dbt_tmp' -%}
+  {%- set backup_identifier = model['name'] + '__dbt_backup' -%}
 
   {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) -%}
   {%- set target_relation = api.Relation.create(identifier=identifier, schema=schema, database=database,
@@ -24,14 +23,12 @@
      exist, then there is nothing to move out of the way and subsequentally drop. In that case,
      this relation will be effectively unused.
   */
+  {%- set backup_relation_type = 'view' if old_relation is none else old_relation.type -%}
   {%- set backup_relation = api.Relation.create(identifier=backup_identifier,
                                                 schema=schema, database=database,
-                                                type=(old_relation.type or 'view')) -%}
+                                                type=backup_relation_type) -%}
 
   {%- set exists_as_view = (old_relation is not none and old_relation.is_view) -%}
-
-  {%- set has_transactional_hooks = (hooks | selectattr('transaction', 'equalto', True) | list | length) > 0 %}
-  {%- set should_ignore = non_destructive_mode and exists_as_view %}
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
 
@@ -43,45 +40,22 @@
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
   -- build model
-  {% if should_ignore -%}
-    {#
-      -- Materializations need to a statement with name='main'.
-      -- We could issue a no-op query here (like `select 1`), but that's wasteful. Instead:
-      --   1) write the sql contents out to the compiled dirs
-      --   2) return a status and result to the caller
-    #}
-    {% call noop_statement('main', status="PASS", res=None) -%}
-      -- Not running : non-destructive mode
-      {{ sql }}
-    {%- endcall %}
-  {%- else -%}
-    {% call statement('main') -%}
-      {{ create_view_as(intermediate_relation, sql) }}
-    {%- endcall %}
-  {%- endif %}
+  {% call statement('main') -%}
+    {{ create_view_as(intermediate_relation, sql) }}
+  {%- endcall %}
 
   -- cleanup
-  {% if not should_ignore -%}
-    -- move the existing view out of the way
-    {% if old_relation is not none %}
-      {{ adapter.rename_relation(target_relation, backup_relation) }}
-    {% endif %}
-    {{ adapter.rename_relation(intermediate_relation, target_relation) }}
-  {%- endif %}
+  -- move the existing view out of the way
+  {% if old_relation is not none %}
+    {{ adapter.rename_relation(target_relation, backup_relation) }}
+  {% endif %}
+  {{ adapter.rename_relation(intermediate_relation, target_relation) }}
 
   {{ run_hooks(post_hooks, inside_transaction=True) }}
 
-  {#
-      -- Don't commit in non-destructive mode _unless_ there are in-transaction hooks
-      -- TODO : Figure out some other way of doing this that isn't as fragile
-  #}
-  {% if has_transactional_hooks or not should_ignore %}
-      {{ adapter.commit() }}
-  {% endif %}
+  {{ adapter.commit() }}
 
-  {% if not should_ignore %}
-    {{ drop_relation_if_exists(backup_relation) }}
-  {% endif %}
+  {{ drop_relation_if_exists(backup_relation) }}
 
   {{ run_hooks(post_hooks, inside_transaction=False) }}
 

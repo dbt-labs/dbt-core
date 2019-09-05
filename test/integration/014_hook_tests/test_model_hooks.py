@@ -1,5 +1,4 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 from dbt.exceptions import CompilationException
 
 
@@ -25,7 +24,7 @@ MODEL_PRE_HOOK = """
     '{{ target.schema }}',
     '{{ target.type }}',
     '{{ target.user }}',
-    '{{ target.pass }}',
+    '{{ target.get("pass", "") }}',
     {{ target.port }},
     {{ target.threads }},
     '{{ run_started_at }}',
@@ -55,7 +54,7 @@ MODEL_POST_HOOK = """
     '{{ target.schema }}',
     '{{ target.type }}',
     '{{ target.user }}',
-    '{{ target.pass }}',
+    '{{ target.get("pass", "") }}',
     {{ target.port }},
     {{ target.threads }},
     '{{ run_started_at }}',
@@ -67,7 +66,7 @@ class BaseTestPrePost(DBTIntegrationTest):
     def setUp(self):
         DBTIntegrationTest.setUp(self)
 
-        self.run_sql_file("test/integration/014_hook_tests/seed_model.sql")
+        self.run_sql_file("seed_model.sql")
 
         self.fields = [
             'state',
@@ -120,7 +119,7 @@ class TestPrePostModelHooks(BaseTestPrePost):
     @property
     def project_config(self):
         return {
-            'macro-paths': ['test/integration/014_hook_tests/macros'],
+            'macro-paths': ['macros'],
             'models': {
                 'test': {
                     'pre-hook': [
@@ -144,9 +143,9 @@ class TestPrePostModelHooks(BaseTestPrePost):
 
     @property
     def models(self):
-        return "test/integration/014_hook_tests/models"
+        return "models"
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_postgres_pre_and_post_model_hooks(self):
         self.run_dbt(['run'])
 
@@ -161,12 +160,12 @@ class TestPrePostModelHooksOnSeeds(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/014_hook_tests/seed-models"
+        return "seed-models"
 
     @property
     def project_config(self):
         return {
-            'data-paths': ['test/integration/014_hook_tests/data'],
+            'data-paths': ['data'],
             'models': {},
             'seeds': {
                 'post-hook': [
@@ -176,7 +175,7 @@ class TestPrePostModelHooksOnSeeds(DBTIntegrationTest):
             }
         }
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_postgres_hooks_on_seeds(self):
         res = self.run_dbt(['seed'])
         self.assertEqual(len(res), 1, 'Expected exactly one item')
@@ -188,21 +187,21 @@ class TestPrePostModelHooksInConfig(BaseTestPrePost):
     @property
     def project_config(self):
         return {
-            'macro-paths': ['test/integration/014_hook_tests/macros'],
+            'macro-paths': ['macros'],
         }
 
     @property
     def models(self):
-        return "test/integration/014_hook_tests/configured-models"
+        return "configured-models"
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_postgres_pre_and_post_model_hooks_model(self):
         self.run_dbt(['run'])
 
         self.check_hooks('start')
         self.check_hooks('end')
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_postgres_pre_and_post_model_hooks_model_and_project(self):
         self.use_default_project({
             'models': {
@@ -234,7 +233,7 @@ class TestPrePostModelHooksInConfigKwargs(TestPrePostModelHooksInConfig):
 
     @property
     def models(self):
-        return "test/integration/014_hook_tests/kwargs-models"
+        return "kwargs-models"
 
 
 
@@ -245,12 +244,12 @@ class TestDuplicateHooksInConfigs(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/014_hook_tests/error-models"
+        return "error-models"
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_postgres_run_duplicate_hook_defs(self):
         with self.assertRaises(CompilationException) as exc:
             self.run_dbt(['run'])
 
-            self.assertIn('pre_hook', str(exc.exception))
-            self.assertIn('pre-hook', str(exc.exception))
+        self.assertIn('pre_hook', str(exc.exception))
+        self.assertIn('pre-hook', str(exc.exception))

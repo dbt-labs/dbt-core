@@ -1,6 +1,7 @@
 import codecs
 import linecache
 import os
+import tempfile
 
 import jinja2
 import jinja2._compat
@@ -11,11 +12,39 @@ import jinja2.sandbox
 
 import dbt.compat
 import dbt.exceptions
+import dbt.utils
 
-from dbt.node_types import NodeType
-from dbt.utils import AttrDict
+from dbt.clients._jinja_blocks import BlockIterator
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
+
+
+def _linecache_inject(source, write):
+    if write:
+        # this is the only reliable way to accomplish this. Obviously, it's
+        # really darn noisy and will fill your temporary directory
+        tmp_file = tempfile.NamedTemporaryFile(
+            prefix='dbt-macro-compiled-',
+            suffix='.py',
+            delete=False,
+            mode='w+',
+            encoding='utf-8',
+        )
+        tmp_file.write(source)
+        filename = tmp_file.name
+    else:
+        filename = codecs.encode(os.urandom(12), 'hex').decode('ascii')
+
+    # encode, though I don't think this matters
+    filename = jinja2._compat.encode_filename(filename)
+    # put ourselves in the cache
+    linecache.cache[filename] = (
+        len(source),
+        None,
+        [line + '\n' for line in source.splitlines()],
+        filename
+    )
+    return filename
 
 
 class MacroFuzzParser(jinja2.parser.Parser):
@@ -43,22 +72,16 @@ class MacroFuzzEnvironment(jinja2.sandbox.SandboxedEnvironment):
 
     def _compile(self, source, filename):
         """Override jinja's compilation to stash the rendered source inside
-        the python linecache for debugging.
+        the python linecache for debugging when the appropriate environment
+        variable is set.
+
+        If the value is 'write', also write the files to disk.
+        WARNING: This can write a ton of data if you aren't careful.
         """
-        if filename == '<template>':
-            # make a better filename
-            filename = 'dbt-{}'.format(
-                codecs.encode(os.urandom(12), 'hex').decode('ascii')
-            )
-            # encode, though I don't think this matters
-            filename = jinja2._compat.encode_filename(filename)
-            # put ourselves in the cache
-            linecache.cache[filename] = (
-                len(source),
-                None,
-                [line+'\n' for line in source.splitlines()],
-                filename
-            )
+        macro_compile = os.environ.get('DBT_MACRO_DEBUGGING')
+        if filename == '<template>' and macro_compile:
+            write = macro_compile == 'write'
+            filename = _linecache_inject(source, write)
 
         return super(MacroFuzzEnvironment, self)._compile(source, filename)
 
@@ -219,7 +242,7 @@ def create_macro_capture_env(node):
             return self
 
         def __call__(self, *args, **kwargs):
-            return True
+            return self
 
     return ParserMacroCapture
 
@@ -281,3 +304,25 @@ def get_rendered(string, ctx, node=None,
 
 def undefined_error(msg):
     raise jinja2.exceptions.UndefinedError(msg)
+
+
+def extract_toplevel_blocks(data, allowed_blocks=None, collect_raw_data=True):
+    """Extract the top level blocks with matching block types from a jinja
+    file, with some special handling for block nesting.
+
+    :param str data: The data to extract blocks from.
+    :param Optional[Set[str]] allowed_blocks: The names of the blocks to
+        extract from the file. They may not be nested within if/for blocks.
+        If None, use the default values.
+    :param bool collect_raw_data: If set, raw data between matched blocks will
+        also be part of the results, as `BlockData` objects. They have a
+        `block_type_name` field of `'__dbt_data'` and will never have a
+        `block_name`.
+    :return List[Union[BlockData, BlockTag]]: A list of `BlockTag`s matching
+        the allowed block types and (if `collect_raw_data` is `True`)
+        `BlockData` objects.
+    """
+    return BlockIterator(data).lex_for_blocks(
+        allowed_blocks=allowed_blocks,
+        collect_raw_data=collect_raw_data
+    )

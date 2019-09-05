@@ -1,5 +1,4 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest, FakeArgs
+from test.integration.base import DBTIntegrationTest, FakeArgs, use_profile
 
 from dbt.task.test import TestTask
 import os
@@ -7,7 +6,7 @@ import os
 
 class TestDataTests(DBTIntegrationTest):
 
-    test_path = os.path.normpath("test/integration/009_data_tests_test/tests")
+    test_path = os.path.normpath("tests")
 
     @property
     def project_config(self):
@@ -21,7 +20,7 @@ class TestDataTests(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/009_data_tests_test/models"
+        return "models"
 
     def run_data_validations(self):
         args = FakeArgs()
@@ -30,11 +29,11 @@ class TestDataTests(DBTIntegrationTest):
         test_task = TestTask(args, self.config)
         return test_task.run()
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_postgres_data_tests(self):
         self.use_profile('postgres')
 
-        self.run_sql_file("test/integration/009_data_tests_test/seed.sql")
+        self.run_sql_file("seed.sql")
 
         results = self.run_dbt()
         self.assertEqual(len(results), 1)
@@ -59,11 +58,11 @@ class TestDataTests(DBTIntegrationTest):
         self.assertNotEqual(len(test_results), 0)
         self.assertEqual(len(test_results), len(defined_tests))
 
-    @attr(type='snowflake')
+    @use_profile('snowflake')
     def test_snowflake_data_tests(self):
         self.use_profile('snowflake')
 
-        self.run_sql_file("test/integration/009_data_tests_test/seed.sql")
+        self.run_sql_file("seed.sql")
 
         results = self.run_dbt()
         self.assertEqual(len(results), 1)

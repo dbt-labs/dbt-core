@@ -47,6 +47,10 @@ CONFIG_CONTRACT = {
         'materialized': {
             'type': 'string',
         },
+        'persist_docs': {
+            'type': 'object',
+            'additionalProperties': True,
+        },
         'post-hook': {
             'type': 'array',
             'items': HOOK_CONTRACT,
@@ -80,10 +84,14 @@ CONFIG_CONTRACT = {
                 }
             ]
         },
+        'severity': {
+            'type': 'string',
+            'pattern': '([eE][rR][rR][oO][rR]|[wW][aA][rR][nN])',
+        },
     },
     'required': [
         'enabled', 'materialized', 'post-hook', 'pre-hook', 'vars',
-        'quoting', 'column_types', 'tags'
+        'quoting', 'column_types', 'tags', 'persist_docs'
     ]
 }
 
@@ -441,6 +449,79 @@ class ParsedNode(APIObject):
         self._contents['config'] = value
 
 
+SNAPSHOT_CONFIG_CONTRACT = {
+    'properties': {
+        'target_database': {
+            'type': 'string',
+        },
+        'target_schema': {
+            'type': 'string',
+        },
+        'unique_key': {
+            'type': 'string',
+        },
+        'anyOf': [
+            {
+                'properties': {
+                    'strategy': {
+                        'enum': ['timestamp'],
+                    },
+                    'updated_at': {
+                        'type': 'string',
+                        'description': (
+                            'The column name with the timestamp to compare'
+                        ),
+                    },
+                },
+                'required': ['updated_at'],
+            },
+            {
+                'properties': {
+                    'strategy': {
+                        'enum': ['check'],
+                    },
+                    'check_cols': {
+                        'oneOf': [
+                            {
+                                'type': 'array',
+                                'items': {'type': 'string'},
+                                'description': 'The columns to check',
+                                'minLength': 1,
+                            },
+                            {
+                                'enum': ['all'],
+                                'description': 'Check all columns',
+                            },
+                        ],
+                    },
+                },
+                'required': ['check_cols'],
+            }
+        ]
+    },
+    'required': [
+        'target_schema', 'unique_key', 'strategy',
+    ],
+}
+
+
+PARSED_SNAPSHOT_NODE_CONTRACT = deep_merge(
+    PARSED_NODE_CONTRACT,
+    {
+        'properties': {
+            'config': SNAPSHOT_CONFIG_CONTRACT,
+            'resource_type': {
+                'enum': [NodeType.Snapshot],
+            },
+        },
+    }
+)
+
+
+class ParsedSnapshotNode(ParsedNode):
+    SCHEMA = PARSED_SNAPSHOT_NODE_CONTRACT
+
+
 # The parsed node update is only the 'patch', not the test. The test became a
 # regular parsed node. Note that description and columns must be present, but
 # may be empty.
@@ -657,6 +738,7 @@ PARSED_SOURCE_DEFINITION_CONTRACT = deep_merge(
     HAS_UNIQUE_ID_CONTRACT,
     HAS_DOCREFS_CONTRACT,
     HAS_RELATION_METADATA_CONTRACT,
+    HAS_FQN_CONTRACT,
     {
         'description': (
             'A source table definition, as parsed from the one provided in the'

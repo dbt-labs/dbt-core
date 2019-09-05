@@ -33,6 +33,9 @@ POSTGRES_CREDENTIALS_CONTRACT = {
         'schema': {
             'type': 'string',
         },
+        'search_path': {
+            'type': 'string',
+        },
         'keepalives_idle': {
             'type': 'integer',
         },
@@ -53,7 +56,7 @@ class PostgresCredentials(Credentials):
         return 'postgres'
 
     def _connection_keys(self):
-        return ('host', 'port', 'user', 'database', 'schema')
+        return ('host', 'port', 'user', 'database', 'schema', 'search_path')
 
 
 class PostgresConnectionManager(SQLConnectionManager):
@@ -61,7 +64,7 @@ class PostgresConnectionManager(SQLConnectionManager):
     TYPE = 'postgres'
 
     @contextmanager
-    def exception_handler(self, sql, connection_name='master'):
+    def exception_handler(self, sql):
         try:
             yield
 
@@ -70,7 +73,7 @@ class PostgresConnectionManager(SQLConnectionManager):
 
             try:
                 # attempt to release the connection
-                self.release(connection_name)
+                self.release()
             except psycopg2.Error:
                 logger.debug("Failed to release connection!")
                 pass
@@ -81,7 +84,13 @@ class PostgresConnectionManager(SQLConnectionManager):
         except Exception as e:
             logger.debug("Error running SQL: %s", sql)
             logger.debug("Rolling back transaction.")
-            self.release(connection_name)
+            self.release()
+            if isinstance(e, dbt.exceptions.RuntimeException):
+                # during a sql query, an internal to dbt exception was raised.
+                # this sounds a lot like a signal handler and probably has
+                # useful information, so raise it without modification.
+                raise
+
             raise dbt.exceptions.RuntimeException(e)
 
     @classmethod
@@ -90,7 +99,6 @@ class PostgresConnectionManager(SQLConnectionManager):
             logger.debug('Connection is already open, skipping open.')
             return connection
 
-        base_credentials = connection.credentials
         credentials = cls.get_credentials(connection.credentials.incorporate())
         kwargs = {}
         keepalives_idle = credentials.get('keepalives_idle',
@@ -99,6 +107,14 @@ class PostgresConnectionManager(SQLConnectionManager):
         # call an invalid setsockopt() call (contrary to the docs).
         if keepalives_idle:
             kwargs['keepalives_idle'] = keepalives_idle
+
+        # psycopg2 doesn't support search_path officially,
+        # see https://github.com/psycopg/psycopg2/issues/465
+        search_path = credentials.get('search_path')
+        if search_path is not None and search_path != '':
+            # see https://postgresql.org/docs/9.5/libpq-connect.html
+            kwargs['options'] = '-c search_path={}'.format(
+                search_path.replace(' ', '\\ '))
 
         try:
             handle = psycopg2.connect(
@@ -132,7 +148,7 @@ class PostgresConnectionManager(SQLConnectionManager):
 
         logger.debug("Cancelling query '{}' ({})".format(connection_name, pid))
 
-        _, cursor = self.add_query(sql, 'master')
+        _, cursor = self.add_query(sql)
         res = cursor.fetchone()
 
         logger.debug("Cancel query '{}': {}".format(connection_name, res))

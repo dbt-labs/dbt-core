@@ -1,14 +1,11 @@
 import itertools
 import os
-import json
-from collections import OrderedDict, defaultdict
-import sqlparse
+from collections import defaultdict
 
 import dbt.utils
 import dbt.include
 import dbt.tracking
 
-from dbt import deprecations
 from dbt.utils import get_materialization, NodeType, is_type
 from dbt.linker import Linker
 
@@ -19,9 +16,8 @@ import dbt.exceptions
 import dbt.flags
 import dbt.loader
 import dbt.config
-from dbt.contracts.graph.compiled import CompiledNode, CompiledGraph
+from dbt.contracts.graph.compiled import CompiledNode
 
-from dbt.clients.system import write_json
 from dbt.logger import GLOBAL_LOGGER as logger
 
 graph_file_name = 'graph.gpickle'
@@ -29,23 +25,23 @@ graph_file_name = 'graph.gpickle'
 
 def print_compile_stats(stats):
     names = {
-        NodeType.Model: 'models',
-        NodeType.Test: 'tests',
-        NodeType.Archive: 'archives',
-        NodeType.Analysis: 'analyses',
-        NodeType.Macro: 'macros',
-        NodeType.Operation: 'operations',
-        NodeType.Seed: 'seed files',
-        NodeType.Source: 'sources',
+        NodeType.Model: 'model',
+        NodeType.Test: 'test',
+        NodeType.Snapshot: 'snapshot',
+        NodeType.Analysis: 'analyse',
+        NodeType.Macro: 'macro',
+        NodeType.Operation: 'operation',
+        NodeType.Seed: 'seed file',
+        NodeType.Source: 'source',
     }
 
     results = {k: 0 for k in names.keys()}
     results.update(stats)
 
     stat_line = ", ".join(
-        ["{} {}".format(ct, names.get(t)) for t, ct in results.items()])
+        [dbt.utils.pluralize(ct, names.get(t)) for t, ct in results.items()])
 
-    logger.info("Found {}".format(stat_line))
+    logger.notice("Found {}".format(stat_line))
 
 
 def _add_prepended_cte(prepended_ctes, new_cte):
@@ -138,15 +134,16 @@ class Compiler(object):
             if 'data' in injected_node.tags and \
                is_type(injected_node, NodeType.Test):
                 injected_node.wrapped_sql = (
-                    "select count(*) from (\n{test_sql}\n) sbq").format(
+                    "select count(*) as errors "
+                    "from (\n{test_sql}\n) sbq").format(
                         test_sql=injected_node.injected_sql)
             else:
                 # don't wrap schema tests or analyses.
                 injected_node.wrapped_sql = injected_node.injected_sql
 
-        elif is_type(injected_node, NodeType.Archive):
+        elif is_type(injected_node, NodeType.Snapshot):
             # unfortunately we do everything automagically for
-            # archives. in the future it'd be nice to generate
+            # snapshots. in the future it'd be nice to generate
             # the SQL at the parser level.
             pass
 
@@ -184,7 +181,7 @@ class Compiler(object):
         if cycle:
             raise RuntimeError("Found a cycle: {}".format(cycle))
 
-    def compile(self, manifest):
+    def compile(self, manifest, write=True):
         linker = Linker()
 
         self.link_graph(linker, manifest)
@@ -196,25 +193,35 @@ class Compiler(object):
                 manifest.macros.items()):
             stats[node.resource_type] += 1
 
-        self.write_graph_file(linker, manifest)
+        if write:
+            self.write_graph_file(linker, manifest)
         print_compile_stats(stats)
 
         return linker
 
 
-def compile_manifest(config, manifest):
+def compile_manifest(config, manifest, write=True):
     compiler = Compiler(config)
     compiler.initialize()
-    return compiler.compile(manifest)
+    return compiler.compile(manifest, write=write)
 
 
-def compile_node(adapter, config, node, manifest, extra_context):
+def _is_writable(node):
+    if not node.injected_sql:
+        return False
+
+    if dbt.utils.is_type(node, NodeType.Snapshot):
+        return False
+
+    return True
+
+
+def compile_node(adapter, config, node, manifest, extra_context, write=True):
     compiler = Compiler(config)
     node = compiler.compile_node(node, manifest, extra_context)
     node = _inject_runtime_config(adapter, node, extra_context)
 
-    if(node.injected_sql is not None and
-       not (dbt.utils.is_type(node, NodeType.Archive))):
+    if write and _is_writable(node):
         logger.debug('Writing injected SQL for node "{}"'.format(
             node.unique_id))
 

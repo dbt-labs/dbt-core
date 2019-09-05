@@ -13,10 +13,17 @@ COLOR_FG_GREEN = dbt.ui.colors.COLORS['green']
 COLOR_FG_YELLOW = dbt.ui.colors.COLORS['yellow']
 COLOR_RESET_ALL = dbt.ui.colors.COLORS['reset_all']
 
+PRINTER_WIDTH = 80
+
 
 def use_colors():
     global USE_COLORS
     USE_COLORS = True
+
+
+def printer_width(printer_width):
+    global PRINTER_WIDTH
+    PRINTER_WIDTH = printer_width
 
 
 def get_timestamp():
@@ -49,7 +56,8 @@ def print_timestamped_line(msg, use_color=None):
     logger.info("{} | {}".format(get_timestamp(), msg))
 
 
-def print_fancy_output_line(msg, status, index, total, execution_time=None):
+def print_fancy_output_line(msg, status, index, total, execution_time=None,
+                            truncate=False):
     if index is None or total is None:
         progress = ''
     else:
@@ -59,7 +67,10 @@ def print_fancy_output_line(msg, status, index, total, execution_time=None):
         progress=progress,
         message=msg)
 
-    justified = prefix.ljust(80, ".")
+    truncate_width = PRINTER_WIDTH - 3
+    justified = prefix.ljust(PRINTER_WIDTH, ".")
+    if truncate and len(justified) > truncate_width:
+        justified = justified[:truncate_width] + '...'
 
     if execution_time is None:
         status_time = ""
@@ -83,11 +94,13 @@ def get_counts(flat_nodes):
 
         if node.get('resource_type') == NodeType.Model:
             t = '{} {}'.format(get_materialization(node), t)
+        elif node.get('resource_type') == NodeType.Operation:
+            t = 'hook'
 
         counts[t] = counts.get(t, 0) + 1
 
     stat_line = ", ".join(
-        ["{} {}s".format(v, k) for k, v in counts.items()])
+        [dbt.utils.pluralize(v, k) for k, v in counts.items()])
 
     return stat_line
 
@@ -95,6 +108,18 @@ def get_counts(flat_nodes):
 def print_start_line(description, index, total):
     msg = "START {}".format(description)
     print_fancy_output_line(msg, 'RUN', index, total)
+
+
+def print_hook_start_line(statement, index, total):
+    msg = 'START hook: {}'.format(statement)
+    print_fancy_output_line(msg, 'RUN', index, total, truncate=True)
+
+
+def print_hook_end_line(statement, status, index, total, execution_time):
+    msg = 'OK hook: {}'.format(statement)
+    # hooks don't fail into this path, so always green
+    print_fancy_output_line(msg, green(status), index, total,
+                            execution_time=execution_time, truncate=True)
 
 
 def print_skip_line(model, schema, relation, index, num_models):
@@ -120,20 +145,22 @@ def get_printable_result(result, success, error):
 
 def print_test_result_line(result, schema_name, index, total):
     model = result.node
-    info = 'PASS'
 
     if result.error is not None:
         info = "ERROR"
         color = red
 
-    elif result.status > 0:
-        info = 'FAIL {}'.format(result.status)
-        color = red
-
-        result.fail = True
     elif result.status == 0:
         info = 'PASS'
         color = green
+
+    elif result.warn:
+        info = 'WARN {}'.format(result.status)
+        color = yellow
+
+    elif result.fail:
+        info = 'FAIL {}'.format(result.status)
+        color = red
 
     else:
         raise RuntimeError("unexpected status: {}".format(result.status))
@@ -157,15 +184,16 @@ def print_model_result_line(result, description, index, total):
         result.execution_time)
 
 
-def print_archive_result_line(result, index, total):
+def print_snapshot_result_line(result, index, total):
     model = result.node
 
-    info, status = get_printable_result(result, 'archived', 'archiving')
+    info, status = get_printable_result(result, 'snapshotted', 'snapshotting')
     cfg = model.get('config', {})
 
+    msg = "{info} {name}".format(
+        info=info, name=model.name, **cfg)
     print_fancy_output_line(
-        "{info} {source_schema}.{source_table} --> "
-        "{target_schema}.{target_table}".format(info=info, **cfg),
+        msg,
         status,
         index,
         total,
@@ -229,6 +257,8 @@ def interpret_run_result(result):
         return 'error'
     elif result.skipped:
         return 'skip'
+    elif result.warned:
+        return 'warn'
     else:
         return 'pass'
 
@@ -238,6 +268,7 @@ def print_run_status_line(results):
         'error': 0,
         'skip': 0,
         'pass': 0,
+        'warn': 0,
         'total': 0,
     }
 
@@ -246,20 +277,28 @@ def print_run_status_line(results):
         stats[result_type] += 1
         stats['total'] += 1
 
-    stats_line = "\nDone. PASS={pass} ERROR={error} SKIP={skip} TOTAL={total}"
+    stats_line = "\nDone. PASS={pass} WARN={warn} ERROR={error} SKIP={skip} TOTAL={total}"  # noqa
     logger.info(stats_line.format(**stats))
 
 
-def print_run_result_error(result, newline=True):
+def print_run_result_error(result, newline=True, is_warning=False):
     if newline:
         logger.info("")
 
-    if result.failed:
-        logger.info(yellow("Failure in {} {} ({})").format(
+    if result.failed or (is_warning and result.warned):
+        if is_warning:
+            color = yellow
+            info = 'Warning'
+        else:
+            color = red
+            info = 'Failure'
+        logger.info(color("{} in {} {} ({})").format(
+            info,
             result.node.get('resource_type'),
             result.node.get('name'),
             result.node.get('original_file_path')))
-        logger.info("  Got {} results, expected 0.".format(result.status))
+        status = dbt.utils.pluralize(result.status, 'result')
+        logger.info("  Got {}, expected 0.".format(status))
 
         if result.node.get('build_path') is not None:
             logger.info("")
@@ -284,11 +323,16 @@ def print_skip_caused_by_error(model, schema, relation, index, num_models,
     print_run_result_error(result, newline=False)
 
 
-def print_end_of_run_summary(num_errors, early_exit=False):
+def print_end_of_run_summary(num_errors, num_warnings, early_exit=False):
+    error_plural = dbt.utils.pluralize(num_errors, 'error')
+    warn_plural = dbt.utils.pluralize(num_warnings, 'warning')
     if early_exit:
         message = yellow('Exited because of keyboard interrupt.')
     elif num_errors > 0:
-        message = red('Completed with {} errors:'.format(num_errors))
+        message = red("Completed with {} and {}:".format(
+            error_plural, warn_plural))
+    elif num_warnings > 0:
+        message = yellow('Completed with {}:'.format(warn_plural))
     else:
         message = green('Completed successfully')
 
@@ -298,9 +342,13 @@ def print_end_of_run_summary(num_errors, early_exit=False):
 
 def print_run_end_messages(results, early_exit=False):
     errors = [r for r in results if r.error is not None or r.failed]
-    print_end_of_run_summary(len(errors), early_exit)
+    warnings = [r for r in results if r.warned]
+    print_end_of_run_summary(len(errors), len(warnings), early_exit)
 
     for error in errors:
-        print_run_result_error(error)
+        print_run_result_error(error, is_warning=False)
+
+    for warning in warnings:
+        print_run_result_error(warning, is_warning=True)
 
     print_run_status_line(results)

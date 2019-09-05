@@ -250,7 +250,7 @@ def _handle_windows_error(exc, cwd, cmd):
         cls = dbt.exceptions.WorkingDirectoryError
     else:
         message = 'Unknown error: {} (errno={}: "{}")'.format(
-            str(exc), exc.errno,  errno.errorcode.get(exc.errno, '<Unknown!>')
+            str(exc), exc.errno, errno.errorcode.get(exc.errno, '<Unknown!>')
         )
     raise cls(cwd, cmd, message)
 
@@ -312,7 +312,7 @@ def run_cmd(cwd, cmd, env=None):
 def download(url, path):
     response = requests.get(url)
     with open(path, 'wb') as handle:
-        for block in response.iter_content(1024*64):
+        for block in response.iter_content(1024 * 64):
             handle.write(block)
 
 
@@ -382,7 +382,7 @@ def move(src, dst):
     except OSError:
         # probably different drives
         if os.path.isdir(src):
-            if _absnorm(dst+'\\').startswith(_absnorm(src+'\\')):
+            if _absnorm(dst + '\\').startswith(_absnorm(src + '\\')):
                 # dst is inside src
                 raise EnvironmentError(
                     "Cannot move a directory '{}' into itself '{}'"

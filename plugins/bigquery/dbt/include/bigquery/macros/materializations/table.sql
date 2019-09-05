@@ -29,7 +29,6 @@
 {% materialization table, adapter='bigquery' -%}
 
   {%- set identifier = model['alias'] -%}
-  {%- set non_destructive_mode = (flags.NON_DESTRUCTIVE == True) -%}
   {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) -%}
   {%- set exists_not_as_table = (old_relation is not none and not old_relation.is_table) -%}
   {%- set target_relation = api.Relation.create(database=database, schema=schema, identifier=identifier, type='table') -%}

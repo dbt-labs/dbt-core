@@ -1,3 +1,15 @@
+{% macro postgres__create_table_as(temporary, relation, sql) -%}
+  {%- set unlogged = config.get('unlogged', default=false) -%}
+
+  create {% if temporary -%}
+    temporary
+  {%- elif unlogged -%}
+    unlogged
+  {%- endif %} table {{ relation }}
+  as (
+    {{ sql }}
+  );
+{%- endmacro %}
 
 {% macro postgres__create_schema(database_name, schema_name) -%}
   {% if database_name -%}
@@ -91,3 +103,19 @@
 {% macro postgres__current_timestamp() -%}
   now()
 {%- endmacro %}
+
+{% macro postgres__snapshot_get_time() -%}
+  {{ current_timestamp() }}::timestamp without time zone
+{%- endmacro %}
+
+{% macro postgres__make_temp_relation(base_relation, suffix) %}
+    {% set tmp_identifier = base_relation.identifier ~ suffix ~ py_current_timestring() %}
+    {% do return(base_relation.incorporate(
+                                  table_name=tmp_identifier,
+                                  path={
+                                    "identifier": tmp_identifier,
+                                    "schema": none,
+                                    "database": none
+                                  })) -%}
+{% endmacro %}
+

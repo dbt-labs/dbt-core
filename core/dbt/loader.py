@@ -1,7 +1,6 @@
 import os
 import itertools
 
-from dbt import deprecations
 from dbt.include.global_project import PACKAGES
 import dbt.exceptions
 import dbt.flags
@@ -11,8 +10,8 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.utils import timestring
 
 from dbt.parser import MacroParser, ModelParser, SeedParser, AnalysisParser, \
-    DocumentationParser, DataTestParser, HookParser, ArchiveParser, \
-    SchemaParser, ParserUtils
+    DocumentationParser, DataTestParser, HookParser, SchemaParser, \
+    ParserUtils, SnapshotParser
 
 from dbt.contracts.project import ProjectList
 
@@ -35,15 +34,15 @@ class GraphLoader(object):
                              self.macro_manifest)
 
         for project_name, project in self.all_projects.items():
-            nodes, disabled = parser.load_and_parse(
+            parse_results = parser.load_and_parse(
                 package_name=project_name,
                 root_dir=project.project_root,
                 relative_dirs=getattr(project, relative_dirs_attr),
                 resource_type=resource_type,
                 **kwargs
             )
-            self.nodes.update(nodes)
-            self.disabled.extend(disabled)
+            self.nodes.update(parse_results.parsed)
+            self.disabled.extend(parse_results.disabled)
 
     def _load_macros(self, internal_manifest=None):
         # skip any projects in the internal manifest
@@ -76,6 +75,8 @@ class GraphLoader(object):
 
     def _load_nodes(self):
         self._load_sql_nodes(ModelParser, NodeType.Model, 'source_paths')
+        self._load_sql_nodes(SnapshotParser, NodeType.Snapshot,
+                             'snapshot_paths')
         self._load_sql_nodes(AnalysisParser, NodeType.Analysis,
                              'analysis_paths')
         self._load_sql_nodes(DataTestParser, NodeType.Test, 'test_paths',
@@ -84,10 +85,6 @@ class GraphLoader(object):
         hook_parser = HookParser(self.root_project, self.all_projects,
                                  self.macro_manifest)
         self.nodes.update(hook_parser.load_and_parse())
-
-        archive_parser = ArchiveParser(self.root_project, self.all_projects,
-                                       self.macro_manifest)
-        self.nodes.update(archive_parser.load_and_parse())
 
         self._load_seeds()
 
@@ -194,12 +191,14 @@ def _check_resource_uniqueness(manifest):
         existing_node = names_resources.get(name)
         if existing_node is not None:
             dbt.exceptions.raise_duplicate_resource_name(
-                    existing_node, node)
+                existing_node, node
+            )
 
         existing_alias = alias_resources.get(alias)
         if existing_alias is not None:
             dbt.exceptions.raise_ambiguous_alias(
-                    existing_alias, node)
+                existing_alias, node
+            )
 
         names_resources[name] = node
         alias_resources[alias] = node
@@ -211,17 +210,9 @@ def _warn_for_unused_resource_config_paths(manifest, config):
     config.warn_for_unused_resource_config_paths(resource_fqns, disabled_fqns)
 
 
-def _warn_for_deprecated_configs(manifest):
-    for unique_id, node in manifest.nodes.items():
-        is_model = node.resource_type == NodeType.Model
-        if is_model and 'sql_where' in node.config:
-            deprecations.warn('sql_where')
-
-
 def _check_manifest(manifest, config):
     _check_resource_uniqueness(manifest)
     _warn_for_unused_resource_config_paths(manifest, config)
-    _warn_for_deprecated_configs(manifest)
 
 
 def internal_project_names():

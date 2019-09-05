@@ -4,28 +4,58 @@ from snowplow_tracker import Subject, Tracker, Emitter, logger as sp_logger
 from snowplow_tracker import SelfDescribingJson
 from datetime import datetime
 
+from dbt.adapters.factory import get_adapter
+
 import pytz
 import platform
 import uuid
+import requests
 import yaml
 import os
-
-import dbt.clients.system
 
 sp_logger.setLevel(100)
 
 COLLECTOR_URL = "fishtownanalytics.sinter-collect.com"
 COLLECTOR_PROTOCOL = "https"
 
-INVOCATION_SPEC = 'iglu:com.dbt/invocation/jsonschema/1-0-0'
+INVOCATION_SPEC = 'iglu:com.dbt/invocation/jsonschema/1-0-1'
 PLATFORM_SPEC = 'iglu:com.dbt/platform/jsonschema/1-0-0'
 RUN_MODEL_SPEC = 'iglu:com.dbt/run_model/jsonschema/1-0-1'
 INVOCATION_ENV_SPEC = 'iglu:com.dbt/invocation_env/jsonschema/1-0-0'
 PACKAGE_INSTALL_SPEC = 'iglu:com.dbt/package_install/jsonschema/1-0-0'
+RPC_REQUEST_SPEC = 'iglu:com.dbt/rpc_request/jsonschema/1-0-1'
 
 DBT_INVOCATION_ENV = 'DBT_INVOCATION_ENV'
 
-emitter = Emitter(COLLECTOR_URL, protocol=COLLECTOR_PROTOCOL, buffer_size=1)
+
+class TimeoutEmitter(Emitter):
+    def __init__(self):
+        super(TimeoutEmitter, self).__init__(COLLECTOR_URL,
+                                             protocol=COLLECTOR_PROTOCOL,
+                                             buffer_size=1,
+                                             on_failure=self.handle_failure)
+
+    @staticmethod
+    def handle_failure(num_ok, unsent):
+        # num_ok will always be 0, unsent will always be 1 entry long, because
+        # the buffer is length 1, so not much to talk about
+        logger.warning('Error sending message, disabling tracking')
+        do_not_track()
+
+    def http_get(self, payload):
+        sp_logger.info("Sending GET request to %s..." % self.endpoint)
+        sp_logger.debug("Payload: %s" % payload)
+        r = requests.get(self.endpoint, params=payload, timeout=5.0)
+
+        msg = "GET request finished with status code: " + str(r.status_code)
+        if self.is_good_status_code(r.status_code):
+            sp_logger.info(msg)
+        else:
+            sp_logger.warn(msg)
+        return r
+
+
+emitter = TimeoutEmitter()
 tracker = Tracker(emitter, namespace="cf", app_id="dbt")
 
 active_user = None
@@ -59,12 +89,22 @@ class User(object):
         tracker.set_subject(subject)
 
     def set_cookie(self):
+        # If the user points dbt to a profile directory which exists AND
+        # contains a profiles.yml file, then we can set a cookie. If the
+        # specified folder does not exist, or if there is not a profiles.yml
+        # file in this folder, then an inconsistent cookie can be used. This
+        # will change in every dbt invocation until the user points to a
+        # profile dir file which contains a valid profiles.yml file.
+        #
+        # See: https://github.com/fishtown-analytics/dbt/issues/1645
+
         user = {"id": str(uuid.uuid4())}
 
-        dbt.clients.system.make_directory(self.cookie_dir)
-
-        with open(self.cookie_path, "w") as fh:
-            yaml.dump(user, fh)
+        cookie_path = os.path.abspath(self.cookie_dir)
+        profiles_file = os.path.join(cookie_path, 'profiles.yml')
+        if os.path.exists(cookie_path) and os.path.exists(profiles_file):
+            with open(self.cookie_path, "w") as fh:
+                yaml.dump(user, fh)
 
         return user
 
@@ -87,6 +127,11 @@ def get_run_type(args):
 
 
 def get_invocation_context(user, config, args):
+    try:
+        adapter_type = get_adapter(config).type()
+    except Exception:
+        adapter_type = None
+
     return {
         "project_id": None if config is None else config.hashed_name(),
         "user_id": user.id,
@@ -97,6 +142,7 @@ def get_invocation_context(user, config, args):
         "version": str(dbt_version.installed),
 
         "run_type": get_run_type(args),
+        "adapter_type": adapter_type,
     }
 
 
@@ -199,6 +245,18 @@ def track_model_run(options):
         active_user,
         category="dbt",
         action='run_model',
+        label=active_user.invocation_id,
+        context=context
+    )
+
+
+def track_rpc_request(options):
+    context = [SelfDescribingJson(RPC_REQUEST_SPEC, options)]
+
+    track(
+        active_user,
+        category="dbt",
+        action='rpc_request',
         label=active_user.invocation_id,
         context=context
     )

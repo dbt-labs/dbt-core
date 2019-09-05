@@ -1,12 +1,11 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 class TestPrePostRunHooks(DBTIntegrationTest):
 
     def setUp(self):
         DBTIntegrationTest.setUp(self)
 
-        self.run_sql_file("test/integration/014_hook_tests/seed_run.sql")
+        self.run_sql_file("seed_run.sql")
 
         self.fields = [
             'state',
@@ -30,8 +29,8 @@ class TestPrePostRunHooks(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            'macro-paths': ['test/integration/014_hook_tests/macros'],
-            'data-paths': ['test/integration/014_hook_tests/data'],
+            'macro-paths': ['macros'],
+            'data-paths': ['data'],
 
             # The create and drop table statements here validate that these hooks run
             # in the same order that they are defined. Drop before create is an error.
@@ -52,7 +51,7 @@ class TestPrePostRunHooks(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/014_hook_tests/models"
+        return "models"
 
     def get_ctx_vars(self, state):
         field_list = ", ".join(['"{}"'.format(f) for f in self.fields])
@@ -88,7 +87,7 @@ class TestPrePostRunHooks(DBTIntegrationTest):
         self.assertTrue(ctx['run_started_at'] is not None and len(ctx['run_started_at']) > 0, 'run_started_at was not set')
         self.assertTrue(ctx['invocation_id'] is not None and len(ctx['invocation_id']) > 0, 'invocation_id was not set')
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__pre_and_post_run_hooks(self):
         self.run_dbt(['run'])
 
@@ -99,7 +98,7 @@ class TestPrePostRunHooks(DBTIntegrationTest):
         self.assertTableDoesNotExist("end_hook_order_test")
         self.assert_used_schemas()
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test__postgres__pre_and_post_seed_hooks(self):
         self.run_dbt(['seed'])
 

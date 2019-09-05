@@ -1,5 +1,4 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 MODEL_PRE_HOOK = """
    insert into {{this.schema}}.on_model_hook (
@@ -45,7 +44,7 @@ MODEL_POST_HOOK = """
 class TestBigqueryPrePostModelHooks(DBTIntegrationTest):
     def setUp(self):
         DBTIntegrationTest.setUp(self)
-        self.run_sql_file("test/integration/014_hook_tests/seed_model_bigquery.sql")
+        self.run_sql_file("seed_model_bigquery.sql")
 
         self.fields = [
             'state',
@@ -70,7 +69,7 @@ class TestBigqueryPrePostModelHooks(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            'macro-paths': ['test/integration/014_hook_tests/macros'],
+            'macro-paths': ['macros'],
             'models': {
                 'test': {
                     'pre-hook': [MODEL_PRE_HOOK],
@@ -82,7 +81,7 @@ class TestBigqueryPrePostModelHooks(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/014_hook_tests/models"
+        return "models"
 
     def get_ctx_vars(self, state):
         field_list = ", ".join(self.fields)
@@ -106,7 +105,7 @@ class TestBigqueryPrePostModelHooks(DBTIntegrationTest):
         self.assertTrue(ctx['run_started_at'] is not None and len(ctx['run_started_at']) > 0, 'run_started_at was not set')
         self.assertTrue(ctx['invocation_id'] is not None and len(ctx['invocation_id']) > 0, 'invocation_id was not set')
 
-    @attr(type='bigquery')
+    @use_profile('bigquery')
     def test_pre_and_post_model_hooks_bigquery(self):
         self.run_dbt(['run'])
 
@@ -121,12 +120,12 @@ class TestBigqueryPrePostModelHooksOnSeeds(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/014_hook_tests/seed-models-bq"
+        return "seed-models-bq"
 
     @property
     def project_config(self):
         return {
-            'data-paths': ['test/integration/014_hook_tests/data'],
+            'data-paths': ['data'],
             'models': {},
             'seeds': {
                 'post-hook': [
@@ -135,7 +134,7 @@ class TestBigqueryPrePostModelHooksOnSeeds(DBTIntegrationTest):
             }
         }
 
-    @attr(type='bigquery')
+    @use_profile('bigquery')
     def test_hooks_on_seeds_bigquery(self):
         res = self.run_dbt(['seed'])
         self.assertEqual(len(res), 1, 'Expected exactly one item')

@@ -1,5 +1,4 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 import mock
 import hashlib
 import os
@@ -29,7 +28,7 @@ class TestEventTracking(DBTIntegrationTest):
 
     @staticmethod
     def dir(path):
-        return "test/integration/033_event_tracking_test/" + path.lstrip("/")
+        return path.lstrip("/")
 
     @property
     def models(self):
@@ -93,7 +92,8 @@ class TestEventTracking(DBTIntegrationTest):
         self,
         command,
         progress,
-        result_type=None
+        result_type=None,
+        adapter_type='postgres'
     ):
 
         def populate(
@@ -104,7 +104,7 @@ class TestEventTracking(DBTIntegrationTest):
         ):
             return [
                 {
-                    'schema': 'iglu:com.dbt/invocation/jsonschema/1-0-0',
+                    'schema': 'iglu:com.dbt/invocation/jsonschema/1-0-1',
                     'data': {
                         'project_id': project_id,
                         'user_id': user_id,
@@ -117,7 +117,8 @@ class TestEventTracking(DBTIntegrationTest):
 
                         'options': None,  # TODO : Add options to compile cmd!
                         'result_type': result_type,
-                        'result': None
+                        'result': None,
+                        'adapter_type': adapter_type
                     }
                 },
                 {
@@ -178,7 +179,7 @@ class TestEventTrackingSuccess(TestEventTracking):
     def packages_config(self):
         return {
             'packages': [
-                {'git': 'https://github.com/fishtown-analytics/dbt-integration-project'},
+                {'git': 'https://github.com/fishtown-analytics/dbt-integration-project', 'warn-unpinned': False},
             ],
         }
 
@@ -189,7 +190,7 @@ class TestEventTrackingSuccess(TestEventTracking):
             "test-paths": [self.dir("test")],
         }
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test__event_tracking_compile(self):
         expected_calls = [
             call(
@@ -217,7 +218,7 @@ class TestEventTrackingSuccess(TestEventTracking):
             expected_contexts
         )
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test__event_tracking_deps(self):
         package_context = [
             {
@@ -253,14 +254,14 @@ class TestEventTrackingSuccess(TestEventTracking):
         ]
 
         expected_contexts = [
-            self.build_context('deps', 'start'),
+            self.build_context('deps', 'start', adapter_type=None),
             package_context,
-            self.build_context('deps', 'end', result_type='ok')
+            self.build_context('deps', 'end', result_type='ok', adapter_type=None)
         ]
 
         self.run_event_test(["deps"], expected_calls, expected_contexts)
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test__event_tracking_seed(self):
         def seed_context(project_id, user_id, invocation_id, version):
             return [{
@@ -314,7 +315,7 @@ class TestEventTrackingSuccess(TestEventTracking):
 
         self.run_event_test(["seed"], expected_calls, expected_contexts)
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test__event_tracking_models(self):
         expected_calls = [
             call(
@@ -376,7 +377,7 @@ class TestEventTrackingSuccess(TestEventTracking):
             expected_contexts
         )
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test__event_tracking_model_error(self):
         # cmd = ["run", "--model", "model_error"]
         # self.run_event_test(cmd, event_run_model_error, expect_pass=False)
@@ -422,7 +423,7 @@ class TestEventTrackingSuccess(TestEventTracking):
             expect_pass=False
         )
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test__event_tracking_tests(self):
         # TODO: dbt does not track events for tests, but it should!
         self.run_dbt(["run", "--model", "example", "example_2"])
@@ -462,7 +463,7 @@ class TestEventTrackingCompilationError(TestEventTracking):
             "source-paths": [self.dir("model-compilation-error")],
         }
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test__event_tracking_with_compilation_error(self):
         expected_calls = [
             call(
@@ -528,7 +529,7 @@ class TestEventTrackingUnableToConnect(TestEventTracking):
             }
         }
 
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test__event_tracking_unable_to_connect(self):
         expected_calls = [
             call(
@@ -558,29 +559,16 @@ class TestEventTrackingUnableToConnect(TestEventTracking):
         )
 
 
-class TestEventTrackingArchive(TestEventTracking):
+class TestEventTrackingSnapshot(TestEventTracking):
     @property
     def project_config(self):
         return {
-            "archive": [
-                {
-                    "source_schema": self.unique_schema(),
-                    "target_schema": self.unique_schema(),
-                    "tables": [
-                        {
-                            "source_table": "archivable",
-                            "target_table": "archived",
-                            "updated_at": '"updated_at"',
-                            "unique_key": '"id"'
-                        }
-                    ]
-                }
-            ]
+            "snapshot-paths": ['snapshots']
         }
 
-    @attr(type="postgres")
-    def test__event_tracking_archive(self):
-        self.run_dbt(["run", "--models", "archivable"])
+    @use_profile("postgres")
+    def test__event_tracking_snapshot(self):
+        self.run_dbt(["run", "--models", "snapshottable"])
 
         expected_calls = [
             call(
@@ -603,28 +591,29 @@ class TestEventTrackingArchive(TestEventTracking):
             ),
         ]
 
+        # the model here has a raw_sql that contains the schema, which changes
         expected_contexts = [
-            self.build_context('archive', 'start'),
+            self.build_context('snapshot', 'start'),
             self.run_context(
-                hashed_contents='f785c4490e73e5b52fed5627f5709bfa',
-                model_id='3cdcd0fef985948fd33af308468da3b9',
+                hashed_contents=ANY,
+                model_id='820793a4def8d8a38d109a9709374849',
                 index=1,
                 total=1,
-                status='INSERT 0 1',
-                materialization='archive'
+                status='SELECT 1',
+                materialization='snapshot'
             ),
-            self.build_context('archive', 'end', result_type='ok')
+            self.build_context('snapshot', 'end', result_type='ok')
         ]
 
         self.run_event_test(
-            ["archive"],
+            ["snapshot"],
             expected_calls,
             expected_contexts
         )
 
 
 class TestEventTrackingCatalogGenerate(TestEventTracking):
-    @attr(type="postgres")
+    @use_profile("postgres")
     def test__event_tracking_catalog_generate(self):
         # create a model for the catalog
         self.run_dbt(["run", "--models", "example"])

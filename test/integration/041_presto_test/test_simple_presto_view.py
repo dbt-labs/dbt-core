@@ -11,13 +11,13 @@ class TestBasePrestoRun(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/041_presto_test/models"
+        return "models"
 
     @property
     def project_config(self):
         return {
-            'data-paths': ['test/integration/041_presto_test/data'],
-            'macro-paths': ['test/integration/041_presto_test/macros'],
+            'data-paths': ['data'],
+            'macro-paths': ['macros'],
         }
 
     @property

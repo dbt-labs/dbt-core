@@ -1,12 +1,11 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 
 class TestMacros(DBTIntegrationTest):
 
     def setUp(self):
         DBTIntegrationTest.setUp(self)
-        self.run_sql_file("test/integration/016_macro_tests/seed.sql")
+        self.run_sql_file("seed.sql")
 
     @property
     def schema(self):
@@ -14,13 +13,13 @@ class TestMacros(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/016_macro_tests/models"
+        return "models"
 
     @property
     def packages_config(self):
         return {
             'packages': [
-                {'git': 'https://github.com/fishtown-analytics/dbt-integration-project'},
+                {'git': 'https://github.com/fishtown-analytics/dbt-integration-project', 'warn-unpinned': False}
             ]
         }
 
@@ -32,10 +31,10 @@ class TestMacros(DBTIntegrationTest):
                     "test": "DUMMY"
                 }
             },
-            "macro-paths": ["test/integration/016_macro_tests/macros"],
+            "macro-paths": ["macros"],
         }
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_working_macros(self):
         self.run_dbt(["deps"])
         results = self.run_dbt(["run"])
@@ -56,15 +55,15 @@ class TestInvalidMacros(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/016_macro_tests/models"
+        return "models"
 
     @property
     def project_config(self):
         return {
-            "macro-paths": ["test/integration/016_macro_tests/bad-macros"]
+            "macro-paths": ["bad-macros"]
         }
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_invalid_macro(self):
 
         try:
@@ -87,27 +86,27 @@ class TestMisusedMacros(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/016_macro_tests/bad-models"
+        return "bad-models"
 
     @property
     def packages_config(self):
         return {
             'packages': [
-                {'git': 'https://github.com/fishtown-analytics/dbt-integration-project'}
+                {'git': 'https://github.com/fishtown-analytics/dbt-integration-project', 'warn-unpinned': False}
             ]
         }
 
     @property
     def project_config(self):
         return {
-            "macro-paths": ["test/integration/016_macro_tests/macros"],
+            "macro-paths": ["macros"],
         }
 
     # TODO: compilation no longer exists, so while the model calling this macro
     # fails, it does not raise a runtime exception. change this test to verify
     # that the model finished with ERROR state.
     #
-    # @attr(type='postgres')
+    # @use_profile('postgres')
     # def test_working_macros(self):
     #     self.run_dbt(["deps"])
 

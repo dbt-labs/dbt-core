@@ -1,5 +1,3 @@
-import copy
-import functools
 import json
 import os
 
@@ -13,11 +11,9 @@ from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 import dbt.clients.jinja
 import dbt.clients.agate_helper
 import dbt.flags
-import dbt.schema
 import dbt.tracking
+import dbt.writer
 import dbt.utils
-
-import dbt.hooks
 
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
@@ -49,36 +45,17 @@ class RelationProxy(object):
         return self.relation_type.create(*args, **kwargs)
 
 
-class DatabaseWrapper(object):
+class BaseDatabaseWrapper(object):
     """
-    Wrapper for runtime database interaction. Mostly a compatibility layer now.
+    Wrapper for runtime database interaction. Applies the runtime quote policy
+    via a relation proxy.
     """
-    def __init__(self, connection_name, adapter):
-        self.connection_name = connection_name
+    def __init__(self, adapter):
         self.adapter = adapter
         self.Relation = RelationProxy(adapter)
 
-    def wrap(self, name):
-        func = getattr(self.adapter, name)
-
-        @functools.wraps(func)
-        def wrapped(*args, **kwargs):
-            kwargs['model_name'] = self.connection_name
-            return func(*args, **kwargs)
-
-        return wrapped
-
     def __getattr__(self, name):
-        if name in self.adapter._available_model_:
-            return self.wrap(name)
-        elif name in self.adapter._available_raw_:
-            return getattr(self.adapter, name)
-        else:
-            raise AttributeError(
-                "'{}' object has no attribute '{}'".format(
-                    self.__class__.__name__, name
-                )
-            )
+        raise NotImplementedError('subclasses need to implement this')
 
     @property
     def config(self):
@@ -88,7 +65,23 @@ class DatabaseWrapper(object):
         return self.adapter.type()
 
     def commit(self):
-        return self.adapter.commit_if_has_connection(self.connection_name)
+        return self.adapter.commit_if_has_connection()
+
+
+class BaseResolver(object):
+    def __init__(self, db_wrapper, model, config, manifest):
+        self.db_wrapper = db_wrapper
+        self.model = model
+        self.config = config
+        self.manifest = manifest
+
+    @property
+    def current_project(self):
+        return self.config.project_name
+
+    @property
+    def Relation(self):
+        return self.db_wrapper.Relation
 
 
 def _add_macro_map(context, package_name, macro_map):
@@ -202,6 +195,13 @@ def _load_result(sql_results):
     return call
 
 
+def _debug_here():
+    import sys
+    import ipdb
+    frame = sys._getframe(3)
+    ipdb.set_trace(frame)
+
+
 def _add_sql_handlers(context):
     sql_results = {}
     return dbt.utils.merge(context, {
@@ -222,8 +222,7 @@ def log(msg, info=False):
 class Var(object):
     UndefinedVarError = "Required var '{}' not found in config:\nVars "\
                         "supplied to {} = {}"
-    NoneVarError = "Supplied var '{}' is undefined in config:\nVars supplied "\
-                   "to {} = {}"
+    _VAR_NOTSET = object()
 
     def __init__(self, model, context, overrides):
         self.model = model
@@ -256,42 +255,32 @@ class Var(object):
     def pretty_dict(self, data):
         return json.dumps(data, sort_keys=True, indent=4)
 
+    def get_missing_var(self, var_name):
+        pretty_vars = self.pretty_dict(self.local_vars)
+        msg = self.UndefinedVarError.format(
+            var_name, self.model_name, pretty_vars
+        )
+        dbt.exceptions.raise_compiler_error(msg, self.model)
+
     def assert_var_defined(self, var_name, default):
-        if var_name not in self.local_vars and default is None:
-            pretty_vars = self.pretty_dict(self.local_vars)
-            dbt.exceptions.raise_compiler_error(
-                self.UndefinedVarError.format(
-                    var_name, self.model_name, pretty_vars
-                ),
-                self.model
-            )
+        if var_name not in self.local_vars and default is self._VAR_NOTSET:
+            return self.get_missing_var(var_name)
 
-    def assert_var_not_none(self, var_name):
+    def get_rendered_var(self, var_name):
         raw = self.local_vars[var_name]
-        if raw is None:
-            pretty_vars = self.pretty_dict(self.local_vars)
-            dbt.exceptions.raise_compiler_error(
-                self.NoneVarError.format(
-                    var_name, self.model_name, pretty_vars
-                ),
-                self.model
-            )
-
-    def __call__(self, var_name, default=None):
-        self.assert_var_defined(var_name, default)
-
-        if var_name not in self.local_vars:
-            return default
-
-        self.assert_var_not_none(var_name)
-
-        raw = self.local_vars[var_name]
-
         # if bool/int/float/etc are passed in, don't compile anything
         if not isinstance(raw, basestring):
             return raw
 
         return dbt.clients.jinja.get_rendered(raw, self.context)
+
+    def __call__(self, var_name, default=_VAR_NOTSET):
+        if var_name in self.local_vars:
+            return self.get_rendered_var(var_name)
+        elif default is not self._VAR_NOTSET:
+            return default
+        else:
+            return self.get_missing_var(var_name)
 
 
 def write(node, target_path, subdirectory):
@@ -313,14 +302,14 @@ def render(context, node):
 def fromjson(string, default=None):
     try:
         return json.loads(string)
-    except ValueError as e:
+    except ValueError:
         return default
 
 
 def tojson(value, default=None):
     try:
         return json.dumps(value)
-    except ValueError as e:
+    except ValueError:
         return default
 
 
@@ -328,7 +317,7 @@ def try_or_compiler_error(model):
     def impl(message_if_exception, func, *args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except Exception as e:
+        except Exception:
             dbt.exceptions.raise_compiler_error(message_if_exception, model)
     return impl
 
@@ -363,8 +352,24 @@ def get_datetime_module_context():
     }
 
 
+def get_context_modules():
+    return {
+        'pytz': get_pytz_module_context(),
+        'datetime': get_datetime_module_context(),
+    }
+
+
+def generate_config_context(cli_vars):
+    context = {
+        'env_var': env_var,
+        'modules': get_context_modules(),
+    }
+    context['var'] = Var(None, context, cli_vars)
+    return _add_tracking(context)
+
+
 def generate_base(model, model_dict, config, manifest, source_config,
-                  provider, connection_name):
+                  provider, adapter=None):
     """Generate the common aspects of the config dict."""
     if provider is None:
         raise dbt.exceptions.InternalException(
@@ -377,6 +382,7 @@ def generate_base(model, model_dict, config, manifest, source_config,
     target['type'] = config.credentials.type
     target.pop('pass', None)
     target['name'] = target_name
+
     adapter = get_adapter(config)
 
     context = {'env': target}
@@ -384,7 +390,7 @@ def generate_base(model, model_dict, config, manifest, source_config,
     pre_hooks = None
     post_hooks = None
 
-    db_wrapper = DatabaseWrapper(connection_name, adapter)
+    db_wrapper = provider.DatabaseWrapper(adapter)
 
     context = dbt.utils.merge(context, {
         "adapter": db_wrapper,
@@ -396,17 +402,13 @@ def generate_base(model, model_dict, config, manifest, source_config,
         "config": provider.Config(model_dict, source_config),
         "database": config.credentials.database,
         "env_var": env_var,
-        "exceptions": dbt.exceptions.CONTEXT_EXPORTS,
+        "exceptions": dbt.exceptions.wrapped_exports(model),
         "execute": provider.execute,
         "flags": dbt.flags,
-        # TODO: Do we have to leave this in?
         "graph": manifest.to_flat_graph(),
         "log": log,
         "model": model_dict,
-        "modules": {
-            "pytz": get_pytz_module_context(),
-            "datetime": get_datetime_module_context(),
-        },
+        "modules": get_context_modules(),
         "post_hooks": post_hooks,
         "pre_hooks": pre_hooks,
         "ref": provider.ref(db_wrapper, model, config, manifest),
@@ -420,11 +422,14 @@ def generate_base(model, model_dict, config, manifest, source_config,
         "target": target,
         "try_or_compiler_error": try_or_compiler_error(model)
     })
+    if os.environ.get('DBT_MACRO_DEBUGGING'):
+        context['debug'] = _debug_here
 
     return context
 
 
-def modify_generated_context(context, model, model_dict, config, manifest):
+def modify_generated_context(context, model, model_dict, config, manifest,
+                             provider):
     cli_var_overrides = config.cli_vars
 
     context = _add_tracking(context)
@@ -437,13 +442,14 @@ def modify_generated_context(context, model, model_dict, config, manifest):
 
     context["write"] = write(model_dict, config.target_path, 'run')
     context["render"] = render(context, model_dict)
-    context["var"] = Var(model, context=context, overrides=cli_var_overrides)
+    context["var"] = provider.Var(model, context=context,
+                                  overrides=cli_var_overrides)
     context['context'] = context
 
     return context
 
 
-def generate_execute_macro(model, config, manifest, provider, connection_name):
+def generate_execute_macro(model, config, manifest, provider):
     """Internally, macros can be executed like nodes, with some restrictions:
 
      - they don't have have all values available that nodes do:
@@ -452,17 +458,17 @@ def generate_execute_macro(model, config, manifest, provider, connection_name):
      - they can't be configured with config() directives
     """
     model_dict = model.serialize()
-    context = generate_base(model, model_dict, config, manifest,
-                            None, provider, connection_name)
+    context = generate_base(model, model_dict, config, manifest, None,
+                            provider)
 
     return modify_generated_context(context, model, model_dict, config,
-                                    manifest)
+                                    manifest, provider)
 
 
 def generate_model(model, config, manifest, source_config, provider):
     model_dict = model.to_dict()
     context = generate_base(model, model_dict, config, manifest,
-                            source_config, provider, model.get('name'))
+                            source_config, provider)
     # operations (hooks) don't get a 'this'
     if model.resource_type != NodeType.Operation:
         this = get_this_relation(context['adapter'], config, model_dict)
@@ -477,7 +483,7 @@ def generate_model(model, config, manifest, source_config, provider):
     })
 
     return modify_generated_context(context, model, model_dict, config,
-                                    manifest)
+                                    manifest, provider)
 
 
 def generate(model, config, manifest, source_config=None, provider=None):
@@ -487,5 +493,4 @@ def generate(model, config, manifest, source_config=None, provider=None):
     or
         dbt.context.runtime.generate
     """
-    return generate_model(model, config, manifest, source_config,
-                          provider)
+    return generate_model(model, config, manifest, source_config, provider)

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="/etc/dbt-horizontal.png" alt="dbt logo"/>
+  <img src="https://github.com/fishtown-analytics/dbt/blob/master/etc/dbt-horizontal.png?raw=true" alt="dbt logo"/>
 </p>
 <p align="center">
   <a href="https://codeclimate.com/github/fishtown-analytics/dbt">
@@ -20,7 +20,7 @@
 
 dbt is the T in ELT. Organize, cleanse, denormalize, filter, rename, and pre-aggregate the raw data in your warehouse so that it's ready for analysis.
 
-![dbt architecture](/etc/dbt-arch.png?raw=true)
+![dbt architecture](https://github.com/fishtown-analytics/dbt/blob/master/etc/dbt-arch.png?raw=true)
 
 dbt can be used to [aggregate pageviews into sessions](https://github.com/fishtown-analytics/snowplow), calculate [ad spend ROI](https://github.com/fishtown-analytics/facebook-ads), or report on [email campaign performance](https://github.com/fishtown-analytics/mailchimp).
 
@@ -28,9 +28,9 @@ dbt can be used to [aggregate pageviews into sessions](https://github.com/fishto
 
 Analysts using dbt can transform their data by simply writing select statements, while dbt handles turning these statements into tables and views in a data warehouse.
 
-These select statements, or "models", form a dbt project. Models frequently build on top of one another – dbt makes it easy to [manage relationships](https://docs.getdbt.com/reference#ref) between models, and [visualize these relationships](https://docs.getdbt.com/docs/documentation), as well as assure the quality of your transformations through [testing](https://docs.getdbt.com/docs/testing).
+These select statements, or "models", form a dbt project. Models frequently build on top of one another – dbt makes it easy to [manage relationships](https://docs.getdbt.com/docs/ref) between models, and [visualize these relationships](https://docs.getdbt.com/docs/documentation), as well as assure the quality of your transformations through [testing](https://docs.getdbt.com/docs/testing).
 
-![dbt dag](/etc/dbt-dag.png?raw=true)
+![dbt dag](https://github.com/fishtown-analytics/dbt/blob/master/etc/dbt-dag.png?raw=true)
 
 ## Getting started
 

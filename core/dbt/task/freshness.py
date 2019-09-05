@@ -1,5 +1,5 @@
 import os
-from dbt.task.runnable import BaseRunnableTask
+from dbt.task.runnable import GraphRunnableTask
 from dbt.node_runners import FreshnessRunner
 from dbt.node_types import NodeType
 from dbt.ui.printer import print_timestamped_line, print_run_result_error
@@ -8,7 +8,7 @@ from dbt.contracts.results import FreshnessExecutionResult
 RESULT_FILE_NAME = 'sources.json'
 
 
-class FreshnessTask(BaseRunnableTask):
+class FreshnessTask(GraphRunnableTask):
     def result_path(self):
         if self.args.output:
             return os.path.realpath(self.args.output)

@@ -73,7 +73,7 @@ class TestHubPackage(unittest.TestCase):
         self.assertEqual(a.source_type(), 'hub')
 
     def test_invalid(self):
-        with self.assertRaises(dbt.exceptions.ValidationException):
+        with self.assertRaises(dbt.exceptions.DependencyException):
             RegistryPackage(package='namespace/name', key='invalid')
 
     def test_resolve_ok(self):
@@ -151,8 +151,7 @@ class TestHubPackage(unittest.TestCase):
             package='fishtown-analytics-test/a',
             version='0.1.2'
         )
-        with self.assertRaises(dbt.exceptions.DependencyException) as e:
-            exc = e
+        with self.assertRaises(dbt.exceptions.DependencyException) as exc:
             a.resolve_version()
 
         msg = 'Package fishtown-analytics-test/a was not found in the package index'
@@ -169,8 +168,7 @@ class TestHubPackage(unittest.TestCase):
             package='fishtown-analytics-test/a',
             version='0.1.2'
         )
-        with self.assertRaises(dbt.exceptions.DependencyException) as e:
-            exc = e
+        with self.assertRaises(dbt.exceptions.DependencyException) as exc:
             a.resolve_version()
         msg = (
             "Could not find a matching version for package "
@@ -195,8 +193,7 @@ class TestHubPackage(unittest.TestCase):
             version='0.1.3'
         )
         c = a.incorporate(b)
-        with self.assertRaises(dbt.exceptions.DependencyException) as e:
-            exc = e
+        with self.assertRaises(dbt.exceptions.DependencyException) as exc:
             c.resolve_version()
         msg = (
             "Version error for package fishtown-analytics-test/a: Could not "

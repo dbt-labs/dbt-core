@@ -1,5 +1,4 @@
 from dbt.api import APIObject
-from dbt.contracts.graph.unparsed import UNPARSED_NODE_CONTRACT
 from dbt.contracts.graph.parsed import PARSED_NODE_CONTRACT, \
     PARSED_MACRO_CONTRACT, PARSED_DOCUMENTATION_CONTRACT, \
     PARSED_SOURCE_DEFINITION_CONTRACT
@@ -186,6 +185,7 @@ class Manifest(APIObject):
         self.generated_at = generated_at
         self.metadata = metadata
         self.disabled = disabled
+        self._flat_graph = None
         super(Manifest, self).__init__()
 
     @staticmethod
@@ -223,6 +223,19 @@ class Manifest(APIObject):
             'metadata': self.metadata,
             'disabled': [v.serialize() for v in self.disabled],
         }
+
+    def to_flat_graph(self):
+        """This function gets called in context.common by each node, so we want
+        to cache it. Make sure you don't call this until you're done with
+        building your manifest!
+        """
+        if self._flat_graph is None:
+            self._flat_graph = {
+                'nodes': {
+                    k: v.serialize() for k, v in self.nodes.items()
+                },
+            }
+        return self._flat_graph
 
     def find_disabled_by_name(self, name, package=None):
         return dbt.utils.find_in_list_by_name(self.disabled, name, package,
@@ -380,22 +393,6 @@ class Manifest(APIObject):
                     'not found or is disabled').format(patch.name)
                 )
 
-    def to_flat_graph(self):
-        """Convert the parsed manifest to the 'flat graph' that the compiler
-        expects.
-
-        Kind of hacky note: everything in the code is happy to deal with
-        macros as ParsedMacro objects (in fact, it's been changed to require
-        that), so those can just be returned without any work. Nodes sadly
-        require a lot of work on the compiler side.
-
-        Ideally in the future we won't need to have this method.
-        """
-        return {
-            'nodes': {k: v.to_shallow_dict() for k, v in self.nodes.items()},
-            'macros': self.macros,
-        }
-
     def __getattr__(self, name):
         raise AttributeError("'{}' object has no attribute '{}'".format(
             type(self).__name__, name)
@@ -410,3 +407,13 @@ class Manifest(APIObject):
 
     def get_used_databases(self):
         return frozenset(node.database for node in self.nodes.values())
+
+    def deepcopy(self, config=None):
+        return Manifest(
+            nodes={k: v.incorporate() for k, v in self.nodes.items()},
+            macros={k: v.incorporate() for k, v in self.macros.items()},
+            docs={k: v.incorporate() for k, v in self.docs.items()},
+            generated_at=self.generated_at,
+            disabled=[n.incorporate() for n in self.disabled],
+            config=config
+        )

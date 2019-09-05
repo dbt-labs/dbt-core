@@ -1,6 +1,7 @@
 
 import dbt.exceptions
 import dbt.utils
+from dbt.node_types import NodeType
 
 
 def docs(node, manifest, config, column_name=None):
@@ -26,8 +27,6 @@ def docs(node, manifest, config, column_name=None):
         if target_doc is None:
             dbt.exceptions.doc_target_not_found(node, doc_name,
                                                 doc_package_name)
-
-        target_doc_id = target_doc.unique_id
 
         return target_doc.block_contents
 
@@ -125,95 +124,146 @@ class ParserUtils(object):
         return column
 
     @classmethod
-    def process_docs(cls, manifest, current_project):
-        for _, node in manifest.nodes.items():
-            target_doc = None
-            target_doc_name = None
-            target_doc_package = None
-            for docref in node.get('docrefs', []):
-                column_name = docref.get('column_name')
-                if column_name is None:
-                    description = node.get('description', '')
-                else:
-                    column = cls._get_node_column(node, column_name)
-                    description = column.get('description', '')
-                target_doc_name = docref['documentation_name']
-                target_doc_package = docref['documentation_package']
-                context = {
-                    'doc': docs(node, manifest, current_project, column_name),
-                }
+    def process_docs_for_node(cls, manifest, current_project, node):
+        for docref in node.get('docrefs', []):
+            column_name = docref.get('column_name')
+            if column_name is None:
+                description = node.get('description', '')
+            else:
+                column = cls._get_node_column(node, column_name)
+                description = column.get('description', '')
+            context = {
+                'doc': docs(node, manifest, current_project, column_name),
+            }
 
-                # At this point, target_doc is a ParsedDocumentation, and we
-                # know that our documentation string has a 'docs("...")'
-                # pointing at it. We want to render it.
-                description = dbt.clients.jinja.get_rendered(description,
-                                                             context)
-                # now put it back.
-                if column_name is None:
-                    node.set('description', description)
-                else:
-                    column['description'] = description
+            # At this point, target_doc is a ParsedDocumentation, and we
+            # know that our documentation string has a 'docs("...")'
+            # pointing at it. We want to render it.
+            description = dbt.clients.jinja.get_rendered(description,
+                                                         context)
+            # now put it back.
+            if column_name is None:
+                node.set('description', description)
+            else:
+                column['description'] = description
+
+    @classmethod
+    def process_docs_for_source(cls, manifest, current_project, source):
+        context = {
+            'doc': docs(source, manifest, current_project),
+        }
+        table_description = source.get('description', '')
+        source_description = source.get('source_description', '')
+        table_description = dbt.clients.jinja.get_rendered(table_description,
+                                                           context)
+        source_description = dbt.clients.jinja.get_rendered(source_description,
+                                                            context)
+        source.set('description', table_description)
+        source.set('source_description', source_description)
+
+        for column_name, column_def in source.columns.items():
+            column_desc = column_def.get('description', '')
+            column_desc = dbt.clients.jinja.get_rendered(column_desc, context)
+            column_def['description'] = column_desc
+
+    @classmethod
+    def process_docs(cls, manifest, current_project):
+        for node in manifest.nodes.values():
+            if node.resource_type == NodeType.Source:
+                cls.process_docs_for_source(manifest, current_project, node)
+            else:
+                cls.process_docs_for_node(manifest, current_project, node)
         return manifest
 
     @classmethod
-    def process_refs(cls, manifest, current_project):
-        for _, node in manifest.nodes.items():
+    def process_refs_for_node(cls, manifest, current_project, node):
+        """Given a manifest and a node in that manifest, process its refs"""
+        for ref in node.refs:
             target_model = None
             target_model_name = None
             target_model_package = None
 
-            for ref in node.refs:
-                if len(ref) == 1:
-                    target_model_name = ref[0]
-                elif len(ref) == 2:
-                    target_model_package, target_model_name = ref
+            if len(ref) == 1:
+                target_model_name = ref[0]
+            elif len(ref) == 2:
+                target_model_package, target_model_name = ref
 
-                target_model = cls.resolve_ref(
-                    manifest,
-                    target_model_name,
-                    target_model_package,
-                    current_project,
-                    node.get('package_name'))
+            target_model = cls.resolve_ref(
+                manifest,
+                target_model_name,
+                target_model_package,
+                current_project,
+                node.get('package_name'))
 
-                if target_model is None or target_model is cls.DISABLED:
-                    # This may raise. Even if it doesn't, we don't want to add
-                    # this node to the graph b/c there is no destination node
-                    node.config['enabled'] = False
-                    dbt.utils.invalid_ref_fail_unless_test(
-                            node, target_model_name, target_model_package,
-                            disabled=(target_model is cls.DISABLED)
-                    )
+            if target_model is None or target_model is cls.DISABLED:
+                # This may raise. Even if it doesn't, we don't want to add
+                # this node to the graph b/c there is no destination node
+                node.config['enabled'] = False
+                dbt.utils.invalid_ref_fail_unless_test(
+                    node, target_model_name, target_model_package,
+                    disabled=(target_model is cls.DISABLED)
+                )
 
-                    continue
+                continue
 
-                target_model_id = target_model.get('unique_id')
+            target_model_id = target_model.get('unique_id')
 
-                node.depends_on['nodes'].append(target_model_id)
-                manifest.nodes[node['unique_id']] = node
+            node.depends_on['nodes'].append(target_model_id)
+            manifest.nodes[node['unique_id']] = node
 
+    @classmethod
+    def process_refs(cls, manifest, current_project):
+        for node in manifest.nodes.values():
+            cls.process_refs_for_node(manifest, current_project, node)
         return manifest
 
     @classmethod
-    def process_sources(cls, manifest, current_project):
-        for _, node in manifest.nodes.items():
-            target_source = None
-            for source_name, table_name in node.sources:
-                target_source = cls.resolve_source(
-                    manifest,
-                    source_name,
-                    table_name,
-                    current_project,
-                    node.get('package_name'))
+    def process_sources_for_node(cls, manifest, current_project, node):
+        target_source = None
+        for source_name, table_name in node.sources:
+            target_source = cls.resolve_source(
+                manifest,
+                source_name,
+                table_name,
+                current_project,
+                node.get('package_name'))
 
-                if target_source is None:
-                    # this folows the same pattern as refs
-                    node.config['enabled'] = False
-                    dbt.utils.invalid_source_fail_unless_test(
-                        node,
-                        source_name,
-                        table_name)
-                    continue
-                target_source_id = target_source.unique_id
-                node.depends_on['nodes'].append(target_source_id)
-                manifest.nodes[node['unique_id']] = node
+            if target_source is None:
+                # this folows the same pattern as refs
+                node.config['enabled'] = False
+                dbt.utils.invalid_source_fail_unless_test(
+                    node,
+                    source_name,
+                    table_name)
+                continue
+            target_source_id = target_source.unique_id
+            node.depends_on['nodes'].append(target_source_id)
+            manifest.nodes[node['unique_id']] = node
+
+    @classmethod
+    def process_sources(cls, manifest, current_project):
+        for node in manifest.nodes.values():
+            cls.process_sources_for_node(manifest, current_project, node)
+        return manifest
+
+    @classmethod
+    def add_new_refs(cls, manifest, current_project, node, macros):
+        """Given a new node that is not in the manifest, copy the manifest and
+        insert the new node into it as if it were part of regular ref
+        processing
+        """
+        manifest = manifest.deepcopy(config=current_project)
+        # it's ok for macros to silently override a local project macro name
+        manifest.macros.update(macros)
+
+        if node.unique_id in manifest.nodes:
+            # this should be _impossible_ due to the fact that rpc calls get
+            # a unique ID that starts with 'rpc'!
+            raise dbt.exceptions.raise_duplicate_resource_name(
+                manifest.nodes[node.unique_id], node
+            )
+        manifest.nodes[node.unique_id] = node
+        cls.process_sources_for_node(manifest, current_project, node)
+        cls.process_refs_for_node(manifest, current_project, node)
+        cls.process_docs_for_node(manifest, current_project, node)
         return manifest

@@ -1,11 +1,10 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 class TestPermissions(DBTIntegrationTest):
 
     def setUp(self):
         DBTIntegrationTest.setUp(self)
-        self.run_sql_file("test/integration/010_permission_tests/seed.sql")
+        self.run_sql_file("seed.sql")
 
     @property
     def schema(self):
@@ -13,9 +12,9 @@ class TestPermissions(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/010_permission_tests/models"
+        return "models"
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_no_create_schema_permissions(self):
         # the noaccess user does not have permissions to create a schema -- this should fail
         failed = False
@@ -27,7 +26,7 @@ class TestPermissions(DBTIntegrationTest):
 
         self.assertTrue(failed)
 
-    @attr(type='postgres')
+    @use_profile('postgres')
     def test_create_schema_permissions(self):
         # now it should work!
         self.run_sql('grant create on database {} to noaccess'.format(self.default_database))

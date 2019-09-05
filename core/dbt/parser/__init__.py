@@ -1,6 +1,6 @@
 
 from .analysis import AnalysisParser
-from .archives import ArchiveParser
+from .snapshots import SnapshotParser
 from .data_test import DataTestParser
 from .docs import DocumentationParser
 from .hooks import HookParser
@@ -13,7 +13,7 @@ from .util import ParserUtils
 
 __all__ = [
     'AnalysisParser',
-    'ArchiveParser',
+    'SnapshotParser',
     'DataTestParser',
     'DocumentationParser',
     'HookParser',

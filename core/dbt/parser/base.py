@@ -13,7 +13,7 @@ from dbt.utils import coalesce
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.contracts.graph.parsed import ParsedNode
 from dbt.parser.source_config import SourceConfig
-from dbt.node_types import NodeType
+from dbt import deprecations
 
 
 class BaseParser(object):
@@ -40,8 +40,8 @@ class BaseParser(object):
         return "{}.{}.{}".format(resource_type, package_name, resource_name)
 
     @classmethod
-    def get_fqn(cls, path, package_project_config, extra=[]):
-        parts = dbt.utils.split_path(path)
+    def get_fqn(cls, node, package_project_config, extra=[]):
+        parts = dbt.utils.split_path(node.path)
         name, _ = os.path.splitext(parts[-1])
         fqn = ([package_project_config.project_name] +
                parts[:-1] +
@@ -59,6 +59,7 @@ class MacrosKnownParser(BaseParser):
         )
         self.macro_manifest = macro_manifest
         self._get_schema_func = None
+        self._get_alias_func = None
 
     def get_schema_func(self):
         """The get_schema function is set by a few different things:
@@ -82,22 +83,63 @@ class MacrosKnownParser(BaseParser):
                 'generate_schema_name',
                 GLOBAL_PROJECT_NAME
             )
+        # this is only true in tests!
         if get_schema_macro is None:
-            def get_schema(_):
+            def get_schema(custom_schema_name=None, node=None):
                 return self.default_schema
         else:
             root_context = dbt.context.parser.generate_macro(
                 get_schema_macro, self.root_project_config,
-                self.macro_manifest, 'generate_schema_name'
+                self.macro_manifest
             )
             get_schema = get_schema_macro.generator(root_context)
 
         self._get_schema_func = get_schema
         return self._get_schema_func
 
+    def get_alias_func(self):
+        """The get_alias function is set by a few different things:
+            - if there is a 'generate_alias_name' macro in the root project,
+                it will be used.
+            - if that does not exist but there is a 'generate_alias_name'
+                macro in the 'dbt' internal project, that will be used
+            - if neither of those exist (unit tests?), a function that returns
+                the 'default alias' as set in the model's filename or alias
+                configuration.
+        """
+        if self._get_alias_func is not None:
+            return self._get_alias_func
+
+        get_alias_macro = self.macro_manifest.find_macro_by_name(
+            'generate_alias_name',
+            self.root_project_config.project_name
+        )
+        if get_alias_macro is None:
+            get_alias_macro = self.macro_manifest.find_macro_by_name(
+                'generate_alias_name',
+                GLOBAL_PROJECT_NAME
+            )
+
+        # the generate_alias_name macro might not exist
+        if get_alias_macro is None:
+            def get_alias(custom_alias_name, node):
+                if custom_alias_name is None:
+                    return node.name
+                else:
+                    return custom_alias_name
+        else:
+            root_context = dbt.context.parser.generate_macro(
+                get_alias_macro, self.root_project_config,
+                self.macro_manifest
+            )
+            get_alias = get_alias_macro.generator(root_context)
+
+        self._get_alias_func = get_alias
+        return self._get_alias_func
+
     def _build_intermediate_node_dict(self, config, node_dict, node_path,
                                       package_project_config, tags, fqn,
-                                      agate_table, archive_config,
+                                      agate_table, snapshot_config,
                                       column_name):
         """Update the unparsed node dictionary and build the basis for an
         intermediate ParsedNode that will be passed into the renderer
@@ -111,7 +153,7 @@ class MacrosKnownParser(BaseParser):
         # been called from jinja yet). But the Var() call below needs info
         # about project level configs b/c they might contain refs.
         # TODO: Restructure this?
-        config_dict = coalesce(archive_config, {})
+        config_dict = coalesce(snapshot_config, {})
         config_dict.update(config.config)
 
         empty = (
@@ -159,25 +201,11 @@ class MacrosKnownParser(BaseParser):
             parsed_node.raw_sql, context, parsed_node.to_shallow_dict(),
             capture_macros=True)
 
-        # Clean up any open conns opened by adapter functions that hit the db
-        db_wrapper = context['adapter']
-        db_wrapper.adapter.release_connection(parsed_node.name)
-
     def _update_parsed_node_info(self, parsed_node, config):
         """Given the SourceConfig used for parsing and the parsed node,
         generate and set the true values to use, overriding the temporary parse
         values set in _build_intermediate_parsed_node.
         """
-        # Special macro defined in the global project. Use the root project's
-        # definition, not the current package
-        schema_override = config.config.get('schema')
-        get_schema = self.get_schema_func()
-        parsed_node.schema = get_schema(schema_override).strip()
-        parsed_node.alias = config.config.get('alias', parsed_node.get('name'))
-        parsed_node.database = config.config.get(
-            'database', self.default_database
-        ).strip()
-
         # Set tags on node provided in config blocks
         model_tags = config.config.get('tags', [])
         parsed_node.tags.extend(model_tags)
@@ -187,17 +215,42 @@ class MacrosKnownParser(BaseParser):
         config_dict.update(config.config)
         parsed_node.config = config_dict
 
+        # Special macro defined in the global project. Use the root project's
+        # definition, not the current package
+        schema_override = config.config.get('schema')
+        get_schema = self.get_schema_func()
+        try:
+            schema = get_schema(schema_override, parsed_node)
+        except dbt.exceptions.CompilationException as exc:
+            too_many_args = (
+                "macro 'dbt_macro__generate_schema_name' takes not more than "
+                "1 argument(s)"
+            )
+            if too_many_args not in str(exc):
+                raise
+            deprecations.warn('generate-schema-name-single-arg')
+            schema = get_schema(schema_override)
+        parsed_node.schema = schema.strip()
+
+        alias_override = config.config.get('alias')
+        get_alias = self.get_alias_func()
+        parsed_node.alias = get_alias(alias_override, parsed_node).strip()
+
+        parsed_node.database = config.config.get(
+            'database', self.default_database
+        ).strip()
+
         for hook_type in dbt.hooks.ModelHookType.Both:
             parsed_node.config[hook_type] = dbt.hooks.get_hooks(parsed_node,
                                                                 hook_type)
 
     def parse_node(self, node, node_path, package_project_config, tags=None,
                    fqn_extra=None, fqn=None, agate_table=None,
-                   archive_config=None, column_name=None):
+                   snapshot_config=None, column_name=None):
         """Parse a node, given an UnparsedNode and any other required information.
 
         agate_table should be set if the node came from a seed file.
-        archive_config should be set if the node is an Archive node.
+        snapshot_config should be set if the node is an Snapshot node.
         column_name should be set if the node is a Test node associated with a
         particular column.
         """
@@ -207,7 +260,7 @@ class MacrosKnownParser(BaseParser):
         fqn_extra = coalesce(fqn_extra, [])
 
         if fqn is None:
-            fqn = self.get_fqn(node.path, package_project_config, fqn_extra)
+            fqn = self.get_fqn(node, package_project_config, fqn_extra)
 
         config = SourceConfig(
             self.root_project_config,
@@ -217,7 +270,7 @@ class MacrosKnownParser(BaseParser):
 
         parsed_dict = self._build_intermediate_node_dict(
             config, node.serialize(), node_path, config, tags, fqn,
-            agate_table, archive_config, column_name
+            agate_table, snapshot_config, column_name
         )
         parsed_node = ParsedNode(**parsed_dict)
 
@@ -227,3 +280,16 @@ class MacrosKnownParser(BaseParser):
         parsed_node.validate()
 
         return parsed_node
+
+    def check_block_parsing(self, name, path, contents):
+        """Check if we were able to extract toplevel blocks from the given
+        contents. Return True if extraction was successful (no exceptions),
+        False if it fails.
+        """
+        if not dbt.flags.TEST_NEW_PARSER:
+            return True
+        try:
+            dbt.clients.jinja.extract_toplevel_blocks(contents)
+        except Exception:
+            return False
+        return True

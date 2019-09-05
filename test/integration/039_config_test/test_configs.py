@@ -1,3 +1,6 @@
+from datetime import datetime
+import os
+import shutil
 
 from test.integration.base import DBTIntegrationTest, use_profile
 
@@ -13,7 +16,7 @@ class TestConfigs(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            'data-paths': ['test/integration/039_config_test/data'],
+            'data-paths': ['data'],
             'models': {
                 'test': {
                     # the model configs will override this
@@ -26,7 +29,7 @@ class TestConfigs(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/039_config_test/models"
+        return "models"
 
     @use_profile('postgres')
     def test_postgres_config_layering(self):
@@ -39,3 +42,44 @@ class TestConfigs(DBTIntegrationTest):
         # make sure we overwrote the materialization properly
         models = self.get_models_in_schema()
         self.assertEqual(models['model'], 'table')
+
+
+class TestTargetConfigs(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "config_039"
+
+    def unique_schema(self):
+        return super(TestTargetConfigs, self).unique_schema().upper()
+
+    @property
+    def models(self):
+        return "models"
+
+    def setUp(self):
+        super(TestTargetConfigs, self).setUp()
+        self.init_targets = [d for d in os.listdir('.') if os.path.isdir(d) and d.startswith('target_')]
+
+    def tearDown(self):
+        super(TestTargetConfigs, self).tearDown()
+        for d in self.new_dirs():
+            shutil.rmtree(d)
+
+    def new_dirs(self):
+        for d in os.listdir('.'):
+            if os.path.isdir(d) and d not in self.init_targets and d.startswith('target_'):
+                yield d
+
+    @property
+    def project_config(self):
+        return {
+            'data-paths': ['data'],
+            'target-path': "target_{{ modules.datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%S') }}"
+        }
+
+    @use_profile('postgres')
+    def test_alternative_target_paths(self):
+        self.run_dbt(['seed'])
+        dirs = list(self.new_dirs())
+        self.assertEqual(len(dirs), 1)
+        self.assertTrue(os.path.exists(os.path.join(dirs[0], 'manifest.json')))

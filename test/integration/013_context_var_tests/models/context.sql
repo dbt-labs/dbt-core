@@ -19,7 +19,7 @@ select
     '{{ target.schema }}'  as "target.schema",
     '{{ target.type }}'    as "target.type",
     '{{ target.user }}'    as "target.user",
-    '{{ target.pass }}'    as "target.pass", -- not actually included, here to test that it is _not_ present!
+    '{{ target.get("pass", "") }}'    as "target.pass", -- not actually included, here to test that it is _not_ present!
     {{ target.port }}      as "target.port",
     {{ target.threads }}   as "target.threads",
 

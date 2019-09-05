@@ -1,18 +1,37 @@
 {% macro snowflake__create_table_as(temporary, relation, sql) -%}
-  {% if temporary %}
-    use schema {{ adapter.quote_as_configured(schema, 'schema') }};
-  {% endif %}
-
   {%- set transient = config.get('transient', default=true) -%}
+  {%- set cluster_by_keys = config.get('cluster_by', default=none) -%}
+  {%- set enable_automatic_clustering = config.get('automatic_clustering', default=false) -%}
+  {%- if cluster_by_keys is not none and cluster_by_keys is string -%}
+    {%- set cluster_by_keys = [cluster_by_keys] -%}
+  {%- endif -%}
+  {%- if cluster_by_keys is not none -%}
+    {%- set cluster_by_string = cluster_by_keys|join(", ")-%}
+  {% else %}
+    {%- set cluster_by_string = none -%}
+  {%- endif -%}
 
-  create {% if temporary -%}
-    temporary
-  {%- elif transient -%}
-    transient
-  {%- endif %} table {{ relation.include(database=(not temporary), schema=(not temporary)) }}
-  as (
-    {{ sql }}
-  );
+      create or replace {% if temporary -%}
+        temporary
+      {%- elif transient -%}
+        transient
+      {%- endif %} table {{ relation }}
+      as (
+        {%- if cluster_by_string is not none -%}
+          select * from(
+            {{ sql }}
+            ) order by ({{ cluster_by_string }})
+        {%- else -%}
+          {{ sql }}
+        {%- endif %}
+      );
+    {% if cluster_by_string is not none and not temporary -%}
+      alter table {{relation}} cluster by ({{cluster_by_string}});
+    {%- endif -%}
+    {% if enable_automatic_clustering and cluster_by_string is not none and not temporary  -%}
+      alter table {{relation}} resume recluster;
+    {%- endif -%}
+
 {% endmacro %}
 
 {% macro snowflake__create_view_as(relation, sql) -%}
@@ -58,6 +77,8 @@
       table_schema as schema,
       case when table_type = 'BASE TABLE' then 'table'
            when table_type = 'VIEW' then 'view'
+           when table_type = 'MATERIALIZED VIEW' then 'materializedview'
+           when table_type = 'EXTERNAL TABLE' then 'externaltable'
            else table_type
       end as table_type
     from {{ information_schema }}.tables
@@ -82,9 +103,20 @@
   convert_timezone('UTC', current_timestamp())
 {%- endmacro %}
 
+{% macro snowflake__snapshot_get_time() -%}
+  to_timestamp_ntz({{ current_timestamp() }})
+{%- endmacro %}
+
 
 {% macro snowflake__rename_relation(from_relation, to_relation) -%}
   {% call statement('rename_relation') -%}
     alter table {{ from_relation }} rename to {{ to_relation }}
   {%- endcall %}
+{% endmacro %}
+
+
+{% macro snowflake__alter_column_type(relation, column_name, new_column_type) -%}
+  {% call statement('alter_column_type') %}
+    alter table {{ relation }} alter {{ column_name }} set data type {{ new_column_type }};
+  {% endcall %}
 {% endmacro %}

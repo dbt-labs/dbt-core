@@ -14,7 +14,7 @@ import dbt.loader
 
 try:
     from queue import Empty
-except KeyError:
+except ImportError:
     from Queue import Empty
 
 
@@ -32,6 +32,7 @@ class GraphTest(unittest.TestCase):
         self.load_projects_patcher.stop()
         self.find_matching_patcher.stop()
         self.load_file_contents_patcher.stop()
+        self.get_adapter_patcher.stop()
 
     def setUp(self):
         dbt.flags.STRICT_MODE = True
@@ -41,6 +42,8 @@ class GraphTest(unittest.TestCase):
         self.load_projects_patcher = patch('dbt.loader._load_projects')
         self.find_matching_patcher = patch('dbt.clients.system.find_matching')
         self.load_file_contents_patcher = patch('dbt.clients.system.load_file_contents')
+        self.get_adapter_patcher = patch('dbt.context.parser.get_adapter')
+        self.factory = self.get_adapter_patcher.start()
 
         def mock_write_gpickle(graph, outfile):
             self.graph_result = graph
@@ -52,7 +55,7 @@ class GraphTest(unittest.TestCase):
                 'test': {
                     'type': 'postgres',
                     'threads': 4,
-                    'host': 'database',
+                    'host': 'thishostshouldnotexist',
                     'port': 5432,
                     'user': 'root',
                     'pass': 'password',
@@ -125,12 +128,12 @@ class GraphTest(unittest.TestCase):
         compiler = self.get_compiler(config)
         linker = compiler.compile(manifest)
 
-        self.assertEquals(
-            linker.nodes(),
+        self.assertEqual(
+            list(linker.nodes()),
             ['model.test_models_compile.model_one'])
 
-        self.assertEquals(
-            linker.edges(),
+        self.assertEqual(
+            list(linker.edges()),
             [])
 
     def test__two_models_simple_ref(self):
@@ -193,7 +196,7 @@ class GraphTest(unittest.TestCase):
             key = 'model.test_models_compile.{}'.format(model)
             actual = manifest.nodes[key].get('config', {}) \
                                              .get('materialized')
-            self.assertEquals(actual, expected)
+            self.assertEqual(actual, expected)
 
     def test__model_incremental(self):
         self.use_models({
@@ -205,7 +208,6 @@ class GraphTest(unittest.TestCase):
                 "test_models_compile": {
                     "model_one": {
                         "materialized": "incremental",
-                        "sql_where": "created_at",
                         "unique_key": "id"
                     },
                 }
@@ -219,8 +221,8 @@ class GraphTest(unittest.TestCase):
 
         node = 'model.test_models_compile.model_one'
 
-        self.assertEqual(linker.nodes(), [node])
-        self.assertEqual(linker.edges(), [])
+        self.assertEqual(list(linker.nodes()), [node])
+        self.assertEqual(list(linker.edges()), [])
 
         self.assertEqual(
             manifest.nodes[node].get('config', {}).get('materialized'),

@@ -11,6 +11,8 @@ from dbt.exceptions import ValidationException
 from dbt.exceptions import RuntimeException
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import parse_cli_vars
+from dbt import tracking
+from dbt.ui import printer
 
 from .renderer import ConfigRenderer
 
@@ -59,9 +61,10 @@ def read_profile(profiles_dir):
 
 
 class UserConfig(object):
-    def __init__(self, send_anonymous_usage_stats, use_colors):
+    def __init__(self, send_anonymous_usage_stats, use_colors, printer_width):
         self.send_anonymous_usage_stats = send_anonymous_usage_stats
         self.use_colors = use_colors
+        self.printer_width = printer_width
 
     @classmethod
     def from_dict(cls, cfg=None):
@@ -75,7 +78,10 @@ class UserConfig(object):
             'use_colors',
             DEFAULT_USE_COLORS
         )
-        return cls(send_anonymous_usage_stats, use_colors)
+        printer_width = cfg.get(
+            'printer_width'
+        )
+        return cls(send_anonymous_usage_stats, use_colors, printer_width)
 
     def to_dict(self):
         return {
@@ -90,6 +96,18 @@ class UserConfig(object):
         if profile:
             user_cfg = profile.get('config', {})
         return cls.from_dict(user_cfg)
+
+    def set_values(self, cookie_dir):
+        if self.send_anonymous_usage_stats:
+            tracking.initialize_tracking(cookie_dir)
+        else:
+            tracking.do_not_track()
+
+        if self.use_colors:
+            printer.use_colors()
+
+        if self.printer_width:
+            printer.printer_width(self.printer_width)
 
 
 class Profile(object):
@@ -129,7 +147,6 @@ class Profile(object):
     def __eq__(self, other):
         if not (isinstance(other, self.__class__) and
                 isinstance(self, other.__class__)):
-            return False
             return False
         return self.to_profile_info() == other.to_profile_info()
 
@@ -335,14 +352,12 @@ class Profile(object):
         )
 
     @classmethod
-    def from_args(cls, args, project_profile_name=None, cli_vars=None):
+    def from_args(cls, args, project_profile_name=None):
         """Given the raw profiles as read from disk and the name of the desired
         profile if specified, return the profile component of the runtime
         config.
 
         :param args argparse.Namespace: The arguments as parsed from the cli.
-        :param cli_vars dict: The command-line variables passed as arguments,
-            as a dict.
         :param project_profile_name Optional[str]: The profile name, if
             specified in a project.
         :raises DbtProjectError: If there is no profile name specified in the
@@ -352,9 +367,7 @@ class Profile(object):
             target could not be found.
         :returns Profile: The new Profile object.
         """
-        if cli_vars is None:
-            cli_vars = parse_cli_vars(getattr(args, 'vars', '{}'))
-
+        cli_vars = parse_cli_vars(getattr(args, 'vars', '{}'))
         threads_override = getattr(args, 'threads', None)
         target_override = getattr(args, 'target', None)
         raw_profiles = read_profile(args.profiles_dir)

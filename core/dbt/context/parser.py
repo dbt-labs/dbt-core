@@ -1,23 +1,7 @@
 import dbt.exceptions
 
 import dbt.context.common
-
-
-execute = False
-
-
-def ref(db_wrapper, model, config, manifest):
-
-    def ref(*args):
-        if len(args) == 1 or len(args) == 2:
-            model.refs.append(list(args))
-
-        else:
-            dbt.exceptions.ref_invalid_args(model, args)
-
-        return db_wrapper.adapter.Relation.create_from_node(config, model)
-
-    return ref
+from dbt.adapters.factory import get_adapter
 
 
 def docs(unparsed, docrefs, column_name=None):
@@ -43,14 +27,6 @@ def docs(unparsed, docrefs, column_name=None):
         return True
 
     return do_docs
-
-
-def source(db_wrapper, model, config, manifest):
-    def do_source(source_name, table_name):
-        model.sources.append([source_name, table_name])
-        return db_wrapper.adapter.Relation.create_from_node(config, model)
-
-    return do_source
 
 
 class Config(object):
@@ -96,13 +72,75 @@ class Config(object):
         return ''
 
 
+class DatabaseWrapper(dbt.context.common.BaseDatabaseWrapper):
+    """The parser subclass of the database wrapper applies any explicit
+    parse-time overrides.
+    """
+    def __getattr__(self, name):
+        override = (name in self.adapter._available_ and
+                    name in self.adapter._parse_replacements_)
+
+        if override:
+            return self.adapter._parse_replacements_[name]
+        elif name in self.adapter._available_:
+            return getattr(self.adapter, name)
+        else:
+            raise AttributeError(
+                "'{}' object has no attribute '{}'".format(
+                    self.__class__.__name__, name
+                )
+            )
+
+
+class Var(dbt.context.common.Var):
+    def get_missing_var(self, var_name):
+        # in the parser, just always return None.
+        return None
+
+
+class RefResolver(dbt.context.common.BaseResolver):
+    def __call__(self, *args):
+        # When you call ref(), this is what happens at parse time
+        if len(args) == 1 or len(args) == 2:
+            self.model.refs.append(list(args))
+
+        else:
+            dbt.exceptions.ref_invalid_args(self.model, args)
+
+        return self.Relation.create_from_node(self.config, self.model)
+
+
+class SourceResolver(dbt.context.common.BaseResolver):
+    def __call__(self, source_name, table_name):
+        # When you call source(), this is what happens at parse time
+        self.model.sources.append([source_name, table_name])
+        return self.Relation.create_from_node(self.config, self.model)
+
+
+class Provider(object):
+    execute = False
+    Config = Config
+    DatabaseWrapper = DatabaseWrapper
+    Var = Var
+    ref = RefResolver
+    source = SourceResolver
+
+
 def generate(model, runtime_config, manifest, source_config):
-    return dbt.context.common.generate(
-        model, runtime_config, manifest, source_config, dbt.context.parser)
+    # during parsing, we don't have a connection, but we might need one, so we
+    # have to acquire it.
+    # In the future, it would be nice to lazily open the connection, as in some
+    # projects it would be possible to parse without connecting to the db
+    with get_adapter(runtime_config).connection_named(model.get('name')):
+        return dbt.context.common.generate(
+            model, runtime_config, manifest, source_config, Provider()
+        )
 
 
-def generate_macro(model, runtime_config, manifest, connection_name):
+def generate_macro(model, runtime_config, manifest):
+    # parser.generate_macro is called by the get_${attr}_func family of Parser
+    # methods, which preparse and cache the generate_${attr}_name family of
+    # macros for use during parsing
     return dbt.context.common.generate_execute_macro(
-        model, runtime_config, manifest, dbt.context.parser,
-        connection_name
+        model, runtime_config, manifest, Provider()
     )

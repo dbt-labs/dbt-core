@@ -1,5 +1,4 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest
+from test.integration.base import DBTIntegrationTest, use_profile
 
 class TestBigqueryPrePostRunHooks(DBTIntegrationTest):
 
@@ -7,7 +6,7 @@ class TestBigqueryPrePostRunHooks(DBTIntegrationTest):
         DBTIntegrationTest.setUp(self)
         self.use_profile('bigquery')
         self.use_default_project()
-        self.run_sql_file("test/integration/014_hook_tests/seed_run_bigquery.sql")
+        self.run_sql_file("seed_run_bigquery.sql")
 
         self.fields = [
             'state',
@@ -33,8 +32,8 @@ class TestBigqueryPrePostRunHooks(DBTIntegrationTest):
     @property
     def project_config(self):
         return {
-            'macro-paths': ['test/integration/014_hook_tests/macros'],
-            'data-paths': ['test/integration/014_hook_tests/data'],
+            'macro-paths': ['macros'],
+            'data-paths': ['data'],
 
             # The create and drop table statements here validate that these hooks run
             # in the same order that they are defined. Drop before create is an error.
@@ -53,7 +52,7 @@ class TestBigqueryPrePostRunHooks(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/014_hook_tests/models"
+        return "models"
 
     def get_ctx_vars(self, state):
         field_list = ", ".join(self.fields)
@@ -78,7 +77,7 @@ class TestBigqueryPrePostRunHooks(DBTIntegrationTest):
         self.assertTrue(ctx['run_started_at'] is not None and len(ctx['run_started_at']) > 0, 'run_started_at was not set')
         self.assertTrue(ctx['invocation_id'] is not None and len(ctx['invocation_id']) > 0, 'invocation_id was not set')
 
-    @attr(type='bigquery')
+    @use_profile('bigquery')
     def test_bigquery_pre_and_post_run_hooks(self):
         self.run_dbt(['run'])
 
@@ -88,7 +87,7 @@ class TestBigqueryPrePostRunHooks(DBTIntegrationTest):
         self.assertTableDoesNotExist("start_hook_order_test")
         self.assertTableDoesNotExist("end_hook_order_test")
 
-    @attr(type='bigquery')
+    @use_profile('bigquery')
     def test_bigquery_pre_and_post_seed_hooks(self):
         self.run_dbt(['seed'])
 

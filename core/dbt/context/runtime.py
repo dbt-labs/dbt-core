@@ -8,80 +8,79 @@ from dbt.parser import ParserUtils
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
-execute = True
-
-
-def ref(db_wrapper, model, config, manifest):
-    current_project = config.project_name
-    adapter = db_wrapper.adapter
-
-    def do_ref(*args):
-        target_model_name = None
-        target_model_package = None
+class BaseRefResolver(dbt.context.common.BaseResolver):
+    def resolve(self, args):
+        name = None
+        package = None
 
         if len(args) == 1:
-            target_model_name = args[0]
+            name = args[0]
         elif len(args) == 2:
-            target_model_package, target_model_name = args
+            package, name = args
         else:
-            dbt.exceptions.ref_invalid_args(model, args)
+            dbt.exceptions.ref_invalid_args(self.model, args)
 
         target_model = ParserUtils.resolve_ref(
-            manifest,
-            target_model_name,
-            target_model_package,
-            current_project,
-            model.get('package_name'))
+            self.manifest,
+            name,
+            package,
+            self.current_project,
+            self.model.package_name)
 
         if target_model is None or target_model is ParserUtils.DISABLED:
             dbt.exceptions.ref_target_not_found(
-                model,
-                target_model_name,
-                target_model_package)
+                self.model,
+                name,
+                package)
+        return target_model, name
 
-        target_model_id = target_model.get('unique_id')
+    def create_ephemeral_relation(self, target_model, name):
+        self.model.set_cte(target_model.unique_id, None)
+        return self.Relation.create(
+            type=self.Relation.CTE,
+            identifier=add_ephemeral_model_prefix(name)
+        ).quote(identifier=False)
 
-        if target_model_id not in model.get('depends_on', {}).get('nodes'):
-            dbt.exceptions.ref_bad_context(model,
-                                           target_model_name,
-                                           target_model_package)
-
-        is_ephemeral = (get_materialization(target_model) == 'ephemeral')
-
-        if is_ephemeral:
-            model.set_cte(target_model_id, None)
-            return adapter.Relation.create(
-                type=adapter.Relation.CTE,
-                identifier=add_ephemeral_model_prefix(
-                    target_model_name)).quote(identifier=False)
+    def create_relation(self, target_model, name):
+        if get_materialization(target_model) == 'ephemeral':
+            return self.create_ephemeral_relation(target_model, name)
         else:
-            return adapter.Relation.create_from_node(config, target_model)
-
-    return do_ref
+            return self.Relation.create_from_node(self.config, target_model)
 
 
-def source(db_wrapper, model, config, manifest):
-    current_project = config.project_name
+class RefResolver(BaseRefResolver):
+    def validate(self, resolved, args):
+        if resolved.unique_id not in self.model.depends_on.get('nodes'):
+            dbt.exceptions.ref_bad_context(self.model, args)
 
-    def do_source(source_name, table_name):
+    def __call__(self, *args):
+        # When you call ref(), this is what happens at runtime
+        target_model, name = self.resolve(args)
+        self.validate(target_model, args)
+        return self.create_relation(target_model, name)
+
+
+class SourceResolver(dbt.context.common.BaseResolver):
+    def resolve(self, source_name, table_name):
         target_source = ParserUtils.resolve_source(
-            manifest,
+            self.manifest,
             source_name,
             table_name,
-            current_project,
-            model.get('package_name')
+            self.current_project,
+            self.model.package_name
         )
 
         if target_source is None:
             dbt.exceptions.source_target_not_found(
-                model,
+                self.model,
                 source_name,
                 table_name)
+        return target_source
 
-        model.sources.append([source_name, table_name])
-        return db_wrapper.Relation.create_from_source(target_source)
-
-    return do_source
+    def __call__(self, source_name, table_name):
+        """When you call source(), this is what happens at runtime"""
+        target_source = self.resolve(source_name, table_name)
+        return self.Relation.create_from_source(target_source)
 
 
 class Config:
@@ -118,13 +117,34 @@ class Config:
         return to_return
 
 
+class DatabaseWrapper(dbt.context.common.BaseDatabaseWrapper):
+    """The runtime database wrapper exposes everything the adapter marks
+    available.
+    """
+    def __getattr__(self, name):
+        if name in self.adapter._available_:
+            return getattr(self.adapter, name)
+        else:
+            raise AttributeError(
+                "'{}' object has no attribute '{}'".format(
+                    self.__class__.__name__, name
+                )
+            )
+
+
+class Var(dbt.context.common.Var):
+    pass
+
+
+class Provider(object):
+    execute = True
+    Config = Config
+    DatabaseWrapper = DatabaseWrapper
+    Var = Var
+    ref = RefResolver
+    source = SourceResolver
+
+
 def generate(model, runtime_config, manifest):
     return dbt.context.common.generate(
-        model, runtime_config, manifest, None, dbt.context.runtime)
-
-
-def generate_macro(model, runtime_config, manifest, connection_name):
-    return dbt.context.common.generate_execute_macro(
-        model, runtime_config, manifest, dbt.context.runtime,
-        connection_name
-    )
+        model, runtime_config, manifest, None, Provider())

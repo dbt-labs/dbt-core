@@ -1,8 +1,6 @@
 import networkx as nx
-from collections import defaultdict
 import threading
 
-import dbt.utils
 from dbt.compat import PriorityQueue
 from dbt.node_types import NodeType
 
@@ -138,7 +136,7 @@ class GraphQueue(object):
 
         Callers must hold the lock.
         """
-        for node, in_degree in self.graph.in_degree_iter():
+        for node, in_degree in dict(self.graph.in_degree()).items():
             if not self._already_known(node) and in_degree == 0:
                 self.inner.put((self._scores[node], node))
                 self.queued.add(node)
@@ -270,5 +268,5 @@ def _updated_graph(graph, manifest):
         for key in GRAPH_SERIALIZE_BLACKLIST:
             if key in data:
                 del data[key]
-        graph.add_node(node_id, data)
+        graph.add_node(node_id, **data)
     return graph

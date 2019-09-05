@@ -1,5 +1,4 @@
-from nose.plugins.attrib import attr
-from test.integration.base import DBTIntegrationTest, FakeArgs
+from test.integration.base import DBTIntegrationTest, FakeArgs, use_profile
 
 
 class TestBigqueryAdapterFunctions(DBTIntegrationTest):
@@ -10,13 +9,13 @@ class TestBigqueryAdapterFunctions(DBTIntegrationTest):
 
     @property
     def models(self):
-        return "test/integration/022_bigquery_test/adapter-models"
+        return "adapter-models"
 
     @property
     def profile_config(self):
         return self.bigquery_profile()
 
-    @attr(type='bigquery')
+    @use_profile('bigquery')
     def test__bigquery_adapter_functions(self):
         results = self.run_dbt()
         self.assertEqual(len(results), 3)
