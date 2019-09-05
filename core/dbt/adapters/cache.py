@@ -1,7 +1,6 @@
 from collections import namedtuple
 import threading
 from copy import deepcopy
-import pprint
 from dbt.logger import CACHE_LOGGER as logger
 import dbt.exceptions
 
@@ -163,6 +162,12 @@ class _CachedRelation(object):
         return [dot_separated(r) for r in self.referenced_by]
 
 
+def lazy_log(msg, func):
+    if logger.disabled:
+        return
+    logger.debug(msg.format(func()))
+
+
 class RelationsCache(object):
     """A cache of the relations known to dbt. Keeps track of relationships
     declared between tables and handles renames/drops as a real database would.
@@ -303,14 +308,13 @@ class RelationsCache(object):
         """
         cached = _CachedRelation(relation)
         logger.debug('Adding relation: {!s}'.format(cached))
-        logger.debug('before adding: {}'.format(
-            pprint.pformat(self.dump_graph()))
-        )
+
+        lazy_log('before adding: {!s}', self.dump_graph)
+
         with self.lock:
             self._setdefault(cached)
-        logger.debug('after adding: {}'.format(
-            pprint.pformat(self.dump_graph()))
-        )
+
+        lazy_log('after adding: {!s}', self.dump_graph)
 
     def _remove_refs(self, keys):
         """Removes all references to all entries in keys. This does not
@@ -431,11 +435,10 @@ class RelationsCache(object):
         old_key = _make_key(old)
         new_key = _make_key(new)
         logger.debug('Renaming relation {!s} to {!s}'.format(
-            old_key, new_key)
-        )
-        logger.debug('before rename: {}'.format(
-            pprint.pformat(self.dump_graph()))
-        )
+            old_key, new_key
+        ))
+
+        lazy_log('before rename: {!s}', self.dump_graph)
 
         with self.lock:
             if self._check_rename_constraints(old_key, new_key):
@@ -443,9 +446,7 @@ class RelationsCache(object):
             else:
                 self._setdefault(_CachedRelation(new))
 
-        logger.debug('after rename: {}'.format(
-            pprint.pformat(self.dump_graph()))
-        )
+        lazy_log('after rename: {!s}', self.dump_graph)
 
     def get_relations(self, database, schema):
         """Case-insensitively yield all relations matching the given schema.
