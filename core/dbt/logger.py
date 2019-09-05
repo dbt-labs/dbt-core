@@ -26,7 +26,7 @@ colorama_wrap = True
 colorama.init(wrap=colorama_wrap)
 
 
-if sys.platform == 'win32' and not os.getenv('TERM'):
+if sys.platform == "win32" and not os.getenv("TERM"):
     colorama_wrap = False
     colorama_stdout = colorama.AnsiToWin32(sys.stdout).stream
 

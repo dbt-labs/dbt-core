@@ -417,7 +417,7 @@ def translate_aliases(
 # It has no effect on mashumaro serialization.
 def restrict_to(*restrictions):
     """Create the metadata for a restricted dataclass field"""
-    return {'restrict': list(restrictions)}
+    return {"restrict": list(restrictions)}
 
 
 def coerce_dict_str(value: Any) -> Optional[Dict[str, Any]]:
