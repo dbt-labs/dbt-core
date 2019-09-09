@@ -82,32 +82,6 @@ def query_url(url, query):
     return requests.post(url, headers=headers, data=json.dumps(query))
 
 
-class BackgroundQueryProcess(multiprocessing.Process):
-    def __init__(self, query, url, group=None, name=None):
-        parent, child = multiprocessing.Pipe()
-        self.parent_pipe = parent
-        self.child_pipe = child
-        self.query = query
-        self.url = url
-        super().__init__(group=group, name=name)
-
-    def run(self):
-        try:
-            result = query_url(self.url, self.query).json()
-        except Exception as exc:
-            self.child_pipe.send(('error', str(exc)))
-        else:
-            self.child_pipe.send(('result', result))
-
-    def wait_result(self):
-        result_type, result = self.parent_pipe.recv()
-        self.join()
-        if result_type == 'error':
-            raise Exception(result)
-        else:
-            return result
-
-
 _select_from_ephemeral = '''with __dbt__CTE__ephemeral_model as (
 
 
@@ -224,21 +198,6 @@ class HasRPCServer(DBTIntegrationTest):
             raise result
         else:
             return result
-
-    def background_query(
-        self, _method, _sql=None, _test_request_id=1, _block=False, macros=None, **kwargs
-    ):
-        built = self.build_query(_method, kwargs, _sql, _test_request_id,
-                                 macros)
-
-        url = 'http://localhost:{}/jsonrpc'.format(self._server.port)
-        name = _method
-        if 'name' in kwargs:
-            name += ' ' + kwargs['name']
-        bg_query = BackgroundQueryProcess(built, url, name=name)
-        self.background_queries.append(bg_query)
-        bg_query.start()
-        return bg_query
 
     def assertResultHasTimings(self, result, *names):
         self.assertIn('timing', result)
@@ -580,6 +539,12 @@ class TestRPCServer(HasRPCServer):
         self.assertEqual(rowdict[1]['state'], 'running')
         self.assertEqual(rowdict[1]['timeout'], None)
 
+        # try to GC our running task
+        gc_response = self.query('gc', task_ids=[request_token]).json()
+        gc_result = self.assertIsResult(gc_response)
+        self.assertIn('running', gc_result)
+        self.assertEqual(gc_result['running'], [request_token])
+
         self.kill_and_assert(request_token, request_id)
 
     def kill_and_assert(self, request_token, request_id):
@@ -840,6 +805,106 @@ class TestRPCServer(HasRPCServer):
         self.kill_and_assert(*dead)
         self.assertRunning([alive])
         self.kill_and_assert(*alive)
+
+    def _make_any_requests(self, num_requests):
+        stored = []
+        for idx in range(num_requests):
+            response = self.query('run', 'select 1 as id', name='run').json()
+            result = self.assertIsResult(response)
+            self.assertIn('request_token', result)
+            token = result['request_token']
+            self.poll_for_result(token)
+            stored.append(token)
+        return stored
+
+    @use_profile('postgres')
+    def test_gc_by_time_postgres(self):
+        # make a few normal requests
+        num_requests = 10
+        self._make_any_requests(num_requests)
+
+        resp = self.query('ps', completed=True, active=True).json()
+        result = self.assertIsResult(resp)
+        self.assertEqual(len(result['rows']), num_requests)
+        # force a GC
+        resp = self.query('gc', before=datetime.utcnow().isoformat()).json()
+        result = self.assertIsResult(resp)
+        self.assertEqual(len(result['deleted']), num_requests)
+        self.assertEqual(len(result['missing']), 0)
+        self.assertEqual(len(result['running']), 0)
+        # now there should be none
+        resp = self.query('ps', completed=True, active=True).json()
+        result = self.assertIsResult(resp)
+        self.assertEqual(len(result['rows']), 0)
+
+    @use_profile('postgres')
+    def test_gc_by_id_postgres(self):
+        # make 10 requests, then gc half of them
+        num_requests = 10
+        stored = self._make_any_requests(num_requests)
+
+        resp = self.query('ps', completed=True, active=True).json()
+        result = self.assertIsResult(resp)
+        self.assertEqual(len(result['rows']), num_requests)
+
+        resp = self.query('gc', task_ids=stored[:num_requests//2]).json()
+        result = self.assertIsResult(resp)
+        self.assertEqual(len(result['deleted']), num_requests//2)
+        self.assertEqual(sorted(result['deleted']), sorted(stored[:num_requests//2]))
+        self.assertEqual(len(result['missing']), 0)
+        self.assertEqual(len(result['running']), 0)
+        # we should have total - what we removed still there
+        resp = self.query('ps', completed=True, active=True).json()
+        result = self.assertIsResult(resp)
+        self.assertEqual(len(result['rows']), (num_requests - num_requests//2))
+
+        resp = self.query('gc', task_ids=stored[num_requests//2:]).json()
+        result = self.assertIsResult(resp)
+        self.assertEqual(len(result['deleted']), num_requests//2)
+        self.assertEqual(sorted(result['deleted']), sorted(stored[num_requests//2:]))
+        self.assertEqual(len(result['missing']), 0)
+        self.assertEqual(len(result['running']), 0)
+        # all gone!
+        resp = self.query('ps', completed=True, active=True).json()
+        result = self.assertIsResult(resp)
+        self.assertEqual(len(result['rows']), 0)
+
+    @use_profile('postgres')
+    def test_gc_change_interval(self):
+        num_requests = 10
+        self._make_any_requests(num_requests)
+
+        # all present
+        resp = self.query('ps', completed=True, active=True).json()
+        result = self.assertIsResult(resp)
+        self.assertEqual(len(result['rows']), num_requests)
+
+        resp = self.query('gc', settings=dict(maxsize=1000, reapsize=5, auto_reap_age=0.1)).json()
+        result = self.assertIsResult(resp)
+        self.assertEqual(len(result['deleted']), 0)
+        self.assertEqual(len(result['missing']), 0)
+        self.assertEqual(len(result['running']), 0)
+        time.sleep(0.5)
+
+        # all cleared up
+        test_resp = self.query('ps', completed=True, active=True)
+        resp = test_resp.json()
+        result = self.assertIsResult(resp)
+        self.assertEqual(len(result['rows']), 0)
+
+        resp = self.query('gc', settings=dict(maxsize=2, reapsize=5, auto_reap_age=10000)).json()
+        result = self.assertIsResult(resp)
+        self.assertEqual(len(result['deleted']), 0)
+        self.assertEqual(len(result['missing']), 0)
+        self.assertEqual(len(result['running']), 0)
+
+        # make more requests
+        self._make_any_requests(num_requests)
+        time.sleep(0.5)
+        # there should be 2 left!
+        resp = self.query('ps', completed=True, active=True).json()
+        result = self.assertIsResult(resp)
+        self.assertEqual(len(result['rows']), 2)
 
 
 class FailedServerProcess(ServerProcess):

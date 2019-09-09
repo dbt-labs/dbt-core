@@ -3,6 +3,7 @@ import os
 import signal
 import threading
 import uuid
+from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Dict, Union, Optional, List
 
@@ -43,10 +44,48 @@ class TaskHandlerState(StrEnum):
     Running = 'running'
     Success = 'success'
     Error = 'error'
-    Shutdown = 'shutdown'
+
+    def __lt__(self, other) -> bool:
+        """A logical ordering for TaskHandlerState:
+
+        NotStarted < Initializing < Running < (Success, Error)
+        """
+        if not isinstance(other, TaskHandlerState):
+            raise TypeError('cannot compare to non-TaskHandlerState')
+        order = (self.NotStarted, self.Initializing, self.Running)
+        smaller = set()
+        for value in order:
+            smaller.add(value)
+            if self == value:
+                return other not in smaller
+
+        return False
+
+    def __le__(self, other) -> bool:
+        # so that ((Success <= Error) is True)
+        return ((self < other) or
+                (self == other) or
+                (self.finished and other.finished))
+
+    def __gt__(self, other) -> bool:
+        if not isinstance(other, TaskHandlerState):
+            raise TypeError('cannot compare to non-TaskHandlerState')
+        order = (self.NotStarted, self.Initializing, self.Running)
+        smaller = set()
+        for value in order:
+            smaller.add(value)
+            if self == value:
+                return other in smaller
+        return other in smaller
+
+    def __ge__(self, other) -> bool:
+        # so that ((Success <= Error) is True)
+        return ((self > other) or
+                (self == other) or
+                (self.finished and other.finished))
 
     @property
-    def finished(self):
+    def finished(self) -> bool:
         return self == self.Error or self == self.Success
 
 
@@ -126,6 +165,7 @@ class RequestTaskHandler(threading.Thread):
         self.process: Optional[multiprocessing.Process] = None
         self.thread: Optional[threading.Thread] = None
         self.started: Optional[datetime] = None
+        self.ended: Optional[datetime] = None
         self.timeout: Optional[float] = None
         self.task_id: uuid.UUID = uuid.uuid4()
         # the are multiple threads potentially operating on these attributes:
@@ -197,6 +237,34 @@ class RequestTaskHandler(threading.Thread):
                 'Invalid message type {} (result={})'.format(msg)
             )
 
+    @contextmanager
+    def state_handler(self):
+        try:
+            try:
+                yield
+            finally:
+                # make sure to set this _before_ updating state
+                self.ended = datetime.now()
+        except RPCException as exc:
+            self.error = exc
+            self.state = TaskHandlerState.Error
+            raise  # this re-raises for single-threaded operation
+        except dbt.exceptions.Exception as exc:
+            self.error = dbt_error(exc)
+            self.state = TaskHandlerState.Error
+            raise
+        except BaseException as exc:
+            # we should only get here if we got a BaseException that is not an
+            # Exception (we caught those in _wait_for_results), or a bug in
+            # get_result's call stack. Either way, we should set an error so we
+            # can figure out what happened on thread death, and re-raise in
+            # case it's something python-internal.
+            self.error = server_error(exc)
+            self.state = TaskHandlerState.Error
+            raise
+        else:
+            self.state = TaskHandlerState.Success
+
     def get_result(self) -> RemoteCallableResult:
         if self.process is None:
             raise dbt.exceptions.InternalException(
@@ -222,24 +290,10 @@ class RequestTaskHandler(threading.Thread):
 
     def run(self):
         try:
-            self.result = self.get_result()
-            self.state = TaskHandlerState.Success
-        except RPCException as exc:
-            self.error = exc
-            self.state = TaskHandlerState.Error
-        except dbt.exceptions.Exception as exc:
-            self.error = dbt_error(exc)
-            self.state = TaskHandlerState.Error
-            raise
-        except BaseException as exc:
-            # we should only get here if we got a BaseException that is not an
-            # Exception (we caught those in _wait_for_results), or a bug in
-            # get_result's call stack. Either way, we should set an error so we
-            # can figure out what happened on thread death, and re-raise in
-            # case it's something python-internal.
-            self.error = server_error(exc)
-            self.state = TaskHandlerState.Error
-            raise
+            with self.state_handler():
+                self.result = self.get_result()
+        except RPCException:
+            pass  # rpc exceptions are fine, the managing thread will handle it
 
     def handle_singlethreaded(self, kwargs):
         # in single-threaded mode, we're going to remain synchronous, so call
@@ -247,18 +301,8 @@ class RequestTaskHandler(threading.Thread):
         # note this shouldn't call self.run() as that has different semantics
         # (we want errors to raise)
         self.process.run()
-        try:
+        with self.state_handler():
             self.result = self.get_result()
-            self.state = TaskHandlerState.Success
-        except RPCException as exc:
-            self.error = exc
-            self.state = TaskHandlerState.Error
-            raise
-        except dbt.exceptions.Exception as exc:
-            self.error = dbt_error(exc)
-            self.state = TaskHandlerState.Error
-            raise
-
         return self.result
 
     def start(self):
