@@ -50,13 +50,11 @@ class TimeDeltaFieldEncoder(FieldEncoder[timedelta]):
         try:
             return timedelta(seconds=value)
         except TypeError:
-            raise ValidationError(
-                'cannot encode {} into timedelta'.format(value)
-            ) from None
+            raise ValidationError("cannot encode {} into timedelta".format(value)) from None
 
     @property
     def json_schema(self) -> JsonDict:
-        return {'type': 'number'}
+        return {"type": "number"}
 
 
 class PathEncoder(FieldEncoder):
@@ -91,10 +89,12 @@ class NoValue(dbtClassMixin):
 
 
 dbtClassMixin.register_field_encoders(
-    Port: PortEncoder(),
+    {
     timedelta: TimeDeltaFieldEncoder(),
         timedelta: TimeDeltaFieldEncoder(),
-})
+        Path: PathEncoder(),
+    }
+)
 
 
 FQNPath = Tuple[str, ...]
