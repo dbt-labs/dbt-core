@@ -297,8 +297,13 @@ def print_run_result_error(result, newline=True, is_warning=False):
             result.node.get('resource_type'),
             result.node.get('name'),
             result.node.get('original_file_path')))
-        status = dbt.utils.pluralize(result.status, 'result')
-        logger.info("  Got {}, expected 0.".format(status))
+
+        try:
+            int(result.status)
+            status = dbt.utils.pluralize(result.status, 'result')
+            logger.info("  Got {}, expected 0.".format(status))
+        except ValueError:
+            logger.info("  Status: {}".format(result.status))
 
         if result.node.get('build_path') is not None:
             logger.info("")
