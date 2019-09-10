@@ -300,10 +300,11 @@ def print_run_result_error(result, newline=True, is_warning=False):
 
         try:
             int(result.status)
-            status = dbt.utils.pluralize(result.status, 'result')
-            logger.info("  Got {}, expected 0.".format(status))
         except ValueError:
             logger.info("  Status: {}".format(result.status))
+        else:
+            status = dbt.utils.pluralize(result.status, 'result')
+            logger.info("  Got {}, expected 0.".format(status))
 
         if result.node.get('build_path') is not None:
             logger.info("")
