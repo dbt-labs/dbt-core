@@ -287,6 +287,10 @@ class SourceFreshnessResult(NodeSerializable):
         return self.status == 'error'
 
     @property
+    def warned(self):
+        return self.status == 'warn'
+
+    @property
     def skipped(self):
         return False
 
