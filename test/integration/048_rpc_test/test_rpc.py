@@ -98,6 +98,7 @@ def addr_in_use(err, *args):
     return False
 
 
+@mark.skipif(os.name == 'nt', reason='"dbt rpc" not supported on windows')
 class HasRPCServer(DBTIntegrationTest):
     ServerProcess = ServerProcess
     should_seed = True
@@ -493,7 +494,6 @@ class TestRPCServer(HasRPCServer):
         request_token = result['request_token']
         return request_token, request_id
 
-    @mark.skipif(os.name == 'nt', reason='"kill" not supported on windows')
     @mark.flaky(rerun_filter=None)
     @use_profile('postgres')
     def test_ps_kill_postgres(self):
@@ -564,7 +564,6 @@ class TestRPCServer(HasRPCServer):
         self.assertIn('logs', error_data)
         return error_data
 
-    @mark.skipif(os.name == 'nt', reason='"kill" not supported on windows')
     @mark.flaky(rerun_filter=lambda *a, **kw: True)
     @use_profile('postgres')
     def test_ps_kill_longwait_postgres(self):
@@ -653,9 +652,7 @@ class TestRPCServer(HasRPCServer):
         self.assertIn('message', error_data)
         self.assertEqual(error_data['message'], 'RPC timed out after 1s')
         self.assertIn('logs', error_data)
-        # on windows, process start is so slow that frequently we won't have collected any logs
-        if os.name != 'nt':
-            self.assertTrue(len(error_data['logs']) > 0)
+        self.assertTrue(len(error_data['logs']) > 0)
 
     @use_profile('postgres')
     def test_seed_project_postgres(self):
@@ -753,7 +750,6 @@ class TestRPCServer(HasRPCServer):
     def _add_command(self, cmd, id_):
         self.assertIsResult(self.async_query(cmd, _test_request_id=id_).json(), id_)
 
-    @mark.skipif(os.name == 'nt', reason='"sighup" not supported on windows')
     @mark.flaky(rerun_filter=lambda *a, **kw: True)
     @use_profile('postgres')
     def test_sighup_postgres(self):

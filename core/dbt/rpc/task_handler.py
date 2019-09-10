@@ -1,5 +1,4 @@
 import multiprocessing
-import os
 import signal
 import threading
 import uuid
@@ -11,8 +10,7 @@ from hologram import JsonSchemaMixin
 from hologram.helpers import StrEnum
 
 import dbt.exceptions
-from dbt import flags
-from dbt.adapters.factory import load_plugin, cleanup_connections
+from dbt.adapters.factory import cleanup_connections
 from dbt.logger import GLOBAL_LOGGER as logger, list_handler, LogMessage
 from dbt.rpc.error import (
     dbt_error,
@@ -93,23 +91,6 @@ def sigterm_handler(signum, frame):
     raise dbt.exceptions.RPCKilledException(signum)
 
 
-def _nt_setup(config, args):
-    """
-    On windows, we have to do a some things that dbt does dynamically at
-    process load.
-
-    These things are inherited automatically on posix, where fork() keeps
-    everything in memory.
-    """
-    # reset flags
-    flags.set_from_args(args)
-    # reload the active plugin
-    load_plugin(config.credentials.type)
-
-    # reset tracking, etc
-    config.config.set_values(args.profiles_dir)
-
-
 def _task_bootstrap(
     task: RPCTask,
     queue,  # typing: Queue[Tuple[QueueMessageType, Any]]
@@ -120,11 +101,6 @@ def _task_bootstrap(
     # the first thing we do in a new process: push logging back over our queue
     handler = QueueLogHandler(queue)
     with handler.applicationbound():
-        # on windows, we need to reload our plugins because of how it starts
-        # new processes. At this point there are no adapter plugins loaded!
-        if os.name == 'nt':
-            _nt_setup(task.config, task.args)
-
         rpc_exception = None
         result = None
         try:
@@ -315,8 +291,7 @@ class RequestTaskHandler(threading.Thread):
         # Also for some reason, if you do this after forking, even without
         # calling close(), the connection in the parent ends up throwing
         # 'connection already closed' exceptions
-        if os.name != 'nt':
-            cleanup_connections()
+        cleanup_connections()
         self.process.start()
         self.state = TaskHandlerState.Running
         super().start()

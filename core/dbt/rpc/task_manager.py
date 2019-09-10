@@ -425,13 +425,12 @@ class TaskManager:
                 return self._builtins
 
             methods: Dict[str, UnmanagedHandler] = {
+                'kill': self.process_kill,
                 'ps': self.process_ps,
                 'status': self.process_status,
                 'poll': self.process_poll,
                 'gc': self.process_gc,
             }
-            if os.name != 'nt':
-                methods['kill'] = self.process_kill
 
             self._builtins.update(methods)
             return self._builtins

@@ -9,6 +9,7 @@ from werkzeug.wrappers import Request, Response
 from werkzeug.serving import run_simple
 from werkzeug.exceptions import NotFound
 
+from dbt.exceptions import RuntimeException
 from dbt.logger import (
     GLOBAL_LOGGER as logger,
     list_handler,
@@ -94,15 +95,16 @@ def signhup_replace():
 
 class RPCServerTask(ConfiguredTask):
     def __init__(self, args, config, tasks=None):
+        if os.name == 'nt':
+            raise RuntimeException(
+                'The dbt RPC server is not supported on windows'
+            )
         super().__init__(args, config)
         self._tasks = tasks or self._default_tasks()
         self.task_manager = rpc.TaskManager(self.args, self.config)
         self._reloader = None
         self._reload_task_manager()
-
-        # windows doesn't have SIGHUP so don't do sighup things
-        if os.name != 'nt':
-            signal.signal(signal.SIGHUP, self._sighup_handler)
+        signal.signal(signal.SIGHUP, self._sighup_handler)
 
     def _reload_task_manager(self):
         """This function can only be running once at a time, as it runs in the
