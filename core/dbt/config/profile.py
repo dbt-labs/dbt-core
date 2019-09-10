@@ -1,5 +1,4 @@
 import os
-import pprint
 
 from dbt.adapters.factory import load_plugin
 from dbt.clients.system import load_file_contents
@@ -142,7 +141,7 @@ class Profile(object):
         return result
 
     def __str__(self):
-        return pprint.pformat(self.to_profile_info())
+        return str(self.to_profile_info())
 
     def __eq__(self, other):
         if not (isinstance(other, self.__class__) and
