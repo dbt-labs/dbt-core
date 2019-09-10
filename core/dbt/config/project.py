@@ -1,7 +1,6 @@
 from copy import deepcopy
 import hashlib
 import os
-import pprint
 
 from dbt.clients.system import resolve_path_from_base
 from dbt.clients.system import path_exists
@@ -295,7 +294,7 @@ class Project:
 
     def __str__(self):
         cfg = self.to_project_config(with_packages=True)
-        return pprint.pformat(cfg)
+        return str(cfg)
 
     def __eq__(self, other):
         if not (isinstance(other, self.__class__) and
