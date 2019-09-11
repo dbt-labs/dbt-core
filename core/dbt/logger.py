@@ -8,7 +8,7 @@ import sys
 import warnings
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, List, ContextManager, Callable, Dict, Any
+from typing import Optional, List, ContextManager, Callable, Dict, Any, Set
 
 import colorama
 import logbook
@@ -157,6 +157,35 @@ def _redirect_std_logging():
     logbook.compat.redirect_logging()
 
 
+def _root_channel(record: logbook.LogRecord) -> str:
+    return record.channel.split('.')[0]
+
+
+class Relevel(logbook.Processor):
+    def __init__(
+        self,
+        allowed: List[str],
+        min_level=logbook.WARNING,
+        target_level=logbook.DEBUG,
+    ) -> None:
+        self.allowed: Set[str] = set(allowed)
+        self.min_level = min_level
+        self.target_level = target_level
+        super().__init__()
+
+    def process(self, record):
+        if _root_channel(record) in self.allowed:
+            return
+        record.extra['old_level'] = record.level
+        # suppress logs at/below our min level by lowering them to NOTSET
+        if record.level < self.min_level:
+            record.level = logbook.NOTSET
+        # if we didn't mess with it, then lower all logs above our level to
+        # our target level.
+        else:
+            record.level = self.target_level
+
+
 logger = logbook.Logger('dbt')
 # provide this for the cache, disabled by default
 CACHE_LOGGER = logbook.Logger('dbt.cache')
@@ -287,10 +316,12 @@ class LogManager(logbook.NestedSetup):
         self._null_handler = logbook.NullHandler()
         self._output_handler = OutputHandler(self.stdout)
         self._file_handler = DelayedFileHandler()
+        self._relevel_processor = Relevel(allowed=['dbt', 'werkzeug'])
         super().__init__([
             self._null_handler,
             self._output_handler,
             self._file_handler,
+            self._relevel_processor,
         ])
 
     def disable(self):
@@ -388,28 +419,15 @@ class ListLogHandler(LogMessageHandler):
             lst = []
         self.records: List[LogMessage] = lst
 
+    def should_handle(self, record):
+        """Only ever emit dbt-sourced log messages to the ListHandler."""
+        if _root_channel(record) != 'dbt':
+            return False
+        return super().should_handle(record)
+
     def emit(self, record: logbook.LogRecord):
         as_dict = self.format_logmessage(record)
         self.records.append(as_dict)
-
-
-class SuppressBelow(logbook.Handler):
-    def __init__(
-        self, channels, level=logbook.INFO, filter=None, bubble=False
-    ) -> None:
-        self.channels = set(channels)
-        super().__init__(level, filter, bubble)
-
-    def should_handle(self, record):
-        channel = record.channel.split('.')[0]
-        if channel not in self.channels:
-            return False
-        # if we were set to 'info' and record.level is warn/error, we don't
-        # want to 'handle' it (so a real logger will)
-        return self.level >= record.level
-
-    def handle(self, record):
-        return True
 
 
 # we still need to use logging to suppress these or pytest captures them
@@ -419,8 +437,8 @@ logging.getLogger('urllib3').setLevel(logging.INFO)
 logging.getLogger('google').setLevel(logging.INFO)
 logging.getLogger('snowflake.connector').setLevel(logging.INFO)
 logging.getLogger('parsedatetime').setLevel(logging.INFO)
-# we never want to see werkzeug logs
-logging.getLogger('werkzeug').setLevel(logging.CRITICAL)
+# want to see werkzeug logs about errors
+logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 
 def list_handler(

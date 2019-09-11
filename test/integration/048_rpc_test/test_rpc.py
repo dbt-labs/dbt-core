@@ -52,7 +52,7 @@ class ServerProcess(multiprocessing.Process):
     def status_ok(self):
         result = query_url(
             'http://localhost:{}/jsonrpc'.format(self.port),
-            {'method': 'status', 'id': 1, 'jsonrpc': 2.0}
+            {'method': 'status', 'id': 1, 'jsonrpc': '2.0'}
         ).json()
         return self._compare_result(result)
 
@@ -71,7 +71,7 @@ class ServerProcess(multiprocessing.Process):
             raise Exception('server never appeared!')
         status_result = query_url(
             'http://localhost:{}/jsonrpc'.format(self.port),
-            {'method': 'status', 'id': 1, 'jsonrpc': 2.0}
+            {'method': 'status', 'id': 1, 'jsonrpc': '2.0'}
         ).json()
         if not self._compare_result(status_result):
             raise Exception('Got invalid status result: {}'.format(status_result))

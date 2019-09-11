@@ -15,6 +15,7 @@ from werkzeug import Request as HTTPRequest
 import dbt.exceptions
 import dbt.tracking
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.rpc.error import RPCException, server_error, dbt_error
 from dbt.rpc.logger import RequestContext
 from dbt.rpc.task_handler import RequestTaskHandler
 from dbt.rpc.task import RemoteCallable
@@ -111,9 +112,15 @@ class ResponseManager(JSONRPCResponseManager):
                 message=JSONRPCParseError.MESSAGE,
             ))
 
+        if data.get('jsonrpc', None) != '2.0':
+            return JSONRPC20Response(error=dict(
+                code=JSONRPCInvalidRequest.CODE,
+                message=JSONRPCInvalidRequest.MESSAGE,
+            ))
+
         try:
             request = JSONRPCRequest.from_data(data)
-        except JSONRPCInvalidRequestException:
+        except (ValueError, JSONRPCInvalidRequestException):
             return JSONRPC20Response(error=dict(
                 code=JSONRPCInvalidRequest.CODE,
                 message=JSONRPCInvalidRequest.MESSAGE,
