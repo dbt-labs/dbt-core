@@ -513,8 +513,9 @@ class TestRPCServer(HasRPCServer):
         self.assertEqual(rowdict[0]['request_id'], request_id)
         self.assertEqual(rowdict[0]['method'], 'run')
         self.assertEqual(rowdict[0]['state'], 'running')
-        self.assertEqual(rowdict[0]['timeout'], None)
+        self.assertIsNone(rowdict[0]['timeout'])
         self.assertEqual(rowdict[0]['task_id'], request_token)
+        self.assertGreater(rowdict[0]['elapsed'], 0)
 
         complete_ps_result = self.query('ps', completed=True, active=False).json()
         result = self.assertIsResult(complete_ps_result)
@@ -523,7 +524,8 @@ class TestRPCServer(HasRPCServer):
         self.assertEqual(rowdict[0]['request_id'], 1)
         self.assertEqual(rowdict[0]['method'], 'compile')
         self.assertEqual(rowdict[0]['state'], 'success')
-        self.assertEqual(rowdict[0]['timeout'], None)
+        self.assertIsNone(rowdict[0]['timeout'])
+        self.assertGreater(rowdict[0]['elapsed'], 0)
 
         all_ps_result = self.query('ps', completed=True, active=True).json()
         result = self.assertIsResult(all_ps_result)
@@ -533,11 +535,13 @@ class TestRPCServer(HasRPCServer):
         self.assertEqual(rowdict[0]['request_id'], 1)
         self.assertEqual(rowdict[0]['method'], 'compile')
         self.assertEqual(rowdict[0]['state'], 'success')
-        self.assertEqual(rowdict[0]['timeout'], None)
+        self.assertIsNone(rowdict[0]['timeout'])
+        self.assertGreater(rowdict[0]['elapsed'], 0)
         self.assertEqual(rowdict[1]['request_id'], request_id)
         self.assertEqual(rowdict[1]['method'], 'run')
         self.assertEqual(rowdict[1]['state'], 'running')
-        self.assertEqual(rowdict[1]['timeout'], None)
+        self.assertIsNone(rowdict[1]['timeout'])
+        self.assertGreater(rowdict[1]['elapsed'], 0)
 
         # try to GC our running task
         gc_response = self.query('gc', task_ids=[request_token]).json()
@@ -546,6 +550,22 @@ class TestRPCServer(HasRPCServer):
         self.assertEqual(gc_result['running'], [request_token])
 
         self.kill_and_assert(request_token, request_id)
+
+        all_ps_result = self.query('ps', completed=True, active=True).json()
+        result = self.assertIsResult(all_ps_result)
+        self.assertEqual(len(result['rows']), 2)
+        rowdict = result['rows']
+        rowdict.sort(key=lambda r: r['start'])
+        self.assertEqual(rowdict[0]['request_id'], 1)
+        self.assertEqual(rowdict[0]['method'], 'compile')
+        self.assertEqual(rowdict[0]['state'], 'success')
+        self.assertIsNone(rowdict[0]['timeout'])
+        self.assertGreater(rowdict[0]['elapsed'], 0)
+        self.assertEqual(rowdict[1]['request_id'], request_id)
+        self.assertEqual(rowdict[1]['method'], 'run')
+        self.assertEqual(rowdict[1]['state'], 'error')
+        self.assertIsNone(rowdict[1]['timeout'])
+        self.assertGreater(rowdict[1]['elapsed'], 0)
 
     def kill_and_assert(self, request_token, request_id):
         kill_response = self.query('kill', task_id=request_token).json()

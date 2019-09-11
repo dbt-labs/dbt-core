@@ -29,6 +29,22 @@ from dbt.utils import restrict_to
 from dbt import helper_types  # noqa
 
 
+def _assert_started(task_handler: RequestTaskHandler) -> datetime:
+    if task_handler.started is None:
+        raise dbt.exceptions.InternalException(
+            'task handler started but start time is not set'
+        )
+    return task_handler.started
+
+
+def _assert_ended(task_handler: RequestTaskHandler) -> datetime:
+    if task_handler.ended is None:
+        raise dbt.exceptions.InternalException(
+            'task handler finished but end time is not set'
+        )
+    return task_handler.ended
+
+
 @dataclass
 class TaskRow(JsonSchemaMixin):
     task_id: uuid.UUID
@@ -52,19 +68,11 @@ class TaskRow(JsonSchemaMixin):
         start = None
         elapsed = None
         if state > TaskHandlerState.NotStarted:
-            if task_handler.started is None:
-                raise dbt.exceptions.InternalException(
-                    'task handler started but start time is not set'
-                )
-            start = task_handler.started
+            start = _assert_started(task_handler)
             elapsed_end = now_time
 
             if state.finished:
-                if task_handler.ended is None:
-                    raise dbt.exceptions.InternalException(
-                        'task handler finished but end time is not set'
-                    )
-                elapsed_end = task_handler.ended
+                elapsed_end = _assert_ended(task_handler)
 
             elapsed = (elapsed_end - start).total_seconds()
 

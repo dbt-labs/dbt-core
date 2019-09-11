@@ -220,7 +220,7 @@ class RequestTaskHandler(threading.Thread):
                 yield
             finally:
                 # make sure to set this _before_ updating state
-                self.ended = datetime.now()
+                self.ended = datetime.utcnow()
         except RPCException as exc:
             self.error = exc
             self.state = TaskHandlerState.Error
