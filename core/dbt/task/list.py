@@ -43,9 +43,10 @@ class ListTask(GraphRunnableTask):
                 )
 
     @classmethod
-    def pre_init_hook(cls):
+    def pre_init_hook(cls, args):
         """A hook called before the task is initialized."""
         log_manager.stderr_console()
+        super().pre_init_hook(args)
 
     def _iterate_selected_nodes(self):
         nodes = sorted(self.select_nodes())
