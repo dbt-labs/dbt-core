@@ -35,10 +35,7 @@
 {% endmacro %}
 
 {% macro snowflake__create_view_as(relation, sql) -%}
-  {%- set secure = config.get('secure', default=false) -%}
-  create or replace {% if secure -%}
-    secure
-  {%- endif %} view {{ relation }} as (
+  create or replace view {{ relation }} as (
     {{ sql }}
   );
 {% endmacro %}
