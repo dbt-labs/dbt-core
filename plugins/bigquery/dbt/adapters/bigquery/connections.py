@@ -60,7 +60,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
     @classmethod
     def handle_error(cls, error, message, sql):
         logger.debug(message.format(sql=sql))
-        logger.debug(error)
+        logger.debug(str(error))
         error_msg = "\n".join(
             [item['message'] for item in error.errors])
 
