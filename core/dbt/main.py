@@ -915,10 +915,10 @@ def parse_args(args, cls=DBTArgumentParser):
     )
 
     p.add_argument(
-        '--log-format',
+        "--log-format",
         choices=['text', 'json', 'default'],
         default=None,
-        help='''Specify the log format, overriding the command's default.'''
+        help="""Specify the log format, overriding the command's default.""",
     )
 
     p.add_argument(
