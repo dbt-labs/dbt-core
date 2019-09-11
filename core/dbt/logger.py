@@ -176,7 +176,7 @@ class OutputHandler(logbook.StreamHandler, FormatterMixin):
 
 
 def _root_channel(record: logbook.LogRecord) -> str:
-    return record.channel.split('.')[0]
+    return record.channel.split(".")[0]
 
 
 class Relevel(logbook.Processor):
@@ -194,7 +194,7 @@ class Relevel(logbook.Processor):
     def process(self, record):
         if _root_channel(record) in self.allowed:
             return
-        record.extra['old_level'] = record.level
+        record.extra["old_level"] = record.level
         # suppress logs at/below our min level by lowering them to NOTSET
         if record.level < self.min_level:
             record.level = logbook.NOTSET
@@ -472,7 +472,7 @@ class LogManager(logbook.NestedSetup):
         self._null_handler = logbook.NullHandler()
         self._output_handler = OutputHandler(self.stdout)
         self._file_handler = DelayedFileHandler()
-        self._relevel_processor = Relevel(allowed=['dbt', 'werkzeug'])
+        self._relevel_processor = Relevel(allowed=["dbt", "werkzeug"])
         self._state_processor = DbtProcessState('internal')
         self._scrub_processor = ScrubSecrets()
         # keep track of whether we've already entered to decide if we should
@@ -483,7 +483,7 @@ class LogManager(logbook.NestedSetup):
             self._null_handler,
             self._output_handler,
             self._file_handler,
-            self._relevel_processor,
+                self._file_handler,
                 self._relevel_processor,
                 self._state_processor,
         ])
@@ -597,7 +597,7 @@ class ListLogHandler(LogMessageHandler):
 
     def should_handle(self, record):
         """Only ever emit dbt-sourced log messages to the ListHandler."""
-        if _root_channel(record) != 'dbt':
+        if _root_channel(record) != "dbt":
             return False
         return super().should_handle(record)
 
