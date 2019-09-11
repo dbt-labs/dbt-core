@@ -458,8 +458,17 @@ class JSONEncoder(json.JSONEncoder):
             return float(obj)
         if isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
             return obj.isoformat()
-
         return super().default(obj)
+
+
+class ForgivingJSONEncoder(JSONEncoder):
+    def default(self, obj):
+        # let dbt's default JSON encoder handle it if possible, fallback to
+        # str()
+        try:
+            return super().default(obj)
+        except TypeError:
+            return str(obj)
 
 
 def translate_aliases(kwargs, aliases):
