@@ -7,6 +7,7 @@ This is a bugfix release.
 ### Fixes:
 - Fix for dbt hanging at the end of execution in `dbt source snapshot-freshness` tasks ([#1728](https://github.com/fishtown-analytics/dbt/issues/1728), [#1729](https://github.com/fishtown-analytics/dbt/pull/1729))
 - Fix for broken "packages" and "tags" selector dropdowns in the dbt Documentation website ([docs#47](https://github.com/fishtown-analytics/dbt-docs/issues/47), [#1726](https://github.com/fishtown-analytics/dbt/pull/1726))
+- Bump Werkzeug to v0.15.x ([#1697](https://github.com/fishtown-analytics/dbt/issues/1697), [#1746](https://github.com/fishtown-analytics/dbt/pull/1746)])
 
 
 ## dbt 0.14.1 (September 3, 2019)
