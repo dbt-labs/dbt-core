@@ -1,4 +1,4 @@
-## dbt 0.14.2 (Unreleased)
+## dbt 0.14.2 (September 12, 2019)
 
 ### Overview
 
