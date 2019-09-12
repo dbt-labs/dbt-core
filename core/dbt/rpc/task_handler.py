@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Dict, Union, Optional, List
 
-from hologram import JsonSchemaMixin
+from hologram import JsonSchemaMixin, ValidationError
 from hologram.helpers import StrEnum
 
 import dbt.exceptions
@@ -94,7 +94,7 @@ def sigterm_handler(signum, frame):
 def _task_bootstrap(
     task: RPCTask,
     queue,  # typing: Queue[Tuple[QueueMessageType, Any]]
-    kwargs: Dict[str, Any]
+    params: JsonSchemaMixin,
 ) -> None:
     """_task_bootstrap runs first inside the child process"""
     signal.signal(signal.SIGTERM, sigterm_handler)
@@ -104,7 +104,7 @@ def _task_bootstrap(
         rpc_exception = None
         result = None
         try:
-            result = task.handle_request(**kwargs)
+            result = task.handle_request(params=params)
         except RPCException as exc:
             rpc_exception = exc
         except dbt.exceptions.RPCKilledException as exc:
@@ -300,10 +300,16 @@ class RequestTaskHandler(threading.Thread):
         self.started = datetime.utcnow()
         self.state = TaskHandlerState.Initializing
         self.timeout = kwargs.pop('timeout', None)
+        try:
+            params = self.task.get_parameters().from_dict(kwargs)
+        except ValidationError as exc:
+            # raise a TypeError to indicate invalid parameters
+            self.state = TaskHandlerState.Error
+            raise TypeError(exc)
         self.subscriber = QueueSubscriber()
         self.process = multiprocessing.Process(
             target=_task_bootstrap,
-            args=(self.task, self.subscriber.queue, kwargs)
+            args=(self.task, self.subscriber.queue, params)
         )
 
         if self._single_threaded:

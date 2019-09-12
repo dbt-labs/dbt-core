@@ -1,7 +1,10 @@
 import signal
 import threading
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Union, List
+from typing import Union, List, Optional
+
+from hologram import JsonSchemaMixin
 
 from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import extract_toplevel_blocks
@@ -19,8 +22,31 @@ from dbt.task.seed import SeedTask
 from dbt.task.test import TestTask
 
 
-class _RPCExecTask(RPCTask):
+@dataclass
+class RPCExecParameters(JsonSchemaMixin):
+    name: str
+    sql: str
+    macros: Optional[str]
 
+
+@dataclass
+class RPCCompileProjectParameters(JsonSchemaMixin):
+    models: Union[None, str, List[str]] = None
+    exclude: Union[None, str, List[str]] = None
+
+
+@dataclass
+class RPCTestProjectParameters(RPCCompileProjectParameters):
+    data: bool = False
+    schema: bool = False
+
+
+@dataclass
+class RPCSeedProjectParameters(JsonSchemaMixin):
+    show: bool = False
+
+
+class _RPCExecTask(RPCTask):
     def __init__(self, args, config, manifest):
         super().__init__(args, config)
         self._base_manifest = manifest.deepcopy(config=config)
@@ -91,12 +117,14 @@ class _RPCExecTask(RPCTask):
         finally:
             thread_done.set()
 
-    def handle_request(self, name, sql, macros=None) -> RemoteCallableResult:
+    def handle_request(
+        self, params: RPCExecParameters
+    ) -> RemoteCallableResult:
         # we could get a ctrl+c at any time, including during parsing.
         thread = None
         started = datetime.utcnow()
         try:
-            node = self._get_exec_node(name, sql, macros)
+            node = self._get_exec_node(params.name, params.sql, params.macros)
 
             selected_uids = [node.unique_id]
             self.runtime_cleanup(selected_uids)
@@ -160,12 +188,10 @@ class RemoteCompileProjectTask(RPCTask):
         pass
 
     def handle_request(
-        self,
-        models: Union[None, str, List[str]] = None,
-        exclude: Union[None, str, List[str]] = None,
+        self, params: RPCCompileProjectParameters
     ) -> RemoteCallableResult:
-        self.args.models = self._listify(models)
-        self.args.exclude = self._listify(exclude)
+        self.args.models = self._listify(params.models)
+        self.args.exclude = self._listify(params.exclude)
 
         results = self.run()
         return results
@@ -183,12 +209,10 @@ class RemoteRunProjectTask(RPCTask, RunTask):
         pass
 
     def handle_request(
-        self,
-        models: Union[None, str, List[str]] = None,
-        exclude: Union[None, str, List[str]] = None,
+        self, params: RPCCompileProjectParameters
     ) -> RemoteCallableResult:
-        self.args.models = self._listify(models)
-        self.args.exclude = self._listify(exclude)
+        self.args.models = self._listify(params.models)
+        self.args.exclude = self._listify(params.exclude)
 
         results = self.run()
         return results
@@ -205,8 +229,10 @@ class RemoteSeedProjectTask(RPCTask, SeedTask):
         # we started out with a manifest!
         pass
 
-    def handle_request(self, show: bool = False) -> RemoteCallableResult:
-        self.args.show = show
+    def handle_request(
+        self, params: RPCSeedProjectParameters
+    ) -> RemoteCallableResult:
+        self.args.show = params.show
 
         results = self.run()
         return results
@@ -224,16 +250,12 @@ class RemoteTestProjectTask(RPCTask, TestTask):
         pass
 
     def handle_request(
-        self,
-        models: Union[None, str, List[str]] = None,
-        exclude: Union[None, str, List[str]] = None,
-        data: bool = False,
-        schema: bool = False,
+        self, params: RPCTestProjectParameters,
     ) -> RemoteCallableResult:
-        self.args.models = self._listify(models)
-        self.args.exclude = self._listify(exclude)
-        self.args.data = data
-        self.args.schema = schema
+        self.args.models = self._listify(params.models)
+        self.args.exclude = self._listify(params.exclude)
+        self.args.data = params.data
+        self.args.schema = params.schema
 
         results = self.run()
         return results

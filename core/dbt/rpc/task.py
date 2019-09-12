@@ -1,7 +1,9 @@
 import base64
-from abc import abstractmethod
-from typing import Union, List, Optional
+import inspect
+from abc import ABCMeta, abstractmethod
+from typing import Union, List, Optional, Type
 
+from hologram import JsonSchemaMixin
 
 from dbt.exceptions import NotImplementedException
 from dbt.rpc.logger import RemoteCallableResult, RemoteExecutionResult
@@ -9,12 +11,35 @@ from dbt.rpc.error import invalid_params
 from dbt.task.compile import CompileTask
 
 
-class RemoteCallable:
+class RemoteCallable(metaclass=ABCMeta):
     METHOD_NAME: Optional[str] = None
     is_async = False
 
+    @classmethod
+    def get_parameters(cls) -> Type[JsonSchemaMixin]:
+        argspec = inspect.getfullargspec(cls.handle_request)
+        annotations = argspec.annotations
+        if 'params' not in annotations:
+            raise TypeError(
+                'handle_request must have parameter named params with a valid '
+                'JsonSchemaMixin type definition (no params annotation found)'
+            )
+        params_type = annotations['params']
+        if not issubclass(params_type, JsonSchemaMixin):
+            raise TypeError(
+                'handle_request must have parameter named params with a valid '
+                'JsonSchemaMixin type definition (got {}, expected '
+                'JsonSchemaMixin subclass)'.format(params_type)
+            )
+        if params_type is JsonSchemaMixin:
+            raise TypeError(
+                'handle_request must have parameter named params with a valid '
+                'JsonSchemaMixin type definition (got JsonSchemaMixin itself!)'
+            )
+        return params_type
+
     @abstractmethod
-    def handle_request(self, *args, **kwargs) -> RemoteCallableResult:
+    def handle_request(self, params: JsonSchemaMixin) -> RemoteCallableResult:
         raise NotImplementedException(
             'from_kwargs not implemented'
         )
