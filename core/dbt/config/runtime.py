@@ -1,6 +1,4 @@
-
 from copy import deepcopy
-import pprint
 
 from dbt.utils import parse_cli_vars
 from dbt.contracts.project import Configuration
@@ -162,7 +160,7 @@ class RuntimeConfig(Project, Profile):
         return result
 
     def __str__(self):
-        return pprint.pformat(self.serialize())
+        return str(self.serialize())
 
     def validate(self):
         """Validate the configuration against its contract.
