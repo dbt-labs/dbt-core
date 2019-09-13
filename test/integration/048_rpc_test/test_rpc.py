@@ -958,7 +958,7 @@ class TestRPCServerFailed(HasRPCServer):
             'RPC server failed to compile project, call the "status" method for compile status',
             None)
         self.assertIn('message', data)
-        self.assertIn('Compilation warning: Invalid test config', str(data['message']))
+        self.assertIn('Invalid test config', str(data['message']))
 
     def tearDown(self):
         # prevent an OperationalError where the server closes on us in the

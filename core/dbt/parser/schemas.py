@@ -18,10 +18,9 @@ from dbt.contracts.graph.unparsed import (
 )
 from dbt.context.parser import docs
 from dbt.exceptions import (
-    warn_or_error, validator_error_message, JSONValidationException,
+    validator_error_message, JSONValidationException,
     raise_invalid_schema_yml_version, ValidationException, CompilationException
 )
-from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.node_types import NodeType, SourceType
 from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock, FilesystemSearcher
@@ -37,19 +36,24 @@ UnparsedSchemaYaml = Union[UnparsedSourceDefinition, UnparsedNodeUpdate]
 TestDef = Union[str, Dict[str, Any]]
 
 
-def warn_invalid(filepath, key, value, explain):
-    msg = (
-        "Invalid test config given in {} @ {}: {} {}"
-    ).format(filepath, key, value, explain)
-    warn_or_error(msg, value, log_fmt='Compilation warning: {}\n')
-
-
-def warn_validation_error(filepath, key, value, exc):
-    if isinstance(exc, ValidationError):
-        msg = validator_error_message(exc)
+def error_context(
+    path: str,
+    key: str,
+    data: Any,
+    cause: Union[str, ValidationException, JSONValidationException]
+) -> str:
+    """Provide contextual information about an error while parsing
+    """
+    if isinstance(cause, str):
+        reason = cause
+    elif isinstance(cause, ValidationError):
+        reason = validator_error_message(cause)
     else:
-        msg = exc.msg
-    warn_invalid(filepath, key, value, '- ' + msg)
+        reason = cause.msg
+    return (
+        'Invalid {key} config given in {path} @ {key}: {data} - {reason}'
+        .format(key=key, path=path, data=data, reason=reason)
+    )
 
 
 class ParserRef:
@@ -154,7 +158,10 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             if str_keys:
                 yield entry
             else:
-                warn_invalid(path, key, entry, '(expected a Dict[str])')
+                msg = error_context(
+                    path, key, data, 'expected a dict with string keys'
+                )
+                raise CompilationException(msg)
 
     def read_yaml_models(
         self, yaml: YamlBlock
@@ -165,10 +172,9 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
         for data in self._get_dicts_for(yaml, yaml_key):
             try:
                 model = UnparsedNodeUpdate.from_dict(data)
-                # we don't want to fail the full run, but we do want to fail
-                # parsing this block
             except (ValidationError, JSONValidationException) as exc:
-                warn_validation_error(path, yaml_key, data, exc)
+                msg = error_context(path, yaml_key, data, exc)
+                raise CompilationException(msg) from exc
             else:
                 yield model
 
@@ -183,7 +189,8 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
                 data = self._renderer.render_schema_source(data)
                 source = UnparsedSourceDefinition.from_dict(data)
             except (ValidationError, JSONValidationException) as exc:
-                warn_validation_error(path, yaml_key, data, exc)
+                msg = error_context(path, yaml_key, data, exc)
+                raise CompilationException(msg) from exc
             else:
                 for table in source.tables:
                     yield SourceTarget(source, table)
@@ -191,15 +198,17 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
     def _yaml_from_file(
         self, source_file: SourceFile
     ) -> Optional[Dict[str, Any]]:
-        """If loading the yaml fails, the file will be skipped with an INFO
-        message. TODO(jeb): should this be a warning?
+        """If loading the yaml fails, raise an exception.
         """
         path: str = source_file.path.relative_path
         try:
             return load_yaml_text(source_file.contents)
         except ValidationException as e:
-            logger.info("Error reading {}:{} - Skipping\n{}".format(
-                        self.project.project_name, path, e))
+            reason = validator_error_message(e)
+            raise CompilationException(
+                'Error reading {}: {} - {}'
+                .format(self.project.project_name, path, reason)
+            )
         return None
 
     def parse_column(
@@ -277,11 +286,11 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
         except CompilationException as exc:
             context = _trimmed(str(block.target))
             msg = (
-                'Compilation warning: Invalid test config given in {}:'
+                'Invalid test config given in {}:'
                 '\n\t{}\n\t@: {}'
                 .format(block.path.original_file_path, exc.msg, context)
             )
-            warn_or_error(msg, None)
+            raise CompilationException(msg)
 
     def _calculate_freshness(
         self,

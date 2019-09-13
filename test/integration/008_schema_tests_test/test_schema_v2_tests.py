@@ -77,20 +77,12 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
         return test_task.run()
 
     @use_profile('postgres')
-    def test_malformed_schema_test_wont_brick_run(self):
-        # dbt run should work (Despite broken schema test)
-        results = self.run_dbt(strict=False)
-        self.assertEqual(len(results), 2)
-
-        # in v2, we skip the entire model
-        ran_tests = self.run_schema_validations()
-        self.assertEqual(len(ran_tests), 5)
-        self.assertEqual(sum(x.status for x in ran_tests), 0)
-
-    @use_profile('postgres')
     def test_malformed_schema_strict_will_break_run(self):
         with self.assertRaises(CompilationException):
             self.run_dbt(strict=True)
+        # even if strict = False!
+        with self.assertRaises(CompilationException):
+            self.run_dbt(strict=False)
 
 
 class TestHooksInTests(DBTIntegrationTest):
