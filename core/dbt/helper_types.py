@@ -1,5 +1,9 @@
 # never name this package "types", or mypy will crash in ugly ways
-from hologram import FieldEncoder, JsonSchemaMixin
+from hologram import (
+    FieldEncoder, JsonSchemaMixin, JsonDict, ValidationError
+)
+
+from datetime import timedelta
 from typing import NewType
 
 
@@ -12,4 +16,28 @@ class PortEncoder(FieldEncoder):
         return {'type': 'integer', 'minimum': 0, 'maximum': 65535}
 
 
-JsonSchemaMixin.register_field_encoders({Port: PortEncoder()})
+class TimeDeltaFieldEncoder(FieldEncoder[timedelta]):
+    """Encodes timedeltas to dictionaries"""
+
+    def to_wire(self, value: timedelta) -> float:
+        return value.total_seconds()
+
+    def to_python(self, value) -> timedelta:
+        if isinstance(value, timedelta):
+            return value
+        try:
+            return timedelta(seconds=value)
+        except TypeError:
+            raise ValidationError(
+                'cannot encode {} into timedelta'.format(value)
+            ) from None
+
+    @property
+    def json_schema(self) -> JsonDict:
+        return {'type': 'number'}
+
+
+JsonSchemaMixin.register_field_encoders({
+    Port: PortEncoder(),
+    timedelta: TimeDeltaFieldEncoder()
+})

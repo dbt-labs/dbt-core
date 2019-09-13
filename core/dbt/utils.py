@@ -8,7 +8,7 @@ import itertools
 import json
 import os
 from enum import Enum
-from typing import Tuple, Type, Any
+from typing import Tuple, Type, Any, Optional
 
 import dbt.exceptions
 
@@ -458,8 +458,17 @@ class JSONEncoder(json.JSONEncoder):
             return float(obj)
         if isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
             return obj.isoformat()
-
         return super().default(obj)
+
+
+class ForgivingJSONEncoder(JSONEncoder):
+    def default(self, obj):
+        # let dbt's default JSON encoder handle it if possible, fallback to
+        # str()
+        try:
+            return super().default(obj)
+        except TypeError:
+            return str(obj)
 
 
 def translate_aliases(kwargs, aliases):
@@ -494,3 +503,18 @@ def pluralize(count, string):
         return "{} {}".format(count, string)
     else:
         return "{} {}s".format(count, string)
+
+
+def env_set_truthy(key: str) -> Optional[str]:
+    """Return the value if it was set to a "truthy" string value, or None
+    otherwise.
+    """
+    value = os.getenv(key)
+    if not value or value.lower() in ('0', 'false', 'f'):
+        return None
+    return value
+
+
+def restrict_to(*restrictions):
+    """Create the metadata for a restricted dataclass field"""
+    return {'restrict': list(restrictions)}

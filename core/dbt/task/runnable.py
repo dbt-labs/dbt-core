@@ -281,7 +281,11 @@ class GraphRunnableTask(ManifestTask):
         if len(self._flattened_nodes) == 0:
             logger.warning("WARNING: Nothing to do. Try checking your model "
                            "configs and model specification args")
-            return []
+            return self.get_result(
+                results=[],
+                generated_at=datetime.utcnow(),
+                elapsed_time=0.0,
+            )
         else:
             logger.info("")
 
@@ -292,7 +296,7 @@ class GraphRunnableTask(ManifestTask):
             result.write(self.result_path())
 
         self.task_end_messages(result.results)
-        return result.results
+        return result
 
     def interpret_results(self, results):
         if results is None:

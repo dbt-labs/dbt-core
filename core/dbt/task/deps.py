@@ -34,7 +34,7 @@ def _initialize_downloads():
     # the user might have set an environment variable. Set it to None, and do
     # not remove it when finished.
     if DOWNLOADS_PATH is None:
-        DOWNLOADS_PATH = os.environ.get('DBT_DOWNLOADS_DIR', None)
+        DOWNLOADS_PATH = os.getenv('DBT_DOWNLOADS_DIR')
         REMOVE_DOWNLOADS = False
     # if we are making a per-run temp directory, remove it at the end of
     # successful runs

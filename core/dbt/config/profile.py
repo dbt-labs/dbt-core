@@ -19,7 +19,7 @@ from .renderer import ConfigRenderer
 DEFAULT_THREADS = 1
 DEFAULT_PROFILES_DIR = os.path.join(os.path.expanduser('~'), '.dbt')
 PROFILES_DIR = os.path.expanduser(
-    os.environ.get('DBT_PROFILES_DIR', DEFAULT_PROFILES_DIR)
+    os.getenv('DBT_PROFILES_DIR', DEFAULT_PROFILES_DIR)
 )
 
 INVALID_PROFILE_MESSAGE = """

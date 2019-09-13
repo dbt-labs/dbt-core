@@ -9,6 +9,7 @@ from werkzeug.wrappers import Request, Response
 from werkzeug.serving import run_simple
 from werkzeug.exceptions import NotFound
 
+from dbt.exceptions import RuntimeException
 from dbt.logger import (
     GLOBAL_LOGGER as logger,
     list_handler,
@@ -22,9 +23,12 @@ from dbt.task.remote import (
     RemoteSeedProjectTask,
     RemoteTestProjectTask,
 )
-from dbt.utils import JSONEncoder
+from dbt.utils import ForgivingJSONEncoder, env_set_truthy
 from dbt import rpc
 from dbt.rpc.logger import ServerContext, HTTPRequest, RPCResponse
+
+
+SINGLE_THREADED_WEBSERVER = env_set_truthy('DBT_SINGLE_THREADED_WEBSERVER')
 
 
 # SIG_DFL ends up killing the process if multiple build up, but SIG_IGN just
@@ -91,15 +95,16 @@ def signhup_replace():
 
 class RPCServerTask(ConfiguredTask):
     def __init__(self, args, config, tasks=None):
+        if os.name == 'nt':
+            raise RuntimeException(
+                'The dbt RPC server is not supported on windows'
+            )
         super().__init__(args, config)
         self._tasks = tasks or self._default_tasks()
         self.task_manager = rpc.TaskManager(self.args, self.config)
         self._reloader = None
         self._reload_task_manager()
-
-        # windows doesn't have SIGHUP so don't do sighup things
-        if os.name != 'nt':
-            signal.signal(signal.SIGHUP, self._sighup_handler)
+        signal.signal(signal.SIGHUP, self._sighup_handler)
 
     def _reload_task_manager(self):
         """This function can only be running once at a time, as it runs in the
@@ -135,6 +140,9 @@ class RPCServerTask(ConfiguredTask):
             RemoteRunTask, RemoteRunProjectTask,
             RemoteSeedProjectTask, RemoteTestProjectTask
         ]
+
+    def single_threaded(self):
+        return SINGLE_THREADED_WEBSERVER or self.args.single_threaded
 
     def run(self):
         log_manager.format_json()
@@ -172,7 +180,7 @@ class RPCServerTask(ConfiguredTask):
         # metadata+state in a multiprocessing.Manager, adds polling the
         # manager to the request  task handler and in general gets messy
         # fast.
-        run_simple(host, port, app, threaded=not self.args.single_threaded)
+        run_simple(host, port, app, threaded=not self.single_threaded)
 
     @Request.application
     def handle_jsonrpc_request(self, request):
@@ -180,7 +188,10 @@ class RPCServerTask(ConfiguredTask):
             jsonrpc_response = rpc.ResponseManager.handle(
                 request, self.task_manager
             )
-            json_data = json.dumps(jsonrpc_response.data, cls=JSONEncoder)
+            json_data = json.dumps(
+                jsonrpc_response.data,
+                cls=ForgivingJSONEncoder,
+            )
             response = Response(json_data, mimetype='application/json')
             # this looks and feels dumb, but our json encoder converts decimals
             # and datetimes, and if we use the json_data itself the output
