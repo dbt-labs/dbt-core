@@ -94,22 +94,17 @@ schema_file_keys = (
 
 
 def error_context(
-    path: str,
-    key: str,
-    data: Any,
-    cause: Union[str, ValidationException, JSONValidationException]
+    path: str, key: str, data: Any, cause: Union[str, ValidationException, JSONValidationException]
 ) -> str:
-    """Provide contextual information about an error while parsing
-    """
+    """Provide contextual information about an error while parsing"""
     if isinstance(cause, str):
         reason = cause
     elif isinstance(cause, ValidationError):
         reason = validator_error_message(cause)
     else:
         reason = cause.msg
-    return (
-        'Invalid {key} config given in {path} @ {key}: {data} - {reason}'
-        .format(key=key, path=path, data=data, reason=reason)
+    return "Invalid {key} config given in {path} @ {key}: {data} - {reason}".format(
+        key=key, path=path, data=data, reason=reason
     )
 
 
