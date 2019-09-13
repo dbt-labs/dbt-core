@@ -23,7 +23,7 @@ import dbt.task.freshness as freshness_task
 import dbt.task.run_operation as run_operation_task
 from dbt.task.list import ListTask
 from dbt.task.rpc_server import RPCServerTask
-from dbt.adapters.factory import reset_adapters
+from dbt.adapters.factory import reset_adapters, cleanup_connections
 
 import dbt.tracking
 import dbt.ui.printer
@@ -123,6 +123,15 @@ def initialize_config_values(parsed):
     cfg.set_values(parsed.profiles_dir)
 
 
+@contextmanager
+def adapter_management():
+    reset_adapters()
+    try:
+        yield
+    finally:
+        cleanup_connections()
+
+
 def handle_and_check(args):
     with log_manager.applicationbound():
         parsed = parse_args(args)
@@ -143,10 +152,10 @@ def handle_and_check(args):
 
             initialize_config_values(parsed)
 
-            reset_adapters()
+            with adapter_management():
 
-            task, res = run_from_args(parsed)
-            success = task.interpret_results(res)
+                task, res = run_from_args(parsed)
+                success = task.interpret_results(res)
 
             return res, success
 
