@@ -2,9 +2,8 @@ from dbt.contracts.util import Replaceable, Mergeable
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt import tracking
 from dbt.ui import printer
-# from dbt.utils import JSONEncoder
 
-from hologram import JsonSchemaMixin
+from hologram import JsonSchemaMixin, ValidationError
 from hologram.helpers import HyphenatedJsonSchemaMixin, register_pattern, \
     ExtensibleJsonSchemaMixin
 
@@ -92,30 +91,82 @@ class RegistryPackageMetadata(
     downloads: Downloads
 
 
+# A list of all the reserved words that packages may not have as names.
+BANNED_PROJECT_NAMES = {
+    '_sql_results',
+    'adapter',
+    'api',
+    'column',
+    'config',
+    'context',
+    'database',
+    'env',
+    'env_var',
+    'exceptions',
+    'execute',
+    'flags',
+    'fromjson',
+    'graph',
+    'invocation_id',
+    'load_agate_table',
+    'load_result',
+    'log',
+    'model',
+    'modules',
+    'post_hooks',
+    'pre_hooks',
+    'ref',
+    'render',
+    'return',
+    'run_started_at',
+    'schema',
+    'source',
+    'sql',
+    'sql_now',
+    'store_result',
+    'target',
+    'this',
+    'tojson',
+    'try_or_compiler_error',
+    'var',
+    'write',
+}
+
+
 @dataclass
 class Project(HyphenatedJsonSchemaMixin, Replaceable):
     name: Name
     version: Union[SemverString, float]
-    project_root: Optional[str]
-    source_paths: Optional[List[str]]
-    macro_paths: Optional[List[str]]
-    data_paths: Optional[List[str]]
-    test_paths: Optional[List[str]]
-    analysis_paths: Optional[List[str]]
-    docs_paths: Optional[List[str]]
-    target_path: Optional[str]
-    snapshot_paths: Optional[List[str]]
-    clean_targets: Optional[List[str]]
-    profile: Optional[str]
-    log_path: Optional[str]
-    modules_path: Optional[str]
-    quoting: Optional[Quoting]
+    project_root: Optional[str] = None
+    source_paths: Optional[List[str]] = None
+    macro_paths: Optional[List[str]] = None
+    data_paths: Optional[List[str]] = None
+    test_paths: Optional[List[str]] = None
+    analysis_paths: Optional[List[str]] = None
+    docs_paths: Optional[List[str]] = None
+    target_path: Optional[str] = None
+    snapshot_paths: Optional[List[str]] = None
+    clean_targets: Optional[List[str]] = None
+    profile: Optional[str] = None
+    log_path: Optional[str] = None
+    modules_path: Optional[str] = None
+    quoting: Optional[Quoting] = None
     on_run_start: Optional[List[str]] = field(default_factory=list)
     on_run_end: Optional[List[str]] = field(default_factory=list)
     require_dbt_version: Optional[Union[List[str], str]] = None
     models: Dict[str, Any] = field(default_factory=dict)
     seeds: Dict[str, Any] = field(default_factory=dict)
     packages: List[PackageSpec] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data, validate=True):
+        result = super().from_dict(data, validate=validate)
+        if result.name in BANNED_PROJECT_NAMES:
+            raise ValidationError(
+                'Invalid project name: {} is a reserved word'
+                .format(result.name)
+            )
+        return result
 
 
 @dataclass

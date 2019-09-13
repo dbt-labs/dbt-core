@@ -282,5 +282,3 @@ class TestSnowflakeIncrementalOverwrite(BaseTestSimpleCopy):
 
         results = self.run_dbt(["run"])
         self.assertEqual(len(results),  1)
-
-
