@@ -1,7 +1,6 @@
 import itertools
 import os
 import pickle
-from contextlib import contextmanager
 from datetime import datetime
 from typing import Dict, Optional, Mapping
 
@@ -80,19 +79,6 @@ def make_parse_result(
         profile_hash=profile_hash,
         project_hashes=project_hashes,
     )
-
-
-@contextmanager
-def log_exceptions():
-    try:
-        yield
-    except dbt.exceptions.Exception as exc:
-        logger.error('Parsing failed: {}'.format(exc))
-        raise
-    except Exception as exc:
-        logger.error('Parsing failed with an uncaught exception: {}'
-                     .format(exc))
-        raise
 
 
 class GraphLoader:
@@ -298,21 +284,19 @@ class GraphLoader:
         root_config: RuntimeConfig,
         internal_manifest: Optional[Manifest] = None
     ) -> Manifest:
-        with log_exceptions():
-            projects = load_all_projects(root_config)
-            loader = cls(root_config, projects)
-            loader.load(internal_manifest=internal_manifest)
-            loader.write_parse_results()
-            manifest = loader.create_manifest()
-            _check_manifest(manifest, root_config)
-            return manifest
+        projects = load_all_projects(root_config)
+        loader = cls(root_config, projects)
+        loader.load(internal_manifest=internal_manifest)
+        loader.write_parse_results()
+        manifest = loader.create_manifest()
+        _check_manifest(manifest, root_config)
+        return manifest
 
     @classmethod
     def load_internal(cls, root_config: RuntimeConfig) -> Manifest:
-        with log_exceptions():
-            projects = load_internal_projects(root_config)
-            loader = cls(root_config, projects)
-            return loader.load_only_macros()
+        projects = load_internal_projects(root_config)
+        loader = cls(root_config, projects)
+        return loader.load_only_macros()
 
 
 def _check_resource_uniqueness(manifest):
