@@ -74,34 +74,34 @@ class DBTArgumentParser(argparse.ArgumentParser):
 def main(args=None):
     if args is None:
         args = sys.argv[1:]
+    with log_manager.applicationbound():
+        try:
+            results, succeeded = handle_and_check(args)
+            if succeeded:
+                exit_code = ExitCodes.Success.value
+            else:
+                exit_code = ExitCodes.ModelError.value
 
-    try:
-        results, succeeded = handle_and_check(args)
-        if succeeded:
-            exit_code = ExitCodes.Success.value
-        else:
-            exit_code = ExitCodes.ModelError.value
+        except KeyboardInterrupt:
+            logger.info("ctrl-c")
+            exit_code = ExitCodes.UnhandledError.value
 
-    except KeyboardInterrupt:
-        logger.info("ctrl-c")
-        exit_code = ExitCodes.UnhandledError.value
+        # This can be thrown by eg. argparse
+        except SystemExit as e:
+            exit_code = e.code
 
-    # This can be thrown by eg. argparse
-    except SystemExit as e:
-        exit_code = e.code
+        except BaseException as e:
+            logger.warning("Encountered an error:")
+            logger.warning(str(e))
 
-    except BaseException as e:
-        logger.warning("Encountered an error:")
-        logger.warning(str(e))
-
-        if log_manager.initialized:
-            logger.debug(traceback.format_exc())
-        elif not isinstance(e, RuntimeException):
-            # if it did not come from dbt proper and the logger is not
-            # initialized (so there's no safe path to log to), log the stack
-            # trace at error level.
-            logger.error(traceback.format_exc())
-        exit_code = ExitCodes.UnhandledError.value
+            if log_manager.initialized:
+                logger.debug(traceback.format_exc())
+            elif not isinstance(e, RuntimeException):
+                # if it did not come from dbt proper and the logger is not
+                # initialized (so there's no safe path to log to), log the
+                # stack trace at error level.
+                logger.error(traceback.format_exc())
+            exit_code = ExitCodes.UnhandledError.value
 
     sys.exit(exit_code)
 
