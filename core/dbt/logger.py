@@ -317,12 +317,26 @@ class LogManager(logbook.NestedSetup):
         self._output_handler = OutputHandler(self.stdout)
         self._file_handler = DelayedFileHandler()
         self._relevel_processor = Relevel(allowed=['dbt', 'werkzeug'])
+        # keep track of wheter we've already entered to decide if we should
+        # be actually pushing. This allows us to log in main() and also
+        # support entering dbt execution via handle_and_check.
+        self._stack_depth = 0
         super().__init__([
             self._null_handler,
             self._output_handler,
             self._file_handler,
             self._relevel_processor,
         ])
+
+    def push_application(self):
+        self._stack_depth += 1
+        if self._stack_depth == 1:
+            super().push_application()
+
+    def pop_application(self):
+        self._stack_depth -= 1
+        if self._stack_depth == 0:
+            super().pop_application()
 
     def disable(self):
         self.add_handler(logbook.NullHandler())
