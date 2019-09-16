@@ -36,7 +36,6 @@ class BaseSourcesTest(DBTIntegrationTest):
     def setUp(self):
         super().setUp()
         os.environ['DBT_TEST_SCHEMA_NAME_VARIABLE'] = 'test_run_schema'
-        self.run_dbt_with_vars(['seed'], strict=False)
 
     def tearDown(self):
         del os.environ['DBT_TEST_SCHEMA_NAME_VARIABLE']
@@ -48,7 +47,13 @@ class BaseSourcesTest(DBTIntegrationTest):
         return self.run_dbt(cmd, *args, **kwargs)
 
 
-class TestSources(BaseSourcesTest):
+class SuccessfulSourcesTest(BaseSourcesTest):
+    def setUp(self):
+        super().setUp()
+        self.run_dbt_with_vars(['seed'], strict=False)
+
+
+class TestSources(SuccessfulSourcesTest):
     @property
     def project_config(self):
         cfg = super().project_config
@@ -165,7 +170,7 @@ class TestSources(BaseSourcesTest):
         ])
 
 
-class TestSourceFreshness(BaseSourcesTest):
+class TestSourceFreshness(SuccessfulSourcesTest):
     def setUp(self):
         super().setUp()
         self.maxDiff = None
@@ -278,7 +283,7 @@ class TestSourceFreshness(BaseSourcesTest):
         self._run_source_freshness()
 
 
-class TestSourceFreshnessErrors(BaseSourcesTest):
+class TestSourceFreshnessErrors(SuccessfulSourcesTest):
     @property
     def models(self):
         return "error_models"
@@ -296,15 +301,17 @@ class TestSourceFreshnessErrors(BaseSourcesTest):
 
 
 class TestMalformedSources(BaseSourcesTest):
+    # even seeds should fail, because parsing is what's raising
     @property
     def models(self):
         return "malformed_models"
 
     @use_profile('postgres')
-    def test_postgres_malformed_schema_nonstrict_will_not_break_run(self):
-        self.run_dbt_with_vars(['run'], strict=False)
+    def test_postgres_malformed_schema_nonstrict_will_break_run(self):
+        with self.assertRaises(CompilationException):
+            self.run_dbt_with_vars(['seed'], strict=False)
 
     @use_profile('postgres')
     def test_postgres_malformed_schema_strict_will_break_run(self):
         with self.assertRaises(CompilationException):
-            self.run_dbt_with_vars(['run'], strict=True)
+            self.run_dbt_with_vars(['seed'], strict=True)
