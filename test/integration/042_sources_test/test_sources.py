@@ -92,7 +92,7 @@ class TestSources(SuccessfulSourcesTest):
     @use_profile('postgres')
     def test_postgres_basic_source_def(self):
         results = self.run_dbt_with_vars(['run'])
-        self.assertEqual(len(results), 3)
+        self.assertEqual(len(results), 4)
         self.assertManyTablesEqual(
             ['source', 'descendant_model', 'nonsource_descendant'],
             ['expected_multi_source', 'multi_source_model'])

@@ -107,6 +107,10 @@ class SourceFreshnessResult(JsonSchemaMixin, Writable):
         self.fail = self.status == 'error'
 
     @property
+    def warned(self):
+        return self.status == 'warn'
+
+    @property
     def skipped(self):
         return False
 
