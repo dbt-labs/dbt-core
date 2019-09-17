@@ -156,6 +156,7 @@ class Project(HyphenatedJsonSchemaMixin, Replaceable):
     require_dbt_version: Optional[Union[List[str], str]] = None
     models: Dict[str, Any] = field(default_factory=dict)
     seeds: Dict[str, Any] = field(default_factory=dict)
+    snapshots: Dict[str, Any] = field(default_factory=dict)
     packages: List[PackageSpec] = field(default_factory=list)
 
     @classmethod

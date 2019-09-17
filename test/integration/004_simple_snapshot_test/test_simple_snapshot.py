@@ -114,7 +114,7 @@ class TestSimpleSnapshotFileSelects(DBTIntegrationTest):
         return {
             "data-paths": ['data'],
             "snapshot-paths": ['test-snapshots-select',
-                              'test-snapshots-pg'],
+                               'test-snapshots-pg'],
         }
 
     @use_profile('postgres')
@@ -157,6 +157,23 @@ class TestSimpleSnapshotFileSelects(DBTIntegrationTest):
         self.assertTableDoesNotExist('snapshot_alvarez')
         self.assertTableDoesNotExist('snapshot_kelly')
         self.assertTableDoesNotExist('snapshot_actual')
+
+
+class TestConfiguredSnapshotFileSelects(TestSimpleSnapshotFileSelects):
+    @property
+    def project_config(self):
+        return {
+            "data-paths": ['data'],
+            "snapshot-paths": ['test-snapshots-select-noconfig'],
+            "snapshots": {
+                "test": {
+                    "target_schema": self.unique_schema(),
+                    "unique_key": "id || '-' || first_name",
+                    'strategy': 'timestamp',
+                    'updated_at': 'updated_at',
+                }
+            }
+        }
 
 
 class TestSimpleSnapshotFilesBigquery(DBTIntegrationTest):
@@ -375,6 +392,23 @@ class TestCheckCols(TestSimpleSnapshotFiles):
         return {
             "data-paths": ['data'],
             "snapshot-paths": ['test-check-col-snapshots'],
+        }
+
+
+class TestConfiguredCheckCols(TestCheckCols):
+    @property
+    def project_config(self):
+        return {
+            "data-paths": ['data'],
+            "snapshot-paths": ['test-check-col-snapshots-noconfig'],
+            "snapshots": {
+                "test": {
+                    "target_schema": self.unique_schema(),
+                    "unique_key": "id || '-' || first_name",
+                    "strategy": "check",
+                    "check_cols": ["email"],
+                }
+            }
         }
 
 

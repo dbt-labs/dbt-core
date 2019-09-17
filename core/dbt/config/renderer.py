@@ -23,7 +23,7 @@ class ConfigRenderer:
         if first in {'on-run-start', 'on-run-end'}:
             return True
         # models have two things to avoid
-        if first in {'seeds', 'models'}:
+        if first in {'seeds', 'models', 'snapshots'}:
             # model-level hooks
             if 'pre-hook' in keypath or 'post-hook' in keypath:
                 return True
