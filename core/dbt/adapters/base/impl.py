@@ -116,7 +116,7 @@ def _utc(dt: Optional[datetime], source: BaseRelation, field_name: str) -> datet
 
 def _relation_name(rel: Optional[BaseRelation]) -> str:
     if rel is None:
-        return 'null relation'
+        return "null relation"
     else:
         return str(rel)
 
@@ -219,7 +219,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         with self.connection_named(node.unique_id, node):
             yield
 
-    @available.parse(lambda *a, **k: ('', empty_table()))
+    @available.parse(lambda *a, **k: ("", empty_table()))
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
     ) -> Tuple[Union[str, AdapterResponse], agate.Table]:
@@ -375,9 +375,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             cache_update.add((relation.database, relation.schema))
         self.cache.update_schemas(cache_update)
 
-    def set_relations_cache(
-        self, manifest: Manifest, clear: bool = False
-    ) -> None:
+    def set_relations_cache(self, manifest: Manifest, clear: bool = False) -> None:
         """Run a query that gets a populated cache of the relations in the
         database and set the cache on this adapter.
         """
@@ -409,7 +407,7 @@ class BaseAdapter(metaclass=AdapterMeta):
                 'Attempted to drop a null relation for {}'.format(name)
             )
         self.cache.drop(relation)
-        return ''
+        return ""
 
     @available
     def cache_renamed(
@@ -425,12 +423,11 @@ class BaseAdapter(metaclass=AdapterMeta):
             src_name = _relation_name(from_relation)
             dst_name = _relation_name(to_relation)
             raise_compiler_error(
-                'Attempted to rename {} to {} for {}'
-                .format(src_name, dst_name, name)
+                "Attempted to rename {} to {} for {}".format(src_name, dst_name, name)
             )
 
         self.cache.rename(from_relation, to_relation)
-        return ''
+        return ""
 
     ###
     # Abstract methods for database-specific values, attributes, and types
