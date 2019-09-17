@@ -17,7 +17,7 @@ class TestInvalidDisabledModels(DBTIntegrationTest):
         return "models-2"
 
     @use_profile('postgres')
-    def test_view_with_incremental_attributes(self):
+    def test_postgres_view_with_incremental_attributes(self):
         with self.assertRaises(RuntimeError) as exc:
             self.run_dbt()
 
@@ -40,7 +40,7 @@ class TestInvalidModelReference(DBTIntegrationTest):
         return "models-3"
 
     @use_profile('postgres')
-    def test_view_with_incremental_attributes(self):
+    def test_postgres_view_with_incremental_attributes(self):
         with self.assertRaises(RuntimeError) as exc:
             self.run_dbt()
 

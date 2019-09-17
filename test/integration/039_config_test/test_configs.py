@@ -77,7 +77,7 @@ class TestTargetConfigs(DBTIntegrationTest):
         }
 
     @use_profile('postgres')
-    def test_alternative_target_paths(self):
+    def test_postgres_alternative_target_paths(self):
         self.run_dbt(['seed'])
         dirs = list(self.new_dirs())
         self.assertEqual(len(dirs), 1)

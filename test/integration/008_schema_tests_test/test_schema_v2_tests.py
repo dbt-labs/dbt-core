@@ -27,7 +27,7 @@ class TestSchemaTests(DBTIntegrationTest):
         return test_task.run()
 
     @use_profile('postgres')
-    def test_schema_tests(self):
+    def test_postgres_schema_tests(self):
         results = self.run_dbt()
         self.assertEqual(len(results), 5)
         test_results = self.run_schema_validations()
@@ -77,7 +77,7 @@ class TestMalformedSchemaTests(DBTIntegrationTest):
         return test_task.run()
 
     @use_profile('postgres')
-    def test_malformed_schema_strict_will_break_run(self):
+    def test_postgres_malformed_schema_strict_will_break_run(self):
         with self.assertRaises(CompilationException):
             self.run_dbt(strict=True)
         # even if strict = False!
@@ -104,7 +104,7 @@ class TestHooksInTests(DBTIntegrationTest):
         }
 
     @use_profile('postgres')
-    def test_hooks_dont_run_for_tests(self):
+    def test_postgres_hooks_dont_run_for_tests(self):
         # This would fail if the hooks ran
         results = self.run_dbt(['test', '--model', 'ephemeral'])
         self.assertEqual(len(results), 1)
@@ -162,7 +162,7 @@ class TestCustomSchemaTests(DBTIntegrationTest):
         return test_task.run()
 
     @use_profile('postgres')
-    def test_schema_tests(self):
+    def test_postgres_schema_tests(self):
         self.run_dbt(["deps"])
         results = self.run_dbt()
         self.assertEqual(len(results), 4)
