@@ -62,7 +62,7 @@ class BigQueryAdapter(BaseAdapter):
     def drop_relation(self, relation):
         is_cached = self._schema_is_cached(relation.database, relation.schema)
         if is_cached:
-            self.cache.drop(relation)
+            self.cache_dropped(relation)
 
         conn = self.connections.get_thread_connection()
         client = conn.handle

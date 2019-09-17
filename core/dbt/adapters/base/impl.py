@@ -1,23 +1,28 @@
 import abc
 from contextlib import contextmanager
+from datetime import datetime
+from typing import (
+    Optional, Tuple, Callable, Container, FrozenSet, Type
+)
 
 import agate
 import pytz
 
 import dbt.exceptions
 import dbt.flags
-import dbt.clients.agate_helper
 
+from dbt.clients.agate_helper import empty_table
+from dbt.config import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.node_types import NodeType
 from dbt.loader import GraphLoader
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import filter_null_values
 
-
+from dbt.adapters.base.connections import BaseConnectionManager
 from dbt.adapters.base.meta import AdapterMeta, available
 from dbt.adapters.base import BaseRelation
-from dbt.adapters.base import Column
+from dbt.adapters.base import Column as BaseColumn
 from dbt.adapters.cache import RelationsCache
 
 
@@ -25,7 +30,7 @@ GET_CATALOG_MACRO_NAME = 'get_catalog'
 FRESHNESS_MACRO_NAME = 'collect_freshness'
 
 
-def _expect_row_value(key, row):
+def _expect_row_value(key: str, row: agate.Row):
     if key not in row.keys():
         raise dbt.exceptions.InternalException(
             'Got a row without "{}" column, columns: {}'
@@ -34,7 +39,9 @@ def _expect_row_value(key, row):
     return row[key]
 
 
-def _relations_filter_schemas(schemas):
+def _relations_filter_schemas(
+    schemas: Container[str]
+) -> Callable[[agate.Row], bool]:
     def test(row):
         referenced_schema = _expect_row_value('referenced_schema', row)
         dependent_schema = _expect_row_value('dependent_schema', row)
@@ -47,7 +54,7 @@ def _relations_filter_schemas(schemas):
     return test
 
 
-def _catalog_filter_schemas(manifest):
+def _catalog_filter_schemas(manifest: Manifest) -> Callable[[agate.Row], bool]:
     """Return a function that takes a row and decides if the row should be
     included in the catalog output.
     """
@@ -65,7 +72,7 @@ def _catalog_filter_schemas(manifest):
     return test
 
 
-def _utc(dt, source, field_name):
+def _utc(dt: datetime, source: str, field_name: str) -> datetime:
     """If dt has a timezone, return a new datetime that's in UTC. Otherwise,
     assume the datetime is already for UTC and add the timezone.
     """
@@ -88,6 +95,13 @@ def _utc(dt, source, field_name):
         return dt.astimezone(pytz.UTC)
     else:
         return dt.replace(tzinfo=pytz.UTC)
+
+
+def _relation_name(rel: Optional[BaseRelation]) -> str:
+    if rel is None:
+        return 'null relation'
+    else:
+        return str(rel)
 
 
 class SchemaSearchMap(dict):
@@ -171,22 +185,19 @@ class BaseAdapter(metaclass=AdapterMeta):
     Macros:
         - get_catalog
     """
-    requires = {}
-
-    Relation = BaseRelation
-    Column = Column
-    # This should be an implementation of BaseConnectionManager
-    ConnectionManager = None
+    Relation: Type[BaseRelation] = BaseRelation
+    Column: Type[BaseColumn] = BaseColumn
+    ConnectionManager: Type[BaseConnectionManager]
 
     # A set of clobber config fields accepted by this adapter
     # for use in materializations
-    AdapterSpecificConfigs = frozenset()
+    AdapterSpecificConfigs: FrozenSet[str] = frozenset()
 
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, config: RuntimeConfig):
+        self.config: RuntimeConfig = config
         self.cache = RelationsCache()
         self.connections = self.ConnectionManager(config)
-        self._internal_manifest_lazy = None
+        self._internal_manifest_lazy: Optional[Manifest] = None
 
     ###
     # Methods that pass through to the connection manager
@@ -219,8 +230,10 @@ class BaseAdapter(metaclass=AdapterMeta):
         finally:
             self.release_connection()
 
-    @available.parse(lambda *a, **k: ('', dbt.clients.agate_helper()))
-    def execute(self, sql, auto_begin=False, fetch=False):
+    @available.parse(lambda *a, **k: ('', empty_table()))
+    def execute(
+        self, sql: str, auto_begin: bool = False, fetch: bool = False
+    ) -> Tuple[str, agate.Table]:
         """Execute the given SQL. This is a thin wrapper around
         ConnectionManager.execute.
 
@@ -241,7 +254,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     # Methods that should never be overridden
     ###
     @classmethod
-    def type(cls):
+    def type(cls) -> str:
         """Get the type of this adapter. Types must be class-unique and
         consistent.
 
@@ -251,12 +264,12 @@ class BaseAdapter(metaclass=AdapterMeta):
         return cls.ConnectionManager.TYPE
 
     @property
-    def _internal_manifest(self):
+    def _internal_manifest(self) -> Manifest:
         if self._internal_manifest_lazy is None:
-            self.load_internal_manifest()
+            return self.load_internal_manifest()
         return self._internal_manifest_lazy
 
-    def check_internal_manifest(self):
+    def check_internal_manifest(self) -> Optional[Manifest]:
         """Return the internal manifest (used for executing macros) if it's
         been initialized, otherwise return None.
         """
@@ -271,7 +284,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     ###
     # Caching methods
     ###
-    def _schema_is_cached(self, database, schema):
+    def _schema_is_cached(self, database: str, schema: str):
         """Check if the schema is cached, and by default logs if it is not."""
 
         if dbt.flags.USE_CACHE is False:
@@ -285,15 +298,9 @@ class BaseAdapter(metaclass=AdapterMeta):
         else:
             return True
 
-    @classmethod
-    def _relations_filter_table(cls, table, schemas):
-        """Filter the table as appropriate for relations table entries.
-        Subclasses can override this to change filtering rules on a per-adapter
-        basis.
-        """
-        return table.where(_relations_filter_schemas(schemas))
-
-    def _get_cache_schemas(self, manifest, exec_only=False):
+    def _get_cache_schemas(
+        self, manifest: Manifest, exec_only: bool = False
+    ) -> SchemaSearchMap:
         """Get a mapping of each node's "information_schema" relations to a
         set of all schemas expected in that information_schema.
 
@@ -314,7 +321,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         # schemas
         return info_schema_name_map
 
-    def _relations_cache_for_schemas(self, manifest):
+    def _relations_cache_for_schemas(self, manifest: Manifest) -> None:
         """Populate the relations cache for the given schemas. Returns an
         iteratble of the schemas populated, as strings.
         """
@@ -332,7 +339,9 @@ class BaseAdapter(metaclass=AdapterMeta):
         # so we can check it later
         self.cache.update_schemas(info_schema_name_map.schemas_searched())
 
-    def set_relations_cache(self, manifest, clear=False):
+    def set_relations_cache(
+        self, manifest: Manifest, clear: bool = False
+    ) -> None:
         """Run a query that gets a populated cache of the relations in the
         database and set the cache on this adapter.
         """
@@ -344,7 +353,8 @@ class BaseAdapter(metaclass=AdapterMeta):
                 self.cache.clear()
             self._relations_cache_for_schemas(manifest)
 
-    def cache_new_relation(self, relation):
+    @available
+    def cache_added(self, relation: Optional[BaseRelation]) -> str:
         """Cache a new relation in dbt. It will show up in `list relations`."""
         if relation is None:
             name = self.nice_connection_name()
@@ -354,6 +364,42 @@ class BaseAdapter(metaclass=AdapterMeta):
         if dbt.flags.USE_CACHE:
             self.cache.add(relation)
         # so jinja doesn't render things
+        return ''
+
+    @available
+    def cache_dropped(self, relation: Optional[BaseRelation]) -> str:
+        """Drop a relation in dbt. It will no longer show up in
+        `list relations`, and any bound views will be dropped from the cache
+        """
+        if relation is None:
+            name = self.nice_connection_name()
+            dbt.exceptions.raise_compiler_error(
+                'Attempted to drop a null relation for {}'.format(name)
+            )
+        if dbt.flags.USE_CACHE:
+            self.cache.drop(relation)
+        return ''
+
+    @available
+    def cache_renamed(
+        self,
+        from_relation: Optional[BaseRelation],
+        to_relation: Optional[BaseRelation],
+    ) -> str:
+        """Rename a relation in dbt. It will show up with a new name in
+        `list_relations`, but bound views will remain bound.
+        """
+        if from_relation is None or to_relation is None:
+            name = self.nice_connection_name()
+            src_name = _relation_name(from_relation)
+            dst_name = _relation_name(to_relation)
+            dbt.exceptions.raise_compiler_error(
+                'Attempted to rename {} to {} for {}'
+                .format(src_name, dst_name, name)
+            )
+
+        if dbt.flags.USE_CACHE:
+            self.cache.rename(from_relation, to_relation)
         return ''
 
     ###

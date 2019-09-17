@@ -1,26 +1,26 @@
 import abc
 from functools import wraps
+from typing import Callable, Optional, Any, FrozenSet, Dict
+
 from dbt.deprecations import warn, renamed_method
 
 
-def _always_none(*args, **kwargs):
-    return None
+Decorator = Callable[[Any], Callable]
 
 
-def _always_list(*args, **kwargs):
-    return None
-
-
-def available(func):
+def available_function(func: Callable) -> Callable:
     """A decorator to indicate that a method on the adapter will be
     exposed to the database wrapper, and will be available at parse and run
     time.
     """
-    func._is_available_ = True
+    func._is_available_ = True  # type: ignore
     return func
 
 
-def available_deprecated(supported_name, parse_replacement=None):
+def available_deprecated(
+    supported_name: str,
+    parse_replacement: Optional[Callable] = None
+) -> Decorator:
     """A decorator that marks a function as available, but also prints a
     deprecation warning. Use like
 
@@ -50,12 +50,12 @@ def available_deprecated(supported_name, parse_replacement=None):
             return func(*args, **kwargs)
 
         if parse_replacement:
-            available = available_parse(parse_replacement)
-        return available(inner)
+            available_function = available_parse(parse_replacement)
+        return available_function(inner)
     return wrapper
 
 
-def available_parse(parse_replacement):
+def available_parse(parse_replacement: Callable) -> Decorator:
     """A decorator factory to indicate that a method on the adapter will be
     exposed to the database wrapper, and will be stubbed out at parse time with
     the given function.
@@ -79,10 +79,34 @@ def available_parse(parse_replacement):
     return inner
 
 
-available.deprecated = available_deprecated
-available.parse = available_parse
-available.parse_none = available_parse(lambda *a, **k: None)
-available.parse_list = available_parse(lambda *a, **k: [])
+class available:
+    def __new__(cls, func: Callable) -> Callable:
+        return available_function(func)
+
+    @classmethod
+    def parse(cls, parse_replacement: Callable) -> Decorator:
+        return available_parse(parse_replacement)
+
+    @classmethod
+    def deprecated(
+        cls, supported_name: str, parse_replacement: Optional[Callable] = None
+    ) -> Decorator:
+        return available_deprecated(supported_name, parse_replacement)
+
+    @classmethod
+    def parse_none(cls, func: Callable) -> Callable:
+        wrapper = available_parse(lambda *a, **k: None)
+        return wrapper(func)
+
+    @classmethod
+    def parse_list(cls, func: Callable) -> Callable:
+        wrapper = available_parse(lambda *a, **k: [])
+        return wrapper(func)
+
+# available.deprecated = available_deprecated
+# available.parse = available_parse
+# available.parse_none = available_parse(lambda *a, **k: None)
+# available.parse_list = available_parse(lambda *a, **k: [])
 
 
 class AdapterMeta(abc.ABCMeta):
@@ -110,7 +134,7 @@ class AdapterMeta(abc.ABCMeta):
             if parse_replacement is not None:
                 replacements[name] = parse_replacement
 
-        cls._available_ = frozenset(available)
+        cls._available_: FrozenSet[str] = frozenset(available)
         # should this be a namedtuple so it will be immutable like _available_?
-        cls._parse_replacements_ = replacements
+        cls._parse_replacements_: Dict[str, Callable] = replacements
         return cls

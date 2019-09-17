@@ -65,6 +65,9 @@
 {% endmacro %}
 
 {% macro create_table_as(temporary, relation, sql) -%}
+  {%- if not temporary -%}
+    {%- do adapter.cache_added(relation.incorporate(dbt_created=True)) -%}
+  {%- endif -%}
   {{ adapter_macro('create_table_as', temporary, relation, sql) }}
 {%- endmacro %}
 
@@ -77,6 +80,7 @@
 {% endmacro %}
 
 {% macro create_view_as(relation, sql) -%}
+  {%- do adapter.cache_added(relation.incorporate(dbt_created=True)) -%}
   {{ adapter_macro('create_view_as', relation, sql) }}
 {%- endmacro %}
 

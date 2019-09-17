@@ -1,5 +1,10 @@
 
 {% macro create_csv_table(model, agate_table) -%}
+  {%- do adapter.cache_added(api.Relation.create(
+    database=model.database,
+    schema=model.schema,
+    identifier=model.alias,
+    dbt_created=True)) -%}
   {{ adapter_macro('create_csv_table', model, agate_table) }}
 {%- endmacro %}
 

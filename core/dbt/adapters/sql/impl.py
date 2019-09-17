@@ -122,13 +122,12 @@ class SQLAdapter(BaseAdapter):
         )
 
     def drop_relation(self, relation):
-        if dbt.flags.USE_CACHE:
-            self.cache.drop(relation)
         if relation.type is None:
             dbt.exceptions.raise_compiler_error(
                 'Tried to drop relation {}, but its type is null.'
                 .format(relation))
 
+        self.cache_dropped(relation)
         self.execute_macro(
             DROP_RELATION_MACRO_NAME,
             kwargs={'relation': relation}
@@ -141,8 +140,7 @@ class SQLAdapter(BaseAdapter):
         )
 
     def rename_relation(self, from_relation, to_relation):
-        if dbt.flags.USE_CACHE:
-            self.cache.rename(from_relation, to_relation)
+        self.cache_renamed(from_relation, to_relation)
 
         kwargs = {'from_relation': from_relation, 'to_relation': to_relation}
         self.execute_macro(
