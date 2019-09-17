@@ -9,7 +9,8 @@ class SnowflakeAdapter(SQLAdapter):
     ConnectionManager = SnowflakeConnectionManager
 
     AdapterSpecificConfigs = frozenset(
-        {"transient", "cluster_by", "automatic_clustering", "secure"}
+        {"transient", "cluster_by", "automatic_clustering", "secure",
+         "copy_grants"}
     )
 
     @classmethod
