@@ -35,7 +35,7 @@ class TestMacros(DBTIntegrationTest):
         }
 
     @use_profile('postgres')
-    def test_working_macros(self):
+    def test_postgres_working_macros(self):
         self.run_dbt(["deps"])
         results = self.run_dbt(["run"])
         self.assertEqual(len(results), 6)
@@ -64,7 +64,7 @@ class TestInvalidMacros(DBTIntegrationTest):
         }
 
     @use_profile('postgres')
-    def test_invalid_macro(self):
+    def test_postgres_invalid_macro(self):
 
         try:
             self.run_dbt(["run"], expect_pass=False)

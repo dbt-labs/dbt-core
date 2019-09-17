@@ -31,13 +31,13 @@ class TestCLIInvocation(ModelCopyingIntegrationTest):
         return "models"
 
     @use_profile('postgres')
-    def test_toplevel_dbt_run(self):
+    def test_postgres_toplevel_dbt_run(self):
         results = self.run_dbt(['run'])
         self.assertEqual(len(results), 1)
         self.assertTablesEqual("seed", "model")
 
     @use_profile('postgres')
-    def test_subdir_dbt_run(self):
+    def test_postgres_subdir_dbt_run(self):
         os.chdir(os.path.join(self.models, "subdir1"))
 
         results = self.run_dbt(['run'])
@@ -97,7 +97,7 @@ class TestCLIInvocationWithProfilesDir(ModelCopyingIntegrationTest):
         return "models"
 
     @use_profile('postgres')
-    def test_toplevel_dbt_run_with_profile_dir_arg(self):
+    def test_postgres_toplevel_dbt_run_with_profile_dir_arg(self):
         results = self.run_dbt(['run', '--profiles-dir', 'dbt-profile'], profiles_dir=False)
         self.assertEqual(len(results), 1)
 

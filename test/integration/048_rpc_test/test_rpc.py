@@ -886,7 +886,7 @@ class TestRPCServer(HasRPCServer):
         self.assertEqual(len(result['rows']), 0)
 
     @use_profile('postgres')
-    def test_gc_change_interval(self):
+    def test_postgres_gc_change_interval(self):
         num_requests = 10
         self._make_any_requests(num_requests)
 

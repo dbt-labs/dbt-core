@@ -26,14 +26,14 @@ class TestPermissions(DBTIntegrationTest):
         return "models"
 
     @use_profile('postgres')
-    def test_no_create_schema_permissions(self):
+    def test_postgres_no_create_schema_permissions(self):
         # the noaccess user does not have permissions to create a schema -- this should fail
         self.run_sql('drop schema if exists "{}" cascade'.format(self.unique_schema()))
         with self.assertRaises(RuntimeError):
             self.run_dbt(['run', '--target', 'noaccess'], expect_pass=False)
 
     @use_profile('postgres')
-    def test_create_schema_permissions(self):
+    def test_postgres_create_schema_permissions(self):
         # now it should work!
         self.run_sql('grant create on database {} to noaccess'.format(self.default_database))
         self.run_sql('grant usage, create on schema "{}" to noaccess'.format(self.unique_schema()))

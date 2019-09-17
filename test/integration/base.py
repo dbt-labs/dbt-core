@@ -61,18 +61,20 @@ class TestArgs:
 
 def _profile_from_test_name(test_name):
     adapter_names = ('postgres', 'snowflake', 'redshift', 'bigquery', 'presto')
-    adapters_in_name =  sum(x in test_name for x in adapter_names)
-    if adapters_in_name > 1:
-        raise ValueError('test names must only have 1 profile choice embedded')
+    adapters_in_name = sum(x in test_name for x in adapter_names)
+    if adapters_in_name != 1:
+        raise ValueError(
+            'test names must have exactly 1 profile choice embedded, {} has {}'
+            .format(test_name, adapters_in_name)
+        )
 
     for adapter_name in adapter_names:
         if adapter_name in test_name:
             return adapter_name
 
-    warnings.warn(
+    raise ValueError(
         'could not find adapter name in test name {}'.format(test_name)
     )
-    return 'postgres'
 
 
 def _pytest_test_name():

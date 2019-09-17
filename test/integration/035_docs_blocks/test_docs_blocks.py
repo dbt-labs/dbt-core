@@ -20,7 +20,7 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
 
 
     @use_profile('postgres')
-    def test_valid_doc_ref(self):
+    def test_postgres_valid_doc_ref(self):
         self.assertEqual(len(self.run_dbt()), 1)
 
         self.assertTrue(os.path.exists('./target/manifest.json'))
@@ -58,7 +58,7 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
         self.assertEqual(len(model_data['columns']), 3)
 
     @use_profile('postgres')
-    def test_alternative_docs_path(self):
+    def test_postgres_alternative_docs_path(self):
         self.use_default_project({"docs-paths": [self.dir("docs")]})
         self.assertEqual(len(self.run_dbt()), 1)
 
@@ -97,7 +97,7 @@ class TestGoodDocsBlocks(DBTIntegrationTest):
         self.assertEqual(len(model_data['columns']), 3)
 
     @use_profile('postgres')
-    def test_alternative_docs_path_missing(self):
+    def test_postgres_alternative_docs_path_missing(self):
         self.use_default_project({"docs-paths": [self.dir("not-docs")]})
         with self.assertRaises(dbt.exceptions.CompilationException):
             self.run_dbt()
@@ -116,7 +116,7 @@ class TestMissingDocsBlocks(DBTIntegrationTest):
         return self.dir("missing_docs_models")
 
     @use_profile('postgres')
-    def test_missing_doc_ref(self):
+    def test_postgres_missing_doc_ref(self):
         # The run should fail since we could not find the docs reference.
         with self.assertRaises(dbt.exceptions.CompilationException):
             self.run_dbt()
@@ -135,7 +135,7 @@ class TestBadDocsBlocks(DBTIntegrationTest):
         return self.dir("invalid_name_models")
 
     @use_profile('postgres')
-    def test_invalid_doc_ref(self):
+    def test_postgres_invalid_doc_ref(self):
         # The run should fail since we could not find the docs reference.
         with self.assertRaises(dbt.exceptions.CompilationException):
             self.run_dbt(expect_pass=False)

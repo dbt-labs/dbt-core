@@ -13,7 +13,6 @@ class TestExitCodes(DBTIntegrationTest):
     def models(self):
         return "models"
 
-
     @property
     def project_config(self):
         return {
@@ -66,6 +65,7 @@ class TestExitCodes(DBTIntegrationTest):
         self.assertTableDoesExist('good_snapshot')
         self.assertTrue(success)
 
+
 class TestExitCodesSnapshotFail(DBTIntegrationTest):
 
     @property
@@ -83,7 +83,7 @@ class TestExitCodesSnapshotFail(DBTIntegrationTest):
         }
 
     @use_profile('postgres')
-    def test___snapshot_fail(self):
+    def test__postgres_snapshot_fail(self):
         results, success = self.run_dbt_and_check(['run', '--model', 'good'])
         self.assertTrue(success)
         self.assertEqual(len(results.results), 1)
@@ -112,7 +112,7 @@ class TestExitCodesDeps(DBTIntegrationTest):
         }
 
     @use_profile('postgres')
-    def test_deps(self):
+    def test_postgres_deps(self):
         _, success = self.run_dbt_and_check(['deps'])
         self.assertTrue(success)
 
@@ -138,7 +138,7 @@ class TestExitCodesDepsFail(DBTIntegrationTest):
         }
 
     @use_profile('postgres')
-    def test_deps(self):
+    def test_postgres_deps(self):
         with self.assertRaises(dbt.exceptions.InternalException):
             # this should fail
             self.run_dbt_and_check(['deps'])
@@ -160,7 +160,7 @@ class TestExitCodesSeed(DBTIntegrationTest):
         }
 
     @use_profile('postgres')
-    def test_seed(self):
+    def test_postgres_seed(self):
         results, success = self.run_dbt_and_check(['seed'])
         self.assertEqual(len(results.results), 1)
         self.assertTrue(success)
@@ -182,6 +182,6 @@ class TestExitCodesSeedFail(DBTIntegrationTest):
         }
 
     @use_profile('postgres')
-    def test_seed(self):
+    def test_postgres_seed(self):
         _, success = self.run_dbt_and_check(['seed'])
         self.assertFalse(success)

@@ -27,7 +27,7 @@ class TestSimpleSeed(DBTIntegrationTest):
         }
 
     @use_profile('postgres')
-    def test_simple_seed(self):
+    def test_postgres_simple_seed(self):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         self.assertTablesEqual("seed_actual","seed_expected")
@@ -39,7 +39,7 @@ class TestSimpleSeed(DBTIntegrationTest):
 
 
     @use_profile('postgres')
-    def test_simple_seed_with_drop(self):
+    def test_postgres_simple_seed_with_drop(self):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         self.assertTablesEqual("seed_actual","seed_expected")
@@ -74,7 +74,7 @@ class TestSimpleSeedCustomSchema(DBTIntegrationTest):
         }
 
     @use_profile('postgres')
-    def test_simple_seed_with_schema(self):
+    def test_postgres_simple_seed_with_schema(self):
         schema_name = "{}_{}".format(self.unique_schema(), 'custom_schema')
 
         results = self.run_dbt(["seed"])
@@ -88,7 +88,7 @@ class TestSimpleSeedCustomSchema(DBTIntegrationTest):
 
 
     @use_profile('postgres')
-    def test_simple_seed_with_drop_and_schema(self):
+    def test_postgres_simple_seed_with_drop_and_schema(self):
         schema_name = "{}_{}".format(self.unique_schema(), 'custom_schema')
 
         results = self.run_dbt(["seed"])
@@ -128,7 +128,7 @@ class TestSimpleSeedDisabled(DBTIntegrationTest):
         }
 
     @use_profile('postgres')
-    def test_simple_seed_with_disabled(self):
+    def test_postgres_simple_seed_with_disabled(self):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
         self.assertTableDoesExist('seed_enabled')
@@ -184,7 +184,7 @@ class TestSimpleSeedWithBOM(DBTIntegrationTest):
         }
 
     @use_profile('postgres')
-    def test_simple_seed(self):
+    def test_postgres_simple_seed(self):
         # first make sure nobody "fixed" the file by accident
         seed_path = os.path.join(self.config.data_paths[0], 'seed_bom.csv')
         # 'data-bom/seed_bom.csv'
@@ -212,6 +212,6 @@ class TestSimpleSeedWithUnicode(DBTIntegrationTest):
         }
 
     @use_profile('postgres')
-    def test_simple_seed(self):
+    def test_postgres_simple_seed(self):
         results = self.run_dbt(["seed"])
         self.assertEqual(len(results),  1)
