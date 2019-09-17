@@ -600,7 +600,7 @@ class Project:
                 "on-run-start": self.on_run_start,
                 "on-run-end": self.on_run_end,
                 "dispatch": self.dispatch,
-            'snapshots': self.snapshots,
+                "seeds": self.seeds,
             'sources': self.sources,
                 "sources": self.sources,
             'vars': self.vars.to_dict(),
