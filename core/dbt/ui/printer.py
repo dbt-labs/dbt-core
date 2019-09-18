@@ -192,14 +192,16 @@ def print_model_result_line(
         result.execution_time)
 
 
-def print_snapshot_result_line(result, index: int, total: int):
+def print_snapshot_result_line(
+    result, description: str, index: int, total: int
+) -> None:
     model = result.node
 
     info, status = get_printable_result(result, 'snapshotted', 'snapshotting')
     cfg = model.config.to_dict()
 
-    msg = "{info} {name}".format(
-        info=info, name=model.name, **cfg)
+    msg = "{info} {description}".format(
+        info=info, description=description, **cfg)
     print_fancy_output_line(
         msg,
         status,
