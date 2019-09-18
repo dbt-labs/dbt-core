@@ -480,11 +480,14 @@ class TestRunner(CompileRunner):
 
 class SnapshotRunner(ModelRunner):
     def describe_node(self):
-        return "snapshot {}".format(self.node.name)
+        return "snapshot {}".format(self.get_node_representation())
 
     def print_result_line(self, result):
-        dbt.ui.printer.print_snapshot_result_line(result, self.node_index,
-                                                  self.num_nodes)
+        dbt.ui.printer.print_snapshot_result_line(
+            result,
+            self.get_node_representation(),
+            self.node_index,
+            self.num_nodes)
 
 
 class SeedRunner(ModelRunner):
