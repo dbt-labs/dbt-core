@@ -183,6 +183,39 @@ class TestPrePostModelHooksOnSeeds(DBTIntegrationTest):
         self.assertEqual(len(res), 1, 'Expected exactly one item')
 
 
+class TestPrePostModelHooksOnSnapshots(DBTIntegrationTest):
+    @property
+    def schema(self):
+        return "model_hooks_014"
+
+    @property
+    def models(self):
+        return "test-snapshot-models"
+
+    @property
+    def project_config(self):
+        return {
+            'data-paths': ['data'],
+            'snapshot-paths': ['test-snapshots'],
+            'models': {},
+            'snapshots': {
+                'post-hook': [
+                    'alter table {{ this }} add column new_col int',
+                    'update {{ this }} set new_col = 1'
+                ]
+            }
+        }
+
+    @use_profile('postgres')
+    def test_postgres_hooks_on_snapshots(self):
+        res = self.run_dbt(['seed'])
+        self.assertEqual(len(res), 1, 'Expected exactly one item')
+        res = self.run_dbt(['snapshot'])
+        self.assertEqual(len(res), 1, 'Expected exactly one item')
+        res = self.run_dbt(['test'])
+        self.assertEqual(len(res), 1, 'Expected exactly one item')
+
+
 class TestPrePostModelHooksInConfig(BaseTestPrePost):
     @property
     def project_config(self):
@@ -229,12 +262,25 @@ class TestPrePostModelHooksInConfig(BaseTestPrePost):
         self.check_hooks('start', count=2)
         self.check_hooks('end', count=2)
 
-class TestPrePostModelHooksInConfigKwargs(TestPrePostModelHooksInConfig):
 
+class TestPrePostModelHooksInConfigKwargs(TestPrePostModelHooksInConfig):
     @property
     def models(self):
         return "kwargs-models"
 
+
+class TestPrePostSnapshotHooksInConfigKwargs(TestPrePostModelHooksOnSnapshots):
+    @property
+    def models(self):
+        return "test-snapshot-models"
+
+    @property
+    def project_config(self):
+        return {
+            'data-paths': ['data'],
+            'snapshot-paths': ['test-kwargs-snapshots'],
+            'models': {},
+        }
 
 
 class TestDuplicateHooksInConfigs(DBTIntegrationTest):

@@ -199,6 +199,11 @@
     {% do exceptions.relation_wrong_type(target_relation, 'table') %}
   {%- endif -%}
 
+
+  {{ run_hooks(pre_hooks, inside_transaction=False) }}
+
+  {{ run_hooks(pre_hooks, inside_transaction=True) }}
+
   {% set strategy_macro = strategy_dispatch(strategy_name) %}
   {% set strategy = strategy_macro(model, "snapshotted_data", "source_data", config, target_relation_exists) %}
 
@@ -251,10 +256,14 @@
 
   {% endif %}
 
+  {{ run_hooks(post_hooks, inside_transaction=True) }}
+
   {{ adapter.commit() }}
 
   {% if staging_table is defined %}
       {% do post_snapshot(staging_table) %}
   {% endif %}
+
+  {{ run_hooks(post_hooks, inside_transaction=False) }}
 
 {% endmaterialization %}

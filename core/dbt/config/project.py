@@ -147,7 +147,8 @@ class Project:
                  source_paths, macro_paths, data_paths, test_paths,
                  analysis_paths, docs_paths, target_path, snapshot_paths,
                  clean_targets, log_path, modules_path, quoting, models,
-                 on_run_start, on_run_end, seeds, dbt_version, packages):
+                 on_run_start, on_run_end, seeds, snapshots, dbt_version,
+                 packages):
         self.project_name = project_name
         self.version = version
         self.project_root = project_root
@@ -168,6 +169,7 @@ class Project:
         self.on_run_start = on_run_start
         self.on_run_end = on_run_end
         self.seeds = seeds
+        self.snapshots = snapshots
         self.dbt_version = dbt_version
         self.packages = packages
 
@@ -181,7 +183,7 @@ class Project:
             ('on-run-end',): _list_if_none_or_string,
         }
 
-        for k in ('models', 'seeds'):
+        for k in ('models', 'seeds', 'snapshots'):
             handlers[(k,)] = _dict_if_none
             handlers[(k, 'vars')] = _dict_if_none
             handlers[(k, 'pre-hook')] = _list_if_none_or_string
@@ -252,6 +254,7 @@ class Project:
         on_run_start = project_dict.get('on-run-start', [])
         on_run_end = project_dict.get('on-run-end', [])
         seeds = project_dict.get('seeds', {})
+        snapshots = project_dict.get('snapshots', {})
         dbt_raw_version = project_dict.get('require-dbt-version', '>=0.0.0')
 
         try:
@@ -285,6 +288,7 @@ class Project:
             on_run_start=on_run_start,
             on_run_end=on_run_end,
             seeds=seeds,
+            snapshots=snapshots,
             dbt_version=dbt_version,
             packages=packages
         )
@@ -331,6 +335,7 @@ class Project:
             'on-run-start': self.on_run_start,
             'on-run-end': self.on_run_end,
             'seeds': self.seeds,
+            'snapshots': self.snapshots,
             'require-dbt-version': [
                 v.to_version_string() for v in self.dbt_version
             ],
@@ -394,6 +399,7 @@ class Project:
         return {
             'models': _get_config_paths(self.models),
             'seeds': _get_config_paths(self.seeds),
+            'snapshots': _get_config_paths(self.snapshots),
         }
 
     def get_unused_resource_config_paths(self, resource_fqns, disabled):

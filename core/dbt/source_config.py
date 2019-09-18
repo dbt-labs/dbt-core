@@ -17,9 +17,17 @@ class SourceConfig:
         'database',
         'severity',
 
-        'incremental_strategy'
-    }
+        'incremental_strategy',
 
+        # snapshots
+        'target_database',
+        'target_schema',
+        'strategy',
+        'updated_at',
+        # this is often a list, but it should replace and not append (sometimes
+        # it's 'all')
+        'check_cols',
+    }
     ConfigKeys = AppendListFields | ExtendDictFields | ClobberFields
 
     def __init__(self, active_project, own_project, fqn, node_type):
@@ -164,7 +172,7 @@ class SourceConfig:
         if self.node_type == NodeType.Seed:
             model_configs = runtime_config.seeds
         elif self.node_type == NodeType.Snapshot:
-            model_configs = {}
+            model_configs = runtime_config.snapshots
         else:
             model_configs = runtime_config.models
 

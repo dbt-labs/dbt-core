@@ -69,7 +69,6 @@ class SnapshotParser(
             parsed_node = ParsedSnapshotNode.from_dict(node.to_dict())
             self.set_snapshot_attributes(parsed_node)
             return parsed_node
-
         except ValidationError as exc:
             raise CompilationException(validator_error_message(exc), node)
 
