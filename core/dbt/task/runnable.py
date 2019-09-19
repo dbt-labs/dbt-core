@@ -47,6 +47,7 @@ class ManifestTask(ConfiguredTask):
 
     def compile_manifest(self):
         self.linker = compile_manifest(self.config, self.manifest)
+        self.manifest.build_flat_graph()
 
     def _runtime_initialize(self):
         self.load_manifest()
