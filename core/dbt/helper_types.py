@@ -90,7 +90,7 @@ class NoValue(dbtClassMixin):
 
 dbtClassMixin.register_field_encoders(
     {
-    timedelta: TimeDeltaFieldEncoder(),
+        Port: PortEncoder(),
         timedelta: TimeDeltaFieldEncoder(),
         Path: PathEncoder(),
     }

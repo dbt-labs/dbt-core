@@ -69,13 +69,12 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
         try:
             key = CatalogKey(
                 dkey,
-                str(data['table_schema']),
-                str(data['table_name']),
+                str(data["table_schema"]),
+                str(data["table_name"]),
             )
         except KeyError as exc:
             raise dbt.exceptions.CompilationException(
-                'Catalog information missing required key {} (got {})'
-                .format(exc, data)
+                "Catalog information missing required key {} (got {})".format(exc, data)
             )
         table: CatalogTable
         if key in self:
@@ -87,10 +86,10 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
 
     def add_column(self, data: PrimitiveDict):
         table = self.get_table(data)
-        column_data = get_stripped_prefix(data, 'column_')
+        column_data = get_stripped_prefix(data, "column_")
         # the index should really never be that big so it's ok to end up
         # serializing this to JSON (2^53 is the max safe value there)
-        column_data['index'] = int(column_data['index'])
+        column_data["index"] = int(column_data["index"])
 
         column = ColumnMetadata.from_dict(column_data)
         table.columns[column.name] = column
@@ -142,11 +141,11 @@ def format_stats(stats: PrimitiveDict) -> StatsDict:
     """
     stats_collector: StatsDict = {}
 
-    base_keys = {k.split(':')[0] for k in stats}
+    base_keys = {k.split(":")[0] for k in stats}
     for key in base_keys:
-        dct: PrimitiveDict = {'id': key}
-        for subkey in ('label', 'value', 'description', 'include'):
-            dct[subkey] = stats['{}:{}'.format(key, subkey)]
+        dct: PrimitiveDict = {"id": key}
+        for subkey in ("label", "value", "description", "include"):
+            dct[subkey] = stats["{}:{}".format(key, subkey)]
 
         try:
             stats_item = StatsItem.from_dict(dct)
@@ -157,10 +156,10 @@ def format_stats(stats: PrimitiveDict) -> StatsDict:
 
     # we always have a 'has_stats' field, it's never included
     has_stats = StatsItem(
-        id='has_stats',
-        label='Has Stats?',
+        id="has_stats",
+        label="Has Stats?",
         value=len(stats_collector) > 0,
-        description='Indicates whether there are statistics for this table',
+        description="Indicates whether there are statistics for this table",
         include=False,
     )
     stats_collector['has_stats'] = has_stats
