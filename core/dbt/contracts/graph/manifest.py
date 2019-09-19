@@ -367,38 +367,6 @@ class Manifest:
 
         return resource_fqns
 
-    def _filter_subgraph(self, subgraph, predicate):
-        """
-        Given a subgraph of the manifest, and a predicate, filter
-        the subgraph using that predicate. Generates a list of nodes.
-        """
-        to_return = []
-
-        for unique_id, item in subgraph.items():
-            if predicate(item):
-                to_return.append(item)
-
-        return to_return
-
-    def _model_matches_schema_and_table(self, schema, table, model):
-        if model.resource_type == NodeType.Source:
-            return (model.schema.lower() == schema.lower() and
-                    model.identifier.lower() == table.lower())
-        return (model.schema.lower() == schema.lower() and
-                model.alias.lower() == table.lower())
-
-    def get_unique_ids_for_schema_and_table(self, schema, table):
-        """
-        Given a schema and table, find matching models, and return
-        their unique_ids. A schema and table may have more than one
-        match if the relation matches both a source and a seed, for instance.
-        """
-        def predicate(model):
-            return self._model_matches_schema_and_table(schema, table, model)
-
-        matching = list(self._filter_subgraph(self.nodes, predicate))
-        return [match.unique_id for match in matching]
-
     def add_nodes(self, new_nodes):
         """Add the given dict of new nodes to the manifest."""
         for unique_id, node in new_nodes.items():

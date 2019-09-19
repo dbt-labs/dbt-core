@@ -1,8 +1,6 @@
 from dbt.contracts.graph.parsed import (
     ParsedNode,
     ParsedAnalysisNode,
-    ParsedDocumentation,
-    ParsedMacro,
     ParsedModelNode,
     ParsedHookNode,
     ParsedRPCNode,
@@ -216,8 +214,6 @@ CompileResultNode = Union[
     CompiledSnapshotNode,
     CompiledTestNode,
     ParsedAnalysisNode,
-    ParsedDocumentation,
-    ParsedMacro,
     ParsedModelNode,
     ParsedHookNode,
     ParsedRPCNode,
