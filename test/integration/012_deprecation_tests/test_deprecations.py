@@ -57,3 +57,39 @@ class TestMacroDeprecations(BaseTestDeprecations):
         self.run_dbt(strict=False)
         expected = {'generate-schema-name-single-arg'}
         self.assertEqual(expected, deprecations.active_deprecations)
+
+
+class TestMaterializationReturnDeprecation(BaseTestDeprecations):
+    def setUp(self):
+        super().setUp()
+        deprecations.reset_deprecations()
+
+    @property
+    def schema(self):
+        return "deprecation_test_012"
+
+    @staticmethod
+    def dir(path):
+        return path.lstrip("/")
+
+    @property
+    def models(self):
+        return self.dir('custom-models')
+
+    @property
+    def project_config(self):
+        return {
+            'macro-paths': [self.dir('custom-materialization-macros')],
+        }
+
+    @use_profile('postgres')
+    def test_postgres_deprecations_fail(self):
+        # this should fail at runtime
+        self.run_dbt(strict=True, expect_pass=False)
+
+    @use_profile('postgres')
+    def test_postgres_deprecations(self):
+        self.assertEqual(deprecations.active_deprecations, set())
+        self.run_dbt(strict=False)
+        expected = {'materialization-return'}
+        self.assertEqual(expected, deprecations.active_deprecations)
