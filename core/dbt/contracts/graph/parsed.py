@@ -219,6 +219,10 @@ class ParsedNodeMandatory(
 ):
     alias: str
 
+    @property
+    def identifier(self):
+        return self.alias
+
 
 @dataclass
 class ParsedNodeDefaults(ParsedNodeMandatory):

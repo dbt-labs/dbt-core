@@ -1,10 +1,10 @@
 # never name this package "types", or mypy will crash in ugly ways
+from datetime import timedelta
+from typing import NewType
+
 from hologram import (
     FieldEncoder, JsonSchemaMixin, JsonDict, ValidationError
 )
-
-from datetime import timedelta
-from typing import NewType
 
 
 Port = NewType('Port', int)
@@ -39,5 +39,5 @@ class TimeDeltaFieldEncoder(FieldEncoder[timedelta]):
 
 JsonSchemaMixin.register_field_encoders({
     Port: PortEncoder(),
-    timedelta: TimeDeltaFieldEncoder()
+    timedelta: TimeDeltaFieldEncoder(),
 })
