@@ -315,10 +315,6 @@ def _return(value):
     raise dbt.exceptions.MacroReturn(value)
 
 
-def get_this_relation(db_wrapper, config, model):
-    return db_wrapper.Relation.create_from_node(config, model)
-
-
 def get_pytz_module_context():
     context_exports = pytz.__all__
 
@@ -472,7 +468,7 @@ def generate_model(model, config, manifest, source_config, provider):
                             source_config, provider)
     # operations (hooks) don't get a 'this'
     if model.resource_type != NodeType.Operation:
-        this = get_this_relation(context['adapter'], config, model)
+        this = context['adapter'].Relation.create_from(config, model)
         context['this'] = this
     # overwrite schema/database if we have them, and hooks + sql
     # the hooks should come in as dicts, at least for the `run_hooks` macro

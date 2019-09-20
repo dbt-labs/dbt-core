@@ -2,8 +2,7 @@
 
 ### Breaking changes
  - Cache management changes:
-   - Materializations that perform creates via direct "create X" statements must call `adapter.cache_added`
-      - `create_table_as`/`create_view_as` already do this
+  - Materialization macros should now return a dictionary {"relations": [...]}, with the list containing all relations that have been added, in order to add them to the cache. The default behavior is to still add the materialization's model to the cache.
   - Materializations that perform drops via direct "drop" statements must call `adapter.cache_dropped`
       - `adapter.drop_relation` already does this
   - Materializations that perform renames via direct "alter table" statements must call `adapter.cache_renamed`

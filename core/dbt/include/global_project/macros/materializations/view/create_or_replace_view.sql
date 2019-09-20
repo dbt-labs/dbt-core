@@ -58,4 +58,7 @@
       -- No transactions on BigQuery
       {{ run_hooks(post_hooks, inside_transaction=False) }}
   {% endif %}
+
+  {{ return({'relations': [target_relation]}) }}
+
 {% endmacro %}
