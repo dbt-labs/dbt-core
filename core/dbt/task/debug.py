@@ -368,25 +368,21 @@ class DebugTask(BaseTask):
 
     @classmethod
     def validate_connection(cls, target_dict):
-        """Validate a connection dictionary. On error, raises a DbtConfigError.
-        """
-        target_name = 'test'
+        """Validate a connection dictionary. On error, raises a DbtConfigError."""
+        target_name = "test"
         # make a fake profile that we can parse
         profile_data = {
-            'outputs': {
+            "outputs": {
                 target_name: target_dict,
             },
         }
         # this will raise a DbtConfigError on failure
         profile = Profile.from_raw_profile_info(
             raw_profile=profile_data,
-            profile_name='',
+            profile_name="",
             target_override=target_name,
             renderer=ProfileRenderer({}),
         )
         result = cls.attempt_connection(profile)
         if result is not None:
-            raise dbt.exceptions.DbtProfileError(
-                result,
-                result_type='connection_failure'
-            )
+            raise dbt.exceptions.DbtProfileError(result, result_type="connection_failure")
