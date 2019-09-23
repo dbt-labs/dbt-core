@@ -8,7 +8,7 @@ import itertools
 import json
 import os
 from enum import Enum
-from typing import Tuple, Type, Any, Optional
+from typing import Tuple, Type, Any, Optional, TypeVar, Dict
 
 import dbt.exceptions
 
@@ -433,16 +433,20 @@ def parse_cli_vars(var_string):
         raise
 
 
-def filter_null_values(input):
+K_T = TypeVar('K_T')
+V_T = TypeVar('V_T')
+
+
+def filter_null_values(input: Dict[K_T, V_T]) -> Dict[K_T, V_T]:
     return dict((k, v) for (k, v) in input.items()
                 if v is not None)
 
 
-def add_ephemeral_model_prefix(s):
+def add_ephemeral_model_prefix(s: str) -> str:
     return '__dbt__CTE__{}'.format(s)
 
 
-def timestring():
+def timestring() -> str:
     """Get the current datetime as an RFC 3339-compliant string"""
     # isoformat doesn't include the mandatory trailing 'Z' for UTC.
     return datetime.datetime.utcnow().isoformat() + 'Z'
