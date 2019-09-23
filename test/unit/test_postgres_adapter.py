@@ -2,10 +2,11 @@ import mock
 import unittest
 
 import dbt.flags as flags
+from dbt.task.debug import DebugTask
 
 import dbt.adapters
 from dbt.adapters.postgres import PostgresAdapter
-from dbt.exceptions import ValidationException
+from dbt.exceptions import ValidationException, DbtConfigError
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from psycopg2 import extensions as psycopg2_extensions
 from psycopg2 import DatabaseError, Error
@@ -95,7 +96,6 @@ class TestPostgresAdapter(unittest.TestCase):
             add_query.assert_called_once_with('select pg_terminate_backend(42)')
 
         master.handle.get_backend_pid.assert_not_called()
-
 
     @mock.patch('dbt.adapters.postgres.connections.psycopg2')
     def test_default_keepalive(self, psycopg2):
@@ -200,17 +200,19 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
     def setUp(self):
         flags.STRICT_MODE = False
 
+        self.target_dict = {
+            'type': 'postgres',
+            'dbname': 'postgres',
+            'user': 'root',
+            'host': 'thishostshouldnotexist',
+            'pass': 'password',
+            'port': 5432,
+            'schema': 'public'
+        }
+
         profile_cfg = {
             'outputs': {
-                'test': {
-                    'type': 'postgres',
-                    'dbname': 'postgres',
-                    'user': 'root',
-                    'host': 'thishostshouldnotexist',
-                    'pass': 'password',
-                    'port': 5432,
-                    'schema': 'public'
-                }
+                'test': self.target_dict,
             },
             'target': 'test'
         }
@@ -302,3 +304,23 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         self.mock_execute.assert_has_calls([
             mock.call('alter table "postgres"."test_schema".table_a rename to table_b', None)
         ])
+
+    def test_debug_connection_ok(self):
+        DebugTask.validate_connection(self.target_dict)
+        self.mock_execute.assert_has_calls([
+            mock.call('select 1 as id', None)
+        ])
+
+    def test_debug_connection_fail_nopass(self):
+        del self.target_dict['pass']
+        with self.assertRaises(DbtConfigError):
+            DebugTask.validate_connection(self.target_dict)
+
+        def test_connection_fail_select(self):
+            self.mock_execute.side_effect = DatabaseError()
+            with self.assertRaises(DbtConfigError):
+                DebugTask.validate_connection(self.target_dict)
+            self.mock_execute.assert_has_calls([
+                mock.call('select 1 as id', None)
+            ])
+
