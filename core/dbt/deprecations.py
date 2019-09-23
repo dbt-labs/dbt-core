@@ -71,7 +71,7 @@ class MaterializationReturnDeprecation(DBTDeprecation):
     added, but this behavior will be removed in a future version of dbt.
 
   For more information, see:
-    --- TODO: docs link here ---
+  https://docs.getdbt.com/v0.15/docs/creating-new-materializations#section-6-returning-relations
     '''.lstrip()
 
 
