@@ -1,4 +1,4 @@
-{%- materialization view, default -%}
+{%- materialization custom, default -%}
 
   {%- set identifier = model['alias'] -%}
   {%- set tmp_identifier = model['name'] + '__dbt_tmp' -%}
@@ -59,6 +59,7 @@
 
   {{ run_hooks(post_hooks, inside_transaction=False) }}
 
-  {{ return({'relations': [target_relation]}) }}
+  {# do not return anything! #}
+  {# {{ return({'relations': [target_relation]}) }} #}
 
 {%- endmaterialization -%}

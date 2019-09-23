@@ -1,3 +1,13 @@
+## dbt 0.15.0 (TBD)
+
+### Breaking changes
+ - Cache management changes:
+  - Materialization macros should now return a dictionary {"relations": [...]}, with the list containing all relations that have been added, in order to add them to the cache. The default behavior is to still add the materialization's model to the cache.
+  - Materializations that perform drops via direct "drop" statements must call `adapter.cache_dropped`
+      - `adapter.drop_relation` already does this
+  - Materializations that perform renames via direct "alter table" statements must call `adapter.cache_renamed`
+      - `adapter.rename_relation` already does this
+
 ## dbt 0.14.2 (September 13, 2019)
 
 ### Overview
@@ -51,8 +61,8 @@ This is primarily a bugfix release which contains a few minor improvements too. 
  - Fix for non-atomic column expansion logic in Snowflake incremental models and snapshots ([#1687](https://github.com/fishtown-analytics/dbt/issues/1687), [#1690](https://github.com/fishtown-analytics/dbt/pull/1690))
  - Fix for unprojected `count(*)` expression injected by custom data tests ([#1688](https://github.com/fishtown-analytics/dbt/pull/1688))
  - Fix for `dbt run` and `dbt docs generate` commands when running against Panoply Redshift ([#1479](https://github.com/fishtown-analytics/dbt/issues/1479), [#1686](https://github.com/fishtown-analytics/dbt/pull/1686))
- 
- 
+
+
  ### Contributors:
 Thanks for your contributions to dbt!
 

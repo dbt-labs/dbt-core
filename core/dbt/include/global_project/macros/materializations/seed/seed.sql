@@ -131,4 +131,8 @@
   {{ adapter.commit() }}
 
   {{ run_hooks(post_hooks, inside_transaction=False) }}
+
+  {% set target_relation = this.incorporate(type='table') %}
+  {{ return({'relations': [target_relation]}) }}
+
 {% endmaterialization %}

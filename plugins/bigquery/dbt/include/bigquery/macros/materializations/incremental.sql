@@ -49,4 +49,6 @@
 
   {{ run_hooks(post_hooks) }}
 
+  {{ return({'relations': [target_relation]}) }}
+
 {%- endmaterialization %}

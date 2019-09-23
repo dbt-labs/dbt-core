@@ -45,7 +45,7 @@ class BaseRefResolver(dbt.context.common.BaseResolver):
         if get_materialization(target_model) == 'ephemeral':
             return self.create_ephemeral_relation(target_model, name)
         else:
-            return self.Relation.create_from_node(self.config, target_model)
+            return self.Relation.create_from(self.config, target_model)
 
 
 class RefResolver(BaseRefResolver):

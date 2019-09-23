@@ -77,7 +77,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     You must also set the 'TYPE' class attribute with a class-unique constant
     string.
     """
-    TYPE = NotImplemented
+    TYPE: str = NotImplemented
 
     def __init__(self, profile):
         self.profile = profile

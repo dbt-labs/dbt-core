@@ -1,3 +1,10 @@
+import threading
+import time
+import traceback
+from typing import List, Dict, Any
+
+from dbt import deprecations
+from dbt.adapters.base import BaseRelation
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.exceptions import (
     NotImplementedException, CompilationException, RuntimeException,
@@ -15,10 +22,6 @@ import dbt.utils
 import dbt.tracking
 import dbt.ui.printer
 import dbt.flags
-
-import threading
-import time
-import traceback
 
 
 INTERNAL_ERROR_STRING = """This is an error in dbt. Please try again. If \
@@ -307,6 +310,41 @@ class CompileRunner(BaseRunner):
         return compile_node(self.adapter, self.config, self.node, manifest, {})
 
 
+# make sure that we got an ok result back from a materialization
+def _validate_materialization_relations_dict(
+    inp: Dict[Any, Any], model
+) -> List[BaseRelation]:
+    try:
+        relations_value = inp['relations']
+    except KeyError:
+        msg = (
+            'Invalid return value from materialization, "relations" '
+            'not found, got keys: {}'.format(list(inp))
+        )
+        raise CompilationException(msg, node=model) from None
+
+    if not isinstance(relations_value, list):
+        msg = (
+            'Invalid return value from materialization, "relations" '
+            'not a list, got: {}'.format(relations_value)
+        )
+        raise CompilationException(msg, node=model) from None
+
+    relations: List[BaseRelation] = []
+    for relation in relations_value:
+        if not isinstance(relation, BaseRelation):
+            msg = (
+                'Invalid return value from materialization, '
+                '"relations" contains non-Relation: {}'
+                .format(relation)
+            )
+            raise CompilationException(msg, node=model)
+
+        assert isinstance(relation, BaseRelation)
+        relations.append(relation)
+    return relations
+
+
 class ModelRunner(CompileRunner):
     def get_node_representation(self):
         if self.config.credentials.database == self.node.database:
@@ -343,6 +381,25 @@ class ModelRunner(CompileRunner):
         result = context['load_result']('main')
         return RunModelResult(model, status=result.status)
 
+    def _materialization_relations(
+        self, result: Any, model
+    ) -> List[BaseRelation]:
+        if isinstance(result, str):
+            deprecations.warn('materialization-return',
+                              materialization=model.get_materialization())
+            return [
+                self.adapter.Relation.create_from(self.config, model)
+            ]
+
+        if isinstance(result, dict):
+            return _validate_materialization_relations_dict(result, model)
+
+        msg = (
+            'Invalid return value from materialization, expected a dict '
+            'with key "relations", got: {}'.format(str(result))
+        )
+        raise CompilationException(msg, node=model)
+
     def execute(self, model, manifest):
         context = dbt.context.runtime.generate(
             model, self.config, manifest)
@@ -354,12 +411,10 @@ class ModelRunner(CompileRunner):
         if materialization_macro is None:
             missing_materialization(model, self.adapter.type())
 
-        materialization_macro.generator(context)()
+        result = materialization_macro.generator(context)()
 
-        # we must have built a new model, add it to the cache
-        relation = self.adapter.Relation.create_from_node(self.config, model,
-                                                          dbt_created=True)
-        self.adapter.cache_new_relation(relation)
+        for relation in self._materialization_relations(result, model):
+            self.adapter.cache_added(relation.incorporate(dbt_created=True))
 
         return self._build_run_model_result(model, context)
 

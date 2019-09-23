@@ -104,14 +104,14 @@ class RefResolver(dbt.context.common.BaseResolver):
         else:
             dbt.exceptions.ref_invalid_args(self.model, args)
 
-        return self.Relation.create_from_node(self.config, self.model)
+        return self.Relation.create_from(self.config, self.model)
 
 
 class SourceResolver(dbt.context.common.BaseResolver):
     def __call__(self, source_name, table_name):
         # When you call source(), this is what happens at parse time
         self.model.sources.append([source_name, table_name])
-        return self.Relation.create_from_node(self.config, self.model)
+        return self.Relation.create_from(self.config, self.model)
 
 
 class Provider:
