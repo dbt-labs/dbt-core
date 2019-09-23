@@ -133,6 +133,7 @@ class UnparsedSourceTableDefinition(ColumnDescription, NodeDescription):
     freshness: Optional[FreshnessThreshold] = field(
         default_factory=FreshnessThreshold
     )
+    filter: Optional[str] = None
 
     def __post_init__(self):
         NodeDescription.__post_init__(self)

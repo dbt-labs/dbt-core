@@ -2,7 +2,7 @@ import abc
 from contextlib import contextmanager
 from datetime import datetime
 from typing import (
-    Optional, Tuple, Callable, Container, FrozenSet, Type
+    Optional, Tuple, Callable, Container, FrozenSet, Type, Dict, Any
 )
 
 import agate
@@ -61,7 +61,7 @@ def _catalog_filter_schemas(manifest: Manifest) -> Callable[[agate.Row], bool]:
     schemas = frozenset((d.lower(), s.lower())
                         for d, s in manifest.get_used_schemas())
 
-    def test(row):
+    def test(row: agate.Row) -> bool:
         table_database = _expect_row_value('table_database', row)
         table_schema = _expect_row_value('table_schema', row)
         # the schema may be present but None, which is not an error and should
@@ -72,7 +72,9 @@ def _catalog_filter_schemas(manifest: Manifest) -> Callable[[agate.Row], bool]:
     return test
 
 
-def _utc(dt: datetime, source: str, field_name: str) -> datetime:
+def _utc(
+    dt: Optional[datetime], source: BaseRelation, field_name: str
+) -> datetime:
     """If dt has a timezone, return a new datetime that's in UTC. Otherwise,
     assume the datetime is already for UTC and add the timezone.
     """
@@ -887,8 +889,15 @@ class BaseAdapter(metaclass=AdapterMeta):
     ###
     # Operations involving the manifest
     ###
-    def execute_macro(self, macro_name, manifest=None, project=None,
-                      context_override=None, kwargs=None, release=False):
+    def execute_macro(
+        self,
+        macro_name: str,
+        manifest: Optional[Manifest] = None,
+        project: Optional[str] = None,
+        context_override: Optional[Dict[str, Any]] = None,
+        kwargs: Dict[str, Any] = None,
+        release: bool = False,
+    ):
         """Look macro_name up in the manifest and execute its results.
 
         :param str macro_name: The name of the macro to execute.
@@ -947,13 +956,13 @@ class BaseAdapter(metaclass=AdapterMeta):
         return result
 
     @classmethod
-    def _catalog_filter_table(cls, table, manifest):
+    def _catalog_filter_table(cls, table: agate.Table, manifest: Manifest):
         """Filter the table as appropriate for catalog entries. Subclasses can
         override this to change filtering rules on a per-adapter basis.
         """
         return table.where(_catalog_filter_schemas(manifest))
 
-    def get_catalog(self, manifest):
+    def get_catalog(self, manifest: Manifest):
         """Get the catalog for this manifest by running the get catalog macro.
         Returns an agate.Table of catalog information.
         """
@@ -971,12 +980,18 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Cancel all open connections."""
         return self.connections.cancel_open()
 
-    def calculate_freshness(self, source, loaded_at_field, manifest=None):
+    def calculate_freshness(
+        self,
+        source: BaseRelation,
+        loaded_at_field: str,
+        filter: Optional[str],
+        manifest: Optional[Manifest] = None
+    ) -> Dict[str, Any]:
         """Calculate the freshness of sources in dbt, and return it"""
-        # in the future `source` will be a Relation instead of a string
         kwargs = {
             'source': source,
-            'loaded_at_field': loaded_at_field
+            'loaded_at_field': loaded_at_field,
+            'filter': filter,
         }
 
         # run the macro
@@ -994,10 +1009,14 @@ class BaseAdapter(metaclass=AdapterMeta):
                     FRESHNESS_MACRO_NAME, [tuple(r) for r in table]
                 )
             )
+        if table[0][0] is None:
+            # no records in the table, so really the max_loaded_at was
+            # infinitely long ago. Just call it 0:00 January 1 year UTC
+            max_loaded_at = datetime(1, 1, 1, 0, 0, 0, tzinfo=pytz.UTC)
+        else:
+            max_loaded_at = _utc(table[0][0], source, loaded_at_field)
 
-        max_loaded_at = _utc(table[0][0], source, loaded_at_field)
         snapshotted_at = _utc(table[0][1], source, loaded_at_field)
-
         age = (snapshotted_at - max_loaded_at).total_seconds()
         return {
             'max_loaded_at': max_loaded_at,

@@ -472,6 +472,7 @@ class ParsedSourceDefinition(
     docrefs: List[Docref] = field(default_factory=list)
     description: str = ''
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)
+    filter: Optional[str] = None
 
     @property
     def is_ephemeral_model(self):
