@@ -90,9 +90,7 @@ def _catalog_filter_schemas(manifest: Manifest) -> Callable[[agate.Row], bool]:
     return test
 
 
-def _utc(
-    dt: Optional[datetime], source: BaseRelation, field_name: str
-) -> datetime:
+def _utc(dt: Optional[datetime], source: BaseRelation, field_name: str) -> datetime:
     """If dt has a timezone, return a new datetime that's in UTC. Otherwise,
     assume the datetime is already for UTC and add the timezone.
     """
@@ -1039,13 +1037,13 @@ class BaseAdapter(metaclass=AdapterMeta):
         source: BaseRelation,
         loaded_at_field: str,
         filter: Optional[str],
-        manifest: Optional[Manifest] = None
+        manifest: Optional[Manifest] = None,
     ) -> Dict[str, Any]:
         """Calculate the freshness of sources in dbt, and return it"""
         kwargs: Dict[str, Any] = {
             "source": source,
-            'loaded_at_field': loaded_at_field,
-            'filter': filter,
+            "loaded_at_field": loaded_at_field,
+            "filter": filter,
         }
 
         # run the macro
