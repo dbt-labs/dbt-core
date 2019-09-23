@@ -47,6 +47,7 @@ class UnparsedRunHook(UnparsedNode):
 class NamedTested(JsonSchemaMixin, Replaceable):
     name: str
     description: str = ''
+    data_type: str = ''
     tests: Optional[List[Union[Dict[str, Any], str]]] = None
 
     def __post_init__(self):
@@ -117,6 +118,30 @@ class FreshnessThreshold(JsonSchemaMixin, Mergeable):
     def __bool__(self):
         return self.warn_after is not None or self.error_after is not None
 
+#@dataclass
+#class ExternalPartition(JsonSchemaMixin, Replaceable):
+#    name: str
+#    description: str = ''
+#    data_type: str = ''
+#    expression: Optional[str] = None
+#    path_macro: Optional[str] = None
+#    vals: Optional[List, Dict[str, Any]] = None
+#
+#@dataclass
+#class ExternalTable(JsonSchemaMixin, Mergeable):
+#    location: Optional[str] = None
+#    file_format: Optional[str] = None
+#    row_format: Optional[str] = None
+#    tbl_properties: Optional[str] = None
+#    auto_refresh: Optional[str] = None
+#    partitions: Optional[List[ExternalPartition]] = field(default_factory=list)
+#
+#    def __bool__(self):
+#        return self.location is not None
+#
+#    def __post_init__(self):
+#        if self.partitions is None:
+#            self.partitions = []
 
 @dataclass
 class Quoting(JsonSchemaMixin, Mergeable):
@@ -133,6 +158,7 @@ class UnparsedSourceTableDefinition(ColumnDescription, NodeDescription):
     freshness: Optional[FreshnessThreshold] = field(
         default_factory=FreshnessThreshold
     )
+    external: Optional[Dict[str, Any]] = None
 
     def __post_init__(self):
         NodeDescription.__post_init__(self)

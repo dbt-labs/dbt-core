@@ -12,7 +12,7 @@ import dbt.clients.jinja
 import dbt.flags
 from dbt.contracts.graph.unparsed import (
     UnparsedNode, UnparsedMacro, UnparsedDocumentationFile, Quoting,
-    UnparsedBaseNode, FreshnessThreshold
+    UnparsedBaseNode, FreshnessThreshold#, ExternalTable
 )
 from dbt.contracts.util import Replaceable
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
@@ -139,6 +139,7 @@ class NodeConfig(
 class ColumnInfo(JsonSchemaMixin, Replaceable):
     name: str
     description: str = ''
+    data_type: str = ''
 
 
 # Docrefs are not quite like regular references, as they indicate what they
@@ -469,6 +470,7 @@ class ParsedSourceDefinition(
     quoting: Quoting = field(default_factory=Quoting)
     loaded_at_field: Optional[str] = None
     freshness: Optional[FreshnessThreshold] = None
+    external: Optional[Dict[str, Any]] = None
     docrefs: List[Docref] = field(default_factory=list)
     description: str = ''
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)
