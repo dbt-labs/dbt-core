@@ -30,9 +30,11 @@ class _Available:
             x.update(big_expensive_db_query())
             return x
         """
+
         def inner(func):
             func._parse_replacement_ = parse_replacement
             return self(func)
+
         return inner
 
     def deprecated(
@@ -57,13 +59,14 @@ class _Available:
         The optional parse_replacement, if provided, will provide a parse-time
         replacement for the actual method (see `available.parse`).
         """
+
         def wrapper(func):
             func_name = func.__name__
             renamed_method(func_name, supported_name)
 
             @wraps(func)
             def inner(*args, **kwargs):
-                warn('adapter:{}'.format(func_name))
+                warn("adapter:{}".format(func_name))
                 return func(*args, **kwargs)
 
             if parse_replacement:
@@ -71,6 +74,7 @@ class _Available:
             else:
                 available_function = self
             return available_function(inner)
+
         return wrapper
 
     def parse_none(self, func: Callable) -> Callable:

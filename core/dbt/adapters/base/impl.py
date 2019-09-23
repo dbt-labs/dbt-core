@@ -488,9 +488,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     @abc.abstractmethod
     @available.parse_none
-    def rename_relation(
-        self, from_relation: BaseRelation, to_relation: BaseRelation
-    ) -> None:
+    def rename_relation(self, from_relation: BaseRelation, to_relation: BaseRelation) -> None:
         """Rename the relation from from_relation to to_relation.
 
         Implementors must call self.cache.rename() to preserve cache state.
@@ -501,7 +499,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     @abc.abstractmethod
     @available.parse_list
-    def get_columns_in_relation(
+    def get_columns_in_relation(self, relation: BaseRelation) -> List[BaseColumn]:
         self, relation: BaseRelation
     ) -> List[BaseColumn]:
         """Get a list of the columns in the given Relation. """
@@ -510,9 +508,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         )
 
     @available.deprecated('get_columns_in_relation', lambda *a, **k: [])
-    def get_columns_in_table(
-        self, schema: str, identifier: str
-    ) -> List[BaseColumn]:
+    def get_columns_in_table(self, schema: str, identifier: str) -> List[BaseColumn]:
         """DEPRECATED: Get a list of the columns in the given table."""
         relation = self.Relation.create(
             database=self.config.credentials.database,
@@ -523,9 +519,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return self.get_columns_in_relation(relation)
 
     @abc.abstractmethod
-    def expand_column_types(
-        self, goal: BaseRelation, current: BaseRelation
-    ) -> None:
+    def expand_column_types(self, goal: BaseRelation, current: BaseRelation) -> None:
         """Expand the current table's types to match the goal table. (passable)
 
         :param self.Relation goal: A relation that currently exists in the
@@ -684,9 +678,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         return relations
 
-    def _make_match_kwargs(
-        self, database: str, schema: str, identifier: str
-    ) -> Dict[str, str]:
+    def _make_match_kwargs(self, database: str, schema: str, identifier: str) -> Dict[str, str]:
         quoting = self.config.quoting
         if identifier is not None and quoting['identifier'] is False:
             identifier = identifier.lower()
@@ -722,9 +714,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return matches
 
     @available.parse_none
-    def get_relation(
-        self, database: str, schema: str, identifier: str
-    ) -> Optional[BaseRelation]:
+    def get_relation(self, database: str, schema: str, identifier: str) -> Optional[BaseRelation]:
         relations_list = self.list_relations(database, schema)
 
         matches = self._make_match(relations_list, database, schema,
@@ -824,9 +814,7 @@ class BaseAdapter(metaclass=AdapterMeta):
     # converting agate types into their sql equivalents.
     ###
     @abc.abstractclassmethod
-    def convert_text_type(
-        cls, agate_table: agate.Table, col_idx: int
-    ) -> str:
+    def convert_text_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.Text
         type for the given agate table and column index.
 
@@ -838,9 +826,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             '`convert_text_type` is not implemented for this adapter!')
 
     @abc.abstractclassmethod
-    def convert_number_type(
-        cls, agate_table: agate.Table, col_idx: int
-    ) -> str:
+    def convert_number_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.Number
         type for the given agate table and column index.
 
@@ -852,9 +838,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             '`convert_number_type` is not implemented for this adapter!')
 
     @abc.abstractclassmethod
-    def convert_boolean_type(
-        cls, agate_table: agate.Table, col_idx: int
-    ) -> str:
+    def convert_boolean_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.Boolean
         type for the given agate table and column index.
 
@@ -866,9 +850,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             '`convert_boolean_type` is not implemented for this adapter!')
 
     @abc.abstractclassmethod
-    def convert_datetime_type(
-        cls, agate_table: agate.Table, col_idx: int
-    ) -> str:
+    def convert_datetime_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.DateTime
         type for the given agate table and column index.
 
@@ -993,9 +975,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return result
 
     @classmethod
-    def _catalog_filter_table(
-        cls, table: agate.Table, manifest: Manifest
-    ) -> agate.Table:
+    def _catalog_filter_table(cls, table: agate.Table, manifest: Manifest) -> agate.Table:
         """Filter the table as appropriate for catalog entries. Subclasses can
         override this to change filtering rules on a per-adapter basis.
         """

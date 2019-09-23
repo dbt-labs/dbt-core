@@ -298,8 +298,8 @@ class memoized:
         return functools.partial(self.__call__, obj)
 
 
-K_T = TypeVar('K_T')
-V_T = TypeVar('V_T')
+K_T = TypeVar("K_T")
+V_T = TypeVar("V_T")
 
 
 def filter_null_values(input: Dict[K_T, Optional[V_T]]) -> Dict[K_T, V_T]:
