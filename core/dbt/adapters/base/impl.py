@@ -624,10 +624,7 @@ class BaseAdapter(metaclass=AdapterMeta):
             return self.cache.get_relations(database, schema)
 
         schema_relation = self.Relation.create(
-            database=database,
-            schema=schema,
-            identifier='',
-            quote_policy=self.config.quoting
+            database=database, schema=schema, identifier="", quote_policy=self.config.quoting
         ).without_identifier()
 
         # we can't build the relations cache because we don't have a
