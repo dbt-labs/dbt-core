@@ -1,9 +1,12 @@
 import agate
+from typing import Any, Optional, Tuple, Type
 
 import dbt.clients.agate_helper
+from dbt.contracts.connection import Connection
 import dbt.exceptions
 import dbt.flags
 from dbt.adapters.base import BaseAdapter, available
+from dbt.adapters.sql import SQLConnectionManager
 from dbt.logger import GLOBAL_LOGGER as logger
 
 
@@ -35,18 +38,25 @@ class SQLAdapter(BaseAdapter):
         - list_relations_without_caching
         - get_columns_in_relation
     """
+    ConnectionManager: Type[SQLConnectionManager]
+    connections: SQLConnectionManager
+
     @available.parse(lambda *a, **k: (None, None))
-    def add_query(self, sql, auto_begin=True, bindings=None,
-                  abridge_sql_log=False):
+    def add_query(
+        self,
+        sql: str,
+        auto_begin: bool = True,
+        bindings: Optional[Any] = None,
+        abridge_sql_log: bool = False,
+    ) -> Tuple[Connection, Any]:
         """Add a query to the current transaction. A thin wrapper around
         ConnectionManager.add_query.
 
-        :param str sql: The SQL query to add
-        :param bool auto_begin: If set and there is no transaction in progress,
+        :param sql: The SQL query to add
+        :param auto_begin: If set and there is no transaction in progress,
             begin a new one.
-        :param Optional[List[object]]: An optional list of bindings for the
-            query.
-        :param bool abridge_sql_log: If set, limit the raw sql logged to 512
+        :param bindings: An optional list of bindings for the query.
+        :param abridge_sql_log: If set, limit the raw sql logged to 512
             characters
         """
         return self.connections.add_query(sql, auto_begin, bindings,

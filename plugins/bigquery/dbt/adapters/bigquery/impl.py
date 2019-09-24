@@ -6,8 +6,10 @@ import dbt.flags as flags
 import dbt.clients.gcloud
 import dbt.clients.agate_helper
 
-from dbt.adapters.base import BaseAdapter, available
-from dbt.adapters.bigquery import BigQueryRelation
+from dbt.adapters.base import BaseAdapter, available, RelationType
+from dbt.adapters.bigquery.relation import (
+    BigQueryRelation
+)
 from dbt.adapters.bigquery import BigQueryColumn
 from dbt.adapters.bigquery import BigQueryConnectionManager
 from dbt.contracts.connection import Connection
@@ -36,9 +38,9 @@ def _stub_relation(*args, **kwargs):
 class BigQueryAdapter(BaseAdapter):
 
     RELATION_TYPES = {
-        'TABLE': BigQueryRelation.Table,
-        'VIEW': BigQueryRelation.View,
-        'EXTERNAL': BigQueryRelation.External
+        'TABLE': RelationType.Table,
+        'VIEW': RelationType.View,
+        'EXTERNAL': RelationType.External
     }
 
     Relation = BigQueryRelation
@@ -102,7 +104,7 @@ class BigQueryAdapter(BaseAdapter):
             table = self.connections.get_bq_table(
                 database=relation.database,
                 schema=relation.schema,
-                identifier=relation.table_name
+                identifier=relation.identifier
             )
             return self._get_dbt_columns_from_bq_table(table)
 

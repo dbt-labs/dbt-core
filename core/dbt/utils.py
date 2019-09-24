@@ -437,9 +437,8 @@ K_T = TypeVar('K_T')
 V_T = TypeVar('V_T')
 
 
-def filter_null_values(input: Dict[K_T, V_T]) -> Dict[K_T, V_T]:
-    return dict((k, v) for (k, v) in input.items()
-                if v is not None)
+def filter_null_values(input: Dict[K_T, Optional[V_T]]) -> Dict[K_T, V_T]:
+    return {k: v for k, v in input.items() if v is not None}
 
 
 def add_ephemeral_model_prefix(s: str) -> str:
@@ -522,3 +521,15 @@ def env_set_truthy(key: str) -> Optional[str]:
 def restrict_to(*restrictions):
     """Create the metadata for a restricted dataclass field"""
     return {'restrict': list(restrictions)}
+
+
+# some types need to make constants available to the jinja context as
+# attributes, and regular properties only work with objects. maybe this should
+# be handled by the RelationProxy?
+
+class classproperty(object):
+    def __init__(self, func):
+        self.func = func
+
+    def __get__(self, obj, objtype):
+        return self.func(objtype)

@@ -21,7 +21,7 @@ from dbt.utils import filter_null_values
 
 from dbt.adapters.base.connections import BaseConnectionManager
 from dbt.adapters.base.meta import AdapterMeta, available
-from dbt.adapters.base import BaseRelation
+from dbt.adapters.base.relation import ComponentName, BaseRelation
 from dbt.adapters.base import Column as BaseColumn
 from dbt.adapters.cache import RelationsCache
 
@@ -645,7 +645,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         information_schema = self.Relation.create(
             database=database,
             schema=schema,
-            model_name='',
+            identifier='',
             quote_policy=self.config.quoting
         ).information_schema()
 
@@ -762,11 +762,13 @@ class BaseAdapter(metaclass=AdapterMeta):
         The quote key should be one of 'database' (on bigquery, 'profile'),
         'identifier', or 'schema', or it will be treated as if you set `True`.
         """
-        # TODO: Convert BaseRelation to a hologram.JsonSchemaMixin so mypy
-        # likes this
-        quotes = self.Relation.DEFAULTS['quote_policy']
-        default = quotes.get(quote_key)  # type: ignore
-        if self.config.quoting.get(quote_key, default):
+        try:
+            key = ComponentName(quote_key)
+        except ValueError:
+            return identifier
+
+        default = self.Relation.get_default_quote_policy().get_part(key)
+        if self.config.quoting.get(key, default):
             return self.quote(identifier)
         else:
             return identifier

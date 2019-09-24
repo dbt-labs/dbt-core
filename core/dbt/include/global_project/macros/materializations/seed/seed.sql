@@ -15,7 +15,7 @@
   {%- set column_override = model['config'].get('column_types', {}) -%}
 
   {% set sql %}
-    create table {{ this.render(False) }} (
+    create table {{ this.render() }} (
         {%- for col_name in agate_table.column_names -%}
             {%- set inferred_type = adapter.convert_type(agate_table, loop.index0) -%}
             {%- set type = column_override.get(col_name, inferred_type) -%}
@@ -60,7 +60,7 @@
         {% endfor %}
 
         {% set sql %}
-            insert into {{ this.render(False) }} ({{ cols_sql }}) values
+            insert into {{ this.render() }} ({{ cols_sql }}) values
             {% for row in chunk -%}
                 ({%- for column in agate_table.column_names -%}
                     %s

@@ -1,13 +1,13 @@
 from copy import deepcopy
 
+from .profile import Profile
+from .project import Project
 from dbt.utils import parse_cli_vars
 from dbt.contracts.project import Configuration
 from dbt.exceptions import DbtProjectError
 from dbt.exceptions import validator_error_message
 from dbt.adapters.factory import get_relation_class_by_name
 
-from .profile import Profile
-from .project import Project
 
 from hologram import ValidationError
 
@@ -72,11 +72,11 @@ class RuntimeConfig(Project, Profile):
         :param args argparse.Namespace: The parsed command-line arguments.
         :returns RuntimeConfig: The new configuration.
         """
-        quoting = deepcopy(
+        quoting = (
             get_relation_class_by_name(profile.credentials.type)
-            .DEFAULTS['quote_policy']
-        )
-        quoting.update(project.quoting)
+            .get_default_quote_policy()
+            .replace_dict(project.quoting)
+        ).to_dict()
 
         return cls(
             project_name=project.project_name,

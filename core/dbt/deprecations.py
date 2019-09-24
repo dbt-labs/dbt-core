@@ -75,6 +75,15 @@ class MaterializationReturnDeprecation(DBTDeprecation):
     '''.lstrip()
 
 
+class NotADictionaryDeprecation(DBTDeprecation):
+    _name = 'not-a-dictionary'
+
+    _description = '''
+    The object ("{obj}") was used as a dictionary. In a future version of dbt
+    this capability will be removed from objects of this type.
+    '''.lstrip()
+
+
 _adapter_renamed_description = """\
 The adapter function `adapter.{old_name}` is deprecated and will be removed in
  a future release of dbt. Please use `adapter.{new_name}` instead.
@@ -113,6 +122,7 @@ deprecations_list: List[DBTDeprecation] = [
     DBTRepositoriesDeprecation(),
     GenerateSchemaNameSingleArgDeprecated(),
     MaterializationReturnDeprecation(),
+    NotADictionaryDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {

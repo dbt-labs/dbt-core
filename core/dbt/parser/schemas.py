@@ -3,7 +3,7 @@ from typing import Iterable, Dict, Any, Union, List, Optional
 
 from hologram import ValidationError
 
-from dbt.context.common import generate_config_context
+from dbt.context.base import generate_config_context
 
 from dbt.clients.jinja import get_rendered
 from dbt.clients.yaml_helper import load_yaml_text

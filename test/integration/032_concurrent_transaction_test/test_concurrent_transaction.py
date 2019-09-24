@@ -99,6 +99,7 @@ class BaseTestConcurrentTransaction(DBTIntegrationTest):
         self.assertEqual(self.query_state['view_model'], 'good')
         self.assertEqual(self.query_state['model_1'], 'good')
 
+
 class TableTestConcurrentTransaction(BaseTestConcurrentTransaction):
     @property
     def models(self):
@@ -109,6 +110,7 @@ class TableTestConcurrentTransaction(BaseTestConcurrentTransaction):
         self.reset()
         self.run_test()
 
+
 class ViewTestConcurrentTransaction(BaseTestConcurrentTransaction):
     @property
     def models(self):
@@ -118,6 +120,7 @@ class ViewTestConcurrentTransaction(BaseTestConcurrentTransaction):
     def test__redshift__concurrent_transaction_view(self):
         self.reset()
         self.run_test()
+
 
 class IncrementalTestConcurrentTransaction(BaseTestConcurrentTransaction):
     @property

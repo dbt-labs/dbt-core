@@ -92,7 +92,7 @@ class BigQueryConnectionManager(BaseConnectionManager):
                 raise
             raise dbt.exceptions.RuntimeException(str(e))
 
-    def cancel_open(self):
+    def cancel_open(self) -> None:
         pass
 
     @classmethod
