@@ -211,8 +211,8 @@ class AdditionalPropertiesAllowed(AdditionalPropertiesMixin, ExtensibleDbtClassM
 @dataclass
 class ExternalPartition(AdditionalPropertiesAllowed, Replaceable):
     name: str = ""
-    description: str = ''
-    data_type: str = ''
+    description: str = ""
+    data_type: str = ""
     meta: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
