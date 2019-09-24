@@ -16,7 +16,7 @@ from dbt.utils import filter_null_values, deep_merge, classproperty
 import dbt.exceptions
 
 
-Self = TypeVar('Self', bound='BaseRelation')
+Self = TypeVar("Self", bound="BaseRelation")
 
 
 @dataclass(frozen=True, eq=False, repr=False)
@@ -40,7 +40,7 @@ class BaseRelation(FakeAPIObject, Hashable):
             if field.name == field_name:
                 return field
         # this should be unreachable
-        raise ValueError(f'BaseRelation has no {field_name} field!')
+        raise ValueError(f"BaseRelation has no {field_name} field!")
 
     def __eq__(self, other):
         if not isinstance(other, self.__class__):
@@ -49,7 +49,7 @@ class BaseRelation(FakeAPIObject, Hashable):
 
     @classmethod
     def get_default_quote_policy(cls) -> Policy:
-        return cls._get_field_named('quote_policy').default
+        return cls._get_field_named("quote_policy").default
 
     @classmethod
     def get_default_include_policy(cls) -> Policy:
@@ -72,9 +72,9 @@ class BaseRelation(FakeAPIObject, Hashable):
         identifier: Optional[str] = None,
     ) -> bool:
         search = filter_null_values({
-            ComponentName.Database: database,
-            ComponentName.Schema: schema,
-            ComponentName.Identifier: identifier
+            {
+                ComponentName.Database: database,
+                ComponentName.Schema: schema,
         })
 
         if not search:
@@ -113,9 +113,9 @@ class BaseRelation(FakeAPIObject, Hashable):
         identifier: Optional[bool] = None,
     ) -> Self:
         policy = filter_null_values({
-            ComponentName.Database: database,
-            ComponentName.Schema: schema,
-            ComponentName.Identifier: identifier
+            {
+                ComponentName.Database: database,
+                ComponentName.Schema: schema,
         })
 
         new_quote_policy = self.quote_policy.replace_dict(policy)
@@ -128,9 +128,9 @@ class BaseRelation(FakeAPIObject, Hashable):
         identifier: Optional[bool] = None,
     ) -> Self:
         policy = filter_null_values({
-            ComponentName.Database: database,
-            ComponentName.Schema: schema,
-            ComponentName.Identifier: identifier
+            {
+                ComponentName.Database: database,
+                ComponentName.Schema: schema,
         })
 
         new_include_policy = self.include_policy.replace_dict(policy)
@@ -185,15 +185,13 @@ class BaseRelation(FakeAPIObject, Hashable):
         )
 
     @classmethod
-    def create_from_source(
-        cls: Type[Self], source: ParsedSourceDefinition, **kwargs: Any
-    ) -> Self:
+    def create_from_source(cls: Type[Self], source: ParsedSourceDefinition, **kwargs: Any) -> Self:
         source_quoting = source.quoting.to_dict(omit_none=True)
         source_quoting.pop('column', None)
         quote_policy = deep_merge(
             cls.get_default_quote_policy().to_dict(omit_none=True),
             source_quoting,
-            kwargs.get('quote_policy', {}),
+            kwargs.get("quote_policy", {}),
         )
 
         return cls.create(
@@ -272,14 +270,16 @@ class BaseRelation(FakeAPIObject, Hashable):
         type: Optional[RelationType] = None,
         **kwargs,
     ) -> Self:
-        kwargs.update({
-            'path': {
-                'database': database,
-                'schema': schema,
-                'identifier': identifier,
-            },
-            'type': type,
-        })
+        kwargs.update(
+            {
+                "path": {
+                    "database": database,
+                    "schema": schema,
+                    "identifier": identifier,
+                },
+                "type": type,
+            }
+        )
         return cls.from_dict(kwargs)
 
     def __repr__(self) -> str:

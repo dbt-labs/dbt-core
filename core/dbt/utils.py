@@ -437,6 +437,7 @@ def lowercase(value: Optional[str]) -> Optional[str]:
 # attributes, and regular properties only work with objects. maybe this should
 # be handled by the RelationProxy?
 
+
 class classproperty(object):
     def __init__(self, func):
         self.func = func

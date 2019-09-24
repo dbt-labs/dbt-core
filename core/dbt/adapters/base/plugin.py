@@ -28,7 +28,7 @@ class AdapterPlugin:
         adapter: Type[AdapterProtocol],
         credentials: Type[Credentials],
         include_path: str,
-        dependencies: Optional[List[str]] = None
+        dependencies: Optional[List[str]] = None,
     ):
 
         self.adapter: Type[AdapterProtocol] = adapter

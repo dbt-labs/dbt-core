@@ -8,10 +8,10 @@ from dbt.exceptions import RuntimeException
 @dataclass
 class Column:
     TYPE_LABELS: ClassVar[Dict[str, str]] = {
-        'STRING': 'TEXT',
-        'TIMESTAMP': 'TIMESTAMP',
-        'FLOAT': 'FLOAT',
-        'INTEGER': 'INT'
+        "STRING": "TEXT",
+        "TIMESTAMP": "TIMESTAMP",
+        "FLOAT": "FLOAT",
+        "INTEGER": "INT",
     }
     column: str
     dtype: str
@@ -41,14 +41,12 @@ class Column:
         if self.is_string():
             return Column.string_type(self.string_size())
         elif self.is_numeric():
-            return Column.numeric_type(self.dtype, self.numeric_precision,
-                                       self.numeric_scale)
+            return Column.numeric_type(self.dtype, self.numeric_precision, self.numeric_scale)
         else:
             return self.dtype
 
     def is_string(self) -> bool:
-        return self.dtype.lower() in ['text', 'character varying', 'character',
-                                      'varchar']
+        return self.dtype.lower() in ["text", "character varying", "character", "varchar"]
 
     def is_number(self):
         return any([self.is_integer(), self.is_numeric(), self.is_float()])
@@ -76,7 +74,7 @@ class Column:
         if not self.is_string():
             raise RuntimeException("Called string_size() on non-string field!")
 
-        if self.dtype == 'text' or self.char_size is None:
+        if self.dtype == "text" or self.char_size is None:
             # char_size should never be None. Handle it reasonably just in case
             return 256
         else:

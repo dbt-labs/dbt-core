@@ -122,9 +122,7 @@ class Credentials(
 
     @abc.abstractproperty
     def type(self) -> str:
-        raise NotImplementedError(
-            'type not implemented for base credentials class'
-        )
+        raise NotImplementedError("type not implemented for base credentials class")
 
     @property
     def unique_field(self) -> str:
@@ -176,9 +174,11 @@ class Credentials(
         if self._ALIASES:
             dct.update({
                 new_name: dct[canonical_name]
-                for new_name, canonical_name in self._ALIASES.items()
+                    new_name: dct[canonical_name]
                 if canonical_name in dct
-            })
+                    if canonical_name in dct
+                }
+            )
         return dct
 
 

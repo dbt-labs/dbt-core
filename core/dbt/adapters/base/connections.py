@@ -122,7 +122,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         if name is None:
             # if a name isn't specified, we'll re-use a single handle
             # named 'master'
-            conn_name = 'master'
+            conn_name = "master"
         else:
             if not isinstance(name, str):
                 raise dbt.exceptions.CompilerException(
@@ -143,7 +143,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
             )
             self.set_thread_connection(conn)
 
-        if conn.name == conn_name and conn.state == 'open':
+        if conn.name == conn_name and conn.state == "open":
             return conn
 
         fire_event(NewConnection(conn_name=conn_name, conn_type=self.TYPE))

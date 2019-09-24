@@ -54,7 +54,7 @@ class SQLConnectionManager(BaseConnectionManager):
         sql: str,
         auto_begin: bool = True,
         bindings: Optional[Any] = None,
-        abridge_sql_log: bool = False
+        abridge_sql_log: bool = False,
     ) -> Tuple[Connection, Any]:
         connection = self.get_thread_connection()
         if auto_begin and connection.transaction_open is False:
@@ -91,9 +91,7 @@ class SQLConnectionManager(BaseConnectionManager):
 
     @classmethod
     def process_results(
-        cls,
-        column_names: Iterable[str],
-        rows: Iterable[Any]
+        cls, column_names: Iterable[str], rows: Iterable[Any]
     ) -> List[Dict[str, Any]]:
         unique_col_names = dict()
         for idx in range(len(column_names)):
