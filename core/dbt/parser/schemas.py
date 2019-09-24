@@ -357,7 +357,6 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             quoting=quoting,
             resource_type=SourceType(NodeType.Source),
             fqn=[self.project.project_name, source.name, table.name],
-            filter=table.filter,
         )
 
     def generate_node_patch(

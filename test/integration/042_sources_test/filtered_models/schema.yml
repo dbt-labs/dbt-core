@@ -5,6 +5,7 @@ sources:
     freshness:
       warn_after: {count: 10, period: hour}
       error_after: {count: 1, period: day}
+      filter: id > 1
     schema: "{{ var(env_var('DBT_TEST_SCHEMA_NAME_VARIABLE')) }}"
     quoting:
       identifier: True
@@ -14,4 +15,4 @@ sources:
         loaded_at_field: updated_at
         freshness:
           error_after: {count: 18, period: hour}
-        filter: id > 101
+          filter: id > 101

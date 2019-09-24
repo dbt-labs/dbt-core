@@ -472,7 +472,7 @@ class FreshnessRunner(BaseRunner):
             freshness = self.adapter.calculate_freshness(
                 relation,
                 compiled_node.loaded_at_field,
-                compiled_node.filter,
+                compiled_node.freshness.filter,
                 manifest=manifest
             )
 

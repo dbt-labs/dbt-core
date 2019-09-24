@@ -222,7 +222,6 @@ class SchemaParserSourceTest(SchemaParserTest):
             path=normalize('models/test_one.yml'),
             original_file_path=normalize('models/test_one.yml'),
             resource_type=SourceType.Source,
-            filter=None,
         )
         self.assertEqual(src, expected)
 
