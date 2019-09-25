@@ -63,9 +63,7 @@ def find_matching(
         for current_path, subdirectories, local_files in walk_results:
             for local_file in local_files:
                 absolute_path = os.path.join(current_path, local_file)
-                relative_path = os.path.relpath(
-                    absolute_path, absolute_path_to_search
-                )
+                relative_path = os.path.relpath(absolute_path, absolute_path_to_search)
                 modification_time = 0.0
                 try:
                     modification_time = os.path.getmtime(absolute_path)
