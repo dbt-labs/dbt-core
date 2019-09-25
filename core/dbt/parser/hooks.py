@@ -76,7 +76,7 @@ class HookParser(SimpleParser[HookBlock, ParsedHookNode]):
         path = FilePath(
             project_root=self.project.project_root,
             searched_path=".",
-            relative_path='dbt_project.yml',
+            relative_path="dbt_project.yml",
             modification_time=0.0,
         )
         return path
