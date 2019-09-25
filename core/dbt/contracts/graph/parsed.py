@@ -263,6 +263,13 @@ class ParsedRPCNode(ParsedNode):
 @dataclass
 class ParsedSeedNode(ParsedNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Seed]})
+    seed_file_path: str = ''
+
+    def __post_init__(self):
+        if self.seed_file_path == '':
+            raise dbt.exceptions.InternalException(
+                'Seeds should always have a seed_file_path'
+            )
 
     @property
     def empty(self):

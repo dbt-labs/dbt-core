@@ -1,5 +1,7 @@
+import agate
 import json
 import os
+from typing import Union, Callable
 
 from dbt.adapters.factory import get_adapter
 from dbt.node_types import NodeType
@@ -8,6 +10,8 @@ from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
 
 import dbt.clients.jinja
 import dbt.clients.agate_helper
+from dbt.contracts.graph.compiled import CompiledSeedNode
+from dbt.contracts.graph.parsed import ParsedSeedNode
 import dbt.exceptions
 import dbt.flags
 import dbt.tracking
@@ -353,9 +357,11 @@ def generate_config_context(cli_vars):
     return _add_tracking(context)
 
 
-def _build_load_agate_table(model):
+def _build_load_agate_table(
+    model: Union[ParsedSeedNode, CompiledSeedNode]
+) -> Callable[[], agate.Table]:
     def load_agate_table():
-        path = model.original_file_path
+        path = model.seed_file_path
         try:
             table = dbt.clients.agate_helper.from_csv(path)
         except ValueError as e:

@@ -1,6 +1,5 @@
 import unittest
 from unittest import mock
-from os.path import join as pjoin
 
 from .utils import config_from_parts_or_dicts, normalize
 
@@ -82,7 +81,7 @@ class TestLoader(unittest.TestCase):
         path = FilePath(
             searched_path=normalize(searched),
             relative_path=normalize(name),
-            absolute_path=normalize(pjoin(self.root_project_config.project_root, searched, name)),
+            project_root=normalize(self.root_project_config.project_root),
         )
         return SourceFile(path=path, checksum=checksum)
 

@@ -113,7 +113,7 @@ class DocumentationParserTest(unittest.TestCase):
     def _build_file(self, contents, relative_path) -> FileBlock:
         match = FilePath(
             relative_path=relative_path,
-            absolute_path=self.testfile_path,
+            project_root=self.root_path,
             searched_path=self.subdir_path,
         )
         source_file = SourceFile(path=match, checksum=FileHash.empty())

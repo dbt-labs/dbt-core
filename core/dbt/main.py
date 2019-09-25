@@ -823,16 +823,16 @@ def parse_args(args):
     compile_sub = _build_compile_subparser(subs, base_subparser)
     generate_sub = _build_docs_generate_subparser(docs_subs, base_subparser)
     test_sub = _build_test_subparser(subs, base_subparser)
+    seed_sub = _build_seed_subparser(subs, base_subparser)
     # --threads, --no-version-check
     _add_common_arguments(run_sub, compile_sub, generate_sub, test_sub,
-                          rpc_sub)
+                          rpc_sub, seed_sub)
     # --models, --exclude
     _add_selection_arguments(run_sub, compile_sub, generate_sub, test_sub)
     _add_selection_arguments(snapshot_sub, models_name='select')
     # --full-refresh
     _add_table_mutability_arguments(run_sub, compile_sub)
 
-    _build_seed_subparser(subs, base_subparser)
     _build_docs_serve_subparser(docs_subs, base_subparser)
     _build_source_snapshot_freshness_subparser(source_subs, base_subparser)
     _build_run_operation_subparser(subs, base_subparser)

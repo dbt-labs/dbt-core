@@ -8,7 +8,7 @@ from dbt.clients.jinja import extract_toplevel_blocks, BlockTag
 from dbt.clients.system import find_matching
 from dbt.config import Project
 from dbt.contracts.graph.manifest import SourceFile, FilePath
-from dbt.exceptions import CompilationException
+from dbt.exceptions import CompilationException, InternalException
 
 
 @dataclass
@@ -70,9 +70,15 @@ class FilesystemSearcher(Iterable[FilePath]):
         root = self.project.project_root
 
         for result in find_matching(root, self.relative_dirs, ext):
-            file_match = FilePath(**{
-                k: os.path.normcase(v) for k, v in result.items()
-            })
+            if 'searched_path' not in result or 'relative_path' not in result:
+                raise InternalException(
+                    'Invalid result from find_matching: {}'.format(result)
+                )
+            file_match = FilePath(
+                searched_path=result['searched_path'],
+                relative_path=result['relative_path'],
+                project_root=root,
+            )
             yield file_match
 
 

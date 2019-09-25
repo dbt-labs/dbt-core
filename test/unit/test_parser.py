@@ -30,7 +30,7 @@ from .utils import config_from_parts_or_dicts, normalize
 
 
 def get_abs_os_path(unix_path):
-    return os.path.abspath(normalize(unix_path))
+    return normalize(os.path.abspath(unix_path))
 
 
 class BaseParserTest(unittest.TestCase):
@@ -100,9 +100,7 @@ class BaseParserTest(unittest.TestCase):
         path = FilePath(
             searched_path=searched,
             relative_path=filename,
-            absolute_path=os.path.normpath(os.path.abspath(
-                os.path.join(root_dir, searched, filename)
-            )),
+            project_root=root_dir,
         )
         source_file = SourceFile(
             path=path,
@@ -260,7 +258,7 @@ class SchemaParserSourceTest(SchemaParserTest):
         self.assertEqual(tests[1].column_name, 'color')
         self.assertEqual(tests[1].fqn, ['snowplow', 'schema_test', tests[1].name])
 
-        path = os.path.abspath('./dbt_modules/snowplow/models/test_one.yml')
+        path = get_abs_os_path('./dbt_modules/snowplow/models/test_one.yml')
         self.assertIn(path, self.parser.results.files)
         self.assertEqual(sorted(self.parser.results.files[path].nodes),
                          [t.unique_id for t in tests])
@@ -329,7 +327,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertEqual(tests[2].fqn, ['snowplow', 'schema_test', tests[2].name])
         self.assertEqual(tests[2].unique_id.split('.'), ['test', 'snowplow', tests[2].name])
 
-        path = os.path.abspath('./dbt_modules/snowplow/models/test_one.yml')
+        path = get_abs_os_path('./dbt_modules/snowplow/models/test_one.yml')
         self.assertIn(path, self.parser.results.files)
         self.assertEqual(sorted(self.parser.results.files[path].nodes),
                          [t.unique_id for t in tests])
@@ -372,7 +370,7 @@ class ModelParserTest(BaseParserTest):
             raw_sql=raw_sql,
         )
         self.assertEqual(node, expected)
-        path = os.path.abspath('./dbt_modules/snowplow/models/nested/model_1.sql')
+        path = get_abs_os_path('./dbt_modules/snowplow/models/nested/model_1.sql')
         self.assertIn(path, self.parser.results.files)
         self.assertEqual(self.parser.results.files[path].nodes, ['model.snowplow.model_1'])
 
@@ -440,7 +438,7 @@ class SnapshotParserTest(BaseParserTest):
             raw_sql=raw_sql,
         )
         self.assertEqual(node, expected)
-        path = os.path.abspath('./dbt_modules/snowplow/snapshots/nested/snap_1.sql')
+        path = get_abs_os_path('./dbt_modules/snowplow/snapshots/nested/snap_1.sql')
         self.assertIn(path, self.parser.results.files)
         self.assertEqual(self.parser.results.files[path].nodes, ['snapshot.snowplow.foo'])
 
@@ -515,7 +513,7 @@ class SnapshotParserTest(BaseParserTest):
         )
         self.assertEqual(nodes[0], expect_bar)
         self.assertEqual(nodes[1], expect_foo)
-        path = os.path.abspath('./dbt_modules/snowplow/snapshots/nested/snap_1.sql')
+        path = get_abs_os_path('./dbt_modules/snowplow/snapshots/nested/snap_1.sql')
         self.assertIn(path, self.parser.results.files)
         self.assertEqual(sorted(self.parser.results.files[path].nodes),
                          ['snapshot.snowplow.bar', 'snapshot.snowplow.foo'])
@@ -549,7 +547,7 @@ class MacroParserTest(BaseParserTest):
             raw_sql=raw_sql
         )
         self.assertEqual(macro, expected)
-        path = os.path.abspath('./dbt_modules/snowplow/macros/macro.sql')
+        path = get_abs_os_path('./dbt_modules/snowplow/macros/macro.sql')
         self.assertIn(path, self.parser.results.files)
         self.assertEqual(self.parser.results.files[path].macros, ['macro.snowplow.foo'])
 
@@ -591,7 +589,7 @@ class DataTestParserTest(BaseParserTest):
             raw_sql=raw_sql,
         )
         self.assertEqual(node, expected)
-        path = os.path.abspath('./dbt_modules/snowplow/tests/test_1.sql')
+        path = get_abs_os_path('./dbt_modules/snowplow/tests/test_1.sql')
         self.assertIn(path, self.parser.results.files)
         self.assertEqual(self.parser.results.files[path].nodes, ['test.snowplow.test_1'])
 
@@ -632,7 +630,7 @@ class AnalysisParserTest(BaseParserTest):
             raw_sql=raw_sql,
         )
         self.assertEqual(node, expected)
-        path = os.path.abspath('./dbt_modules/snowplow/analyses/nested/analysis_1.sql')
+        path = get_abs_os_path('./dbt_modules/snowplow/analyses/nested/analysis_1.sql')
         self.assertIn(path, self.parser.results.files)
         self.assertEqual(self.parser.results.files[path].nodes, ['analysis.snowplow.analysis_1'])
 
