@@ -1,5 +1,6 @@
 from dbt.node_types import UnparsedNodeType, NodeType, OperationType, MacroType
 from dbt.contracts.util import Replaceable, Mergeable
+from dbt.exceptions import CompilationException
 
 from hologram import JsonSchemaMixin
 from hologram.helpers import StrEnum, ExtensibleJsonSchemaMixin
@@ -47,7 +48,7 @@ class UnparsedRunHook(UnparsedNode):
 class NamedTested(JsonSchemaMixin, Replaceable):
     name: str
     description: str = ''
-    data_type: str = ''
+    data_type: Optional[str] = None
     tests: Optional[List[Union[Dict[str, Any], str]]] = None
 
     def __post_init__(self):
@@ -120,6 +121,11 @@ class FreshnessThreshold(JsonSchemaMixin, Mergeable):
 
 @dataclass
 class AdditionalPropertiesAllowed(ExtensibleJsonSchemaMixin):
+    _extra: Dict[str, Any] = field(default_factory=dict)
+    
+    @property
+    def extra(self):
+        return self._extra
     
     @classmethod
     def from_dict(cls, data, validate=True):
@@ -142,10 +148,15 @@ class AdditionalPropertiesAllowed(ExtensibleJsonSchemaMixin):
 
 @dataclass
 class ExternalPartition(AdditionalPropertiesAllowed, Replaceable):
-    name: str
+    name: str = ''
     description: str = ''
     data_type: str = ''
-    _extra: Dict[str, Any] = field(default_factory=dict)
+    
+    def __post_init__(self):
+        if self.name == '' or self.data_type == '':
+            raise CompilationException (
+                'External partition columns must have names and data types'
+            )
 
 @dataclass
 class ExternalTable(AdditionalPropertiesAllowed, Mergeable):
@@ -154,7 +165,6 @@ class ExternalTable(AdditionalPropertiesAllowed, Mergeable):
     row_format: Optional[str] = None
     tbl_properties: Optional[str] = None
     partitions: Optional[List[ExternalPartition]] = field(default_factory=list)
-    _extra: Dict[str, Any] = field(default_factory=dict)
 
     def __bool__(self):
         return self.location is not None

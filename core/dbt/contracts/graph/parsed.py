@@ -68,11 +68,6 @@ class NodeConfig(
     quoting: Dict[str, Any] = field(default_factory=dict)
     column_types: Dict[str, Any] = field(default_factory=dict)
     tags: Union[List[str], str] = field(default_factory=list)
-    _extra: Dict[str, Any] = field(default_factory=dict)
-
-    @property
-    def extra(self):
-        return self._extra
 
     @classmethod
     def field_mapping(cls):
@@ -121,7 +116,7 @@ class NodeConfig(
 class ColumnInfo(JsonSchemaMixin, Replaceable):
     name: str
     description: str = ''
-    data_type: str = ''
+    data_type: Optional[str] = None
 
 
 # Docrefs are not quite like regular references, as they indicate what they
