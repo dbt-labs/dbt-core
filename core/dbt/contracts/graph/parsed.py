@@ -21,7 +21,7 @@ from dbt.clients.system import write_file
 from dbt.contracts.files import FileHash, MAXIMUM_SEED_SIZE_NAME
 from dbt.contracts.graph.unparsed import (
     UnparsedNode,
-    UnparsedBaseNode, FreshnessThreshold, ExternalTable,
+    UnparsedDocumentation,
     HasYamlMetadata, MacroArgument, UnparsedSourceDefinition,
     Docs,
     UnparsedBaseNode,
