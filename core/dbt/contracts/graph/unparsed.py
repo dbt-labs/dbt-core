@@ -217,9 +217,7 @@ class ExternalPartition(AdditionalPropertiesAllowed, Replaceable):
 
     def __post_init__(self):
         if self.name == "" or self.data_type == "":
-            raise CompilationException(
-                'External partition columns must have names and data types'
-            )
+            raise CompilationException("External partition columns must have names and data types")
 
 
 @dataclass
