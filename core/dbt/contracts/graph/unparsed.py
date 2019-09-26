@@ -119,14 +119,15 @@ class FreshnessThreshold(JsonSchemaMixin, Mergeable):
     def __bool__(self):
         return self.warn_after is not None or self.error_after is not None
 
+
 @dataclass
 class AdditionalPropertiesAllowed(ExtensibleJsonSchemaMixin):
     _extra: Dict[str, Any] = field(default_factory=dict)
-    
+
     @property
     def extra(self):
         return self._extra
-    
+
     @classmethod
     def from_dict(cls, data, validate=True):
         self = super().from_dict(data=data, validate=validate)
@@ -146,17 +147,19 @@ class AdditionalPropertiesAllowed(ExtensibleJsonSchemaMixin):
         dct.update(kwargs)
         return self.from_dict(dct)
 
+
 @dataclass
 class ExternalPartition(AdditionalPropertiesAllowed, Replaceable):
     name: str = ''
     description: str = ''
     data_type: str = ''
-    
+
     def __post_init__(self):
         if self.name == '' or self.data_type == '':
-            raise CompilationException (
+            raise CompilationException(
                 'External partition columns must have names and data types'
             )
+
 
 @dataclass
 class ExternalTable(AdditionalPropertiesAllowed, Mergeable):
@@ -164,14 +167,11 @@ class ExternalTable(AdditionalPropertiesAllowed, Mergeable):
     file_format: Optional[str] = None
     row_format: Optional[str] = None
     tbl_properties: Optional[str] = None
-    partitions: Optional[List[ExternalPartition]] = field(default_factory=list)
+    partitions: Optional[List[ExternalPartition]] = None
 
     def __bool__(self):
         return self.location is not None
 
-    def __post_init__(self):
-        if self.partitions is None:
-            self.partitions = []
 
 @dataclass
 class Quoting(JsonSchemaMixin, Mergeable):
@@ -188,7 +188,9 @@ class UnparsedSourceTableDefinition(ColumnDescription, NodeDescription):
     freshness: Optional[FreshnessThreshold] = field(
         default_factory=FreshnessThreshold
     )
-    external: Optional[ExternalTable] = None
+    external: Optional[ExternalTable] = field(
+        default_factory=ExternalTable
+    )
 
     def __post_init__(self):
         NodeDescription.__post_init__(self)

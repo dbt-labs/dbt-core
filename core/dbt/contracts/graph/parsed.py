@@ -5,14 +5,14 @@ from typing import (
 
 from hologram import JsonSchemaMixin
 from hologram.helpers import (
-    StrEnum, register_pattern, ExtensibleJsonSchemaMixin
+    StrEnum, register_pattern
 )
 
 import dbt.clients.jinja
 import dbt.flags
 from dbt.contracts.graph.unparsed import (
     UnparsedNode, UnparsedMacro, UnparsedDocumentationFile, Quoting,
-    UnparsedBaseNode, FreshnessThreshold, ExternalTable, 
+    UnparsedBaseNode, FreshnessThreshold, ExternalTable,
     AdditionalPropertiesAllowed
 )
 from dbt.contracts.util import Replaceable

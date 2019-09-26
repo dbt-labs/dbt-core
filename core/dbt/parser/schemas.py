@@ -329,7 +329,6 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             NodeType.Source, self.project.project_name, source.name, table.name
         ])
         description = table.description or ''
-        external = table.external or ''
         source_description = source.description or ''
         collect_docrefs(source, refs, None, description, source_description)
 
@@ -351,7 +350,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             unique_id=unique_id,
             name=table.name,
             description=description,
-            external=external,
+            external=table.external,
             source_name=source.name,
             source_description=source_description,
             loader=source.loader,

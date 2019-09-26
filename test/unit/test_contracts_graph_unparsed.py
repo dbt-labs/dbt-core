@@ -300,6 +300,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
                     'tests': [],
                     'columns': [],
                     'quoting': {},
+                    'external': {},
                     'freshness': {},
                 },
                 {
@@ -308,6 +309,7 @@ class TestUnparsedSourceDefinition(ContractTestCase):
                     'tests': [],
                     'columns': [],
                     'quoting': {'database': True},
+                    'external': {},
                     'freshness': {},
                 },
             ],
