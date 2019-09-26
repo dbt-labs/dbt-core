@@ -624,7 +624,7 @@ logging.getLogger("urllib3").setLevel(LOG_LEVEL_HTTP)
 logging.getLogger("google").setLevel(LOG_LEVEL_GOOGLE)
 logging.getLogger("snowflake.connector").setLevel(LOG_LEVEL_SNOWFLAKE)
 
-logging.getLogger('parsedatetime').setLevel(logging.ERROR)
+logging.getLogger("parsedatetime").setLevel(logging.ERROR)
 logging.getLogger("werkzeug").setLevel(LOG_LEVEL_WERKZEUG)
 
 
