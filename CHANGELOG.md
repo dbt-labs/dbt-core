@@ -1,3 +1,14 @@
+## dbt 0.14.3 (Unreleased)
+
+This is a bugfix release.
+
+### Fixes:
+- Fix for `dictionary changed size during iteration` race condition ([#1740](https://github.com/fishtown-analytics/dbt/issues/1740), [#1750](https://github.com/fishtown-analytics/dbt/pull/1750))
+
+### Under the hood:
+- Provide a programmatic method for validating profile targets ([#1754](https://github.com/fishtown-analytics/dbt/issues/1754), [#1775](https://github.com/fishtown-analytics/dbt/pull/1775))
+
+
 ## dbt 0.14.2 (September 13, 2019)
 
 ### Overview
