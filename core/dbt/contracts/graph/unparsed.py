@@ -210,13 +210,13 @@ class AdditionalPropertiesAllowed(AdditionalPropertiesMixin, ExtensibleDbtClassM
 
 @dataclass
 class ExternalPartition(AdditionalPropertiesAllowed, Replaceable):
-    name: str = ''
+    name: str = ""
     description: str = ''
     data_type: str = ''
     meta: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
-        if self.name == '' or self.data_type == '':
+        if self.name == "" or self.data_type == "":
             raise CompilationException(
                 'External partition columns must have names and data types'
             )
