@@ -105,6 +105,7 @@ class FreshnessStatus(StrEnum):
 class FreshnessThreshold(JsonSchemaMixin, Mergeable):
     warn_after: Optional[Time] = None
     error_after: Optional[Time] = None
+    filter: Optional[str] = None
 
     def status(self, age: float) -> FreshnessStatus:
         if self.error_after and self.error_after.exceeded(age):

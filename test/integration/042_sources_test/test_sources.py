@@ -51,6 +51,32 @@ class SuccessfulSourcesTest(BaseSourcesTest):
     def setUp(self):
         super().setUp()
         self.run_dbt_with_vars(['seed'], strict=False)
+        self.maxDiff = None
+        self._id = 101
+        # this is the db initial value
+        self.last_inserted_time = "2016-09-19T14:45:51+00:00"
+
+    def _set_updated_at_to(self, delta):
+        insert_time = datetime.utcnow() + delta
+        timestr = insert_time.strftime("%Y-%m-%d %H:%M:%S")
+        # favorite_color,id,first_name,email,ip_address,updated_at
+        insert_id = self._id
+        self._id += 1
+        raw_sql = """INSERT INTO {schema}.{source}
+            (favorite_color,id,first_name,email,ip_address,updated_at)
+        VALUES (
+            'blue',{id},'Jake','abc@example.com','192.168.1.1','{time}'
+        )"""
+        self.run_sql(
+            raw_sql,
+            kwargs={
+                'schema': self.unique_schema(),
+                'time': timestr,
+                'id': insert_id,
+                'source': self.adapter.quote('source'),
+            }
+        )
+        self.last_inserted_time = insert_time.strftime("%Y-%m-%dT%H:%M:%S+00:00")
 
 
 class TestSources(SuccessfulSourcesTest):
@@ -171,37 +197,6 @@ class TestSources(SuccessfulSourcesTest):
 
 
 class TestSourceFreshness(SuccessfulSourcesTest):
-    def setUp(self):
-        super().setUp()
-        self.maxDiff = None
-        self._id = 100
-        # this is the db initial value
-        self.last_inserted_time = "2016-09-19T14:45:51+00:00"
-
-    # test_source.test_table should have a loaded_at field of `updated_at`
-    # and a freshness of warn_after: 10 hours, error_after: 18 hours
-    # by default, our data set is way out of date!
-    def _set_updated_at_to(self, delta):
-        insert_time = datetime.utcnow() + delta
-        timestr = insert_time.strftime("%Y-%m-%d %H:%M:%S")
-        # favorite_color,id,first_name,email,ip_address,updated_at
-        insert_id = self._id
-        self._id += 1
-        raw_sql = """INSERT INTO {schema}.{source}
-            (favorite_color,id,first_name,email,ip_address,updated_at)
-        VALUES (
-            'blue',{id},'Jake','abc@example.com','192.168.1.1','{time}'
-        )"""
-        self.run_sql(
-            raw_sql,
-            kwargs={
-                'schema': self.unique_schema(),
-                'time': timestr,
-                'id': insert_id,
-                'source': self.adapter.quote('source'),
-            }
-        )
-        self.last_inserted_time = insert_time.strftime("%Y-%m-%dT%H:%M:%S+00:00")
 
     def _assert_freshness_results(self, path, state):
         self.assertTrue(os.path.exists(path))
@@ -233,6 +228,9 @@ class TestSourceFreshness(SuccessfulSourcesTest):
         })
 
     def _run_source_freshness(self):
+        # test_source.test_table should have a loaded_at field of `updated_at`
+        # and a freshness of warn_after: 10 hours, error_after: 18 hours
+        # by default, our data set is way out of date!
         self.freshness_start_time = datetime.utcnow()
         results = self.run_dbt_with_vars(
             ['source', 'snapshot-freshness', '-o', 'target/error_source.json'],
@@ -298,6 +296,38 @@ class TestSourceFreshnessErrors(SuccessfulSourcesTest):
         self.assertEqual(results[0].status, 'error')
         self.assertFalse(results[0].fail)
         self.assertIsNotNone(results[0].error)
+
+
+class TestSourceFreshnessFilter(SuccessfulSourcesTest):
+    @property
+    def models(self):
+        return 'filtered_models'
+
+    def assert_source_freshness_passed(self, results):
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].status, 'pass')
+        self.assertFalse(results[0].fail)
+        self.assertIsNone(results[0].error)
+
+    def assert_source_freshness_failed(self, results):
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].status, 'error')
+        self.assertTrue(results[0].fail)
+        self.assertIsNone(results[0].error)
+
+    @use_profile('postgres')
+    def test_postgres_all_records(self):
+        # all records are filtered out
+        self.run_dbt_with_vars(['source', 'snapshot-freshness'], expect_pass=False)
+        # we should insert a record with #101 that's fresh, but will still fail
+        # because the filter excludes it
+        self._set_updated_at_to(timedelta(hours=-2))
+        self.run_dbt_with_vars(['source', 'snapshot-freshness'], expect_pass=False)
+
+        # we should now insert a record with #102 that's fresh, and the filter
+        # includes it
+        self._set_updated_at_to(timedelta(hours=-2))
+        results = self.run_dbt_with_vars(['source', 'snapshot-freshness'], expect_pass=True)
 
 
 class TestMalformedSources(BaseSourcesTest):
