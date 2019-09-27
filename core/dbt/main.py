@@ -742,8 +742,8 @@ def parse_args(args):
 
     p.add_argument(
         '--log-format',
-        choices=['text', 'json', None],
-        default=None,
+        choices=['text', 'json', 'default'],
+        default='default',
         help='''Specify the log format, overriding the command's default.'''
     )
 

@@ -47,10 +47,10 @@ class BaseTask(metaclass=ABCMeta):
     @classmethod
     def pre_init_hook(cls, args):
         """A hook called before the task is initialized."""
-        if args.log_format == 'text' or args.log_format is None:
-            log_manager.format_text()
-        else:
+        if args.log_format == 'json':
             log_manager.format_json()
+        else:
+            log_manager.format_text()
 
     @classmethod
     def from_args(cls, args):
