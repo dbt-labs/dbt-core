@@ -844,22 +844,27 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'id': {
                             'name': 'id',
                             'description': 'The user ID number',
+                            'data_type': None,
                         },
                         'first_name': {
                             'name': 'first_name',
                             'description': "The user's first name",
+                            'data_type': None,
                         },
                         'email': {
                             'name': 'email',
                             'description': "The user's email",
+                            'data_type': None,
                         },
                         'ip_address': {
                             'name': 'ip_address',
                             'description': "The user's IP address",
+                            'data_type': None,
                         },
                         'updated_at': {
                             'name': 'updated_at',
                             'description': "The last time this user's email was updated",
+                            'data_type': None,
                         },
                     },
                     'patch_path': schema_yml_path,
@@ -1161,11 +1166,13 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'columns': {
                         'first_name': {
                             'description': 'The first name being summarized',
-                            'name': 'first_name'
+                            'name': 'first_name',
+                            'data_type': None
                         },
                         'ct': {
                             'description': 'The number of instances of the first name',
-                            'name': 'ct'
+                            'name': 'ct',
+                            'data_type': None
                         },
                     },
                     'config': {
@@ -1227,11 +1234,13 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'columns': {
                         'first_name': {
                             'description': 'The first name being summarized',
-                            'name': 'first_name'
+                            'name': 'first_name',
+                            'data_type': None
                         },
                         'ct': {
                             'description': 'The number of instances of the first name',
-                            'name': 'ct'
+                            'name': 'ct',
+                            'data_type': None
                         },
                     },
                     'config': {
@@ -1325,7 +1334,8 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'columns': {
                         'id': {
                             'description': 'An ID field',
-                            'name': 'id'
+                            'name': 'id',
+                            'data_type': None
                         }
                     },
                     'quoting': {
@@ -1352,6 +1362,10 @@ class TestDocsGenerate(DBTIntegrationTest):
                             'documentation_package': '',
                         },
                     ],
+                    'external': {
+                        'file_format': None, 'location': None, 'partitions': None, 
+                        'row_format': None, 'tbl_properties': None
+                    },
                     'freshness': {'error_after': None, 'warn_after': None, 'filter': None},
                     'identifier': 'seed',
                     'loaded_at_field': None,
@@ -1589,23 +1603,28 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'columns': {
                         'email': {
                             'description': "The user's email",
-                            'name': 'email'
+                            'name': 'email',
+                            'data_type': None
                         },
                         'first_name': {
                             'description': "The user's name",
-                            'name': 'first_name'
+                            'name': 'first_name',
+                            'data_type': None
                         },
                         'id': {
                             'description': 'The user id',
-                            'name': 'id'
+                            'name': 'id',
+                            'data_type': None
                         },
                         'ip_address': {
                             'description': "The user's IP address",
-                            'name': 'ip_address'
+                            'name': 'ip_address',
+                            'data_type': None
                         },
                         'updated_at': {
                             'description': 'When the user was updated',
-                            'name': 'updated_at'
+                            'name': 'updated_at',
+                            'data_type': None
                         },
                     },
                     'description': 'A clustered and partitioned copy of the test model',
@@ -1646,23 +1665,28 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'columns': {
                         'email': {
                             'description': "The user's email",
-                            'name': 'email'
+                            'name': 'email',
+                            'data_type': None
                         },
                         'first_name': {
                             'description': "The user's name",
-                            'name': 'first_name'
+                            'name': 'first_name',
+                            'data_type': None
                         },
                         'id': {
                             'description': 'The user id',
-                            'name': 'id'
+                            'name': 'id',
+                            'data_type': None
                         },
                         'ip_address': {
                             'description': "The user's IP address",
-                            'name': 'ip_address'
+                            'name': 'ip_address',
+                            'data_type': None
                         },
                         'updated_at': {
                             'description': 'When the user was updated',
-                            'name': 'updated_at'
+                            'name': 'updated_at',
+                            'data_type': None
                         },
                     },
                     'description': 'A clustered and partitioned copy of the test model, clustered on multiple columns',
@@ -1705,22 +1729,27 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'field_1': {
                             'name': 'field_1',
                             'description': 'The first field',
+                            'data_type': None,
                         },
                         'field_2': {
                             'name': 'field_2',
                             'description': 'The second field',
+                            'data_type': None,
                         },
                         'field_3': {
                             'name': 'field_3',
                             'description': 'The third field',
+                            'data_type': None,
                         },
                         'nested_field.field_4': {
                             'name': 'nested_field.field_4',
                             'description': 'The first nested field',
+                            'data_type': None,
                         },
                         'nested_field.field_5': {
                             'name': 'nested_field.field_5',
                             'description': 'The second nested field',
+                            'data_type': None,
                         },
                     },
                     'description': 'The test model',
@@ -1963,22 +1992,27 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'id': {
                             'name': 'id',
                             'description': 'The user ID number',
+                            'data_type': None,
                         },
                         'first_name': {
                             'name': 'first_name',
                             'description': "The user's first name",
+                            'data_type': None,
                         },
                         'email': {
                             'name': 'email',
                             'description': "The user's email",
+                            'data_type': None,
                         },
                         'ip_address': {
                             'name': 'ip_address',
                             'description': "The user's IP address",
+                            'data_type': None,
                         },
                         'updated_at': {
                             'name': 'updated_at',
                             'description': "The last time this user's email was updated",
+                            'data_type': None,
                         },
                     },
                     'patch_path': self.dir('rs_models/schema.yml'),
@@ -2179,12 +2213,12 @@ class TestDocsGenerate(DBTIntegrationTest):
                         'target/compiled/test/model.sql'
                     ),
                     'columns': {
-                        'id': {'description': 'The user ID number', 'name': 'id'},
-                        'first_name': {'description': "The user's first name", 'name': 'first_name'},
-                        'email': {'description': "The user's email", 'name': 'email'},
-                        'ip_address': {'description': "The user's IP address", 'name': 'ip_address'},
+                        'id': {'description': 'The user ID number', 'name': 'id', 'data_type': None},
+                        'first_name': {'description': "The user's first name", 'name': 'first_name', 'data_type': None},
+                        'email': {'description': "The user's email", 'name': 'email', 'data_type': None},
+                        'ip_address': {'description': "The user's IP address", 'name': 'ip_address', 'data_type': None},
                         'updated_at': {'description': "The last time this user's email was updated",
-                                       'name': 'updated_at'}
+                                       'name': 'updated_at', 'data_type': None}
                     },
                     'compiled': True,
                     'compiled_sql': compiled_sql,
@@ -2466,11 +2500,13 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'columns': {
                         'first_name': {
                             'description': 'The first name being summarized',
-                            'name': 'first_name'
+                            'name': 'first_name',
+                            'data_type': None
                         },
                         'ct': {
                             'description': 'The number of instances of the first name',
-                            'name': 'ct'
+                            'name': 'ct',
+                            'data_type': None
                         },
                     },
                     'compiled': True,
@@ -2556,11 +2592,13 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'columns': {
                         'first_name': {
                             'description': 'The first name being summarized',
-                            'name': 'first_name'
+                            'name': 'first_name',
+                            'data_type': None
                         },
                         'ct': {
                             'description': 'The number of instances of the first name',
-                            'name': 'ct'
+                            'name': 'ct',
+                            'data_type': None
                         },
                     },
                     'compiled': True,
