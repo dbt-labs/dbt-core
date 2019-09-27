@@ -1,8 +1,9 @@
 from dbt.node_types import NodeType
 from dbt.contracts.util import Replaceable, Mergeable
+from dbt.exceptions import CompilationException
 
 from hologram import JsonSchemaMixin
-from hologram.helpers import StrEnum
+from hologram.helpers import StrEnum, ExtensibleJsonSchemaMixin
 
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -57,6 +58,7 @@ class UnparsedRunHook(UnparsedNode):
 class NamedTested(JsonSchemaMixin, Replaceable):
     name: str
     description: str = ''
+    data_type: Optional[str] = None
     tests: Optional[List[Union[Dict[str, Any], str]]] = None
 
     def __post_init__(self):
@@ -130,6 +132,59 @@ class FreshnessThreshold(JsonSchemaMixin, Mergeable):
 
 
 @dataclass
+class AdditionalPropertiesAllowed(ExtensibleJsonSchemaMixin):
+    _extra: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def extra(self):
+        return self._extra
+
+    @classmethod
+    def from_dict(cls, data, validate=True):
+        self = super().from_dict(data=data, validate=validate)
+        keys = self.to_dict(validate=False, omit_none=False)
+        for key, value in data.items():
+            if key not in keys:
+                self._extra[key] = value
+        return self
+
+    def to_dict(self, omit_none=True, validate=False):
+        data = super().to_dict(omit_none=omit_none, validate=validate)
+        data.update(self._extra)
+        return data
+
+    def replace(self, **kwargs):
+        dct = self.to_dict(omit_none=False, validate=False)
+        dct.update(kwargs)
+        return self.from_dict(dct)
+
+
+@dataclass
+class ExternalPartition(AdditionalPropertiesAllowed, Replaceable):
+    name: str = ''
+    description: str = ''
+    data_type: str = ''
+
+    def __post_init__(self):
+        if self.name == '' or self.data_type == '':
+            raise CompilationException(
+                'External partition columns must have names and data types'
+            )
+
+
+@dataclass
+class ExternalTable(AdditionalPropertiesAllowed, Mergeable):
+    location: Optional[str] = None
+    file_format: Optional[str] = None
+    row_format: Optional[str] = None
+    tbl_properties: Optional[str] = None
+    partitions: Optional[List[ExternalPartition]] = None
+
+    def __bool__(self):
+        return self.location is not None
+
+
+@dataclass
 class Quoting(JsonSchemaMixin, Mergeable):
     database: Optional[bool] = None
     schema: Optional[bool] = None
@@ -143,6 +198,9 @@ class UnparsedSourceTableDefinition(ColumnDescription, NodeDescription):
     quoting: Quoting = field(default_factory=Quoting)
     freshness: Optional[FreshnessThreshold] = field(
         default_factory=FreshnessThreshold
+    )
+    external: Optional[ExternalTable] = field(
+        default_factory=ExternalTable
     )
 
     def __post_init__(self):

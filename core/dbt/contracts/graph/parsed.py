@@ -5,14 +5,15 @@ from typing import (
 
 from hologram import JsonSchemaMixin
 from hologram.helpers import (
-    StrEnum, register_pattern, ExtensibleJsonSchemaMixin
+    StrEnum, register_pattern
 )
 
 import dbt.clients.jinja
 import dbt.flags
 from dbt.contracts.graph.unparsed import (
     UnparsedNode, UnparsedMacro, UnparsedDocumentationFile, Quoting,
-    UnparsedBaseNode, FreshnessThreshold
+    UnparsedBaseNode, FreshnessThreshold, ExternalTable,
+    AdditionalPropertiesAllowed
 )
 from dbt.contracts.util import Replaceable
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
@@ -50,7 +51,7 @@ register_pattern(Severity, insensitive_patterns('warn', 'error'))
 
 @dataclass
 class NodeConfig(
-    ExtensibleJsonSchemaMixin, Replaceable, MutableMapping[str, Any]
+    AdditionalPropertiesAllowed, Replaceable, MutableMapping[str, Any]
 ):
     enabled: bool = True
     materialized: str = 'view'
@@ -61,30 +62,6 @@ class NodeConfig(
     quoting: Dict[str, Any] = field(default_factory=dict)
     column_types: Dict[str, Any] = field(default_factory=dict)
     tags: Union[List[str], str] = field(default_factory=list)
-    _extra: Dict[str, Any] = field(default_factory=dict)
-
-    @property
-    def extra(self):
-        return self._extra
-
-    @classmethod
-    def from_dict(cls, data, validate=True):
-        self = super().from_dict(data=data, validate=validate)
-        keys = self.to_dict(validate=False, omit_none=False)
-        for key, value in data.items():
-            if key not in keys:
-                self._extra[key] = value
-        return self
-
-    def to_dict(self, omit_none=True, validate=False):
-        data = super().to_dict(omit_none=omit_none, validate=validate)
-        data.update(self._extra)
-        return data
-
-    def replace(self, **kwargs):
-        dct = self.to_dict(omit_none=False, validate=False)
-        dct.update(kwargs)
-        return self.from_dict(dct)
 
     @classmethod
     def field_mapping(cls):
@@ -133,6 +110,7 @@ class NodeConfig(
 class ColumnInfo(JsonSchemaMixin, Replaceable):
     name: str
     description: str = ''
+    data_type: Optional[str] = None
 
 
 # Docrefs are not quite like regular references, as they indicate what they
@@ -476,6 +454,7 @@ class ParsedSourceDefinition(
     quoting: Quoting = field(default_factory=Quoting)
     loaded_at_field: Optional[str] = None
     freshness: Optional[FreshnessThreshold] = None
+    external: Optional[ExternalTable] = None
     docrefs: List[Docref] = field(default_factory=list)
     description: str = ''
     columns: Dict[str, ColumnInfo] = field(default_factory=dict)

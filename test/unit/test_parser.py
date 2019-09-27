@@ -24,7 +24,7 @@ from dbt.contracts.graph.parsed import (
     ParsedSnapshotNode, TimestampSnapshotConfig, SnapshotStrategy,
     ParsedAnalysisNode
 )
-from dbt.contracts.graph.unparsed import FreshnessThreshold
+from dbt.contracts.graph.unparsed import FreshnessThreshold, ExternalTable
 
 from .utils import config_from_parts_or_dicts, normalize
 
@@ -209,6 +209,7 @@ class SchemaParserSourceTest(SchemaParserTest):
             name='my_table',
             loader='',
             freshness=FreshnessThreshold(),
+            external=ExternalTable(),
             source_description='',
             identifier='my_table',
             fqn=['snowplow', 'my_source', 'my_table'],
