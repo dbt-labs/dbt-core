@@ -1,4 +1,5 @@
 import unittest
+from contextlib import contextmanager
 from unittest import mock
 
 import dbt.flags as flags
@@ -46,7 +47,8 @@ class TestSnowflakeAdapter(unittest.TestCase):
         self.cursor = self.handle.cursor.return_value
         self.mock_execute = self.cursor.execute
         self.patcher = mock.patch(
-            'dbt.adapters.snowflake.connections.snowflake.connector.connect')
+            'dbt.adapters.snowflake.connections.snowflake.connector.connect'
+        )
         self.snowflake = self.patcher.start()
 
         self.load_patch = mock.patch('dbt.loader.make_parse_result')
@@ -132,6 +134,65 @@ class TestSnowflakeAdapter(unittest.TestCase):
                 None
             )
         ])
+
+    @contextmanager
+    def current_warehouse(self, response):
+        # there is probably some elegant way built into mock.patch to do this
+        fetchall_return = self.cursor.fetchall.return_value
+        execute_side_effect = self.mock_execute.side_effect
+
+        def execute_effect(sql, *args, **kwargs):
+            if sql == 'select current_warehouse() as warehouse':
+                self.cursor.description = [['name']]
+                self.cursor.fetchall.return_value = [[response]]
+            else:
+                self.cursor.description = None
+                self.cursor.fetchall.return_value = fetchall_return
+            return self.mock_execute.return_value
+
+        self.mock_execute.side_effect = execute_effect
+        try:
+            yield
+        finally:
+            self.cursor.fetchall.return_value = fetchall_return
+            self.mock_execute.side_effect = execute_side_effect
+
+    def _strip_transactions(self):
+        result = []
+        for call_args in self.mock_execute.call_args_list:
+            args, kwargs = tuple(call_args)
+            is_transactional = (
+                len(kwargs) == 0 and
+                len(args) == 2 and
+                args[1] is None and
+                args[0] in {'BEGIN', 'COMMIT'}
+            )
+            if not is_transactional:
+                result.append(call_args)
+        return result
+
+    def test_pre_post_hooks_warehouse(self):
+        with self.current_warehouse('warehouse'):
+            config = {'warehouse': 'other_warehouse'}
+            result = self.adapter.pre_model_hook(config)
+            self.assertIsNotNone(result)
+            calls = [
+                mock.call('select current_warehouse() as warehouse', None),
+                mock.call('use warehouse other_warehouse', None)
+            ]
+            self.mock_execute.assert_has_calls(calls)
+            self.adapter.post_model_hook(config, result)
+            calls.append(mock.call('use warehouse warehouse', None))
+            self.mock_execute.assert_has_calls(calls)
+
+    def test_pre_post_hooks_no_warehouse(self):
+        with self.current_warehouse('warehouse'):
+            config = {}
+            result = self.adapter.pre_model_hook(config)
+            self.assertIsNone(result)
+            self.mock_execute.assert_not_called()
+            self.adapter.post_model_hook(config, result)
+            self.mock_execute.assert_not_called()
 
     def test_cancel_open_connections_empty(self):
         self.assertEqual(len(list(self.adapter.cancel_open_connections())), 0)

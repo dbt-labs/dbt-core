@@ -445,12 +445,12 @@ class ListLogHandler(LogMessageHandler):
 
 
 # we still need to use logging to suppress these or pytest captures them
-logging.getLogger('botocore').setLevel(logging.INFO)
-logging.getLogger('requests').setLevel(logging.INFO)
-logging.getLogger('urllib3').setLevel(logging.INFO)
-logging.getLogger('google').setLevel(logging.INFO)
-logging.getLogger('snowflake.connector').setLevel(logging.INFO)
-logging.getLogger('parsedatetime').setLevel(logging.INFO)
+logging.getLogger('botocore').setLevel(logging.ERROR)
+logging.getLogger('requests').setLevel(logging.ERROR)
+logging.getLogger('urllib3').setLevel(logging.ERROR)
+logging.getLogger('google').setLevel(logging.ERROR)
+logging.getLogger('snowflake.connector').setLevel(logging.ERROR)
+logging.getLogger('parsedatetime').setLevel(logging.ERROR)
 # want to see werkzeug logs about errors
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
 

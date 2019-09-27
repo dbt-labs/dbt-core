@@ -240,6 +240,7 @@ class SnowflakeConnectionManager(SQLConnectionManager):
         """On snowflake, rolling back the handle of an aborted session raises
         an exception.
         """
+        logger.debug('initiating rollback')
         try:
             connection.handle.rollback()
         except snowflake.connector.errors.ProgrammingError as e:

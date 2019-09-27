@@ -411,7 +411,18 @@ class ModelRunner(CompileRunner):
         if materialization_macro is None:
             missing_materialization(model, self.adapter.type())
 
-        result = materialization_macro.generator(context)()
+        if 'config' not in context:
+            raise InternalException(
+                'Invalid materialization context generated, missing config: {}'
+                .format(context)
+            )
+        context_config = context['config']
+
+        hook_ctx = self.adapter.pre_model_hook(context_config)
+        try:
+            result = materialization_macro.generator(context)()
+        finally:
+            self.adapter.post_model_hook(context_config, hook_ctx)
 
         for relation in self._materialization_relations(result, model):
             self.adapter.cache_added(relation.incorporate(dbt_created=True))
