@@ -6,7 +6,7 @@ from dbt.contracts.graph.manifest import SourceFile
 from dbt.contracts.graph.parsed import ParsedRPCNode, ParsedMacro
 from dbt.contracts.graph.unparsed import UnparsedMacro
 from dbt.exceptions import InternalException
-from dbt.node_types import NodeType, MacroType
+from dbt.node_types import NodeType
 from dbt.parser.base import SimpleSQLParser
 from dbt.parser.macros import MacroParser
 from dbt.parser.search import FileBlock
@@ -56,7 +56,7 @@ class RPCMacroParser(MacroParser):
             package_name=self.project.project_name,
             raw_sql=contents,
             root_path=self.project.project_root,
-            resource_type=MacroType(NodeType.Macro),
+            resource_type=NodeType.Macro,
         )
         for node in self.parse_unparsed_macros(base):
             yield node

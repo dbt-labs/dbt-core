@@ -14,16 +14,14 @@ from dbt.parser import (
 from dbt.parser.search import FileBlock
 from dbt.parser.schema_test_builders import YamlBlock
 
-from dbt.node_types import (
-    NodeType, SnapshotType, MacroType, SourceType, TestType, AnalysisType
-)
+from dbt.node_types import NodeType
 from dbt.contracts.graph.manifest import (
     Manifest, FilePath, SourceFile, FileHash
 )
 from dbt.contracts.graph.parsed import (
     ParsedModelNode, ParsedMacro, ParsedNodePatch, ParsedSourceDefinition,
     NodeConfig, DependsOn, ColumnInfo, ParsedTestNode, TestConfig,
-    ParsedSnapshotNode, TimestampSnapshotConfig, TimestampStrategy,
+    ParsedSnapshotNode, TimestampSnapshotConfig, SnapshotStrategy,
     ParsedAnalysisNode
 )
 from dbt.contracts.graph.unparsed import FreshnessThreshold
@@ -221,7 +219,7 @@ class SchemaParserSourceTest(SchemaParserTest):
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
             path=normalize('models/test_one.yml'),
             original_file_path=normalize('models/test_one.yml'),
-            resource_type=SourceType.Source,
+            resource_type=NodeType.Source,
         )
         self.assertEqual(src, expected)
 
@@ -424,14 +422,14 @@ class SnapshotParserTest(BaseParserTest):
             # the `database` entry is overrridden by the target_database config
             database='dbt',
             schema='analytics',
-            resource_type=SnapshotType.Snapshot,
+            resource_type=NodeType.Snapshot,
             unique_id='snapshot.snowplow.foo',
             fqn=['snowplow', 'nested', 'snap_1', 'foo'],
             package_name='snowplow',
             original_file_path=normalize('snapshots/nested/snap_1.sql'),
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
             config=TimestampSnapshotConfig(
-                strategy=TimestampStrategy.Timestamp,
+                strategy=SnapshotStrategy.Timestamp,
                 updated_at='last_update',
                 target_database='dbt',
                 target_schema='analytics',
@@ -476,14 +474,14 @@ class SnapshotParserTest(BaseParserTest):
             name='foo',
             database='dbt',
             schema='analytics',
-            resource_type=SnapshotType.Snapshot,
+            resource_type=NodeType.Snapshot,
             unique_id='snapshot.snowplow.foo',
             fqn=['snowplow', 'nested', 'snap_1', 'foo'],
             package_name='snowplow',
             original_file_path=normalize('snapshots/nested/snap_1.sql'),
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
             config=TimestampSnapshotConfig(
-                strategy=TimestampStrategy.Timestamp,
+                strategy=SnapshotStrategy.Timestamp,
                 updated_at='last_update',
                 target_database='dbt',
                 target_schema='analytics',
@@ -498,14 +496,14 @@ class SnapshotParserTest(BaseParserTest):
             name='bar',
             database='dbt',
             schema='analytics',
-            resource_type=SnapshotType.Snapshot,
+            resource_type=NodeType.Snapshot,
             unique_id='snapshot.snowplow.bar',
             fqn=['snowplow', 'nested', 'snap_1', 'bar'],
             package_name='snowplow',
             original_file_path=normalize('snapshots/nested/snap_1.sql'),
             root_path=get_abs_os_path('./dbt_modules/snowplow'),
             config=TimestampSnapshotConfig(
-                strategy=TimestampStrategy.Timestamp,
+                strategy=SnapshotStrategy.Timestamp,
                 updated_at='last_update',
                 target_database='dbt',
                 target_schema='analytics',
@@ -542,7 +540,7 @@ class MacroParserTest(BaseParserTest):
         macro = list(self.parser.results.macros.values())[0]
         expected = ParsedMacro(
             name='foo',
-            resource_type=MacroType.Macro,
+            resource_type=NodeType.Macro,
             unique_id='macro.snowplow.foo',
             package_name='snowplow',
             original_file_path=normalize('macros/macro.sql'),
@@ -580,7 +578,7 @@ class DataTestParserTest(BaseParserTest):
             name='test_1',
             database='test',
             schema='analytics',
-            resource_type=TestType.Test,
+            resource_type=NodeType.Test,
             unique_id='test.snowplow.test_1',
             fqn=['snowplow', 'data_test', 'test_1'],
             package_name='snowplow',
@@ -622,7 +620,7 @@ class AnalysisParserTest(BaseParserTest):
             name='analysis_1',
             database='test',
             schema='analytics',
-            resource_type=AnalysisType.Analysis,
+            resource_type=NodeType.Analysis,
             unique_id='analysis.snowplow.analysis_1',
             fqn=['snowplow', 'analysis', 'nested', 'analysis_1'],
             package_name='snowplow',

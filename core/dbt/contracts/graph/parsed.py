@@ -16,17 +16,11 @@ from dbt.contracts.graph.unparsed import (
 )
 from dbt.contracts.util import Replaceable
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
-from dbt.node_types import (
-    NodeType, SourceType, SnapshotType, MacroType, TestType, OperationType,
-    SeedType, ModelType, AnalysisType, RPCCallType
-)
+from dbt.node_types import NodeType
 
 
-class TimestampStrategy(StrEnum):
+class SnapshotStrategy(StrEnum):
     Timestamp = 'timestamp'
-
-
-class CheckStrategy(StrEnum):
     Check = 'check'
 
 
@@ -245,28 +239,30 @@ class ParsedNode(ParsedNodeDefaults, ParsedNodeMixins):
 
 @dataclass
 class ParsedAnalysisNode(ParsedNode):
-    resource_type: AnalysisType
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Analysis]})
 
 
 @dataclass
 class ParsedHookNode(ParsedNode):
-    resource_type: OperationType
+    resource_type: NodeType = field(
+        metadata={'restrict': [NodeType.Operation]}
+    )
     index: Optional[int] = None
 
 
 @dataclass
 class ParsedModelNode(ParsedNode):
-    resource_type: ModelType
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Model]})
 
 
 @dataclass
 class ParsedRPCNode(ParsedNode):
-    resource_type: RPCCallType
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.RPCCall]})
 
 
 @dataclass
 class ParsedSeedNode(ParsedNode):
-    resource_type: SeedType
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Seed]})
 
     @property
     def empty(self):
@@ -281,7 +277,7 @@ class TestConfig(NodeConfig):
 
 @dataclass
 class ParsedTestNode(ParsedNode):
-    resource_type: TestType
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
     column_name: Optional[str] = None
     config: TestConfig = field(default_factory=TestConfig)
 
@@ -307,7 +303,7 @@ class _SnapshotConfig(NodeConfig):
 
 @dataclass(init=False)
 class GenericSnapshotConfig(_SnapshotConfig):
-    strategy: str
+    strategy: SnapshotStrategy
 
     def __init__(self, strategy: str, **kwargs) -> None:
         self.strategy = strategy
@@ -316,11 +312,13 @@ class GenericSnapshotConfig(_SnapshotConfig):
 
 @dataclass(init=False)
 class TimestampSnapshotConfig(_SnapshotConfig):
-    strategy: TimestampStrategy
+    strategy: SnapshotStrategy = field(metadata={
+        'restrict': [SnapshotStrategy.Timestamp]
+    })
     updated_at: str
 
     def __init__(
-        self, strategy: TimestampStrategy, updated_at: str, **kwargs
+        self, strategy: SnapshotStrategy, updated_at: str, **kwargs
     ) -> None:
         self.strategy = strategy
         self.updated_at = updated_at
@@ -329,7 +327,9 @@ class TimestampSnapshotConfig(_SnapshotConfig):
 
 @dataclass(init=False)
 class CheckSnapshotConfig(_SnapshotConfig):
-    strategy: CheckStrategy
+    strategy: SnapshotStrategy = field(metadata={
+        'restrict': [SnapshotStrategy.Check]
+    })
     # TODO: is there a way to get this to accept tuples of strings? Adding
     # `Tuple[str, ...]` to the list of types results in this:
     # ['email'] is valid under each of {'type': 'array', 'items':
@@ -340,7 +340,7 @@ class CheckSnapshotConfig(_SnapshotConfig):
     check_cols: Union[All, List[str]]
 
     def __init__(
-        self, strategy: CheckStrategy, check_cols: Union[All, List[str]],
+        self, strategy: SnapshotStrategy, check_cols: Union[All, List[str]],
         **kwargs
     ) -> None:
         self.strategy = strategy
@@ -356,7 +356,7 @@ class IntermediateSnapshotNode(ParsedNode):
     # defined in config blocks. To fix that, we have an intermediate type that
     # uses a regular node config, which the snapshot parser will then convert
     # into a full ParsedSnapshotNode after rendering.
-    resource_type: SnapshotType
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Snapshot]})
 
 
 def _create_if_else_chain(
@@ -384,7 +384,7 @@ def _create_if_else_chain(
 
 @dataclass
 class ParsedSnapshotNode(ParsedNode):
-    resource_type: SnapshotType
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Snapshot]})
     config: Union[
         CheckSnapshotConfig,
         TimestampSnapshotConfig,
@@ -397,8 +397,8 @@ class ParsedSnapshotNode(ParsedNode):
 
         # mess with config
         configs = [
-            (str(CheckStrategy.Check), CheckSnapshotConfig),
-            (str(TimestampStrategy.Timestamp), TimestampSnapshotConfig),
+            (str(SnapshotStrategy.Check), CheckSnapshotConfig),
+            (str(SnapshotStrategy.Timestamp), TimestampSnapshotConfig),
         ]
 
         if embeddable:
@@ -431,7 +431,7 @@ class MacroDependsOn(JsonSchemaMixin, Replaceable):
 @dataclass
 class ParsedMacro(UnparsedMacro, HasUniqueID):
     name: str
-    resource_type: MacroType
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Macro]})
     # TODO: can macros even have tags?
     tags: List[str] = field(default_factory=list)
     # TODO: is this ever populated?
@@ -465,7 +465,7 @@ class ParsedSourceDefinition(
     source_description: str
     loader: str
     identifier: str
-    resource_type: SourceType
+    resource_type: NodeType = field(metadata={'restrict': [NodeType.Source]})
     quoting: Quoting = field(default_factory=Quoting)
     loaded_at_field: Optional[str] = None
     freshness: Optional[FreshnessThreshold] = None

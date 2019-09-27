@@ -7,7 +7,7 @@ from dbt.contracts.graph.unparsed import UnparsedMacro
 from dbt.contracts.graph.parsed import ParsedMacro
 from dbt.exceptions import CompilationException
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.node_types import NodeType, MacroType
+from dbt.node_types import NodeType
 from dbt.parser.base import BaseParser
 from dbt.parser.search import FileBlock, FilesystemSearcher
 from dbt.utils import MACRO_PREFIX
@@ -78,7 +78,7 @@ class MacroParser(BaseParser[ParsedMacro]):
             package_name=self.project.project_name,
             raw_sql=source_file.contents,
             root_path=self.project.project_root,
-            resource_type=MacroType(NodeType.Macro),
+            resource_type=NodeType.Macro,
         )
 
         for node in self.parse_unparsed_macros(base_node):

@@ -21,7 +21,7 @@ from dbt.exceptions import (
     CompilationException, validator_error_message
 )
 from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
-from dbt.node_types import NodeType, UnparsedNodeType
+from dbt.node_types import NodeType
 from dbt.source_config import SourceConfig
 from dbt.parser.results import ParseResult, ManifestNodes
 from dbt.parser.search import FileBlock
@@ -236,7 +236,7 @@ class ConfiguredParser(
         # message reasons
         return UnparsedNode(
             name=name,
-            resource_type=UnparsedNodeType(self.resource_type),
+            resource_type=self.resource_type,
             path=path,
             original_file_path=original_file_path,
             root_path=self.project.project_root,
