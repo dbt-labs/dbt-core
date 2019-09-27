@@ -252,12 +252,13 @@ class ManifestTest(unittest.TestCase):
             []
         )
 
-    def test__to_flat_graph(self):
+    def test__build_flat_graph(self):
         nodes = copy.copy(self.nested_nodes)
         manifest = Manifest(nodes=nodes, macros={}, docs={},
                             generated_at=datetime.utcnow(), disabled=[],
                             files={})
-        flat_graph = manifest.to_flat_graph()
+        manifest.build_flat_graph()
+        flat_graph = manifest.flat_graph
         flat_nodes = flat_graph['nodes']
         self.assertEqual(set(flat_graph), set(['nodes']))
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
@@ -590,12 +591,13 @@ class MixedManifestTest(unittest.TestCase):
             []
         )
 
-    def test__to_flat_graph(self):
+    def test__build_flat_graph(self):
         nodes = copy.copy(self.nested_nodes)
         manifest = Manifest(nodes=nodes, macros={}, docs={},
                             generated_at=datetime.utcnow(), disabled=[],
                             files={})
-        flat_graph = manifest.to_flat_graph()
+        manifest.build_flat_graph()
+        flat_graph = manifest.flat_graph
         flat_nodes = flat_graph['nodes']
         self.assertEqual(set(flat_graph), set(['nodes']))
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
