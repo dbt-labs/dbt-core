@@ -18,6 +18,7 @@ class RPCServerTask(ConfiguredTask):
         super(RPCServerTask, self).__init__(args, config)
         # compile locally
         self.manifest = self._compile_manifest()
+        self.manifest.build_flat_graph()
         self.task_manager = rpc.TaskManager()
         tasks = tasks or [RemoteCompileTask, RemoteRunTask]
         for cls in tasks:
