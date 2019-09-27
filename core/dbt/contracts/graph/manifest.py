@@ -269,22 +269,11 @@ class Manifest:
         Make sure you don't call this until you're done with building your
         manifest!
         """
-<<<<<<< HEAD
-        if self._flat_graph is None:
-            self._flat_graph = {
-                'nodes': {
-                    k: v.to_dict(omit_none=False)
-                    for k, v in self.nodes.items()
-                },
-            }
-        return self._flat_graph
-=======
         self.flat_graph = {
             'nodes': {
-                k: v.serialize() for k, v in self.nodes.items()
+                k: v.to_dict(omit_none=False) for k, v in self.nodes.items()
             },
         }
->>>>>>> dev/0.14.3
 
     def find_disabled_by_name(self, name, package=None):
         return dbt.utils.find_in_list_by_name(self.disabled, name, package,
