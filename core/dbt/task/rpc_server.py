@@ -43,6 +43,7 @@ def reload_manager(task_manager, tasks):
         with list_handler(logs):
             compile_task.run()
         manifest = compile_task.manifest
+        manifest.build_flat_graph()
 
         for cls in tasks:
             task_manager.add_task_handler(cls, manifest)
