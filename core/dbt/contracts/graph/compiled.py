@@ -13,6 +13,7 @@ from dbt.contracts.graph.parsed import (
 )
 from dbt.node_types import NodeType
 from dbt.contracts.util import Replaceable
+from dbt.exceptions import InternalException
 
 from hologram import JsonSchemaMixin
 from dataclasses import dataclass, field
@@ -87,6 +88,13 @@ class CompiledRPCNode(CompiledNode):
 @dataclass
 class CompiledSeedNode(CompiledNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Seed]})
+    seed_file_path: str = ''
+
+    def __post_init__(self):
+        if self.seed_file_path == '':
+            raise InternalException(
+                'Seeds should always have a seed_file_path'
+            )
 
     @property
     def empty(self):
@@ -191,7 +199,7 @@ def parsed_instance_for(compiled: CompiledNode) -> ParsedNode:
         raise ValueError('invalid resource_type: {}'
                          .format(compiled.resource_type))
 
-    # validate=False to allow extra keys from copmiling
+    # validate=False to allow extra keys from compiling
     return cls.from_dict(compiled.to_dict(), validate=False)
 
 

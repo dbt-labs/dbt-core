@@ -25,16 +25,31 @@ NodeEdgeMap = Dict[str, List[str]]
 class FilePath(JsonSchemaMixin):
     searched_path: str
     relative_path: str
-    absolute_path: str
+    project_root: str
 
     @property
-    def search_key(self):
-        # TODO: should this be project root + original_file_path?
+    def search_key(self) -> str:
+        # TODO: should this be project name + path relative to project root?
         return self.absolute_path
 
     @property
-    def original_file_path(self):
-        return os.path.join(self.searched_path, self.relative_path)
+    def full_path(self) -> str:
+        # useful for symlink preservation
+        return os.path.normcase(os.path.join(
+            self.project_root, self.searched_path, self.relative_path
+        ))
+
+    @property
+    def absolute_path(self) -> str:
+        return os.path.normcase(os.path.abspath(self.full_path))
+
+    @property
+    def original_file_path(self) -> str:
+        # this is mostly used for reporting errors. It doesn't show the project
+        # name, should it?
+        return os.path.join(
+            self.searched_path, self.relative_path
+        )
 
 
 @dataclass

@@ -341,7 +341,8 @@ class ManifestTest(unittest.TestCase):
             path='seed.csv',
             original_file_path='seed.csv',
             root_path='',
-            raw_sql='-- csv --'
+            raw_sql='-- csv --',
+            seed_file_path='data/seed.csv'
         )
         manifest = Manifest(nodes=nodes, macros={}, docs={},
                             generated_at=datetime.utcnow(), disabled=[],

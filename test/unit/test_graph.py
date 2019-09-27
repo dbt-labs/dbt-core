@@ -132,7 +132,7 @@ class GraphTest(unittest.TestCase):
         for k, v in models.items():
             path = FilePath(
                 searched_path='models',
-                absolute_path=os.path.normcase(os.path.abspath('models/{}.sql'.format(k))),
+                project_root=os.path.normcase(os.getcwd()),
                 relative_path='{}.sql'.format(k),
             )
             source_file = SourceFile(path=path, checksum=FileHash.empty())
@@ -143,7 +143,6 @@ class GraphTest(unittest.TestCase):
         loader = dbt.loader.GraphLoader(config, {config.project_name: config})
         loader.load()
         return loader.create_manifest()
-
 
     def test__single_model(self):
         self.use_models({

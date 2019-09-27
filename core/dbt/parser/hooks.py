@@ -1,4 +1,3 @@
-import os
 from dataclasses import dataclass
 from typing import Iterable, Iterator, Union, List, Tuple
 
@@ -71,16 +70,11 @@ class HookParser(SimpleParser[HookBlock, ParsedHookNode]):
     def transform(self, node):
         return node
 
-    def get_paths(self):
-        searched_path = '.'
-        relative_path = 'dbt_project.yml'
-        absolute_path = os.path.normcase(os.path.abspath(os.path.join(
-            self.project.project_root, searched_path, relative_path
-        )))
+    def get_paths(self) -> List[FilePath]:
         path = FilePath(
+            project_root=self.project.project_root,
             searched_path='.',
-            relative_path='relative_path',
-            absolute_path=absolute_path,
+            relative_path='dbt_project.yml',
         )
         return [path]
 

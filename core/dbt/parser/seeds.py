@@ -30,3 +30,19 @@ class SeedParser(SimpleSQLParser[ParsedSeedNode]):
 
     def load_file(self, match: FilePath) -> SourceFile:
         return SourceFile.seed(match)
+
+    def _create_parsetime_node(
+        self,
+        block: FileBlock,
+        path: str,
+        config: SourceConfig,
+        name=None,
+        **kwargs,
+    ) -> ParsedSeedNode:
+        return super()._create_parsetime_node(
+            block=block,
+            path=path,
+            config=config,
+            name=name,
+            seed_file_path=block.path.full_path,
+        )
