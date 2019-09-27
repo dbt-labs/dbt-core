@@ -82,7 +82,7 @@ class BaseTask(metaclass=ABCMeta):
     @classmethod
     def pre_init_hook(cls, args):
         """A hook called before the task is initialized."""
-        if args.log_format == 'json':
+        if args.log_format == "json":
             log_manager.format_json()
             # we're mutating the initialized, but not-yet-configured event logger
             # because it's being configured too late -- bad! TODO refactor!
