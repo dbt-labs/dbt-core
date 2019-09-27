@@ -61,22 +61,16 @@ class SnowflakeAdapter(SQLAdapter):
         self.execute('use warehouse {}'.format(warehouse))
 
     def pre_model_hook(self, config: Mapping[str, Any]) -> Optional[str]:
-        self.connections.clear_transaction()
-        self.connections.begin()
         default_warehouse = self.config.credentials.warehouse
         warehouse = config.get('warehouse', default_warehouse)
         if warehouse == default_warehouse or warehouse is None:
             return None
         previous = self._get_warehouse()
         self._use_warehouse(warehouse)
-        self.connections.commit()
         return previous
 
     def post_model_hook(
         self, config: Mapping[str, Any], context: Optional[str]
     ) -> None:
         if context is not None:
-            self.connections.clear_transaction()
-            self.connections.begin()
             self._use_warehouse(context)
-            self.connections.commit()

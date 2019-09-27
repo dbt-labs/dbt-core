@@ -157,9 +157,6 @@ class TestSnowflakeAdapter(unittest.TestCase):
             self.cursor.fetchall.return_value = fetchall_return
             self.mock_execute.side_effect = execute_side_effect
 
-    def _assert_only_transactions(self):
-        self.assertEqual(len(self._strip_transactions()), 0)
-
     def _strip_transactions(self):
         result = []
         for call_args in self.mock_execute.call_args_list:
@@ -183,19 +180,19 @@ class TestSnowflakeAdapter(unittest.TestCase):
                 mock.call('select current_warehouse() as warehouse', None),
                 mock.call('use warehouse other_warehouse', None)
             ]
-            self.assertEqual(calls, self._strip_transactions())
+            self.mock_execute.assert_has_calls(calls)
             self.adapter.post_model_hook(config, result)
             calls.append(mock.call('use warehouse warehouse', None))
-            self.assertEqual(calls, self._strip_transactions())
+            self.mock_execute.assert_has_calls(calls)
 
     def test_pre_post_hooks_no_warehouse(self):
         with self.current_warehouse('warehouse'):
             config = {}
             result = self.adapter.pre_model_hook(config)
             self.assertIsNone(result)
-            self._assert_only_transactions()
+            self.mock_execute.assert_not_called()
             self.adapter.post_model_hook(config, result)
-            self._assert_only_transactions()
+            self.mock_execute.assert_not_called()
 
     def test_cancel_open_connections_empty(self):
         self.assertEqual(len(list(self.adapter.cancel_open_connections())), 0)
