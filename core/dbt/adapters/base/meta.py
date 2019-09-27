@@ -8,105 +8,81 @@ from dbt.deprecations import warn, renamed_method
 Decorator = Callable[[Any], Callable]
 
 
-def available_function(func: Callable) -> Callable:
-    """A decorator to indicate that a method on the adapter will be
-    exposed to the database wrapper, and will be available at parse and run
-    time.
-    """
-    func._is_available_ = True  # type: ignore
-    return func
-
-
-def available_deprecated(
-    supported_name: str,
-    parse_replacement: Optional[Callable] = None
-) -> Decorator:
-    """A decorator that marks a function as available, but also prints a
-    deprecation warning. Use like
-
-    @available_deprecated('my_new_method')
-    def my_old_method(self, arg):
-        args = compatability_shim(arg)
-        return self.my_new_method(*args)
-
-    @available_deprecated('my_new_slow_method', lambda *a, **k: (0, ''))
-    def my_old_slow_method(self, arg):
-        args = compatibility_shim(arg)
-        return self.my_new_slow_method(*args)
-
-    To make `adapter.my_old_method` available but also print out a warning on
-    use directing users to `my_new_method`.
-
-    The optional parse_replacement, if provided, will provide a parse-time
-    replacement for the actual method (see `available_parse`).
-    """
-    def wrapper(func):
-        func_name = func.__name__
-        renamed_method(func_name, supported_name)
-
-        @wraps(func)
-        def inner(*args, **kwargs):
-            warn('adapter:{}'.format(func_name))
-            return func(*args, **kwargs)
-
-        if parse_replacement:
-            available_function = available_parse(parse_replacement)
-        return available_function(inner)
-    return wrapper
-
-
-def available_parse(parse_replacement: Callable) -> Decorator:
-    """A decorator factory to indicate that a method on the adapter will be
-    exposed to the database wrapper, and will be stubbed out at parse time with
-    the given function.
-
-    @available_parse()
-    def my_method(self, a, b):
-        if something:
-            return None
-        return big_expensive_db_query()
-
-    @available_parse(lambda *args, **args: {})
-    def my_other_method(self, a, b):
-        x = {}
-        x.update(big_expensive_db_query())
-        return x
-    """
-    def inner(func):
-        func._parse_replacement_ = parse_replacement
-        available(func)
+class _Available:
+    def __call__(self, func: Callable) -> Callable:
+        func._is_available_ = True  # type: ignore
         return func
-    return inner
 
+    def parse(self, parse_replacement: Callable) -> Decorator:
+        """A decorator factory to indicate that a method on the adapter will be
+        exposed to the database wrapper, and will be stubbed out at parse time
+        with the given function.
 
-class available:
-    def __new__(cls, func: Callable) -> Callable:
-        return available_function(func)
+        @available.parse()
+        def my_method(self, a, b):
+            if something:
+                return None
+            return big_expensive_db_query()
 
-    @classmethod
-    def parse(cls, parse_replacement: Callable) -> Decorator:
-        return available_parse(parse_replacement)
+        @available.parse(lambda *args, **args: {})
+        def my_other_method(self, a, b):
+            x = {}
+            x.update(big_expensive_db_query())
+            return x
+        """
+        def inner(func):
+            func._parse_replacement_ = parse_replacement
+            return self(func)
+        return inner
 
-    @classmethod
     def deprecated(
-        cls, supported_name: str, parse_replacement: Optional[Callable] = None
+        self, supported_name: str, parse_replacement: Optional[Callable] = None
     ) -> Decorator:
-        return available_deprecated(supported_name, parse_replacement)
+        """A decorator that marks a function as available, but also prints a
+        deprecation warning. Use like
 
-    @classmethod
-    def parse_none(cls, func: Callable) -> Callable:
-        wrapper = available_parse(lambda *a, **k: None)
+        @available.deprecated('my_new_method')
+        def my_old_method(self, arg):
+            args = compatability_shim(arg)
+            return self.my_new_method(*args)
+
+        @available.deprecated('my_new_slow_method', lambda *a, **k: (0, ''))
+        def my_old_slow_method(self, arg):
+            args = compatibility_shim(arg)
+            return self.my_new_slow_method(*args)
+
+        To make `adapter.my_old_method` available but also print out a warning
+        on use directing users to `my_new_method`.
+
+        The optional parse_replacement, if provided, will provide a parse-time
+        replacement for the actual method (see `available.parse`).
+        """
+        def wrapper(func):
+            func_name = func.__name__
+            renamed_method(func_name, supported_name)
+
+            @wraps(func)
+            def inner(*args, **kwargs):
+                warn('adapter:{}'.format(func_name))
+                return func(*args, **kwargs)
+
+            if parse_replacement:
+                available_function = self.parse(parse_replacement)
+            else:
+                available_function = self
+            return available_function(inner)
+        return wrapper
+
+    def parse_none(self, func: Callable) -> Callable:
+        wrapper = self.parse(lambda *a, **k: None)
         return wrapper(func)
 
-    @classmethod
-    def parse_list(cls, func: Callable) -> Callable:
-        wrapper = available_parse(lambda *a, **k: [])
+    def parse_list(self, func: Callable) -> Callable:
+        wrapper = self.parse(lambda *a, **k: [])
         return wrapper(func)
 
-# available.deprecated = available_deprecated
-# available.parse = available_parse
-# available.parse_none = available_parse(lambda *a, **k: None)
-# available.parse_list = available_parse(lambda *a, **k: [])
+
+available = _Available()
 
 
 class AdapterMeta(abc.ABCMeta):

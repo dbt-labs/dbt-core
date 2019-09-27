@@ -211,7 +211,7 @@ class Manifest:
         self.generated_at = generated_at
         self.disabled = disabled
         self.files = files
-        self._flat_graph = None
+        self.flat_graph = None
         super(Manifest, self).__init__()
 
     @classmethod
@@ -263,19 +263,17 @@ class Manifest:
             send_anonymous_usage_stats=send_anonymous_usage_stats,
         )
 
-    def to_flat_graph(self):
-        """This function gets called in context.common by each node, so we want
-        to cache it. Make sure you don't call this until you're done with
-        building your manifest!
+    def build_flat_graph(self):
+        """This attribute is used in context.common by each node, so we want to
+        only build it once and avoid any concurrency issues around it.
+        Make sure you don't call this until you're done with building your
+        manifest!
         """
-        if self._flat_graph is None:
-            self._flat_graph = {
-                'nodes': {
-                    k: v.to_dict(omit_none=False)
-                    for k, v in self.nodes.items()
-                },
-            }
-        return self._flat_graph
+        self.flat_graph = {
+            'nodes': {
+                k: v.to_dict(omit_none=False) for k, v in self.nodes.items()
+            },
+        }
 
     def find_disabled_by_name(self, name, package=None):
         return dbt.utils.find_in_list_by_name(self.disabled, name, package,

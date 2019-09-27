@@ -456,6 +456,15 @@ class FreshnessRunner(BaseRunner):
         return result
 
     def execute(self, compiled_node, manifest):
+        # we should only be here if we compiled_node.has_freshness, and
+        # therefore loaded_at_field should be a str. If this invariant is
+        # broken, raise!
+        if compiled_node.loaded_at_field is None:
+            raise InternalException(
+                'Got to execute for source freshness of a source that has no '
+                'loaded_at_field!'
+            )
+
         relation = self.adapter.Relation.create_from_source(compiled_node)
         # given a Source, calculate its fresnhess.
         with self.adapter.connection_named(compiled_node.unique_id):
@@ -463,6 +472,7 @@ class FreshnessRunner(BaseRunner):
             freshness = self.adapter.calculate_freshness(
                 relation,
                 compiled_node.loaded_at_field,
+                compiled_node.freshness.filter,
                 manifest=manifest
             )
 

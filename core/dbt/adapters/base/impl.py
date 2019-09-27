@@ -2,7 +2,7 @@ import abc
 from contextlib import contextmanager
 from datetime import datetime
 from typing import (
-    Optional, Tuple, Callable, Container, FrozenSet, Type
+    Optional, Tuple, Callable, Container, FrozenSet, Type, Dict, Any, List
 )
 
 import agate
@@ -61,7 +61,7 @@ def _catalog_filter_schemas(manifest: Manifest) -> Callable[[agate.Row], bool]:
     schemas = frozenset((d.lower(), s.lower())
                         for d, s in manifest.get_used_schemas())
 
-    def test(row):
+    def test(row: agate.Row) -> bool:
         table_database = _expect_row_value('table_database', row)
         table_schema = _expect_row_value('table_schema', row)
         # the schema may be present but None, which is not an error and should
@@ -72,7 +72,9 @@ def _catalog_filter_schemas(manifest: Manifest) -> Callable[[agate.Row], bool]:
     return test
 
 
-def _utc(dt: datetime, source: str, field_name: str) -> datetime:
+def _utc(
+    dt: Optional[datetime], source: BaseRelation, field_name: str
+) -> datetime:
     """If dt has a timezone, return a new datetime that's in UTC. Otherwise,
     assume the datetime is already for UTC and add the timezone.
     """
@@ -406,17 +408,13 @@ class BaseAdapter(metaclass=AdapterMeta):
     # Abstract methods for database-specific values, attributes, and types
     ###
     @abc.abstractclassmethod
-    def date_function(cls):
-        """Get the date function used by this adapter's database.
-
-        :return: The date function
-        :rtype: str
-        """
+    def date_function(cls) -> str:
+        """Get the date function used by this adapter's database."""
         raise dbt.exceptions.NotImplementedException(
             '`date_function` is not implemented for this adapter!')
 
     @abc.abstractclassmethod
-    def is_cancelable(cls):
+    def is_cancelable(cls) -> bool:
         raise dbt.exceptions.NotImplementedException(
             '`is_cancelable` is not implemented for this adapter!'
         )
@@ -425,19 +423,14 @@ class BaseAdapter(metaclass=AdapterMeta):
     # Abstract methods about schemas
     ###
     @abc.abstractmethod
-    def list_schemas(self, database):
-        """Get a list of existing schemas.
-
-        :param str database: The name of the database to list under.
-        :return: All schemas that currently exist in the database
-        :rtype: List[str]
-        """
+    def list_schemas(self, database: str) -> List[str]:
+        """Get a list of existing schemas in database"""
         raise dbt.exceptions.NotImplementedException(
             '`list_schemas` is not implemented for this adapter!'
         )
 
     @available.parse(lambda *a, **k: False)
-    def check_schema_exists(self, database, schema):
+    def check_schema_exists(self, database: str, schema: str) -> bool:
         """Check if a schema exists.
 
         The default implementation of this is potentially unnecessarily slow,
@@ -455,12 +448,10 @@ class BaseAdapter(metaclass=AdapterMeta):
     ###
     @abc.abstractmethod
     @available.parse_none
-    def drop_relation(self, relation):
+    def drop_relation(self, relation: BaseRelation) -> None:
         """Drop the given relation.
 
         *Implementors must call self.cache.drop() to preserve cache state!*
-
-        :param self.Relation relation: The relation to drop
         """
         raise dbt.exceptions.NotImplementedException(
             '`drop_relation` is not implemented for this adapter!'
@@ -468,24 +459,20 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     @abc.abstractmethod
     @available.parse_none
-    def truncate_relation(self, relation):
-        """Truncate the given relation.
-
-        :param self.Relation relation: The relation to truncate
-        """
+    def truncate_relation(self, relation: BaseRelation) -> None:
+        """Truncate the given relation."""
         raise dbt.exceptions.NotImplementedException(
             '`truncate_relation` is not implemented for this adapter!'
         )
 
     @abc.abstractmethod
     @available.parse_none
-    def rename_relation(self, from_relation, to_relation):
+    def rename_relation(
+        self, from_relation: BaseRelation, to_relation: BaseRelation
+    ) -> None:
         """Rename the relation from from_relation to to_relation.
 
         Implementors must call self.cache.rename() to preserve cache state.
-
-        :param self.Relation from_relation: The original relation name
-        :param self.Relation to_relation: The new relation name
         """
         raise dbt.exceptions.NotImplementedException(
             '`rename_relation` is not implemented for this adapter!'
@@ -493,19 +480,18 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     @abc.abstractmethod
     @available.parse_list
-    def get_columns_in_relation(self, relation):
-        """Get a list of the columns in the given Relation.
-
-        :param self.Relation relation: The relation to query for.
-        :return: Information about all columns in the given relation.
-        :rtype: List[self.Column]
-        """
+    def get_columns_in_relation(
+        self, relation: BaseRelation
+    ) -> List[BaseColumn]:
+        """Get a list of the columns in the given Relation."""
         raise dbt.exceptions.NotImplementedException(
             '`get_columns_in_relation` is not implemented for this adapter!'
         )
 
     @available.deprecated('get_columns_in_relation', lambda *a, **k: [])
-    def get_columns_in_table(self, schema, identifier):
+    def get_columns_in_table(
+        self, schema: str, identifier: str
+    ) -> List[BaseColumn]:
         """DEPRECATED: Get a list of the columns in the given table."""
         relation = self.Relation.create(
             database=self.config.credentials.database,
@@ -516,7 +502,9 @@ class BaseAdapter(metaclass=AdapterMeta):
         return self.get_columns_in_relation(relation)
 
     @abc.abstractmethod
-    def expand_column_types(self, goal, current):
+    def expand_column_types(
+        self, goal: BaseRelation, current: BaseRelation
+    ) -> None:
         """Expand the current table's types to match the goal table. (passable)
 
         :param self.Relation goal: A relation that currently exists in the
@@ -529,7 +517,9 @@ class BaseAdapter(metaclass=AdapterMeta):
         )
 
     @abc.abstractmethod
-    def list_relations_without_caching(self, information_schema, schema):
+    def list_relations_without_caching(
+        self, information_schema: BaseRelation, schema: str
+    ) -> List[BaseRelation]:
         """List relations in the given schema, bypassing the cache.
 
         This is used as the underlying behavior to fill the cache.
@@ -549,16 +539,11 @@ class BaseAdapter(metaclass=AdapterMeta):
     # Provided methods about relations
     ###
     @available.parse_list
-    def get_missing_columns(self, from_relation, to_relation):
+    def get_missing_columns(
+        self, from_relation: BaseRelation, to_relation: BaseRelation
+    ) -> List[BaseColumn]:
         """Returns a list of Columns in from_relation that are missing from
         to_relation.
-
-        :param Relation from_relation: The relation that might have extra
-            columns
-        :param Relation to_relation: The realtion that might have columns
-            missing
-        :return: The columns in from_relation that are missing from to_relation
-        :rtype: List[self.Relation]
         """
         if not isinstance(from_relation, self.Relation):
             dbt.exceptions.invalid_type_error(
@@ -592,7 +577,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         ]
 
     @available.parse_none
-    def valid_snapshot_target(self, relation):
+    def valid_snapshot_target(self, relation: BaseRelation) -> None:
         """Ensure that the target relation is valid, by making sure it has the
         expected columns.
 
@@ -634,7 +619,9 @@ class BaseAdapter(metaclass=AdapterMeta):
             dbt.exceptions.raise_compiler_error(msg)
 
     @available.parse_none
-    def expand_target_column_types(self, from_relation, to_relation):
+    def expand_target_column_types(
+        self, from_relation: BaseRelation, to_relation: BaseRelation
+    ) -> None:
         if not isinstance(from_relation, self.Relation):
             dbt.exceptions.invalid_type_error(
                 method_name='expand_target_column_types',
@@ -651,7 +638,7 @@ class BaseAdapter(metaclass=AdapterMeta):
 
         self.expand_column_types(from_relation, to_relation)
 
-    def list_relations(self, database, schema):
+    def list_relations(self, database: str, schema: str) -> List[BaseRelation]:
         if self._schema_is_cached(database, schema):
             return self.cache.get_relations(database, schema)
 
@@ -672,7 +659,9 @@ class BaseAdapter(metaclass=AdapterMeta):
                      .format(database, schema, relations))
         return relations
 
-    def _make_match_kwargs(self, database, schema, identifier):
+    def _make_match_kwargs(
+        self, database: str, schema: str, identifier: str
+    ) -> Dict[str, str]:
         quoting = self.config.quoting
         if identifier is not None and quoting['identifier'] is False:
             identifier = identifier.lower()
@@ -689,7 +678,13 @@ class BaseAdapter(metaclass=AdapterMeta):
             'schema': schema,
         })
 
-    def _make_match(self, relations_list, database, schema, identifier):
+    def _make_match(
+        self,
+        relations_list: List[BaseRelation],
+        database: str,
+        schema: str,
+        identifier: str,
+    ) -> List[BaseRelation]:
 
         matches = []
 
@@ -702,7 +697,9 @@ class BaseAdapter(metaclass=AdapterMeta):
         return matches
 
     @available.parse_none
-    def get_relation(self, database, schema, identifier):
+    def get_relation(
+        self, database: str, schema: str, identifier: str
+    ) -> Optional[BaseRelation]:
         relations_list = self.list_relations(database, schema)
 
         matches = self._make_match(relations_list, database, schema,
@@ -724,7 +721,7 @@ class BaseAdapter(metaclass=AdapterMeta):
         return None
 
     @available.deprecated('get_relation', lambda *a, **k: False)
-    def already_exists(self, schema, name):
+    def already_exists(self, schema: str, name: str) -> bool:
         """DEPRECATED: Return if a model already exists in the database"""
         database = self.config.credentials.database
         relation = self.get_relation(database, schema, name)
@@ -736,47 +733,39 @@ class BaseAdapter(metaclass=AdapterMeta):
     ###
     @abc.abstractmethod
     @available.parse_none
-    def create_schema(self, database, schema):
-        """Create the given schema if it does not exist.
-
-        :param str schema: The schema name to create.
-        """
+    def create_schema(self, database: str, schema: str):
+        """Create the given schema if it does not exist."""
         raise dbt.exceptions.NotImplementedException(
             '`create_schema` is not implemented for this adapter!'
         )
 
     @abc.abstractmethod
-    def drop_schema(self, database, schema):
-        """Drop the given schema (and everything in it) if it exists.
-
-        :param str schema: The schema name to drop.
-        """
+    def drop_schema(self, database: str, schema: str):
+        """Drop the given schema (and everything in it) if it exists."""
         raise dbt.exceptions.NotImplementedException(
             '`drop_schema` is not implemented for this adapter!'
         )
 
     @available
     @abc.abstractclassmethod
-    def quote(cls, identifier):
-        """Quote the given identifier, as appropriate for the database.
-
-        :param str identifier: The identifier to quote
-        :return: The quoted identifier
-        :rtype: str
-        """
+    def quote(cls, identifier: str) -> str:
+        """Quote the given identifier, as appropriate for the database."""
         raise dbt.exceptions.NotImplementedException(
             '`quote` is not implemented for this adapter!'
         )
 
     @available
-    def quote_as_configured(self, identifier, quote_key):
+    def quote_as_configured(self, identifier: str, quote_key: str) -> str:
         """Quote or do not quote the given identifer as configured in the
         project config for the quote key.
 
         The quote key should be one of 'database' (on bigquery, 'profile'),
         'identifier', or 'schema', or it will be treated as if you set `True`.
         """
-        default = self.Relation.DEFAULTS['quote_policy'].get(quote_key)
+        # TODO: Convert BaseRelation to a hologram.JsonSchemaMixin so mypy
+        # likes this
+        quotes = self.Relation.DEFAULTS['quote_policy']
+        default = quotes.get(quote_key)  # type: ignore
         if self.config.quoting.get(quote_key, default):
             return self.quote(identifier)
         else:
@@ -787,79 +776,81 @@ class BaseAdapter(metaclass=AdapterMeta):
     # converting agate types into their sql equivalents.
     ###
     @abc.abstractclassmethod
-    def convert_text_type(cls, agate_table, col_idx):
+    def convert_text_type(
+        cls, agate_table: agate.Table, col_idx: int
+    ) -> str:
         """Return the type in the database that best maps to the agate.Text
         type for the given agate table and column index.
 
-        :param agate.Table agate_table: The table
-        :param int col_idx: The index into the agate table for the column.
+        :param agate_table: The table
+        :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
-        :rtype: str
         """
         raise dbt.exceptions.NotImplementedException(
             '`convert_text_type` is not implemented for this adapter!')
 
     @abc.abstractclassmethod
-    def convert_number_type(cls, agate_table, col_idx):
+    def convert_number_type(
+        cls, agate_table: agate.Table, col_idx: int
+    ) -> str:
         """Return the type in the database that best maps to the agate.Number
         type for the given agate table and column index.
 
-        :param agate.Table agate_table: The table
-        :param int col_idx: The index into the agate table for the column.
+        :param agate_table: The table
+        :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
-        :rtype: str
         """
         raise dbt.exceptions.NotImplementedException(
             '`convert_number_type` is not implemented for this adapter!')
 
     @abc.abstractclassmethod
-    def convert_boolean_type(cls, agate_table, col_idx):
+    def convert_boolean_type(
+        cls, agate_table: agate.Table, col_idx: int
+    ) -> str:
         """Return the type in the database that best maps to the agate.Boolean
         type for the given agate table and column index.
 
-        :param agate.Table agate_table: The table
-        :param int col_idx: The index into the agate table for the column.
+        :param agate_table: The table
+        :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
-        :rtype: str
         """
         raise dbt.exceptions.NotImplementedException(
             '`convert_boolean_type` is not implemented for this adapter!')
 
     @abc.abstractclassmethod
-    def convert_datetime_type(cls, agate_table, col_idx):
+    def convert_datetime_type(
+        cls, agate_table: agate.Table, col_idx: int
+    ) -> str:
         """Return the type in the database that best maps to the agate.DateTime
         type for the given agate table and column index.
 
-        :param agate.Table agate_table: The table
-        :param int col_idx: The index into the agate table for the column.
+        :param agate_table: The table
+        :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
-        :rtype: str
         """
         raise dbt.exceptions.NotImplementedException(
             '`convert_datetime_type` is not implemented for this adapter!')
 
     @abc.abstractclassmethod
-    def convert_date_type(cls, agate_table, col_idx):
+    def convert_date_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the agate.Date
         type for the given agate table and column index.
 
-        :param agate.Table agate_table: The table
-        :param int col_idx: The index into the agate table for the column.
+        :param agate_table: The table
+        :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
-        :rtype: str
         """
         raise dbt.exceptions.NotImplementedException(
             '`convert_date_type` is not implemented for this adapter!')
 
     @abc.abstractclassmethod
-    def convert_time_type(cls, agate_table, col_idx):
+    def convert_time_type(cls, agate_table: agate.Table, col_idx: int) -> str:
         """Return the type in the database that best maps to the
         agate.TimeDelta type for the given agate table and column index.
 
-        :param agate.Table agate_table: The table
-        :param int col_idx: The index into the agate table for the column.
+        :param agate_table: The table
+        :param col_idx: The index into the agate table for the column.
         :return: The name of the type in the database
-        :rtype: str
         """
         raise dbt.exceptions.NotImplementedException(
             '`convert_time_type` is not implemented for this adapter!')
@@ -887,24 +878,27 @@ class BaseAdapter(metaclass=AdapterMeta):
     ###
     # Operations involving the manifest
     ###
-    def execute_macro(self, macro_name, manifest=None, project=None,
-                      context_override=None, kwargs=None, release=False):
+    def execute_macro(
+        self,
+        macro_name: str,
+        manifest: Optional[Manifest] = None,
+        project: Optional[str] = None,
+        context_override: Optional[Dict[str, Any]] = None,
+        kwargs: Dict[str, Any] = None,
+        release: bool = False,
+    ) -> agate.Table:
         """Look macro_name up in the manifest and execute its results.
 
-        :param str macro_name: The name of the macro to execute.
-        :param Optional[Manifest] manifest: The manifest to use for generating
-            the base macro execution context. If none is provided, use the
-            internal manifest.
-        :param Optional[str] project: The name of the project to search in, or
-            None for the first match.
-        :param Optional[dict] context_override: An optional dict to update()
-            the macro execution context.
-        :param Optional[dict] kwargs: An optional dict of keyword args used to
-            pass to the macro.
-        :param bool release: If True, release the connection after executing.
-
-        Return an an AttrDict with three attributes: 'table', 'data', and
-            'status'. 'table' is an agate.Table.
+        :param macro_name: The name of the macro to execute.
+        :param manifest: The manifest to use for generating the base macro
+            execution context. If none is provided, use the internal manifest.
+        :param project: The name of the project to search in, or None for the
+            first match.
+        :param context_override: An optional dict to update() the macro
+            execution context.
+        :param kwargs: An optional dict of keyword args used to pass to the
+            macro.
+        :param release: If True, release the connection after executing.
         """
         if kwargs is None:
             kwargs = {}
@@ -947,13 +941,15 @@ class BaseAdapter(metaclass=AdapterMeta):
         return result
 
     @classmethod
-    def _catalog_filter_table(cls, table, manifest):
+    def _catalog_filter_table(
+        cls, table: agate.Table, manifest: Manifest
+    ) -> agate.Table:
         """Filter the table as appropriate for catalog entries. Subclasses can
         override this to change filtering rules on a per-adapter basis.
         """
         return table.where(_catalog_filter_schemas(manifest))
 
-    def get_catalog(self, manifest):
+    def get_catalog(self, manifest: Manifest) -> agate.Table:
         """Get the catalog for this manifest by running the get catalog macro.
         Returns an agate.Table of catalog information.
         """
@@ -971,12 +967,18 @@ class BaseAdapter(metaclass=AdapterMeta):
         """Cancel all open connections."""
         return self.connections.cancel_open()
 
-    def calculate_freshness(self, source, loaded_at_field, manifest=None):
+    def calculate_freshness(
+        self,
+        source: BaseRelation,
+        loaded_at_field: str,
+        filter: Optional[str],
+        manifest: Optional[Manifest] = None
+    ) -> Dict[str, Any]:
         """Calculate the freshness of sources in dbt, and return it"""
-        # in the future `source` will be a Relation instead of a string
-        kwargs = {
+        kwargs: Dict[str, Any] = {
             'source': source,
-            'loaded_at_field': loaded_at_field
+            'loaded_at_field': loaded_at_field,
+            'filter': filter,
         }
 
         # run the macro
@@ -994,10 +996,14 @@ class BaseAdapter(metaclass=AdapterMeta):
                     FRESHNESS_MACRO_NAME, [tuple(r) for r in table]
                 )
             )
+        if table[0][0] is None:
+            # no records in the table, so really the max_loaded_at was
+            # infinitely long ago. Just call it 0:00 January 1 year UTC
+            max_loaded_at = datetime(1, 1, 1, 0, 0, 0, tzinfo=pytz.UTC)
+        else:
+            max_loaded_at = _utc(table[0][0], source, loaded_at_field)
 
-        max_loaded_at = _utc(table[0][0], source, loaded_at_field)
         snapshotted_at = _utc(table[0][1], source, loaded_at_field)
-
         age = (snapshotted_at - max_loaded_at).total_seconds()
         return {
             'max_loaded_at': max_loaded_at,
