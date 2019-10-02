@@ -1,14 +1,13 @@
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.task.base import ConfiguredTask
+from dbt.task.runnable import ManifestTask
 from dbt.adapters.factory import get_adapter
-from dbt.loader import GraphLoader
 
 import dbt
 import dbt.utils
 import dbt.exceptions
 
 
-class RunOperationTask(ConfiguredTask):
+class RunOperationTask(ManifestTask):
     def _get_macro_parts(self):
         macro_name = self.args.macro
         if '.' in macro_name:
@@ -21,8 +20,11 @@ class RunOperationTask(ConfiguredTask):
     def _get_kwargs(self):
         return dbt.utils.parse_cli_vars(self.args.args)
 
+    def compile_manifest(self):
+        # skip building a linker, but do make sure to build the flat graph
+        self.manifest.build_flat_graph()
+
     def _run_unsafe(self):
-        manifest = GraphLoader.load_all(self.config)
         adapter = get_adapter(self.config)
 
         package_name, macro_name = self._get_macro_parts()
@@ -34,12 +36,13 @@ class RunOperationTask(ConfiguredTask):
                 macro_name,
                 project=package_name,
                 kwargs=macro_kwargs,
-                manifest=manifest
+                manifest=self.manifest
             )
 
         return res
 
     def run(self):
+        self._runtime_initialize()
         try:
             result = self._run_unsafe()
         except dbt.exceptions.Exception as exc:

@@ -42,3 +42,10 @@
   {% endset %}
   {% do run_query(query) %}
 {% endmacro %}
+
+
+{% macro log_graph() %}
+  {% for node in graph.nodes.values() %}
+    {{ log((node | string), info=True)}}
+  {% endfor %}
+{% endmacro %}
