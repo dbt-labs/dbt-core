@@ -50,8 +50,8 @@ def get_stripped_prefix(source: Dict[str, Any], prefix: str) -> Dict[str, Any]:
 
 def build_catalog_table(data) -> CatalogTable:
     # build the new table's metadata + stats
-    metadata = TableMetadata.from_dict(get_stripped_prefix(data, 'table_'))
-    stats = format_stats(get_stripped_prefix(data, 'stats:'))
+    metadata = TableMetadata.from_dict(get_stripped_prefix(data, "table_"))
+    stats = format_stats(get_stripped_prefix(data, "stats:"))
 
     return CatalogTable(
         metadata=metadata,
