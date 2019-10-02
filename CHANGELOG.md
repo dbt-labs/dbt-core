@@ -1,6 +1,7 @@
 ## dbt 0.15.0 (TBD)
 
 ### Breaking changes
+ - The 'table_name' parameter to relations has been removed
  - Cache management changes:
   - Materialization macros should now return a dictionary {"relations": [...]}, with the list containing all relations that have been added, in order to add them to the cache. The default behavior is to still add the materialization's model to the cache.
   - Materializations that perform drops via direct "drop" statements must call `adapter.cache_dropped`
@@ -17,8 +18,6 @@ This is a bugfix release.
 
 ### Under the hood:
 - Provide a programmatic method for validating profile targets ([#1754](https://github.com/fishtown-analytics/dbt/issues/1754), [#1775](https://github.com/fishtown-analytics/dbt/pull/1775))
-
->>>>>>> dev/0.14.3
 
 ## dbt 0.14.2 (September 13, 2019)
 
