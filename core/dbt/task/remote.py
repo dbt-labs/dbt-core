@@ -163,21 +163,21 @@ class _RPCExecTask(RPCTask):
 
 
 class RemoteCompileTask(_RPCExecTask):
-    METHOD_NAME = 'compile'
+    METHOD_NAME = 'compile_sql'
 
     def get_runner_type(self):
         return RPCCompileRunner
 
 
 class RemoteRunTask(_RPCExecTask, RunTask):
-    METHOD_NAME = 'run'
+    METHOD_NAME = 'run_sql'
 
     def get_runner_type(self):
         return RPCExecuteRunner
 
 
 class RemoteCompileProjectTask(RPCTask):
-    METHOD_NAME = 'compile_project'
+    METHOD_NAME = 'compile'
 
     def __init__(self, args, config, manifest):
         super().__init__(args, config)
@@ -198,7 +198,7 @@ class RemoteCompileProjectTask(RPCTask):
 
 
 class RemoteRunProjectTask(RPCTask, RunTask):
-    METHOD_NAME = 'run_project'
+    METHOD_NAME = 'run'
 
     def __init__(self, args, config, manifest):
         super().__init__(args, config)
@@ -219,7 +219,7 @@ class RemoteRunProjectTask(RPCTask, RunTask):
 
 
 class RemoteSeedProjectTask(RPCTask, SeedTask):
-    METHOD_NAME = 'seed_project'
+    METHOD_NAME = 'seed'
 
     def __init__(self, args, config, manifest):
         super().__init__(args, config)
@@ -239,7 +239,7 @@ class RemoteSeedProjectTask(RPCTask, SeedTask):
 
 
 class RemoteTestProjectTask(RPCTask, TestTask):
-    METHOD_NAME = 'test_project'
+    METHOD_NAME = 'test'
 
     def __init__(self, args, config, manifest):
         super().__init__(args, config)
