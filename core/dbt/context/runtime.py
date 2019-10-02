@@ -1,6 +1,7 @@
 from dbt.utils import get_materialization, add_ephemeral_model_prefix
 
 import dbt.clients.jinja
+import dbt.context.base
 import dbt.context.common
 import dbt.flags
 from dbt.parser.util import ParserUtils
@@ -144,7 +145,7 @@ class DatabaseWrapper(dbt.context.common.BaseDatabaseWrapper):
             )
 
 
-class Var(dbt.context.common.Var):
+class Var(dbt.context.base.Var):
     pass
 
 

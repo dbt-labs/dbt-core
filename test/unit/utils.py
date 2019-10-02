@@ -60,7 +60,6 @@ def inject_adapter(value):
     artisanal adapter will be available from get_adapter() as if dbt loaded it.
     """
     from dbt.adapters import factory
-    from dbt.adapters.base.connections import BaseConnectionManager
     key = value.type()
     factory._ADAPTERS[key] = value
     factory.ADAPTER_TYPES[key] = type(value)

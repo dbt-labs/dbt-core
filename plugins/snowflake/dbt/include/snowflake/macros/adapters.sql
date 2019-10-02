@@ -16,7 +16,7 @@
         temporary
       {%- elif transient -%}
         transient
-      {%- endif %} table {{ relation }} {% if copy_grants and not temporary -%} copy grants {%- endif %} as 
+      {%- endif %} table {{ relation }} {% if copy_grants and not temporary -%} copy grants {%- endif %} as
       (
         {%- if cluster_by_string is not none -%}
           select * from(
@@ -83,7 +83,7 @@
       case when table_type = 'BASE TABLE' then 'table'
            when table_type = 'VIEW' then 'view'
            when table_type = 'MATERIALIZED VIEW' then 'materializedview'
-           when table_type = 'EXTERNAL TABLE' then 'externaltable'
+           when table_type = 'EXTERNAL TABLE' then 'external'
            else table_type
       end as table_type
     from {{ information_schema }}.tables

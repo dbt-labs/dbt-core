@@ -1,6 +1,6 @@
-from dbt.clients.system import write_json
-
 import dataclasses
+
+from dbt.clients.system import write_json
 
 
 class Replaceable:

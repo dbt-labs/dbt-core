@@ -14,8 +14,7 @@ def make_relation(database, schema, identifier):
 
 def make_mock_relationship(database, schema, identifier):
     return BaseRelation.create(
-        database=database, schema=schema, identifier=identifier,
-        table_name=identifier, type='view'
+        database=database, schema=schema, identifier=identifier, type='view'
     )
 
 

@@ -3,28 +3,23 @@ import json
 import os
 from typing import Union, Callable
 
-from dbt.adapters.factory import get_adapter
-from dbt.node_types import NodeType
-from dbt.include.global_project import PACKAGES
-from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
-
-import dbt.clients.jinja
 import dbt.clients.agate_helper
 from dbt.contracts.graph.compiled import CompiledSeedNode
 from dbt.contracts.graph.parsed import ParsedSeedNode
 import dbt.exceptions
 import dbt.flags
 import dbt.tracking
-import dbt.writer
 import dbt.utils
-
-from dbt.logger import GLOBAL_LOGGER as logger  # noqa
-
-
-# These modules are added to the context. Consider alternative
-# approaches which will extend well to potentially many modules
-import pytz
-import datetime
+import dbt.writer
+from dbt.adapters.factory import get_adapter
+from dbt.node_types import NodeType
+from dbt.include.global_project import PACKAGES
+from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
+from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.clients.jinja import get_rendered
+from dbt.context.base import (
+    debug_here, env_var, get_context_modules, add_tracking
+)
 
 
 class RelationProxy:
@@ -129,53 +124,6 @@ def _add_macros(context, model, manifest):
     return context
 
 
-def _add_tracking(context):
-    if dbt.tracking.active_user is not None:
-        context = dbt.utils.merge(context, {
-            "run_started_at": dbt.tracking.active_user.run_started_at,
-            "invocation_id": dbt.tracking.active_user.invocation_id,
-        })
-    else:
-        context = dbt.utils.merge(context, {
-            "run_started_at": None,
-            "invocation_id": None
-        })
-
-    return context
-
-
-def _add_validation(context):
-    def validate_any(*args):
-        def inner(value):
-            for arg in args:
-                if isinstance(arg, type) and isinstance(value, arg):
-                    return
-                elif value == arg:
-                    return
-            raise dbt.exceptions.ValidationException(
-                'Expected value "{}" to be one of {}'
-                .format(value, ','.join(map(str, args))))
-        return inner
-
-    validation_utils = dbt.utils.AttrDict({
-        'any': validate_any,
-    })
-
-    return dbt.utils.merge(
-        context,
-        {'validation': validation_utils})
-
-
-def env_var(var, default=None):
-    if var in os.environ:
-        return os.environ[var]
-    elif default is not None:
-        return default
-    else:
-        msg = "Env var required but not provided: '{}'".format(var)
-        dbt.clients.jinja.undefined_error(msg)
-
-
 def _store_result(sql_results):
     def call(name, status, agate_table=None):
         if agate_table is None:
@@ -198,82 +146,35 @@ def _load_result(sql_results):
     return call
 
 
-def _debug_here():
-    import sys
-    import ipdb
-    frame = sys._getframe(3)
-    ipdb.set_trace(frame)
+def add_validation(context):
+    def validate_any(*args):
+        def inner(value):
+            for arg in args:
+                if isinstance(arg, type) and isinstance(value, arg):
+                    return
+                elif value == arg:
+                    return
+            raise dbt.exceptions.ValidationException(
+                'Expected value "{}" to be one of {}'
+                .format(value, ','.join(map(str, args))))
+        return inner
+
+    validation_utils = dbt.utils.AttrDict({
+        'any': validate_any,
+    })
+
+    return dbt.utils.merge(
+        context,
+        {'validation': validation_utils})
 
 
-def _add_sql_handlers(context):
+def add_sql_handlers(context):
     sql_results = {}
     return dbt.utils.merge(context, {
         '_sql_results': sql_results,
         'store_result': _store_result(sql_results),
         'load_result': _load_result(sql_results),
     })
-
-
-def log(msg, info=False):
-    if info:
-        logger.info(msg)
-    else:
-        logger.debug(msg)
-    return ''
-
-
-class Var:
-    UndefinedVarError = "Required var '{}' not found in config:\nVars "\
-                        "supplied to {} = {}"
-    _VAR_NOTSET = object()
-
-    def __init__(self, model, context, overrides):
-        self.model = model
-        self.context = context
-
-        # These are hard-overrides (eg. CLI vars) that should take
-        # precedence over context-based var definitions
-        self.overrides = overrides
-
-        if model is None:
-            # during config parsing we have no model and no local vars
-            self.model_name = '<Configuration>'
-            local_vars = {}
-        else:
-            self.model_name = model.name
-            local_vars = model.local_vars()
-
-        self.local_vars = dbt.utils.merge(local_vars, overrides)
-
-    def pretty_dict(self, data):
-        return json.dumps(data, sort_keys=True, indent=4)
-
-    def get_missing_var(self, var_name):
-        pretty_vars = self.pretty_dict(self.local_vars)
-        msg = self.UndefinedVarError.format(
-            var_name, self.model_name, pretty_vars
-        )
-        dbt.exceptions.raise_compiler_error(msg, self.model)
-
-    def assert_var_defined(self, var_name, default):
-        if var_name not in self.local_vars and default is self._VAR_NOTSET:
-            return self.get_missing_var(var_name)
-
-    def get_rendered_var(self, var_name):
-        raw = self.local_vars[var_name]
-        # if bool/int/float/etc are passed in, don't compile anything
-        if not isinstance(raw, str):
-            return raw
-
-        return dbt.clients.jinja.get_rendered(raw, self.context)
-
-    def __call__(self, var_name, default=_VAR_NOTSET):
-        if var_name in self.local_vars:
-            return self.get_rendered_var(var_name)
-        elif default is not self._VAR_NOTSET:
-            return default
-        else:
-            return self.get_missing_var(var_name)
 
 
 def write(node, target_path, subdirectory):
@@ -287,7 +188,7 @@ def write(node, target_path, subdirectory):
 
 def render(context, node):
     def fn(string):
-        return dbt.clients.jinja.get_rendered(string, context, node)
+        return get_rendered(string, context, node)
 
     return fn
 
@@ -315,46 +216,17 @@ def try_or_compiler_error(model):
     return impl
 
 
+# Base context collection, used for parsing configs.
+def log(msg, info=False):
+    if info:
+        logger.info(msg)
+    else:
+        logger.debug(msg)
+    return ''
+
+
 def _return(value):
     raise dbt.exceptions.MacroReturn(value)
-
-
-def get_pytz_module_context():
-    context_exports = pytz.__all__
-
-    return {
-        name: getattr(pytz, name) for name in context_exports
-    }
-
-
-def get_datetime_module_context():
-    context_exports = [
-        'date',
-        'datetime',
-        'time',
-        'timedelta',
-        'tzinfo'
-    ]
-
-    return {
-        name: getattr(datetime, name) for name in context_exports
-    }
-
-
-def get_context_modules():
-    return {
-        'pytz': get_pytz_module_context(),
-        'datetime': get_datetime_module_context(),
-    }
-
-
-def generate_config_context(cli_vars):
-    context = {
-        'env_var': env_var,
-        'modules': get_context_modules(),
-    }
-    context['var'] = Var(None, context, cli_vars)
-    return _add_tracking(context)
 
 
 def _build_load_agate_table(
@@ -428,7 +300,7 @@ def generate_base(model, model_dict, config, manifest, source_config,
         "try_or_compiler_error": try_or_compiler_error(model)
     })
     if os.environ.get('DBT_MACRO_DEBUGGING'):
-        context['debug'] = _debug_here
+        context['debug'] = debug_here
 
     return context
 
@@ -436,9 +308,9 @@ def generate_base(model, model_dict, config, manifest, source_config,
 def modify_generated_context(context, model, config, manifest, provider):
     cli_var_overrides = config.cli_vars
 
-    context = _add_tracking(context)
-    context = _add_validation(context)
-    context = _add_sql_handlers(context)
+    context = add_tracking(context)
+    context = add_validation(context)
+    context = add_sql_handlers(context)
 
     # we make a copy of the context for each of these ^^
 

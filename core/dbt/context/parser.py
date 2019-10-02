@@ -89,7 +89,7 @@ class DatabaseWrapper(dbt.context.common.BaseDatabaseWrapper):
             )
 
 
-class Var(dbt.context.common.Var):
+class Var(dbt.context.base.Var):
     def get_missing_var(self, var_name):
         # in the parser, just always return None.
         return None

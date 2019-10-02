@@ -130,7 +130,6 @@ class _CachedRelation:
                 'schema': new_relation.inner.schema,
                 'identifier': new_relation.inner.identifier
             },
-            table_name=new_relation.inner.identifier
         )
 
     def rename_key(self, old_key, new_key):

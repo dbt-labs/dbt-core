@@ -4,8 +4,6 @@ from snowplow_tracker import Subject, Tracker, Emitter, logger as sp_logger
 from snowplow_tracker import SelfDescribingJson
 from datetime import datetime
 
-from dbt.adapters.factory import get_adapter
-
 import pytz
 import platform
 import uuid
@@ -125,6 +123,8 @@ def get_run_type(args):
 
 
 def get_invocation_context(user, config, args):
+    # put this in here to avoid an import cycle
+    from dbt.adapters.factory import get_adapter
     try:
         adapter_type = get_adapter(config).type()
     except Exception:

@@ -1,5 +1,5 @@
 from dbt.clients.jinja import get_rendered
-from dbt.context.common import generate_config_context
+from dbt.context.base import generate_config_context
 from dbt.exceptions import DbtProfileError
 from dbt.exceptions import DbtProjectError
 from dbt.exceptions import RecursionException
