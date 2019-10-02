@@ -9,12 +9,18 @@ from datetime import datetime, timedelta
 from queue import Empty
 from typing import Optional, Any, Union
 
-from dbt.contracts.results import RemoteCompileResult, RemoteExecutionResult
+from dbt.contracts.results import (
+    RemoteCompileResult, RemoteExecutionResult, RemoteCatalogResults
+)
 from dbt.exceptions import InternalException
 from dbt.utils import restrict_to
 
 
-RemoteCallableResult = Union[RemoteCompileResult, RemoteExecutionResult]
+RemoteCallableResult = Union[
+    RemoteCompileResult,
+    RemoteExecutionResult,
+    RemoteCatalogResults,
+]
 
 
 class QueueMessageType(StrEnum):

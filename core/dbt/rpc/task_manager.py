@@ -18,6 +18,7 @@ from dbt.contracts.results import (
     RemoteCompileResult,
     RemoteRunResult,
     RemoteExecutionResult,
+    RemoteCatalogResults,
 )
 from dbt.logger import LogMessage
 from dbt.rpc.error import dbt_error, RPCException
@@ -210,6 +211,24 @@ class PollRunSuccessResult(PollResult, RemoteRunResult):
         )
 
 
+@dataclass
+class PollCatalogSuccessResult(PollResult, RemoteCatalogResults):
+    status: TaskHandlerState = field(
+        metadata=restrict_to(TaskHandlerState.Success),
+        default=TaskHandlerState.Success
+    )
+
+    @classmethod
+    def from_result(cls, status, base):
+        return cls(
+            status=status,
+            nodes=base.nodes,
+            generated_at=base.generated_at,
+            _compile_results=base._compile_results,
+            logs=base.logs,
+        )
+
+
 def poll_success(status, logs, result):
     if status != TaskHandlerState.Success:
         raise dbt.exceptions.InternalException(
@@ -223,6 +242,8 @@ def poll_success(status, logs, result):
         return PollRunSuccessResult.from_result(status=status, base=result)
     elif isinstance(result, RemoteCompileResult):
         return PollCompileSuccessResult.from_result(status=status, base=result)
+    elif isinstance(result, RemoteCatalogResults):
+        return PollCatalogSuccessResult.from_result(status=status, base=result)
     else:
         raise dbt.exceptions.InternalException(
             'got invalid result in poll_success: {}'.format(result)

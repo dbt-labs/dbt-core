@@ -922,6 +922,34 @@ class TestRPCServer(HasRPCServer):
         result = self.assertIsResult(resp)
         self.assertEqual(len(result['rows']), 2)
 
+    @use_profile('postgres')
+    def test_docs_generate_postgres(self):
+        self.run_dbt_with_vars(['seed'])
+        self.run_dbt_with_vars(['run'])
+        self.assertFalse(os.path.exists('target/catalog.json'))
+        result = self.async_query('docs.generate').json()
+        dct = self.assertIsResult(result)
+        self.assertTrue(os.path.exists('target/catalog.json'))
+        self.assertIn('status', dct)
+        self.assertTrue(dct['status'])
+        self.assertIn('nodes', dct)
+        nodes = dct['nodes']
+        self.assertEqual(len(nodes), 10)
+        expected = {
+            'model.test.descendant_model',
+            'model.test.multi_source_model',
+            'model.test.nonsource_descendant',
+            'seed.test.expected_multi_source',
+            'seed.test.other_source_table',
+            'seed.test.other_table',
+            'seed.test.source',
+            'source.test.other_source.test_table',
+            'source.test.test_source.other_test_table',
+            'source.test.test_source.test_table',
+        }
+        for uid in expected:
+            self.assertIn(uid, nodes)
+
 
 class FailedServerProcess(ServerProcess):
     def _compare_result(self, result):

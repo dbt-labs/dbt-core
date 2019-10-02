@@ -22,6 +22,7 @@ from dbt.task.remote import (
     RemoteRunTask, RemoteRunProjectTask,
     RemoteSeedProjectTask,
     RemoteTestProjectTask,
+    RemoteDocsGenerateProjectTask,
 )
 from dbt.utils import ForgivingJSONEncoder, env_set_truthy
 from dbt import rpc
@@ -149,7 +150,8 @@ class RPCServerTask(ConfiguredTask):
         return [
             RemoteCompileTask, RemoteCompileProjectTask,
             RemoteRunTask, RemoteRunProjectTask,
-            RemoteSeedProjectTask, RemoteTestProjectTask
+            RemoteSeedProjectTask, RemoteTestProjectTask,
+            RemoteDocsGenerateProjectTask
         ]
 
     def single_threaded(self):
