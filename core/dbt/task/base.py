@@ -5,7 +5,7 @@ from typing import Type, Union
 from dbt.config import RuntimeConfig, Project
 from dbt.config.profile import read_profile, PROFILES_DIR
 from dbt import tracking
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.logger import GLOBAL_LOGGER as logger, log_manager
 import dbt.exceptions
 
 
@@ -45,8 +45,12 @@ class BaseTask(metaclass=ABCMeta):
         self.config = config
 
     @classmethod
-    def pre_init_hook(cls):
+    def pre_init_hook(cls, args):
         """A hook called before the task is initialized."""
+        if args.log_format == 'json':
+            log_manager.format_json()
+        else:
+            log_manager.format_text()
 
     @classmethod
     def from_args(cls, args):

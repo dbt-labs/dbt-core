@@ -236,6 +236,7 @@ class DelayedFileHandler(logbook.TimedRotatingFileHandler, FormatterMixin):
         logbook.Handler.__init__(self, level, filter, bubble)
         if log_dir is not None:
             self.set_path(log_dir)
+        self._text_format_string = None
 
     def reset(self):
         if self.initialized:

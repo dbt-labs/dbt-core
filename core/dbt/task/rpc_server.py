@@ -95,6 +95,8 @@ def signhup_replace():
 
 
 class RPCServerTask(ConfiguredTask):
+    DEFAULT_LOG_FORMAT = 'json'
+
     def __init__(self, args, config, tasks=None):
         if os.name == 'nt':
             raise RuntimeException(
@@ -106,6 +108,14 @@ class RPCServerTask(ConfiguredTask):
         self._reloader = None
         self._reload_task_manager()
         signal.signal(signal.SIGHUP, self._sighup_handler)
+
+    @classmethod
+    def pre_init_hook(cls, args):
+        """A hook called before the task is initialized."""
+        if args.log_format == 'text':
+            log_manager.format_text()
+        else:
+            log_manager.format_json()
 
     def _reload_task_manager(self):
         """This function can only be running once at a time, as it runs in the
@@ -145,8 +155,7 @@ class RPCServerTask(ConfiguredTask):
     def single_threaded(self):
         return SINGLE_THREADED_WEBSERVER or self.args.single_threaded
 
-    def run(self):
-        log_manager.format_json()
+    def run_forever(self):
         host = self.args.host
         port = self.args.port
         addr = (host, port)
@@ -155,7 +164,6 @@ class RPCServerTask(ConfiguredTask):
         if host == '0.0.0.0':
             display_host = 'localhost'
 
-        ServerContext().push_application()
         logger.info(
             'Serving RPC server at {}:{}, pid={}'.format(
                 *addr, os.getpid()
@@ -182,6 +190,10 @@ class RPCServerTask(ConfiguredTask):
         # manager to the request  task handler and in general gets messy
         # fast.
         run_simple(host, port, app, threaded=not self.single_threaded)
+
+    def run(self):
+        with ServerContext().applicationbound():
+            self.run_forever()
 
     @Request.application
     def handle_jsonrpc_request(self, request):

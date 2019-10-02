@@ -180,7 +180,7 @@ def run_from_args(parsed):
     log_cache_events(getattr(parsed, 'log_cache_events', False))
     flags.set_from_args(parsed)
 
-    parsed.cls.pre_init_hook()
+    parsed.cls.pre_init_hook(parsed)
     # we can now use the logger for stdout
 
     logger.info("Running with dbt{}".format(dbt.version.installed))
@@ -738,6 +738,13 @@ def parse_args(args):
         Display debug logging during dbt execution. Useful for debugging and
         making bug reports.
         '''
+    )
+
+    p.add_argument(
+        '--log-format',
+        choices=['text', 'json', 'default'],
+        default='default',
+        help='''Specify the log format, overriding the command's default.'''
     )
 
     p.add_argument(
