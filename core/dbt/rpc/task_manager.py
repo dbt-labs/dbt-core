@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from functools import wraps
 from typing import (
-    Any, Dict, Optional, List, Union, Set, Callable, Iterable, Tuple, Type
+    Any, Dict, Optional, List, Union, Set, Callable, Iterable, Tuple, Type,
 )
 
 from hologram import JsonSchemaMixin, ValidationError
@@ -15,7 +15,7 @@ from hologram.helpers import StrEnum
 
 import dbt.exceptions
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.results import (
+from dbt.contracts.rpc import (
     RemoteCompileResult,
     RemoteRunResult,
     RemoteExecutionResult,
@@ -58,6 +58,7 @@ class TaskRow(JsonSchemaMixin):
     end: Optional[datetime]
     elapsed: Optional[float]
     timeout: Optional[float]
+    tags: Optional[Dict[str, Any]]
 
     @classmethod
     def from_task(cls, task_handler: RequestTaskHandler, now_time: datetime):
@@ -75,6 +76,7 @@ class TaskRow(JsonSchemaMixin):
 
             if state.finished:
                 elapsed_end = _assert_ended(task_handler)
+                end = elapsed_end
 
             elapsed = (elapsed_end - start).total_seconds()
 
@@ -88,6 +90,7 @@ class TaskRow(JsonSchemaMixin):
             end=end,
             elapsed=elapsed,
             timeout=task_handler.timeout,
+            tags=task_handler.tags,
         )
 
 
@@ -105,7 +108,8 @@ class KillResult(JsonSchemaMixin):
 
 @dataclass
 class PollResult(JsonSchemaMixin):
-    status: TaskHandlerState
+    tags: Optional[Dict[str, Any]] = None
+    status: TaskHandlerState = TaskHandlerState.NotStarted
 
 
 class GCResultState(StrEnum):
@@ -158,31 +162,47 @@ class _GCArguments(JsonSchemaMixin):
     settings: Optional[GCSettings]
 
 
+TaskTags = Optional[Dict[str, Any]]
+
+
 @dataclass
 class PollExecuteSuccessResult(PollResult, RemoteExecutionResult):
     status: TaskHandlerState = field(
-        metadata=restrict_to(TaskHandlerState.Success)
+        metadata=restrict_to(TaskHandlerState.Success),
+        default=TaskHandlerState.Success,
     )
 
     @classmethod
-    def from_result(cls, status, base):
+    def from_result(
+        cls: Type['PollExecuteSuccessResult'],
+        status: TaskHandlerState,
+        base: RemoteExecutionResult,
+        tags: TaskTags,
+    ) -> 'PollExecuteSuccessResult':
         return cls(
             status=status,
             results=base.results,
             generated_at=base.generated_at,
             elapsed_time=base.elapsed_time,
             logs=base.logs,
+            tags=tags,
         )
 
 
 @dataclass
 class PollCompileSuccessResult(PollResult, RemoteCompileResult):
     status: TaskHandlerState = field(
-        metadata=restrict_to(TaskHandlerState.Success)
+        metadata=restrict_to(TaskHandlerState.Success),
+        default=TaskHandlerState.Success,
     )
 
     @classmethod
-    def from_result(cls, status, base):
+    def from_result(
+        cls: Type['PollCompileSuccessResult'],
+        status: TaskHandlerState,
+        base: RemoteCompileResult,
+        tags: TaskTags,
+    ) -> 'PollCompileSuccessResult':
         return cls(
             status=status,
             raw_sql=base.raw_sql,
@@ -190,17 +210,24 @@ class PollCompileSuccessResult(PollResult, RemoteCompileResult):
             node=base.node,
             timing=base.timing,
             logs=base.logs,
+            tags=tags,
         )
 
 
 @dataclass
 class PollRunSuccessResult(PollResult, RemoteRunResult):
     status: TaskHandlerState = field(
-        metadata=restrict_to(TaskHandlerState.Success)
+        metadata=restrict_to(TaskHandlerState.Success),
+        default=TaskHandlerState.Success,
     )
 
     @classmethod
-    def from_result(cls, status, base):
+    def from_result(
+        cls: Type['PollRunSuccessResult'],
+        status: TaskHandlerState,
+        base: RemoteRunResult,
+        tags: TaskTags,
+    ) -> 'PollRunSuccessResult':
         return cls(
             status=status,
             raw_sql=base.raw_sql,
@@ -209,6 +236,7 @@ class PollRunSuccessResult(PollResult, RemoteRunResult):
             timing=base.timing,
             logs=base.logs,
             table=base.table,
+            tags=tags,
         )
 
 
@@ -216,35 +244,43 @@ class PollRunSuccessResult(PollResult, RemoteRunResult):
 class PollCatalogSuccessResult(PollResult, RemoteCatalogResults):
     status: TaskHandlerState = field(
         metadata=restrict_to(TaskHandlerState.Success),
-        default=TaskHandlerState.Success
+        default=TaskHandlerState.Success,
     )
 
     @classmethod
-    def from_result(cls, status, base):
+    def from_result(
+        cls: Type['PollCatalogSuccessResult'],
+        status: TaskHandlerState,
+        base: RemoteCatalogResults,
+        tags: TaskTags,
+    ) -> 'PollCatalogSuccessResult':
         return cls(
             status=status,
             nodes=base.nodes,
             generated_at=base.generated_at,
             _compile_results=base._compile_results,
             logs=base.logs,
+            tags=tags,
         )
 
 
-def poll_success(status, logs, result):
+def poll_success(
+    status: TaskHandlerState, result: Any, tags: TaskTags
+) -> PollResult:
     if status != TaskHandlerState.Success:
         raise dbt.exceptions.InternalException(
             'got invalid result status in poll_success: {}'.format(status)
         )
 
     if isinstance(result, RemoteExecutionResult):
-        return PollExecuteSuccessResult.from_result(status=status, base=result)
+        return PollExecuteSuccessResult.from_result(status, result, tags)
     # order matters here, as RemoteRunResult subclasses RemoteCompileResult
     elif isinstance(result, RemoteRunResult):
-        return PollRunSuccessResult.from_result(status=status, base=result)
+        return PollRunSuccessResult.from_result(status, result, tags)
     elif isinstance(result, RemoteCompileResult):
-        return PollCompileSuccessResult.from_result(status=status, base=result)
+        return PollCompileSuccessResult.from_result(status, result, tags)
     elif isinstance(result, RemoteCatalogResults):
-        return PollCatalogSuccessResult.from_result(status=status, base=result)
+        return PollCatalogSuccessResult.from_result(status, result, tags)
     else:
         raise dbt.exceptions.InternalException(
             'got invalid result in poll_success: {}'.format(result)
@@ -253,7 +289,7 @@ def poll_success(status, logs, result):
 
 @dataclass
 class PollInProgressResult(PollResult):
-    logs: List[LogMessage]
+    logs: List[LogMessage] = field(default_factory=list)
 
 
 @dataclass
@@ -421,7 +457,7 @@ class TaskManager:
     ) -> PollResult:
         task_id = uuid.UUID(request_token)
         try:
-            task = self.tasks[task_id]
+            task: RequestTaskHandler = self.tasks[task_id]
         except KeyError:
             # We don't recognize that ID.
             raise dbt.exceptions.UnknownAsyncIDException(task_id) from None
@@ -460,11 +496,15 @@ class TaskManager:
 
             return poll_success(
                 status=state,
-                logs=task_logs,
                 result=task.result,
+                tags=task.tags,
             )
 
-        return PollInProgressResult(state, task_logs)
+        return PollInProgressResult(
+            status=state,
+            tags=task.tags,
+            logs=task_logs,
+        )
 
     def _rpc_builtins(self) -> Dict[str, UnmanagedHandler]:
         if self._builtins:

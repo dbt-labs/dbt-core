@@ -1,51 +1,54 @@
 import base64
 import inspect
-from abc import ABCMeta, abstractmethod
-from typing import Union, List, Optional, Type
+from abc import abstractmethod
+from typing import Union, List, Optional, Type, TypeVar, Generic
 
-from hologram import JsonSchemaMixin
-
-from dbt.exceptions import NotImplementedException
+from dbt.contracts.rpc import RPCParameters
+from dbt.exceptions import NotImplementedException, InternalException
 from dbt.rpc.logger import RemoteCallableResult, RemoteExecutionResult
 from dbt.rpc.error import invalid_params
 from dbt.task.compile import CompileTask
 
 
-class RemoteCallable(metaclass=ABCMeta):
+Parameters = TypeVar('Parameters', bound=RPCParameters)
+Result = TypeVar('Result', bound=RemoteCallableResult)
+
+
+class RemoteCallable(Generic[Parameters, Result]):
     METHOD_NAME: Optional[str] = None
     is_async = False
 
     @classmethod
-    def get_parameters(cls) -> Type[JsonSchemaMixin]:
+    def get_parameters(cls) -> Type[Parameters]:
         argspec = inspect.getfullargspec(cls.set_args)
         annotations = argspec.annotations
         if 'params' not in annotations:
-            raise TypeError(
+            raise InternalException(
                 'set_args must have parameter named params with a valid '
-                'JsonSchemaMixin type definition (no params annotation found)'
+                'RPCParameters type definition (no params annotation found)'
             )
         params_type = annotations['params']
-        if not issubclass(params_type, JsonSchemaMixin):
-            raise TypeError(
+        if not issubclass(params_type, RPCParameters):
+            raise InternalException(
                 'set_args must have parameter named params with a valid '
-                'JsonSchemaMixin type definition (got {}, expected '
-                'JsonSchemaMixin subclass)'.format(params_type)
+                'RPCParameters type definition (got {}, expected '
+                'RPCParameters subclass)'.format(params_type)
             )
-        if params_type is JsonSchemaMixin:
-            raise TypeError(
+        if params_type is RPCParameters:
+            raise InternalException(
                 'set_args must have parameter named params with a valid '
-                'JsonSchemaMixin type definition (got JsonSchemaMixin itself!)'
+                'RPCParameters type definition (got RPCParameters itself!)'
             )
         return params_type
 
     @abstractmethod
-    def set_args(self, params: JsonSchemaMixin):
+    def set_args(self, params: Parameters):
         raise NotImplementedException(
             'set_args not implemented'
         )
 
     @abstractmethod
-    def handle_request(self) -> RemoteCallableResult:
+    def handle_request(self) -> Result:
         raise NotImplementedException(
             'handle_request not implemented'
         )
@@ -88,15 +91,20 @@ class RemoteCallable(metaclass=ABCMeta):
         )
 
 
-class RPCTask(CompileTask, RemoteCallable):
+# If you call recursive_subclasses on a subclass of RPCTask, it should only
+# return subtypes of the given subclass.
+T = TypeVar('T', bound='RPCTask')
+
+
+class RPCTask(CompileTask, RemoteCallable[Parameters, RemoteExecutionResult]):
     def __init__(self, args, config, manifest):
         super().__init__(args, config)
         self._base_manifest = manifest.deepcopy(config=config)
 
     @classmethod
     def recursive_subclasses(
-        cls, named_only: bool = True
-    ) -> List[Type['RPCTask']]:
+        cls: Type[T], named_only: bool = True
+    ) -> List[Type[T]]:
         classes = []
         current = [cls]
         while current:
@@ -108,7 +116,9 @@ class RPCTask(CompileTask, RemoteCallable):
             classes = [c for c in classes if c.METHOD_NAME is not None]
         return classes
 
-    def get_result(self, results, elapsed_time, generated_at):
+    def get_result(
+        self, results, elapsed_time, generated_at
+    ) -> RemoteExecutionResult:
         return RemoteExecutionResult(
             results=results,
             elapsed_time=elapsed_time,

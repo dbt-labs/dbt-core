@@ -3,7 +3,6 @@ from dbt.contracts.graph.unparsed import Time, FreshnessStatus
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
 from dbt.contracts.util import Writable, Replaceable
 from dbt.logger import (
-    LogMessage,
     TimingProcessor,
     JsonOnly,
     GLOBAL_LOGGER as logger,
@@ -207,35 +206,6 @@ class FreshnessRunOutput(JsonSchemaMixin, Writable):
     sources: Dict[str, SourceFreshnessRunResult]
 
 
-@dataclass
-class RemoteCompileResult(JsonSchemaMixin):
-    raw_sql: str
-    compiled_sql: str
-    node: CompileResultNode
-    timing: List[TimingInfo]
-    logs: List[LogMessage]
-
-    @property
-    def error(self):
-        return None
-
-
-@dataclass
-class RemoteExecutionResult(ExecutionResult):
-    logs: List[LogMessage]
-
-
-@dataclass
-class ResultTable(JsonSchemaMixin):
-    column_names: List[str]
-    rows: List[Any]
-
-
-@dataclass
-class RemoteRunResult(RemoteCompileResult):
-    table: ResultTable
-
-
 Primitive = Union[bool, str, float, None]
 
 CatalogKey = NamedTuple(
@@ -298,8 +268,3 @@ class CatalogResults(JsonSchemaMixin, Writable):
     nodes: Dict[str, CatalogTable]
     generated_at: datetime
     _compile_results: Optional[Any] = None
-
-
-@dataclass
-class RemoteCatalogResults(CatalogResults):
-    logs: List[LogMessage] = field(default_factory=list)
