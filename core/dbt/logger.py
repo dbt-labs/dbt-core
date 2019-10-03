@@ -93,8 +93,10 @@ class LogMessageFormatter(logbook.StringFormatter):
 class JsonFormatter(LogMessageFormatter):
     def __call__(self, record, handler):
         """Return a the record converted to LogMessage's JSON form"""
+        # utils imports exceptions which imports logger...
+        import dbt.utils
         log_message = super().__call__(record, handler)
-        return json.dumps(log_message.to_dict())
+        return json.dumps(log_message.to_dict(), cls=dbt.utils.JSONEncoder)
 
 
 class FormatterMixin:
@@ -152,6 +154,17 @@ class OutputHandler(logbook.StreamHandler, FormatterMixin):
         self._text_format_string = self._default_format
         self.format_text()
 
+    def should_handle(self, record):
+        if record.level < self.level:
+            return False
+        text_mode = self.formatter_class is logbook.StringFormatter
+        if text_mode and record.extra.get('json_only', False):
+            return False
+        elif not text_mode and record.extra.get('text_only', False):
+            return False
+        else:
+            return True
+
 
 def _redirect_std_logging():
     logbook.compat.redirect_logging()
@@ -184,6 +197,81 @@ class Relevel(logbook.Processor):
         # our target level.
         else:
             record.level = self.target_level
+
+
+class JsonOnly(logbook.Processor):
+    def process(self, record):
+        record.extra['json_only'] = True
+
+
+class TextOnly(logbook.Processor):
+    def process(self, record):
+        record.extra['text_only'] = True
+
+
+class TimingProcessor(logbook.Processor):
+    def __init__(self, timing_info: Optional[JsonSchemaMixin] = None):
+        self.timing_info = timing_info
+        super().__init__()
+
+    def process(self, record):
+        if self.timing_info is not None:
+            record.extra['timing_info'] = self.timing_info.to_dict()
+
+
+class PushIfNonDefault(logbook.Processor):
+    KEY: str = NotImplemented
+    DEFAULT: Any = NotImplemented
+    def __init__(self, value: str):
+        self.value = value
+        super().__init__()
+
+    def process(self, record):
+        overwrite = (
+            self.KEY not in record.extra or
+            record.extra[self.KEY] == self.DEFAULT
+        )
+        if overwrite:
+            record.extra[self.KEY] = self.value
+
+
+class DbtProcessState(PushIfNonDefault):
+    KEY = 'run_state'
+    DEFAULT = 'internal'
+
+
+class DbtModelState(logbook.Processor):
+    def __init__(self, state):
+        self.state = state
+        super().__init__()
+
+    def process(self, record):
+        record.extra['model_state'] = self.state
+
+
+class DbtStatusMessage(logbook.Processor):
+    def process(self, record):
+        record.extra['is_status_message'] = True
+
+
+class NodeInfo(logbook.Processor):
+    def __init__(self, unique_id: str):
+        self.unique_id = unique_id
+        super().__init__()
+
+    def process(self, record):
+        record.extra['unique_id'] = self.unique_id
+
+
+class TimestampNamed(JsonOnly):
+    def __init__(self, name: str):
+        self.name = name
+        super().__init__()
+
+    def process(self, record):
+        super().process(record)
+        record.extra[self.name] = datetime.utcnow().isoformat()
+
 
 
 logger = logbook.Logger('dbt')
@@ -318,6 +406,7 @@ class LogManager(logbook.NestedSetup):
         self._output_handler = OutputHandler(self.stdout)
         self._file_handler = DelayedFileHandler()
         self._relevel_processor = Relevel(allowed=['dbt', 'werkzeug'])
+        self._state_processor = DbtProcessState(DbtProcessState.DEFAULT)
         # keep track of wheter we've already entered to decide if we should
         # be actually pushing. This allows us to log in main() and also
         # support entering dbt execution via handle_and_check.
@@ -327,6 +416,7 @@ class LogManager(logbook.NestedSetup):
             self._output_handler,
             self._file_handler,
             self._relevel_processor,
+            self._state_processor,
         ])
 
     def push_application(self):

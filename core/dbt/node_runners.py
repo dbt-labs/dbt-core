@@ -5,7 +5,11 @@ from typing import List, Dict, Any
 
 from dbt import deprecations
 from dbt.adapters.base import BaseRelation
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.logger import (
+    GLOBAL_LOGGER as logger,
+    JsonOnly,
+    DbtModelState,
+)
 from dbt.exceptions import (
     NotImplementedException, CompilationException, RuntimeException,
     InternalException, missing_materialization
@@ -69,6 +73,18 @@ class BaseRunner:
 
         self.skip = False
         self.skip_cause = None
+
+    def get_result_status(self, result) -> str:
+        if result.error:
+            return 'error: {}'.format(result.error)
+        elif result.skip:
+            return 'skipped'
+        elif result.fail:
+            return 'failed'
+        elif result.warn:
+            return 'warn'
+        else:
+            return 'passed'
 
     def run_with_hooks(self, manifest):
         if self.skip:
@@ -435,6 +451,12 @@ class FreshnessRunner(BaseRunner):
         raise RuntimeException(
             'Freshness: nodes cannot be skipped!'
         )
+
+    def get_result_status(self, result) -> str:
+        if result.error:
+            return 'error: {}'.format(result.error)
+        else:
+            return str(result.status)
 
     def before_execute(self):
         description = 'freshness of {0.source_name}.{0.name}'.format(self.node)

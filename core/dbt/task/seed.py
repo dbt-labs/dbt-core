@@ -1,6 +1,6 @@
 import random
 
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.logger import GLOBAL_LOGGER as logger, TextOnly
 from dbt.node_runners import SeedRunner
 from dbt.node_types import NodeType
 from dbt.task.run import RunTask
@@ -35,11 +35,13 @@ class SeedTask(RunTask):
         alias = result.node.alias
 
         header = "Random sample of table: {}.{}".format(schema, alias)
-        logger.info("")
+        with TextOnly():
+            logger.info("")
         logger.info(header)
         logger.info("-" * len(header))
         rand_table.print_table(max_rows=10, max_columns=None)
-        logger.info("")
+        with TextOnly():
+            logger.info("")
 
     def show_tables(self, results):
         for result in results:

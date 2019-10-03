@@ -5,7 +5,15 @@ from multiprocessing.dummy import Pool as ThreadPool
 
 from dbt.task.base import ConfiguredTask
 from dbt.adapters.factory import get_adapter
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.logger import (
+    GLOBAL_LOGGER as logger,
+    DbtProcessState,
+    TextOnly,
+    NodeInfo,
+    TimestampNamed,
+    JsonOnly,
+    DbtModelState,
+)
 from dbt.compilation import compile_manifest
 from dbt.contracts.results import ExecutionResult
 from dbt.loader import GraphLoader
@@ -19,6 +27,7 @@ import dbt.graph.selector
 
 RESULT_FILE_NAME = 'run_results.json'
 MANIFEST_FILE_NAME = 'manifest.json'
+RUNNING_STATE = DbtProcessState('running')
 
 
 def write_manifest(manifest, config):
@@ -120,9 +129,16 @@ class GraphRunnableTask(ManifestTask):
         return cls(self.config, adapter, node, run_count, num_nodes)
 
     def call_runner(self, runner):
-        # TODO: create+enforce an actual contracts for what `result` is instead
-        # of the current free-for-all
-        result = runner.run_with_hooks(self.manifest)
+        with RUNNING_STATE, NodeInfo(runner.node.unique_id):
+            with TimestampNamed('node_started_at'):
+                logger.info('Began running model')
+            status = 'error'  # we must have an error if we don't see this
+            try:
+                result = runner.run_with_hooks(self.manifest)
+                status = runner.get_result_status(result)
+            finally:
+                with TimestampNamed('node_finished_at'), DbtModelState(status):
+                    logger.info('Finished running model')
         if result.error is not None and self.raise_on_first_error():
             # if we raise inside a thread, it'll just get silently swallowed.
             # stash the error message we want here, and it will check the
@@ -292,7 +308,8 @@ class GraphRunnableTask(ManifestTask):
                 elapsed_time=0.0,
             )
         else:
-            logger.info("")
+            with TextOnly():
+                logger.info("")
 
         selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
         result = self.execute_with_hooks(selected_uids)
