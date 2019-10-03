@@ -86,7 +86,7 @@ from dbt.version import __version__
 from dbt.dataclass_schema import StrEnum, dbtClassMixin
 
 PARTIAL_PARSE_FILE_NAME = "partial_parse.msgpack"
-PARSING_STATE = DbtProcessState('parsing')
+PARSING_STATE = DbtProcessState("parsing")
 
 
 class ReparseReason(StrEnum):

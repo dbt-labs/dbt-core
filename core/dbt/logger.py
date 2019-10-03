@@ -98,6 +98,7 @@ class JsonFormatter(LogMessageFormatter):
         """Return a the record converted to LogMessage's JSON form"""
         # utils imports exceptions which imports logger...
         import dbt.utils
+
         log_message = super().__call__(record, handler)
         dct = log_message.to_dict(omit_none=True)
         return json.dumps(dct, cls=dbt.utils.JSONEncoder)
@@ -166,9 +167,9 @@ class OutputHandler(logbook.StreamHandler, FormatterMixin):
         if record.level < self.level:
             return False
         text_mode = self.formatter_class is logbook.StringFormatter
-        if text_mode and record.extra.get('json_only', False):
+        if text_mode and record.extra.get("json_only", False):
             return False
-        elif not text_mode and record.extra.get('text_only', False):
+        elif not text_mode and record.extra.get("text_only", False):
             return False
         else:
             return True
@@ -205,12 +206,12 @@ class Relevel(logbook.Processor):
 
 class JsonOnly(logbook.Processor):
     def process(self, record):
-        record.extra['json_only'] = True
+        record.extra["json_only"] = True
 
 
 class TextOnly(logbook.Processor):
     def process(self, record):
-        record.extra['text_only'] = True
+        record.extra["text_only"] = True
 
 
 class TimingProcessor(logbook.Processor):
@@ -248,7 +249,7 @@ class DbtModelState(logbook.Processor):
 
 class DbtStatusMessage(logbook.Processor):
     def process(self, record):
-        record.extra['is_status_message'] = True
+        record.extra["is_status_message"] = True
 
 
 class UniqueID(logbook.Processor):
@@ -257,7 +258,7 @@ class UniqueID(logbook.Processor):
         super().__init__()
 
     def process(self, record):
-        record.extra['unique_id'] = self.unique_id
+        record.extra["unique_id"] = self.unique_id
 
 
 class NodeCount(logbook.Processor):
@@ -483,7 +484,7 @@ class LogManager(logbook.NestedSetup):
             self._output_handler,
             self._file_handler,
             self._relevel_processor,
-            self._state_processor,
+                self._relevel_processor,
                 self._state_processor,
         ])
 

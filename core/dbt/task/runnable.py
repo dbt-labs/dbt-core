@@ -64,7 +64,7 @@ from dbt.ui import warning_tag
 
 RESULT_FILE_NAME = 'run_results.json'
 MANIFEST_FILE_NAME = "manifest.json"
-RUNNING_STATE = DbtProcessState('running')
+RUNNING_STATE = DbtProcessState("running")
 
 
 class ManifestTask(ConfiguredTask):
