@@ -5,11 +5,7 @@ from typing import List, Dict, Any
 
 from dbt import deprecations
 from dbt.adapters.base import BaseRelation
-from dbt.logger import (
-    GLOBAL_LOGGER as logger,
-    JsonOnly,
-    DbtModelState,
-)
+from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.exceptions import (
     NotImplementedException, CompilationException, RuntimeException,
     InternalException, missing_materialization

@@ -9,10 +9,10 @@ from dbt.logger import (
     GLOBAL_LOGGER as logger,
     DbtProcessState,
     TextOnly,
-    NodeInfo,
+    UniqueID,
     TimestampNamed,
-    JsonOnly,
     DbtModelState,
+    NodeMetadata,
 )
 from dbt.compilation import compile_manifest
 from dbt.contracts.results import ExecutionResult
@@ -129,8 +129,8 @@ class GraphRunnableTask(ManifestTask):
         return cls(self.config, adapter, node, run_count, num_nodes)
 
     def call_runner(self, runner):
-        with RUNNING_STATE, NodeInfo(runner.node.unique_id):
-            with TimestampNamed('node_started_at'):
+        with RUNNING_STATE, UniqueID(runner.node.unique_id):
+            with TimestampNamed('node_started_at'), NodeMetadata(runner.node):
                 logger.info('Began running model')
             status = 'error'  # we must have an error if we don't see this
             try:

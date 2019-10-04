@@ -116,7 +116,6 @@ class RunTask(CompileTask):
             print_hook_end_line(hook_text, status, idx, num_hooks,
                                 timer.elapsed)
 
-
         with TextOnly():
             print_timestamped_line("")
 

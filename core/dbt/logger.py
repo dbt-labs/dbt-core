@@ -219,25 +219,18 @@ class TimingProcessor(logbook.Processor):
             record.extra['timing_info'] = self.timing_info.to_dict()
 
 
-class PushIfNonDefault(logbook.Processor):
-    KEY: str = NotImplemented
-    DEFAULT: Any = NotImplemented
+class DbtProcessState(logbook.Processor):
     def __init__(self, value: str):
         self.value = value
         super().__init__()
 
     def process(self, record):
         overwrite = (
-            self.KEY not in record.extra or
-            record.extra[self.KEY] == self.DEFAULT
+            'run_state' not in record.extra or
+            record.extra['run_state'] == 'internal'
         )
         if overwrite:
-            record.extra[self.KEY] = self.value
-
-
-class DbtProcessState(PushIfNonDefault):
-    KEY = 'run_state'
-    DEFAULT = 'internal'
+            record.extra['run_state'] = self.value
 
 
 class DbtModelState(logbook.Processor):
@@ -254,13 +247,36 @@ class DbtStatusMessage(logbook.Processor):
         record.extra['is_status_message'] = True
 
 
-class NodeInfo(logbook.Processor):
+class UniqueID(logbook.Processor):
     def __init__(self, unique_id: str):
         self.unique_id = unique_id
         super().__init__()
 
     def process(self, record):
         record.extra['unique_id'] = self.unique_id
+
+
+class NodeMetadata(logbook.Processor):
+    def __init__(self, node):
+        self.node = node
+        super().__init__()
+
+    def process(self, record):
+        keys = [
+            ('alias', 'node_alias'),
+            ('schema', 'node_schema'),
+            ('database', 'node_database'),
+            ('name', 'node_name'),
+            ('original_file_path', 'node_path')
+        ]
+        for attr, key in keys:
+            value = getattr(self.node, attr, None)
+            if value is not None:
+                record.extra[key] = value
+        if hasattr(self.node, 'config'):
+            materialized = getattr(self.node.config, 'materialized', None)
+            if materialized is not None:
+                record.extra['node_materialized'] = materialized
 
 
 class TimestampNamed(JsonOnly):
@@ -271,7 +287,6 @@ class TimestampNamed(JsonOnly):
     def process(self, record):
         super().process(record)
         record.extra[self.name] = datetime.utcnow().isoformat()
-
 
 
 logger = logbook.Logger('dbt')
@@ -406,7 +421,7 @@ class LogManager(logbook.NestedSetup):
         self._output_handler = OutputHandler(self.stdout)
         self._file_handler = DelayedFileHandler()
         self._relevel_processor = Relevel(allowed=['dbt', 'werkzeug'])
-        self._state_processor = DbtProcessState(DbtProcessState.DEFAULT)
+        self._state_processor = DbtProcessState('internal')
         # keep track of wheter we've already entered to decide if we should
         # be actually pushing. This allows us to log in main() and also
         # support entering dbt execution via handle_and_check.

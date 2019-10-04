@@ -12,13 +12,11 @@ from hologram.helpers import StrEnum
 from hologram import JsonSchemaMixin
 
 import agate
-import logbook
 
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Union, Dict, List, Optional, Any, NamedTuple
 from numbers import Real
-
 
 
 @dataclass
