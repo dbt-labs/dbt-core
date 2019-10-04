@@ -230,10 +230,7 @@ class DbtProcessState(logbook.Processor):
         super().__init__()
 
     def process(self, record):
-        overwrite = (
-            'run_state' not in record.extra or
-            record.extra['run_state'] == 'internal'
-        )
+        overwrite = "run_state" not in record.extra or record.extra["run_state"] == "internal"
         if overwrite:
             record.extra['run_state'] = self.value
 
