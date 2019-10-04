@@ -232,7 +232,7 @@ class DbtProcessState(logbook.Processor):
     def process(self, record):
         overwrite = "run_state" not in record.extra or record.extra["run_state"] == "internal"
         if overwrite:
-            record.extra['run_state'] = self.value
+            record.extra["run_state"] = self.value
 
 
 class DbtModelState(logbook.Processor):
@@ -290,9 +290,9 @@ class NodeMetadata(logbook.Processor):
 class ModelMetadata(NodeMetadata):
     def mapping_keys(self):
         return [
-            ('alias', 'node_alias'),
-            ('schema', 'node_schema'),
-            ('database', 'node_database'),
+            ("alias", "node_alias"),
+            ("schema", "node_schema"),
+            ("database", "node_database"),
             ('original_file_path', 'node_path'),
             ('name', 'node_name'),
             ('resource_type', 'resource_type'),
@@ -303,7 +303,7 @@ class ModelMetadata(NodeMetadata):
         if hasattr(self.node, 'config'):
             materialized = getattr(self.node.config, 'materialized', None)
             if materialized is not None:
-                record.extra['node_materialized'] = materialized
+                record.extra["node_materialized"] = materialized
 
     def process(self, record):
         super().process(record)
@@ -470,7 +470,7 @@ class LogManager(logbook.NestedSetup):
         self._output_handler = OutputHandler(self.stdout)
         self._file_handler = DelayedFileHandler()
         self._relevel_processor = Relevel(allowed=["dbt", "werkzeug"])
-        self._state_processor = DbtProcessState('internal')
+        self._state_processor = DbtProcessState("internal")
         self._scrub_processor = ScrubSecrets()
         # keep track of whether we've already entered to decide if we should
         # be actually pushing. This allows us to log in main() and also
