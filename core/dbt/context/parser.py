@@ -115,7 +115,7 @@ class SourceResolver(dbt.context.common.BaseResolver):
 
         else:
             dbt.exceptions.raise_compiler_error(
-                "source() takes at exactly two arguments ({} given)".format(len(args)),
+                "source() takes exactly two arguments ({} given)".format(len(args)),
                 self.model)
 
         return self.Relation.create_from(self.config, self.model)
