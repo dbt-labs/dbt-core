@@ -9,6 +9,7 @@ from hologram import JsonSchemaMixin
 from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import extract_toplevel_blocks
 from dbt.compilation import compile_manifest
+from dbt.contracts.results import RemoteCatalogResults
 from dbt.parser.results import ParseResult
 from dbt.parser.rpc import RPCCallParser, RPCMacroParser
 from dbt.parser.util import ParserUtils
@@ -17,6 +18,7 @@ from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.rpc.node_runners import RPCCompileRunner, RPCExecuteRunner
 from dbt.rpc.task import RemoteCallableResult, RPCTask
 
+from dbt.task.generate import GenerateTask
 from dbt.task.run import RunTask
 from dbt.task.seed import SeedTask
 from dbt.task.test import TestTask
@@ -44,6 +46,11 @@ class RPCTestProjectParameters(RPCCompileProjectParameters):
 @dataclass
 class RPCSeedProjectParameters(JsonSchemaMixin):
     show: bool = False
+
+
+@dataclass
+class RPCDocsGenerateProjectParameters(JsonSchemaMixin):
+    compile: bool = True
 
 
 class _RPCExecTask(RPCTask):
@@ -259,3 +266,36 @@ class RemoteTestProjectTask(RPCTask, TestTask):
 
         results = self.run()
         return results
+
+
+class RemoteDocsGenerateProjectTask(RPCTask, GenerateTask):
+    METHOD_NAME = 'docs.generate'
+
+    def __init__(self, args, config, manifest):
+        super().__init__(args, config)
+        self.manifest = manifest.deepcopy(config=config)
+
+    def load_manifest(self):
+        # we started out with a manifest!
+        pass
+
+    def handle_request(
+        self, params: RPCDocsGenerateProjectParameters,
+    ) -> RemoteCallableResult:
+        self.args.models = None
+        self.args.exclude = None
+        self.args.compile = params.compile
+
+        results = self.run()
+        assert isinstance(results, RemoteCatalogResults)
+        return results
+
+    def get_catalog_results(
+        self, nodes, generated_at, compile_results
+    ) -> RemoteCatalogResults:
+        return RemoteCatalogResults(
+            nodes=nodes,
+            generated_at=datetime.utcnow(),
+            _compile_results=compile_results,
+            logs=[],
+        )

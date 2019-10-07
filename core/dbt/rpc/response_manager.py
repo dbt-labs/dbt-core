@@ -88,7 +88,7 @@ class ResponseManager(JSONRPCResponseManager):
             # to_dict
             if hasattr(output, 'result'):
                 if isinstance(output.result, JsonSchemaMixin):
-                    output.result = output.result.to_dict(omit_empty=False)
+                    output.result = output.result.to_dict(omit_none=False)
             yield output
 
     @classmethod

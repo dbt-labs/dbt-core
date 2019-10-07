@@ -1,7 +1,7 @@
 from dbt.contracts.graph.manifest import CompileResultNode
 from dbt.contracts.graph.unparsed import Time, FreshnessStatus
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
-from dbt.contracts.util import Writable
+from dbt.contracts.util import Writable, Replaceable
 from dbt.logger import LogMessage
 from hologram.helpers import StrEnum
 from hologram import JsonSchemaMixin
@@ -10,7 +10,7 @@ import agate
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Union, Dict, List, Optional, Any
+from typing import Union, Dict, List, Optional, Any, NamedTuple
 from numbers import Real
 
 
@@ -227,3 +227,72 @@ class ResultTable(JsonSchemaMixin):
 @dataclass
 class RemoteRunResult(RemoteCompileResult):
     table: ResultTable
+
+
+Primitive = Union[bool, str, float, None]
+
+CatalogKey = NamedTuple(
+    'CatalogKey',
+    [('database', str), ('schema', str), ('name', str)]
+)
+
+
+@dataclass
+class StatsItem(JsonSchemaMixin):
+    id: str
+    label: str
+    value: Primitive
+    description: str
+    include: bool
+
+
+StatsDict = Dict[str, StatsItem]
+
+
+@dataclass
+class ColumnMetadata(JsonSchemaMixin):
+    type: str
+    comment: Optional[str]
+    index: int
+    name: str
+
+
+ColumnMap = Dict[str, ColumnMetadata]
+
+
+@dataclass
+class TableMetadata(JsonSchemaMixin):
+    type: str
+    database: str
+    schema: str
+    name: str
+    comment: Optional[str]
+    owner: Optional[str]
+
+
+@dataclass
+class CatalogTable(JsonSchemaMixin, Replaceable):
+    metadata: TableMetadata
+    columns: ColumnMap
+    stats: StatsDict
+    # the same table with two unique IDs will just be listed two times
+    unique_id: Optional[str] = None
+
+    def key(self) -> CatalogKey:
+        return CatalogKey(
+            self.metadata.database.lower(),
+            self.metadata.schema.lower(),
+            self.metadata.name.lower(),
+        )
+
+
+@dataclass
+class CatalogResults(JsonSchemaMixin, Writable):
+    nodes: Dict[str, CatalogTable]
+    generated_at: datetime
+    _compile_results: Optional[Any] = None
+
+
+@dataclass
+class RemoteCatalogResults(CatalogResults):
+    logs: List[LogMessage] = field(default_factory=list)

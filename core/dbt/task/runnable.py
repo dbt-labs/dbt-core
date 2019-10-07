@@ -21,6 +21,11 @@ RESULT_FILE_NAME = 'run_results.json'
 MANIFEST_FILE_NAME = 'manifest.json'
 
 
+def write_manifest(manifest, config):
+    if dbt.flags.WRITE_JSON:
+        manifest.write(os.path.join(config.target_path, MANIFEST_FILE_NAME))
+
+
 def load_manifest(config):
     # performance trick: if the adapter has a manifest loaded, use that to
     # avoid parsing internal macros twice. Also, when loading the adapter's
@@ -31,8 +36,7 @@ def load_manifest(config):
     internal = adapter.load_internal_manifest()
     manifest = GraphLoader.load_all(config, internal_manifest=internal)
 
-    if dbt.flags.WRITE_JSON:
-        manifest.write(os.path.join(config.target_path, MANIFEST_FILE_NAME))
+    write_manifest(manifest, config)
     return manifest
 
 

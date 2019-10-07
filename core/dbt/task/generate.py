@@ -1,15 +1,17 @@
 import os
 import shutil
-from dataclasses import dataclass
 from datetime import datetime
-from typing import Union, Dict, List, Optional, Any, NamedTuple
+from typing import Dict, List, Any
 
-from hologram import JsonSchemaMixin, ValidationError
+from hologram import ValidationError
 
 from dbt.adapters.factory import get_adapter
 from dbt.contracts.graph.compiled import CompileResultNode
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.util import Writable, Replaceable
+from dbt.contracts.results import (
+    TableMetadata, CatalogTable, CatalogResults, Primitive, CatalogKey,
+    StatsItem, StatsDict, ColumnMetadata
+)
 from dbt.include.global_project import DOCS_INDEX_FILE_PATH
 import dbt.ui.printer
 import dbt.utils
@@ -17,6 +19,7 @@ import dbt.compilation
 import dbt.exceptions
 
 from dbt.task.compile import CompileTask
+from dbt.task.runnable import write_manifest
 
 
 CATALOG_FILENAME = 'catalog.json'
@@ -33,87 +36,31 @@ def get_stripped_prefix(source: Dict[str, Any], prefix: str) -> Dict[str, Any]:
     }
 
 
-Primitive = Union[bool, str, float, None]
 PrimitiveDict = Dict[str, Primitive]
 
 
-Key = NamedTuple(
-    'Key',
-    [('database', str), ('schema', str), ('name', str)]
-)
+def build_catalog_table(data) -> CatalogTable:
+    # build the new table's metadata + stats
+    metadata = TableMetadata.from_dict(get_stripped_prefix(data, 'table_'))
+    stats = format_stats(get_stripped_prefix(data, 'stats:'))
 
-
-@dataclass
-class StatsItem(JsonSchemaMixin):
-    id: str
-    label: str
-    value: Primitive
-    description: str
-    include: bool
-
-
-StatsDict = Dict[str, StatsItem]
-
-
-@dataclass
-class ColumnMetadata(JsonSchemaMixin):
-    type: str
-    comment: Optional[str]
-    index: int
-    name: str
-
-
-ColumnMap = Dict[str, ColumnMetadata]
-
-
-@dataclass
-class TableMetadata(JsonSchemaMixin):
-    type: str
-    database: str
-    schema: str
-    name: str
-    comment: Optional[str]
-    owner: Optional[str]
-
-
-@dataclass
-class Table(JsonSchemaMixin, Replaceable):
-    metadata: TableMetadata
-    columns: ColumnMap
-    stats: StatsDict
-    # the same table with two unique IDs will just be listed two times
-    unique_id: Optional[str] = None
-
-    @classmethod
-    def from_query_result(cls, data) -> 'Table':
-        # build the new table's metadata + stats
-        metadata = TableMetadata.from_dict(get_stripped_prefix(data, 'table_'))
-        stats = format_stats(get_stripped_prefix(data, 'stats:'))
-
-        return cls(
-            metadata=metadata,
-            stats=stats,
-            columns={},
-        )
-
-    def key(self) -> Key:
-        return Key(
-            self.metadata.database.lower(),
-            self.metadata.schema.lower(),
-            self.metadata.name.lower(),
-        )
+    return CatalogTable(
+        metadata=metadata,
+        stats=stats,
+        columns={},
+    )
 
 
 # keys are database name, schema name, table name
-class Catalog(Dict[Key, Table]):
+class Catalog(Dict[CatalogKey, CatalogTable]):
     def __init__(self, columns: List[PrimitiveDict]):
         super().__init__()
         for col in columns:
             self.add_column(col)
 
-    def get_table(self, data: PrimitiveDict) -> Table:
+    def get_table(self, data: PrimitiveDict) -> CatalogTable:
         try:
-            key = Key(
+            key = CatalogKey(
                 str(data['table_database']),
                 str(data['table_schema']),
                 str(data['table_name']),
@@ -123,10 +70,11 @@ class Catalog(Dict[Key, Table]):
                 'Catalog information missing required key {} (got {})'
                 .format(exc, data)
             )
+        table: CatalogTable
         if key in self:
             table = self[key]
         else:
-            table = Table.from_query_result(data)
+            table = build_catalog_table(data)
             self[key] = table
         return table
 
@@ -140,8 +88,10 @@ class Catalog(Dict[Key, Table]):
         column = ColumnMetadata.from_dict(column_data)
         table.columns[column.name] = column
 
-    def make_unique_id_map(self, manifest: Manifest) -> Dict[str, Table]:
-        nodes: Dict[str, Table] = {}
+    def make_unique_id_map(
+        self, manifest: Manifest
+    ) -> Dict[str, CatalogTable]:
+        nodes: Dict[str, CatalogTable] = {}
 
         manifest_mapping = get_unique_id_mapping(manifest)
         for table in self.values():
@@ -201,16 +151,16 @@ def format_stats(stats: PrimitiveDict) -> StatsDict:
     return stats_collector
 
 
-def mapping_key(node: CompileResultNode) -> Key:
-    return Key(
+def mapping_key(node: CompileResultNode) -> CatalogKey:
+    return CatalogKey(
         node.database.lower(), node.schema.lower(), node.identifier.lower()
     )
 
 
-def get_unique_id_mapping(manifest: Manifest) -> Dict[Key, List[str]]:
+def get_unique_id_mapping(manifest: Manifest) -> Dict[CatalogKey, List[str]]:
     # A single relation could have multiple unique IDs pointing to it if a
     # source were also a node.
-    ident_map: Dict[Key, List[str]] = {}
+    ident_map: Dict[CatalogKey, List[str]] = {}
     for unique_id, node in manifest.nodes.items():
         key = mapping_key(node)
 
@@ -221,13 +171,6 @@ def get_unique_id_mapping(manifest: Manifest) -> Dict[Key, List[str]]:
     return ident_map
 
 
-@dataclass
-class CatalogResults(JsonSchemaMixin, Writable):
-    nodes: Dict[str, Table]
-    generated_at: datetime
-    _compile_results: Optional[Any] = None
-
-
 def _coerce_decimal(value):
     if isinstance(value, dbt.utils.DECIMALS):
         return float(value)
@@ -236,13 +179,13 @@ def _coerce_decimal(value):
 
 class GenerateTask(CompileTask):
     def _get_manifest(self) -> Manifest:
-        manifest = dbt.loader.GraphLoader.load_all(self.config)
-        return manifest
+        # manifest = dbt.loader.GraphLoader.load_all(self.config)
+        return self.manifest
 
     def run(self):
         compile_results = None
         if self.args.compile:
-            compile_results = super().run()
+            compile_results = CompileTask.run(self)
             if any(r.error is not None for r in compile_results):
                 dbt.ui.printer.print_timestamped_line(
                     'compile failed, cannot generate docs'
@@ -255,10 +198,8 @@ class GenerateTask(CompileTask):
 
         adapter = get_adapter(self.config)
         with adapter.connection_named('generate_catalog'):
-            manifest = self._get_manifest()
-
             dbt.ui.printer.print_timestamped_line("Building catalog")
-            catalog_table = adapter.get_catalog(manifest)
+            catalog_table = adapter.get_catalog(self.manifest)
 
         catalog_data: List[PrimitiveDict] = [
             dict(zip(catalog_table.column_names, map(_coerce_decimal, row)))
@@ -266,19 +207,29 @@ class GenerateTask(CompileTask):
         ]
 
         catalog = Catalog(catalog_data)
-        results = CatalogResults(
-            nodes=catalog.make_unique_id_map(manifest),
+        results = self.get_catalog_results(
+            nodes=catalog.make_unique_id_map(self.manifest),
             generated_at=datetime.utcnow(),
-            _compile_results=compile_results,
+            compile_results=compile_results,
         )
 
         path = os.path.join(self.config.target_path, CATALOG_FILENAME)
         results.write(path)
+        write_manifest(self.manifest, self.config)
 
         dbt.ui.printer.print_timestamped_line(
             'Catalog written to {}'.format(os.path.abspath(path))
         )
         return results
+
+    def get_catalog_results(
+        self, nodes, generated_at, compile_results
+    ) -> CatalogResults:
+        return CatalogResults(
+            nodes=nodes,
+            generated_at=datetime.utcnow(),
+            _compile_results=compile_results,
+        )
 
     def interpret_results(self, results):
         compile_results = results._compile_results
