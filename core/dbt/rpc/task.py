@@ -17,7 +17,7 @@ class RemoteCallable(metaclass=ABCMeta):
 
     @classmethod
     def get_parameters(cls) -> Type[JsonSchemaMixin]:
-        argspec = inspect.getfullargspec(cls.handle_request)
+        argspec = inspect.getfullargspec(cls.set_args)
         annotations = argspec.annotations
         if 'params' not in annotations:
             raise TypeError(
@@ -39,9 +39,15 @@ class RemoteCallable(metaclass=ABCMeta):
         return params_type
 
     @abstractmethod
-    def handle_request(self, params: JsonSchemaMixin) -> RemoteCallableResult:
+    def set_args(self, params: JsonSchemaMixin):
         raise NotImplementedException(
-            'from_kwargs not implemented'
+            'set_args not implemented'
+        )
+
+    @abstractmethod
+    def handle_request(self) -> RemoteCallableResult:
+        raise NotImplementedException(
+            'handle_request not implemented'
         )
 
     @staticmethod
@@ -83,6 +89,25 @@ class RemoteCallable(metaclass=ABCMeta):
 
 
 class RPCTask(CompileTask, RemoteCallable):
+    def __init__(self, args, config, manifest):
+        super().__init__(args, config)
+        self._base_manifest = manifest.deepcopy(config=config)
+
+    @classmethod
+    def recursive_subclasses(
+        cls, named_only: bool = True
+    ) -> List[Type['RPCTask']]:
+        classes = []
+        current = [cls]
+        while current:
+            klass = current.pop()
+            scls = klass.__subclasses__()
+            classes.extend(scls)
+            current.extend(scls)
+        if named_only:
+            classes = [c for c in classes if c.METHOD_NAME is not None]
+        return classes
+
     def get_result(self, results, elapsed_time, generated_at):
         return RemoteExecutionResult(
             results=results,

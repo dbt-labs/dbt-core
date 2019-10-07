@@ -7,13 +7,14 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from functools import wraps
 from typing import (
-    Any, Dict, Optional, List, Union, Set, Callable, Iterable, Tuple
+    Any, Dict, Optional, List, Union, Set, Callable, Iterable, Tuple, Type
 )
 
 from hologram import JsonSchemaMixin, ValidationError
 from hologram.helpers import StrEnum
 
 import dbt.exceptions
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.results import (
     RemoteCompileResult,
     RemoteRunResult,
@@ -23,7 +24,7 @@ from dbt.contracts.results import (
 from dbt.logger import LogMessage
 from dbt.rpc.error import dbt_error, RPCException
 from dbt.rpc.task_handler import TaskHandlerState, RequestTaskHandler
-from dbt.rpc.task import RemoteCallable
+from dbt.rpc.task import RemoteCallable, RPCTask
 from dbt.utils import restrict_to
 
 # import this to make sure our timedelta encoder is registered
@@ -292,7 +293,7 @@ class TaskManager:
         self.args = args
         self.config = config
         self.tasks: Dict[uuid.UUID, RequestTaskHandler] = {}
-        self._rpc_task_map = {}
+        self._rpc_task_map: Dict[str, RPCTask] = {}
         self._builtins: Dict[str, UnmanagedHandler] = {}
         self.last_compile = LastCompile(status=ManifestStatus.Init)
         self._lock = multiprocessing.Lock()
@@ -306,7 +307,19 @@ class TaskManager:
     def reserve_handler(self, task):
         self._rpc_task_map[task.METHOD_NAME] = None
 
-    def add_task_handler(self, task, manifest):
+    def add_task_handler(self, task: Type[RPCTask], manifest: Manifest):
+        if task.METHOD_NAME in self._rpc_task_map:
+            other_task = self._rpc_task_map[task.METHOD_NAME]
+            raise dbt.exceptions.InternalException(
+                'Got two tasks with the same method name! {0} and {1} both '
+                'have a method name of {0.METHOD_NAME}, but RPC method names '
+                'should be unique'.format(task, other_task)
+            )
+        if task.METHOD_NAME is None:
+            raise dbt.exceptions.InternalException(
+                'Task {} has no method name, cannot add it'.format(task)
+            )
+        assert task.METHOD_NAME is not None
         self._rpc_task_map[task.METHOD_NAME] = task(
             self.args, self.config, manifest
         )

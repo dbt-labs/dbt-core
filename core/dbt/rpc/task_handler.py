@@ -104,7 +104,8 @@ def _task_bootstrap(
         rpc_exception = None
         result = None
         try:
-            result = task.handle_request(params=params)
+            task.set_args(params=params)
+            result = task.handle_request()
         except RPCException as exc:
             rpc_exception = exc
         except dbt.exceptions.RPCKilledException as exc:
@@ -306,6 +307,10 @@ class RequestTaskHandler(threading.Thread):
             # raise a TypeError to indicate invalid parameters
             self.state = TaskHandlerState.Error
             raise TypeError(exc)
+        except TypeError:
+            # we got this from our argument parser, already a nice TypeError
+            self.state = TaskHandlerState.Error
+            raise
         self.subscriber = QueueSubscriber()
         self.process = multiprocessing.Process(
             target=_task_bootstrap,
