@@ -345,7 +345,7 @@ def _build_init_subparser(subparsers, base_subparser):
         Skip interative profile setup.
         """,
     )
-    sub.set_defaults(cls=init_task.InitTask, which='init', rpc_method=None)
+    sub.set_defaults(cls=init_task.InitTask, which="init", rpc_method=None)
     return sub
 
 
@@ -420,7 +420,7 @@ def _build_clean_subparser(subparsers, base_subparser):
         (usually the dbt_packages and target directories.)
         """,
     )
-    sub.set_defaults(cls=clean_task.CleanTask, which='clean', rpc_method=None)
+    sub.set_defaults(cls=clean_task.CleanTask, which="clean", rpc_method=None)
     return sub
 
 
@@ -442,7 +442,7 @@ def _build_debug_subparser(subparsers, base_subparser):
         """,
     )
     _add_version_check(sub)
-    sub.set_defaults(cls=debug_task.DebugTask, which='debug', rpc_method=None)
+    sub.set_defaults(cls=debug_task.DebugTask, which="debug", rpc_method=None)
     return sub
 
 
@@ -513,7 +513,7 @@ def _build_run_subparser(subparsers, base_subparser):
         """,
     )
 
-    run_sub.set_defaults(cls=run_task.RunTask, which='run', rpc_method='run')
+    run_sub.set_defaults(cls=run_task.RunTask, which="run", rpc_method="run")
     return run_sub
 
 
@@ -526,7 +526,7 @@ def _build_compile_subparser(subparsers, base_subparser):
         Compiled SQL files are written to the target/ directory.
         """,
     )
-    sub.set_defaults(cls=compile_task.CompileTask, which='compile',
+    sub.set_defaults(cls=compile_task.CompileTask, which="compile", rpc_method="compile")
                      rpc_method='compile')
     sub.add_argument('--parse-only', action='store_true')
     return sub
@@ -552,7 +552,8 @@ def _build_docs_generate_subparser(subparsers, base_subparser):
     # will cause weird errors about 'conflicting option strings'.
     generate_sub = subparsers.add_parser("generate", parents=[base_subparser])
     generate_sub.set_defaults(cls=generate_task.GenerateTask,
-                              which='generate', rpc_method='docs.generate')
+        cls=generate_task.GenerateTask, which="generate", rpc_method="docs.generate"
+    )
     generate_sub.add_argument(
         '--no-compile',
         action='store_false',
@@ -676,8 +677,7 @@ def _build_seed_subparser(subparsers, base_subparser):
         Show a sample of the loaded data in the terminal
         """,
     )
-    seed_sub.set_defaults(cls=seed_task.SeedTask, which='seed',
-                          rpc_method='seed')
+    seed_sub.set_defaults(cls=seed_task.SeedTask, which="seed", rpc_method="seed")
     return seed_sub
 
 
@@ -696,8 +696,7 @@ def _build_docs_serve_subparser(subparsers, base_subparser):
         dest='open_browser',
         action='store_false',
     )
-    serve_sub.set_defaults(cls=serve_task.ServeTask, which='serve',
-                           rpc_method=None)
+    serve_sub.set_defaults(cls=serve_task.ServeTask, which="serve", rpc_method=None)
     return serve_sub
 
 
@@ -736,7 +735,7 @@ def _build_test_subparser(subparsers, base_subparser):
         ''',
     )
 
-    sub.set_defaults(cls=test_task.TestTask, which='test', rpc_method='test')
+    sub.set_defaults(cls=test_task.TestTask, which="test", rpc_method="test")
     return sub
 
 
