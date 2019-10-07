@@ -524,8 +524,7 @@ def _build_compile_subparser(subparsers, base_subparser):
         """,
     )
     sub.set_defaults(cls=compile_task.CompileTask, which="compile", rpc_method="compile")
-                     rpc_method='compile')
-    sub.add_argument('--parse-only', action='store_true')
+    sub.add_argument("--parse-only", action="store_true")
     return sub
 
 
