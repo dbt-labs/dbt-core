@@ -19,6 +19,7 @@ import dbt.compilation
 import dbt.exceptions
 
 from dbt.task.compile import CompileTask
+from dbt.task.runnable import write_manifest
 
 
 CATALOG_FILENAME = 'catalog.json'
@@ -178,8 +179,8 @@ def _coerce_decimal(value):
 
 class GenerateTask(CompileTask):
     def _get_manifest(self) -> Manifest:
-        manifest = dbt.loader.GraphLoader.load_all(self.config)
-        return manifest
+        # manifest = dbt.loader.GraphLoader.load_all(self.config)
+        return self.manifest
 
     def run(self):
         compile_results = None
@@ -197,10 +198,8 @@ class GenerateTask(CompileTask):
 
         adapter = get_adapter(self.config)
         with adapter.connection_named('generate_catalog'):
-            manifest = self._get_manifest()
-
             dbt.ui.printer.print_timestamped_line("Building catalog")
-            catalog_table = adapter.get_catalog(manifest)
+            catalog_table = adapter.get_catalog(self.manifest)
 
         catalog_data: List[PrimitiveDict] = [
             dict(zip(catalog_table.column_names, map(_coerce_decimal, row)))
@@ -209,13 +208,14 @@ class GenerateTask(CompileTask):
 
         catalog = Catalog(catalog_data)
         results = self.get_catalog_results(
-            nodes=catalog.make_unique_id_map(manifest),
+            nodes=catalog.make_unique_id_map(self.manifest),
             generated_at=datetime.utcnow(),
             compile_results=compile_results,
         )
 
         path = os.path.join(self.config.target_path, CATALOG_FILENAME)
         results.write(path)
+        write_manifest(self.manifest, self.config)
 
         dbt.ui.printer.print_timestamped_line(
             'Catalog written to {}'.format(os.path.abspath(path))

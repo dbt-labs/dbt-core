@@ -927,6 +927,8 @@ class TestRPCServer(HasRPCServer):
         self.run_dbt_with_vars(['seed'])
         self.run_dbt_with_vars(['run'])
         self.assertFalse(os.path.exists('target/catalog.json'))
+        if os.path.exists('target/manifest.json'):
+            os.remove('target/manifest.json')
         result = self.async_query('docs.generate').json()
         dct = self.assertIsResult(result)
         self.assertTrue(os.path.exists('target/catalog.json'))
@@ -949,6 +951,11 @@ class TestRPCServer(HasRPCServer):
         }
         for uid in expected:
             self.assertIn(uid, nodes)
+        self.assertTrue(os.path.exists('target/manifest.json'))
+        with open('target/manifest.json') as fp:
+            manifest = json.load(fp)
+        self.assertIn('nodes', manifest)
+        self.assertEqual(len(manifest['nodes']), 17)
 
 
 class FailedServerProcess(ServerProcess):

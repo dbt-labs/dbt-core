@@ -821,7 +821,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         return {
             'nodes': {
                 'model.test.model': {
-                    'build_path': None,
+                    'build_path': os.path.normpath('target/compiled/test/model.sql'),
                     'name': 'model',
                     'root_path': self.test_root_dir,
                     'resource_type': 'model',
@@ -869,9 +869,17 @@ class TestDocsGenerate(DBTIntegrationTest):
                     },
                     'patch_path': schema_yml_path,
                     'docrefs': [],
+                    'compiled': True,
+                    'compiled_sql': ANY,
+                    'extra_ctes_injected': True,
+                    'extra_ctes': [],
+                    'injected_sql': ANY,
+                    'wrapped_sql': 'None',
                 },
                 'seed.test.seed': {
                     'build_path': None,
+                    'compiled': True,
+                    'compiled_sql': '',
                     'config': {
                         'enabled': True,
                         'materialized': 'seed',
@@ -905,10 +913,16 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'description': '',
                     'columns': {},
                     'docrefs': [],
+                    'compiled': True,
+                    'compiled_sql': '',
+                    'extra_ctes_injected': True,
+                    'extra_ctes': [],
+                    'injected_sql': '',
+                    'wrapped_sql': 'None',
                 },
                 'test.test.not_null_model_id': {
                     'alias': 'not_null_model_id',
-                    'build_path': None,
+                    'build_path': os.path.normpath('target/compiled/test/schema_test/not_null_model_id.sql'),
                     'column_name': 'id',
                     'columns': {},
                     'config': {
@@ -941,10 +955,16 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'tags': ['schema'],
                     'unique_id': 'test.test.not_null_model_id',
                     'docrefs': [],
+                    'compiled': True,
+                    'compiled_sql': AnyStringWith('count(*)'),
+                    'extra_ctes_injected': True,
+                    'extra_ctes': [],
+                    'injected_sql': AnyStringWith('count(*)'),
+                    'wrapped_sql': AnyStringWith('count(*)'),
                 },
                 'test.test.test_nothing_model_': {
                     'alias': 'test_nothing_model_',
-                    'build_path': None,
+                    'build_path': os.path.normpath('target/compiled/test/schema_test/test_nothing_model_.sql'),
                     'column_name': None,
                     'columns': {},
                     'config': {
@@ -977,10 +997,16 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'tags': ['schema'],
                     'unique_id': 'test.test.test_nothing_model_',
                     'docrefs': [],
+                    'compiled': True,
+                    'compiled_sql': AnyStringWith('select 0'),
+                    'extra_ctes_injected': True,
+                    'extra_ctes': [],
+                    'injected_sql': AnyStringWith('select 0'),
+                    'wrapped_sql': AnyStringWith('select 0'),
                 },
                 'test.test.unique_model_id': {
                     'alias': 'unique_model_id',
-                    'build_path': None,
+                    'build_path': os.path.normpath('target/compiled/test/schema_test/unique_model_id.sql'),
                     'column_name': 'id',
                     'columns': {},
                     'config': {
@@ -1013,6 +1039,12 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'tags': ['schema'],
                     'unique_id': 'test.test.unique_model_id',
                     'docrefs': [],
+                    'compiled': True,
+                    'compiled_sql': AnyStringWith('count(*)'),
+                    'extra_ctes_injected': True,
+                    'extra_ctes': [],
+                    'injected_sql': AnyStringWith('count(*)'),
+                    'wrapped_sql': AnyStringWith('count(*)'),
                 },
             },
             'parent_map': {
@@ -1123,7 +1155,7 @@ class TestDocsGenerate(DBTIntegrationTest):
             'nodes': {
                 'model.test.ephemeral_copy': {
                     'alias': 'ephemeral_copy',
-                    'build_path': None,
+                    'build_path': os.path.normpath('target/compiled/test/ephemeral_copy.sql'),
                     'columns': {},
                     'config': {
                         'column_types': {},
@@ -1160,10 +1192,16 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'database': self.default_database,
                     'tags': [],
                     'unique_id': 'model.test.ephemeral_copy',
+                    'compiled': True,
+                    'compiled_sql': ANY,
+                    'extra_ctes_injected': True,
+                    'extra_ctes': [],
+                    'injected_sql': ANY,
+                    'wrapped_sql': 'None',
                 },
                 'model.test.ephemeral_summary': {
                     'alias': 'ephemeral_summary',
-                    'build_path': None,
+                    'build_path': os.path.normpath('target/compiled/test/ephemeral_summary.sql'),
                     'columns': {
                         'first_name': {
                             'description': 'The first name being summarized',
@@ -1228,10 +1266,17 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'tags': [],
-                    'unique_id': 'model.test.ephemeral_summary'},
+                    'unique_id': 'model.test.ephemeral_summary',
+                    'compiled': True,
+                    'compiled_sql': ANY,
+                    'extra_ctes_injected': True,
+                    'extra_ctes': [ANY],
+                    'injected_sql': ANY,
+                    'wrapped_sql': 'None',
+                },
                 'model.test.view_summary': {
                     'alias': 'view_summary',
-                    'build_path': None,
+                    'build_path': os.path.normpath('target/compiled/test/view_summary.sql'),
                     'columns': {
                         'first_name': {
                             'description': 'The first name being summarized',
@@ -1295,7 +1340,13 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'schema': my_schema_name,
                     'sources': [],
                     'tags': [],
-                    'unique_id': 'model.test.view_summary'
+                    'unique_id': 'model.test.view_summary',
+                    'compiled': True,
+                    'compiled_sql': ANY,
+                    'extra_ctes_injected': True,
+                    'extra_ctes': [],
+                    'injected_sql': ANY,
+                    'wrapped_sql': 'None',
                 },
                 'seed.test.seed': {
                     'alias': 'seed',
@@ -1330,7 +1381,13 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'schema': my_schema_name,
                     'database': self.default_database,
                     'tags': [],
-                    'unique_id': 'seed.test.seed'
+                    'unique_id': 'seed.test.seed',
+                    'compiled': True,
+                    'compiled_sql': '',
+                    'extra_ctes_injected': True,
+                    'extra_ctes': [],
+                    'injected_sql': '',
+                    'wrapped_sql': 'None',
                 },
                 'source.test.my_source.my_table': {
                     'columns': {
@@ -1365,7 +1422,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                         },
                     ],
                     'external': {
-                        'file_format': None, 'location': None, 'partitions': None, 
+                        'file_format': None, 'location': None, 'partitions': None,
                         'row_format': None, 'tbl_properties': None
                     },
                     'freshness': {'error_after': None, 'warn_after': None, 'filter': None},
@@ -1589,7 +1646,7 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'sources': [],
                     'depends_on': {'macros': [], 'nodes': ['seed.test.seed']},
                     'fqn': ['test', 'clustered'],
-                    'build_path': None,
+                    'build_path': os.path.normpath('target/compiled/test/clustered.sql'),
                     'name': 'clustered',
                     'original_file_path': clustered_sql_path,
                     'package_name': 'test',
@@ -1632,10 +1689,16 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'description': 'A clustered and partitioned copy of the test model',
                     'patch_path': self.dir('bq_models/schema.yml'),
                     'docrefs': [],
+                    'compiled': True,
+                    'compiled_sql': ANY,
+                    'extra_ctes_injected': True,
+                    'extra_ctes': [],
+                    'injected_sql': ANY,
+                    'wrapped_sql': 'None',
                 },
                 'model.test.multi_clustered': {
                     'alias': 'multi_clustered',
-                    'build_path': None,
+                    'build_path': os.path.normpath('target/compiled/test/multi_clustered.sql'),
                     'config': {
                         'cluster_by': ['first_name', 'email'],
                         'column_types': {},
@@ -1694,10 +1757,16 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'description': 'A clustered and partitioned copy of the test model, clustered on multiple columns',
                     'patch_path': self.dir('bq_models/schema.yml'),
                     'docrefs': [],
+                    'compiled': True,
+                    'compiled_sql': ANY,
+                    'extra_ctes_injected': True,
+                    'extra_ctes': [],
+                    'injected_sql': ANY,
+                    'wrapped_sql': 'None',
                 },
                 'model.test.nested_view': {
                     'alias': 'nested_view',
-                    'build_path': None,
+                    'build_path': os.path.normpath('target/compiled/test/nested_view.sql'),
                     'config': {
                         'column_types': {},
                         'enabled': True,
@@ -1757,10 +1826,16 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'description': 'The test model',
                     'patch_path': self.dir('bq_models/schema.yml'),
                     'docrefs': [],
+                    'compiled': True,
+                    'compiled_sql': ANY,
+                    'extra_ctes_injected': True,
+                    'extra_ctes': [],
+                    'injected_sql': ANY,
+                    'wrapped_sql': 'None',
                 },
                 'model.test.nested_table': {
                     'alias': 'nested_table',
-                    'build_path': None,
+                    'build_path': os.path.normpath('target/compiled/test/nested_table.sql'),
                     'config': {
                         'column_types': {},
                         'enabled': True,
@@ -1794,6 +1869,12 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'columns': {},
                     'description': '',
                     'docrefs': [],
+                    'compiled': True,
+                    'compiled_sql': ANY,
+                    'extra_ctes_injected': True,
+                    'extra_ctes': [],
+                    'injected_sql': ANY,
+                    'wrapped_sql': 'None',
                 },
                 'seed.test.seed': {
                     'build_path': None,
@@ -1832,6 +1913,12 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'columns': {},
                     'description': '',
                     'docrefs': [],
+                    'compiled': True,
+                    'compiled_sql': '',
+                    'extra_ctes_injected': True,
+                    'extra_ctes': [],
+                    'injected_sql': '',
+                    'wrapped_sql': 'None',
                 },
             },
             'child_map': {
@@ -1960,7 +2047,7 @@ class TestDocsGenerate(DBTIntegrationTest):
         return {
             'nodes': {
                 'model.test.model': {
-                    'build_path': None,
+                    'build_path': os.path.normpath('target/compiled/test/model.sql'),
                     'name': 'model',
                     'root_path': self.test_root_dir,
                     'resource_type': 'model',
@@ -2022,6 +2109,12 @@ class TestDocsGenerate(DBTIntegrationTest):
                     },
                     'patch_path': self.dir('rs_models/schema.yml'),
                     'docrefs': [],
+                    'compiled': True,
+                    'compiled_sql': ANY,
+                    'extra_ctes_injected': True,
+                    'extra_ctes': [],
+                    'injected_sql': ANY,
+                    'wrapped_sql': 'None',
                 },
                 'seed.test.seed': {
                     'build_path': None,
@@ -2060,6 +2153,12 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'columns': {},
                     'description': '',
                     'docrefs': [],
+                    'compiled': True,
+                    'compiled_sql': ANY,
+                    'extra_ctes_injected': True,
+                    'extra_ctes': [],
+                    'injected_sql': ANY,
+                    'wrapped_sql': 'None',
                 },
             },
             'parent_map': {
