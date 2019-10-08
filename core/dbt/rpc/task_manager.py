@@ -307,18 +307,26 @@ class TaskManager:
     def reserve_handler(self, task):
         self._rpc_task_map[task.METHOD_NAME] = None
 
+    def _assert_unique_task(self, task_type: Type[RPCTask]):
+        method = task_type.METHOD_NAME
+        if method not in self._rpc_task_map:
+            # this is weird, but hey whatever
+            return
+        other_task = self._rpc_task_map[method]
+        if other_task is None or type(other_task) is task_type:
+            return
+        raise dbt.exceptions.InternalException(
+            'Got two tasks with the same method name! {0} and {1} both '
+            'have a method name of {0.METHOD_NAME}, but RPC method names '
+            'should be unique'.format(task_type, other_task)
+        )
+
     def add_task_handler(self, task: Type[RPCTask], manifest: Manifest):
-        if task.METHOD_NAME in self._rpc_task_map:
-            other_task = self._rpc_task_map[task.METHOD_NAME]
-            raise dbt.exceptions.InternalException(
-                'Got two tasks with the same method name! {0} and {1} both '
-                'have a method name of {0.METHOD_NAME}, but RPC method names '
-                'should be unique'.format(task, other_task)
-            )
         if task.METHOD_NAME is None:
             raise dbt.exceptions.InternalException(
                 'Task {} has no method name, cannot add it'.format(task)
             )
+        self._assert_unique_task(task)
         assert task.METHOD_NAME is not None
         self._rpc_task_map[task.METHOD_NAME] = task(
             self.args, self.config, manifest

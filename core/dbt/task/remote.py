@@ -190,56 +190,44 @@ class RemoteRunTask(_RPCExecTask, RunTask):
         return RPCExecuteRunner
 
 
-class RemoteCompileProjectTask(RPCTask):
+class _RPCCommandTask(RPCTask):
+    def __init__(self, args, config, manifest):
+        super().__init__(args, config, manifest)
+        self.manifest = self._base_manifest
+
+    def load_manifest(self):
+        # we started out with a manifest!
+        pass
+
+    def handle_request(self) -> RemoteCallableResult:
+        return self.run()
+
+
+class RemoteCompileProjectTask(_RPCCommandTask):
     METHOD_NAME = 'compile'
 
-    def load_manifest(self):
-        # we started out with a manifest!
-        pass
-
     def set_args(self, params: RPCCompileProjectParameters) -> None:
         self.args.models = self._listify(params.models)
         self.args.exclude = self._listify(params.exclude)
 
-    def handle_request(self) -> RemoteCallableResult:
-        return self.run()
 
-
-class RemoteRunProjectTask(RPCTask, RunTask):
+class RemoteRunProjectTask(_RPCCommandTask, RunTask):
     METHOD_NAME = 'run'
 
-    def load_manifest(self):
-        # we started out with a manifest!
-        pass
-
     def set_args(self, params: RPCCompileProjectParameters) -> None:
         self.args.models = self._listify(params.models)
         self.args.exclude = self._listify(params.exclude)
 
-    def handle_request(self) -> RemoteCallableResult:
-        return self.run()
 
-
-class RemoteSeedProjectTask(RPCTask, SeedTask):
+class RemoteSeedProjectTask(_RPCCommandTask, SeedTask):
     METHOD_NAME = 'seed'
-
-    def load_manifest(self):
-        # we started out with a manifest!
-        pass
 
     def set_args(self, params: RPCSeedProjectParameters) -> None:
         self.args.show = params.show
 
-    def handle_request(self) -> RemoteCallableResult:
-        return self.run()
 
-
-class RemoteTestProjectTask(RPCTask, TestTask):
+class RemoteTestProjectTask(_RPCCommandTask, TestTask):
     METHOD_NAME = 'test'
-
-    def load_manifest(self):
-        # we started out with a manifest!
-        pass
 
     def set_args(self, params: RPCTestProjectParameters) -> None:
         self.args.models = self._listify(params.models)
@@ -247,24 +235,14 @@ class RemoteTestProjectTask(RPCTask, TestTask):
         self.args.data = params.data
         self.args.schema = params.schema
 
-    def handle_request(self) -> RemoteCallableResult:
-        return self.run()
 
-
-class RemoteDocsGenerateProjectTask(RPCTask, GenerateTask):
+class RemoteDocsGenerateProjectTask(_RPCCommandTask, GenerateTask):
     METHOD_NAME = 'docs.generate'
-
-    def load_manifest(self):
-        # we started out with a manifest!
-        pass
 
     def set_args(self, params: RPCDocsGenerateProjectParameters) -> None:
         self.args.models = None
         self.args.exclude = None
         self.args.compile = params.compile
-
-    def handle_request(self) -> RemoteCallableResult:
-        return self.run()
 
     def get_catalog_results(
         self, nodes, generated_at, compile_results
@@ -277,7 +255,7 @@ class RemoteDocsGenerateProjectTask(RPCTask, GenerateTask):
         )
 
 
-class RemoteRPCParameters(RPCTask):
+class RemoteRPCParameters(_RPCCommandTask):
     METHOD_NAME = 'cli_args'
 
     def set_args(self, params: RPCCliParameters) -> None:

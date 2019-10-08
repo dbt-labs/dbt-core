@@ -1,5 +1,6 @@
 import multiprocessing
 import signal
+import sys
 import threading
 import uuid
 from contextlib import contextmanager
@@ -11,7 +12,9 @@ from hologram.helpers import StrEnum
 
 import dbt.exceptions
 from dbt.adapters.factory import cleanup_connections
-from dbt.logger import GLOBAL_LOGGER as logger, list_handler, LogMessage
+from dbt.logger import (
+    GLOBAL_LOGGER as logger, list_handler, LogMessage, OutputHandler
+)
 from dbt.rpc.error import (
     dbt_error,
     server_error,
@@ -116,7 +119,8 @@ def _task_bootstrap(
             logger.debug('dbt runtime exception', exc_info=True)
             rpc_exception = dbt_error(exc)
         except Exception as exc:
-            logger.debug('uncaught python exception', exc_info=True)
+            with OutputHandler(sys.stderr).applicationbound():
+                logger.error('uncaught python exception', exc_info=True)
             rpc_exception = server_error(exc)
 
         # put whatever result we got onto the queue as well.

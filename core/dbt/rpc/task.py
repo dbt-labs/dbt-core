@@ -21,19 +21,19 @@ class RemoteCallable(metaclass=ABCMeta):
         annotations = argspec.annotations
         if 'params' not in annotations:
             raise TypeError(
-                'handle_request must have parameter named params with a valid '
+                'set_args must have parameter named params with a valid '
                 'JsonSchemaMixin type definition (no params annotation found)'
             )
         params_type = annotations['params']
         if not issubclass(params_type, JsonSchemaMixin):
             raise TypeError(
-                'handle_request must have parameter named params with a valid '
+                'set_args must have parameter named params with a valid '
                 'JsonSchemaMixin type definition (got {}, expected '
                 'JsonSchemaMixin subclass)'.format(params_type)
             )
         if params_type is JsonSchemaMixin:
             raise TypeError(
-                'handle_request must have parameter named params with a valid '
+                'set_args must have parameter named params with a valid '
                 'JsonSchemaMixin type definition (got JsonSchemaMixin itself!)'
             )
         return params_type
