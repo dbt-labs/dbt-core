@@ -108,9 +108,16 @@ class RefResolver(dbt.context.common.BaseResolver):
 
 
 class SourceResolver(dbt.context.common.BaseResolver):
-    def __call__(self, source_name, table_name):
+    def __call__(self, *args):
         # When you call source(), this is what happens at parse time
-        self.model.sources.append([source_name, table_name])
+        if len(args) == 2:
+            self.model.sources.append(list(args))
+
+        else:
+            dbt.exceptions.raise_compiler_error(
+                "source() takes exactly two arguments ({} given)"
+                .format(len(args)), self.model)
+
         return self.Relation.create_from(self.config, self.model)
 
 
