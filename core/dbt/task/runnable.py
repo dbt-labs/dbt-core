@@ -13,6 +13,7 @@ from dbt.logger import (
     TimestampNamed,
     DbtModelState,
     NodeMetadata,
+    NodeCount,
 )
 from dbt.compilation import compile_manifest
 from dbt.contracts.results import ExecutionResult
@@ -129,15 +130,19 @@ class GraphRunnableTask(ManifestTask):
         return cls(self.config, adapter, node, run_count, num_nodes)
 
     def call_runner(self, runner):
-        with RUNNING_STATE, UniqueID(runner.node.unique_id):
-            with TimestampNamed('node_started_at'), NodeMetadata(runner.node):
+        uid_context = UniqueID(runner.node.unique_id)
+        with RUNNING_STATE, uid_context:
+            startctx = TimestampNamed('node_started_at')
+            extended_metadata = NodeMetadata(runner.node, runner.node_index)
+            with startctx, extended_metadata:
                 logger.info('Began running model')
             status = 'error'  # we must have an error if we don't see this
             try:
                 result = runner.run_with_hooks(self.manifest)
                 status = runner.get_result_status(result)
             finally:
-                with TimestampNamed('node_finished_at'), DbtModelState(status):
+                finishctx = TimestampNamed('node_finished_at')
+                with finishctx, DbtModelState(status):
                     logger.info('Finished running model')
         if result.error is not None and self.raise_on_first_error():
             # if we raise inside a thread, it'll just get silently swallowed.
@@ -219,8 +224,10 @@ class GraphRunnableTask(ManifestTask):
 
         text = "Concurrency: {} threads (target='{}')"
         concurrency_line = text.format(num_threads, target_name)
-        dbt.ui.printer.print_timestamped_line(concurrency_line)
-        dbt.ui.printer.print_timestamped_line("")
+        with NodeCount(self.num_nodes):
+            dbt.ui.printer.print_timestamped_line(concurrency_line)
+        with TextOnly():
+            dbt.ui.printer.print_timestamped_line("")
 
         pool = ThreadPool(num_threads)
         try:

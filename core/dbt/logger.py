@@ -234,12 +234,12 @@ class DbtProcessState(logbook.Processor):
 
 
 class DbtModelState(logbook.Processor):
-    def __init__(self, state):
+    def __init__(self, state: Dict[str, str]):
         self.state = state
         super().__init__()
 
     def process(self, record):
-        record.extra['model_state'] = self.state
+        record.extra.update(self.state)
 
 
 class DbtStatusMessage(logbook.Processor):
@@ -256,9 +256,19 @@ class UniqueID(logbook.Processor):
         record.extra['unique_id'] = self.unique_id
 
 
+class NodeCount(logbook.Processor):
+    def __init__(self, node_count: int):
+        self.node_count = node_count
+        super().__init__()
+
+    def process(self, record):
+        record.extra['node_count'] = self.node_count
+
+
 class NodeMetadata(logbook.Processor):
-    def __init__(self, node):
+    def __init__(self, node, node_index):
         self.node = node
+        self.node_index = node_index
         super().__init__()
 
     def process(self, record):
@@ -273,6 +283,7 @@ class NodeMetadata(logbook.Processor):
             value = getattr(self.node, attr, None)
             if value is not None:
                 record.extra[key] = value
+        record.extra['node_index'] = self.node_index
         if hasattr(self.node, 'config'):
             materialized = getattr(self.node.config, 'materialized', None)
             if materialized is not None:
