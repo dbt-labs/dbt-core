@@ -288,7 +288,7 @@ class _SnapshotConfig(NodeConfig):
 
 @dataclass(init=False)
 class GenericSnapshotConfig(_SnapshotConfig):
-    strategy: SnapshotStrategy
+    strategy: str
 
     def __init__(self, strategy: str, **kwargs) -> None:
         self.strategy = strategy
@@ -297,13 +297,13 @@ class GenericSnapshotConfig(_SnapshotConfig):
 
 @dataclass(init=False)
 class TimestampSnapshotConfig(_SnapshotConfig):
-    strategy: SnapshotStrategy = field(metadata={
-        'restrict': [SnapshotStrategy.Timestamp]
+    strategy: str = field(metadata={
+        'restrict': [str(SnapshotStrategy.Timestamp)]
     })
     updated_at: str
 
     def __init__(
-        self, strategy: SnapshotStrategy, updated_at: str, **kwargs
+        self, strategy: str, updated_at: str, **kwargs
     ) -> None:
         self.strategy = strategy
         self.updated_at = updated_at
@@ -312,8 +312,8 @@ class TimestampSnapshotConfig(_SnapshotConfig):
 
 @dataclass(init=False)
 class CheckSnapshotConfig(_SnapshotConfig):
-    strategy: SnapshotStrategy = field(metadata={
-        'restrict': [SnapshotStrategy.Check]
+    strategy: str = field(metadata={
+        'restrict': [str(SnapshotStrategy.Check)]
     })
     # TODO: is there a way to get this to accept tuples of strings? Adding
     # `Tuple[str, ...]` to the list of types results in this:
@@ -325,7 +325,7 @@ class CheckSnapshotConfig(_SnapshotConfig):
     check_cols: Union[All, List[str]]
 
     def __init__(
-        self, strategy: SnapshotStrategy, check_cols: Union[All, List[str]],
+        self, strategy: str, check_cols: Union[All, List[str]],
         **kwargs
     ) -> None:
         self.strategy = strategy
