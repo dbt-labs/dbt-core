@@ -4,7 +4,7 @@ import signal
 import threading
 from contextlib import contextmanager
 
-from werkzeug.wsgi import DispatcherMiddleware
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from werkzeug.wrappers import Request, Response
 from werkzeug.serving import run_simple
 from werkzeug.exceptions import NotFound

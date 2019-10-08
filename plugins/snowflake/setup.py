@@ -30,6 +30,6 @@ setup(
     },
     install_requires=[
         'dbt-core=={}'.format(package_version),
-        'snowflake-connector-python>=1.6.12',
+        'snowflake-connector-python>=1.6.12,<2.1',
     ]
 )
