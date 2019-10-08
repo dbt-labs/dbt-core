@@ -132,7 +132,7 @@ class GraphQueue:
 
         Callers must hold the lock.
         """
-        for node, in_degree in dict(self.graph.in_degree()).items():
+        for node, in_degree in self.graph.in_degree():
             if not self._already_known(node) and in_degree == 0:
                 self.inner.put((self._scores[node], node))
                 self.queued.add(node)
