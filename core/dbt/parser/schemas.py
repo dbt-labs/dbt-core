@@ -316,9 +316,9 @@ class SchemaParser(SimpleParser[GenericTestBlock, ParsedGenericTestNode]):
         # not configs which have been separated out in the builder.
         # The keyword args are not completely rendered until compilation.
         metadata = {
-            'namespace': builder.namespace,
-            'name': builder.name,
-            'kwargs': builder.args,
+            "namespace": builder.namespace,
+            "name": builder.name,
+            "kwargs": builder.args,
         }
         tags = sorted(set(itertools.chain(tags, builder.tags())))
 
