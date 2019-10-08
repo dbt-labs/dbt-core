@@ -9,6 +9,7 @@ from dbt.contracts.graph.parsed import (
     ParsedSourceDefinition,
     ParsedTestNode,
     TestConfig,
+    TestMetadata,
     PARSED_TYPES,
 )
 from dbt.node_types import NodeType
@@ -112,6 +113,7 @@ class CompiledTestNode(CompiledNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
     column_name: Optional[str] = None
     config: TestConfig = field(default_factory=TestConfig)
+    test_metadata: Optional[TestMetadata] = None
 
 
 def _inject_ctes_into_sql(sql: str, ctes: List[InjectedCTE]) -> str:

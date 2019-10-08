@@ -961,6 +961,11 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes': [],
                     'injected_sql': AnyStringWith('count(*)'),
                     'wrapped_sql': AnyStringWith('count(*)'),
+                    'test_metadata': {
+                        'namespace': None,
+                        'name': 'not_null',
+                        'kwargs': {'column_name': 'id'},
+                    },
                 },
                 'test.test.test_nothing_model_': {
                     'alias': 'test_nothing_model_',
@@ -1003,6 +1008,11 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes': [],
                     'injected_sql': AnyStringWith('select 0'),
                     'wrapped_sql': AnyStringWith('select 0'),
+                    'test_metadata': {
+                        'namespace': 'test',
+                        'name': 'nothing',
+                        'kwargs': {},
+                    },
                 },
                 'test.test.unique_model_id': {
                     'alias': 'unique_model_id',
@@ -1045,6 +1055,11 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'extra_ctes': [],
                     'injected_sql': AnyStringWith('count(*)'),
                     'wrapped_sql': AnyStringWith('count(*)'),
+                    'test_metadata': {
+                        'namespace': None,
+                        'name': 'unique',
+                        'kwargs': {'column_name': 'id'},
+                    },
                 },
             },
             'parent_map': {
@@ -2455,7 +2470,12 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'database': self.default_database,
                     'tags': ['schema'],
                     'unique_id': 'test.test.not_null_model_id',
-                    'wrapped_sql': AnyStringWith('id is null')
+                    'wrapped_sql': AnyStringWith('id is null'),
+                    'test_metadata': {
+                        'namespace': None,
+                        'name': 'not_null',
+                        'kwargs': {'column_name': 'id'},
+                    },
                 },
                 'thread_id': ANY,
                 'timing': [ANY, ANY],
@@ -2508,6 +2528,11 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'tags': ['schema'],
                     'unique_id': 'test.test.test_nothing_model_',
                     'wrapped_sql': AnyStringWith('select 0'),
+                    'test_metadata': {
+                        'namespace': 'test',
+                        'name': 'nothing',
+                        'kwargs': {},
+                    },
                 },
                 'thread_id': ANY,
                 'timing': [ANY, ANY],
@@ -2559,7 +2584,12 @@ class TestDocsGenerate(DBTIntegrationTest):
                     'sources': [],
                     'tags': ['schema'],
                     'unique_id': 'test.test.unique_model_id',
-                    'wrapped_sql': AnyStringWith('count(*)')
+                    'wrapped_sql': AnyStringWith('count(*)'),
+                    'test_metadata': {
+                        'namespace': None,
+                        'name': 'unique',
+                        'kwargs': {'column_name': 'id'},
+                    },
                 },
                 'thread_id': ANY,
                 'timing': [ANY, ANY],

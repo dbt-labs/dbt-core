@@ -10,7 +10,11 @@ from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config.renderer import ConfigRenderer
 from dbt.contracts.graph.manifest import SourceFile
 from dbt.contracts.graph.parsed import (
-    ParsedNodePatch, ParsedTestNode, ParsedSourceDefinition, ColumnInfo, Docref
+    ParsedNodePatch,
+    ParsedSourceDefinition,
+    ColumnInfo,
+    Docref,
+    ParsedTestNode,
 )
 from dbt.contracts.graph.unparsed import (
     UnparsedSourceDefinition, UnparsedNodeUpdate, NamedTested,
@@ -255,6 +259,12 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
 
         config = self.initial_config(fqn)
 
+        metadata = {
+            'namespace': builder.namespace,
+            'name': builder.name,
+            'kwargs': builder.args,
+        }
+
         node = self._create_parsetime_node(
             block=block,
             path=compiled_path,
@@ -263,6 +273,7 @@ class SchemaParser(SimpleParser[SchemaTestBlock, ParsedTestNode]):
             name=builder.fqn_name,
             raw_sql=builder.build_raw_sql(),
             column_name=block.column_name,
+            test_metadata=metadata,
         )
         self.render_update(node, config)
         self.add_result_node(block, node)
