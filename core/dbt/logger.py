@@ -264,7 +264,7 @@ class NodeCount(logbook.Processor):
         super().__init__()
 
     def process(self, record):
-        record.extra['node_count'] = self.node_count
+        record.extra["node_count"] = self.node_count
 
 
 class NodeMetadata(logbook.Processor):
