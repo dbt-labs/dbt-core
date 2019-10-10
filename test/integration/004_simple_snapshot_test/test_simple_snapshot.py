@@ -2,7 +2,7 @@ from test.integration.base import DBTIntegrationTest, use_profile
 import dbt.exceptions
 
 
-class TestSimpleSnapshotFiles(DBTIntegrationTest):
+class BaseSimpleSnapshotTest(DBTIntegrationTest):
     NUM_SNAPSHOT_MODELS = 1
 
     @property
@@ -15,19 +15,6 @@ class TestSimpleSnapshotFiles(DBTIntegrationTest):
 
     def run_snapshot(self):
         return self.run_dbt(['snapshot'])
-
-    @property
-    def project_config(self):
-        return {
-            "data-paths": ['data'],
-            "snapshot-paths": ['test-snapshots-pg'],
-        }
-
-    @use_profile('postgres')
-    def test__postgres_ref_snapshot(self):
-        self.dbt_run_seed_snapshot()
-        results = self.run_dbt(['run'])
-        self.assertEqual(len(results), 1)
 
     def dbt_run_seed_snapshot(self):
         if self.adapter_type == 'postgres':
@@ -47,6 +34,21 @@ class TestSimpleSnapshotFiles(DBTIntegrationTest):
 
     def assert_expected(self):
         self.assert_case_tables_equal('snapshot_actual', 'snapshot_expected')
+
+
+class TestSimpleSnapshotFiles(BaseSimpleSnapshotTest):
+    @property
+    def project_config(self):
+        return {
+            "data-paths": ['data'],
+            "snapshot-paths": ['test-snapshots-pg'],
+        }
+
+    @use_profile('postgres')
+    def test__postgres_ref_snapshot(self):
+        self.dbt_run_seed_snapshot()
+        results = self.run_dbt(['run'])
+        self.assertEqual(len(results), 1)
 
     @use_profile('postgres')
     def test__postgres__simple_snapshot(self):
@@ -98,6 +100,77 @@ class TestSimpleSnapshotFiles(DBTIntegrationTest):
         results = self.run_dbt(["snapshot"], expect_pass=False)
         self.assertEqual(len(results),  self.NUM_SNAPSHOT_MODELS)
         self.assertIn('not implemented for presto', results[0].error)
+
+
+class TestCustomSnapshotFiles(BaseSimpleSnapshotTest):
+    @property
+    def project_config(self):
+        return {
+            'data-paths': ['data'],
+            'macro-paths': ['custom-snapshot-macros'],
+            'snapshot-paths': ['test-snapshots-pg-custom'],
+        }
+
+    @use_profile('postgres')
+    def test__postgres_ref_snapshot(self):
+        self.dbt_run_seed_snapshot()
+        results = self.run_dbt(['run'])
+        self.assertEqual(len(results), 1)
+
+    @use_profile('postgres')
+    def test__postgres__simple_custom_snapshot(self):
+        self.dbt_run_seed_snapshot()
+
+        self.assert_expected()
+
+        self.run_sql_file("invalidate_postgres.sql")
+        self.run_sql_file("update.sql")
+
+        results = self.run_snapshot()
+        self.assertEqual(len(results),  self.NUM_SNAPSHOT_MODELS)
+
+        self.assert_expected()
+
+
+class TestNamespacedCustomSnapshotFiles(BaseSimpleSnapshotTest):
+    @property
+    def project_config(self):
+        return {
+            'data-paths': ['data'],
+            'macro-paths': ['custom-snapshot-macros'],
+            'snapshot-paths': ['test-snapshots-pg-custom-namespaced'],
+        }
+
+    @use_profile('postgres')
+    def test__postgres__simple_custom_snapshot_namespaced(self):
+        self.dbt_run_seed_snapshot()
+
+        self.assert_expected()
+
+        self.run_sql_file("invalidate_postgres.sql")
+        self.run_sql_file("update.sql")
+
+        results = self.run_snapshot()
+        self.assertEqual(len(results),  self.NUM_SNAPSHOT_MODELS)
+
+        self.assert_expected()
+
+
+class TestInvalidNamespacedCustomSnapshotFiles(BaseSimpleSnapshotTest):
+    @property
+    def project_config(self):
+        return {
+            'data-paths': ['data'],
+            'macro-paths': ['custom-snapshot-macros'],
+            'snapshot-paths': ['test-snapshots-pg-custom-invalid'],
+        }
+
+    def run_snapshot(self):
+        return self.run_dbt(['snapshot'], expect_pass=False)
+
+    @use_profile('postgres')
+    def test__postgres__simple_custom_snapshot_invalid_namespace(self):
+        self.dbt_run_seed_snapshot()
 
 
 class TestSimpleSnapshotFileSelects(DBTIntegrationTest):
