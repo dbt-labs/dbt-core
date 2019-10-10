@@ -35,7 +35,7 @@ class Name(ValidatedStringMixin):
         return True
 
 
-register_pattern(Name, r'^[^\d\W]\w*$')
+register_pattern(Name, r"^[^\d\W]\w*$")
 
 
 class SemverString(str, SerializableType):
