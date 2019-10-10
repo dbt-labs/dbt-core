@@ -303,10 +303,12 @@ def print_run_result_error(
         if is_warning:
             color = yellow
             info = 'Warning'
+            logger_fn = logger.warning
         else:
             color = red
             info = 'Failure'
-        logger.info(color("{} in {} {} ({})").format(
+            logger_fn = logger.error
+        logger_fn(color("{} in {} {} ({})").format(
             info,
             result.node.resource_type,
             result.node.name,
@@ -315,10 +317,10 @@ def print_run_result_error(
         try:
             int(result.status)
         except ValueError:
-            logger.info("  Status: {}".format(result.status))
+            logger.error("  Status: {}".format(result.status))
         else:
             status = dbt.utils.pluralize(result.status, 'result')
-            logger.info("  Got {}, expected 0.".format(status))
+            logger.error("  Got {}, expected 0.".format(status))
 
         if result.node.build_path is not None:
             with TextOnly():
@@ -330,10 +332,10 @@ def print_run_result_error(
         first = True
         for line in result.error.split("\n"):
             if first:
-                logger.info(yellow(line))
+                logger.error(yellow(line))
                 first = False
             else:
-                logger.info(line)
+                logger.error(line)
 
 
 def print_skip_caused_by_error(
