@@ -129,7 +129,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
         else:
             if not isinstance(name, str):
                 raise dbt.exceptions.CompilerException(
-                    f'For connection name, got {name} - not a string!'
+                    f"For connection name, got {name} - not a string!"
                 )
             assert isinstance(name, str)
             conn_name = name

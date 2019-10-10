@@ -254,15 +254,14 @@ class BaseRelation(FakeAPIObject, Hashable):
         if node.resource_type == NodeType.Source:
             if not isinstance(node, ParsedSourceDefinition):
                 raise InternalException(
-                    'type mismatch, expected ParsedSourceDefinition but got {}'
-                    .format(type(node))
+                    "type mismatch, expected ParsedSourceDefinition but got {}".format(type(node))
                 )
             return cls.create_from_source(node, **kwargs)
         else:
             if not isinstance(node, (ParsedNode, CompiledNode)):
                 raise InternalException(
-                    'type mismatch, expected ParsedNode or CompiledNode but '
-                    'got {}'.format(type(node))
+                    "type mismatch, expected ParsedNode or CompiledNode but "
+                    "got {}".format(type(node))
                 )
             return cls.create_from_node(config, node, **kwargs)
 

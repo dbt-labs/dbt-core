@@ -137,7 +137,7 @@ class Credentials(
     def hashed_unique_field(self) -> str:
         return hashlib.md5(self.unique_field.encode('utf-8')).hexdigest()
 
-    def connection_info(
+    def connection_info(self, *, with_aliases: bool = False) -> Iterable[Tuple[str, Any]]:
         self, *, with_aliases: bool = False
     ) -> Iterable[Tuple[str, Any]]:
         """Return an ordered iterator of key/value pairs for pretty-printing.
@@ -146,9 +146,7 @@ class Credentials(
         connection_keys = set(self._connection_keys())
         aliases: List[str] = []
         if with_aliases:
-            aliases = [
-                k for k, v in self._ALIASES.items() if v in connection_keys
-            ]
+            aliases = [k for k, v in self._ALIASES.items() if v in connection_keys]
         for key in itertools.chain(self._connection_keys(), aliases):
             if key in as_dict:
                 yield key, as_dict[key]

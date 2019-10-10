@@ -46,7 +46,7 @@ class PostgresCredentials(Credentials):
         return self.host
 
     def _connection_keys(self):
-        return ('host', 'port', 'user', 'database', 'schema', 'search_path',
+        return (
                 'keepalives_idle', 'sslmode')
 
 

@@ -221,10 +221,10 @@ class BaseMacroGenerator:
         self.context: Optional[Dict[str, Any]] = context
 
     def get_template(self):
-        raise NotImplementedError('get_template not implemented!')
+        raise NotImplementedError("get_template not implemented!")
 
     def get_name(self) -> str:
-        raise NotImplementedError('get_name not implemented!')
+        raise NotImplementedError("get_name not implemented!")
 
     def get_macro(self):
         name = self.get_name()
@@ -333,9 +333,7 @@ class MacroGenerator(BaseMacroGenerator):
 
 
 class QueryStringGenerator(BaseMacroGenerator):
-    def __init__(
-        self, template_str: str, context: Dict[str, Any]
-    ) -> None:
+    def __init__(self, template_str: str, context: Dict[str, Any]) -> None:
         super().__init__(context)
         self.template_str: str = template_str
         env = get_environment()
@@ -345,7 +343,7 @@ class QueryStringGenerator(BaseMacroGenerator):
         )
 
     def get_name(self) -> str:
-        return 'query_comment_macro'
+        return "query_comment_macro"
 
     def get_template(self):
         """Don't use the template cache, we don't have a node"""

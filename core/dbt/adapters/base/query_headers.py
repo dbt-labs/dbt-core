@@ -15,7 +15,7 @@ class NodeWrapper:
         self._inner_node = node
 
     def __getattr__(self, name):
-        return getattr(self._inner_node, name, '')
+        return getattr(self._inner_node, name, "")
 
 
 class _QueryComment(local):
@@ -24,6 +24,7 @@ class _QueryComment(local):
         - the current thread's query comment.
         - a source_name indicating what set the current thread's query comment
     """
+
     def __init__(self, initial):
         self.query_comment: Optional[str] = initial
         self.append = False
@@ -87,7 +88,7 @@ class MacroQueryStringSetter:
         return self.comment.add(sql)
 
     def reset(self):
-        self.set('master', None)
+        self.set("master", None)
 
     def set(self, name: str, node: Optional[CompileResultNode]):
         wrapped: Optional[NodeWrapper] = None
