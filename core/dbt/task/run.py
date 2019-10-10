@@ -1,7 +1,7 @@
 import functools
 import time
 
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.logger import GLOBAL_LOGGER as logger, TextOnly
 from dbt.node_types import NodeType, RunHookType
 from dbt.node_runners import ModelRunner
 
@@ -92,7 +92,8 @@ class RunTask(CompileTask):
         num_hooks = len(ordered_hooks)
 
         plural = 'hook' if num_hooks == 1 else 'hooks'
-        print_timestamped_line("")
+        with TextOnly():
+            print_timestamped_line("")
         print_timestamped_line(
             'Running {} {} {}'.format(num_hooks, hook_type, plural)
         )
@@ -115,7 +116,8 @@ class RunTask(CompileTask):
             print_hook_end_line(hook_text, status, idx, num_hooks,
                                 timer.elapsed)
 
-        print_timestamped_line("")
+        with TextOnly():
+            print_timestamped_line("")
 
     def safe_run_hooks(self, adapter, hook_type, extra_context):
         try:
@@ -134,7 +136,8 @@ class RunTask(CompileTask):
             execution = " in {execution_time:0.2f}s".format(
                 execution_time=execution_time)
 
-        print_timestamped_line("")
+        with TextOnly():
+            print_timestamped_line("")
         print_timestamped_line(
             "Finished running {stat_line}{execution}."
             .format(stat_line=stat_line, execution=execution))

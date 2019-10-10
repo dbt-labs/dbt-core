@@ -70,6 +70,18 @@ class BaseRunner:
         self.skip = False
         self.skip_cause = None
 
+    def get_result_status(self, result) -> Dict[str, str]:
+        if result.error:
+            return {'node_status': 'error', 'node_error': str(result.error)}
+        elif result.skip:
+            return {'node_status': 'skipped'}
+        elif result.fail:
+            return {'node_status': 'failed'}
+        elif result.warn:
+            return {'node_status': 'warn'}
+        else:
+            return {'node_status': 'passed'}
+
     def run_with_hooks(self, manifest):
         if self.skip:
             return self.on_skip()
@@ -435,6 +447,12 @@ class FreshnessRunner(BaseRunner):
         raise RuntimeException(
             'Freshness: nodes cannot be skipped!'
         )
+
+    def get_result_status(self, result) -> Dict[str, str]:
+        if result.error:
+            return {'node_status': 'error', 'node_error': str(result.error)}
+        else:
+            return {'node_status': str(result.status)}
 
     def before_execute(self):
         description = 'freshness of {0.source_name}.{0.name}'.format(self.node)

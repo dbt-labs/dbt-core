@@ -2,7 +2,12 @@ from dbt.contracts.graph.manifest import CompileResultNode
 from dbt.contracts.graph.unparsed import Time, FreshnessStatus
 from dbt.contracts.graph.parsed import ParsedSourceDefinition
 from dbt.contracts.util import Writable, Replaceable
-from dbt.logger import LogMessage
+from dbt.logger import (
+    LogMessage,
+    TimingProcessor,
+    JsonOnly,
+    GLOBAL_LOGGER as logger,
+)
 from hologram.helpers import StrEnum
 from hologram import JsonSchemaMixin
 
@@ -28,7 +33,7 @@ class TimingInfo(JsonSchemaMixin):
 
 
 class collect_timing_info:
-    def __init__(self, name):
+    def __init__(self, name: str):
         self.timing_info = TimingInfo(name=name)
 
     def __enter__(self):
@@ -37,6 +42,8 @@ class collect_timing_info:
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.timing_info.end()
+        with JsonOnly(), TimingProcessor(self.timing_info):
+            logger.debug('finished collecting timing info')
 
 
 @dataclass

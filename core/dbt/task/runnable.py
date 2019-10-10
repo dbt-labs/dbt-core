@@ -5,7 +5,16 @@ from multiprocessing.dummy import Pool as ThreadPool
 
 from dbt.task.base import ConfiguredTask
 from dbt.adapters.factory import get_adapter
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.logger import (
+    GLOBAL_LOGGER as logger,
+    DbtProcessState,
+    TextOnly,
+    UniqueID,
+    TimestampNamed,
+    DbtModelState,
+    NodeMetadata,
+    NodeCount,
+)
 from dbt.compilation import compile_manifest
 from dbt.contracts.results import ExecutionResult
 from dbt.loader import GraphLoader
@@ -19,6 +28,7 @@ import dbt.graph.selector
 
 RESULT_FILE_NAME = 'run_results.json'
 MANIFEST_FILE_NAME = 'manifest.json'
+RUNNING_STATE = DbtProcessState('running')
 
 
 def write_manifest(manifest, config):
@@ -120,9 +130,20 @@ class GraphRunnableTask(ManifestTask):
         return cls(self.config, adapter, node, run_count, num_nodes)
 
     def call_runner(self, runner):
-        # TODO: create+enforce an actual contracts for what `result` is instead
-        # of the current free-for-all
-        result = runner.run_with_hooks(self.manifest)
+        uid_context = UniqueID(runner.node.unique_id)
+        with RUNNING_STATE, uid_context:
+            startctx = TimestampNamed('node_started_at')
+            extended_metadata = NodeMetadata(runner.node, runner.node_index)
+            with startctx, extended_metadata:
+                logger.info('Began running model')
+            status = 'error'  # we must have an error if we don't see this
+            try:
+                result = runner.run_with_hooks(self.manifest)
+                status = runner.get_result_status(result)
+            finally:
+                finishctx = TimestampNamed('node_finished_at')
+                with finishctx, DbtModelState(status):
+                    logger.info('Finished running model')
         if result.error is not None and self.raise_on_first_error():
             # if we raise inside a thread, it'll just get silently swallowed.
             # stash the error message we want here, and it will check the
@@ -203,8 +224,10 @@ class GraphRunnableTask(ManifestTask):
 
         text = "Concurrency: {} threads (target='{}')"
         concurrency_line = text.format(num_threads, target_name)
-        dbt.ui.printer.print_timestamped_line(concurrency_line)
-        dbt.ui.printer.print_timestamped_line("")
+        with NodeCount(self.num_nodes):
+            dbt.ui.printer.print_timestamped_line(concurrency_line)
+        with TextOnly():
+            dbt.ui.printer.print_timestamped_line("")
 
         pool = ThreadPool(num_threads)
         try:
@@ -292,7 +315,8 @@ class GraphRunnableTask(ManifestTask):
                 elapsed_time=0.0,
             )
         else:
-            logger.info("")
+            with TextOnly():
+                logger.info("")
 
         selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
         result = self.execute_with_hooks(selected_uids)

@@ -1,8 +1,9 @@
 from typing import Dict, Optional, Tuple
 
-from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.utils import get_materialization
+from dbt.logger import GLOBAL_LOGGER as logger, DbtStatusMessage, TextOnly
 from dbt.node_types import NodeType
+from dbt.tracking import InvocationProcessor
+from dbt.utils import get_materialization
 import dbt.ui.colors
 
 import time
@@ -295,7 +296,8 @@ def print_run_result_error(
     result, newline: bool = True, is_warning: bool = False
 ) -> None:
     if newline:
-        logger.info("")
+        with TextOnly():
+            logger.info("")
 
     if result.fail or (is_warning and result.warn):
         if is_warning:
@@ -319,7 +321,8 @@ def print_run_result_error(
             logger.info("  Got {}, expected 0.".format(status))
 
         if result.node.build_path is not None:
-            logger.info("")
+            with TextOnly():
+                logger.info("")
             logger.info("  compiled SQL at {}".format(
                 result.node.build_path))
 
@@ -357,19 +360,21 @@ def print_end_of_run_summary(
     else:
         message = green('Completed successfully')
 
-    logger.info('')
+    with TextOnly():
+        logger.info('')
     logger.info('{}'.format(message))
 
 
 def print_run_end_messages(results, early_exit: bool = False) -> None:
     errors = [r for r in results if r.error is not None or r.fail]
     warnings = [r for r in results if r.warn]
-    print_end_of_run_summary(len(errors), len(warnings), early_exit)
+    with DbtStatusMessage(), InvocationProcessor():
+        print_end_of_run_summary(len(errors), len(warnings), early_exit)
 
-    for error in errors:
-        print_run_result_error(error, is_warning=False)
+        for error in errors:
+            print_run_result_error(error, is_warning=False)
 
-    for warning in warnings:
-        print_run_result_error(warning, is_warning=True)
+        for warning in warnings:
+            print_run_result_error(warning, is_warning=True)
 
-    print_run_status_line(results)
+        print_run_status_line(results)

@@ -8,7 +8,7 @@ from dbt.include.global_project import PACKAGES
 import dbt.exceptions
 import dbt.flags
 
-from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.logger import GLOBAL_LOGGER as logger, DbtProcessState
 from dbt.node_types import NodeType
 from dbt.clients.system import make_directory
 from dbt.config import Project, RuntimeConfig
@@ -31,6 +31,7 @@ from dbt.version import __version__
 
 
 PARTIAL_PARSE_FILE_NAME = 'partial_parse.pickle'
+PARSING_STATE = DbtProcessState('parsing')
 
 
 _parser_types = [
@@ -284,19 +285,21 @@ class GraphLoader:
         root_config: RuntimeConfig,
         internal_manifest: Optional[Manifest] = None
     ) -> Manifest:
-        projects = load_all_projects(root_config)
-        loader = cls(root_config, projects)
-        loader.load(internal_manifest=internal_manifest)
-        loader.write_parse_results()
-        manifest = loader.create_manifest()
-        _check_manifest(manifest, root_config)
-        return manifest
+        with PARSING_STATE:
+            projects = load_all_projects(root_config)
+            loader = cls(root_config, projects)
+            loader.load(internal_manifest=internal_manifest)
+            loader.write_parse_results()
+            manifest = loader.create_manifest()
+            _check_manifest(manifest, root_config)
+            return manifest
 
     @classmethod
     def load_internal(cls, root_config: RuntimeConfig) -> Manifest:
-        projects = load_internal_projects(root_config)
-        loader = cls(root_config, projects)
-        return loader.load_only_macros()
+        with PARSING_STATE:
+            projects = load_internal_projects(root_config)
+            loader = cls(root_config, projects)
+            return loader.load_only_macros()
 
 
 def _check_resource_uniqueness(manifest):
