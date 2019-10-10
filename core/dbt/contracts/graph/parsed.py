@@ -261,10 +261,18 @@ class TestConfig(NodeConfig):
 
 
 @dataclass
+class TestMetadata(JsonSchemaMixin):
+    namespace: Optional[str]
+    name: str
+    kwargs: Dict[str, Any]
+
+
+@dataclass
 class ParsedTestNode(ParsedNode):
     resource_type: NodeType = field(metadata={'restrict': [NodeType.Test]})
     column_name: Optional[str] = None
     config: TestConfig = field(default_factory=TestConfig)
+    test_metadata: Optional[TestMetadata] = None
 
 
 @dataclass(init=False)

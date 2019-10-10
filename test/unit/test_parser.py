@@ -306,6 +306,15 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertTrue(tests[0].name.startswith('accepted_values_'))
         self.assertEqual(tests[0].fqn, ['snowplow', 'schema_test', tests[0].name])
         self.assertEqual(tests[0].unique_id.split('.'), ['test', 'snowplow', tests[0].name])
+        self.assertEqual(tests[0].test_metadata.name, 'accepted_values')
+        self.assertIsNone(tests[0].test_metadata.namespace)
+        self.assertEqual(
+            tests[0].test_metadata.kwargs,
+            {
+                'column_name': 'color',
+                'values': ['red', 'blue', 'green'],
+            }
+        )
 
         # foreign packages are a bit weird, they include the macro package
         # name in the test name
@@ -318,6 +327,15 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertTrue(tests[1].name.startswith('foreign_package_test_case_'))
         self.assertEqual(tests[1].package_name, 'snowplow')
         self.assertEqual(tests[1].unique_id.split('.'), ['test', 'snowplow', tests[1].name])
+        self.assertEqual(tests[1].test_metadata.name, 'test_case')
+        self.assertEqual(tests[1].test_metadata.namespace, 'foreign_package')
+        self.assertEqual(
+            tests[1].test_metadata.kwargs,
+            {
+                'column_name': 'color',
+                'arg': 100,
+            },
+        )
 
         self.assertEqual(tests[2].config.severity, 'WARN')
         self.assertEqual(tests[2].tags, ['schema'])
@@ -327,6 +345,14 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertTrue(tests[2].name.startswith('not_null_'))
         self.assertEqual(tests[2].fqn, ['snowplow', 'schema_test', tests[2].name])
         self.assertEqual(tests[2].unique_id.split('.'), ['test', 'snowplow', tests[2].name])
+        self.assertEqual(tests[2].test_metadata.name, 'not_null')
+        self.assertIsNone(tests[2].test_metadata.namespace)
+        self.assertEqual(
+            tests[2].test_metadata.kwargs,
+            {
+                'column_name': 'color',
+            },
+        )
 
         path = get_abs_os_path('./dbt_modules/snowplow/models/test_one.yml')
         self.assertIn(path, self.parser.results.files)
