@@ -142,10 +142,7 @@ class Credentials(ExtensibleDbtClassMixin, Replaceable, metaclass=abc.ABCMeta):
         return hashlib.md5(self.unique_field.encode("utf-8")).hexdigest()
 
     def connection_info(self, *, with_aliases: bool = False) -> Iterable[Tuple[str, Any]]:
-        self, *, with_aliases: bool = False
-    ) -> Iterable[Tuple[str, Any]]:
-        """Return an ordered iterator of key/value pairs for pretty-printing.
-        """
+        """Return an ordered iterator of key/value pairs for pretty-printing."""
         as_dict = self.to_dict(omit_none=False)
         connection_keys = set(self._connection_keys())
         aliases: List[str] = []
