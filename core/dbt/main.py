@@ -64,6 +64,14 @@ class DBTArgumentParser(argparse.ArgumentParser):
         self.register('action', 'dbtversion', DBTVersion)
 
 
+class RPCArgumentParser(DBTArgumentParser):
+    def exit(self, status=0, message=None):
+        if status == 0:
+            return
+        else:
+            raise TypeError(message)
+
+
 def main(args=None):
     if args is None:
         args = sys.argv[1:]
@@ -310,7 +318,7 @@ def _build_init_subparser(subparsers, base_subparser):
         Name of the new project
         ''',
     )
-    sub.set_defaults(cls=init_task.InitTask, which='init')
+    sub.set_defaults(cls=init_task.InitTask, which='init', rpc_method=None)
     return sub
 
 
@@ -323,7 +331,7 @@ def _build_clean_subparser(subparsers, base_subparser):
         (usually the dbt_modules and target directories.)
         '''
     )
-    sub.set_defaults(cls=clean_task.CleanTask, which='clean')
+    sub.set_defaults(cls=clean_task.CleanTask, which='clean', rpc_method=None)
     return sub
 
 
@@ -344,7 +352,7 @@ def _build_debug_subparser(subparsers, base_subparser):
         If specified, DBT will show path information for this project
         '''
     )
-    sub.set_defaults(cls=debug_task.DebugTask, which='debug')
+    sub.set_defaults(cls=debug_task.DebugTask, which='debug', rpc_method=None)
     return sub
 
 
@@ -356,7 +364,7 @@ def _build_deps_subparser(subparsers, base_subparser):
         Pull the most recent version of the dependencies listed in packages.yml
         '''
     )
-    sub.set_defaults(cls=deps_task.DepsTask, which='deps')
+    sub.set_defaults(cls=deps_task.DepsTask, which='deps', rpc_method=None)
     return sub
 
 
@@ -377,7 +385,8 @@ def _build_snapshot_subparser(subparsers, base_subparser):
         Overrides settings in profiles.yml.
         '''
     )
-    sub.set_defaults(cls=snapshot_task.SnapshotTask, which='snapshot')
+    sub.set_defaults(cls=snapshot_task.SnapshotTask, which='snapshot',
+                     rpc_method=None)
     return sub
 
 
@@ -388,7 +397,7 @@ def _build_run_subparser(subparsers, base_subparser):
         help='''
         Compile SQL and execute against the current target database.
         ''')
-    run_sub.set_defaults(cls=run_task.RunTask, which='run')
+    run_sub.set_defaults(cls=run_task.RunTask, which='run', rpc_method='run')
     return run_sub
 
 
@@ -401,7 +410,8 @@ def _build_compile_subparser(subparsers, base_subparser):
         Compiled SQL files are written to the target/ directory.
         '''
     )
-    sub.set_defaults(cls=compile_task.CompileTask, which='compile')
+    sub.set_defaults(cls=compile_task.CompileTask, which='compile',
+                     rpc_method='compile')
     sub.add_argument('--parse-only', action='store_true')
     return sub
 
@@ -411,7 +421,7 @@ def _build_docs_generate_subparser(subparsers, base_subparser):
     # will cause weird errors about 'conflicting option strings'.
     generate_sub = subparsers.add_parser('generate', parents=[base_subparser])
     generate_sub.set_defaults(cls=generate_task.GenerateTask,
-                              which='generate')
+                              which='generate', rpc_method='docs.generate')
     generate_sub.add_argument(
         '--no-compile',
         action='store_false',
@@ -502,7 +512,8 @@ def _build_seed_subparser(subparsers, base_subparser):
         Show a sample of the loaded data in the terminal
         '''
     )
-    seed_sub.set_defaults(cls=seed_task.SeedTask, which='seed')
+    seed_sub.set_defaults(cls=seed_task.SeedTask, which='seed',
+                          rpc_method='seed')
     return seed_sub
 
 
@@ -516,7 +527,8 @@ def _build_docs_serve_subparser(subparsers, base_subparser):
         Specify the port number for the docs server.
         '''
     )
-    serve_sub.set_defaults(cls=serve_task.ServeTask, which='serve')
+    serve_sub.set_defaults(cls=serve_task.ServeTask, which='serve',
+                           rpc_method=None)
     return serve_sub
 
 
@@ -543,7 +555,7 @@ def _build_test_subparser(subparsers, base_subparser):
         '''
     )
 
-    sub.set_defaults(cls=test_task.TestTask, which='test')
+    sub.set_defaults(cls=test_task.TestTask, which='test', rpc_method='test')
     return sub
 
 
@@ -583,7 +595,7 @@ def _build_source_snapshot_freshness_subparser(subparsers, base_subparser):
         '''
     )
     sub.set_defaults(cls=freshness_task.FreshnessTask,
-                     which='snapshot-freshness')
+                     which='snapshot-freshness', rpc_method=None)
     return sub
 
 
@@ -610,7 +622,7 @@ def _build_rpc_subparser(subparsers, base_subparser):
         Specify the port number for the rpc server.
         ''',
     )
-    sub.set_defaults(cls=RPCServerTask, which='rpc')
+    sub.set_defaults(cls=RPCServerTask, which='rpc', rpc_method=None)
     # the rpc task does a 'compile', so we need these attributes to exist, but
     # we don't want users to be allowed to set them.
     sub.set_defaults(models=None, exclude=None)
@@ -626,7 +638,7 @@ def _build_list_subparser(subparsers, base_subparser):
         ''',
         aliases=['ls'],
     )
-    sub.set_defaults(cls=ListTask, which='list')
+    sub.set_defaults(cls=ListTask, which='list', rpc_method=None)
     resource_values = list(ListTask.ALL_RESOURCE_VALUES) + ['default', 'all']
     sub.add_argument('--resource-type',
                      choices=resource_values,
@@ -695,12 +707,12 @@ def _build_run_operation_subparser(subparsers, base_subparser):
         '''
     )
     sub.set_defaults(cls=run_operation_task.RunOperationTask,
-                     which='run-operation')
+                     which='run-operation', rpc_method=None)
     return sub
 
 
-def parse_args(args):
-    p = DBTArgumentParser(
+def parse_args(args, cls=DBTArgumentParser):
+    p = cls(
         prog='dbt',
         description='''
         An ELT tool for managing your SQL transformations and data models.

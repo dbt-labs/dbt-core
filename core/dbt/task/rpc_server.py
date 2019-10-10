@@ -17,13 +17,7 @@ from dbt.logger import (
 )
 from dbt.task.base import ConfiguredTask
 from dbt.task.compile import CompileTask
-from dbt.task.remote import (
-    RemoteCompileTask, RemoteCompileProjectTask,
-    RemoteRunTask, RemoteRunProjectTask,
-    RemoteSeedProjectTask,
-    RemoteTestProjectTask,
-    RemoteDocsGenerateProjectTask,
-)
+from dbt.task.remote import RPCTask
 from dbt.utils import ForgivingJSONEncoder, env_set_truthy
 from dbt import rpc
 from dbt.rpc.logger import ServerContext, HTTPRequest, RPCResponse
@@ -147,12 +141,7 @@ class RPCServerTask(ConfiguredTask):
 
     @staticmethod
     def _default_tasks():
-        return [
-            RemoteCompileTask, RemoteCompileProjectTask,
-            RemoteRunTask, RemoteRunProjectTask,
-            RemoteSeedProjectTask, RemoteTestProjectTask,
-            RemoteDocsGenerateProjectTask
-        ]
+        return RPCTask.recursive_subclasses(named_only=True)
 
     def single_threaded(self):
         return SINGLE_THREADED_WEBSERVER or self.args.single_threaded

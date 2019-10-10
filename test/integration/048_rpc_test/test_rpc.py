@@ -690,6 +690,20 @@ class TestRPCServer(HasRPCServer):
         )
 
     @use_profile('postgres')
+    def test_seed_project_cli_postgres(self):
+        self.run_sql_file("seed.sql")
+        result = self.async_query('cli_args', cli='seed --show').json()
+        dct = self.assertIsResult(result)
+        self.assertTablesEqual('source', 'seed_expected')
+        self.assertIn('results', dct)
+        results = dct['results']
+        self.assertEqual(len(results), 4)
+        self.assertEqual(
+            set(r['node']['name'] for r in results),
+            {'expected_multi_source', 'other_source_table', 'other_table', 'source'}
+        )
+
+    @use_profile('postgres')
     def test_compile_project_postgres(self):
         self.run_dbt_with_vars(['seed'])
         result = self.async_query('compile').json()
@@ -704,9 +718,38 @@ class TestRPCServer(HasRPCServer):
         self.assertNotIn('ephemeral_model', compiled)
 
     @use_profile('postgres')
+    def test_compile_project_cli_postgres(self):
+        self.run_dbt_with_vars(['seed'])
+        result = self.async_query('cli_args', cli='compile --models=source:test_source+').json()
+        dct = self.assertIsResult(result)
+        self.assertIn('results', dct)
+        results = dct['results']
+        self.assertEqual(len(results), 6)
+        compiled = set(r['node']['name'] for r in results)
+        self.assertTrue(compiled.issuperset(
+            {'descendant_model', 'multi_source_model'}
+        ))
+        self.assertNotIn('ephemeral_model', compiled)
+        self.assertNotIn('nonsource_descendant', compiled)
+
+    @use_profile('postgres')
     def test_run_project_postgres(self):
         self.run_dbt_with_vars(['seed'])
         result = self.async_query('run').json()
+        dct = self.assertIsResult(result)
+        self.assertIn('results', dct)
+        results = dct['results']
+        self.assertEqual(len(results), 3)
+        self.assertEqual(
+            set(r['node']['name'] for r in results),
+            {'descendant_model', 'multi_source_model', 'nonsource_descendant'}
+        )
+        self.assertTablesEqual('multi_source_model', 'expected_multi_source')
+
+    @use_profile('postgres')
+    def test_run_project_cli_postgres(self):
+        self.run_dbt_with_vars(['seed'])
+        result = self.async_query('cli_args', cli='run').json()
         dct = self.assertIsResult(result)
         self.assertIn('results', dct)
         results = dct['results']
@@ -930,6 +973,41 @@ class TestRPCServer(HasRPCServer):
         if os.path.exists('target/manifest.json'):
             os.remove('target/manifest.json')
         result = self.async_query('docs.generate').json()
+        dct = self.assertIsResult(result)
+        self.assertTrue(os.path.exists('target/catalog.json'))
+        self.assertIn('status', dct)
+        self.assertTrue(dct['status'])
+        self.assertIn('nodes', dct)
+        nodes = dct['nodes']
+        self.assertEqual(len(nodes), 10)
+        expected = {
+            'model.test.descendant_model',
+            'model.test.multi_source_model',
+            'model.test.nonsource_descendant',
+            'seed.test.expected_multi_source',
+            'seed.test.other_source_table',
+            'seed.test.other_table',
+            'seed.test.source',
+            'source.test.other_source.test_table',
+            'source.test.test_source.other_test_table',
+            'source.test.test_source.test_table',
+        }
+        for uid in expected:
+            self.assertIn(uid, nodes)
+        self.assertTrue(os.path.exists('target/manifest.json'))
+        with open('target/manifest.json') as fp:
+            manifest = json.load(fp)
+        self.assertIn('nodes', manifest)
+        self.assertEqual(len(manifest['nodes']), 17)
+
+    @use_profile('postgres')
+    def test_docs_generate_postgres(self):
+        self.run_dbt_with_vars(['seed'])
+        self.run_dbt_with_vars(['run'])
+        self.assertFalse(os.path.exists('target/catalog.json'))
+        if os.path.exists('target/manifest.json'):
+            os.remove('target/manifest.json')
+        result = self.async_query('cli_args', cli='docs generate').json()
         dct = self.assertIsResult(result)
         self.assertTrue(os.path.exists('target/catalog.json'))
         self.assertIn('status', dct)

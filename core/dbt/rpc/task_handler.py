@@ -1,5 +1,6 @@
 import multiprocessing
 import signal
+import sys
 import threading
 import uuid
 from contextlib import contextmanager
@@ -11,7 +12,9 @@ from hologram.helpers import StrEnum
 
 import dbt.exceptions
 from dbt.adapters.factory import cleanup_connections
-from dbt.logger import GLOBAL_LOGGER as logger, list_handler, LogMessage
+from dbt.logger import (
+    GLOBAL_LOGGER as logger, list_handler, LogMessage, OutputHandler
+)
 from dbt.rpc.error import (
     dbt_error,
     server_error,
@@ -104,7 +107,8 @@ def _task_bootstrap(
         rpc_exception = None
         result = None
         try:
-            result = task.handle_request(params=params)
+            task.set_args(params=params)
+            result = task.handle_request()
         except RPCException as exc:
             rpc_exception = exc
         except dbt.exceptions.RPCKilledException as exc:
@@ -115,7 +119,8 @@ def _task_bootstrap(
             logger.debug('dbt runtime exception', exc_info=True)
             rpc_exception = dbt_error(exc)
         except Exception as exc:
-            logger.debug('uncaught python exception', exc_info=True)
+            with OutputHandler(sys.stderr).applicationbound():
+                logger.error('uncaught python exception', exc_info=True)
             rpc_exception = server_error(exc)
 
         # put whatever result we got onto the queue as well.
@@ -306,6 +311,10 @@ class RequestTaskHandler(threading.Thread):
             # raise a TypeError to indicate invalid parameters
             self.state = TaskHandlerState.Error
             raise TypeError(exc)
+        except TypeError:
+            # we got this from our argument parser, already a nice TypeError
+            self.state = TaskHandlerState.Error
+            raise
         self.subscriber = QueueSubscriber()
         self.process = multiprocessing.Process(
             target=_task_bootstrap,

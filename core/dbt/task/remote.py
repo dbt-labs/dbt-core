@@ -1,3 +1,4 @@
+import shlex
 import signal
 import threading
 from dataclasses import dataclass
@@ -6,6 +7,8 @@ from typing import Union, List, Optional
 
 from hologram import JsonSchemaMixin
 
+import dbt.exceptions
+import dbt.ui.printer
 from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import extract_toplevel_blocks
 from dbt.compilation import compile_manifest
@@ -13,7 +16,6 @@ from dbt.contracts.results import RemoteCatalogResults
 from dbt.parser.results import ParseResult
 from dbt.parser.rpc import RPCCallParser, RPCMacroParser
 from dbt.parser.util import ParserUtils
-import dbt.ui.printer
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.rpc.node_runners import RPCCompileRunner, RPCExecuteRunner
 from dbt.rpc.task import RemoteCallableResult, RPCTask
@@ -53,11 +55,12 @@ class RPCDocsGenerateProjectParameters(JsonSchemaMixin):
     compile: bool = True
 
 
-class _RPCExecTask(RPCTask):
-    def __init__(self, args, config, manifest):
-        super().__init__(args, config)
-        self._base_manifest = manifest.deepcopy(config=config)
+@dataclass
+class RPCCliParameters(JsonSchemaMixin):
+    cli: str
 
+
+class _RPCExecTask(RPCTask):
     def runtime_cleanup(self, selected_uids):
         """Do some pre-run cleanup that is usually performed in Task __init__.
         """
@@ -81,10 +84,11 @@ class _RPCExecTask(RPCTask):
         sql = ''.join(data_chunks)
         return sql, macros
 
-    def _get_exec_node(self, name, sql, macros):
+    def _get_exec_node(self):
         results = ParseResult.rpc()
         macro_overrides = {}
-        sql, macros = self._extract_request_data(sql)
+        macros = self.args.macros
+        sql, macros = self._extract_request_data(self.args.sql)
 
         if macros:
             macro_parser = RPCMacroParser(results, self.config)
@@ -98,7 +102,7 @@ class _RPCExecTask(RPCTask):
             root_project=self.config,
             macro_manifest=self._base_manifest,
         )
-        node = rpc_parser.parse_remote(sql, name)
+        node = rpc_parser.parse_remote(sql, self.args.name)
         self.manifest = ParserUtils.add_new_refs(
             manifest=self._base_manifest,
             current_project=self.config,
@@ -124,14 +128,17 @@ class _RPCExecTask(RPCTask):
         finally:
             thread_done.set()
 
-    def handle_request(
-        self, params: RPCExecParameters
-    ) -> RemoteCallableResult:
+    def set_args(self, params: RPCExecParameters):
+        self.args.name = params.name
+        self.args.sql = params.sql
+        self.args.macros = params.macros
+
+    def handle_request(self) -> RemoteCallableResult:
         # we could get a ctrl+c at any time, including during parsing.
         thread = None
         started = datetime.utcnow()
         try:
-            node = self._get_exec_node(params.name, params.sql, params.macros)
+            node = self._get_exec_node()
 
             selected_uids = [node.unique_id]
             self.runtime_cleanup(selected_uids)
@@ -183,112 +190,59 @@ class RemoteRunTask(_RPCExecTask, RunTask):
         return RPCExecuteRunner
 
 
-class RemoteCompileProjectTask(RPCTask):
+class _RPCCommandTask(RPCTask):
+    def __init__(self, args, config, manifest):
+        super().__init__(args, config, manifest)
+        self.manifest = self._base_manifest
+
+    def load_manifest(self):
+        # we started out with a manifest!
+        pass
+
+    def handle_request(self) -> RemoteCallableResult:
+        return self.run()
+
+
+class RemoteCompileProjectTask(_RPCCommandTask):
     METHOD_NAME = 'compile'
 
-    def __init__(self, args, config, manifest):
-        super().__init__(args, config)
-        self.manifest = manifest.deepcopy(config=config)
-
-    def load_manifest(self):
-        # we started out with a manifest!
-        pass
-
-    def handle_request(
-        self, params: RPCCompileProjectParameters
-    ) -> RemoteCallableResult:
+    def set_args(self, params: RPCCompileProjectParameters) -> None:
         self.args.models = self._listify(params.models)
         self.args.exclude = self._listify(params.exclude)
 
-        results = self.run()
-        return results
 
-
-class RemoteRunProjectTask(RPCTask, RunTask):
+class RemoteRunProjectTask(_RPCCommandTask, RunTask):
     METHOD_NAME = 'run'
 
-    def __init__(self, args, config, manifest):
-        super().__init__(args, config)
-        self.manifest = manifest.deepcopy(config=config)
-
-    def load_manifest(self):
-        # we started out with a manifest!
-        pass
-
-    def handle_request(
-        self, params: RPCCompileProjectParameters
-    ) -> RemoteCallableResult:
+    def set_args(self, params: RPCCompileProjectParameters) -> None:
         self.args.models = self._listify(params.models)
         self.args.exclude = self._listify(params.exclude)
 
-        results = self.run()
-        return results
 
-
-class RemoteSeedProjectTask(RPCTask, SeedTask):
+class RemoteSeedProjectTask(_RPCCommandTask, SeedTask):
     METHOD_NAME = 'seed'
 
-    def __init__(self, args, config, manifest):
-        super().__init__(args, config)
-        self.manifest = manifest.deepcopy(config=config)
-
-    def load_manifest(self):
-        # we started out with a manifest!
-        pass
-
-    def handle_request(
-        self, params: RPCSeedProjectParameters
-    ) -> RemoteCallableResult:
+    def set_args(self, params: RPCSeedProjectParameters) -> None:
         self.args.show = params.show
 
-        results = self.run()
-        return results
 
-
-class RemoteTestProjectTask(RPCTask, TestTask):
+class RemoteTestProjectTask(_RPCCommandTask, TestTask):
     METHOD_NAME = 'test'
 
-    def __init__(self, args, config, manifest):
-        super().__init__(args, config)
-        self.manifest = manifest.deepcopy(config=config)
-
-    def load_manifest(self):
-        # we started out with a manifest!
-        pass
-
-    def handle_request(
-        self, params: RPCTestProjectParameters,
-    ) -> RemoteCallableResult:
+    def set_args(self, params: RPCTestProjectParameters) -> None:
         self.args.models = self._listify(params.models)
         self.args.exclude = self._listify(params.exclude)
         self.args.data = params.data
         self.args.schema = params.schema
 
-        results = self.run()
-        return results
 
-
-class RemoteDocsGenerateProjectTask(RPCTask, GenerateTask):
+class RemoteDocsGenerateProjectTask(_RPCCommandTask, GenerateTask):
     METHOD_NAME = 'docs.generate'
 
-    def __init__(self, args, config, manifest):
-        super().__init__(args, config)
-        self.manifest = manifest.deepcopy(config=config)
-
-    def load_manifest(self):
-        # we started out with a manifest!
-        pass
-
-    def handle_request(
-        self, params: RPCDocsGenerateProjectParameters,
-    ) -> RemoteCallableResult:
+    def set_args(self, params: RPCDocsGenerateProjectParameters) -> None:
         self.args.models = None
         self.args.exclude = None
         self.args.compile = params.compile
-
-        results = self.run()
-        assert isinstance(results, RemoteCatalogResults)
-        return results
 
     def get_catalog_results(
         self, nodes, generated_at, compile_results
@@ -299,3 +253,32 @@ class RemoteDocsGenerateProjectTask(RPCTask, GenerateTask):
             _compile_results=compile_results,
             logs=[],
         )
+
+
+class RemoteRPCParameters(_RPCCommandTask):
+    METHOD_NAME = 'cli_args'
+
+    def set_args(self, params: RPCCliParameters) -> None:
+        # more import cycles :(
+        from dbt.main import parse_args, RPCArgumentParser
+        split = shlex.split(params.cli)
+        self.args = parse_args(split, RPCArgumentParser)
+
+    def get_rpc_task_cls(self):
+        # This is obnoxious, but we don't have actual access to the TaskManager
+        # so instead we get to dig through all the subclasses of RPCTask
+        # (recursively!) looking for a matching METHOD_NAME
+        for candidate in RPCTask.recursive_subclasses():
+            if candidate.METHOD_NAME == self.args.rpc_method:
+                return candidate
+        # this shouldn't happen
+        raise dbt.exceptions.InternalException(
+            'No matching handler found for rpc method {} (which={})'
+            .format(self.args.rpc_method, self.args.which)
+        )
+
+    def handle_request(self) -> JsonSchemaMixin:
+        cls = self.get_rpc_task_cls()
+        # we parsed args from the cli, so we're set on that front
+        task = cls(self.args, self.config, self.manifest)
+        return task.handle_request()
