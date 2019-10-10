@@ -277,7 +277,8 @@ class NodeMetadata(logbook.Processor):
             ('schema', 'node_schema'),
             ('database', 'node_database'),
             ('name', 'node_name'),
-            ('original_file_path', 'node_path')
+            ('original_file_path', 'node_path'),
+            ('resource_type', 'resource_type'),
         ]
         for attr, key in keys:
             value = getattr(self.node, attr, None)
