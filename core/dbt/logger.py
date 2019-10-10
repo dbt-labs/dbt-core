@@ -293,9 +293,9 @@ class ModelMetadata(NodeMetadata):
             ("alias", "node_alias"),
             ("schema", "node_schema"),
             ("database", "node_database"),
-            ('original_file_path', 'node_path'),
+            ("original_file_path", "node_path"),
             ("name", "node_name"),
-            ('resource_type', 'resource_type'),
+            ("resource_type", "resource_type"),
             ('depends_on_nodes', 'depends_on'),
         ]
 
