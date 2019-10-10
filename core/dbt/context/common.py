@@ -1,8 +1,8 @@
 import agate
-import json
+import itertools
 import os
-from typing import Union, Callable, Type
 from typing_extensions import Protocol
+from typing import Union, Callable, Any, Dict, List, TypeVar, Type
 
 import dbt.clients.agate_helper
 from dbt.contracts.graph.compiled import CompiledSeedNode
@@ -16,11 +16,9 @@ from dbt.adapters.factory import get_adapter
 from dbt.node_types import NodeType
 from dbt.include.global_project import PACKAGES
 from dbt.include.global_project import PROJECT_NAME as GLOBAL_PROJECT_NAME
-from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.clients.jinja import get_rendered
-from dbt.context.base import (
-    debug_here, env_var, get_context_modules, add_tracking, Var
-)
+from dbt.context.base import Var, HasCredentialsContext
+from dbt.contracts.graph.manifest import Manifest
 
 
 class RelationProxy:
@@ -97,7 +95,9 @@ class Provider(Protocol):
     source: Type[BaseResolver]
 
 
-def _add_macro_map(context, package_name, macro_map):
+def _add_macro_map(
+    context: Dict[str, Any], package_name: str, macro_map: Dict[str, Callable]
+):
     """Update an existing context in-place, adding the given macro map to the
     appropriate package namespace. Adapter packages get inserted into the
     global namespace.
@@ -106,37 +106,42 @@ def _add_macro_map(context, package_name, macro_map):
     if package_name in PACKAGES:
         key = GLOBAL_PROJECT_NAME
     if key not in context:
-        context[key] = {}
+        value: Dict[str, Callable] = {}
+        context[key] = value
 
     context[key].update(macro_map)
 
 
-def _add_macros(context, model, manifest):
-    macros_to_add = {'global': [], 'local': []}
+class ManifestParsedContext(HasCredentialsContext):
+    """A context available after the manifest has been parsed."""
+    def __init__(self, config, manifest):
+        super().__init__(config)
+        self.manifest = manifest
 
-    for unique_id, macro in manifest.macros.items():
-        if macro.resource_type != NodeType.Macro:
-            continue
-        package_name = macro.package_name
+    def add_macros(self, context):
+        global_macros: List[Dict[str, Callable]] = []
+        local_macros: List[Dict[str, Callable]] = []
 
-        macro_map = {
-            macro.name: macro.generator(context)
-        }
+        for unique_id, macro in self.manifest.macros.items():
+            if macro.resource_type != NodeType.Macro:
+                continue
+            package_name = macro.package_name
 
-        # adapter packages are part of the global project space
-        _add_macro_map(context, package_name, macro_map)
+            macro_map: Dict[str, Callable] = {
+                macro.name: macro.generator(context)
+            }
 
-        if package_name == model.package_name:
-            macros_to_add['local'].append(macro_map)
-        elif package_name in PACKAGES:
-            macros_to_add['global'].append(macro_map)
+            # adapter packages are part of the global project space
+            _add_macro_map(context, package_name, macro_map)
 
-    # Load global macros before local macros -- local takes precedence
-    unprefixed_macros = macros_to_add['global'] + macros_to_add['local']
-    for macro_map in unprefixed_macros:
-        context.update(macro_map)
+            if package_name == self.search_package_name:
+                local_macros.append(macro_map)
+            elif package_name in PACKAGES:
+                global_macros.append(macro_map)
 
-    return context
+        # Load global macros before local macros -- local takes precedence
+        for macro_map in itertools.chain(global_macros, local_macros):
+            context.update(macro_map)
 
 
 def _store_result(sql_results):
@@ -161,9 +166,12 @@ def _load_result(sql_results):
     return call
 
 
-def add_validation(context):
-    def validate_any(*args):
-        def inner(value):
+T = TypeVar('T')
+
+
+def get_validation() -> dbt.utils.AttrDict:
+    def validate_any(*args) -> Callable[[T], None]:
+        def inner(value: T) -> None:
             for arg in args:
                 if isinstance(arg, type) and isinstance(value, arg):
                     return
@@ -174,22 +182,16 @@ def add_validation(context):
                 .format(value, ','.join(map(str, args))))
         return inner
 
-    validation_utils = dbt.utils.AttrDict({
+    return dbt.utils.AttrDict({
         'any': validate_any,
     })
-
-    return dbt.utils.merge(
-        context,
-        {'validation': validation_utils})
 
 
 def add_sql_handlers(context):
     sql_results = {}
-    return dbt.utils.merge(context, {
-        '_sql_results': sql_results,
-        'store_result': _store_result(sql_results),
-        'load_result': _load_result(sql_results),
-    })
+    context['_sql_results'] = sql_results
+    context['store_result'] = _store_result(sql_results)
+    context['load_result'] = _load_result(sql_results)
 
 
 def write(node, target_path, subdirectory):
@@ -208,20 +210,6 @@ def render(context, node):
     return fn
 
 
-def fromjson(string, default=None):
-    try:
-        return json.loads(string)
-    except ValueError:
-        return default
-
-
-def tojson(value, default=None):
-    try:
-        return json.dumps(value)
-    except ValueError:
-        return default
-
-
 def try_or_compiler_error(model):
     def impl(message_if_exception, func, *args, **kwargs):
         try:
@@ -232,16 +220,6 @@ def try_or_compiler_error(model):
 
 
 # Base context collection, used for parsing configs.
-def log(msg, info=False):
-    if info:
-        logger.info(msg)
-    else:
-        logger.debug(msg)
-    return ''
-
-
-def _return(value):
-    raise dbt.exceptions.MacroReturn(value)
 
 
 def _build_load_agate_table(
@@ -258,89 +236,100 @@ def _build_load_agate_table(
     return load_agate_table
 
 
-def generate_base(model, model_dict, config, manifest, source_config,
-                  provider, adapter=None):
-    """Generate the common aspects of the config dict."""
-    if provider is None:
-        raise dbt.exceptions.InternalException(
-            "Invalid provider given to context: {}".format(provider))
+class ProviderContext(ManifestParsedContext):
+    def __init__(self, model, config, manifest, provider, source_config):
+        if provider is None:
+            raise dbt.exceptions.InternalException(
+                "Invalid provider given to context: {}".format(provider))
+        self.model = model
+        super().__init__(config, manifest)
+        self.source_config = source_config
+        self.provider = provider
+        self.adapter = get_adapter(self.config)
+        self.db_wrapper = self.provider.DatabaseWrapper(self.adapter)
 
-    target_name = config.target_name
-    target = config.to_profile_info()
-    del target['credentials']
-    target.update(config.credentials.to_dict(with_aliases=True))
-    target['type'] = config.credentials.type
-    target.pop('pass', None)
-    target.pop('password', None)
-    target['name'] = target_name
+    @property
+    def search_package_name(self):
+        return self.model.package_name
 
-    adapter = get_adapter(config)
+    def add_provider_functions(self, context):
+        context['ref'] = self.provider.ref(
+            self.db_wrapper, self.model, self.config, self.manifest
+        )
+        context['source'] = self.provider.source(
+            self.db_wrapper, self.model, self.config, self.manifest
+        )
+        context['config'] = self.provider.Config(
+            self.model, self.source_config
+        )
+        context['execute'] = self.provider.execute
 
-    context = {'env': target}
+    def add_exceptions(self, context):
+        context['exceptions'] = dbt.exceptions.wrapped_exports(self.model)
 
-    pre_hooks = None
-    post_hooks = None
+    def add_default_schema_info(self, context):
+        context['database'] = getattr(
+            self.model, 'database', self.config.credentials.database
+        )
+        context['schema'] = getattr(
+            self.model, 'schema', self.config.credentials.schema
+        )
 
-    db_wrapper = provider.DatabaseWrapper(adapter)
+    def make_var(self, context) -> Var:
+        return self.provider.Var(
+            self.model, context=context, overrides=self.config.cli_vars
+        )
 
-    context = dbt.utils.merge(context, {
-        "adapter": db_wrapper,
-        "api": {
-            "Relation": db_wrapper.Relation,
-            "Column": adapter.Column,
-        },
-        "column": adapter.Column,
-        "config": provider.Config(model, source_config),
-        "database": config.credentials.database,
-        "env_var": env_var,
-        "exceptions": dbt.exceptions.wrapped_exports(model),
-        "execute": provider.execute,
-        "flags": dbt.flags,
-        "load_agate_table": _build_load_agate_table(model),
-        "graph": manifest.flat_graph,
-        "log": log,
-        "model": model_dict,
-        "modules": get_context_modules(),
-        "post_hooks": post_hooks,
-        "pre_hooks": pre_hooks,
-        "ref": provider.ref(db_wrapper, model, config, manifest),
-        "return": _return,
-        "schema": config.credentials.schema,
-        "sql": None,
-        "sql_now": adapter.date_function(),
-        "source": provider.source(db_wrapper, model, config, manifest),
-        "fromjson": fromjson,
-        "tojson": tojson,
-        "target": target,
-        "try_or_compiler_error": try_or_compiler_error(model)
-    })
-    if os.environ.get('DBT_MACRO_DEBUGGING'):
-        context['debug'] = debug_here
+    def insert_model_information(self, context: Dict[str, Any]) -> None:
+        """By default, the model information is not added to the context"""
+        pass
 
-    return context
+    def modify_generated_context(self, context: Dict[str, Any]) -> None:
+        context['validation'] = get_validation()
+        add_sql_handlers(context)
+        self.add_macros(context)
 
+        context["write"] = write(self.model, self.config.target_path, 'run')
+        context["render"] = render(context, self.model)
+        context['context'] = context
 
-def modify_generated_context(context, model, config, manifest, provider):
-    cli_var_overrides = config.cli_vars
+    def to_dict(self):
+        target = self.get_target()
 
-    context = add_tracking(context)
-    context = add_validation(context)
-    context = add_sql_handlers(context)
+        context = super().to_dict()
 
-    # we make a copy of the context for each of these ^^
+        self.add_provider_functions(context)
+        self.add_exceptions(context)
+        self.add_default_schema_info(context)
 
-    context = _add_macros(context, model, manifest)
+        context.update({
+            "adapter": self.db_wrapper,
+            "api": {
+                "Relation": self.db_wrapper.Relation,
+                "Column": self.adapter.Column,
+            },
+            "column": self.adapter.Column,
+            'env': target,
+            'target': target,
+            "flags": dbt.flags,
+            "load_agate_table": _build_load_agate_table(self.model),
+            "graph": self.manifest.flat_graph,
+            "model": self.model.to_dict(),
+            "post_hooks": None,
+            "pre_hooks": None,
+            "sql": None,
+            "sql_now": self.adapter.date_function(),
+            "try_or_compiler_error": try_or_compiler_error(self.model)
+        })
 
-    context["write"] = write(model, config.target_path, 'run')
-    context["render"] = render(context, model)
-    context["var"] = provider.Var(model, context=context,
-                                  overrides=cli_var_overrides)
-    context['context'] = context
+        self.insert_model_information(context)
 
-    return context
+        self.modify_generated_context(context)
+
+        return context
 
 
-def generate_execute_macro(model, config, manifest, provider):
+class ExecuteMacroContext(ProviderContext):
     """Internally, macros can be executed like nodes, with some restrictions:
 
      - they don't have have all values available that nodes do:
@@ -348,40 +337,56 @@ def generate_execute_macro(model, config, manifest, provider):
         - 'schema' does not use any 'model' information
      - they can't be configured with config() directives
     """
-    model_dict = model.to_dict()
-    context = generate_base(model, model_dict, config, manifest, None,
-                            provider)
-
-    return modify_generated_context(context, model, config, manifest, provider)
+    def __init__(self, model, config, manifest: Manifest, provider) -> None:
+        super().__init__(model, config, manifest, provider, None)
 
 
-def generate_model(model, config, manifest, source_config, provider):
-    model_dict = model.to_dict()
-    context = generate_base(model, model_dict, config, manifest,
-                            source_config, provider)
-    # operations (hooks) don't get a 'this'
-    if model.resource_type != NodeType.Operation:
-        this = context['adapter'].Relation.create_from(config, model)
-        context['this'] = this
-    # overwrite schema/database if we have them, and hooks + sql
-    # the hooks should come in as dicts, at least for the `run_hooks` macro
-    # TODO: do we have to preserve this as backwards a compatibility thing?
-    context.update({
-        'schema': getattr(model, 'schema', context['schema']),
-        'database': getattr(model, 'database', context['database']),
-        'pre_hooks': [h.to_dict() for h in model.config.pre_hook],
-        'post_hooks': [h.to_dict() for h in model.config.post_hook],
-        'sql': getattr(model, 'injected_sql', None),
-    })
+class ModelContext(ProviderContext):
+    def get_this(self):
+        return self.db_wrapper.Relation.create_from(self.config, self.model)
 
-    return modify_generated_context(context, model, config, manifest, provider)
+    def add_hooks(self, context):
+        context['pre_hooks'] = [
+            h.to_dict() for h in self.model.config.pre_hook
+        ]
+        context['post_hooks'] = [
+            h.to_dict() for h in self.model.config.post_hook
+        ]
+
+    def insert_model_information(self, context):
+        # operations (hooks) don't get a 'this'
+        if self.model.resource_type != NodeType.Operation:
+            context['this'] = self.get_this()
+        # overwrite schema/database if we have them, and hooks + sql
+        # the hooks should come in as dicts, at least for the `run_hooks` macro
+        # TODO: do we have to preserve this as backwards a compatibility thing?
+        self.add_default_schema_info(context)
+        self.add_hooks(context)
+        context['sql'] = getattr(self.model, 'injected_sql', None)
 
 
-def generate(model, config, manifest, source_config=None, provider=None):
+def generate_execute_macro(
+    model, config, manifest: Manifest, provider
+) -> Dict[str, Any]:
+    """Internally, macros can be executed like nodes, with some restrictions:
+
+     - they don't have have all values available that nodes do:
+        - 'this', 'pre_hooks', 'post_hooks', and 'sql' are missing
+        - 'schema' does not use any 'model' information
+     - they can't be configured with config() directives
+    """
+    ctx = ExecuteMacroContext(model, config, manifest, provider)
+    return ctx.to_dict()
+
+
+def generate(
+    model, config, manifest: Manifest, provider, source_config=None
+) -> Dict[str, Any]:
     """
     Not meant to be called directly. Call with either:
         dbt.context.parser.generate
     or
         dbt.context.runtime.generate
     """
-    return generate_model(model, config, manifest, source_config, provider)
+    ctx = ModelContext(model, config, manifest, provider, source_config)
+    return ctx.to_dict()

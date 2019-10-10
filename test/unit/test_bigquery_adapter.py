@@ -25,6 +25,9 @@ class BaseTestBigQueryAdapter(unittest.TestCase):
         flags.STRICT_MODE = True
 
         self.raw_profile = {
+            'config': {
+                'query_comment': 'dbt'
+            },
             'outputs': {
                 'oauth': {
                     'type': 'bigquery',

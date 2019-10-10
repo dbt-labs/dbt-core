@@ -176,6 +176,7 @@ class UserConfig(ExtensibleJsonSchemaMixin, Replaceable):
     use_colors: bool = DEFAULT_USE_COLORS
     partial_parse: Optional[bool] = None
     printer_width: Optional[int] = None
+    query_comment: Optional[str] = None
 
     def set_values(self, cookie_dir):
         if self.send_anonymous_usage_stats:

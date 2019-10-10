@@ -31,7 +31,8 @@ class PostgresCredentials(Credentials):
         return 'postgres'
 
     def _connection_keys(self):
-        return ('host', 'port', 'user', 'database', 'schema', 'search_path')
+        return ('host', 'port', 'user', 'database', 'schema', 'search_path',
+                'keepalives_idle')
 
 
 class PostgresConnectionManager(SQLConnectionManager):

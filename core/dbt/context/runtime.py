@@ -158,4 +158,5 @@ class Provider(dbt.context.common.Provider):
 
 def generate(model, runtime_config, manifest):
     return dbt.context.common.generate(
-        model, runtime_config, manifest, None, Provider())
+        model, runtime_config, manifest, Provider(), None
+    )

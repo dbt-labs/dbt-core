@@ -26,6 +26,9 @@ class TestRedshiftAdapter(unittest.TestCase):
         flags.STRICT_MODE = True
 
         profile_cfg = {
+            'config': {
+                'query_comment': 'dbt'
+            },
             'outputs': {
                 'test': {
                     'type': 'redshift',

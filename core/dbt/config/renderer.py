@@ -1,5 +1,5 @@
 from dbt.clients.jinja import get_rendered
-from dbt.context.base import generate_config_context
+from dbt.context.base import ConfigRenderContext
 from dbt.exceptions import DbtProfileError
 from dbt.exceptions import DbtProjectError
 from dbt.exceptions import RecursionException
@@ -11,7 +11,7 @@ class ConfigRenderer:
     variables and a render type.
     """
     def __init__(self, cli_vars):
-        self.context = generate_config_context(cli_vars)
+        self.context = ConfigRenderContext(cli_vars).to_dict()
 
     @staticmethod
     def _is_hook_or_model_vars_path(keypath):

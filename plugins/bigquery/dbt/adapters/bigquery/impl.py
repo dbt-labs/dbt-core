@@ -334,8 +334,16 @@ class BigQueryAdapter(BaseAdapter):
 
         if flags.STRICT_MODE:
             connection = self.connections.get_thread_connection()
-            assert isinstance(connection, Connection)
-            assert(connection.name == model.get('name'))
+            if not isinstance(connection, Connection):
+                raise dbt.exceptions.CompilerException(
+                    f'Got {connection} - not a Connection!'
+                )
+            model_uid = model.get('unique_id')
+            if connection.name != model_uid:
+                raise dbt.exceptions.InternalException(
+                    f'Connection had name "{connection.name}", expected model '
+                    f'unique id of "{model_uid}"'
+                )
 
         if materialization == 'view':
             res = self._materialize_as_view(model)

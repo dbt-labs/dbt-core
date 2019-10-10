@@ -35,7 +35,8 @@ class SnowflakeCredentials(Credentials):
         return 'snowflake'
 
     def _connection_keys(self):
-        return ('account', 'user', 'database', 'schema', 'warehouse', 'role')
+        return ('account', 'user', 'database', 'schema', 'warehouse', 'role',
+                'client_session_keep_alive')
 
     def auth_args(self):
         # Pull all of the optional authentication args for the connector,

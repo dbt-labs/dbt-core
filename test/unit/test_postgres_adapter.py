@@ -27,6 +27,9 @@ class TestPostgresAdapter(unittest.TestCase):
             'project-root': '/tmp/dbt/does-not-exist',
         }
         profile_cfg = {
+            'config': {
+                'query_comment': 'dbt'
+            },
             'outputs': {
                 'test': {
                     'type': 'postgres',
@@ -204,6 +207,9 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         }
 
         profile_cfg = {
+            'config': {
+                'query_comment': 'dbt'
+            },
             'outputs': {
                 'test': self.target_dict,
             },
@@ -250,7 +256,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         self.adapter.drop_schema(database='postgres', schema='test_schema')
 
         self.mock_execute.assert_has_calls([
-            mock.call('drop schema if exists "test_schema" cascade', None)
+            mock.call('-- dbt\ndrop schema if exists "test_schema" cascade', None)
         ])
 
     def test_quoting_on_drop(self):
@@ -263,7 +269,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         )
         self.adapter.drop_relation(relation)
         self.mock_execute.assert_has_calls([
-            mock.call('drop table if exists "postgres"."test_schema".test_table cascade', None)
+            mock.call('-- dbt\ndrop table if exists "postgres"."test_schema".test_table cascade', None)
         ])
 
     def test_quoting_on_truncate(self):
@@ -276,7 +282,7 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
         )
         self.adapter.truncate_relation(relation)
         self.mock_execute.assert_has_calls([
-            mock.call('truncate table "postgres"."test_schema".test_table', None)
+            mock.call('-- dbt\ntruncate table "postgres"."test_schema".test_table', None)
         ])
 
     def test_quoting_on_rename(self):
@@ -300,13 +306,13 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
             to_relation=to_relation
         )
         self.mock_execute.assert_has_calls([
-            mock.call('alter table "postgres"."test_schema".table_a rename to table_b', None)
+            mock.call('-- dbt\nalter table "postgres"."test_schema".table_a rename to table_b', None)
         ])
 
     def test_debug_connection_ok(self):
         DebugTask.validate_connection(self.target_dict)
         self.mock_execute.assert_has_calls([
-            mock.call('select 1 as id', None)
+            mock.call('-- dbt\nselect 1 as id', None)
         ])
 
     def test_debug_connection_fail_nopass(self):
@@ -319,6 +325,6 @@ class TestConnectingPostgresAdapter(unittest.TestCase):
             with self.assertRaises(DbtConfigError):
                 DebugTask.validate_connection(self.target_dict)
             self.mock_execute.assert_has_calls([
-                mock.call('select 1 as id', None)
+                mock.call('-- dbt\nselect 1 as id', None)
             ])
 
