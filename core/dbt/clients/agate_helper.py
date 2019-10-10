@@ -46,7 +46,7 @@ def table_from_data_flat(data, column_names):
                 row.append(value)
         rows.append(row)
 
-    return agate.Table(rows, column_names)
+    return agate.Table(rows, column_names, column_types=DEFAULT_TYPE_TESTER)
 
 
 def empty_table():
