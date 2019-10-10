@@ -16,7 +16,7 @@ DEFAULT_USE_COLORS = True
 
 
 Name = NewType('Name', str)
-register_pattern(Name, r'^[^\d\W]\w*\Z')
+register_pattern(Name, r'^[^\d\W]\w*$')
 
 # this does not support the full semver (does not allow a trailing -fooXYZ) and
 # is not restrictive enough for full semver, (allows '1.0'). But it's like
