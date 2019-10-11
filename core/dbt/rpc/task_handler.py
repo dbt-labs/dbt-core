@@ -3,15 +3,15 @@ import signal
 import sys
 import threading
 import uuid
-from contextlib import contextmanager
 from datetime import datetime
-from typing import Any, Dict, Union, Optional, List
+from typing import Any, Dict, Union, Optional, List, Type
 
 from hologram import JsonSchemaMixin, ValidationError
 from hologram.helpers import StrEnum
 
 import dbt.exceptions
 from dbt.adapters.factory import cleanup_connections
+from dbt.contracts.rpc import RPCParameters
 from dbt.logger import (
     GLOBAL_LOGGER as logger, list_handler, LogMessage, OutputHandler
 )
@@ -135,6 +135,52 @@ def _task_bootstrap(
             handler.emit_error(error.error)
 
 
+class StateHandler:
+    """A helper context manager to manage task handler state."""
+    def __init__(self, task_handler: 'RequestTaskHandler') -> None:
+        self.handler = task_handler
+
+    def __enter__(self) -> None:
+        return None
+
+    def set_end(self):
+        self.handler.ended = datetime.utcnow()
+
+    def handle_success(self):
+        self.handler.state = TaskHandlerState.Success
+        self.set_end()
+
+    def handle_error(self, exc_type, exc_value, exc_tb) -> bool:
+        if isinstance(exc_value, RPCException):
+            self.handler.error = exc_value
+            self.handler.state = TaskHandlerState.Error
+        elif isinstance(exc_value, dbt.exceptions.Exception):
+            self.handler.error = dbt_error(exc_value)
+            self.handler.state = TaskHandlerState.Error
+        else:
+            # we should only get here if we got a BaseException that is not
+            # an Exception (we caught those in _wait_for_results), or a bug
+            # in get_result's call stack. Either way, we should set an
+            # error so we can figure out what happened on thread death
+            self.handler.error = server_error(exc_value)
+            self.handler.state = TaskHandlerState.Error
+        self.set_end()
+        return False
+
+    def __exit__(self, exc_type, exc_value, exc_tb) -> bool:
+        if exc_type is not None:
+            return self.handle_error(exc_type, exc_value, exc_tb)
+
+        self.handle_success()
+        return False
+
+
+class ErrorOnlyStateHandler(StateHandler):
+    """A state handler that does not touch state on success."""
+    def handle_success(self):
+        pass
+
+
 class RequestTaskHandler(threading.Thread):
     """Handler for the single task triggered by a given jsonrpc request."""
     def __init__(self, manager, task, http_request, json_rpc_request):
@@ -147,7 +193,6 @@ class RequestTaskHandler(threading.Thread):
         self.thread: Optional[threading.Thread] = None
         self.started: Optional[datetime] = None
         self.ended: Optional[datetime] = None
-        self.timeout: Optional[float] = None
         self.task_id: uuid.UUID = uuid.uuid4()
         # the are multiple threads potentially operating on these attributes:
         #   - the task manager has the RequestTaskHandler and any requests
@@ -159,6 +204,8 @@ class RequestTaskHandler(threading.Thread):
         self.error: Optional[RPCException] = None
         self.state: TaskHandlerState = TaskHandlerState.NotStarted
         self.logs: List[LogMessage] = []
+        self.task_kwargs: Optional[Dict[str, Any]] = None
+        self.task_params: Optional[RPCParameters] = None
         super().__init__(
             name='{}-handler-{}'.format(self.task_id, self.method),
             daemon=True,  # if the RPC server goes away, we probably should too
@@ -179,6 +226,20 @@ class RequestTaskHandler(threading.Thread):
     @property
     def _single_threaded(self):
         return self.task.args.single_threaded or SINGLE_THREADED_HANDLER
+
+    @property
+    def timeout(self) -> Optional[float]:
+        if self.task_params is None or self.task_params.timeout is None:
+            return None
+        # task_params.timeout is a `Real` for encoding reasons, but we just
+        # want it as a float.
+        return float(self.task_params.timeout)
+
+    @property
+    def tags(self) -> Optional[Dict[str, Any]]:
+        if self.task_params is None:
+            return None
+        return self.task_params.task_tags
 
     def _wait_for_results(self) -> RemoteCallableResult:
         """Wait for results off the queue. If there is an exception raised,
@@ -218,34 +279,6 @@ class RequestTaskHandler(threading.Thread):
                 'Invalid message type {} (result={})'.format(msg)
             )
 
-    @contextmanager
-    def state_handler(self):
-        try:
-            try:
-                yield
-            finally:
-                # make sure to set this _before_ updating state
-                self.ended = datetime.utcnow()
-        except RPCException as exc:
-            self.error = exc
-            self.state = TaskHandlerState.Error
-            raise  # this re-raises for single-threaded operation
-        except dbt.exceptions.Exception as exc:
-            self.error = dbt_error(exc)
-            self.state = TaskHandlerState.Error
-            raise
-        except BaseException as exc:
-            # we should only get here if we got a BaseException that is not an
-            # Exception (we caught those in _wait_for_results), or a bug in
-            # get_result's call stack. Either way, we should set an error so we
-            # can figure out what happened on thread death, and re-raise in
-            # case it's something python-internal.
-            self.error = server_error(exc)
-            self.state = TaskHandlerState.Error
-            raise
-        else:
-            self.state = TaskHandlerState.Success
-
     def get_result(self) -> RemoteCallableResult:
         if self.process is None:
             raise dbt.exceptions.InternalException(
@@ -263,6 +296,7 @@ class RequestTaskHandler(threading.Thread):
             # RPC Exceptions come already preserialized for the jsonrpc
             # framework
             exc.logs = [l.to_dict() for l in self.logs]
+            exc.tags = self.tags
             raise
 
         # results get real logs
@@ -271,7 +305,7 @@ class RequestTaskHandler(threading.Thread):
 
     def run(self):
         try:
-            with self.state_handler():
+            with StateHandler(self):
                 self.result = self.get_result()
         except RPCException:
             pass  # rpc exceptions are fine, the managing thread will handle it
@@ -282,7 +316,7 @@ class RequestTaskHandler(threading.Thread):
         # note this shouldn't call self.run() as that has different semantics
         # (we want errors to raise)
         self.process.run()
-        with self.state_handler():
+        with StateHandler(self):
             self.result = self.get_result()
         return self.result
 
@@ -301,24 +335,32 @@ class RequestTaskHandler(threading.Thread):
         self.state = TaskHandlerState.Running
         super().start()
 
+    def _collect_parameters(self):
+        # both get_parameters and the argparse can raise a TypeError.
+        cls: Type[RPCParameters] = self.task.get_parameters()
+
+        try:
+            return cls.from_dict(self.task_kwargs)
+        except ValidationError as exc:
+            # raise a TypeError to indicate invalid parameters so we get a nice
+            # error from our json-rpc library
+            raise TypeError(exc) from exc
+
     def handle(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         self.started = datetime.utcnow()
         self.state = TaskHandlerState.Initializing
-        self.timeout = kwargs.pop('timeout', None)
-        try:
-            params = self.task.get_parameters().from_dict(kwargs)
-        except ValidationError as exc:
-            # raise a TypeError to indicate invalid parameters
-            self.state = TaskHandlerState.Error
-            raise TypeError(exc)
-        except TypeError:
-            # we got this from our argument parser, already a nice TypeError
-            self.state = TaskHandlerState.Error
-            raise
+        self.task_kwargs = kwargs
+        with ErrorOnlyStateHandler(self):
+            # this will raise a TypeError if you provided bad arguments.
+            self.task_params = self._collect_parameters()
+        if self.task_params is None:
+            raise dbt.exceptions.InternalException(
+                'Task params set to None!'
+            )
         self.subscriber = QueueSubscriber()
         self.process = multiprocessing.Process(
             target=_task_bootstrap,
-            args=(self.task, self.subscriber.queue, params)
+            args=(self.task, self.subscriber.queue, self.task_params)
         )
 
         if self._single_threaded:

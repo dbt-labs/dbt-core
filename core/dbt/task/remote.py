@@ -1,24 +1,32 @@
 import shlex
 import signal
 import threading
-from dataclasses import dataclass
 from datetime import datetime
-from typing import Union, List, Optional
-
-from hologram import JsonSchemaMixin
+from typing import Type
 
 import dbt.exceptions
 import dbt.ui.printer
 from dbt.adapters.factory import get_adapter
 from dbt.clients.jinja import extract_toplevel_blocks
 from dbt.compilation import compile_manifest
-from dbt.contracts.results import RemoteCatalogResults
+from dbt.contracts.rpc import (
+    RPCExecParameters,
+    RPCCompileParameters,
+    RPCTestParameters,
+    RPCSeedParameters,
+    RPCDocsGenerateParameters,
+    RPCCliParameters,
+    RemoteCatalogResults,
+    RemoteExecutionResult,
+)
 from dbt.parser.results import ParseResult
 from dbt.parser.rpc import RPCCallParser, RPCMacroParser
 from dbt.parser.util import ParserUtils
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.rpc.node_runners import RPCCompileRunner, RPCExecuteRunner
-from dbt.rpc.task import RemoteCallableResult, RPCTask
+from dbt.rpc.node_runners import (
+    RPCCompileRunner, RPCExecuteRunner
+)
+from dbt.rpc.task import RPCTask, Parameters
 
 from dbt.task.generate import GenerateTask
 from dbt.task.run import RunTask
@@ -26,41 +34,7 @@ from dbt.task.seed import SeedTask
 from dbt.task.test import TestTask
 
 
-@dataclass
-class RPCExecParameters(JsonSchemaMixin):
-    name: str
-    sql: str
-    macros: Optional[str]
-
-
-@dataclass
-class RPCCompileProjectParameters(JsonSchemaMixin):
-    models: Union[None, str, List[str]] = None
-    exclude: Union[None, str, List[str]] = None
-
-
-@dataclass
-class RPCTestProjectParameters(RPCCompileProjectParameters):
-    data: bool = False
-    schema: bool = False
-
-
-@dataclass
-class RPCSeedProjectParameters(JsonSchemaMixin):
-    show: bool = False
-
-
-@dataclass
-class RPCDocsGenerateProjectParameters(JsonSchemaMixin):
-    compile: bool = True
-
-
-@dataclass
-class RPCCliParameters(JsonSchemaMixin):
-    cli: str
-
-
-class _RPCExecTask(RPCTask):
+class _RPCExecTask(RPCTask[RPCExecParameters]):
     def runtime_cleanup(self, selected_uids):
         """Do some pre-run cleanup that is usually performed in Task __init__.
         """
@@ -133,7 +107,7 @@ class _RPCExecTask(RPCTask):
         self.args.sql = params.sql
         self.args.macros = params.macros
 
-    def handle_request(self) -> RemoteCallableResult:
+    def handle_request(self) -> RemoteExecutionResult:
         # we could get a ctrl+c at any time, including during parsing.
         thread = None
         started = datetime.utcnow()
@@ -149,7 +123,7 @@ class _RPCExecTask(RPCTask):
             thread.start()
             thread_done.wait()
         except KeyboardInterrupt:
-            adapter = get_adapter(self.config)
+            adapter = get_adapter(self.config)  # type: ignore
             if adapter.is_cancelable():
 
                 for conn_name in adapter.cancel_open_connections():
@@ -179,6 +153,11 @@ class _RPCExecTask(RPCTask):
 class RemoteCompileTask(_RPCExecTask):
     METHOD_NAME = 'compile_sql'
 
+    def handle_request(self) -> RemoteExecutionResult:
+        # TODO: annotate that this is a RemoteExecutionResult of
+        # RemoteCompileResults.
+        return super().handle_request()
+
     def get_runner_type(self):
         return RPCCompileRunner
 
@@ -186,11 +165,16 @@ class RemoteCompileTask(_RPCExecTask):
 class RemoteRunTask(_RPCExecTask, RunTask):
     METHOD_NAME = 'run_sql'
 
+    def handle_request(self) -> RemoteExecutionResult:
+        # TODO: annotate that this is a RemoteExecutionResult of
+        # RemoteRunResult.
+        return super().handle_request()
+
     def get_runner_type(self):
         return RPCExecuteRunner
 
 
-class _RPCCommandTask(RPCTask):
+class _RPCCommandTask(RPCTask[Parameters]):
     def __init__(self, args, config, manifest):
         super().__init__(args, config, manifest)
         self.manifest = self._base_manifest
@@ -199,47 +183,50 @@ class _RPCCommandTask(RPCTask):
         # we started out with a manifest!
         pass
 
-    def handle_request(self) -> RemoteCallableResult:
+    def handle_request(self) -> RemoteExecutionResult:
         return self.run()
 
 
-class RemoteCompileProjectTask(_RPCCommandTask):
+class RemoteCompileProjectTask(_RPCCommandTask[RPCCompileParameters]):
     METHOD_NAME = 'compile'
 
-    def set_args(self, params: RPCCompileProjectParameters) -> None:
+    def set_args(self, params: RPCCompileParameters) -> None:
         self.args.models = self._listify(params.models)
         self.args.exclude = self._listify(params.exclude)
 
 
-class RemoteRunProjectTask(_RPCCommandTask, RunTask):
+class RemoteRunProjectTask(_RPCCommandTask[RPCCompileParameters], RunTask):
     METHOD_NAME = 'run'
 
-    def set_args(self, params: RPCCompileProjectParameters) -> None:
+    def set_args(self, params: RPCCompileParameters) -> None:
         self.args.models = self._listify(params.models)
         self.args.exclude = self._listify(params.exclude)
 
 
-class RemoteSeedProjectTask(_RPCCommandTask, SeedTask):
+class RemoteSeedProjectTask(_RPCCommandTask[RPCSeedParameters], SeedTask):
     METHOD_NAME = 'seed'
 
-    def set_args(self, params: RPCSeedProjectParameters) -> None:
+    def set_args(self, params: RPCSeedParameters) -> None:
         self.args.show = params.show
 
 
-class RemoteTestProjectTask(_RPCCommandTask, TestTask):
+class RemoteTestProjectTask(_RPCCommandTask[RPCTestParameters], TestTask):
     METHOD_NAME = 'test'
 
-    def set_args(self, params: RPCTestProjectParameters) -> None:
+    def set_args(self, params: RPCTestParameters) -> None:
         self.args.models = self._listify(params.models)
         self.args.exclude = self._listify(params.exclude)
         self.args.data = params.data
         self.args.schema = params.schema
 
 
-class RemoteDocsGenerateProjectTask(_RPCCommandTask, GenerateTask):
+class RemoteDocsGenerateProjectTask(
+    _RPCCommandTask[RPCDocsGenerateParameters],
+    GenerateTask,
+):
     METHOD_NAME = 'docs.generate'
 
-    def set_args(self, params: RPCDocsGenerateProjectParameters) -> None:
+    def set_args(self, params: RPCDocsGenerateParameters) -> None:
         self.args.models = None
         self.args.exclude = None
         self.args.compile = params.compile
@@ -255,7 +242,7 @@ class RemoteDocsGenerateProjectTask(_RPCCommandTask, GenerateTask):
         )
 
 
-class RemoteRPCParameters(_RPCCommandTask):
+class RemoteRPCParameters(_RPCCommandTask[RPCCliParameters]):
     METHOD_NAME = 'cli_args'
 
     def set_args(self, params: RPCCliParameters) -> None:
@@ -264,11 +251,12 @@ class RemoteRPCParameters(_RPCCommandTask):
         split = shlex.split(params.cli)
         self.args = parse_args(split, RPCArgumentParser)
 
-    def get_rpc_task_cls(self):
+    def get_rpc_task_cls(self) -> Type[_RPCCommandTask]:
         # This is obnoxious, but we don't have actual access to the TaskManager
         # so instead we get to dig through all the subclasses of RPCTask
         # (recursively!) looking for a matching METHOD_NAME
-        for candidate in RPCTask.recursive_subclasses():
+        candidate: Type[_RPCCommandTask]
+        for candidate in _RPCCommandTask.recursive_subclasses():
             if candidate.METHOD_NAME == self.args.rpc_method:
                 return candidate
         # this shouldn't happen
@@ -277,7 +265,7 @@ class RemoteRPCParameters(_RPCCommandTask):
             .format(self.args.rpc_method, self.args.which)
         )
 
-    def handle_request(self) -> JsonSchemaMixin:
+    def handle_request(self) -> RemoteExecutionResult:
         cls = self.get_rpc_task_cls()
         # we parsed args from the cli, so we're set on that front
         task = cls(self.args, self.config, self.manifest)

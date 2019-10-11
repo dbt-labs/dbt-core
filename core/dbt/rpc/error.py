@@ -12,6 +12,7 @@ class RPCException(JSONRPCDispatchException):
         message: Optional[str] = None,
         data: Optional[Dict[str, Any]] = None,
         logs: Optional[List[Dict[str, Any]]] = None,
+        tags: Optional[Dict[str, Any]] = None
     ) -> None:
         if code is None:
             code = -32000
@@ -23,6 +24,7 @@ class RPCException(JSONRPCDispatchException):
         super().__init__(code=code, message=message, data=data)
         if logs is not None:
             self.logs = logs
+        self.error.data['tags'] = tags
 
     def __str__(self):
         return (
@@ -40,9 +42,25 @@ class RPCException(JSONRPCDispatchException):
             return
         self.error.data['logs'] = value
 
+    @property
+    def tags(self):
+        return self.error.data.get('tags')
+
+    @tags.setter
+    def tags(self, value):
+        if value is None:
+            return
+        self.error.data['tags'] = value
+
     @classmethod
     def from_error(cls, err):
-        return cls(err.code, err.message, err.data, err.data.get('logs'))
+        return cls(
+            code=err.code,
+            message=err.message,
+            data=err.data,
+            logs=err.data.get('logs'),
+            tags=err.data.get('tags'),
+        )
 
 
 def invalid_params(data):
@@ -53,17 +71,17 @@ def invalid_params(data):
     )
 
 
-def server_error(err, logs=None):
+def server_error(err, logs=None, tags=None):
     exc = dbt.exceptions.Exception(str(err))
-    return dbt_error(exc, logs)
+    return dbt_error(exc, logs, tags)
 
 
-def timeout_error(timeout_value, logs=None):
+def timeout_error(timeout_value, logs=None, tags=None):
     exc = dbt.exceptions.RPCTimeoutException(timeout_value)
-    return dbt_error(exc, logs)
+    return dbt_error(exc, logs, tags)
 
 
-def dbt_error(exc, logs=None):
+def dbt_error(exc, logs=None, tags=None):
     exc = RPCException(code=exc.CODE, message=exc.MESSAGE, data=exc.data(),
-                       logs=logs)
+                       logs=logs, tags=tags)
     return exc

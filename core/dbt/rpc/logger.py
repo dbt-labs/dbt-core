@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from queue import Empty
 from typing import Optional, Any, Union
 
-from dbt.contracts.results import (
+from dbt.contracts.rpc import (
     RemoteCompileResult, RemoteExecutionResult, RemoteCatalogResults
 )
 from dbt.exceptions import InternalException

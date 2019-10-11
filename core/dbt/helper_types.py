@@ -1,5 +1,6 @@
 # never name this package "types", or mypy will crash in ugly ways
 from datetime import timedelta
+from numbers import Real
 from typing import NewType
 
 from hologram import (
@@ -37,7 +38,14 @@ class TimeDeltaFieldEncoder(FieldEncoder[timedelta]):
         return {'type': 'number'}
 
 
+class RealEncoder(FieldEncoder):
+    @property
+    def json_schema(self):
+        return {'type': 'number'}
+
+
 JsonSchemaMixin.register_field_encoders({
     Port: PortEncoder(),
     timedelta: TimeDeltaFieldEncoder(),
+    Real: RealEncoder(),
 })

@@ -12,6 +12,7 @@ import requests
 from pytest import mark
 
 from test.integration.base import DBTIntegrationTest, use_profile
+from dbt.version import __version__
 from dbt.logger import log_manager
 from dbt.main import handle_and_check
 
@@ -171,7 +172,7 @@ class HasRPCServer(DBTIntegrationTest):
 
     def poll_for_result(self, request_token, request_id=1, timeout=60):
         start = time.time()
-        while timeout is None or ((time.time() - start) < timeout):
+        while True:
             time.sleep(0.5)
             response = self.query('poll', request_token=request_token, _test_request_id=request_id)
             response_json = response.json()
@@ -181,6 +182,9 @@ class HasRPCServer(DBTIntegrationTest):
             self.assertIn('status', result)
             if result['status'] == 'success':
                 return response
+            if timeout is not None:
+                self.assertGreater(timeout, (time.time() - start))
+
 
     def async_query(self, _method, _sql=None, _test_request_id=1, macros=None, **kwargs):
         response = self.query(_method, _sql, _test_request_id, macros, **kwargs).json()
@@ -497,8 +501,16 @@ class TestRPCServer(HasRPCServer):
     @mark.flaky(rerun_filter=None)
     @use_profile('postgres')
     def test_ps_kill_postgres(self):
-        done_query = self.async_query('compile_sql', 'select 1 as id', name='done').json()
-        self.assertIsResult(done_query)
+        task_tags = {
+            'dbt_version': __version__,
+            'my_custom_tag': True,
+        }
+        done_query = self.async_query(
+            'compile_sql', 'select 1 as id', name='done', task_tags=task_tags
+        ).json()
+        done_result = self.assertIsResult(done_query)
+        self.assertIn('tags', done_result)
+        self.assertEqual(done_result['tags'], task_tags)
 
         request_token, request_id = self._get_sleep_query()
 
@@ -516,6 +528,7 @@ class TestRPCServer(HasRPCServer):
         self.assertIsNone(rowdict[0]['timeout'])
         self.assertEqual(rowdict[0]['task_id'], request_token)
         self.assertGreater(rowdict[0]['elapsed'], 0)
+        self.assertIsNone(rowdict[0]['tags'])
 
         complete_ps_result = self.query('ps', completed=True, active=False).json()
         result = self.assertIsResult(complete_ps_result)
@@ -526,6 +539,7 @@ class TestRPCServer(HasRPCServer):
         self.assertEqual(rowdict[0]['state'], 'success')
         self.assertIsNone(rowdict[0]['timeout'])
         self.assertGreater(rowdict[0]['elapsed'], 0)
+        self.assertEqual(rowdict[0]['tags'], task_tags)
 
         all_ps_result = self.query('ps', completed=True, active=True).json()
         result = self.assertIsResult(all_ps_result)
@@ -537,11 +551,13 @@ class TestRPCServer(HasRPCServer):
         self.assertEqual(rowdict[0]['state'], 'success')
         self.assertIsNone(rowdict[0]['timeout'])
         self.assertGreater(rowdict[0]['elapsed'], 0)
+        self.assertEqual(rowdict[0]['tags'], task_tags)
         self.assertEqual(rowdict[1]['request_id'], request_id)
         self.assertEqual(rowdict[1]['method'], 'run_sql')
         self.assertEqual(rowdict[1]['state'], 'running')
         self.assertIsNone(rowdict[1]['timeout'])
         self.assertGreater(rowdict[1]['elapsed'], 0)
+        self.assertIsNone(rowdict[1]['tags'])
 
         # try to GC our running task
         gc_response = self.query('gc', task_ids=[request_token]).json()
@@ -561,11 +577,13 @@ class TestRPCServer(HasRPCServer):
         self.assertEqual(rowdict[0]['state'], 'success')
         self.assertIsNone(rowdict[0]['timeout'])
         self.assertGreater(rowdict[0]['elapsed'], 0)
+        self.assertEqual(rowdict[0]['tags'], task_tags)
         self.assertEqual(rowdict[1]['request_id'], request_id)
         self.assertEqual(rowdict[1]['method'], 'run_sql')
         self.assertEqual(rowdict[1]['state'], 'error')
         self.assertIsNone(rowdict[1]['timeout'])
         self.assertGreater(rowdict[1]['elapsed'], 0)
+        self.assertIsNone(rowdict[1]['tags'])
 
     def kill_and_assert(self, request_token, request_id):
         kill_response = self.query('kill', task_id=request_token).json()
@@ -609,13 +627,15 @@ class TestRPCServer(HasRPCServer):
         data = self.async_query(
             'compile_sql',
             'select * from {{ reff("nonsource_descendant") }}',
-            name='mymodel'
+            name='mymodel',
+            task_tags={'some_tag': True, 'another_tag': 'blah blah blah'}
         ).json()
         error_data = self.assertIsErrorWith(data, 10004, 'Compilation Error', {
             'type': 'CompilationException',
             'message': "Compilation Error in rpc mymodel (from remote system)\n  'reff' is undefined",
             'compiled_sql': None,
             'raw_sql': 'select * from {{ reff("nonsource_descendant") }}',
+            'tags': {'some_tag': True, 'another_tag': 'blah blah blah'}
         })
         self.assertIn('logs', error_data)
         self.assertTrue(len(error_data['logs']) > 0)
@@ -670,7 +690,7 @@ class TestRPCServer(HasRPCServer):
         self.assertIn('timeout', error_data)
         self.assertEqual(error_data['timeout'], 1)
         self.assertIn('message', error_data)
-        self.assertEqual(error_data['message'], 'RPC timed out after 1s')
+        self.assertEqual(error_data['message'], 'RPC timed out after 1.0s')
         self.assertIn('logs', error_data)
         self.assertTrue(len(error_data['logs']) > 0)
 
