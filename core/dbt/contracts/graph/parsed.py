@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, Field
 from typing import (
     Optional, Union, List, Dict, Any, Type, Tuple, NewType, MutableMapping
 )
@@ -277,8 +277,8 @@ class ParsedTestNode(ParsedNode):
 
 @dataclass(init=False)
 class _SnapshotConfig(NodeConfig):
-    unique_key: str = field(init=False)
-    target_schema: str = field(init=False)
+    unique_key: str = field(init=False, metadata=dict(init_required=True))
+    target_schema: str = field(init=False, metadata=dict(init_required=True))
     target_database: Optional[str] = None
 
     def __init__(
@@ -293,10 +293,25 @@ class _SnapshotConfig(NodeConfig):
         self.target_database = target_database
         super().__init__(**kwargs)
 
+    # type hacks...
+    @classmethod
+    def _get_fields(cls) -> List[Tuple[Field, str]]:  # type: ignore
+        fields: List[Tuple[Field, str]] = []
+        for old_field, name in super()._get_fields():
+            new_field = old_field
+            # tell hologram we're really an initvar
+            if old_field.metadata and old_field.metadata.get('init_required'):
+                new_field = field(init=True, metadata=old_field.metadata)
+                new_field.name = old_field.name
+                new_field.type = old_field.type
+                new_field._field_type = old_field._field_type  # type: ignore
+            fields.append((new_field, name))
+        return fields
+
 
 @dataclass(init=False)
 class GenericSnapshotConfig(_SnapshotConfig):
-    strategy: str = field(init=False)
+    strategy: str = field(init=False, metadata=dict(init_required=True))
 
     def __init__(self, strategy: str, **kwargs) -> None:
         self.strategy = strategy
@@ -307,9 +322,12 @@ class GenericSnapshotConfig(_SnapshotConfig):
 class TimestampSnapshotConfig(_SnapshotConfig):
     strategy: str = field(
         init=False,
-        metadata={'restrict': [str(SnapshotStrategy.Timestamp)]},
+        metadata=dict(
+            restrict=[str(SnapshotStrategy.Timestamp)],
+            init_required=True,
+        ),
     )
-    updated_at: str = field(init=False)
+    updated_at: str = field(init=False, metadata=dict(init_required=True))
 
     def __init__(
         self, strategy: str, updated_at: str, **kwargs
@@ -323,7 +341,10 @@ class TimestampSnapshotConfig(_SnapshotConfig):
 class CheckSnapshotConfig(_SnapshotConfig):
     strategy: str = field(
         init=False,
-        metadata={'restrict': [str(SnapshotStrategy.Check)]},
+        metadata=dict(
+            restrict=[str(SnapshotStrategy.Check)],
+            init_required=True,
+        ),
     )
     # TODO: is there a way to get this to accept tuples of strings? Adding
     # `Tuple[str, ...]` to the list of types results in this:
@@ -332,7 +353,10 @@ class CheckSnapshotConfig(_SnapshotConfig):
     # but without it, parsing gets upset about values like `('email',)`
     # maybe hologram itself should support this behavior? It's not like tuples
     # are meaningful in json
-    check_cols: Union[All, List[str]] = field(init=False)
+    check_cols: Union[All, List[str]] = field(
+        init=False,
+        metadata=dict(init_required=True),
+    )
 
     def __init__(
         self, strategy: str, check_cols: Union[All, List[str]],
