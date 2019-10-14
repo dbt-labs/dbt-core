@@ -387,12 +387,6 @@ class Manifest:
                     'not found or is disabled').format(patch.name)
                 )
 
-    # TODO: why is this here?
-    def __getattr__(self, name):
-        raise AttributeError("'{}' object has no attribute '{}'".format(
-            type(self).__name__, name)
-        )
-
     def get_used_schemas(self, resource_types=None):
         return frozenset({
             (node.database, node.schema)
