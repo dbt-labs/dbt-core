@@ -10,8 +10,9 @@ import agate
 
 import dbt.exceptions
 import dbt.flags
-from dbt.config import Profile
-from dbt.contracts.connection import Connection, Identifier, ConnectionState
+from dbt.contracts.connection import (
+    Connection, Identifier, ConnectionState, HasCredentials
+)
 from dbt.logger import GLOBAL_LOGGER as logger
 
 
@@ -30,7 +31,7 @@ class BaseConnectionManager(metaclass=abc.ABCMeta):
     """
     TYPE: str = NotImplemented
 
-    def __init__(self, profile: Profile):
+    def __init__(self, profile: HasCredentials):
         self.profile = profile
         self.thread_connections: Dict[Hashable, Connection] = {}
         self.lock = multiprocessing.RLock()

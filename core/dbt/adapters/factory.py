@@ -1,108 +1,142 @@
 import threading
 from importlib import import_module
-from typing import Type, Dict, TypeVar
+from typing import Type, Dict, Any
 
 from dbt.exceptions import RuntimeException
 from dbt.include.global_project import PACKAGES
 from dbt.logger import GLOBAL_LOGGER as logger
-from dbt.contracts.connection import Credentials
+from dbt.contracts.connection import Credentials, HasCredentials
 
+from dbt.adapters.base.impl import BaseAdapter
+from dbt.adapters.base.plugin import AdapterPlugin
 
 # TODO: we can't import these because they cause an import cycle.
-# currently RuntimeConfig needs to figure out default quoting for its adapter.
-# We should push that elsewhere when we fixup project/profile stuff
-# Instead here are some import loop avoiding-hacks right now. And Profile has
-# to call into load_plugin to get credentials, so adapter/relation don't work
-RuntimeConfig = TypeVar('RuntimeConfig')
-BaseAdapter = TypeVar('BaseAdapter')
-BaseRelation = TypeVar('BaseRelation')
-
-ADAPTER_TYPES: Dict[str, Type[BaseAdapter]] = {}
-
-_ADAPTERS: Dict[str, BaseAdapter] = {}
-_ADAPTER_LOCK = threading.Lock()
+# Profile has to call into load_plugin to get credentials, so adapter/relation
+# don't work
+BaseRelation = Any
 
 
-def get_adapter_class_by_name(adapter_name: str) -> Type[BaseAdapter]:
-    with _ADAPTER_LOCK:
-        if adapter_name in ADAPTER_TYPES:
-            return ADAPTER_TYPES[adapter_name]
-
-        adapter_names = ", ".join(ADAPTER_TYPES.keys())
-
-    message = "Invalid adapter type {}! Must be one of {}"
-    formatted_message = message.format(adapter_name, adapter_names)
-    raise RuntimeException(formatted_message)
+Adapter = BaseAdapter
 
 
-def get_relation_class_by_name(adapter_name: str) -> Type[BaseRelation]:
-    adapter = get_adapter_class_by_name(adapter_name)
-    return adapter.Relation
+class AdpaterContainer:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.adapters: Dict[str, Adapter] = {}
+        self.adapter_types: Dict[str, Type[Adapter]] = {}
+
+    def get_adapter_class_by_name(self, name: str) -> Type[Adapter]:
+        with self.lock:
+            if name in self.adapter_types:
+                return self.adapter_types[name]
+
+            names = ", ".join(self.adapter_types.keys())
+
+        message = f"Invalid adapter type {name}! Must be one of {names}"
+        raise RuntimeException(message)
+
+    def get_relation_class_by_name(self, name: str) -> Type[BaseRelation]:
+        adapter = self.get_adapter_class_by_name(name)
+        return adapter.Relation
+
+    def load_plugin(self, name: str) -> Type[Credentials]:
+        # this doesn't need a lock: in the worst case we'll overwrite PACKAGES
+        # and adapter_type entries with the same value, as they're all
+        # singletons
+        try:
+            mod = import_module('.' + name, 'dbt.adapters')
+        except ImportError as e:
+            logger.info("Error importing adapter: {}".format(e))
+            raise RuntimeException(
+                "Could not find adapter type {}!".format(name)
+            )
+        if not hasattr(mod, 'Plugin'):
+            raise RuntimeException(
+                f'Could not find plugin in {name} plugin module'
+            )
+        plugin: AdapterPlugin = mod.Plugin  # type: ignore
+        plugin_type = plugin.adapter.type()
+
+        if plugin_type != name:
+            raise RuntimeException(
+                f'Expected to find adapter with type named {name}, got '
+                f'adapter with type {plugin_type}'
+            )
+
+        with self.lock:
+            # things do hold the lock to iterate over it so we need it to add
+            self.adapter_types[name] = plugin.adapter
+
+        PACKAGES[plugin.project_name] = plugin.include_path
+
+        for dep in plugin.dependencies:
+            self.load_plugin(dep)
+
+        return plugin.credentials
+
+    def register_adapter(self, config: HasCredentials) -> Adapter:
+        adapter_name = config.credentials.type
+        adapter_type = self.get_adapter_class_by_name(adapter_name)
+
+        with self.lock:
+            if adapter_name in self.adapters:
+                # this shouldn't really happen...
+                return
+
+            adapter: Adapter = adapter_type(config)  # type: ignore
+            self.adapters[adapter_name] = adapter
+
+    def lookup_adapter(self, adapter_name: str) -> Adapter:
+        return self.adapters[adapter_name]
+
+    def reset_adapters(self):
+        """Clear the adapters. This is useful for tests, which change configs.
+        """
+        with self.lock:
+            for adapter in self.adapters.values():
+                adapter.cleanup_connections()
+            self.adapters.clear()
+
+    def cleanup_connections(self):
+        """Only clean up the adapter connections list without resetting the actual
+        adapters.
+        """
+        with self.lock:
+            for adapter in self.adapters.values():
+                adapter.cleanup_connections()
 
 
-def load_plugin(adapter_name: str) -> Credentials:
-    # this doesn't need a lock: in the worst case we'll overwrite PACKAGES and
-    # _ADAPTER_TYPE entries with the same value, as they're all singletons
-    try:
-        mod = import_module('.' + adapter_name, 'dbt.adapters')
-    except ImportError as e:
-        logger.info("Error importing adapter: {}".format(e))
-        raise RuntimeException(
-            "Could not find adapter type {}!".format(adapter_name)
-        )
-    plugin = mod.Plugin
-
-    if plugin.adapter.type() != adapter_name:
-        raise RuntimeException(
-            'Expected to find adapter with type named {}, got adapter with '
-            'type {}'
-            .format(adapter_name, plugin.adapter.type())
-        )
-
-    with _ADAPTER_LOCK:
-        # things do hold the lock to iterate over it so we need ot to add stuff
-        ADAPTER_TYPES[adapter_name] = plugin.adapter
-
-    PACKAGES[plugin.project_name] = plugin.include_path
-
-    for dep in plugin.dependencies:
-        load_plugin(dep)
-
-    return plugin.credentials
+FACTORY: AdpaterContainer = AdpaterContainer()
 
 
-def get_adapter(config: RuntimeConfig) -> BaseAdapter:
-    adapter_name = config.credentials.type
+def register_adapter(config: HasCredentials) -> None:
+    return FACTORY.register_adapter(config)
 
-    # Atomically check to see if we already have an adapter
-    if adapter_name in _ADAPTERS:
-        return _ADAPTERS[adapter_name]
 
-    adapter_type = get_adapter_class_by_name(adapter_name)
-
-    with _ADAPTER_LOCK:
-        # check again, in case something was setting it before
-        if adapter_name in _ADAPTERS:
-            return _ADAPTERS[adapter_name]
-
-        adapter = adapter_type(config)
-        _ADAPTERS[adapter_name] = adapter
-        return adapter
+def get_adapter(config: HasCredentials):
+    return FACTORY.lookup_adapter(config.credentials.type)
 
 
 def reset_adapters():
     """Clear the adapters. This is useful for tests, which change configs.
     """
-    with _ADAPTER_LOCK:
-        for adapter in _ADAPTERS.values():
-            adapter.cleanup_connections()
-        _ADAPTERS.clear()
+    FACTORY.reset_adapters()
 
 
 def cleanup_connections():
     """Only clean up the adapter connections list without resetting the actual
     adapters.
     """
-    with _ADAPTER_LOCK:
-        for adapter in _ADAPTERS.values():
-            adapter.cleanup_connections()
+    FACTORY.cleanup_connections()
+
+
+def get_adapter_class_by_name(name: str) -> Type[BaseAdapter]:
+    return FACTORY.get_adapter_class_by_name(name)
+
+
+def get_relation_class_by_name(name: str) -> Type[BaseRelation]:
+    return FACTORY.get_relation_class_by_name(name)
+
+
+def load_plugin(name: str) -> Type[Credentials]:
+    return FACTORY.load_plugin(name)

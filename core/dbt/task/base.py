@@ -2,6 +2,7 @@ import os
 from abc import ABCMeta, abstractmethod
 from typing import Type, Union
 
+from dbt.adapters.factory import register_adapter
 from dbt.config import RuntimeConfig, Project
 from dbt.config.profile import read_profile, PROFILES_DIR
 from dbt import tracking
@@ -136,6 +137,10 @@ class RequiresProjectTask(BaseTask):
 
 class ConfiguredTask(RequiresProjectTask):
     ConfigType = RuntimeConfig
+
+    def __init__(self, args, config):
+        super().__init__(args, config)
+        register_adapter(self.config)
 
 
 class ProjectOnlyTask(RequiresProjectTask):

@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import (
     Any, ClassVar, Dict, Tuple, Iterable, Optional, NewType
 )
+from typing_extensions import Protocol
 
 from hologram import JsonSchemaMixin
 from hologram.helpers import (
@@ -116,3 +117,7 @@ class Credentials(  # type: ignore
                 if canonical_name in serialized
             })
         return serialized
+
+
+class HasCredentials(Protocol):
+    credentials: Credentials
