@@ -4,7 +4,9 @@ import os
 import shutil
 import tempfile
 from dataclasses import dataclass, field
-from typing import Union, Dict, Optional, List
+from typing import (
+    Union, Dict, Optional, List, Type, Iterator, NoReturn, Generic, TypeVar,
+)
 
 import dbt.utils
 import dbt.deprecations
@@ -50,53 +52,77 @@ PackageContract = Union[LocalPackageContract, GitPackageContract,
                         RegistryPackageContract]
 
 
-def _parse_package(dict_: dict) -> PackageContract:
-    only_1_keys = ['package', 'git', 'local']
-    specified = [k for k in only_1_keys if dict_.get(k)]
-    if len(specified) > 1:
-        dbt.exceptions.raise_dependency_error(
-            'Packages should not contain more than one of {}; '
-            'yours has {} of them - {}'
-            .format(only_1_keys, len(specified), specified))
-    if dict_.get('package'):
-        return RegistryPackageContract.from_dict(dict_)
-    if dict_.get('git'):
-        if dict_.get('version'):
-            msg = ("Keyword 'version' specified for git package {}.\nDid "
-                   "you mean 'revision'?".format(dict_.get('git')))
-            dbt.exceptions.raise_dependency_error(msg)
-        return GitPackageContract.from_dict(dict_)
-    if dict_.get('local'):
-        return LocalPackageContract.from_dict(dict_)
-    dbt.exceptions.raise_dependency_error(
-        'Malformed package definition. Must contain package, git, or local.')
-
-
 def md5sum(s: str):
     return hashlib.md5(s.encode('latin-1')).hexdigest()
 
 
-@dataclass
-class Pinned(metaclass=abc.ABCMeta):
-    _cached_metadata: Optional[ProjectPackageMetadata] = field(init=False)
+PackageContractType = TypeVar('PackageContractType', bound=PackageContract)
 
-    def __post_init__(self):
-        self._cached_metadata = None
 
-    def __str__(self):
+class BasePackage(metaclass=abc.ABCMeta):
+    @abc.abstractproperty
+    def name(self) -> str:
+        raise NotImplementedError
+
+    def all_names(self) -> List[str]:
+        return [self.name]
+
+    @abc.abstractmethod
+    def source_type(self) -> str:
+        raise NotImplementedError
+
+
+class LocalPackageMixin:
+    def __init__(self, local: str) -> None:
+        super().__init__()
+        self.local = local
+
+    @property
+    def name(self):
+        return self.local
+
+    def source_type(self):
+        return 'local'
+
+
+class GitPackageMixin:
+    def __init__(self, git: str) -> None:
+        super().__init__()
+        self.git = git
+
+    @property
+    def name(self):
+        return self.git
+
+    def source_type(self) -> str:
+        return 'git'
+
+
+class RegistryPackageMixin:
+    def __init__(self, package: str) -> None:
+        super().__init__()
+        self.package = package
+
+    @property
+    def name(self):
+        return self.package
+
+    def source_type(self) -> str:
+        return 'hub'
+
+
+class PinnedPackage(BasePackage):
+    def __init__(self) -> None:
+        if hasattr(self, '_cached_metadata'):
+            raise ValueError('already here')
+        self._cached_metadata: Optional[ProjectPackageMetadata] = None
+
+    def __str__(self) -> str:
         version = self.get_version()
         if not version:
             return self.name
 
         return '{}@{}'.format(self.name, version)
-
-    @abc.abstractproperty
-    def name(self):
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def source_type(self):
-        raise NotImplementedError
 
     @abc.abstractmethod
     def get_version(self) -> Optional[str]:
@@ -128,16 +154,9 @@ class Pinned(metaclass=abc.ABCMeta):
         return os.path.join(project.modules_path, dest_dirname)
 
 
-@dataclass
-class LocalPinned(Pinned):
-    local: str
-
-    @property
-    def name(self):
-        return self.local
-
-    def source_type(self):
-        return 'local'
+class LocalPinnedPackage(LocalPackageMixin, PinnedPackage):
+    def __init__(self, local: str) -> None:
+        super().__init__(local)
 
     def get_version(self):
         return None
@@ -177,23 +196,14 @@ class LocalPinned(Pinned):
             shutil.copytree(src_path, dest_path)
 
 
-@dataclass
-class GitPinned(Pinned):
-    git: str
-    revision: str
-    warn_unpinned: bool = True
-    _checkout_name: str = field(init=False)
-
-    def __post_init__(self):
-        super().__post_init__()
+class GitPinnedPackage(GitPackageMixin, PinnedPackage):
+    def __init__(
+        self, git: str, revision: str, warn_unpinned: bool = True
+    ) -> None:
+        super().__init__(git)
+        self.revision = revision
+        self.warn_unpinned = warn_unpinned
         self._checkout_name = md5sum(self.git)
-
-    @property
-    def name(self):
-        return self.git
-
-    def source_type(self):
-        return 'git'
 
     def get_version(self):
         return self.revision
@@ -244,10 +254,10 @@ class GitPinned(Pinned):
         system.move(self._checkout(), dest_path)
 
 
-@dataclass
-class RegistryPinned(Pinned):
-    package: str
-    version: str
+class RegistryPinnedPackage(RegistryPackageMixin, PinnedPackage):
+    def __init__(self, package: str, version: str) -> None:
+        super().__init__(package)
+        self.version = version
 
     @property
     def name(self):
@@ -280,61 +290,54 @@ class RegistryPinned(Pinned):
         system.untar_package(tar_path, deps_path, package_name)
 
 
-class Package(metaclass=abc.ABCMeta):
+SomePinned = TypeVar('SomePinned', bound=PinnedPackage)
+SomeUnpinned = TypeVar('SomeUnpinned', bound='UnpinnedPackage')
+
+
+class UnpinnedPackage(Generic[SomePinned], BasePackage):
     @abc.abstractclassmethod
     def from_contract(cls, contract):
         raise NotImplementedError
 
-    @abc.abstractproperty
-    def name(self):
+    @abc.abstractmethod
+    def incorporate(self: SomeUnpinned, other: SomeUnpinned) -> SomeUnpinned:
         raise NotImplementedError
 
-    def all_names(self):
-        return [self.name]
-
-    def _typecheck(self, other):
-        if not isinstance(other, self.__class__):
-            raise_dependency_error(
-                'Cannot incorporate {0} ({0.__class__.__name__}) into '
-                '{1} ({1.__class__.__name__}): mismatched types'
-                .format(other, self))
+    @abc.abstractmethod
+    def resolved(self) -> SomePinned:
+        raise NotImplementedError
 
 
-@dataclass
-class LocalPackage(Package):
-    local: str
-
-    def source_type(self):
-        return 'local'
-
-    @property
-    def name(self):
-        return self.local
-
+class LocalUnpinnedPackage(
+    LocalPackageMixin, UnpinnedPackage[LocalPinnedPackage]
+):
     @classmethod
-    def from_contract(cls, contract: LocalPackageContract) -> 'LocalPackage':
+    def from_contract(
+        cls, contract: LocalPackageContract
+    ) -> 'LocalUnpinnedPackage':
         return cls(local=contract.local)
 
     def incorporate(
-        self, other: Union['LocalPackage', LocalPinned]
-    ) -> 'LocalPackage':
-        if isinstance(other, LocalPinned):
-            other = LocalPackage(local=other.local)
-        self._typecheck(other)
-        return LocalPackage(local=self.local)
+        self, other: 'LocalUnpinnedPackage'
+    ) -> 'LocalUnpinnedPackage':
+        return LocalUnpinnedPackage(local=self.local)
 
-    def resolved(self) -> LocalPinned:
-        return LocalPinned(local=self.local)
+    def resolved(self) -> LocalPinnedPackage:
+        return LocalPinnedPackage(local=self.local)
 
 
-@dataclass
-class GitPackage(Package):
-    git: str
-    revisions: List[str]
-    warn_unpinned: bool = True
+class GitUnpinnedPackage(GitPackageMixin, UnpinnedPackage[GitPinnedPackage]):
+    def __init__(
+        self, git: str, revisions: List[str], warn_unpinned: bool = True
+    ) -> None:
+        super().__init__(git)
+        self.revisions = revisions
+        self.warn_unpinned = warn_unpinned
 
     @classmethod
-    def from_contract(cls, contract: GitPackageContract) -> 'GitPackage':
+    def from_contract(
+        cls, contract: GitPackageContract
+    ) -> 'GitUnpinnedPackage':
         revisions = [contract.revision] if contract.revision else []
 
         # we want to map None -> True
@@ -342,14 +345,7 @@ class GitPackage(Package):
         return cls(git=contract.git, revisions=revisions,
                    warn_unpinned=warn_unpinned)
 
-    @property
-    def name(self):
-        return self.git
-
-    def source_type(self):
-        return 'git'
-
-    def all_names(self):
+    def all_names(self) -> List[str]:
         if self.git.endswith('.git'):
             other = self.git[:-4]
         else:
@@ -357,22 +353,17 @@ class GitPackage(Package):
         return [self.git, other]
 
     def incorporate(
-        self, other: Union['GitPackage', GitPinned]
-    ) -> 'GitPackage':
-
-        if isinstance(other, GitPinned):
-            other = GitPackage(git=other.git, revisions=[other.revision],
-                               warn_unpinned=other.warn_unpinned)
-
-        self._typecheck(other)
-
+        self, other: 'GitUnpinnedPackage'
+    ) -> 'GitUnpinnedPackage':
         warn_unpinned = self.warn_unpinned and other.warn_unpinned
 
-        return GitPackage(git=self.git,
-                          revisions=self.revisions + other.revisions,
-                          warn_unpinned=warn_unpinned)
+        return GitUnpinnedPackage(
+            git=self.git,
+            revisions=self.revisions + other.revisions,
+            warn_unpinned=warn_unpinned,
+        )
 
-    def resolved(self) -> GitPinned:
+    def resolved(self) -> GitPinnedPackage:
         requested = set(self.revisions)
         if len(requested) == 0:
             requested = {'master'}
@@ -381,20 +372,20 @@ class GitPackage(Package):
                 'git dependencies should contain exactly one version. '
                 '{} contains: {}'.format(self.git, requested))
 
-        return GitPinned(
+        return GitPinnedPackage(
             git=self.git, revision=requested.pop(),
             warn_unpinned=self.warn_unpinned
         )
 
 
-@dataclass
-class RegistryPackage(Package):
-    package: str
-    versions: List[semver.VersionSpecifier]
-
-    @property
-    def name(self):
-        return self.package
+class RegistryUnpinnedPackage(
+    RegistryPackageMixin, UnpinnedPackage[RegistryPinnedPackage]
+):
+    def __init__(
+        self, package: str, versions: List[semver.VersionSpecifier]
+    ) -> None:
+        super().__init__(package)
+        self.versions = versions
 
     def _check_in_index(self):
         index = registry.index_cached()
@@ -404,7 +395,7 @@ class RegistryPackage(Package):
     @classmethod
     def from_contract(
         cls, contract: RegistryPackageContract
-    ) -> 'RegistryPackage':
+    ) -> 'RegistryUnpinnedPackage':
         raw_version = contract.version
         if isinstance(raw_version, str):
             raw_version = [raw_version]
@@ -416,18 +407,14 @@ class RegistryPackage(Package):
         return cls(package=contract.package, versions=versions)
 
     def incorporate(
-        self, other: ['RegistryPackage', RegistryPinned]
-    ) -> 'RegistryPackage':
-        if isinstance(other, RegistryPinned):
-            versions = [
-                semver.VersionSpecifier.from_version_string(other.version)
-            ]
-            other = RegistryPackage(package=other.package, versions=versions)
-        self._typecheck(other)
-        return RegistryPackage(package=self.package,
-                               versions=self.versions + other.versions)
+        self, other: 'RegistryUnpinnedPackage'
+    ) -> 'RegistryUnpinnedPackage':
+        return RegistryUnpinnedPackage(
+            package=self.package,
+            versions=self.versions + other.versions,
+        )
 
-    def resolved(self) -> RegistryPinned:
+    def resolved(self) -> RegistryPinnedPackage:
         self._check_in_index()
         try:
             range_ = semver.reduce_versions(*self.versions)
@@ -445,16 +432,12 @@ class RegistryPackage(Package):
         target = semver.resolve_to_specific_version(range_, available)
         if not target:
             package_version_not_found(self.package, range_, available)
-        return RegistryPinned(package=self.package, version=target)
-
-
-PackageResolver = Union[LocalPackage, GitPackage, RegistryPackage]
-PinnedPackages = Union[LocalPinned, GitPinned, RegistryPinned]
+        return RegistryPinnedPackage(package=self.package, version=target)
 
 
 @dataclass
 class PackageListing:
-    packages: Dict[str, PackageResolver] = field(default_factory=dict)
+    packages: Dict[str, UnpinnedPackage] = field(default_factory=dict)
 
     def __len__(self):
         return len(self.packages)
@@ -462,40 +445,52 @@ class PackageListing:
     def __bool__(self):
         return bool(self.packages)
 
-    def _pick_key(self, key: Package):
+    def _pick_key(self, key: BasePackage) -> str:
         for name in key.all_names():
             if name in self.packages:
                 return name
         return key.name
 
-    def __contains__(self, key: Package):
+    def __contains__(self, key: BasePackage):
         for name in key.all_names():
             if name in self.packages:
                 return True
 
-    def __getitem__(self, key: Package):
-        key = self._pick_key(key)
-        return self.packages[key]
+    def __getitem__(self, key: BasePackage):
+        key_str: str = self._pick_key(key)
+        return self.packages[key_str]
 
-    def __setitem__(self, key: Package, value):
-        key = self._pick_key(key)
-        self.packages[key] = value
+    def __setitem__(self, key: BasePackage, value):
+        key_str: str = self._pick_key(key)
+        self.packages[key_str] = value
 
-    def incorporate(self, package: Package):
-        key = self._pick_key(package)
+    def _mismatched_types(
+        self, old: UnpinnedPackage, new: UnpinnedPackage
+    ) -> NoReturn:
+        raise_dependency_error(
+            f'Cannot incorporate {new} ({new.__class__.__name__}) in {old} '
+            f'({old.__class__.__name__}): mismatched types'
+        )
+
+    def incorporate(self, package: UnpinnedPackage):
+        key: str = self._pick_key(package)
         if key in self.packages:
-            self.packages[key] = self.packages[key].incorporate(package)
+            existing: UnpinnedPackage = self.packages[key]
+            if not isinstance(existing, type(package)):
+                self._mismatched_types(existing, package)
+            self.packages[key] = existing.incorporate(package)
         else:
             self.packages[key] = package
 
-    def update_from(self, src: List[PackageContract]) -> 'PackageListing':
+    def update_from(self, src: List[PackageContract]) -> None:
+        pkg: UnpinnedPackage
         for contract in src:
             if isinstance(contract, LocalPackageContract):
-                pkg = LocalPackage.from_contract(contract)
+                pkg = LocalUnpinnedPackage.from_contract(contract)
             elif isinstance(contract, GitPackageContract):
-                pkg = GitPackage.from_contract(contract)
+                pkg = GitUnpinnedPackage.from_contract(contract)
             elif isinstance(contract, RegistryPackageContract):
-                pkg = RegistryPackage.from_contract(contract)
+                pkg = RegistryUnpinnedPackage.from_contract(contract)
             else:
                 raise dbt.exceptions.InternalException(
                     'Invalid package type {}'.format(type(contract))
@@ -504,22 +499,22 @@ class PackageListing:
 
     @classmethod
     def from_contracts(
-        cls: 'PackageListing', src: List[PackageContract]
+        cls: Type['PackageListing'], src: List[PackageContract]
     ) -> 'PackageListing':
         self = cls({})
         self.update_from(src)
         return self
 
-    def resolved(self) -> List[PinnedPackages]:
+    def resolved(self) -> List[PinnedPackage]:
         return [p.resolved() for p in self.packages.values()]
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[UnpinnedPackage]:
         return iter(self.packages.values())
 
 
 def resolve_packages(
     packages: List[PackageContract], config
-) -> List[PinnedPackages]:
+) -> List[PinnedPackage]:
     pending = PackageListing.from_contracts(packages)
     final = PackageListing()
 

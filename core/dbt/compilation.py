@@ -6,7 +6,7 @@ import dbt.utils
 import dbt.include
 import dbt.tracking
 
-from dbt.utils import get_materialization, NodeType, is_type
+from dbt.node_types import NodeType
 from dbt.linker import Linker
 
 import dbt.context.runtime
@@ -140,7 +140,7 @@ class Compiler:
             # data tests get wrapped in count(*)
             # TODO : move this somewhere more reasonable
             if 'data' in injected_node.tags and \
-               is_type(injected_node, NodeType.Test):
+               injected_node.resource_type == NodeType.Test:
                 injected_node.wrapped_sql = (
                     "select count(*) as errors "
                     "from (\n{test_sql}\n) sbq").format(
@@ -149,14 +149,14 @@ class Compiler:
                 # don't wrap schema tests or analyses.
                 injected_node.wrapped_sql = injected_node.injected_sql
 
-        elif is_type(injected_node, NodeType.Snapshot):
+        elif injected_node.resource_type == NodeType.Snapshot:
             # unfortunately we do everything automagically for
             # snapshots. in the future it'd be nice to generate
             # the SQL at the parser level.
             pass
 
-        elif(is_type(injected_node, NodeType.Model) and
-             get_materialization(injected_node) == 'ephemeral'):
+        elif(injected_node.resource_type == NodeType.Model and
+             injected_node.get_materialization() == 'ephemeral'):
             pass
 
         else:
@@ -219,7 +219,7 @@ def _is_writable(node):
     if not node.injected_sql:
         return False
 
-    if dbt.utils.is_type(node, NodeType.Snapshot):
+    if node.resource_type == NodeType.Snapshot:
         return False
 
     return True

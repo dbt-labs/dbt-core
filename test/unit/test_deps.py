@@ -2,9 +2,11 @@ import unittest
 from unittest import mock
 
 import dbt.exceptions
-from dbt.task.deps import GitPackage, LocalPackage, RegistryPackage, \
-    LocalPackageContract, GitPackageContract, RegistryPackageContract, \
+from dbt.task.deps import (
+    GitUnpinnedPackage, LocalUnpinnedPackage, RegistryUnpinnedPackage,
+    LocalPackageContract, GitPackageContract, RegistryPackageContract,
     resolve_packages
+)
 from dbt.contracts.project import PackageConfig
 from dbt.semver import VersionSpecifier
 
@@ -15,7 +17,7 @@ class TestLocalPackage(unittest.TestCase):
     def test_init(self):
         a_contract = LocalPackageContract.from_dict({'local': '/path/to/package'})
         self.assertEqual(a_contract.local, '/path/to/package')
-        a = LocalPackage.from_contract(a_contract)
+        a = LocalUnpinnedPackage.from_contract(a_contract)
         self.assertEqual(a.local, '/path/to/package')
         a_pinned = a.resolved()
         self.assertEqual(a_pinned.local, '/path/to/package')
@@ -31,7 +33,7 @@ class TestGitPackage(unittest.TestCase):
         self.assertEqual(a_contract.revision, '0.0.1')
         self.assertIs(a_contract.warn_unpinned, None)
 
-        a = GitPackage.from_contract(a_contract)
+        a = GitUnpinnedPackage.from_contract(a_contract)
         self.assertEqual(a.git, 'http://example.com')
         self.assertEqual(a.revisions, ['0.0.1'])
         self.assertIs(a.warn_unpinned, True)
@@ -56,8 +58,8 @@ class TestGitPackage(unittest.TestCase):
             {'git': 'http://example.com', 'revision': '0.0.1',
              'warn-unpinned': False}
         )
-        a = GitPackage.from_contract(a_contract)
-        b = GitPackage.from_contract(b_contract)
+        a = GitUnpinnedPackage.from_contract(a_contract)
+        b = GitUnpinnedPackage.from_contract(b_contract)
         self.assertTrue(a.warn_unpinned)
         self.assertFalse(b.warn_unpinned)
         c = a.incorporate(b)
@@ -75,8 +77,8 @@ class TestGitPackage(unittest.TestCase):
         b_contract = GitPackageContract.from_dict(
             {'git': 'http://example.com', 'revision': '0.0.2'}
         )
-        a = GitPackage.from_contract(a_contract)
-        b = GitPackage.from_contract(b_contract)
+        a = GitUnpinnedPackage.from_contract(a_contract)
+        b = GitUnpinnedPackage.from_contract(b_contract)
         c = a.incorporate(b)
         self.assertEqual(c.git, 'http://example.com')
         self.assertEqual(c.revisions, ['0.0.1', '0.0.2'])
@@ -89,7 +91,7 @@ class TestGitPackage(unittest.TestCase):
         self.assertEqual(a_contract.revision, None)
         self.assertIs(a_contract.warn_unpinned, None)
 
-        a = GitPackage.from_contract(a_contract)
+        a = GitUnpinnedPackage.from_contract(a_contract)
         self.assertEqual(a.git, 'http://example.com')
         self.assertEqual(a.revisions, [])
         self.assertIs(a.warn_unpinned, True)
@@ -141,7 +143,7 @@ class TestHubPackage(unittest.TestCase):
         self.assertEqual(a_contract.package, 'fishtown-analytics-test/a')
         self.assertEqual(a_contract.version, '0.1.2')
 
-        a = RegistryPackage.from_contract(a_contract)
+        a = RegistryUnpinnedPackage.from_contract(a_contract)
         self.assertEqual(a.package, 'fishtown-analytics-test/a')
         self.assertEqual(
             a.versions,
@@ -175,8 +177,8 @@ class TestHubPackage(unittest.TestCase):
             package='fishtown-analytics-test/a',
             version='0.1.2'
         )
-        a = RegistryPackage.from_contract(a_contract)
-        b = RegistryPackage.from_contract(b_contract)
+        a = RegistryUnpinnedPackage.from_contract(a_contract)
+        b = RegistryUnpinnedPackage.from_contract(b_contract)
         c = a.incorporate(b)
 
         self.assertEqual(c.package, 'fishtown-analytics-test/a')
@@ -208,7 +210,7 @@ class TestHubPackage(unittest.TestCase):
         self.assertEqual(c_pinned.source_type(), 'hub')
 
     def test_resolve_missing_package(self):
-        a = RegistryPackage.from_contract(RegistryPackageContract(
+        a = RegistryUnpinnedPackage.from_contract(RegistryPackageContract(
             package='fishtown-analytics-test/b',
             version='0.1.2'
         ))
@@ -219,7 +221,7 @@ class TestHubPackage(unittest.TestCase):
         self.assertEqual(msg, str(exc.exception))
 
     def test_resolve_missing_version(self):
-        a = RegistryPackage.from_contract(RegistryPackageContract(
+        a = RegistryUnpinnedPackage.from_contract(RegistryPackageContract(
             package='fishtown-analytics-test/a',
             version='0.1.4'
         ))
@@ -242,8 +244,8 @@ class TestHubPackage(unittest.TestCase):
             package='fishtown-analytics-test/a',
             version='0.1.3'
         )
-        a = RegistryPackage.from_contract(a_contract)
-        b = RegistryPackage.from_contract(b_contract)
+        a = RegistryUnpinnedPackage.from_contract(a_contract)
+        b = RegistryUnpinnedPackage.from_contract(b_contract)
         c = a.incorporate(b)
 
         with self.assertRaises(dbt.exceptions.DependencyException) as exc:
@@ -263,8 +265,8 @@ class TestHubPackage(unittest.TestCase):
             package='fishtown-analytics-test/a',
             version='<0.1.4'
         )
-        a = RegistryPackage.from_contract(a_contract)
-        b = RegistryPackage.from_contract(b_contract)
+        a = RegistryUnpinnedPackage.from_contract(a_contract)
+        b = RegistryUnpinnedPackage.from_contract(b_contract)
         c = a.incorporate(b)
 
         self.assertEqual(c.package, 'fishtown-analytics-test/a')

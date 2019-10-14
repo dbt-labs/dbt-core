@@ -1,4 +1,4 @@
-from dbt.contracts.util import Replaceable, Mergeable
+from dbt.contracts.util import Replaceable, Mergeable, list_str
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 from dbt import tracking
 from dbt.ui import printer
@@ -151,8 +151,8 @@ class Project(HyphenatedJsonSchemaMixin, Replaceable):
     log_path: Optional[str] = None
     modules_path: Optional[str] = None
     quoting: Optional[Quoting] = None
-    on_run_start: Optional[List[str]] = field(default_factory=list)
-    on_run_end: Optional[List[str]] = field(default_factory=list)
+    on_run_start: Optional[List[str]] = field(default_factory=list_str)
+    on_run_end: Optional[List[str]] = field(default_factory=list_str)
     require_dbt_version: Optional[Union[List[str], str]] = None
     models: Dict[str, Any] = field(default_factory=dict)
     seeds: Dict[str, Any] = field(default_factory=dict)
@@ -200,7 +200,7 @@ class ProfileConfig(HyphenatedJsonSchemaMixin, Replaceable):
 
 
 @dataclass
-class ConfiguredQuoting(JsonSchemaMixin, Replaceable):
+class ConfiguredQuoting(Quoting, Replaceable):
     identifier: bool
     schema: bool
     database: Optional[bool]

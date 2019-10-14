@@ -74,7 +74,7 @@ class AdpaterContainer:
 
         return plugin.credentials
 
-    def register_adapter(self, config: HasCredentials) -> Adapter:
+    def register_adapter(self, config: HasCredentials) -> None:
         adapter_name = config.credentials.type
         adapter_type = self.get_adapter_class_by_name(adapter_name)
 
@@ -110,7 +110,7 @@ FACTORY: AdpaterContainer = AdpaterContainer()
 
 
 def register_adapter(config: HasCredentials) -> None:
-    return FACTORY.register_adapter(config)
+    FACTORY.register_adapter(config)
 
 
 def get_adapter(config: HasCredentials):

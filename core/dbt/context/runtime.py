@@ -9,7 +9,7 @@ from dbt.parser.util import ParserUtils
 from dbt.logger import GLOBAL_LOGGER as logger  # noqa
 
 
-class BaseRefResolver(dbt.context.common.BaseResolver):
+class RefResolver(dbt.context.common.BaseResolver):
     def resolve(self, args):
         name = None
         package = None
@@ -48,8 +48,6 @@ class BaseRefResolver(dbt.context.common.BaseResolver):
         else:
             return self.Relation.create_from(self.config, target_model)
 
-
-class RefResolver(BaseRefResolver):
     def validate(self, resolved, args):
         if resolved.unique_id not in self.model.depends_on.nodes:
             dbt.exceptions.ref_bad_context(self.model, args)
@@ -149,7 +147,7 @@ class Var(dbt.context.base.Var):
     pass
 
 
-class Provider:
+class Provider(dbt.context.common.Provider):
     execute = True
     Config = Config
     DatabaseWrapper = DatabaseWrapper

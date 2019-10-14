@@ -14,18 +14,18 @@ from dbt.contracts.graph.parsed import (
 )
 from dbt.node_types import NodeType
 from dbt.contracts.util import Replaceable
-from dbt.exceptions import InternalException
+from dbt.exceptions import InternalException, RuntimeException
 
 from hologram import JsonSchemaMixin
 from dataclasses import dataclass, field
-import sqlparse
-from typing import Optional, List, Union
+import sqlparse  # type: ignore
+from typing import Optional, List, Union, Dict, Type
 
 
 @dataclass
 class InjectedCTE(JsonSchemaMixin, Replaceable):
     id: str
-    sql: Optional[str] = None
+    sql: str
 
 # for some frustrating reason, we can't subclass from ParsedNode directly,
 # or typing.Union will flatten CompiledNode+ParsedNode into just ParsedNode.
@@ -45,6 +45,10 @@ class CompiledNode(ParsedNode):
     def prepend_ctes(self, prepended_ctes: List[InjectedCTE]):
         self.extra_ctes_injected = True
         self.extra_ctes = prepended_ctes
+        if self.compiled_sql is None:
+            raise RuntimeException(
+                'Cannot prepend ctes to an unparsed node', self
+            )
         self.injected_sql = _inject_ctes_into_sql(
             self.compiled_sql,
             prepended_ctes,
@@ -176,7 +180,7 @@ def _inject_ctes_into_sql(sql: str, ctes: List[InjectedCTE]) -> str:
     return str(parsed)
 
 
-COMPILED_TYPES = {
+COMPILED_TYPES: Dict[NodeType, Type[CompiledNode]] = {
     NodeType.Analysis: CompiledAnalysisNode,
     NodeType.Model: CompiledModelNode,
     NodeType.Operation: CompiledHookNode,

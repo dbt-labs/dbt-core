@@ -1,10 +1,10 @@
 from test.integration.base import DBTIntegrationTest, use_profile
 import threading
-from dbt.adapters.factory import ADAPTER_TYPES
+from dbt.adapters.factory import FACTORY
 
 
 def get_adapter_standalone(config):
-    cls = ADAPTER_TYPES[config.credentials.type]
+    cls = FACTORY.adapter_types[config.credentials.type]
     return cls(config)
 
 

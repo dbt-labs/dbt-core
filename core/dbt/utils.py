@@ -300,12 +300,6 @@ def is_enabled(node):
     return node.config.enabled
 
 
-def is_type(node, _type):
-    if hasattr(_type, 'value'):
-        _type = _type.value
-    return node.resource_type == _type
-
-
 def get_pseudo_test_path(node_name, source_path, test_type):
     "schema tests all come from schema.yml files. fake a source sql file"
     source_path_parts = split_path(source_path)
@@ -390,7 +384,7 @@ def invalid_ref_test_message(node, target_model_name, target_model_package,
 
 def invalid_ref_fail_unless_test(node, target_model_name,
                                  target_model_package, disabled):
-    if is_type(node, NodeType.Test):
+    if node.resource_type == NodeType.Test:
         msg = invalid_ref_test_message(node, target_model_name,
                                        target_model_package, disabled)
         if disabled:
@@ -406,7 +400,7 @@ def invalid_ref_fail_unless_test(node, target_model_name,
 
 
 def invalid_source_fail_unless_test(node, target_name, target_table_name):
-    if is_type(node, NodeType.Test):
+    if node.resource_type == NodeType.Test:
         msg = dbt.exceptions.source_disabled_message(node, target_name,
                                                      target_table_name)
         dbt.exceptions.warn_or_error(msg, log_fmt='WARNING: {}')

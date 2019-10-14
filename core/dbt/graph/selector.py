@@ -1,6 +1,6 @@
 from enum import Enum
 
-import networkx as nx
+import networkx as nx  # type: ignore
 
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import is_enabled, coalesce

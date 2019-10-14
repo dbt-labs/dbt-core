@@ -2,7 +2,6 @@ import os
 
 from hologram import ValidationError
 
-from dbt.adapters.factory import load_plugin
 from dbt.clients.system import load_file_contents
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.contracts.project import ProfileConfig, UserConfig
@@ -121,6 +120,8 @@ class Profile:
 
     @staticmethod
     def _credentials_from_profile(profile, profile_name, target_name):
+        # avoid an import cycle
+        from dbt.adapters.factory import load_plugin
         # credentials carry their 'type' in their actual type, not their
         # attributes. We do want this in order to pick our Credentials class.
         if 'type' not in profile:
@@ -129,7 +130,6 @@ class Profile:
                 .format(profile_name, target_name))
 
         typename = profile.pop('type')
-
         try:
             cls = load_plugin(typename)
             credentials = cls.from_dict(profile)

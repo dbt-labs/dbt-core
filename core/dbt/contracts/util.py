@@ -1,6 +1,23 @@
 import dataclasses
+from typing import List
 
 from dbt.clients.system import write_json
+
+
+def list_str() -> List[str]:
+    """Mypy gets upset about¸stuff like:
+
+    from dataclasses import dataclass, field
+    from typing import Optional, List
+
+    @dataclass
+    class Foo:
+        x: Optional[List[str]] = field(default_factory=list)
+
+
+    Because `list` could be any kind of list, I guess
+    """
+    return []
 
 
 class Replaceable:
@@ -26,4 +43,4 @@ class Mergeable(Replaceable):
 
 class Writable:
     def write(self, path: str, omit_none: bool = False):
-        write_json(path, self.to_dict(omit_none=omit_none))
+        write_json(path, self.to_dict(omit_none=omit_none))  # type: ignore

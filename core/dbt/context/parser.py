@@ -121,7 +121,7 @@ class SourceResolver(dbt.context.common.BaseResolver):
         return self.Relation.create_from(self.config, self.model)
 
 
-class Provider:
+class Provider(dbt.context.common.Provider):
     execute = False
     Config = Config
     DatabaseWrapper = DatabaseWrapper

@@ -13,10 +13,8 @@ import dbt.exceptions
 import dbt.flags
 
 from dbt.clients.agate_helper import empty_table
-from dbt.config import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
 from dbt.node_types import NodeType
-from dbt.parser.manifest import load_internal_manifest
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.utils import filter_null_values
 
@@ -196,8 +194,8 @@ class BaseAdapter(metaclass=AdapterMeta):
     # for use in materializations
     AdapterSpecificConfigs: FrozenSet[str] = frozenset()
 
-    def __init__(self, config: RuntimeConfig):
-        self.config: RuntimeConfig = config
+    def __init__(self, config):
+        self.config = config
         self.cache = RelationsCache()
         self.connections = self.ConnectionManager(config)
         self._internal_manifest_lazy: Optional[Manifest] = None
@@ -280,6 +278,8 @@ class BaseAdapter(metaclass=AdapterMeta):
 
     def load_internal_manifest(self) -> Manifest:
         if self._internal_manifest_lazy is None:
+            # avoid a circular import
+            from dbt.parser.manifest import load_internal_manifest
             manifest = load_internal_manifest(self.config)
             self._internal_manifest_lazy = manifest
         return self._internal_manifest_lazy

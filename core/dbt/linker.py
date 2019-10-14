@@ -1,6 +1,6 @@
 from queue import PriorityQueue
 from typing import Iterable, Set, Optional
-import networkx as nx
+import networkx as nx  # type: ignore
 import threading
 
 
@@ -254,7 +254,7 @@ class Linker:
 
                 if node.resource_type != NodeType.Model:
                     continue
-                if node.get_materialization() != 'ephemeral':
+                if node.get_materialization() != 'ephemeral':  # type: ignore
                     continue
                 # this is an ephemeral model! We have to find everything it
                 # refs and do it all over again until we exhaust them all
