@@ -1,8 +1,10 @@
-import networkx as nx
 from queue import PriorityQueue
+from typing import Iterable, Optional
+import networkx as nx
 import threading
 
 
+from dbt.contracts.graph.manifest import Manifest
 from dbt.node_types import NodeType
 
 
@@ -42,11 +44,8 @@ class GraphQueue:
         # populate the initial queue
         self._find_new_additions()
 
-    def get_node(self, node_id):
-        return self.manifest.nodes[node_id]
-
     def _include_in_cost(self, node_id):
-        node = self.get_node(node_id)
+        node = self.manifest.expect(node_id)
         if not is_blocking_dependency(node):
             return False
         if node.get_materialization() == 'ephemeral':
@@ -95,7 +94,7 @@ class GraphQueue:
         _, node_id = self.inner.get(block=block, timeout=timeout)
         with self.lock:
             self._mark_in_progress(node_id)
-        return self.get_node(node_id)
+        return self.manifest.expect(node_id)
 
     def __len__(self):
         """The length of the queue is the number of tasks left for the queue to
@@ -167,7 +166,6 @@ class GraphQueue:
         """
         self.inner.join()
 
-
 def _subset_graph(graph, include_nodes):
     """Create and return a new graph that is a shallow copy of graph but with
     only the nodes in include_nodes. Transitive edges across removed nodes are
@@ -188,7 +186,6 @@ def _subset_graph(graph, include_nodes):
                 "it disabled?".format(node)
             )
     return new_graph
-
 
 class Linker:
     def __init__(self, data=None):
@@ -216,7 +213,9 @@ class Linker:
 
         return None
 
-    def as_graph_queue(self, manifest, limit_to=None):
+    def as_graph_queue(
+        self, manifest: Manifest, limit_to: Optional[Iterable[str]] = None
+    ) -> GraphQueue:
         """Returns a queue over nodes in the graph that tracks progress of
         dependecies.
         """
@@ -259,6 +258,6 @@ class Linker:
 def _updated_graph(graph, manifest):
     graph = graph.copy()
     for node_id in graph.nodes():
-        data = manifest.nodes[node_id].to_dict()
+        data = manifest.expect(node_id).to_dict()
         graph.add_node(node_id, **data)
     return graph

@@ -415,6 +415,7 @@ class Manifest:
                     'not found or is disabled').format(patch.name)
                 )
 
+    # TODO: why is this here?
     def __getattr__(self, name):
         raise AttributeError("'{}' object has no attribute '{}'".format(
             type(self).__name__, name)
@@ -482,6 +483,14 @@ class Manifest:
 
     def write(self, path):
         self.writable_manifest().write(path)
+
+    def expect(self, unique_id: str) -> CompileResultNode:
+        if unique_id not in self.nodes:
+            # something terrible has happened
+            raise dbt.exceptions.InternalException(
+                'Expected node {} not found in manifest'.format(unique_id)
+            )
+        return self.nodes[unique_id]
 
 
 @dataclass
