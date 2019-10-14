@@ -166,6 +166,7 @@ class Profile(HasCredentials):
     ) -> Credentials:
         # avoid an import cycle
         from dbt.adapters.factory import load_plugin
+
         # credentials carry their 'type' in their actual type, not their
         # attributes. We do want this in order to pick our Credentials class.
         if "type" not in profile:
