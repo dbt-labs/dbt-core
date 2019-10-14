@@ -9,7 +9,7 @@ import dbt.config
 import dbt.utils
 import dbt.exceptions
 from dbt.links import ProfileConfigDocs
-from dbt.adapters.factory import get_adapter
+from dbt.adapters.factory import get_adapter, register_adapter
 from dbt.version import get_installed_version
 from dbt.config import Project, Profile
 from dbt.clients.yaml_helper import load_yaml_text
@@ -270,6 +270,7 @@ class DebugTask(BaseTask):
         """Return a string containing the error message, or None if there was
         no error.
         """
+        register_adapter(profile)
         adapter = get_adapter(profile)
         try:
             with adapter.connection_named('debug'):
