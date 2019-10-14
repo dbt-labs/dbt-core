@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import dbt.clients.system
 import dbt.compilation
+import dbt.context.parser
 import dbt.exceptions
 import dbt.flags
 import dbt.linker
@@ -14,7 +15,6 @@ import dbt.parser.manifest
 from dbt.contracts.graph.manifest import FilePath, SourceFile, FileHash
 from dbt.parser.results import ParseResult
 from dbt.parser.base import BaseParser
-from dbt.parser.search import FileBlock
 
 try:
     from queue import Empty
@@ -33,6 +33,7 @@ class GraphTest(unittest.TestCase):
         self.load_projects_patcher.stop()
         self.file_system_patcher.stop()
         self.get_adapter_patcher.stop()
+        self.get_adapter_patcher_cmn.stop()
         self.mock_filesystem_constructor.stop()
         self.mock_hook_constructor.stop()
         self.load_patch.stop()
@@ -52,6 +53,10 @@ class GraphTest(unittest.TestCase):
         )
         self.get_adapter_patcher = patch('dbt.context.parser.get_adapter')
         self.factory = self.get_adapter_patcher.start()
+        # also patch this one
+
+        self.get_adapter_patcher_cmn = patch('dbt.context.common.get_adapter')
+        self.factory_cmn = self.get_adapter_patcher_cmn.start()
 
         def mock_write_gpickle(graph, outfile):
             self.graph_result = graph
@@ -275,6 +280,7 @@ class GraphTest(unittest.TestCase):
             n: MagicMock(unique_id=n)
             for n in model_ids
         })
+        manifest.expect.side_effect = lambda n: MagicMock(unique_id=n)
         queue = linker.as_graph_queue(manifest)
 
         for model_id in model_ids:

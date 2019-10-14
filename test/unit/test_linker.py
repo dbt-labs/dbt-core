@@ -11,9 +11,12 @@ except ImportError:
 
 
 def _mock_manifest(nodes):
-    return mock.MagicMock(nodes={
+    manifest = mock.MagicMock(nodes={
         n: mock.MagicMock(unique_id=n) for n in nodes
     })
+    manifest.expect.side_effect = lambda n: mock.MagicMock(unique_id=n)
+    return manifest
+
 
 class LinkerTest(unittest.TestCase):
 
