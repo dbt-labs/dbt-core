@@ -76,8 +76,8 @@ class AdapterContainer:
 
         if plugin_type != name:
             raise RuntimeException(
-                f'Expected to find adapter with type named {name}, got '
-                f'adapter with type {plugin_type}'
+                f"Expected to find adapter with type named {name}, got "
+                f"adapter with type {plugin_type}"
             )
 
         with self.lock:
@@ -107,8 +107,7 @@ class AdapterContainer:
         return self.adapters[adapter_name]
 
     def reset_adapters(self):
-        """Clear the adapters. This is useful for tests, which change configs.
-        """
+        """Clear the adapters. This is useful for tests, which change configs."""
         with self.lock:
             for adapter in self.adapters.values():
                 adapter.cleanup_connections()
