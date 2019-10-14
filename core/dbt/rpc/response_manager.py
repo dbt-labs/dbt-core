@@ -17,7 +17,7 @@ import dbt.tracking
 from dbt.logger import GLOBAL_LOGGER as logger
 from dbt.rpc.logger import RequestContext
 from dbt.rpc.task_handler import RequestTaskHandler
-from dbt.rpc.task import RemoteCallable
+from dbt.rpc.method import RemoteMethod
 from dbt.rpc.task_manager import TaskManager
 
 
@@ -50,7 +50,7 @@ class RequestDispatcher(Dict[str, Callable[..., Dict[str, Any]]]):
         )
         if handler is None:
             raise KeyError(key)
-        elif isinstance(handler, RemoteCallable):
+        elif isinstance(handler, RemoteMethod):
             # the handler must be a task. Wrap it in a task handler so it can
             # go async
             return RequestTaskHandler(

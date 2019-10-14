@@ -22,14 +22,14 @@ from dbt.rpc.error import (
     timeout_error,
 )
 from dbt.rpc.logger import (
-    RemoteCallableResult,
+    RPCResult,
     QueueSubscriber,
     QueueLogHandler,
     QueueErrorMessage,
     QueueResultMessage,
     QueueTimeoutMessage,
 )
-from dbt.rpc.task import RPCTask
+from dbt.rpc.method import RemoteMethod
 from dbt.utils import env_set_truthy
 
 # we use this in typing only...
@@ -95,7 +95,7 @@ def sigterm_handler(signum, frame):
 
 
 def _task_bootstrap(
-    task: RPCTask,
+    task: RemoteMethod,
     queue,  # typing: Queue[Tuple[QueueMessageType, Any]]
     params: JsonSchemaMixin,
 ) -> None:
@@ -241,7 +241,7 @@ class RequestTaskHandler(threading.Thread):
             return None
         return self.task_params.task_tags
 
-    def _wait_for_results(self) -> RemoteCallableResult:
+    def _wait_for_results(self) -> RPCResult:
         """Wait for results off the queue. If there is an exception raised,
         raise an appropriate RPC exception.
 
@@ -279,7 +279,7 @@ class RequestTaskHandler(threading.Thread):
                 'Invalid message type {} (result={})'.format(msg)
             )
 
-    def get_result(self) -> RemoteCallableResult:
+    def get_result(self) -> RPCResult:
         if self.process is None:
             raise dbt.exceptions.InternalException(
                 'get_result() called before handle()'

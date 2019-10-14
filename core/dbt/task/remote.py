@@ -1,8 +1,9 @@
+import base64
 import shlex
 import signal
 import threading
 from datetime import datetime
-from typing import Type
+from typing import Type, Optional, Union, List
 
 import dbt.exceptions
 import dbt.ui.printer
@@ -23,15 +24,36 @@ from dbt.parser.results import ParseResult
 from dbt.parser.rpc import RPCCallParser, RPCMacroParser
 from dbt.parser.util import ParserUtils
 from dbt.logger import GLOBAL_LOGGER as logger
+from dbt.rpc.error import invalid_params
 from dbt.rpc.node_runners import (
     RPCCompileRunner, RPCExecuteRunner
 )
-from dbt.rpc.task import RPCTask, Parameters
+from dbt.rpc.method import RemoteMethod, Parameters
 
+from dbt.task.runnable import GraphRunnableTask
 from dbt.task.generate import GenerateTask
 from dbt.task.run import RunTask
 from dbt.task.seed import SeedTask
 from dbt.task.test import TestTask
+
+
+class RPCTask(
+    GraphRunnableTask,
+    RemoteMethod[Parameters, RemoteExecutionResult]
+):
+    def __init__(self, args, config, manifest):
+        super().__init__(args, config)
+        RemoteMethod.__init__(self, args, config, manifest)
+
+    def get_result(
+        self, results, elapsed_time, generated_at
+    ) -> RemoteExecutionResult:
+        return RemoteExecutionResult(
+            results=results,
+            elapsed_time=elapsed_time,
+            generated_at=generated_at,
+            logs=[],
+        )
 
 
 class _RPCExecTask(RPCTask[RPCExecParameters]):
@@ -44,6 +66,32 @@ class _RPCExecTask(RPCTask[RPCExecParameters]):
         self._skipped_children = {}
         self._skipped_children = {}
         self._raise_next_tick = None
+
+    def decode_sql(self, sql: str) -> str:
+        """Base64 decode a string. This should only be used for sql in calls.
+
+        :param str sql: The base64 encoded form of the original utf-8 string
+        :return str: The decoded utf-8 string
+        """
+        # JSON is defined as using "unicode", we'll go a step further and
+        # mandate utf-8 (though for the base64 part, it doesn't really matter!)
+        base64_sql_bytes = str(sql).encode('utf-8')
+
+        try:
+            sql_bytes = base64.b64decode(base64_sql_bytes, validate=True)
+        except ValueError:
+            self.raise_invalid_base64(sql)
+
+        return sql_bytes.decode('utf-8')
+
+    @staticmethod
+    def raise_invalid_base64(sql):
+        raise invalid_params(
+            data={
+                'message': 'invalid base64-encoded sql input',
+                'sql': str(sql),
+            }
+        )
 
     def _extract_request_data(self, data):
         data = self.decode_sql(data)
@@ -178,6 +226,17 @@ class _RPCCommandTask(RPCTask[Parameters]):
     def __init__(self, args, config, manifest):
         super().__init__(args, config, manifest)
         self.manifest = self._base_manifest
+
+    @staticmethod
+    def _listify(
+        value: Optional[Union[str, List[str]]]
+    ) -> Optional[List[str]]:
+        if value is None:
+            return None
+        elif isinstance(value, str):
+            return [value]
+        else:
+            return value
 
     def load_manifest(self):
         # we started out with a manifest!
